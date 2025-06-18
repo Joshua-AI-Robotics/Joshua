@@ -1,16 +1,16 @@
-#pragam once
+#pragma once
 
-#include "onboard/interface/sts3215.h"
+#include "robot/onboard/interfaces/motor_interface.h"
 
 #include <memory>
 #include <string>
 
 enum class MotorType{
     Sts3215,
-    Invaid
-}
+    Invalid
+};
 
 class MotorFactory {
     public:
-    static std:unique_ptr<MotorInterface> CreateMotor();
-}
+    static std::unique_ptr<MotorInterface> CreateMotor(MotorType motor_type);
+};
