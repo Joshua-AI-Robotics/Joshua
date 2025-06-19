@@ -1,6 +1,7 @@
 workspace(name = "ubirobotics")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
 # glog
 http_archive(
@@ -101,3 +102,11 @@ pip_parse(
 # Load dependencies from the generated repo
 load("@my_pip_install//:requirements.bzl", "install_deps")
 install_deps()
+
+# Need to install boost library on the system.
+# sudo apt install libboost-all-dev
+new_local_repository(
+    name = "boost",
+    path = "/usr",  # Assuming Boost is installed in /usr/include and /usr/lib
+    build_file = "//:boost.BUILD",
+)

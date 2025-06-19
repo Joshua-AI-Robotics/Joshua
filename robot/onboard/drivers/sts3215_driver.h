@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boost/asio.hpp>
 #include "robot/onboard/interfaces/motor_interface.h"
 
 class Sts3215Driver : public MotorInterface {
@@ -10,5 +11,6 @@ class Sts3215Driver : public MotorInterface {
   void SetTorque(float torque) override;
 
   private:
+
   
 };
