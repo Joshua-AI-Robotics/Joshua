@@ -3,6 +3,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port_base.hpp>
 #include <glog/logging.h>
+#include <mutex>
 
 class Serial {
   public:
@@ -16,4 +17,5 @@ class Serial {
     int uart_baudrate_;
     boost::asio::io_context& io_context_;
     std::unique_ptr<boost::asio::serial_port> serial_;
+    std::mutex mutex_;
 };

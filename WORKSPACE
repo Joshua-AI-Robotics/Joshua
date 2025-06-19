@@ -110,3 +110,19 @@ new_local_repository(
     path = "/usr",  # Assuming Boost is installed in /usr/include and /usr/lib
     build_file = "//:boost.BUILD",
 )
+
+# libevdev
+# sudo apt install libevdev-dev
+new_local_repository(
+    name = "libevdev",
+    path = "/usr",  # or wherever your system libraries are
+    build_file_content = """
+cc_library(
+    name = "libevdev",
+    hdrs = glob(["include/libevdev-1.0/libevdev/*.h"]),
+    includes = ["include/libevdev-1.0"],
+    linkopts = ["-levdev"],
+    visibility = ["//visibility:public"],
+)
+""",
+)

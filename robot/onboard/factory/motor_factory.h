@@ -24,9 +24,7 @@ public:
     // TODO: Make this input arguments as a class.
     static std::unique_ptr<MotorInterface> CreateMotor(
         MotorType type,
-        boost::asio::io_context& io_context, // Pass the io_context from main/app
-        const std::string& port_name,
-        unsigned int baudrate,        
-        int motor_id
+        const std::shared_ptr<Serial>& serial,
+        int id
     );
 };

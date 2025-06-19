@@ -8,18 +8,15 @@ MotorFactory::MotorFactory() {
 
 std::unique_ptr<MotorInterface> MotorFactory::CreateMotor(
     MotorType type,
-    boost::asio::io_context& io_context,
-    const std::string& port_name,
-    unsigned int baudrate,
-    int motor_id
+    const std::shared_ptr<Serial>& serial,
+    int id
 )
 {
     switch (type)
     {
         case MotorType::STS3215:
         {
-            auto serial = std::make_unique<Serial>(io_context, port_name, baudrate);
-            return std::make_unique<Sts3215Driver>(std::move(serial));
+            return std::make_unique<Sts3215Driver>(serial, id);
         }
         default:
             return nullptr;
