@@ -146,22 +146,6 @@ def read_servo_position(serial_obj, servo_id):
 
     return 0
 
-def getch_nonblocking(timeout=SELECT_TIMEOUT):
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        r, _, _ = select.select([sys.stdin], [], [], timeout)
-        if r:
-            ch = sys.stdin.read(1)
-            if ch == '\x1b':
-                ch += sys.stdin.read(2)  # handle arrow keys
-            return ch
-        else:
-            return None
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
 def print_status():
     os.system('clear')
     print("╔══════════════════════════════════════════════╗")
@@ -179,7 +163,7 @@ def print_status():
         print(f"│ {servo_id:2d} │  {position:7d}  │ {min_pos:6d} │ {max_pos:6d} │")
     print("└────┴───────────┴────────┴────────┘\n")
 
-    print("  [Q] Quit")
+    print("  [Start] Quit")
 
 def map_range(value, in_min, in_max, out_min, out_max):
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
@@ -218,8 +202,6 @@ def main():
 
         time.sleep(SETUP_TIME)
 
-        print_status()
-
         controller_state = {}
 
         # Initialize the state for all axes the controller supports.
@@ -237,14 +219,12 @@ def main():
                     if event.type == ecodes.EV_KEY or event.type == ecodes.EV_ABS:
                         controller_state[event.code] = event.value
             
-            key = getch_nonblocking()
-            if key:
-                if key.lower() == 'q':
-                    print("Shutting Down...")
-                    break
-
             # Move servos here.
             for code, value in sorted(controller_state.items()):
+                if code == ecodes.BTN_START and value == 1:
+                    print("Shutting down...")
+                    raise
+
                 if code == ecodes.ABS_HAT0X: # arrow keys on the left bottom
                     servo_index = XBOX_SERVO_MAP[code]
                     step = int(POSITION_STEP/2) # slow down for servo 1
