@@ -8,7 +8,7 @@ class Serial {
   public:
     Serial(boost::asio::io_context& io, std::string uart_port, int uart_baudrate);
     ~Serial();
-    void Write(const std::string& data);
+    void Write(const std::vector<uint8_t>& data);
     std::string Read();
 
   private:

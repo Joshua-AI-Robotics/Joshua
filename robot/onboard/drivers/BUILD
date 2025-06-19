@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["sts3215_driver.h"],
     deps = [
         "//robot/onboard/interfaces:motor_interface",
+        "//robot/comm_interface/serial:serial",
         "//robot/config:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],

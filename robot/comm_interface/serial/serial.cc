@@ -28,7 +28,7 @@ Serial::~Serial() {
     }
 }
 
-void Serial::Write(const std::string& data){
+void Serial::Write(const std::vector<uint8_t>& data){
     if (!serial_->is_open()) {
         LOG(ERROR) << "Error: Serial port not open for writing.";
         throw std::runtime_error("Serial port not open for writing.");

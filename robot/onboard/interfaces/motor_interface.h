@@ -1,10 +1,13 @@
 #pragma once
 
+#include <glog/logging.h>
+
 // Abstract motor interface.
 class MotorInterface{
   public:
-    virtual void SetSpeed(float value);
-    virtual void SetPosition(float angle);
-    virtual void SetTorque(float torque);
-    virtual ~MotorInterface() = default;
+    MotorInterface();
+    virtual void SetSpeed(int servo_id, float value) = 0;
+    virtual void SetPosition(int servo_id, float angle) = 0;
+    virtual void SetTorque(int servo_id, float torque) = 0;
+    virtual ~MotorInterface();
 };

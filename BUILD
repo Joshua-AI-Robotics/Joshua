@@ -4,7 +4,7 @@ cc_binary(
     name = "main_program",
     srcs = ["main.cc"],
     deps = [
-        "//robot/comm_interface/serial:serial",
+        "//robot/onboard/factory:motor_factory",
     ],
     visibility = ["//visibility:public"],
 )

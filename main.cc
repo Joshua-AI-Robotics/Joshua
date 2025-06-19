@@ -1,6 +1,5 @@
-#include "robot/comm_interface/serial/serial.h"
+#include "robot/onboard/factory/motor_factory.h"
 #include <glog/logging.h>
-#include <iostream>
 
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
@@ -13,10 +12,20 @@ int main(int argc, char* argv[]) {
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.
-        Serial serial_port(io_context, "/dev/ttyACM0", 1000000);
-        LOG(INFO) << "Serial port opened successfully.";
-        serial_port.Write("Hello from Bazel!\n");
-        LOG(INFO) << "Sent data: Hello from Bazel!";
+
+        MotorFactory motor_factory;
+        
+        // TODO: -1 means this can controll mutliple.
+        auto sts3215 = motor_factory.CreateMotor(MotorType::STS3215, io_context, "/dev/ttyACM0", 1000000 ,-1);
+
+        sts3215->SetTorque(1, 1);
+        sleep(1);
+
+        sts3215->SetPosition(1, 1200);
+        sleep(1);
+        sts3215->SetPosition(1, 2800);
+        sleep(1);
+        sts3215->SetTorque(1, 0);
 
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
