@@ -15,8 +15,8 @@ namespace {
 // Constants for servo control
 const int NUMBER_OF_SERVOS = 6;
 const int START_ID = 1;
-const int POSITION_STEP = 20;
-const int MOVE_SPEED = 1500;
+const int POSITION_STEP = 10;
+const int MOVE_SPEED = 2000;
 const int SETUP_MOVE_SPEED = 1200;
 const int SETUP_TIME = 2; // seconds
 const int LOOP_DELAY_US = 10000; // 10ms delay
