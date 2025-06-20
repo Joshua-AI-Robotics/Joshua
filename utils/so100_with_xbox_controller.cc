@@ -7,7 +7,6 @@
 #include <chrono>
 #include <thread>
 #include <atomic>   // For std::atomic
-#include <csignal>  // For signal handling
 #include <memory>   // For std::unique_ptr
 
 namespace {
@@ -62,20 +61,21 @@ int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
     FLAGS_logtostderr = 1; // Log messages to stderr
 
-    LOG(INFO) << "Starting main_program";
-
-    /*
-    TODO:
-    2. Make internal queue to avoid race condition.
-    3. set speed for each motor now.
-    4. Make gripper speed faster.
-    */
-
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.
+
+        robot::onboard::XboxController xbox_controller;
+        if (!xbox_controller.Init()) {
+            LOG(ERROR) << "Failed to initialize Xbox controller. Exiting.";
+            return 1;
+        }
+        robot::onboard::XboxControllerState controller_state;
+        std::thread controller_thread([&]() { // Pass by reference for controller_state
+            xbox_controller.Run(controller_state);
+        });
+
         robot::onboard::MotorFactory motor_factory;        
-       
         boost::asio::io_context io_context;
         auto serial = std::make_shared<robot::comm_interface::Serial>(io_context, "/dev/ttyACM0", 1000000);
         std::vector<std::unique_ptr<robot::onboard::MotorInterface>> so100;
@@ -94,17 +94,6 @@ int main(int argc, char* argv[]) {
             servo->SetPosition(middle_position);
         }
         sleep(SETUP_TIME);
-
-
-        robot::onboard::XboxController xbox_controller;
-        if (!xbox_controller.Init()) {
-            LOG(ERROR) << "Failed to initialize Xbox controller. Exiting.";
-            return 1;
-        }
-        robot::onboard::XboxControllerState controller_state;
-        std::thread controller_thread([&]() { // Pass by reference for controller_state
-            xbox_controller.Run(controller_state);
-        });
 
         // Main loop to read from XboxControllerState and send commands to servos
         while (true) {
