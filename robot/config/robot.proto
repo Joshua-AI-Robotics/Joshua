@@ -37,8 +37,9 @@ message STS3215Config {
     uint32 physical_upper_limit = 3;
     uint32 operational_lower_limit = 4;
     uint32 operational_upper_limit = 5;
-    uint32 move_speed = 6;
-    uint32 idle_position = 7;
+    uint32 move_time_in_ms = 6;
+    uint32 move_speed = 7;
+    uint32 idle_position = 8;
 }
 
 message Motor {
