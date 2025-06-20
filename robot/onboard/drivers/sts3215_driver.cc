@@ -6,7 +6,7 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial
     serial_(serial),
     servo_id_(motor_config.sts3215_config().id())
     {
-        move_time_in_ms_ = 40;
+        move_time_in_ms_ = motor_config.sts3215_config().move_time_in_ms();
         move_speed_ = motor_config.sts3215_config().move_speed();
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
     }
