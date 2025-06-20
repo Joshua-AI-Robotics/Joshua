@@ -30,7 +30,7 @@ Serial::~Serial() {
 }
 
 void Serial::Write(const std::vector<uint8_t>& data){
-    std::lock_guard<std::mutex> lock(mutex_); // Acquire lock
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!serial_->is_open()) {
         LOG(ERROR) << "Error: Serial port not open for writing.";
         throw std::runtime_error("Serial port not open for writing.");
@@ -44,7 +44,7 @@ void Serial::Write(const std::vector<uint8_t>& data){
 }
 
 std::string Serial::Read(){
-    std::lock_guard<std::mutex> lock(mutex_); // Acquire lock
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!serial_->is_open()) {
         LOG(ERROR) << "Error: Serial port not open for reading.";
         throw std::runtime_error("Serial port not open for reading.");

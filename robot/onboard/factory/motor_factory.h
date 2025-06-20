@@ -23,6 +23,7 @@ public:
 
     std::unique_ptr<robot::onboard::MotorInterface> CreateMotor(robot_config::Motor motor_config)
     {
+        // TODO: Fix this nested switch case. Probably should make comm_factory.
         switch (motor_config.motor_type())
         {
             case robot_config::MotorType::STS3215:
@@ -32,14 +33,23 @@ public:
                         if (io_context_ == nullptr) {
                             io_context_ = std::make_shared<boost::asio::io_context>();
                         }
-                        if (serial_ == nullptr) {
-                            serial_ = std::make_shared<Serial>(
-                                io_context_,
-                                motor_config.serial_config().port(),
-                                motor_config.serial_config().baudrate()
-                            );
+                        
+                        auto port = motor_config.serial_config().port();
+                        auto it = serials_.find(motor_config.serial_config().port());
+
+                        // If serial port already exist (e.g. daisy-chain with uart)
+                        if(it != serials_.end()){
+                            return std::make_unique<robot::onboard::Sts3215Driver>(it->second, motor_config);
                         }
-                        return std::make_unique<robot::onboard::Sts3215Driver>(serial_, motor_config);
+
+                        serials_.emplace(port, 
+                            std::make_shared<Serial>(
+                                io_context_,
+                                port,
+                                motor_config.serial_config().baudrate()
+                            ));
+
+                        return std::make_unique<robot::onboard::Sts3215Driver>(serials_[port], motor_config);
                 }
             }
             default:
@@ -48,7 +58,8 @@ public:
     }
 
 private:
-    std::shared_ptr<Serial> serial_;
+    // Need one io_context for every serial.
     std::shared_ptr<boost::asio::io_context> io_context_;
+    std::map<std::string, std::shared_ptr<Serial>> serials_;
 };
 }

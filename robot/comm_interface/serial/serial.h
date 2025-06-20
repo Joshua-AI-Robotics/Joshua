@@ -19,6 +19,6 @@ class Serial {
     int uart_baudrate_;
     std::shared_ptr<boost::asio::io_context> io_context_;
     std::unique_ptr<boost::asio::serial_port> serial_;
-    std::mutex mutex_;
+    std::mutex mutex_; // UART Bus can use single serial. To avoid race condition.
 };
 }
