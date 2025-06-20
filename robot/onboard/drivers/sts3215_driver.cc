@@ -95,14 +95,12 @@ uint16_t Sts3215Driver::read_servo_position() {
     }
     serial_->Write(packet);
 
-    std::string response = serial_->Read();
+    std::vector<uint8_t> response = serial_->Read(8); // Expecting 8 bytes for a position response
 
     // 3. Validate response size
     // Typical Dynamixel status packet for 2 data bytes (position) is 8 bytes:
     // 0xFF 0xFF ID LENGTH ERROR P1 P2 CHECKSUM
-    // So, expecting a minimum of 8 bytes for a full response.
-    // Your check for < 6 is very lenient; consider making it < 8 or appropriate.
-    if (response.size() < 6) { // Original check, maintaining for consistency
+    if (response.size() < 8) {
         LOG(ERROR) << "Invalid/short response from servo " << static_cast<int>(servo_id_)
                    << ". Received " << response.size() << " bytes.";
         return 0; // Return 0 to indicate error or invalid reading
@@ -111,8 +109,8 @@ uint16_t Sts3215Driver::read_servo_position() {
     // 4. Extract position bytes safely
     // The crucial part: cast char to uint8_t, then to uint16_t before shifting.
     // This prevents sign extension if char is signed and the byte value is > 127.
-    uint16_t position_low_byte = static_cast<uint16_t>(static_cast<uint8_t>(response[4]));
-    uint16_t position_high_byte = static_cast<uint16_t>(static_cast<uint8_t>(response[5]));
+    uint16_t position_low_byte = static_cast<uint16_t>(response[4]);
+    uint16_t position_high_byte = static_cast<uint16_t>(response[5]);
 
     uint16_t position = (position_high_byte << 8) | position_low_byte;
     return position;

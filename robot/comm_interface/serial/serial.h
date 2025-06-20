@@ -12,7 +12,7 @@ class Serial {
     Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate);
     ~Serial();
     void Write(const std::vector<uint8_t>& data);
-    std::string Read();
+    std::vector<uint8_t> Read(size_t bytes_to_read);
 
   private:
     std::string uart_port_;

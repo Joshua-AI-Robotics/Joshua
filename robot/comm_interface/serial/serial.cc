@@ -43,24 +43,49 @@ void Serial::Write(const std::vector<uint8_t>& data){
     }
 }
 
-std::string Serial::Read(){
+std::vector<uint8_t> Serial::Read(size_t bytes_to_read){
     std::lock_guard<std::mutex> lock(mutex_);
     if (!serial_->is_open()) {
         LOG(ERROR) << "Error: Serial port not open for reading.";
         throw std::runtime_error("Serial port not open for reading.");
     }
+
+    std::vector<uint8_t> buffer(bytes_to_read);
+    boost::system::error_code ec;
+    
+    // Set up a deadline timer for the read operation
+    boost::asio::steady_timer timer(*io_context_);
+    timer.expires_from_now(std::chrono::milliseconds(100)); // 100ms timeout
+    timer.async_wait([&](const boost::system::error_code& e) {
+        if (!e) { // Timer not cancelled, means timeout occurred
+            serial_->cancel(); // Cancel the pending read operation
+        }
+    });
+
+    size_t bytes_read = 0;
     try {
-        boost::asio::streambuf buffer;
-        boost::asio::read_until(*serial_, buffer, '\n'); // Read until newline or choose a fixed size
-        std::istream is(&buffer);
-        std::string s;
-        std::getline(is, s);
-        return s;
+        bytes_read = boost::asio::read(*serial_, boost::asio::buffer(buffer), ec);
     } catch (const boost::system::system_error& e) {
         LOG(ERROR) << "Error reading from serial port: " << e.what();
         throw std::runtime_error("Error reading from serial port.");
     }
-    throw std::runtime_error("Read function reached end without return or throw."); // Should be unreachable
+
+    timer.cancel(); // Cancel the timer if read completes
+
+    if (ec == boost::asio::error::operation_aborted) {
+        LOG(ERROR) << "Serial read operation timed out or was cancelled.";
+        return {}; // Return empty vector on timeout/cancellation
+    }
+    else if (ec) {
+        LOG(ERROR) << "Error reading from serial port: " << ec.message();
+        throw boost::system::system_error(ec, "Read failed");
+    }
+    
+    if (bytes_read != bytes_to_read) {
+        LOG(WARNING) << "Read " << bytes_read << " bytes, expected " << bytes_to_read;
+    }
+    
+    return buffer;
 }
 
 }
