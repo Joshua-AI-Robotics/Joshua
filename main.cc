@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
         std::vector<int> current_servo_positions(kNumberOfServo);
 
         for(int i = 0; i < kNumberOfServo; i++){
-            so100.emplace_back(motor_factory.CreateMotor(robot::onboard::MotorType::STS3215, serial, kStartId + i));
+            so100.emplace_back(motor_factory.CreateMotor<robot::comm_interface::Serial>(robot::onboard::MotorType::STS3215, serial, kStartId + i));
         }
        
         for(int i = 0; i < kNumberOfServo; ++i){
