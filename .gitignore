@@ -1,0 +1,23 @@
+# Bazel outputs
+/bazel-*
+
+# IDE-specific files (adjust based on your IDEs)
+/.idea/
+/.ijwb/
+/.aswb/
+/.clwb/
+/.project
+/.classpath
+/.settings/
+/.factorypath
+*.iml
+/.vscode/
+
+# Local configuration and user-specific files
+/.bazelrc.user
+/WORKSPACE.user.bzl
+
+# Other common temporary files
+*~
+.*.swp
+/output/
