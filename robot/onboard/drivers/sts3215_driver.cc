@@ -140,6 +140,14 @@ void Sts3215Driver::SetTorque(float torque) {
     }
 }
 
+float Sts3215Driver::GetPosition() {
+    try{
+        return static_cast<float>(read_servo_position());
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to get position.");
+    }
+}
+
 void Sts3215Driver::SetMiddlePosition(){
     try{
         auto middle_position = (operational_lower_limit_ + operational_upper_limit_)/2;
@@ -155,7 +163,7 @@ void Sts3215Driver::SetIdlePosition(){
         serial_->Write(create_move_packet(idle_position_));
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set middle position.");
+        throw std::runtime_error("Failed to set idle position.");
     }
 }
 

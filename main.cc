@@ -69,6 +69,7 @@ int main(int argc, char* argv[]) {
 
         for(int i = 5; i > 0; --i){
             LOG(INFO) << "Shutting down in " << i << "...";
+            LOG(INFO) << motors[i]->GetPosition();
             sleep(1);
         }
 

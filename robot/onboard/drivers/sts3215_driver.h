@@ -14,9 +14,9 @@ class Sts3215Driver : public robot::onboard::MotorInterface {
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
-
-  void SetMiddlePosition();
-  void SetIdlePosition();
+  float GetPosition() override;
+  void SetMiddlePosition() override;
+  void SetIdlePosition() override;
 
   private: 
   uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);
