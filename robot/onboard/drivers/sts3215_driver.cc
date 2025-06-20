@@ -3,11 +3,18 @@
 namespace robot::onboard {
 
 Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot_config::Motor motor_config):
-    serial_(serial),
-    servo_id_(motor_config.sts3215_config().id())
-    {
-        move_time_in_ms_ = motor_config.sts3215_config().move_time_in_ms();
-        move_speed_ = motor_config.sts3215_config().move_speed();
+    serial_(serial)
+    {   
+        auto sts_config = motor_config.sts3215_config();
+        servo_id_ = sts_config.id();
+        move_speed_ = sts_config.move_speed();
+        move_time_in_ms_ = sts_config.move_time_in_ms();
+        physical_lower_limit_ = sts_config.physical_lower_limit();
+        physical_upper_limit_ = sts_config.physical_upper_limit();
+        operational_lower_limit_ = sts_config.operational_lower_limit();
+        operational_upper_limit_ = sts_config.operational_upper_limit();
+        idle_position_ = sts_config.idle_position();
+
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
     }
 
@@ -24,7 +31,7 @@ uint8_t Sts3215Driver::calculate_checksum(std::vector<uint8_t>::const_iterator b
     return ~checksum & 0xFF;
 }
 
-std::vector<uint8_t> Sts3215Driver::create_move_packet(uint16_t position, uint16_t speed) {
+std::vector<uint8_t> Sts3215Driver::create_move_packet(uint16_t position) {
     uint16_t integer_move_time_ms = static_cast<uint16_t>(move_time_in_ms_); // Assume move time is always positive.
     std::vector<uint8_t> packet = {
         static_cast<uint8_t>(0xFF),
@@ -43,8 +50,8 @@ std::vector<uint8_t> Sts3215Driver::create_move_packet(uint16_t position, uint16
         static_cast<uint8_t>((integer_move_time_ms >> 8) & 0xFF),  // Moving Time High Byte
 
         // Moving Speed (16-bit)
-        static_cast<uint8_t>(speed & 0xFF),         // Moving Speed Low Byte
-        static_cast<uint8_t>((speed >> 8) & 0xFF)   // Moving Speed High Byte
+        static_cast<uint8_t>(move_speed_ & 0xFF),         // Moving Speed Low Byte
+        static_cast<uint8_t>((move_speed_ >> 8) & 0xFF)   // Moving Speed High Byte
     };
 
     packet.push_back(calculate_checksum(packet.begin() + 2, packet.end()));
@@ -112,12 +119,12 @@ uint16_t Sts3215Driver::read_servo_position() {
 }
 
 void Sts3215Driver::SetSpeed(float value) {
-    move_speed_ = value;
+    move_speed_ = static_cast<uint16_t>(value);
 }
 
 void Sts3215Driver::SetPosition(float angle) {
     try{
-        serial_->Write(create_move_packet(uint16_t(angle), uint16_t(move_speed_)));
+        serial_->Write(create_move_packet(static_cast<uint16_t>(angle)));
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set position.");
@@ -126,10 +133,29 @@ void Sts3215Driver::SetPosition(float angle) {
 
 void Sts3215Driver::SetTorque(float torque) {
     try{
-        serial_->Write(create_torque_packet(uint16_t(torque)));
+        serial_->Write(create_torque_packet(static_cast<uint16_t>(torque)));
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set torque.");
+    }
+}
+
+void Sts3215Driver::SetMiddlePosition(){
+    try{
+        auto middle_position = (operational_lower_limit_ + operational_upper_limit_)/2;
+        serial_->Write(create_move_packet(middle_position));
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Error: " << e.what();
+        throw std::runtime_error("Failed to set middle position.");
+    }
+}
+
+void Sts3215Driver::SetIdlePosition(){
+    try{
+        serial_->Write(create_move_packet(idle_position_));
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Error: " << e.what();
+        throw std::runtime_error("Failed to set middle position.");
     }
 }
 

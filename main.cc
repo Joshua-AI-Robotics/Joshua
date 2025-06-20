@@ -11,15 +11,7 @@
 #include <fstream>
 
 namespace{
-    constexpr int kStartId= 1;
-    constexpr int kSetupMoveSpeed = 1200;
     constexpr int kSetupTime = 2;
-    struct ServoLimit {
-        int min;
-        int max;
-    };
-
-    const std::vector<float> kEndPosition = {2070, 847, 3011, 655, 1838, 1806};
 }
 
 robot_config::Robot LoadRobotConfig(const std::string& config_path) {
@@ -53,9 +45,6 @@ int main(int argc, char* argv[]) {
         // Motor instantiation.
         robot::onboard::MotorFactory motor_factory; 
         std::vector<std::unique_ptr<robot::onboard::MotorInterface>> motors;
-        std::vector<int> current_servo_positions(number_of_motors);
-        std::vector<std::pair<int, int>> motor_operational_limits;
-        std::vector<int> motor_speeds;
 
         for(int i = 0; i < number_of_motors; i++){
             const auto& motor_proto = robot_config.motor(i);
@@ -63,26 +52,18 @@ int main(int argc, char* argv[]) {
             switch(motor_proto.motor_type()){
                 case robot_config::MotorType::STS3215:
                     motors.emplace_back(motor_factory.CreateMotor(motor_proto));
-                    motor_operational_limits.emplace_back(motor_proto.sts3215_config().operational_lower_limit(), motor_proto.sts3215_config().operational_upper_limit());
-                    motor_speeds.push_back(motor_proto.sts3215_config().move_speed());
                     break;
                 default:
                     LOG(ERROR) << "Unknown motor type: " << motor_proto.motor_type();
                     break;
             }
         }
-
        
         // Random servo movements for validation.
         for(int i = 0; i < number_of_motors; ++i){
             auto& servo = motors[i];
             servo->SetTorque(1);
-            servo->SetSpeed(motor_speeds[i]);
-            int middle_position = (motor_operational_limits[i].first + motor_operational_limits[i].second) / 2;
-            
-
-            current_servo_positions[i] = middle_position;
-            servo->SetPosition(middle_position);
+            servo->SetMiddlePosition();
         }
         sleep(kSetupTime);
 
@@ -94,7 +75,7 @@ int main(int argc, char* argv[]) {
         LOG(INFO) << "Shutting down...";
         for (int i = 0; i < number_of_motors; ++i) {
             auto& servo = motors[i];
-            servo->SetPosition(kEndPosition[i]);            
+            servo->SetIdlePosition();            
         }
         sleep(kSetupTime);
         
