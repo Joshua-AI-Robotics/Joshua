@@ -1,11 +1,11 @@
 #include "robot/comm_interface/serial/serial.h"
 
 namespace robot::comm_interface{
-Serial::Serial(boost::asio::io_context& io, std::string uart_port, int uart_baudrate):
+Serial::Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate):
     io_context_(io), uart_port_(uart_port), uart_baudrate_(uart_baudrate)
     {
         try {
-            serial_ = std::make_unique<boost::asio::serial_port>(io_context_, uart_port_);
+            serial_ = std::make_unique<boost::asio::serial_port>(*io_context_, uart_port_);
 
             serial_->set_option(boost::asio::serial_port_base::baud_rate(uart_baudrate));
             serial_->set_option(boost::asio::serial_port_base::character_size(8));

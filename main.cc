@@ -1,14 +1,16 @@
 #include "robot/onboard/factory/motor_factory.h"
 #include "robot/onboard/drivers/sts3215_driver.h"
+#include "robot/config/robot.pb.h"
 #include <map>
 #include <glog/logging.h>
 #include <vector>
 #include <unistd.h> // For sleep
 #include <chrono>
 #include <thread>
+#include <google/protobuf/text_format.h>
+#include <fstream>
 
 namespace{
-    constexpr int kNumberOfServo = 6;
     constexpr int kStartId= 1;
     constexpr int kSetupMoveSpeed = 1200;
     constexpr int kSetupTime = 2;
@@ -18,15 +20,19 @@ namespace{
     };
 
     const std::vector<float> kEndPosition = {2070, 847, 3011, 655, 1838, 1806};
+}
 
-    const std::map<int, ServoLimit> kServoLimits = {
-        {0, {1024, 3072}},
-        {1, {800, 3000}},
-        {2, {950, 3000}},
-        {3, {900, 3072}},
-        {4, {0, 3000}},
-        {5, {1762, 2400}},
-    };
+robot_config::Robot LoadRobotConfig(const std::string& config_path) {
+    robot_config::Robot robot_config;
+    std::ifstream input(config_path);
+    if (!input) {
+        LOG(ERROR) << "Failed to open robot config file: " << config_path;
+    }
+    std::string config_content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    if (!google::protobuf::TextFormat::ParseFromString(config_content, &robot_config)) {
+        LOG(ERROR) << "Failed to parse robot config from file: " << config_path;
+    }
+    return robot_config;
 }
 
 int main(int argc, char* argv[]) {
@@ -37,24 +43,44 @@ int main(int argc, char* argv[]) {
 
     try {
         // sudo usermod -a -G dialout $USER
-        // And reboot your machine for update the permissions.
-        
-        robot::onboard::MotorFactory motor_factory;        
-       
-        boost::asio::io_context io_context;
-        auto serial = std::make_shared<robot::comm_interface::Serial>(io_context, "/dev/ttyACM0", 1000000);
-        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> so100;
-        std::vector<int> current_servo_positions(kNumberOfServo);
+        // And reboot your machine for update the permissions.        
+        robot_config::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
+        auto number_of_motors = robot_config.motor_size();
+        LOG(INFO) << "Robot Name: " << robot_config.name();
+        LOG(INFO) << "ID:" << robot_config.id();
+               
+                
+        // Motor instantiation.
+        robot::onboard::MotorFactory motor_factory; 
+        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> motors;
+        std::vector<int> current_servo_positions(number_of_motors);
+        std::vector<std::pair<int, int>> motor_operational_limits;
+        std::vector<int> motor_speeds;
 
-        for(int i = 0; i < kNumberOfServo; i++){
-            so100.emplace_back(motor_factory.CreateMotor<robot::comm_interface::Serial>(robot::onboard::MotorType::STS3215, serial, kStartId + i));
+        for(int i = 0; i < number_of_motors; i++){
+            const auto& motor_proto = robot_config.motor(i);
+
+            switch(motor_proto.motor_type()){
+                case robot_config::MotorType::STS3215:
+                    motors.emplace_back(motor_factory.CreateMotor(motor_proto));
+                    motor_operational_limits.emplace_back(motor_proto.sts3215_config().operational_lower_limit(), motor_proto.sts3215_config().operational_upper_limit());
+                    motor_speeds.push_back(motor_proto.sts3215_config().move_speed());
+                    break;
+                default:
+                    LOG(ERROR) << "Unknown motor type: " << motor_proto.motor_type();
+                    break;
+            }
         }
+
        
-        for(int i = 0; i < kNumberOfServo; ++i){
-            auto& servo = so100[i];
+        // Random servo movements for validation.
+        for(int i = 0; i < number_of_motors; ++i){
+            auto& servo = motors[i];
             servo->SetTorque(1);
-            servo->SetSpeed(i == 5 ? kSetupMoveSpeed*2 : kSetupMoveSpeed);
-            int middle_position = (kServoLimits.at(i).min + kServoLimits.at(i).max) / 2;
+            servo->SetSpeed(motor_speeds[i]);
+            int middle_position = (motor_operational_limits[i].first + motor_operational_limits[i].second) / 2;
+            
+
             current_servo_positions[i] = middle_position;
             servo->SetPosition(middle_position);
         }
@@ -66,14 +92,14 @@ int main(int argc, char* argv[]) {
         }
 
         LOG(INFO) << "Shutting down...";
-        for (int i = 0; i < kNumberOfServo; ++i) {
-            auto& servo = so100[i];
+        for (int i = 0; i < number_of_motors; ++i) {
+            auto& servo = motors[i];
             servo->SetPosition(kEndPosition[i]);            
         }
         sleep(kSetupTime);
         
         LOG(INFO) << "Disabling torque on all servos...";
-        for(auto& servo : so100){
+        for(auto& servo : motors){
             servo->SetTorque(0);
         }
 

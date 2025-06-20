@@ -12,3 +12,9 @@ cc_proto_library(
     deps = [":robot_proto"],
     visibility = ["//visibility:public"],
 )
+
+filegroup(
+    name = "robot_config_pbtxt",
+    srcs = ["robot_config.pbtxt"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package robot_config;
+
+enum RobotType {
+    ROBOT_INVALID = 0;
+    MANIPULATOR_ARM = 1;
+}
+
+enum PerceptionType {
+    PERCEPTION_INVALID = 0;
+    CAMERA = 1;
+    LIDAR = 2;
+    RADAR = 3;
+}
+
+enum MotorType {
+    MOTOR_INVALID = 0;
+    STS3215 = 1;
+}
+
+// The communication method to control the motor.
+enum CommType {
+    COMM_INVALID = 0;
+    SERIAL = 1;
+}
+
+message SerialConfig {
+    uint64 id = 1;
+    string port = 2;
+    uint64 baudrate = 3;
+}
+
+message STS3215Config {
+    uint64 id = 1;
+    uint32 physical_lower_limit = 2;
+    uint32 physical_upper_limit = 3;
+    uint32 operational_lower_limit = 4;
+    uint32 operational_upper_limit = 5;
+    uint32 move_speed = 6;
+    uint32 idle_position = 7;
+}
+
+message Motor {
+    string motor_name = 1;
+    uint64 id = 2;
+    MotorType motor_type = 3;
+    CommType comm_type = 4;
+    oneof comm_config {
+        SerialConfig serial_config = 5;
+        // Add other comm type here.
+    }
+    oneof motor_config {
+        STS3215Config sts3215_config = 6;
+        // Add other motor type here.
+    }
+}
+
+message Robot {
+    string name = 1;
+    uint64 id = 2;
+    RobotType robot_type = 3;
+    repeated Motor motor = 4;
+    repeated PerceptionType perception = 5;
+}

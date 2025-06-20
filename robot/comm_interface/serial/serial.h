@@ -9,7 +9,7 @@ namespace robot::comm_interface{
 
 class Serial {
   public:
-    Serial(boost::asio::io_context& io, std::string uart_port, int uart_baudrate);
+    Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate);
     ~Serial();
     void Write(const std::vector<uint8_t>& data);
     std::string Read();
@@ -17,7 +17,7 @@ class Serial {
   private:
     std::string uart_port_;
     int uart_baudrate_;
-    boost::asio::io_context& io_context_;
+    std::shared_ptr<boost::asio::io_context> io_context_;
     std::unique_ptr<boost::asio::serial_port> serial_;
     std::mutex mutex_;
 };

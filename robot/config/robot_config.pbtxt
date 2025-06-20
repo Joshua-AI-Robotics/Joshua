@@ -1,0 +1,120 @@
+name: "so100"
+id: 1
+robot_type: MANIPULATOR_ARM
+
+motor {
+  motor_name: "sts_motor_1"
+  id: 1
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 1
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 1024
+    operational_upper_limit: 3072
+    move_speed: 1500
+  }
+}
+motor {
+  motor_name: "sts_motor_2"
+  id: 2
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 2
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 800
+    operational_upper_limit: 3000
+    move_speed: 1500
+  }
+}
+motor {
+  motor_name: "sts_motor_3"
+  id: 3
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 3
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 950
+    operational_upper_limit: 3000
+    move_speed: 1500
+  }
+}
+motor {
+  motor_name: "sts_motor_4"
+  id: 4
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 4
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 900
+    operational_upper_limit: 3072
+    move_speed: 1500
+    
+  }
+}
+motor {
+  motor_name: "sts_motor_5"
+  id: 5
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 5
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 0
+    operational_upper_limit: 3000
+    move_speed: 1500
+  }
+}
+motor {
+  motor_name: "sts_motor_6"
+  id: 6
+  motor_type: STS3215
+  comm_type: SERIAL
+  serial_config {
+    id: 1
+    port: "/dev/ttyACM0"
+    baudrate: 1000000
+  }
+  sts3215_config {
+    id: 6
+    physical_lower_limit: 0
+    physical_upper_limit: 4095
+    operational_lower_limit: 1762
+    operational_upper_limit: 2400
+    move_speed: 2200
+  }
+}
+perception: CAMERA 

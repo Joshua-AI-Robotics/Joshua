@@ -2,11 +2,12 @@
 
 namespace robot::onboard {
 
-Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, uint8_t servo_id):
-    serial_(serial), servo_id_(servo_id)
+Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot_config::Motor motor_config):
+    serial_(serial),
+    servo_id_(motor_config.sts3215_config().id())
     {
         move_time_in_ms_ = 40;
-        move_speed_ = 1500;
+        move_speed_ = motor_config.sts3215_config().move_speed();
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
     }
 
@@ -73,7 +74,7 @@ std::vector<uint8_t> Sts3215Driver::create_read_position_packet() {
         static_cast<uint8_t>(0x02), // Instruction: READ_DATA
         static_cast<uint8_t>(0x38), // Parameter 1: Starting Address (PRESENT_POSITION_L = 56)
         static_cast<uint8_t>(0x02)  // Parameter 2: Length of Data to Read (2 bytes for position)
-    };    
+    };
     packet.push_back(calculate_checksum(packet.begin() + 2, packet.end()));
     return packet;
 }
@@ -99,7 +100,7 @@ uint16_t Sts3215Driver::read_servo_position() {
                    << ". Received " << response.size() << " bytes.";
         return 0; // Return 0 to indicate error or invalid reading
     }
-    
+
     // 4. Extract position bytes safely
     // The crucial part: cast char to uint8_t, then to uint16_t before shifting.
     // This prevents sign extension if char is signed and the byte value is > 127.
@@ -117,7 +118,7 @@ void Sts3215Driver::SetSpeed(float value) {
 void Sts3215Driver::SetPosition(float angle) {
     try{
         serial_->Write(create_move_packet(uint16_t(angle), uint16_t(move_speed_)));
-    } catch (const std::exception& e) {  
+    } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set position.");
     }
@@ -126,10 +127,10 @@ void Sts3215Driver::SetPosition(float angle) {
 void Sts3215Driver::SetTorque(float torque) {
     try{
         serial_->Write(create_torque_packet(uint16_t(torque)));
-    } catch (const std::exception& e) {  
+    } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set torque.");
     }
 }
 
-} // namespace robot::onboard::driver
+} // namespace robot::onboard

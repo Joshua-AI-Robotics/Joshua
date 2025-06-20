@@ -4,12 +4,12 @@
 #include <vector>
 #include "robot/comm_interface/serial/serial.h"
 #include "robot/onboard/interfaces/motor_interface.h"
-
+#include "robot/config/robot.pb.h"
 
 namespace robot::onboard{
 class Sts3215Driver : public robot::onboard::MotorInterface {
   public:
-  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, uint8_t servo_id);
+  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot_config::Motor motor_config);
   ~Sts3215Driver();
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;
