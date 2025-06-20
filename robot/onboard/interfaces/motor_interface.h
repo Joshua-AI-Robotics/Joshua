@@ -3,6 +3,7 @@
 #include <glog/logging.h>
 
 // Abstract motor interface.
+namespace robot::onboard{
 class MotorInterface{
   public:
     MotorInterface();
@@ -11,3 +12,4 @@ class MotorInterface{
     virtual void SetTorque(float torque) = 0;
     virtual ~MotorInterface();
 };
+}

@@ -11,6 +11,7 @@ namespace boost::asio {
     class io_context;
 }
 
+namespace robot::onboard{
 enum class MotorType {
     STS3215,
     // Add other motor types here
@@ -22,9 +23,10 @@ public:
     ~MotorFactory() = default;
 
     // TODO: Make this input arguments as a class.
-    static std::unique_ptr<MotorInterface> CreateMotor(
+    static std::unique_ptr<robot::onboard::MotorInterface> CreateMotor(
         MotorType type,
-        const std::shared_ptr<Serial>& serial,
+        const std::shared_ptr<robot::comm_interface::Serial>& serial,
         int id
     );
 };
+}

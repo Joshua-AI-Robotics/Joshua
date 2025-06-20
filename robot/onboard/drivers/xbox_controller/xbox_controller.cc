@@ -9,9 +9,7 @@
 #include <algorithm>
 #include <iomanip>
 
-namespace robot {
-namespace onboard {
-namespace drivers {
+namespace robot::onboard{
 
 XboxController::XboxController() {
     // No initial positions or servo maps in this class anymore
@@ -166,6 +164,4 @@ void XboxController::Run(XboxControllerState& state) {
     // No torque disabling here, this class only handles controller input.
 }
 
-} // namespace drivers
-} // namespace onboard
-} // namespace robot 
+}

@@ -1,5 +1,6 @@
 #include "robot/comm_interface/serial/serial.h"
 
+namespace robot::comm_interface{
 Serial::Serial(boost::asio::io_context& io, std::string uart_port, int uart_baudrate):
     io_context_(io), uart_port_(uart_port), uart_baudrate_(uart_baudrate)
     {
@@ -62,3 +63,4 @@ std::string Serial::Read(){
     throw std::runtime_error("Read function reached end without return or throw."); // Should be unreachable
 }
 
+}

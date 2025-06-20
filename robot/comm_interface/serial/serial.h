@@ -5,6 +5,8 @@
 #include <glog/logging.h>
 #include <mutex>
 
+namespace robot::comm_interface{
+
 class Serial {
   public:
     Serial(boost::asio::io_context& io, std::string uart_port, int uart_baudrate);
@@ -19,3 +21,4 @@ class Serial {
     std::unique_ptr<boost::asio::serial_port> serial_;
     std::mutex mutex_;
 };
+}

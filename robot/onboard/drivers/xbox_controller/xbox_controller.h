@@ -1,6 +1,4 @@
-#ifndef ROBOT_ONBOARD_DRIVERS_XBOX_CONTROLLER_H_
-#define ROBOT_ONBOARD_DRIVERS_XBOX_CONTROLLER_H_
-
+# pragma once
 #include <libevdev/libevdev.h>
 #include <string>
 #include <map>
@@ -9,9 +7,7 @@
 #include "robot/onboard/interfaces/motor_interface.h"
 #include <vector>
 
-namespace robot {
-namespace onboard {
-namespace drivers {
+namespace robot::onboard {
 
 // Struct to hold the current state of the Xbox controller
 struct XboxControllerState {
@@ -109,8 +105,4 @@ private:
     void PrintStatus(const XboxControllerState& state);
 };
 
-} // namespace drivers
-} // namespace onboard
-} // namespace robot
-
-#endif // ROBOT_ONBOARD_DRIVERS_XBOX_CONTROLLER_H_ 
+} 

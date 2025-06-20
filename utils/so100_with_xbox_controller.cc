@@ -74,15 +74,15 @@ int main(int argc, char* argv[]) {
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.
-        MotorFactory motor_factory;        
+        robot::onboard::MotorFactory motor_factory;        
        
         boost::asio::io_context io_context;
-        auto serial = std::make_shared<Serial>(io_context, "/dev/ttyACM0", 1000000);
-        std::vector<std::unique_ptr<MotorInterface>> so100;
+        auto serial = std::make_shared<robot::comm_interface::Serial>(io_context, "/dev/ttyACM0", 1000000);
+        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> so100;
         std::vector<int> current_servo_positions(NUMBER_OF_SERVOS);
 
         for(int i = 0; i < NUMBER_OF_SERVOS; i++){
-            so100.emplace_back(motor_factory.CreateMotor(MotorType::STS3215, serial, START_ID + i));
+            so100.emplace_back(motor_factory.CreateMotor(robot::onboard::MotorType::STS3215, serial, START_ID + i));
         }
        
         for(int i = 0; i < NUMBER_OF_SERVOS; ++i){
@@ -96,12 +96,12 @@ int main(int argc, char* argv[]) {
         sleep(SETUP_TIME);
 
 
-        robot::onboard::drivers::XboxController xbox_controller;
+        robot::onboard::XboxController xbox_controller;
         if (!xbox_controller.Init()) {
             LOG(ERROR) << "Failed to initialize Xbox controller. Exiting.";
             return 1;
         }
-        robot::onboard::drivers::XboxControllerState controller_state;
+        robot::onboard::XboxControllerState controller_state;
         std::thread controller_thread([&]() { // Pass by reference for controller_state
             xbox_controller.Run(controller_state);
         });
