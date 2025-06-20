@@ -1,5 +1,5 @@
 #include "robot/onboard/factory/motor_factory.h"
-#include "robot/onboard/drivers/xbox_controller/xbox_controller.h"
+#include "utils/xbox_controller/xbox_controller.h"
 #include "robot/onboard/drivers/sts3215_driver.h"
 #include <glog/logging.h>
 #include <vector>

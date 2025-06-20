@@ -1,4 +1,4 @@
-#include "robot/onboard/drivers/xbox_controller/xbox_controller.h"
+#include "utils/xbox_controller/xbox_controller.h"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -77,35 +77,34 @@ bool XboxController::FindController() {
 
 void XboxController::PrintStatus(const XboxControllerState& state) {
     system("clear"); 
-    LOG(INFO) << "╔══════════════════════════════════════════════╗";
-    LOG(INFO) << "║          Xbox Controller Raw Input Status    ║";
-    LOG(INFO) << "╚══════════════════════════════════════════════╝\n";
+    LOG(INFO) << "\t╔══════════════════════════════════════════════╗";
+    LOG(INFO) << "\t║       Xbox Controller Raw Input Status       ║";
+    LOG(INFO) << "\t╚══════════════════════════════════════════════╝\n";
 
-    LOG(INFO) << "┌─────────────────────────┬──────────────────┐";
-    LOG(INFO) << "│ Axis/Button             │ Value            │";
-    LOG(INFO) << "├─────────────────────────┼──────────────────┤";
-    LOG(INFO) << "│ D-Pad X                 │ " << std::setw(16) << std::right << state.abs_hat0x_value << " │";
-    LOG(INFO) << "│ D-Pad Y                 │ " << std::setw(16) << std::right << state.abs_hat0y_value << " │";
-    LOG(INFO) << "│ Left Joystick X         │ " << std::setw(16) << std::right << state.abs_x_value << " │";
-    LOG(INFO) << "│ Left Joystick Y         │ " << std::setw(16) << std::right << state.abs_y_value << " │";
-    LOG(INFO) << "│ Right Joystick X        │ " << std::setw(16) << std::right << state.abs_rx_value << " │";
-    LOG(INFO) << "│ Right Joystick Y        │ " << std::setw(16) << std::right << state.abs_ry_value << " │";
-    LOG(INFO) << "│ Left Trigger            │ " << std::setw(16) << std::right << state.abs_z_value << " │";
-    LOG(INFO) << "│ Right Trigger           │ " << std::setw(16) << std::right << state.abs_rz_value << " │";
-    LOG(INFO) << "│ A Button                │ " << std::setw(16) << std::right << state.btn_south_state << " │";
-    LOG(INFO) << "│ B Button                │ " << std::setw(16) << std::right << state.btn_east_state << " │";
-    LOG(INFO) << "│ X Button                │ " << std::setw(16) << std::right << state.btn_west_state << " │";
-    LOG(INFO) << "│ Y Button                │ " << std::setw(16) << std::right << state.btn_north_state << " │";
-    LOG(INFO) << "│ Left Bumper             │ " << std::setw(16) << std::right << state.btn_tl_state << " │";
-    LOG(INFO) << "│ Right Bumper            │ " << std::setw(16) << std::right << state.btn_tr_state << " │";
-    LOG(INFO) << "│ Start Button            │ " << std::setw(16) << std::right << state.btn_start_state << " │";
-    LOG(INFO) << "│ Back Button             │ " << std::setw(16) << std::right << state.btn_select_state << " │";
-    LOG(INFO) << "│ Left Stick Click        │ " << std::setw(16) << std::right << state.btn_thumbl_state << " │";
-    LOG(INFO) << "│ Right Stick Click       │ " << std::setw(16) << std::right << state.btn_thumbr_state << " │";
-    LOG(INFO) << "│ Guide Button            │ " << std::setw(16) << std::right << state.btn_mode_state << " │";
-    LOG(INFO) << "└─────────────────────────┴──────────────────┘\n";
+    LOG(INFO) << "\t┌─────────────────────────┬──────────────────┐";
+    LOG(INFO) << "\t│ Axis/Button             │ Value            │";
+    LOG(INFO) << "\t├─────────────────────────┼──────────────────┤";
+    LOG(INFO) << "\t│ D-Pad X                 │ " << std::setw(16) << std::right << state.abs_hat0x_value << " │";
+    LOG(INFO) << "\t│ D-Pad Y                 │ " << std::setw(16) << std::right << state.abs_hat0y_value << " │";
+    LOG(INFO) << "\t│ Left Joystick X         │ " << std::setw(16) << std::right << state.abs_x_value << " │";
+    LOG(INFO) << "\t│ Left Joystick Y         │ " << std::setw(16) << std::right << state.abs_y_value << " │";
+    LOG(INFO) << "\t│ Right Joystick X        │ " << std::setw(16) << std::right << state.abs_rx_value << " │";
+    LOG(INFO) << "\t│ Right Joystick Y        │ " << std::setw(16) << std::right << state.abs_ry_value << " │";
+    LOG(INFO) << "\t│ Left Trigger            │ " << std::setw(16) << std::right << state.abs_z_value << " │";
+    LOG(INFO) << "\t│ Right Trigger           │ " << std::setw(16) << std::right << state.abs_rz_value << " │";
+    LOG(INFO) << "\t│ A Button                │ " << std::setw(16) << std::right << state.btn_south_state << " │";
+    LOG(INFO) << "\t│ B Button                │ " << std::setw(16) << std::right << state.btn_east_state << " │";
+    LOG(INFO) << "\t│ X Button                │ " << std::setw(16) << std::right << state.btn_west_state << " │";
+    LOG(INFO) << "\t│ Y Button                │ " << std::setw(16) << std::right << state.btn_north_state << " │";
+    LOG(INFO) << "\t│ Left Bumper             │ " << std::setw(16) << std::right << state.btn_tl_state << " │";
+    LOG(INFO) << "\t│ Right Bumper            │ " << std::setw(16) << std::right << state.btn_tr_state << " │";
+    LOG(INFO) << "\t│ Start Button            │ " << std::setw(16) << std::right << state.btn_start_state << " │";
+    LOG(INFO) << "\t│ Back Button             │ " << std::setw(16) << std::right << state.btn_select_state << " │";
+    LOG(INFO) << "\t│ Left Stick Click        │ " << std::setw(16) << std::right << state.btn_thumbl_state << " │";
+    LOG(INFO) << "\t│ Right Stick Click       │ " << std::setw(16) << std::right << state.btn_thumbr_state << " │";
+    LOG(INFO) << "\t│ Guide Button            │ " << std::setw(16) << std::right << state.btn_mode_state << " │";
+    LOG(INFO) << "\t└─────────────────────────┴──────────────────┘\n";
 
-    LOG(INFO) << "  [Q] Quit";
 }
 
 void XboxController::ProcessEvent(const input_event& ev, XboxControllerState& state) {
@@ -158,7 +157,7 @@ void XboxController::Run(XboxControllerState& state) {
         } else { // retval == 0, timeout
             // No events within the timeout, continue loop
         }
-        // PrintStatus(state);
+        PrintStatus(state);
     }
 
     // No torque disabling here, this class only handles controller input.

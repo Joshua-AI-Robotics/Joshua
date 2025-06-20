@@ -5,7 +5,7 @@ cc_binary(
     srcs = ["so100_with_xbox_controller.cc"],
     deps = [
         "//robot/onboard/factory:motor_factory",
-        "//robot/onboard/drivers/xbox_controller:xbox_controller",
+        "//utils/xbox_controller:xbox_controller",
     ],
     visibility = ["//visibility:public"],
 )
