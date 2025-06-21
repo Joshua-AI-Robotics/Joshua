@@ -1,4 +1,7 @@
 #include "robot/comm_interface/serial/serial.h"
+#include <termios.h>
+#include <cerrno>
+#include <cstring>
 
 namespace robot::comm_interface{
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate):
@@ -94,22 +97,9 @@ void Serial::Flush() {
         LOG(ERROR) << "Error: Serial port not open for flushing.";
         return;
     }
-    try {
-        serial_->cancel(); // Cancel any pending read operations
-        // Read and discard any remaining bytes in the buffer
-        while (true) {
-            char c;
-            boost::system::error_code ec;
-            boost::asio::read(*serial_, boost::asio::buffer(&c, 1), ec);
-            if (ec == boost::asio::error::eof || ec == boost::asio::error::would_block) {
-                break; // No more data to read
-            } else if (ec) {
-                LOG(ERROR) << "Error flushing serial port: " << ec.message();
-                break;
-            }
-        }
-    } catch (const boost::system::system_error& e) {
-        LOG(ERROR) << "Error flushing serial port: " << e.what();
+    // Using tcflush for POSIX systems is more reliable for clearing serial buffers.
+    if (::tcflush(serial_->native_handle(), TCIFLUSH) != 0) {
+        LOG(ERROR) << "tcflush failed: " << strerror(errno);
     }
 }
 

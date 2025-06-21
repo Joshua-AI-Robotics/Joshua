@@ -93,6 +93,9 @@ std::vector<uint8_t> Sts3215Driver::create_read_position_packet() {
 }
 
 uint16_t Sts3215Driver::read_servo_position() {
+    // 0. Flush the serial port to clear any stale data from previous reads
+    serial_->Flush();
+
     // 1. Create and send the read position packet
     std::vector<uint8_t> packet = create_read_position_packet();
     if (!serial_) {
