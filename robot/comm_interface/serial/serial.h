@@ -13,6 +13,7 @@ class Serial {
     ~Serial();
     void Write(const std::vector<uint8_t>& data);
     std::vector<uint8_t> Read(size_t bytes_to_read);
+    void Flush();
 
   private:
     std::string uart_port_;

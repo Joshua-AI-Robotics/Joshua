@@ -88,4 +88,29 @@ std::vector<uint8_t> Serial::Read(size_t bytes_to_read){
     return buffer;
 }
 
+void Serial::Flush() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!serial_->is_open()) {
+        LOG(ERROR) << "Error: Serial port not open for flushing.";
+        return;
+    }
+    try {
+        serial_->cancel(); // Cancel any pending read operations
+        // Read and discard any remaining bytes in the buffer
+        while (true) {
+            char c;
+            boost::system::error_code ec;
+            boost::asio::read(*serial_, boost::asio::buffer(&c, 1), ec);
+            if (ec == boost::asio::error::eof || ec == boost::asio::error::would_block) {
+                break; // No more data to read
+            } else if (ec) {
+                LOG(ERROR) << "Error flushing serial port: " << ec.message();
+                break;
+            }
+        }
+    } catch (const boost::system::system_error& e) {
+        LOG(ERROR) << "Error flushing serial port: " << e.what();
+    }
+}
+
 }
