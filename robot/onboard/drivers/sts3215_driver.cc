@@ -95,22 +95,94 @@ uint16_t Sts3215Driver::read_servo_position() {
     }
     serial_->Write(packet);
 
-    std::vector<uint8_t> response = serial_->Read(8); // Expecting 8 bytes for a position response
+    std::vector<uint8_t> response;
+    response.reserve(8); // Pre-allocate space
 
-    // 3. Validate response size
-    // Typical Dynamixel status packet for 2 data bytes (position) is 8 bytes:
-    // 0xFF 0xFF ID LENGTH ERROR P1 P2 CHECKSUM
-    if (response.size() < 8) {
-        LOG(ERROR) << "Invalid/short response from servo " << static_cast<int>(servo_id_)
-                   << ". Received " << response.size() << " bytes.";
-        return 0; // Return 0 to indicate error or invalid reading
+    // Synchronize to 0xFF 0xFF header
+    uint8_t byte;
+    bool header_found = false;
+    for (int attempts = 0; attempts < 50; ++attempts) { // Limit attempts to prevent infinite loop
+        std::vector<uint8_t> first_byte_vec = serial_->Read(1);
+        if (first_byte_vec.empty()) {
+            LOG(WARNING) << "Serial read timeout during header search (first byte) for servo " << static_cast<int>(servo_id_);
+            return 0;
+        }
+        uint8_t first_byte = first_byte_vec[0];
+
+        if (first_byte == 0xFF) {
+            std::vector<uint8_t> second_byte_vec = serial_->Read(1);
+            if (second_byte_vec.empty()) {
+                LOG(WARNING) << "Serial read timeout during header search (second byte) for servo " << static_cast<int>(servo_id_);
+                return 0;
+            }
+            uint8_t second_byte = second_byte_vec[0];
+
+            if (second_byte == 0xFF) {
+                // Header found!
+                response.push_back(0xFF);
+                response.push_back(0xFF);
+                header_found = true;
+                break;
+            }
+            // If first_byte was 0xFF but second_byte was not, we continue the loop to find the next 0xFF.
+        }
+    }
+
+    if (!header_found) {
+        LOG(ERROR) << "Failed to find 0xFF 0xFF header after multiple attempts for servo " << static_cast<int>(servo_id_);
+        return 0;
+    }
+
+    // Now read the remaining 6 bytes of the packet
+    std::vector<uint8_t> remaining_bytes = serial_->Read(6);
+    if (remaining_bytes.size() != 6) {
+        LOG(ERROR) << "Failed to read remaining 6 bytes after header sync for servo " << static_cast<int>(servo_id_);
+        return 0;
+    }
+    response.insert(response.end(), remaining_bytes.begin(), remaining_bytes.end());
+
+    // Debugging: Print raw response (after synchronization)
+    LOG(INFO) << "Servo " << static_cast<int>(servo_id_) << ": Received synchronized response size: " << response.size();
+    if (response.size() == 8) {
+        std::string response_str = "Synchronized raw response: ";
+        for (size_t i = 0; i < response.size(); ++i) {
+            response_str += std::to_string(static_cast<int>(response[i])) + " ";
+        }
+        LOG(INFO) << response_str;
+    }
+
+    // 3. Validate response size, start bytes, and error byte
+    // The start bytes and total size are now guaranteed by the sync loop.
+    if (response[4] != 0) { // Error byte check
+        LOG(ERROR) << "Servo " << static_cast<int>(servo_id_) << " returned an error: "
+                   << static_cast<int>(response[4]) << ". Raw response: ";
+        std::string response_str = "";
+        for (size_t i = 0; i < response.size(); ++i) {
+            response_str += std::to_string(static_cast<int>(response[i])) + " ";
+        }
+        LOG(ERROR) << response_str;
+        return 0;
+    }
+
+    // Validate checksum
+    uint8_t calculated_checksum = calculate_checksum(response.begin() + 2, response.begin() + 7);
+    uint8_t received_checksum = response[7];
+    if (calculated_checksum != received_checksum) {
+        LOG(ERROR) << "Checksum mismatch for servo " << static_cast<int>(servo_id_)
+                   << ". Calculated: " << static_cast<int>(calculated_checksum)
+                   << ", Received: " << static_cast<int>(received_checksum)
+                   << ". Raw response: ";
+        std::string response_str = "";
+        for (size_t i = 0; i < response.size(); ++i) {
+            response_str += std::to_string(static_cast<int>(response[i])) + " ";
+        }
+        LOG(ERROR) << response_str;
+        return 0;
     }
 
     // 4. Extract position bytes safely
-    // The crucial part: cast char to uint8_t, then to uint16_t before shifting.
-    // This prevents sign extension if char is signed and the byte value is > 127.
-    uint16_t position_low_byte = static_cast<uint16_t>(response[4]);
-    uint16_t position_high_byte = static_cast<uint16_t>(response[5]);
+    uint16_t position_low_byte = static_cast<uint16_t>(response[5]);
+    uint16_t position_high_byte = static_cast<uint16_t>(response[6]);
 
     uint16_t position = (position_high_byte << 8) | position_low_byte;
     return position;

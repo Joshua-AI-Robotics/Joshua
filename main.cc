@@ -67,11 +67,15 @@ int main(int argc, char* argv[]) {
         }
         sleep(kSetupTime);
 
-        for(int i = 5; i > 0; --i){
+        for(int i = 5; i > 0; --i){   
+            system("clear");         
             LOG(INFO) << "Shutting down in " << i << "...";
-            LOG(INFO) << motors[i]->GetPosition();
-            sleep(1);
+            for(int i = 0; i < number_of_motors; i++){
+                LOG(INFO) << "Servo [" << i  << "] value: " << motors[i]->GetPosition();
+            }
+            sleep(1);            
         }
+
 
         LOG(INFO) << "Shutting down...";
         for (int i = 0; i < number_of_motors; ++i) {
