@@ -1,6 +1,12 @@
 #include "robot/onboard/drivers/sts3215_driver.h"
 
+
+
 namespace robot::onboard {
+
+namespace {
+    constexpr auto kReadAttempt = 50;
+}
 
 Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot_config::Motor motor_config):
     serial_(serial)
@@ -101,7 +107,7 @@ uint16_t Sts3215Driver::read_servo_position() {
     // Synchronize to 0xFF 0xFF header
     uint8_t byte;
     bool header_found = false;
-    for (int attempts = 0; attempts < 50; ++attempts) { // Limit attempts to prevent infinite loop
+    for (int attempts = 0; attempts < kReadAttempt; ++attempts) {
         std::vector<uint8_t> first_byte_vec = serial_->Read(1);
         if (first_byte_vec.empty()) {
             LOG(WARNING) << "Serial read timeout during header search (first byte) for servo " << static_cast<int>(servo_id_);
@@ -140,16 +146,6 @@ uint16_t Sts3215Driver::read_servo_position() {
         return 0;
     }
     response.insert(response.end(), remaining_bytes.begin(), remaining_bytes.end());
-
-    // Debugging: Print raw response (after synchronization)
-    LOG(INFO) << "Servo " << static_cast<int>(servo_id_) << ": Received synchronized response size: " << response.size();
-    if (response.size() == 8) {
-        std::string response_str = "Synchronized raw response: ";
-        for (size_t i = 0; i < response.size(); ++i) {
-            response_str += std::to_string(static_cast<int>(response[i])) + " ";
-        }
-        LOG(INFO) << response_str;
-    }
 
     // 3. Validate response size, start bytes, and error byte
     // The start bytes and total size are now guaranteed by the sync loop.
