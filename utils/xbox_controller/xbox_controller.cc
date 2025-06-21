@@ -151,13 +151,12 @@ void XboxController::Run(XboxControllerState& state) {
             if (rc == LIBEVDEV_READ_STATUS_SYNC || rc == LIBEVDEV_READ_STATUS_SUCCESS) {
                 ProcessEvent(ev, state);
             } else {
-                LOG(ERROR) << "Error reading event: " << strerror(-rc);
-                break;
+                LOG(WARNING) << "Error reading event: " << strerror(-rc);
             }
         } else { // retval == 0, timeout
             // No events within the timeout, continue loop
         }
-        PrintStatus(state);
+        // PrintStatus(state);
     }
 
     // No torque disabling here, this class only handles controller input.

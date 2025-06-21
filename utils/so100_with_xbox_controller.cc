@@ -8,38 +8,14 @@
 #include <thread>
 #include <atomic>   // For std::atomic
 #include <memory>   // For std::unique_ptr
+#include <google/protobuf/text_format.h>
+#include <fstream>
 
-namespace {
 
-// Constants for servo control
-const int NUMBER_OF_SERVOS = 6;
-const int START_ID = 1;
-const int POSITION_STEP = 10;
-const int MOVE_SPEED = 2000;
-const int SETUP_MOVE_SPEED = 1200;
-const int SETUP_TIME = 2; // seconds
-const int LOOP_DELAY_US = 10000; // 10ms delay
-const int JOYSTICK_DEADZONE = 5000; // Adjust this value as needed. Typical range is 0-32767
+namespace{
+    constexpr int kSetupTime = 2;
 
-// Servo limits - replicated from the original Python script
-struct ServoLimit {
-    int min;
-    int max;
-};
-
-const std::vector<float> END_POSITIONS = {2070, 847, 3011, 655, 1838, 1806};
-
-std::map<int, ServoLimit> SERVO_LIMITS = {
-    {0, {1024, 3072}},
-    {1, {800, 3000}},
-    {2, {950, 3000}},
-    {3, {900, 3072}},
-    {4, {0, 3000}},
-    {5, {1762, 2400}},
-};
-
-// Mapping of Xbox controller event codes to servo indices - replicated from Python
-std::map<int, int> XBOX_SERVO_MAP = {
+    std::map<int, int> kXboxServoMap = {
     {ABS_HAT0X, 0},
     {ABS_Y, 1},
     {ABS_RY, 2},
@@ -54,8 +30,22 @@ std::map<int, int> XBOX_SERVO_MAP = {
 int MapRange(int value, int in_min, int in_max, int out_min, int out_max) {
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-
 } // namespace
+
+robot_config::Robot LoadRobotConfig(const std::string& config_path) {
+    robot_config::Robot robot_config;
+    std::ifstream input(config_path);
+    if (!input) {
+        LOG(ERROR) << "Failed to open robot config file: " << config_path;
+        throw std::runtime_error("Failed to open robot config file: " + config_path);
+    }
+    std::string config_content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    if (!google::protobuf::TextFormat::ParseFromString(config_content, &robot_config)) {
+        LOG(ERROR) << "Failed to parse robot config from file: " << config_path;
+        throw std::runtime_error("Failed to parse robot config from file: " + config_path);
+    }
+    return robot_config;
+}
 
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
@@ -75,26 +65,44 @@ int main(int argc, char* argv[]) {
             xbox_controller.Run(controller_state);
         });
 
-        robot::onboard::MotorFactory motor_factory;        
-        boost::asio::io_context io_context;
-        auto serial = std::make_shared<robot::comm_interface::Serial>(io_context, "/dev/ttyACM0", 1000000);
-        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> so100;
-        std::vector<int> current_servo_positions(NUMBER_OF_SERVOS);
+        robot_config::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
+        auto number_of_motors = robot_config.motor_size();
+        LOG(INFO) << "Robot Name: " << robot_config.name();
+        LOG(INFO) << "ID:" << robot_config.id();
 
-        for(int i = 0; i < NUMBER_OF_SERVOS; i++){
-            so100.emplace_back(motor_factory.CreateMotor(robot::onboard::MotorType::STS3215, serial, START_ID + i));
+        // Motor instantiation.
+        robot::onboard::MotorFactory motor_factory; 
+        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> motors;
+
+        for(int i = 0; i < number_of_motors; i++){
+            const auto& motor_proto = robot_config.motor(i);
+
+            switch(motor_proto.motor_type()){
+                case robot_config::MotorType::STS3215:
+                    motors.emplace_back(motor_factory.CreateMotor(motor_proto));
+                    break;
+                default:
+                    LOG(ERROR) << "Unknown motor type: " << motor_proto.motor_type();
+                    break;
+            }
         }
        
-        for(int i = 0; i < NUMBER_OF_SERVOS; ++i){
-            auto& servo = so100[i];
+        // Random servo movements for validation.
+        for(int i = 0; i < number_of_motors; ++i){
+            auto& servo = motors[i];
             servo->SetTorque(1);
-            servo->SetSpeed(i == 5 ? SETUP_MOVE_SPEED*2 : SETUP_MOVE_SPEED);
-            int middle_position = (SERVO_LIMITS[i].min + SERVO_LIMITS[i].max) / 2;
-            current_servo_positions[i] = middle_position;
-            servo->SetPosition(middle_position);
+            servo->SetMiddlePosition();
         }
-        sleep(SETUP_TIME);
+        sleep(kSetupTime);
 
+        const int POSITION_STEP = 10;
+        const int JOYSTICK_DEADZONE = 5000;
+        std::vector<int> current_servo_positions(6);
+        for(int i = 0; i < number_of_motors; i++){
+            current_servo_positions[i] = int(motors[i]->GetPosition());
+            LOG(INFO) << motors[i]->GetPosition();
+        }
+        
         // Main loop to read from XboxControllerState and send commands to servos
         while (true) {
             // Check for Start button press to escape the loop
@@ -105,7 +113,7 @@ int main(int argc, char* argv[]) {
 
             // Process controller state and update servo positions
             // D-Pad X
-            int servo_index_0 = XBOX_SERVO_MAP[ABS_HAT0X];
+            int servo_index_0 = kXboxServoMap[ABS_HAT0X];
             if (controller_state.abs_hat0x_value == 1) {
                 current_servo_positions[servo_index_0] += POSITION_STEP / 2;
             } else if (controller_state.abs_hat0x_value == -1) {
@@ -113,7 +121,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Left Joystick Y
-            int servo_index_1 = XBOX_SERVO_MAP[ABS_Y];
+            int servo_index_1 = kXboxServoMap[ABS_Y];
             int joystick_y_value = controller_state.abs_y_value;
             if (std::abs(joystick_y_value) < JOYSTICK_DEADZONE) {
                 joystick_y_value = 0;
@@ -124,7 +132,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Right Joystick Y
-            int servo_index_2 = XBOX_SERVO_MAP[ABS_RY];
+            int servo_index_2 = kXboxServoMap[ABS_RY];
             int joystick_ry_value = controller_state.abs_ry_value;
             if (std::abs(joystick_ry_value) < JOYSTICK_DEADZONE) {
                 joystick_ry_value = 0;
@@ -135,56 +143,59 @@ int main(int argc, char* argv[]) {
             }
 
             // Y Button
-            int servo_index_3_y = XBOX_SERVO_MAP[BTN_WEST];
+            int servo_index_3_y = kXboxServoMap[BTN_WEST];
             if (controller_state.btn_west_state == 1) {
                 current_servo_positions[servo_index_3_y] -= POSITION_STEP;
             }
             
             // A Button
-            int servo_index_3_a = XBOX_SERVO_MAP[BTN_SOUTH];
+            int servo_index_3_a = kXboxServoMap[BTN_SOUTH];
             if (controller_state.btn_south_state == 1) {
                 current_servo_positions[servo_index_3_a] += POSITION_STEP;
             }
 
             // Left Bumper
-            int servo_index_4_lb = XBOX_SERVO_MAP[BTN_TL];
+            int servo_index_4_lb = kXboxServoMap[BTN_TL];
             if (controller_state.btn_tl_state == 1) {
                 current_servo_positions[servo_index_4_lb] += POSITION_STEP;
             }
 
             // Right Bumper
-            int servo_index_4_rb = XBOX_SERVO_MAP[BTN_TR];
+            int servo_index_4_rb = kXboxServoMap[BTN_TR];
             if (controller_state.btn_tr_state == 1) {
                 current_servo_positions[servo_index_4_rb] -= POSITION_STEP;
             }
 
             // Right Trigger
-            int servo_index_5 = XBOX_SERVO_MAP[ABS_RZ];
-            current_servo_positions[servo_index_5] = MapRange(controller_state.abs_rz_value, 0, 1023, SERVO_LIMITS[servo_index_5].max, SERVO_LIMITS[servo_index_5].min);
+            int servo_index_5 = kXboxServoMap[ABS_RZ];
+            current_servo_positions[servo_index_5] = MapRange(controller_state.abs_rz_value, 0, 1023,
+             robot_config.motor(servo_index_5).sts3215_config().operational_upper_limit(),
+             robot_config.motor(servo_index_5).sts3215_config().operational_lower_limit());
 
             // Apply servo limits and send commands
-            for (int i = 0; i < NUMBER_OF_SERVOS; ++i) {
-                if (current_servo_positions[i] > SERVO_LIMITS[i].max) {
-                    current_servo_positions[i] = SERVO_LIMITS[i].max;
+            for (int i = 0; i < number_of_motors; ++i) {
+                if (current_servo_positions[i] > robot_config.motor(i).sts3215_config().operational_upper_limit()) {
+                    current_servo_positions[i] = robot_config.motor(i).sts3215_config().operational_upper_limit();
                 }
-                if (current_servo_positions[i] < SERVO_LIMITS[i].min) {
-                    current_servo_positions[i] = SERVO_LIMITS[i].min;
+                if (current_servo_positions[i] < robot_config.motor(i).sts3215_config().operational_lower_limit()) {
+                    current_servo_positions[i] = robot_config.motor(i).sts3215_config().operational_lower_limit();
                 }
-                auto& servo = so100[i];
+                auto& servo = motors[i];
+                LOG(INFO) << "Servo: " << i << " Position: " << current_servo_positions[i];
                 servo->SetPosition(current_servo_positions[i]);
-            }            
-            usleep(LOOP_DELAY_US);
+            }
+            usleep(10000);
         }
 
         LOG(INFO) << "Shutting down...";
-        for (int i = 0; i < NUMBER_OF_SERVOS; ++i) {
-            auto& servo = so100[i];
-            servo->SetPosition(END_POSITIONS[i]);            
+        for (int i = 0; i < number_of_motors; ++i) {
+            auto& servo = motors[i];
+            servo->SetIdlePosition();     
         }
-        sleep(SETUP_TIME);
+        sleep(kSetupTime);
         
         LOG(INFO) << "Disabling torque on all servos...";
-        for(auto& servo : so100){
+        for(auto& servo : motors){
             servo->SetTorque(0);
         }
 

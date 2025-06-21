@@ -101,7 +101,7 @@ motor {
     id: 5
     physical_lower_limit: 0
     physical_upper_limit: 4095
-    operational_lower_limit: 0
+    operational_lower_limit: 10
     operational_upper_limit: 3000
     move_time_in_ms: 40
     move_speed: 1500
