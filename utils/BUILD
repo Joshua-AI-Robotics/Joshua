@@ -10,3 +10,15 @@ cc_binary(
     ],
     visibility = ["//visibility:public"],
 )
+
+
+cc_binary(
+    name = "main_camera",
+    srcs = ["main_camera.cc"],
+    deps = [
+        "//robot/perception/factory:camera_factory",
+        "//robot/perception/interfaces:camera_interface",
+        "@com_github_google_glog//:glog",
+        "@opencv//:highgui",
+    ],
+) 
