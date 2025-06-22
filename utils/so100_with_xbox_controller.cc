@@ -1,6 +1,7 @@
 #include "robot/actuation/factory/motor_factory.h"
 #include "utils/xbox_controller/xbox_controller.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
+#include "robot/config/config_utils.h"
 #include <glog/logging.h>
 #include <vector>
 #include <unistd.h> // For sleep
@@ -8,12 +9,11 @@
 #include <thread>
 #include <atomic>   // For std::atomic
 #include <memory>   // For std::unique_ptr
-#include <google/protobuf/text_format.h>
-#include <fstream>
-
 
 namespace{
     constexpr int kSetupTime = 2;
+    constexpr auto kPositionStep = 10;
+    constexpr auto kJoystickDeadZone = 5000;
 
     std::map<int, int> kXboxServoMap = {
     {ABS_HAT0X, 0},
@@ -26,26 +26,10 @@ namespace{
     {ABS_RZ, 5}
 };
 
-// Helper function to map a value from one range to another
 int MapRange(int value, int in_min, int in_max, int out_min, int out_max) {
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 } // namespace
-
-robot_config::Robot LoadRobotConfig(const std::string& config_path) {
-    robot_config::Robot robot_config;
-    std::ifstream input(config_path);
-    if (!input) {
-        LOG(ERROR) << "Failed to open robot config file: " << config_path;
-        throw std::runtime_error("Failed to open robot config file: " + config_path);
-    }
-    std::string config_content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    if (!google::protobuf::TextFormat::ParseFromString(config_content, &robot_config)) {
-        LOG(ERROR) << "Failed to parse robot config from file: " << config_path;
-        throw std::runtime_error("Failed to parse robot config from file: " + config_path);
-    }
-    return robot_config;
-}
 
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
@@ -54,19 +38,18 @@ int main(int argc, char* argv[]) {
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.
-
         utils::XboxController xbox_controller;
         if (!xbox_controller.Init()) {
             LOG(ERROR) << "Failed to initialize Xbox controller. Exiting.";
             return 1;
         }
         utils::XboxControllerState controller_state;
-        std::thread controller_thread([&]() { // Pass by reference for controller_state
+        std::thread controller_thread([&]() {
             xbox_controller.Run(controller_state);
         });
 
-        robot_config::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
-        auto number_of_motors = robot_config.motor_size();
+        robot::Robot robot_config = robot::config_util::LoadRobotConfig("robot/config/robot_config.pbtxt");
+        auto number_of_motors = robot_config.actuations().single_actuation_size();
         LOG(INFO) << "Robot Name: " << robot_config.name();
         LOG(INFO) << "ID:" << robot_config.id();
 
@@ -75,10 +58,11 @@ int main(int argc, char* argv[]) {
         std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
 
         for(int i = 0; i < number_of_motors; i++){
-            const auto& motor_proto = robot_config.motor(i);
+            const auto& single_actuation = robot_config.actuations().single_actuation(i);
+            const auto& motor_proto = single_actuation.motor();
 
             switch(motor_proto.motor_type()){
-                case robot_config::MotorType::STS3215:
+                case robot::actuation::MotorType::STS3215:
                     motors.emplace_back(motor_factory.CreateMotor(motor_proto));
                     break;
                 default:
@@ -95,8 +79,7 @@ int main(int argc, char* argv[]) {
         }
         sleep(kSetupTime);
 
-        const int POSITION_STEP = 10;
-        const int JOYSTICK_DEADZONE = 5000;
+        
         std::vector<int> current_servo_positions(6);
         for(int i = 0; i < number_of_motors; i++){
             current_servo_positions[i] = int(motors[i]->GetPosition());
@@ -115,18 +98,18 @@ int main(int argc, char* argv[]) {
             // D-Pad X
             int servo_index_0 = kXboxServoMap[ABS_HAT0X];
             if (controller_state.abs_hat0x_value == 1) {
-                current_servo_positions[servo_index_0] += POSITION_STEP / 2;
+                current_servo_positions[servo_index_0] += kPositionStep / 2;
             } else if (controller_state.abs_hat0x_value == -1) {
-                current_servo_positions[servo_index_0] -= POSITION_STEP / 2;
+                current_servo_positions[servo_index_0] -= kPositionStep / 2;
             }
 
             // Left Joystick Y
             int servo_index_1 = kXboxServoMap[ABS_Y];
             int joystick_y_value = controller_state.abs_y_value;
-            if (std::abs(joystick_y_value) < JOYSTICK_DEADZONE) {
+            if (std::abs(joystick_y_value) < kJoystickDeadZone) {
                 joystick_y_value = 0;
             }
-            int mapped_value_y = MapRange(joystick_y_value, -32768, 32767, -POSITION_STEP, POSITION_STEP);
+            int mapped_value_y = MapRange(joystick_y_value, -32768, 32767, -kPositionStep, kPositionStep);
             if (mapped_value_y != 0) {
                 current_servo_positions[servo_index_1] += mapped_value_y;
             }
@@ -134,10 +117,10 @@ int main(int argc, char* argv[]) {
             // Right Joystick Y
             int servo_index_2 = kXboxServoMap[ABS_RY];
             int joystick_ry_value = controller_state.abs_ry_value;
-            if (std::abs(joystick_ry_value) < JOYSTICK_DEADZONE) {
+            if (std::abs(joystick_ry_value) < kJoystickDeadZone) {
                 joystick_ry_value = 0;
             }
-            int mapped_value_ry = MapRange(joystick_ry_value, -32768, 32767, -POSITION_STEP, POSITION_STEP);
+            int mapped_value_ry = MapRange(joystick_ry_value, -32768, 32767, -kPositionStep, kPositionStep);
             if (mapped_value_ry != 0) {
                 current_servo_positions[servo_index_2] += mapped_value_ry;
             }
@@ -145,25 +128,25 @@ int main(int argc, char* argv[]) {
             // Y Button
             int servo_index_3_y = kXboxServoMap[BTN_WEST];
             if (controller_state.btn_west_state == 1) {
-                current_servo_positions[servo_index_3_y] -= POSITION_STEP;
+                current_servo_positions[servo_index_3_y] -= kPositionStep;
             }
             
             // A Button
             int servo_index_3_a = kXboxServoMap[BTN_SOUTH];
             if (controller_state.btn_south_state == 1) {
-                current_servo_positions[servo_index_3_a] += POSITION_STEP;
+                current_servo_positions[servo_index_3_a] += kPositionStep;
             }
 
             // Left Bumper
             int servo_index_4_lb = kXboxServoMap[BTN_TL];
             if (controller_state.btn_tl_state == 1) {
-                current_servo_positions[servo_index_4_lb] += POSITION_STEP;
+                current_servo_positions[servo_index_4_lb] += kPositionStep;
             }
 
             // Right Bumper
             int servo_index_4_rb = kXboxServoMap[BTN_TR];
             if (controller_state.btn_tr_state == 1) {
-                current_servo_positions[servo_index_4_rb] -= POSITION_STEP;
+                current_servo_positions[servo_index_4_rb] -= kPositionStep;
             }
 
             // Right Trigger
@@ -198,7 +181,7 @@ int main(int argc, char* argv[]) {
             servo->SetTorque(0);
         }
 
-        controller_thread.join(); // Join the controller thread before exiting
+        controller_thread.join();
 
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();

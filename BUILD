@@ -6,6 +6,7 @@ cc_binary(
     data = ["//robot/config:robot_config_pbtxt"],
     deps = [
         "//robot/actuation/factory:motor_factory",
+        "//robot/config:config_utils",
     ],
     visibility = ["//visibility:public"],
 )

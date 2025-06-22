@@ -1,32 +1,16 @@
 #include "robot/actuation/factory/motor_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
+#include "robot/config/config_utils.h"
 #include <map>
 #include <glog/logging.h>
 #include <vector>
 #include <unistd.h> // For sleep
 #include <chrono>
 #include <thread>
-#include <google/protobuf/text_format.h>
-#include <fstream>
 
 namespace{
     constexpr int kSetupTime = 2;
-}
-
-robot::Robot LoadRobotConfig(const std::string& config_path) {
-    robot::Robot robot_config;
-    std::ifstream input(config_path);
-    if (!input) {
-        LOG(ERROR) << "Failed to open robot config file: " << config_path;
-        throw std::runtime_error("Failed to open robot config file: " + config_path);
-    }
-    std::string config_content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    if (!google::protobuf::TextFormat::ParseFromString(config_content, &robot_config)) {
-        LOG(ERROR) << "Failed to parse robot config from file: " << config_path;
-        throw std::runtime_error("Failed to parse robot config from file: " + config_path);
-    }
-    return robot_config;
 }
 
 int main(int argc, char* argv[]) {
@@ -38,7 +22,7 @@ int main(int argc, char* argv[]) {
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.        
-        robot::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
+        robot::Robot robot_config = robot::config_util::LoadRobotConfig("robot/config/robot_config.pbtxt");
         auto number_of_motors = robot_config.actuations().single_actuation_size();
         LOG(INFO) << "Robot Name: " << robot_config.name();
         LOG(INFO) << "ID:" << robot_config.id();
