@@ -3,7 +3,7 @@
 #include <glog/logging.h>
 
 // Abstract motor interface.
-namespace robot::onboard{
+namespace robot::actuation{
 class MotorInterface{
   public:
     MotorInterface();

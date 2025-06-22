@@ -1,6 +1,6 @@
-#include "robot/onboard/factory/motor_factory.h"
+#include "robot/actuation/factory/motor_factory.h"
 #include "utils/xbox_controller/xbox_controller.h"
-#include "robot/onboard/drivers/sts3215_driver.h"
+#include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include <glog/logging.h>
 #include <vector>
 #include <unistd.h> // For sleep
@@ -55,12 +55,12 @@ int main(int argc, char* argv[]) {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.
 
-        robot::onboard::XboxController xbox_controller;
+        utils::XboxController xbox_controller;
         if (!xbox_controller.Init()) {
             LOG(ERROR) << "Failed to initialize Xbox controller. Exiting.";
             return 1;
         }
-        robot::onboard::XboxControllerState controller_state;
+        utils::XboxControllerState controller_state;
         std::thread controller_thread([&]() { // Pass by reference for controller_state
             xbox_controller.Run(controller_state);
         });
@@ -71,8 +71,8 @@ int main(int argc, char* argv[]) {
         LOG(INFO) << "ID:" << robot_config.id();
 
         // Motor instantiation.
-        robot::onboard::MotorFactory motor_factory; 
-        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> motors;
+        robot::actuation::MotorFactory motor_factory; 
+        std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
 
         for(int i = 0; i < number_of_motors; i++){
             const auto& motor_proto = robot_config.motor(i);
@@ -181,7 +181,6 @@ int main(int argc, char* argv[]) {
                     current_servo_positions[i] = robot_config.motor(i).sts3215_config().operational_lower_limit();
                 }
                 auto& servo = motors[i];
-                LOG(INFO) << "Servo: " << i << " Position: " << current_servo_positions[i];
                 servo->SetPosition(current_servo_positions[i]);
             }
             usleep(10000);

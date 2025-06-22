@@ -1,8 +1,8 @@
-#include "robot/onboard/drivers/sts3215_driver.h"
+#include "robot/actuation/motors/drivers/sts3215_driver.h"
 
 
 
-namespace robot::onboard {
+namespace robot::actuation {
 
 namespace {
     constexpr auto kReadAttempt = 50;
@@ -236,4 +236,4 @@ void Sts3215Driver::SetIdlePosition(){
     }
 }
 
-} // namespace robot::onboard
+} // namespace robot::actuation

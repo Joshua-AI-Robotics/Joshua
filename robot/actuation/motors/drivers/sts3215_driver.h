@@ -3,11 +3,11 @@
 #include <boost/asio.hpp>
 #include <vector>
 #include "robot/comm_interface/serial/serial.h"
-#include "robot/onboard/interfaces/motor_interface.h"
+#include "robot/actuation/interfaces/motor_interface.h"
 #include "robot/config/robot.pb.h"
 
-namespace robot::onboard{
-class Sts3215Driver : public robot::onboard::MotorInterface {
+namespace robot::actuation{
+class Sts3215Driver : public robot::actuation::MotorInterface {
   public:
   Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot_config::Motor motor_config);
   ~Sts3215Driver();

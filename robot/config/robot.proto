@@ -42,6 +42,14 @@ message STS3215Config {
     uint32 idle_position = 8;
 }
 
+message Actuation {
+
+}
+
+message Perception {
+    
+}
+
 message Motor {
     string motor_name = 1;
     uint64 id = 2;

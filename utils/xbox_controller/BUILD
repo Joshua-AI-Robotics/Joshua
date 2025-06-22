@@ -6,7 +6,6 @@ cc_library(
     hdrs = ["xbox_controller.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/onboard/interfaces:motor_interface",
         "@libevdev//:libevdev",
         "@com_github_google_glog//:glog",
     ],

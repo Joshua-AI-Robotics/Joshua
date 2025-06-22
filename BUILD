@@ -5,7 +5,7 @@ cc_binary(
     srcs = ["main.cc"],
     data = ["//robot/config:robot_config_pbtxt"],
     deps = [
-        "//robot/onboard/factory:motor_factory",
+        "//robot/actuation/factory:motor_factory",
     ],
     visibility = ["//visibility:public"],
 )

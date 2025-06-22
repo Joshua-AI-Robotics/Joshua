@@ -1,5 +1,5 @@
-#include "robot/onboard/factory/motor_factory.h"
-#include "robot/onboard/drivers/sts3215_driver.h"
+#include "robot/actuation/factory/motor_factory.h"
+#include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 #include <map>
 #include <glog/logging.h>
@@ -45,8 +45,8 @@ int main(int argc, char* argv[]) {
                
                 
         // Motor instantiation.
-        robot::onboard::MotorFactory motor_factory; 
-        std::vector<std::unique_ptr<robot::onboard::MotorInterface>> motors;
+        robot::actuation::MotorFactory motor_factory; 
+        std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
 
         for(int i = 0; i < number_of_motors; i++){
             const auto& motor_proto = robot_config.motor(i);

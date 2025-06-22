@@ -5,7 +5,6 @@ cc_library(
     srcs = ["serial.cc"],
     hdrs = ["serial.h"],
     deps = [
-        "//robot/onboard/interfaces:motor_interface",
         "@boost//:boost_asio",
         "@com_github_google_glog//:glog",
     ],

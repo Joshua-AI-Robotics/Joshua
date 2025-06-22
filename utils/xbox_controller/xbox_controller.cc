@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <iomanip>
 
-namespace robot::onboard{
+namespace utils{
 
 XboxController::XboxController() {
     // No initial positions or servo maps in this class anymore

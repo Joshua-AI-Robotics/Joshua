@@ -1,8 +1,8 @@
 #pragma once
 
-#include "robot/onboard/interfaces/motor_interface.h"
+#include "robot/actuation/interfaces/motor_interface.h"
 #include "robot/comm_interface/serial/serial.h"
-#include "robot/onboard/drivers/sts3215_driver.h"
+#include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 
 #include <memory>
@@ -15,13 +15,13 @@ namespace boost::asio {
     class io_context;
 }
 
-namespace robot::onboard{
+namespace robot::actuation{
 class MotorFactory {
 public:
     MotorFactory() = default;
     ~MotorFactory() = default;
 
-    std::unique_ptr<robot::onboard::MotorInterface> CreateMotor(robot_config::Motor motor_config)
+    std::unique_ptr<robot::actuation::MotorInterface> CreateMotor(robot_config::Motor motor_config)
     {
         // TODO: Fix this nested switch case. Probably should make comm_factory.
         switch (motor_config.motor_type())
@@ -39,7 +39,7 @@ public:
 
                         // If serial port already exist (e.g. daisy-chain with uart)
                         if(it != serials_.end()){
-                            return std::make_unique<robot::onboard::Sts3215Driver>(it->second, motor_config);
+                            return std::make_unique<robot::actuation::Sts3215Driver>(it->second, motor_config);
                         }
 
                         serials_.emplace(port, 
@@ -49,7 +49,7 @@ public:
                                 motor_config.serial_config().baudrate()
                             ));
 
-                        return std::make_unique<robot::onboard::Sts3215Driver>(serials_[port], motor_config);
+                        return std::make_unique<robot::actuation::Sts3215Driver>(serials_[port], motor_config);
                 }
             }
             default:

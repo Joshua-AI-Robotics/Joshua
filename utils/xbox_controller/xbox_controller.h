@@ -4,10 +4,9 @@
 #include <map>
 #include <memory>
 #include <glog/logging.h>
-#include "robot/onboard/interfaces/motor_interface.h"
 #include <vector>
 
-namespace robot::onboard {
+namespace utils {
 
 // Struct to hold the current state of the Xbox controller
 struct XboxControllerState {
