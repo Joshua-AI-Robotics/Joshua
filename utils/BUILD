@@ -28,8 +28,8 @@ cc_binary(
 
 
 cc_binary(
-    name = "main_camera",
-    srcs = ["main_camera.cc"],
+    name = "camera_main",
+    srcs = ["camera_main.cc"],
     deps = [
         "//robot/perception/factory:camera_factory",
         "//robot/perception/interfaces:camera_interface",
