@@ -1,9 +1,9 @@
 #include "utils/so100_xbox_controller_handler.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include <glog/logging.h>
-#include <unistd.h>
-#include <chrono>
-#include <thread>
+#include <unistd.h> // For usleep
+#include <chrono>   // For std::chrono::milliseconds
+#include <thread>   // For std::this_thread::sleep_for
 
 namespace utils {
 
@@ -13,7 +13,7 @@ So100XboxControllerHandler::So100XboxControllerHandler(const robot::Robot& robot
 
 So100XboxControllerHandler::~So100XboxControllerHandler() {
     Stop();
-    join();
+    Join();
 }
 
 bool So100XboxControllerHandler::Init() {
@@ -37,14 +37,21 @@ void So100XboxControllerHandler::Start() {
         LOG(WARNING) << "Motor control thread already running.";
     } else {
         stop_flag_ = false;
-        motor_control_thread_ = std::thread(&So100XboxControllerHandler::control_loop, this);
+        motor_control_thread_ = std::thread(&So100XboxControllerHandler::ControlLoop, this);
     }
-
-    join();
 }
 
 void So100XboxControllerHandler::Stop() {
     stop_flag_ = true;
+}
+
+void So100XboxControllerHandler::Join() {
+    if (xbox_event_thread_.joinable()) {
+        xbox_event_thread_.join();
+    }
+    if (motor_control_thread_.joinable()) {
+        motor_control_thread_.join();
+    }
 }
 
 int So100XboxControllerHandler::MapRange(int value, int in_min, int in_max, int out_min, int out_max) {
@@ -52,18 +59,7 @@ int So100XboxControllerHandler::MapRange(int value, int in_min, int in_max, int 
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void So100XboxControllerHandler::join(){
-    if (xbox_event_thread_.joinable()) {
-         if (xbox_event_thread_.joinable()) {
-            xbox_event_thread_.join();
-        }
-    }
-    if (motor_control_thread_.joinable()) {
-        motor_control_thread_.join();
-    }
-}
-
-void So100XboxControllerHandler::control_loop() {
+void So100XboxControllerHandler::ControlLoop() {
     std::vector<int> current_servo_positions(motors_.size());
     for(size_t i = 0; i < motors_.size(); ++i){
         if(motors_[i]){

@@ -2,8 +2,13 @@
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 #include "robot/config/config_utils.h"
+#include "robot/perception/factory/camera_factory.h"
+#include "robot/perception/interfaces/camera_interface.h"
+#include <opencv2/highgui.hpp>
+#include "utils/so100_xbox_controller_handler.h"
 #include <map>
 #include <glog/logging.h>
+#include <gflags/gflags.h>
 #include <vector>
 #include <unistd.h> // For sleep
 #include <chrono>
@@ -13,11 +18,14 @@ namespace{
     constexpr int kSetupTime = 2;
 }
 
+DEFINE_bool(enable_camera, false, "Enable camera.");
+DEFINE_bool(enable_controller, false, "Enable controller.");
+
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
     FLAGS_logtostderr = 1;
 
-    LOG(INFO) << "Starting main_program";
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
 
     try {
         // sudo usermod -a -G dialout $USER
@@ -54,15 +62,44 @@ int main(int argc, char* argv[]) {
         }
         sleep(kSetupTime);
 
-        for(int i = 5; i > 0; --i){   
-            system("clear");         
-            LOG(INFO) << "Shutting down in " << i << "...";
-            for(int i = 0; i < number_of_motors; i++){
-                LOG(INFO) << "Servo [" << i  << "] value: " << motors[i]->GetPosition();
+        // Initialize and start So100XboxControllerHandler
+        utils::So100XboxControllerHandler controller_handler(robot_config, motors);
+        if(FLAGS_enable_controller){
+            if (!controller_handler.Init()) {
+                LOG(ERROR) << "Failed to initialize So100XboxControllerHandler. Exiting.";
+                return 1;
             }
-            sleep(1);            
+
+            std::thread controller_thread([&controller_handler]() {
+                controller_handler.Start();
+            });
+            controller_thread.detach();
         }
 
+        // Initialize camera
+        if(FLAGS_enable_camera){
+            robot::perception::CameraFactory camera_factory;
+            std::unique_ptr<robot::perception::CameraInterface> camera = camera_factory.CreateCamera();
+
+            if (!camera) {
+                LOG(ERROR) << "Failed to create camera.";
+                return -1;
+            }
+
+            cv::namedWindow("Camera", cv::WINDOW_AUTOSIZE);
+
+            while (true) {
+                cv::Mat frame = camera->GetFrame();
+                if (frame.empty()) {
+                    LOG(WARNING) << "Failed to capture frame.";
+                    break;
+                }
+                cv::imshow("Camera", frame);
+                if (cv::waitKey(1) == 'q') {
+                    break;
+                }
+            }
+        }
 
         LOG(INFO) << "Shutting down...";
         for (int i = 0; i < number_of_motors; ++i) {
@@ -75,6 +112,9 @@ int main(int argc, char* argv[]) {
         for(auto& servo : motors){
             servo->SetTorque(0);
         }
+
+        cv::destroyAllWindows();
+
 
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();

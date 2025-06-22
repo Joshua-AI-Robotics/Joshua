@@ -7,6 +7,12 @@ cc_binary(
     deps = [
         "//robot/actuation/factory:motor_factory",
         "//robot/config:config_utils",
+        "//utils:so100_xbox_controller_handler",
+        "//robot/perception/factory:camera_factory",
+        "//robot/perception/interfaces:camera_interface",
+        "@com_github_google_glog//:glog",
+        "@com_github_gflags_gflags//:gflags",
+        "@opencv//:highgui",
     ],
     visibility = ["//visibility:public"],
 )

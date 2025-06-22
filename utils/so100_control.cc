@@ -53,7 +53,10 @@ int main(int argc, char* argv[]) {
             LOG(ERROR) << "Failed to initialize So100XboxControllerHandler. Exiting.";
             return 1;
         }
+
+        
         controller_handler.Start();
+        controller_handler.Join(); // This is a blocking thread.
 
         for (int i = 0; i < number_of_motors; ++i) {
             if (motors[i]) {

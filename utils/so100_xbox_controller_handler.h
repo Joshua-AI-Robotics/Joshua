@@ -20,10 +20,11 @@ public:
     bool Init();
     void Start();
     void Stop();
+    
+    void Join();
 
 private:
-    void join();
-    void control_loop();
+    void ControlLoop();
     int MapRange(int value, int in_min, int in_max, int out_min, int out_max);
 
     const robot::Robot& robot_config_;
