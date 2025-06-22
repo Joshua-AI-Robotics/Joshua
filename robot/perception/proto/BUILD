@@ -1,0 +1,13 @@
+load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+
+proto_library(
+    name = "perception_proto",
+    srcs = ["perception.proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "perception_cc_proto",
+    deps = [":perception_proto"],
+    visibility = ["//visibility:public"],
+)

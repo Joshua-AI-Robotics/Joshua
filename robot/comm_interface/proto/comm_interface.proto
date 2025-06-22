@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package robot.comm_interface;
+
+// The communication method to control the actuators.
+enum CommType {
+    COMM_INVALID = 0;
+    SERIAL = 1;
+}
+
+message SerialConfig {
+    uint64 id = 1;
+    string port = 2;
+    uint64 baudrate = 3;
+}

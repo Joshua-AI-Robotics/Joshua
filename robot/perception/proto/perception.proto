@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package robot.perception;
+
+enum PerceptionType {
+    PERCEPTION_INVALID = 0;
+    CAMERA = 1;
+    LIDAR = 2;
+    RADAR = 3;
+}
