@@ -7,6 +7,7 @@ cc_library(
         "//robot/onboard/interfaces:motor_interface",
         "//robot/onboard/drivers:sts3215_driver",
         "//robot/comm_interface/serial:serial",
+        "//robot/config:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

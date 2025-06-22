@@ -126,3 +126,11 @@ cc_library(
 )
 """,
 )
+
+# OpenCV
+# sudo apt install libopencv-dev
+new_local_repository(
+    name = "opencv",
+    path = "/usr",
+    build_file = "//:opencv.BUILD",
+)
