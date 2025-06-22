@@ -14,8 +14,8 @@ namespace{
     constexpr int kSetupTime = 2;
 }
 
-robot_config::Robot LoadRobotConfig(const std::string& config_path) {
-    robot_config::Robot robot_config;
+robot::Robot LoadRobotConfig(const std::string& config_path) {
+    robot::Robot robot_config;
     std::ifstream input(config_path);
     if (!input) {
         LOG(ERROR) << "Failed to open robot config file: " << config_path;
@@ -38,8 +38,8 @@ int main(int argc, char* argv[]) {
     try {
         // sudo usermod -a -G dialout $USER
         // And reboot your machine for update the permissions.        
-        robot_config::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
-        auto number_of_motors = robot_config.motor_size();
+        robot::Robot robot_config = LoadRobotConfig("robot/config/robot_config.pbtxt");
+        auto number_of_motors = robot_config.actuations().single_actuation_size();
         LOG(INFO) << "Robot Name: " << robot_config.name();
         LOG(INFO) << "ID:" << robot_config.id();
                
@@ -49,10 +49,11 @@ int main(int argc, char* argv[]) {
         std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
 
         for(int i = 0; i < number_of_motors; i++){
-            const auto& motor_proto = robot_config.motor(i);
+            const auto& single_actuation = robot_config.actuations().single_actuation(i);
+            const auto& motor_proto = single_actuation.motor();
 
             switch(motor_proto.motor_type()){
-                case robot_config::MotorType::STS3215:
+                case robot::actuation::MotorType::STS3215:
                     motors.emplace_back(motor_factory.CreateMotor(motor_proto));
                     break;
                 default:

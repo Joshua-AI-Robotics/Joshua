@@ -14,6 +14,6 @@ message Robot {
     string name = 1;
     uint64 id = 2;
     RobotType robot_type = 3;
-    robot.actuation.Actuation actuation = 4;
+    robot.actuation.Actuation actuations = 4;
     // TODO: Add perception here once ready.
 }

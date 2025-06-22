@@ -15,8 +15,6 @@ cc_proto_library(
     name = "robot_cc_proto",
     deps = [
         ":robot_proto",
-        "//robot/actuation/proto:actuation_cc_proto",
-        "//robot/perception/proto:perception_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

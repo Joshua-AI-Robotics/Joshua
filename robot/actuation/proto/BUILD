@@ -1,3 +1,4 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 
 proto_library(
@@ -13,7 +14,6 @@ cc_proto_library(
     name = "actuation_cc_proto",
     deps = [
         ":actuation_proto",
-        "//robot/comm_interface/proto:comm_interface_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

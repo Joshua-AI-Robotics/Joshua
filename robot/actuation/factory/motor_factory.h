@@ -21,15 +21,15 @@ public:
     MotorFactory() = default;
     ~MotorFactory() = default;
 
-    std::unique_ptr<robot::actuation::MotorInterface> CreateMotor(robot_config::Motor motor_config)
+    std::unique_ptr<robot::actuation::MotorInterface> CreateMotor(robot::actuation::Motor motor_config)
     {
         // TODO: Fix this nested switch case. Probably should make comm_factory.
         switch (motor_config.motor_type())
         {
-            case robot_config::MotorType::STS3215:
+            case robot::actuation::MotorType::STS3215:
             {
                 switch (motor_config.comm_type()){
-                    case robot_config::CommType::SERIAL:
+                    case robot::comm_interface::CommType::SERIAL:
                         if (io_context_ == nullptr) {
                             io_context_ = std::make_shared<boost::asio::io_context>();
                         }
