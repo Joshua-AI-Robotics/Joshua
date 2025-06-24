@@ -12,6 +12,7 @@
 /.factorypath
 *.iml
 /.vscode/
+/.prettierrc
 
 # Local configuration and user-specific files
 /.bazelrc.user
