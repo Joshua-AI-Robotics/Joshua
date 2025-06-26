@@ -22,28 +22,24 @@ public:
 explicit Nexus(const int& trigger_frequency = 10);
 ~Nexus();
 bool Init();
-void Register(const ActionInterface& interface);
-void Register(const PerceptionInterface& interface);
+void Register(ActionInterface&& interface);
+void Register(PerceptionInterface&& interface);
 void Start();
 
 private:
 void run();
 
 NexusScheduler scheduler_;
-std::vector<ActionInterface> action_interfaces_;
+std::map<std::string, ActionInterface> action_interfaces_;
 std::vector<PerceptionInterface> perception_interfaces_;
-struct ActionPacketCompare {
-    bool operator()(const robot::nexus::NexusActionPacket& a, const robot::nexus::NexusActionPacket& b) const {
-        return a.timestamp() > b.timestamp();
-    }
-};
+
 struct PerceptionPacketCompare {
-    bool operator()(const std::unique_ptr<robot::nexus::NexusPerceptionPacket>& a, const std::unique_ptr<robot::nexus::NexusPerceptionPacket>& b) const {
+    bool operator()(const std::shared_ptr<robot::nexus::NexusPerceptionPacket>& a, const std::shared_ptr<robot::nexus::NexusPerceptionPacket>& b) const {
         return a->timestamp() > b->timestamp();
     }
 };
-std::priority_queue<NexusActionPacket, std::vector<NexusActionPacket>, ActionPacketCompare> action_packet_queue_;
-std::priority_queue<std::unique_ptr<NexusPerceptionPacket>, std::vector<std::unique_ptr<NexusPerceptionPacket>>, PerceptionPacketCompare> perception_packet_queue_;
+std::vector<std::unique_ptr<NexusActionPacket>> action_packet_queue_;
+std::priority_queue<std::shared_ptr<NexusPerceptionPacket>, std::vector<std::shared_ptr<NexusPerceptionPacket>>, PerceptionPacketCompare> perception_packet_queue_;
 std::mutex queue_mutex_;
 std::thread main_thread_;
 std::atomic<bool> stop_;

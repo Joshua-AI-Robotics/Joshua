@@ -215,13 +215,24 @@ void Sts3215Driver::SetAction(std::unique_ptr<robot::nexus::NexusActionPacket> a
     }
     
     try {
-        move_time_in_ms_ = action_packet->sts3215_action().move_time_in_ms();
-        move_speed_ = action_packet->sts3215_action().move_speed();
-        serial_->Write(create_move_packet(action_packet->sts3215_action().position()));
+        // Avoid default value.
+        if(!action_packet->sts3215_action().move_time_in_ms() == 0){
+            move_time_in_ms_ = action_packet->sts3215_action().move_time_in_ms();
+        }
+        if(!action_packet->sts3215_action().move_speed() == 0){
+            move_speed_ = action_packet->sts3215_action().move_speed();
+        }
+        if(!action_packet->sts3215_action().position() == 0){
+            serial_->Write(create_move_packet(action_packet->sts3215_action().position()));
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set action.");
     }
+}
+
+std::string Sts3215Driver::GetId() {
+    return std::to_string(servo_id_);
 }
 
 float Sts3215Driver::GetPosition() {

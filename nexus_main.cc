@@ -26,14 +26,16 @@ int main(int argc, char* argv[]) {
     robot::nexus::Nexus nexus;
     nexus.Init();
     robot::actuation::MotorFactory motor_factory;
-    const auto& single_actuation = robot_config.actuations().single_actuation(0);
-    const auto& motor_proto = single_actuation.motor();
-    nexus.Register(motor_factory.CreateMotor(motor_proto));
+    for (const auto& single_actuation : robot_config.actuations().single_actuation()){
+        const auto& motor_proto = single_actuation.motor();
+        nexus.Register(motor_factory.CreateMotor(motor_proto));
+    }    
 
     robot::perception::CameraFactory camera_factory; 
-    const auto& single_perception = robot_config.perceptions().single_perception(0);
-    const auto& camera_proto = single_perception.camera();
-    nexus.Register(camera_factory.CreateCamera(camera_proto));
+    for (const auto& single_perception : robot_config.perceptions().single_perception()){
+        const auto& camera_proto = single_perception.camera();
+        nexus.Register(camera_factory.CreateCamera(camera_proto));
+    }
 
     nexus.Start();
 

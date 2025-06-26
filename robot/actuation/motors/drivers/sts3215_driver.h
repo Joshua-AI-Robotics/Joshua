@@ -16,6 +16,7 @@ class Sts3215Driver : public robot::actuation::MotorInterface {
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
   void SetAction(std::unique_ptr<::robot::nexus::NexusActionPacket> action_packet) override;
+  std::string GetId() override;
   float GetPosition() override;
   void SetMiddlePosition() override;
   void SetIdlePosition() override;

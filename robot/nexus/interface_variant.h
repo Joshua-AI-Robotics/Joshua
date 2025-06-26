@@ -6,11 +6,11 @@
 
 namespace robot::nexus {
     using ActionInterface = std::variant<
-        std::shared_ptr<robot::actuation::MotorInterface>
+        std::unique_ptr<robot::actuation::MotorInterface>
         // Add other interface types as needed
     >;
     using PerceptionInterface = std::variant<
-        std::shared_ptr<robot::perception::CameraInterface>
+        std::unique_ptr<robot::perception::CameraInterface>
         // Add other perception types as needed
     >;
 }

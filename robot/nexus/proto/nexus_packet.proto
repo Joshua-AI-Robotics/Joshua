@@ -19,4 +19,18 @@ message NexusPerceptionPacket {
     oneof perception_packet_type {
         robot.perception.CameraPerceptionPayload camera_perception = 3;
     }
-} 
+}
+
+// A message to pass to the AI layer for model input.
+message NexusModelInputPacket {
+    uint64 timestamp = 1; // TODO: this might be redundant.
+    string model_input_id = 2;
+    repeated NexusPerceptionPacket perception_packets = 3;
+}
+
+// A message that is the output from the AI layer.
+message NexusModelOutputPacket {
+    uint64 timestamp = 1; // TODO: this might be redundant.
+    string model_output_id = 2;
+    repeated NexusActionPacket action_packets = 3;
+}
