@@ -3,7 +3,8 @@
 namespace robot::nexus {
 
 Nexus::Nexus(const int& trigger_frequency):
-scheduler_(trigger_frequency), stop_(false)
+scheduler_(trigger_frequency), 
+stop_(false)
 {
     LOG(INFO) << "Nexus construted.";
 }
@@ -63,18 +64,7 @@ void Nexus::run(){
         LOG(INFO) << "Nexus model input packet passed to AI layer.";
 
         // Psudo code of the output from the AI layer.
-        // Make fake action packets.
-        LOG(INFO) << "Nexus model output packet received from AI layer.";
-        NexusModelOutputPacket nexus_model_output_packet;
-        nexus_model_output_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        nexus_model_output_packet.set_model_output_id("example_model_output_0");
-        for(int i = 1; i < 6; i++){
-            NexusActionPacket nexus_action_packet;
-            nexus_action_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-            nexus_action_packet.set_action_id(std::to_string(i));
-            nexus_action_packet.mutable_sts3215_action()->set_position(2000);
-            nexus_model_output_packet.add_action_packets()->CopyFrom(nexus_action_packet);
-        }
+        auto nexus_model_output_packet = GenerateMockAIOutput(nexus_model_input_packet);
         
         // Process the action packets.
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){
@@ -88,6 +78,25 @@ void Nexus::run(){
 
         scheduler_.wait_for_next_trigger();
     }
+}
+
+NexusModelOutputPacket Nexus::GenerateMockAIOutput(const NexusModelInputPacket& input_packet) {
+    // These are static so they are only initialized once.
+    static std::mt19937 random_generator(std::random_device{}());
+    static std::uniform_int_distribution<int> position_distribution(1900, 2100);
+
+    LOG(INFO) << "Mock Nexus model output packet received from AI layer.";
+    NexusModelOutputPacket nexus_model_output_packet;
+    nexus_model_output_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    nexus_model_output_packet.set_model_output_id("example_model_output_0");
+    for(int i = 1; i < 6; i++){
+        NexusActionPacket nexus_action_packet;
+        nexus_action_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        nexus_action_packet.set_action_id(std::to_string(i));
+        nexus_action_packet.mutable_sts3215_action()->set_position(position_distribution(random_generator));
+        nexus_model_output_packet.add_action_packets()->CopyFrom(nexus_action_packet);
+    }
+    return nexus_model_output_packet;
 }
 
 }

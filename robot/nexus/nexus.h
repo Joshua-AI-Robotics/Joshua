@@ -14,6 +14,7 @@
 #include <atomic>
 #include <memory>
 #include <glog/logging.h>
+#include <random>
 
 namespace robot::nexus {
 
@@ -28,6 +29,7 @@ void Start();
 
 private:
 void run();
+NexusModelOutputPacket GenerateMockAIOutput(const NexusModelInputPacket& input_packet);
 
 NexusScheduler scheduler_;
 std::map<std::string, ActionInterface> action_interfaces_;
