@@ -30,6 +30,7 @@ cc_binary(
 cc_binary(
     name = "camera_main",
     srcs = ["camera_main.cc"],
+    data = ["//robot/config:robot_config_pbtxt"],
     deps = [
         "//robot/config:config_utils",
         "//robot/perception/factory:camera_factory",

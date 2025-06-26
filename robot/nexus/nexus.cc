@@ -2,6 +2,10 @@
 #include "robot/nexus/nexus_scheduler.h"
 
 namespace robot::nexus {
+namespace {
+    constexpr int kMockMotorLowerBound = 1950;
+    constexpr int kMockMotorUpperBound = 2050;
+}
 
 Nexus::Nexus(const int& trigger_frequency):
 stop_(false)
@@ -93,7 +97,7 @@ int Nexus::GetTriggerFrequency() const {
 NexusModelOutputPacket Nexus::GenerateMockAIOutput(const NexusModelInputPacket& input_packet) {
     // These are static so they are only initialized once.
     static std::mt19937 random_generator(std::random_device{}());
-    static std::uniform_int_distribution<int> position_distribution(1980, 2020);
+    static std::uniform_int_distribution<int> position_distribution(kMockMotorLowerBound, kMockMotorUpperBound);
 
     LOG(INFO) << "Mock Nexus model output packet received from AI layer.";
     NexusModelOutputPacket nexus_model_output_packet;
