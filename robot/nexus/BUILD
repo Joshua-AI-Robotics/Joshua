@@ -6,7 +6,7 @@ proto_library(
     srcs = ["proto/nexus_packet.proto"],
     deps = [
         "//robot/actuation/proto:actuation_packet_proto",
-        "//robot/perception/proto:perception_proto",
+        "//robot/perception/proto:perception_packet_proto",
     ],
 )
 

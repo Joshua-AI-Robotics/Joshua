@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 import "robot/actuation/proto/actuation_packet.proto";
-import "robot/perception/proto/perception.proto";
+import "robot/perception/proto/perception_packet.proto";
 
 package robot.nexus;
 

@@ -25,7 +25,3 @@ message SinglePerception {
 message Perception {
     repeated SinglePerception single_perception = 1;
 }
-
-message CameraPerceptionPayload {
-    bytes image_data = 1; // E.g., encoded as JPEG
-}

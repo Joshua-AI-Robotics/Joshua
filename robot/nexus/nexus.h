@@ -3,7 +3,6 @@
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
 #include "robot/nexus/nexus_scheduler.h"
-#include "robot/nexus/proto/nexus_packet.pb.h"
 #include <vector>
 #include <queue>
 #include <mutex>

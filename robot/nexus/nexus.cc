@@ -42,7 +42,6 @@ void Nexus::run(){
             std::visit([this](auto&& arg) {
                 NexusPerceptionPacket packet = arg->GetData();
                 perception_packet_queue_.push(packet);
-                // TODO: Replace to actual process logic.
                 LOG(INFO) << "Perception packet processed.";
                 perception_packet_queue_.pop();
             }, interface);
