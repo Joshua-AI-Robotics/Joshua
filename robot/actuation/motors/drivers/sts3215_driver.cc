@@ -262,4 +262,16 @@ void Sts3215Driver::SetIdlePosition(){
     }
 }
 
+void Sts3215Driver::GracefulShutdown(){
+    try{
+        move_speed_ = 1000;
+        SetIdlePosition();
+        sleep(2);
+        SetTorque(0);
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Error: " << e.what();
+        throw std::runtime_error("Failed to graceful shutdown.");
+    }
+}
+
 } // namespace robot::actuation

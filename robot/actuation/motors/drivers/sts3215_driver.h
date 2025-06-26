@@ -16,10 +16,11 @@ class Sts3215Driver : public robot::actuation::MotorInterface {
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
   void SetAction(std::unique_ptr<::robot::nexus::NexusActionPacket> action_packet) override;
-  std::string GetId() override;
+  std::string GetId() override; // TODO: Update the ID scheme.
   float GetPosition() override;
   void SetMiddlePosition() override;
   void SetIdlePosition() override;
+  void GracefulShutdown() override;
 
   private: 
   uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);

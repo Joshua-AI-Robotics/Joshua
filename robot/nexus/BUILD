@@ -1,6 +1,12 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
+    name = "thread_pool",
+    hdrs = ["thread_pool.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "nexus_scheduler",
     hdrs = ["nexus_scheduler.h"],
     visibility = ["//visibility:public"],
@@ -28,6 +34,7 @@ cc_library(
         "//robot/nexus/proto:nexus_packet_cc_proto",
         ":nexus_scheduler",
         ":interface_variant",
+        ":thread_pool",
         "@com_github_google_glog//:glog",
     ],
 )

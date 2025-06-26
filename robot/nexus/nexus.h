@@ -2,6 +2,7 @@
 
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
+#include "robot/nexus/thread_pool.h"
 #include <vector>
 #include <queue>
 #include <mutex>

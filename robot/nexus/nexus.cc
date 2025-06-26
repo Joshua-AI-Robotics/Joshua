@@ -15,11 +15,30 @@ stop_(false)
 }
 
 Nexus::~Nexus(){
-    stop_ = true;
+    if (stop_.exchange(true)) {
+        return;
+    }
+    LOG(INFO) << "Destroying Nexus...";
     scheduler_->Stop();
     if (main_thread_.joinable()) {
         main_thread_.join();
     }
+
+    {
+        ThreadPool local_pool(action_interfaces_.size());
+        for(auto& interface : action_interfaces_){
+            std::function<void()> job = [&interface](){
+                LOG(INFO) << "Graceful shutdown for " << interface.first;
+                std::visit([](auto&& arg){
+                    arg->GracefulShutdown();
+                }, interface.second);
+            
+            };
+            local_pool.push_job(job);
+        }
+    } // local_pool is destroyed here, and its destructor waits for jobs.
+
+    LOG(INFO) << "Nexus destroyed.";
 }
 
 bool Nexus::Init(){

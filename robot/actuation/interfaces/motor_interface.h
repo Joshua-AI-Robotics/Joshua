@@ -20,5 +20,7 @@ class MotorInterface{
     virtual float GetPosition() = 0;
     virtual void SetMiddlePosition(){ LOG(WARNING) << "SetMiddlePosition not implemented.";};
     virtual void SetIdlePosition(){ LOG(WARNING) << "SetIdlePosition not implemented.";};
+    // TODO: Add this in the config. (e.g. what's the idle position, what's the torque, speed, etc.)
+    virtual void GracefulShutdown(){ LOG(WARNING) << "GracefulShutdown not implemented.";}; 
 };
 }

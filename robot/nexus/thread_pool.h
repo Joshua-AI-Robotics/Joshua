@@ -1,3 +1,11 @@
+#include <vector>
+#include <thread>
+#include <queue>
+#include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+
 class ThreadPool{
 private:
     std::vector<std::thread> workers_threads_;

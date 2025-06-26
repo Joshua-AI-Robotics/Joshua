@@ -12,10 +12,21 @@
 #include <unistd.h> // For sleep
 #include <chrono>
 #include <thread>
+#include <csignal>
+#include <atomic>
+
+std::atomic<bool> quit(false);
+
+void signal_handler(int signal) {
+    quit = true;
+}
+
 
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);
     FLAGS_logtostderr = 1;
+
+    signal(SIGINT, signal_handler);
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
@@ -23,7 +34,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "ID:" << robot_config.id();
 
-    const int trigger_frequency = 30;
+    const int trigger_frequency = 10;
     robot::nexus::Nexus nexus(trigger_frequency);
     nexus.Init();
 
@@ -43,8 +54,11 @@ int main(int argc, char* argv[]) {
 
     nexus.Start();
 
-    while(true){
+    while(!quit){
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+    LOG(INFO) << "Nexus stopped.";
+
     
+    return 0;
 }
