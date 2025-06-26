@@ -12,6 +12,7 @@
 #include <functional>
 #include <unordered_set>
 #include <atomic>
+#include <memory>
 #include <glog/logging.h>
 
 namespace robot::nexus {
@@ -37,12 +38,12 @@ struct ActionPacketCompare {
     }
 };
 struct PerceptionPacketCompare {
-    bool operator()(const robot::nexus::NexusPerceptionPacket& a, const robot::nexus::NexusPerceptionPacket& b) const {
-        return a.timestamp() > b.timestamp();
+    bool operator()(const std::unique_ptr<robot::nexus::NexusPerceptionPacket>& a, const std::unique_ptr<robot::nexus::NexusPerceptionPacket>& b) const {
+        return a->timestamp() > b->timestamp();
     }
 };
 std::priority_queue<NexusActionPacket, std::vector<NexusActionPacket>, ActionPacketCompare> action_packet_queue_;
-std::priority_queue<NexusPerceptionPacket, std::vector<NexusPerceptionPacket>, PerceptionPacketCompare> perception_packet_queue_;
+std::priority_queue<std::unique_ptr<NexusPerceptionPacket>, std::vector<std::unique_ptr<NexusPerceptionPacket>>, PerceptionPacketCompare> perception_packet_queue_;
 std::mutex queue_mutex_;
 std::thread main_thread_;
 std::atomic<bool> stop_;

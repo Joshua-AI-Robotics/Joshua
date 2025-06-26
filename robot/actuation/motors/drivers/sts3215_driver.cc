@@ -209,11 +209,15 @@ void Sts3215Driver::SetTorque(float torque) {
     }
 }
 
-void Sts3215Driver::SetAction(robot::nexus::NexusActionPacket action_packet) {
+void Sts3215Driver::SetAction(std::unique_ptr<robot::nexus::NexusActionPacket> action_packet) {
+    if (!action_packet) {
+        return;
+    }
+    
     try {
-        move_time_in_ms_ = action_packet.sts3215_action().move_time_in_ms();
-        move_speed_ = action_packet.sts3215_action().move_speed();
-        serial_->Write(create_move_packet(action_packet.sts3215_action().position()));
+        move_time_in_ms_ = action_packet->sts3215_action().move_time_in_ms();
+        move_speed_ = action_packet->sts3215_action().move_speed();
+        serial_->Write(create_move_packet(action_packet->sts3215_action().position()));
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         throw std::runtime_error("Failed to set action.");

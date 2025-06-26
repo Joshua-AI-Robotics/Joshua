@@ -40,8 +40,8 @@ void Nexus::run(){
         // In this new design, the run loop itself triggers the data acquisition.
         for(auto& interface : perception_interfaces_){
             std::visit([this](auto&& arg) {
-                NexusPerceptionPacket packet = arg->GetData();
-                perception_packet_queue_.push(packet);
+                auto packet = arg->GetData();
+                perception_packet_queue_.push(std::move(packet));
                 LOG(INFO) << "Perception packet processed.";
                 perception_packet_queue_.pop();
             }, interface);

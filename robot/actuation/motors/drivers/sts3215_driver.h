@@ -5,6 +5,7 @@
 #include "robot/comm_interface/serial/serial.h"
 #include "robot/actuation/interfaces/motor_interface.h"
 #include "robot/config/robot.pb.h"
+#include <memory>
 
 namespace robot::actuation{
 class Sts3215Driver : public robot::actuation::MotorInterface {
@@ -14,7 +15,7 @@ class Sts3215Driver : public robot::actuation::MotorInterface {
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
-  void SetAction(robot::nexus::NexusActionPacket action_packet) override;
+  void SetAction(std::unique_ptr<::robot::nexus::NexusActionPacket> action_packet) override;
   float GetPosition() override;
   void SetMiddlePosition() override;
   void SetIdlePosition() override;
