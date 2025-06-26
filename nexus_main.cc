@@ -23,14 +23,18 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "ID:" << robot_config.id();
 
-    robot::nexus::Nexus nexus;
+    const int trigger_frequency = 10;
+    robot::nexus::Nexus nexus(trigger_frequency);
     nexus.Init();
+
+    // Register motors.
     robot::actuation::MotorFactory motor_factory;
     for (const auto& single_actuation : robot_config.actuations().single_actuation()){
         const auto& motor_proto = single_actuation.motor();
         nexus.Register(motor_factory.CreateMotor(motor_proto));
     }    
 
+    // Register cameras.
     robot::perception::CameraFactory camera_factory; 
     for (const auto& single_perception : robot_config.perceptions().single_perception()){
         const auto& camera_proto = single_perception.camera();

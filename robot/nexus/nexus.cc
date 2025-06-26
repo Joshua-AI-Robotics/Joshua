@@ -1,16 +1,18 @@
 #include "robot/nexus/nexus.h"
+#include "robot/nexus/nexus_scheduler.h"
 
 namespace robot::nexus {
 
 Nexus::Nexus(const int& trigger_frequency):
-scheduler_(trigger_frequency), 
 stop_(false)
 {
+    scheduler_ = std::make_unique<NexusScheduler>(trigger_frequency);
     LOG(INFO) << "Nexus construted.";
 }
 
 Nexus::~Nexus(){
     stop_ = true;
+    scheduler_->Stop();
     if (main_thread_.joinable()) {
         main_thread_.join();
     }
@@ -76,14 +78,22 @@ void Nexus::run(){
             }
         }
 
-        scheduler_.wait_for_next_trigger();
+        scheduler_->WaitForNextTrigger();
     }
+}
+
+void Nexus::SetTriggerFrequency(int frequency) {
+    scheduler_->SetFrequency(frequency);
+}
+
+int Nexus::GetTriggerFrequency() const {    
+    return scheduler_->GetFrequency();
 }
 
 NexusModelOutputPacket Nexus::GenerateMockAIOutput(const NexusModelInputPacket& input_packet) {
     // These are static so they are only initialized once.
     static std::mt19937 random_generator(std::random_device{}());
-    static std::uniform_int_distribution<int> position_distribution(1900, 2100);
+    static std::uniform_int_distribution<int> position_distribution(1980, 2020);
 
     LOG(INFO) << "Mock Nexus model output packet received from AI layer.";
     NexusModelOutputPacket nexus_model_output_packet;

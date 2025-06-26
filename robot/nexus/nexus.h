@@ -2,7 +2,6 @@
 
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
-#include "robot/nexus/nexus_scheduler.h"
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -18,20 +17,24 @@
 
 namespace robot::nexus {
 
+class NexusScheduler;
+
 class Nexus {
 public:
-explicit Nexus(const int& trigger_frequency = 10);
+explicit Nexus(const int& trigger_frequency = 30);
 ~Nexus();
 bool Init();
 void Register(ActionInterface&& interface);
 void Register(PerceptionInterface&& interface);
 void Start();
+void SetTriggerFrequency(int frequency);
+int GetTriggerFrequency() const;
 
 private:
 void run();
 NexusModelOutputPacket GenerateMockAIOutput(const NexusModelInputPacket& input_packet);
 
-NexusScheduler scheduler_;
+std::unique_ptr<NexusScheduler> scheduler_;
 std::map<std::string, ActionInterface> action_interfaces_;
 std::vector<PerceptionInterface> perception_interfaces_;
 
