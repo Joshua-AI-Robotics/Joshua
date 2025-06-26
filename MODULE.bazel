@@ -39,7 +39,7 @@ http_archive(
 )
 
 # My custom rule for system dependencies
-system_libs = use_repo_rule("//robot:system_deps.bzl", "system_libs_repo")
+system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
 system_libs(name = "local_deps")
 
 ###############################################################################

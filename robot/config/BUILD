@@ -13,9 +13,7 @@ proto_library(
 
 cc_proto_library(
     name = "robot_cc_proto",
-    deps = [
-        ":robot_proto",
-    ],
+    deps = [":robot_proto"],
     visibility = ["//visibility:public"],
 )
 
