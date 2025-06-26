@@ -11,5 +11,6 @@ cc_library(
         "//robot/config:robot_cc_proto",
         "@opencv//:videoio",
         "@opencv//:core",
+        "@opencv//:imgcodecs",
     ],
 )

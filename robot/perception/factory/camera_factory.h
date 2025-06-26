@@ -12,7 +12,7 @@ public:
     CameraFactory() = default;
     ~CameraFactory() = default;
 
-    std::unique_ptr<robot::perception::CameraInterface> CreateCamera();
+    std::unique_ptr<robot::perception::CameraInterface> CreateCamera(const robot::perception::Camera& camera_config);
     
 private:
 };

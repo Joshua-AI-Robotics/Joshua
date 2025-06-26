@@ -46,10 +46,18 @@ cc_library(
 )
 
 cc_library(
+    name = "imgcodecs",
+    hdrs = glob(["include/opencv4/opencv2/imgcodecs/**/*.h*"]),
+    includes = ["include/opencv4"],
+    linkopts = ["-lopencv_imgcodecs"],
+    deps = [":core"],
+)
+
+cc_library(
     name = "videoio",
     hdrs = glob(["include/opencv4/opencv2/videoio/**/*.h*"]),
     includes = ["include/opencv4"],
     linkopts = ["-lopencv_videoio"],
     # The dependency chain: videoio -> highgui -> core -> opencv_headers
-    deps = [":highgui", ":imgproc"],
+    deps = [":highgui", ":imgproc", ":imgcodecs"],
 )

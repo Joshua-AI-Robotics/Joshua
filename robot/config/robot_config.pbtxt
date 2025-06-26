@@ -143,3 +143,13 @@ actuations {
     }
   }
 }
+
+perceptions {
+  single_perception {
+    camera {
+      camera_name: "webcam"
+      id: 1
+      perception_type: CAMERA
+    }
+  }
+}

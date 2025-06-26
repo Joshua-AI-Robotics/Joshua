@@ -12,7 +12,8 @@ public:
     CvCamera();
     ~CvCamera() override;
 
-    cv::Mat GetFrame() override;
+    void Capture() override;
+    ::robot::nexus::NexusPerceptionPacket GetData() override;
 
 private:
     cv::VideoCapture cap_;

@@ -17,3 +17,15 @@ cc_proto_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+proto_library(
+    name = "actuation_packet_proto",
+    srcs = ["actuation_packet.proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "actuation_packet_cc_proto",
+    deps = [":actuation_packet_proto"],
+    visibility = ["//visibility:public"],
+)

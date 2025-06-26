@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "robot/actuation/proto/actuation_packet.proto";
+import "robot/perception/proto/perception.proto";
+
+package robot.nexus;
+
+message NexusActionPacket {
+    uint64 timestamp = 1;
+    string action_id = 2;
+    oneof action_packet_type {
+        robot.actuation.STS3215ActuationPayload sts3215_action = 3;
+    }
+}
+
+message NexusPerceptionPacket {
+    uint64 timestamp = 1;
+    string perception_id = 2;
+    oneof perception_packet_type {
+        robot.perception.CameraPerceptionPayload camera_perception = 3;
+    }
+} 

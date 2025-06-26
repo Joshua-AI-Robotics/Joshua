@@ -1,14 +1,16 @@
 #pragma once
 #include <variant>
+#include <memory>
+#include "robot/actuation/interfaces/motor_interface.h"
+#include "robot/perception/interfaces/camera_interface.h"
 
-// Forward declarations or includes for Sts3215 and Camera should be provided elsewhere if not included here.
 namespace robot::nexus {
     using ActionInterface = std::variant<
-        Sts3215,
-        // Add other sensor types as needed
+        std::shared_ptr<robot::actuation::MotorInterface>
+        // Add other interface types as needed
     >;
-
-    using PerceptionInterface = std::varint<
-        Camera
+    using PerceptionInterface = std::variant<
+        std::shared_ptr<robot::perception::CameraInterface>
+        // Add other perception types as needed
     >;
 }

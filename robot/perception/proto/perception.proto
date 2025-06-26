@@ -8,3 +8,24 @@ enum PerceptionType {
     LIDAR = 2;
     RADAR = 3;
 }
+
+//TODO: Add camera config here.
+message Camera {
+    string camera_name = 1;
+    uint64 id = 2;
+    PerceptionType perception_type = 3;
+}
+
+message SinglePerception {
+    oneof perception_type {
+        Camera camera = 1;
+    }
+}
+
+message Perception {
+    repeated SinglePerception single_perception = 1;
+}
+
+message CameraPerceptionPayload {
+    bytes image_data = 1; // E.g., encoded as JPEG
+}

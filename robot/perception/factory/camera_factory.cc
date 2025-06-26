@@ -3,7 +3,8 @@
 
 namespace robot::perception {
 
-std::unique_ptr<robot::perception::CameraInterface> CameraFactory::CreateCamera() {
+std::unique_ptr<robot::perception::CameraInterface> CameraFactory::CreateCamera(const robot::perception::Camera& camera_config) {
+    // TODO: Add logic to select camera type based on camera_config.
     return std::make_unique<CvCamera>();
 }
 

@@ -1,17 +1,17 @@
 #pragma once
 
-#include <opencv2/core/mat.hpp>
-#include <memory>
+#include "robot/nexus/proto/nexus_packet.pb.h"
+#include <vector>
 
-namespace robot {
-namespace perception {
+namespace robot::perception {
 
 class CameraInterface {
 public:
+    CameraInterface() = default;
     virtual ~CameraInterface() = default;
 
-    virtual cv::Mat GetFrame() = 0;
+    virtual void Capture() = 0;
+    virtual ::robot::nexus::NexusPerceptionPacket GetData() = 0;
 };
 
-}  // namespace perception
-}  // namespace robot 
+} // namespace robot::perception 

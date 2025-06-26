@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package robot.actuation;
+
+message STS3215ActuationPayload {
+    uint32 position = 1;
+    uint32 move_time_in_ms = 2;
+    uint32 move_speed = 3;
+}

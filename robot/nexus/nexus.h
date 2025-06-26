@@ -3,6 +3,7 @@
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
 #include "robot/nexus/nexus_scheduler.h"
+#include "robot/nexus/proto/nexus_packet.pb.h"
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -31,8 +32,18 @@ void run();
 NexusScheduler scheduler_;
 std::vector<ActionInterface> action_interfaces_;
 std::vector<PerceptionInterface> perception_interfaces_;
-// TODO: Update this to shared memory.
-std::priority_queue<NexusPacket, std::vector<NexusPacket>, std::greater<NexusPacket>> packet_queue_;
+struct ActionPacketCompare {
+    bool operator()(const robot::nexus::NexusActionPacket& a, const robot::nexus::NexusActionPacket& b) const {
+        return a.timestamp() > b.timestamp();
+    }
+};
+struct PerceptionPacketCompare {
+    bool operator()(const robot::nexus::NexusPerceptionPacket& a, const robot::nexus::NexusPerceptionPacket& b) const {
+        return a.timestamp() > b.timestamp();
+    }
+};
+std::priority_queue<NexusActionPacket, std::vector<NexusActionPacket>, ActionPacketCompare> action_packet_queue_;
+std::priority_queue<NexusPerceptionPacket, std::vector<NexusPerceptionPacket>, PerceptionPacketCompare> perception_packet_queue_;
 std::mutex queue_mutex_;
 std::thread main_thread_;
 std::atomic<bool> stop_;

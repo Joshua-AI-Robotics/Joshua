@@ -1,18 +1,8 @@
 #pragma once
 
-#include <chrono>
+#include "robot/nexus/proto/nexus_packet.pb.h"
 
-namespace robot::nexus{
-using namespace std::chrono;
-
-struct NexusPacket {
-    time_point<system_clock, nanoseconds> timestamp;
-    std::string sensor_id; 
-    SensorDataVariant data_payload;
-
-    // To store in the priority queue in order.
-    bool operator>(const NexusPacket& other) const {
-            return timestamp > other.timestamp;
-        }
-}
+namespace robot::nexus {
+using NexusActionPacket = robot::nexus::NexusActionPacket;
+using NexusPerceptionPacket = robot::nexus::NexusPerceptionPacket;
 }

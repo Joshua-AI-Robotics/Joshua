@@ -39,27 +39,19 @@ void Nexus::run(){
     while(!stop_){
         // In this new design, the run loop itself triggers the data acquisition.
         for(auto& interface : perception_interfaces_){
-            // Placeholder for getting data from the perception interface.
-            // A std::visit pattern would be used here to handle the variant types.
-            LOG(INFO) << "Triggering perception data acquisition.";
-        }
-        for(auto& interface : action_interfaces_){
-            // Placeholder for getting data from the action interface.
-            LOG(INFO) << "Triggering action data acquisition.";
+            std::visit([this](auto&& arg) {
+                NexusPerceptionPacket packet = arg->GetData();
+                perception_packet_queue_.push(packet);
+                // TODO: Replace to actual process logic.
+                LOG(INFO) << "Perception packet processed.";
+                perception_packet_queue_.pop();
+            }, interface);
         }
 
-
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if(!packet_queue_.empty()){
-            NexusPacket packet = packet_queue_.top();
-            packet_queue_.pop();
-            lock.unlock();
-
-            LOG(INFO) << "Processing packet from " << packet.sensor_id;
-            // TODO: Add packet processing logic here.
-        } else {
-            lock.unlock();
-        }
+        // for(auto& interface : action_interfaces_){
+        //     // Placeholder for getting data from the action interface.
+        //     LOG(INFO) << "Triggering action data acquisition.";
+        // }
 
         scheduler_.wait_for_next_trigger();
     }
