@@ -12,7 +12,7 @@ cc_binary(
         "//robot/perception/interfaces:camera_interface",
         "@com_github_google_glog//:glog",
         "@com_github_gflags_gflags//:gflags",
-        "@opencv//:highgui",
+        "@local_deps//:highgui",
     ],
     visibility = ["//visibility:public"],
 )

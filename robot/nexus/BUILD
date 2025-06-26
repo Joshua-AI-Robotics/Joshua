@@ -1,20 +1,4 @@
-load("@rules_proto//proto:defs.bzl", "proto_library")
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
-
-proto_library(
-    name = "nexus_packet_proto",
-    srcs = ["proto/nexus_packet.proto"],
-    deps = [
-        "//robot/actuation/proto:actuation_packet_proto",
-        "//robot/perception/proto:perception_packet_proto",
-    ],
-)
-
-cc_proto_library(
-    name = "nexus_packet",
-    visibility = ["//visibility:public"],
-    deps = [":nexus_packet_proto"],
-)
+load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
     name = "nexus_scheduler",
@@ -41,7 +25,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":nexus_packet",
+        "//robot/nexus/proto:nexus_packet_cc_proto",
         ":nexus_scheduler",
         ":interface_variant",
         "@com_github_google_glog//:glog",

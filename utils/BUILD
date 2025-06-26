@@ -31,9 +31,12 @@ cc_binary(
     name = "camera_main",
     srcs = ["camera_main.cc"],
     deps = [
+        "//robot/config:config_utils",
         "//robot/perception/factory:camera_factory",
         "//robot/perception/interfaces:camera_interface",
+        "//robot/nexus/proto:nexus_packet_cc_proto",
         "@com_github_google_glog//:glog",
-        "@opencv//:highgui",
+        "@local_deps//:highgui",
+        "@local_deps//:imgcodecs",
     ],
-) 
+)

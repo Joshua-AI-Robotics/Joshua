@@ -5,7 +5,7 @@ cc_library(
     srcs = ["serial.cc"],
     hdrs = ["serial.h"],
     deps = [
-        "@boost//:boost_asio",
+        "@local_deps//:boost_asio",
         "@com_github_google_glog//:glog",
     ],
     visibility = ["//visibility:public"],

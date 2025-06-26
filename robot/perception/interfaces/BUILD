@@ -5,7 +5,8 @@ cc_library(
     hdrs = ["camera_interface.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/nexus:nexus_packet",
-        "@opencv//:core",
+        "//robot/config:robot_cc_proto",
+        "//robot/nexus/proto:nexus_packet_cc_proto",
+        "@local_deps//:core",
     ],
 )

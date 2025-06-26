@@ -7,10 +7,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/perception/interfaces:camera_interface",
+        "@local_deps//:videoio",
+        "@local_deps//:core",
+        "@local_deps//:imgcodecs",
         "@com_github_google_glog//:glog",
         "//robot/config:robot_cc_proto",
-        "@opencv//:videoio",
-        "@opencv//:core",
-        "@opencv//:imgcodecs",
     ],
 )
