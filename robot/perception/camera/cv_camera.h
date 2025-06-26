@@ -5,9 +5,9 @@
 #include <glog/logging.h>
 #include <memory>
 
-namespace robot {
-namespace perception {
+namespace robot::perception {
 
+// TODO: Update the ID, and logic.
 class CvCamera : public CameraInterface {
 public:
     CvCamera();
@@ -20,5 +20,4 @@ private:
     cv::VideoCapture cap_;
 };
 
-}  // namespace perception
-}  // namespace robot 
+}  // namespace robot::perception

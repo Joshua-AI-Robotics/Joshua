@@ -3,8 +3,7 @@
 #include <vector>
 #include <opencv2/imgcodecs.hpp>
 
-namespace robot {
-namespace perception {
+namespace robot::perception {
 
 CvCamera::CvCamera() {
     // Open the default camera (device 0).
@@ -56,5 +55,4 @@ std::unique_ptr<::robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
     return packet;
 }
 
-}  // namespace perception
-}  // namespace robot 
+}  // namespace robot::perception
