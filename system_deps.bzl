@@ -53,7 +53,7 @@ cc_library(
 # opencv
 cc_library(
     name = "opencv",
-    deps = [":videoio", ":features2d", ":flann"],
+    deps = [":videoio", ":features2d", ":flann", ":dnn"],
 )
 
 cc_library(
@@ -119,6 +119,14 @@ cc_library(
     includes = ["usr/include/opencv4"],
     linkopts = ["-lopencv_features2d"],
     deps = [":core", ":flann"],
+)
+
+cc_library(
+    name = "dnn",
+    hdrs = glob(["usr/include/opencv4/opencv2/dnn/**/*.h*"], allow_empty = True),
+    includes = ["usr/include/opencv4"],
+    linkopts = ["-lopencv_dnn"],
+    deps = [":core", ":imgproc"],
 )
 """
     ctx.symlink("/usr", "usr")

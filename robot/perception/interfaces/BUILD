@@ -8,6 +8,5 @@ cc_library(
         "//robot/config:robot_cc_proto",
         "//robot/nexus/proto:nexus_packet_cc_proto",
         "@local_deps//:core",
-        "@local_deps//:opencv",
     ],
 )
