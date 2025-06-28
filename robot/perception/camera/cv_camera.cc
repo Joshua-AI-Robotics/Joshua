@@ -30,9 +30,12 @@ CvCamera::~CvCamera() {
     }
 }
 
-void CvCamera::Capture() {
-    // In this implementation, GetData() also captures the frame,
-    // so this function can be a no-op.
+cv::Mat CvCamera::Capture() {
+    cv::Mat frame;
+    if (cap_.isOpened()) {
+        cap_ >> frame;
+    }
+    return frame;
 }
 
 std::unique_ptr<::robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {

@@ -36,7 +36,6 @@ int main(int argc, char* argv[]) {
 
     const int trigger_frequency = 10;
     robot::nexus::Nexus nexus(trigger_frequency);
-    nexus.Init();
 
     // Register motors.
     robot::actuation::MotorFactory motor_factory;
@@ -52,6 +51,13 @@ int main(int argc, char* argv[]) {
         nexus.Register(camera_factory.CreateCamera(camera_proto));
     }
 
+    // Initialize the nexus.
+    if (!nexus.Init()) {
+        LOG(ERROR) << "Failed to initialize nexus. Exiting.";
+        return -1;
+    }
+
+    // Start the nexus.
     nexus.Start();
 
     while(!quit){

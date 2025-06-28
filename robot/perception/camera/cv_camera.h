@@ -13,7 +13,7 @@ public:
     CvCamera();
     ~CvCamera() override;
 
-    void Capture() override;
+    cv::Mat Capture() override;
     std::unique_ptr<::robot::nexus::NexusPerceptionPacket> GetData() override;
 
 private:

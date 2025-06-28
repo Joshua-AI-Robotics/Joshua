@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
         // Motor instantiation.
         robot::actuation::MotorFactory motor_factory; 
         std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
+        std::vector<std::unique_ptr<robot::perception::CameraInterface>> cameras;
 
         for(int i = 0; i < number_of_motors; i++){
             const auto& single_actuation = robot_config.actuations().single_actuation(i);
@@ -79,17 +80,15 @@ int main(int argc, char* argv[]) {
         // Initialize camera
         if(FLAGS_enable_camera){
             robot::perception::CameraFactory camera_factory;
-            std::unique_ptr<robot::perception::CameraInterface> camera = camera_factory.CreateCamera();
-
-            if (!camera) {
-                LOG(ERROR) << "Failed to create camera.";
-                return -1;
+            for (const auto& single_perception : robot_config.perceptions().single_perception()){
+                const auto& camera_proto = single_perception.camera();
+                cameras.emplace_back(camera_factory.CreateCamera(camera_proto));
             }
 
             cv::namedWindow("Camera", cv::WINDOW_AUTOSIZE);
 
             while (true) {
-                cv::Mat frame = camera->GetFrame();
+                cv::Mat frame = cameras[0]->Capture();
                 if (frame.empty()) {
                     LOG(WARNING) << "Failed to capture frame.";
                     break;

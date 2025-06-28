@@ -53,12 +53,15 @@ cc_library(
 # opencv
 cc_library(
     name = "opencv",
-    deps = [":videoio"],
+    deps = [":videoio", ":features2d", ":flann"],
 )
 
 cc_library(
     name = "opencv_headers",
-    hdrs = glob(["usr/include/opencv4/opencv2/*.hpp"], allow_empty = True),
+    hdrs = glob([
+        "usr/include/opencv4/opencv2/*.hpp",
+        "usr/include/opencv4/opencv2/*.h",
+    ], allow_empty = True),
     includes = ["usr/include/opencv4"],
 )
 
@@ -100,6 +103,22 @@ cc_library(
     includes = ["usr/include/opencv4"],
     linkopts = ["-lopencv_videoio"],
     deps = [":highgui", ":imgproc", ":imgcodecs"],
+)
+
+cc_library(
+    name = "flann",
+    hdrs = glob(["usr/include/opencv4/opencv2/flann/**/*.h*"], allow_empty = True),
+    includes = ["usr/include/opencv4"],
+    linkopts = ["-lopencv_flann"],
+    deps = [":core"],
+)
+
+cc_library(
+    name = "features2d",
+    hdrs = glob(["usr/include/opencv4/opencv2/features2d/**/*.h*"], allow_empty = True),
+    includes = ["usr/include/opencv4"],
+    linkopts = ["-lopencv_features2d"],
+    deps = [":core", ":flann"],
 )
 """
     ctx.symlink("/usr", "usr")

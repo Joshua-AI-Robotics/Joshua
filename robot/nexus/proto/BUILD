@@ -1,5 +1,6 @@
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@rules_python//python:proto.bzl", "py_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -14,5 +15,10 @@ proto_library(
 
 cc_proto_library(
     name = "nexus_packet_cc_proto",
+    deps = [":nexus_packet_proto"],
+)
+
+py_proto_library(
+    name = "nexus_packet_py_proto",
     deps = [":nexus_packet_proto"],
 ) 

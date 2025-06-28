@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@pybind11_bazel//:build_defs.bzl", "pybind_library")
 
 cc_library(
     name = "thread_pool",
@@ -10,6 +11,17 @@ cc_library(
     name = "nexus_scheduler",
     hdrs = ["nexus_scheduler.h"],
     visibility = ["//visibility:public"],
+)
+
+pybind_library(
+    name = "ai_model",
+    srcs = ["ai_model.cc"],
+    hdrs = ["ai_model.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/nexus/proto:nexus_packet_cc_proto",
+        "@com_github_google_glog//:glog",
+    ],
 )
 
 cc_library(
@@ -31,6 +43,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":ai_model",
         "//robot/nexus/proto:nexus_packet_cc_proto",
         ":nexus_scheduler",
         ":interface_variant",
