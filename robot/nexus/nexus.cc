@@ -10,7 +10,7 @@ Nexus::Nexus(const int& trigger_frequency):
 stop_(false)
 {
     scheduler_ = std::make_unique<NexusScheduler>(trigger_frequency);
-    ai_model_ = std::make_unique<AIModel>();
+    ai_executor_ = std::make_unique<AIExecutor>();
     LOG(INFO) << "Nexus construted.";
 }
 
@@ -45,8 +45,8 @@ bool Nexus::Init(){
     if (perception_interfaces_.empty() && action_interfaces_.empty()) {
         LOG(WARNING) << "No interfaces registered with Nexus.";
     }
-    if (!ai_model_->Init("ai.model", "generate_mock_ai_output")) {
-        LOG(ERROR) << "Failed to initialize AI model.";
+    if (!ai_executor_->Init("ai.model", "generate_mock_ai_output")) {
+        LOG(ERROR) << "Failed to initialize AI executor.";
         return false;
     }
     stop_ = false;
@@ -93,7 +93,7 @@ void Nexus::run(){
         LOG(INFO) << "Nexus model input packet passed to AI layer.";
 
         // Psudo code of the output from the AI layer.
-        auto nexus_model_output_packet = ai_model_->Predict(nexus_model_input_packet);
+        auto nexus_model_output_packet = ai_executor_->Predict(nexus_model_input_packet);
         
         // Process the action packets.
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){

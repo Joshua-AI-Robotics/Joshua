@@ -7,10 +7,10 @@
 
 namespace robot::nexus {
 
-class AIModel {
+class AIExecutor {
 public:
-    AIModel();
-    ~AIModel();
+    AIExecutor();
+    ~AIExecutor();
 
     bool Init(const std::string& module_name, const std::string& function_name);
     NexusModelOutputPacket Predict(const NexusModelInputPacket& input_packet);

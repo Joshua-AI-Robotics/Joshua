@@ -3,7 +3,7 @@
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
 #include "robot/nexus/thread_pool.h"
-#include "robot/nexus/ai_model.h"
+#include "robot/nexus/ai_executor.h"
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -36,7 +36,7 @@ private:
 void run();
 
 std::unique_ptr<NexusScheduler> scheduler_;
-std::unique_ptr<AIModel> ai_model_;
+std::unique_ptr<AIExecutor> ai_executor_;
 std::map<std::string, ActionInterface> action_interfaces_;
 std::vector<PerceptionInterface> perception_interfaces_;
 

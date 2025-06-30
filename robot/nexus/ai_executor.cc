@@ -1,5 +1,5 @@
 #define PYBIND11_NO_ASSERT_GIL_HELD_INCREF_DECREF
-#include "robot/nexus/ai_model.h"
+#include "robot/nexus/ai_executor.h"
 #include <glog/logging.h>
 #include <pybind11/pybind11.h>
 #include <thread>
@@ -9,30 +9,30 @@ namespace py = pybind11;
 
 namespace robot::nexus {
 
-struct AIModel::PybindData {
+struct AIExecutor::PybindData {
     pybind11::scoped_interpreter guard;
     std::string module_name;
     std::string function_name;
     PyThreadState* main_thread_state;
 };
 
-AIModel::AIModel() : pybind_data_(std::make_unique<PybindData>()) {
-    LOG(INFO) << "AIModel constructor started";
+AIExecutor::AIExecutor() : pybind_data_(std::make_unique<PybindData>()) {
+    LOG(INFO) << "AIExecutor constructor started";
     
     // The scoped_interpreter initializes Python and acquires the GIL
     // We need to save the thread state and release the GIL so other threads can use it
     pybind_data_->main_thread_state = PyEval_SaveThread();    
 }
 
-AIModel::~AIModel() {
+AIExecutor::~AIExecutor() {
     // Restore the thread state before destruction
     if (pybind_data_->main_thread_state) {
         PyEval_RestoreThread(pybind_data_->main_thread_state);
     }
 }
 
-bool AIModel::Init(const std::string& module_name, const std::string& function_name) {
-    LOG(INFO) << "AIModel::Init called on thread: " << std::this_thread::get_id();
+bool AIExecutor::Init(const std::string& module_name, const std::string& function_name) {
+    LOG(INFO) << "AIExecutor::Init called on thread: " << std::this_thread::get_id();
     try {
         py::gil_scoped_acquire acquire;
         
@@ -44,16 +44,16 @@ bool AIModel::Init(const std::string& module_name, const std::string& function_n
         pybind_data_->module_name = module_name;
         pybind_data_->function_name = function_name;
         
-        LOG(INFO) << "AI model initialized successfully";
+        LOG(INFO) << "AI executor initialized successfully";
     } catch (py::error_already_set &e) {
-        LOG(ERROR) << "Failed to initialize AI model: " << e.what();
+        LOG(ERROR) << "Failed to initialize AI executor: " << e.what();
         return false;
     }
-    LOG(INFO) << "AIModel::Init completed, GIL released automatically";
+    LOG(INFO) << "AIExecutor::Init completed, GIL released automatically";
     return true;
 }
 
-NexusModelOutputPacket AIModel::Predict(const NexusModelInputPacket& input_packet) {
+NexusModelOutputPacket AIExecutor::Predict(const NexusModelInputPacket& input_packet) {
     NexusModelOutputPacket output_packet;
     std::string serialized_input;
     
@@ -83,7 +83,7 @@ NexusModelOutputPacket AIModel::Predict(const NexusModelInputPacket& input_packe
         }
         
     } catch (py::error_already_set &e) {
-        LOG(ERROR) << "Python error in AIModel::Predict: " << e.what();
+        LOG(ERROR) << "Python error in AIExecutor::Predict: " << e.what();
     }
 
     return output_packet;

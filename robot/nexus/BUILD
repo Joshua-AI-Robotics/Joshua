@@ -14,9 +14,9 @@ cc_library(
 )
 
 pybind_library(
-    name = "ai_model",
-    srcs = ["ai_model.cc"],
-    hdrs = ["ai_model.h"],
+    name = "ai_executor",
+    srcs = ["ai_executor.cc"],
+    hdrs = ["ai_executor.h"],
     visibility = ["//visibility:public"],
     deps = [
         "//robot/nexus/proto:nexus_packet_cc_proto",
@@ -43,7 +43,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":ai_model",
+        ":ai_executor",
         "//robot/nexus/proto:nexus_packet_cc_proto",
         ":nexus_scheduler",
         ":interface_variant",

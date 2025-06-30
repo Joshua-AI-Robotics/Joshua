@@ -8,6 +8,7 @@ import logging as glog
 glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
 
 # Add protobuf paths to ensure google module is found
+# TODO: Update the project setting to avoid this manual dependency check.
 if hasattr(sys, '_getframe'):
     # Running under Bazel - add runfiles protobuf paths
     current_dir = os.path.dirname(os.path.abspath(__file__))
