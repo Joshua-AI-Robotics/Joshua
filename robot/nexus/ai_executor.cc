@@ -53,7 +53,7 @@ bool AIExecutor::Init(const std::string& module_name, const std::string& functio
     return true;
 }
 
-NexusModelOutputPacket AIExecutor::Predict(const NexusModelInputPacket& input_packet) {
+NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_packet) {
     NexusModelOutputPacket output_packet;
     std::string serialized_input;
     

@@ -13,7 +13,7 @@ public:
     ~AIExecutor();
 
     bool Init(const std::string& module_name, const std::string& function_name);
-    NexusModelOutputPacket Predict(const NexusModelInputPacket& input_packet);
+    NexusModelOutputPacket Inference(const NexusModelInputPacket& input_packet);
 
 private:
     struct PybindData;

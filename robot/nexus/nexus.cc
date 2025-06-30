@@ -45,6 +45,7 @@ bool Nexus::Init(){
     if (perception_interfaces_.empty() && action_interfaces_.empty()) {
         LOG(WARNING) << "No interfaces registered with Nexus.";
     }
+    // TODO: Update this by using the model name and function name from the config.
     if (!ai_executor_->Init("ai.model", "generate_mock_ai_output")) {
         LOG(ERROR) << "Failed to initialize AI executor.";
         return false;
@@ -93,7 +94,7 @@ void Nexus::run(){
         LOG(INFO) << "Nexus model input packet passed to AI layer.";
 
         // Psudo code of the output from the AI layer.
-        auto nexus_model_output_packet = ai_executor_->Predict(nexus_model_input_packet);
+        auto nexus_model_output_packet = ai_executor_->Inference(nexus_model_input_packet);
         
         // Process the action packets.
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){
