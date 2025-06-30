@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "ID:" << robot_config.id();
 
-    const int trigger_frequency = 10;
+    const int trigger_frequency = 30;
     robot::nexus::Nexus nexus(trigger_frequency);
 
     // Register motors.

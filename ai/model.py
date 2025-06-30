@@ -2,6 +2,10 @@ import random
 import time
 import sys
 import os
+import logging as glog
+
+# Configure logging
+glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
 
 # Add protobuf paths to ensure google module is found
 if hasattr(sys, '_getframe'):
@@ -31,20 +35,20 @@ def generate_mock_ai_output(serialized_input_packet):
     Deserializes a NexusModelInputPacket, creates a mock NexusModelOutputPacket,
     and returns it serialized.
     """
-    print("DEBUG: Python AI function called", flush=True)
+    glog.info("Python AI function called")
     
     try:
-        print("DEBUG: Parsing input packet...", flush=True)
+        glog.info("Parsing input packet...")
         input_packet = nexus_packet_pb2.NexusModelInputPacket()
         input_packet.ParseFromString(serialized_input_packet)
-        print(f"DEBUG: Input packet parsed successfully, ID: {input_packet.model_input_id}", flush=True)
+        glog.info(f"Input packet parsed successfully, ID: {input_packet.model_input_id}")
 
-        print("DEBUG: Creating output packet...", flush=True)
+        glog.info("Creating output packet...")
         output_packet = nexus_packet_pb2.NexusModelOutputPacket()
         output_packet.timestamp = int(time.time() * 1e9)
         output_packet.model_output_id = "py_model_output_0"
 
-        print("DEBUG: Adding action packets...", flush=True)
+        glog.info("Adding action packets...")
         # Mimic the logic from the C++ version
         for i in range(1, 6):
             action_packet = output_packet.action_packets.add()
@@ -52,12 +56,12 @@ def generate_mock_ai_output(serialized_input_packet):
             action_packet.action_id = str(i)
             action_packet.sts3215_action.position = random.randint(1950, 2050)
 
-        print("DEBUG: Serializing output packet...", flush=True)
+        glog.info("Serializing output packet...")
         result = output_packet.SerializeToString()
-        print(f"DEBUG: Serialization complete, result length: {len(result)}", flush=True)
+        glog.info(f"Serialization complete, result length: {len(result)}")
         return result
         
     except Exception as e:
-        print(f"DEBUG: Error in Python AI function: {e}", flush=True)
+        glog.error(f"Error in Python AI function: {e}")
         # Return empty packet on error
         return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString() 
