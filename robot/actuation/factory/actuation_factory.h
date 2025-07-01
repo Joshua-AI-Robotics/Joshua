@@ -1,6 +1,6 @@
 #pragma once
 
-#include "robot/actuation/interfaces/motor_interface.h"
+#include "robot/actuation/interfaces/actuation_interface.h"
 #include "robot/comm_interface/serial/serial.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
@@ -16,12 +16,12 @@ namespace boost::asio {
 }
 
 namespace robot::actuation{
-class MotorFactory {
+class ActuationFactory {
 public:
-    MotorFactory() = default;
-    ~MotorFactory() = default;
+    ActuationFactory() = default;
+    ~ActuationFactory() = default;
 
-    std::unique_ptr<robot::actuation::MotorInterface> CreateMotor(robot::actuation::Motor motor_config)
+    std::unique_ptr<robot::actuation::ActuationInterface> CreateActuator(robot::actuation::Motor motor_config)
     {
         // TODO: Fix this nested switch case. Probably should make comm_factory.
         switch (motor_config.motor_type())

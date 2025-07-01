@@ -1,4 +1,4 @@
-#include "robot/actuation/factory/motor_factory.h"
+#include "robot/actuation/factory/actuation_factory.h"
 #include "robot/config/config_utils.h"
 #include "utils/so100_xbox_controller_handler.h"
 #include <glog/logging.h>
@@ -21,8 +21,8 @@ int main(int argc, char* argv[]) {
         LOG(INFO) << "ID:" << robot_config.id();
 
         // Motor instantiation.
-        robot::actuation::MotorFactory motor_factory;
-        std::vector<std::unique_ptr<robot::actuation::MotorInterface>> motors;
+        robot::actuation::ActuationFactory actuation_factory;
+        std::vector<std::unique_ptr<robot::actuation::ActuationInterface>> actuators;
 
         for (int i = 0; i < number_of_motors; i++) {
             const auto& single_actuation = robot_config.actuations().single_actuation(i);
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
 
             switch (motor_proto.motor_type()) {
             case robot::actuation::MotorType::STS3215:
-                motors.emplace_back(motor_factory.CreateMotor(motor_proto));
+                actuators.emplace_back(actuation_factory.CreateActuator(motor_proto));
                 break;
             default:
                 LOG(ERROR) << "Unknown motor type: " << motor_proto.motor_type();
@@ -40,15 +40,15 @@ int main(int argc, char* argv[]) {
 
         // Initial motor setup.
         for (int i = 0; i < number_of_motors; ++i) {
-            if (motors[i]) {
-                motors[i]->SetTorque(1);
-                motors[i]->SetMiddlePosition();
+            if (actuators[i]) {
+                actuators[i]->SetTorque(1);
+                actuators[i]->SetMiddlePosition();
             }
         }
         sleep(kSetupTime);
 
         // Initialize and start So100XboxControllerHandler
-        utils::So100XboxControllerHandler controller_handler(robot_config, motors);
+        utils::So100XboxControllerHandler controller_handler(robot_config, actuators);
         if (!controller_handler.Init()) {
             LOG(ERROR) << "Failed to initialize So100XboxControllerHandler. Exiting.";
             return 1;
@@ -59,14 +59,14 @@ int main(int argc, char* argv[]) {
         controller_handler.Join(); // This is a blocking thread.
 
         for (int i = 0; i < number_of_motors; ++i) {
-            if (motors[i]) {
-                motors[i]->SetIdlePosition();
+            if (actuators[i]) {
+                actuators[i]->SetIdlePosition();
             }
         }
         sleep(kSetupTime);
 
         LOG(INFO) << "Disabling torque on all servos...";
-        for (auto& servo : motors) {
+        for (auto& servo : actuators) {
             if (servo) {
                 servo->SetTorque(0);
             }

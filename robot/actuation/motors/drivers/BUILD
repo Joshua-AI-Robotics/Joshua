@@ -5,7 +5,7 @@ cc_library(
     srcs = ["sts3215_driver.cc"],
     hdrs = ["sts3215_driver.h"],
     deps = [
-        "//robot/actuation/interfaces:motor_interface",
+        "//robot/actuation/interfaces:actuation_interface",
         "//robot/comm_interface/serial:serial",
         "//robot/config:robot_cc_proto",
     ],

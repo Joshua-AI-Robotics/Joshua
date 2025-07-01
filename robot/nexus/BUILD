@@ -29,7 +29,7 @@ cc_library(
     hdrs = ["interface_variant.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/actuation/interfaces:motor_interface",
+        "//robot/actuation/interfaces:actuation_interface",
         "//robot/perception/interfaces:camera_interface",
     ]
 )

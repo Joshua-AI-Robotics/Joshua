@@ -10,7 +10,7 @@ cc_binary(
         requirement("protobuf"),
     ],
     deps = [
-        "//robot/actuation/factory:motor_factory",
+        "//robot/actuation/factory:actuation_factory",
         "//robot/config:config_utils",
         "//robot/perception/factory:camera_factory",
         "//robot/perception/interfaces:camera_interface",

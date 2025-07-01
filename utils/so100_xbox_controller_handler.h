@@ -2,7 +2,7 @@
 
 #include "utils/xbox_controller/xbox_controller.h"
 #include "robot/config/robot.pb.h"
-#include "robot/actuation/interfaces/motor_interface.h"
+#include "robot/actuation/interfaces/actuation_interface.h"
 #include <vector>
 #include <memory>
 #include <atomic>
@@ -14,7 +14,7 @@ namespace utils {
 class So100XboxControllerHandler {
 public:
     So100XboxControllerHandler(const robot::Robot& robot_config, 
-                          std::vector<std::unique_ptr<robot::actuation::MotorInterface>>& motors);
+                          std::vector<std::unique_ptr<robot::actuation::ActuationInterface>>& actuators);
     ~So100XboxControllerHandler();
 
     bool Init();
@@ -28,7 +28,7 @@ private:
     int MapRange(int value, int in_min, int in_max, int out_min, int out_max);
 
     const robot::Robot& robot_config_;
-    std::vector<std::unique_ptr<robot::actuation::MotorInterface>>& motors_;
+    std::vector<std::unique_ptr<robot::actuation::ActuationInterface>>& actuators_;
     utils::XboxController xbox_controller_;
     utils::XboxControllerState controller_state_;
     std::thread xbox_event_thread_; // Reading the xbox status.

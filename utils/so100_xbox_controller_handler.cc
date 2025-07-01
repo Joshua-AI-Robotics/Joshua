@@ -8,8 +8,8 @@
 namespace utils {
 
 So100XboxControllerHandler::So100XboxControllerHandler(const robot::Robot& robot_config,
-                                           std::vector<std::unique_ptr<robot::actuation::MotorInterface>>& motors)
-    : robot_config_(robot_config), motors_(motors) {}
+                                           std::vector<std::unique_ptr<robot::actuation::ActuationInterface>>& actuators)
+    : robot_config_(robot_config), actuators_(actuators) {}
 
 So100XboxControllerHandler::~So100XboxControllerHandler() {
     Stop();
@@ -60,10 +60,10 @@ int So100XboxControllerHandler::MapRange(int value, int in_min, int in_max, int 
 }
 
 void So100XboxControllerHandler::ControlLoop() {
-    std::vector<int> current_servo_positions(motors_.size());
-    for(size_t i = 0; i < motors_.size(); ++i){
-        if(motors_[i]){
-            current_servo_positions[i] = static_cast<int>(motors_[i]->GetPosition());
+    std::vector<int> current_servo_positions(actuators_.size());
+    for(size_t i = 0; i < actuators_.size(); ++i){
+        if(actuators_[i]){
+            current_servo_positions[i] = static_cast<int>(actuators_[i]->GetPosition());
         }
     }
 
@@ -76,7 +76,7 @@ void So100XboxControllerHandler::ControlLoop() {
 
         // Process controller state and update servo positions
         // D-Pad X
-        if (kXboxServoMap_.count(ABS_HAT0X) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_HAT0X))) {
+        if (kXboxServoMap_.count(ABS_HAT0X) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_HAT0X))) {
             int servo_index_0 = kXboxServoMap_.at(ABS_HAT0X);
             if (controller_state_.abs_hat0x_value == 1) {
                 current_servo_positions[servo_index_0] += kPositionStep / 2;
@@ -86,7 +86,7 @@ void So100XboxControllerHandler::ControlLoop() {
         }
 
         // Left Joystick Y
-        if (kXboxServoMap_.count(ABS_Y) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_Y))) {
+        if (kXboxServoMap_.count(ABS_Y) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_Y))) {
             int servo_index_1 = kXboxServoMap_.at(ABS_Y);
             int joystick_y_value = controller_state_.abs_y_value;
             if (std::abs(joystick_y_value) < kJoystickDeadZone) {
@@ -99,7 +99,7 @@ void So100XboxControllerHandler::ControlLoop() {
         }
 
         // Right Joystick Y
-        if (kXboxServoMap_.count(ABS_RY) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_RY))) {
+        if (kXboxServoMap_.count(ABS_RY) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_RY))) {
             int servo_index_2 = kXboxServoMap_.at(ABS_RY);
             int joystick_ry_value = controller_state_.abs_ry_value;
             if (std::abs(joystick_ry_value) < kJoystickDeadZone) {
@@ -112,7 +112,7 @@ void So100XboxControllerHandler::ControlLoop() {
         }
         
         // Y Button (BTN_WEST) & A Button (BTN_SOUTH) for servo 3
-        if (kXboxServoMap_.count(BTN_WEST) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(BTN_WEST))) {
+        if (kXboxServoMap_.count(BTN_WEST) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(BTN_WEST))) {
             int servo_index_3 = kXboxServoMap_.at(BTN_WEST); // Both map to the same servo
             if (controller_state_.btn_west_state == 1) { // Y button
                 current_servo_positions[servo_index_3] -= kPositionStep;
@@ -123,7 +123,7 @@ void So100XboxControllerHandler::ControlLoop() {
         }
 
         // Left Bumper (BTN_TL) & Right Bumper (BTN_TR) for servo 4
-        if (kXboxServoMap_.count(BTN_TL) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(BTN_TL))) {
+        if (kXboxServoMap_.count(BTN_TL) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(BTN_TL))) {
             int servo_index_4 = kXboxServoMap_.at(BTN_TL); // Both map to the same servo
             if (controller_state_.btn_tl_state == 1) { // Left Bumper
                 current_servo_positions[servo_index_4] += kPositionStep;
@@ -134,7 +134,7 @@ void So100XboxControllerHandler::ControlLoop() {
         }
         
         // Right Trigger (ABS_RZ) for servo 5
-        if (kXboxServoMap_.count(ABS_RZ) && motors_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_RZ))) {
+        if (kXboxServoMap_.count(ABS_RZ) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_RZ))) {
             int servo_index_5 = kXboxServoMap_.at(ABS_RZ);
             // Ensure motor config is accessible and valid for this motor index
             if (servo_index_5 < robot_config_.actuations().single_actuation_size() && robot_config_.actuations().single_actuation(servo_index_5).motor().has_sts3215_config()) {
@@ -147,8 +147,8 @@ void So100XboxControllerHandler::ControlLoop() {
         }
 
         // Apply servo limits and send commands
-        for (size_t i = 0; i < motors_.size(); ++i) {
-            if (!motors_[i]) continue;
+        for (size_t i = 0; i < actuators_.size(); ++i) {
+            if (!actuators_[i]) continue;
 
             // Ensure motor config is accessible and valid for this motor index
             if (i < static_cast<size_t>(robot_config_.actuations().single_actuation_size()) && robot_config_.actuations().single_actuation(i).motor().has_sts3215_config()){
@@ -162,7 +162,7 @@ void So100XboxControllerHandler::ControlLoop() {
             } else {
                 // LOG_FIRST_N(WARNING, 10) << "Motor " << i << " missing STS3215 config or out of bounds for limit application.";
             }
-            motors_[i]->SetPosition(current_servo_positions[i]);
+            actuators_[i]->SetPosition(current_servo_positions[i]);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Same as usleep(10000)
     }

@@ -6,7 +6,7 @@ cc_library(
     hdrs = ["so100_xbox_controller_handler.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/actuation/interfaces:motor_interface",
+        "//robot/actuation/interfaces:actuation_interface",
         "//robot/actuation/motors/drivers:sts3215_driver",
         "//robot/config:robot_cc_proto",
         "//robot/config:config_utils",
@@ -20,7 +20,7 @@ cc_binary(
     srcs = ["so100_control.cc"],
     data = ["//robot/config:robot_config_pbtxt"],
     deps = [
-        "//robot/actuation/factory:motor_factory",
+        "//robot/actuation/factory:actuation_factory",
         "//utils:so100_xbox_controller_handler",
     ],
     visibility = ["//visibility:public"],

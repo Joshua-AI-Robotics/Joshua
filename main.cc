@@ -1,4 +1,4 @@
-#include "robot/actuation/factory/motor_factory.h"
+#include "robot/actuation/factory/actuation_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 #include "robot/config/config_utils.h"
@@ -38,10 +38,10 @@ int main(int argc, char* argv[]) {
     robot::nexus::Nexus nexus(trigger_frequency);
 
     // Register motors.
-    robot::actuation::MotorFactory motor_factory;
+    robot::actuation::ActuationFactory motor_factory;
     for (const auto& single_actuation : robot_config.actuations().single_actuation()){
         const auto& motor_proto = single_actuation.motor();
-        nexus.Register(motor_factory.CreateMotor(motor_proto));
+        nexus.Register(motor_factory.CreateActuator(motor_proto));
     }    
 
     // Register cameras.
