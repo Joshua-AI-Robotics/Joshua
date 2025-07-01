@@ -4,24 +4,24 @@ import "robot/comm_interface/proto/comm_interface.proto";
 
 package robot.actuation;
 
-enum MotorType {
-    MOTOR_INVALID = 0;
+enum ActuationType {
+    ACTUATOR_INVALID = 0;
     STS3215 = 1;
     // Add more motor type here.
 }
 
 // TODO: Update the ID to be a string like sts3215_1.
 // TODO: 
-message Motor {
-    string motor_name = 1;
+message Actuator {
+    string actuator_name = 1;
     uint64 id = 2;
-    MotorType motor_type = 3;
+    ActuationType actuation_type = 3;
     robot.comm_interface.CommType comm_type = 4;
     oneof comm_config {
         robot.comm_interface.SerialConfig serial_config = 5;
         // Add other comm type here.
     }
-    oneof motor_config {
+    oneof actuator_config {
         STS3215Config sts3215_config = 6;
         // Add other motor type here.
     }
@@ -40,7 +40,7 @@ message STS3215Config {
 
 message SingleActuation {
     oneof actuation_type {
-        Motor motor = 1;
+        Actuator actuator = 1;
     }
 }
 

@@ -26,14 +26,14 @@ int main(int argc, char* argv[]) {
 
         for (int i = 0; i < number_of_motors; i++) {
             const auto& single_actuation = robot_config.actuations().single_actuation(i);
-            const auto& motor_proto = single_actuation.motor();
+            const auto& actuator_proto = single_actuation.actuator();
 
-            switch (motor_proto.motor_type()) {
-            case robot::actuation::MotorType::STS3215:
-                actuators.emplace_back(actuation_factory.CreateActuator(motor_proto));
+            switch (actuator_proto.actuation_type()) {
+            case robot::actuation::ActuationType::STS3215:
+                actuators.emplace_back(actuation_factory.CreateActuator(actuator_proto));
                 break;
             default:
-                LOG(ERROR) << "Unknown motor type: " << motor_proto.motor_type();
+                LOG(ERROR) << "Unknown motor type: " << actuator_proto.actuation_type();
                 break;
             }
         }

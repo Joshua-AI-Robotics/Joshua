@@ -38,10 +38,10 @@ int main(int argc, char* argv[]) {
     robot::nexus::Nexus nexus(trigger_frequency);
 
     // Register motors.
-    robot::actuation::ActuationFactory motor_factory;
+    robot::actuation::ActuationFactory actuator_factory;
     for (const auto& single_actuation : robot_config.actuations().single_actuation()){
-        const auto& motor_proto = single_actuation.motor();
-        nexus.Register(motor_factory.CreateActuator(motor_proto));
+        const auto& actuator_proto = single_actuation.actuator();
+        nexus.Register(actuator_factory.CreateActuator(actuator_proto));
     }    
 
     // Register cameras.

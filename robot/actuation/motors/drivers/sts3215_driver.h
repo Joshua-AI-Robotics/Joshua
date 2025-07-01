@@ -10,7 +10,7 @@
 namespace robot::actuation{
 class Sts3215Driver : public robot::actuation::ActuationInterface {
   public:
-  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot::actuation::Motor motor_config);
+  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, robot::actuation::Actuator actuator_config);
   ~Sts3215Driver();
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;

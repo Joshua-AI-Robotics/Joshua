@@ -137,10 +137,10 @@ void So100XboxControllerHandler::ControlLoop() {
         if (kXboxServoMap_.count(ABS_RZ) && actuators_.size() > static_cast<size_t>(kXboxServoMap_.at(ABS_RZ))) {
             int servo_index_5 = kXboxServoMap_.at(ABS_RZ);
             // Ensure motor config is accessible and valid for this motor index
-            if (servo_index_5 < robot_config_.actuations().single_actuation_size() && robot_config_.actuations().single_actuation(servo_index_5).motor().has_sts3215_config()) {
+            if (servo_index_5 < robot_config_.actuations().single_actuation_size() && robot_config_.actuations().single_actuation(servo_index_5).actuator().has_sts3215_config()) {
                  current_servo_positions[servo_index_5] = MapRange(controller_state_.abs_rz_value, 0, 1023,
-                    robot_config_.actuations().single_actuation(servo_index_5).motor().sts3215_config().operational_upper_limit(),
-                    robot_config_.actuations().single_actuation(servo_index_5).motor().sts3215_config().operational_lower_limit());
+                    robot_config_.actuations().single_actuation(servo_index_5).actuator().sts3215_config().operational_upper_limit(),
+                    robot_config_.actuations().single_actuation(servo_index_5).actuator().sts3215_config().operational_lower_limit());
             } else {
                 // LOG_FIRST_N(WARNING, 10) << "Motor " << servo_index_5 << " missing STS3215 config or out of bounds for trigger mapping.";
             }
@@ -151,8 +151,8 @@ void So100XboxControllerHandler::ControlLoop() {
             if (!actuators_[i]) continue;
 
             // Ensure motor config is accessible and valid for this motor index
-            if (i < static_cast<size_t>(robot_config_.actuations().single_actuation_size()) && robot_config_.actuations().single_actuation(i).motor().has_sts3215_config()){
-                const auto& motor_conf = robot_config_.actuations().single_actuation(i).motor().sts3215_config();
+            if (i < static_cast<size_t>(robot_config_.actuations().single_actuation_size()) && robot_config_.actuations().single_actuation(i).actuator().has_sts3215_config()){
+                const auto& motor_conf = robot_config_.actuations().single_actuation(i).actuator().sts3215_config();
                 if (current_servo_positions[i] > motor_conf.operational_upper_limit()) {
                     current_servo_positions[i] = motor_conf.operational_upper_limit();
                 }

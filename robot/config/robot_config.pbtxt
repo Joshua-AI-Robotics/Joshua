@@ -4,10 +4,10 @@ robot_type: MANIPULATOR_ARM
 
 actuations {
   single_actuation {
-    motor {
-      motor_name: "sts_motor_1"
+    actuator {
+      actuator_name: "sts_motor_1"
       id: 1
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
@@ -27,10 +27,10 @@ actuations {
     }
   }
   single_actuation {
-    motor {
-      motor_name: "sts_motor_2"
+    actuator {
+      actuator_name: "sts_motor_2"
       id: 2
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
@@ -50,10 +50,10 @@ actuations {
     }
   }
   single_actuation {
-    motor {
-      motor_name: "sts_motor_3"
+    actuator {
+      actuator_name: "sts_motor_3"
       id: 3
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
@@ -73,10 +73,10 @@ actuations {
     }
   }
   single_actuation {
-    motor {
-      motor_name: "sts_motor_4"
+    actuator {
+      actuator_name: "sts_motor_4"
       id: 4
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
@@ -97,10 +97,10 @@ actuations {
     }
   }
   single_actuation {
-    motor {
-      motor_name: "sts_motor_5"
+    actuator {
+      actuator_name: "sts_motor_5"
       id: 5
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
@@ -120,10 +120,10 @@ actuations {
     }
   }
   single_actuation {
-    motor {
-      motor_name: "sts_motor_6"
+    actuator {
+      actuator_name: "sts_motor_6"
       id: 6
-      motor_type: STS3215
+      actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
         id: 1
