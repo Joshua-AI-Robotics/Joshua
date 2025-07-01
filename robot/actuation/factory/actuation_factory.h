@@ -1,19 +1,12 @@
 #pragma once
 
 #include "robot/actuation/interfaces/actuation_interface.h"
-#include "robot/comm_interface/serial/serial.h"
+#include "robot/comm_interface/factory/comm_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 
 #include <memory>
 #include <string>
-
-using namespace robot::comm_interface;
-
-// Forward declare Boost.Asio io_context
-namespace boost::asio {
-    class io_context;
-}
 
 namespace robot::actuation{
 class ActuationFactory {
@@ -30,36 +23,15 @@ public:
             {
                 switch (actuator_config.comm_type()){
                     case robot::comm_interface::CommType::SERIAL:
-                        if (io_context_ == nullptr) {
-                            io_context_ = std::make_shared<boost::asio::io_context>();
-                        }
-                        
-                        auto port = actuator_config.serial_config().port();
-                        auto it = serials_.find(actuator_config.serial_config().port());
-
-                        // If serial port already exist (e.g. daisy-chain with uart)
-                        if(it != serials_.end()){
-                            return std::make_unique<robot::actuation::Sts3215Driver>(it->second, actuator_config);
-                        }
-
-                        serials_.emplace(port, 
-                            std::make_shared<Serial>(
-                                io_context_,
-                                port,
-                                actuator_config.serial_config().baudrate()
-                            ));
-
-                        return std::make_unique<robot::actuation::Sts3215Driver>(serials_[port], actuator_config);
+                    {
+                        auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(actuator_config.serial_config());
+                        return std::make_unique<robot::actuation::Sts3215Driver>(serial, actuator_config);
+                    }
                 }
             }
             default:
                 return nullptr;
         }
     }
-
-private:
-    // Need one io_context for every serial.
-    std::shared_ptr<boost::asio::io_context> io_context_;
-    std::map<std::string, std::shared_ptr<Serial>> serials_;
 };
 }

@@ -6,7 +6,7 @@ cc_library(
     deps = [
         "//robot/actuation/interfaces:actuation_interface",
         "//robot/actuation/motors/drivers:sts3215_driver",
-        "//robot/comm_interface/serial:serial",
+        "//robot/comm_interface/factory:comm_factory",
         "//robot/config:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],
