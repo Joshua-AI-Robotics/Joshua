@@ -1,7 +1,6 @@
 #pragma once
 
 #include "robot/nexus/proto/nexus_packet.pb.h"
-#include <pybind11/embed.h>
 #include <string>
 #include <memory>
 
