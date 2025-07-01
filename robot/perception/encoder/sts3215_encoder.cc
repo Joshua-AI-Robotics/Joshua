@@ -11,18 +11,19 @@ namespace {
 Sts3215Encoder::Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Sensor& sensor_config)
     : serial_(serial) {
     servo_id_ = sensor_config.sts3215_encoder_config().id();
+    id_ = GetId();
 }
 
 std::unique_ptr<robot::nexus::NexusPerceptionPacket> Sts3215Encoder::GetData() {
     auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
-    packet->set_perception_id("sts3215_encoder_0"); // Example ID
+    packet->set_perception_id(id_);
     packet->mutable_encoder_perception()->set_position(read_servo_position());
-    LOG(INFO) << "Sts3215Encoder::GetData() called.";
     return packet;
 }
 
 std::string Sts3215Encoder::GetId() {
-    return "sts3215_encoder_0"; // Example ID
+    auto id = "sts3215_encoder_" + std::to_string(servo_id_);
+    return id;
 }
 
 float Sts3215Encoder::GetPosition() {

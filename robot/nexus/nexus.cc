@@ -76,6 +76,7 @@ void Nexus::run(){
         for(auto& interface : perception_interfaces_){
             std::visit([this](auto&& arg) {
                 auto packet = arg->GetData();
+                LOG(INFO) << "Perception packet: " << packet->DebugString();
                 perception_packet_queue_.push(std::move(packet));
                 LOG(INFO) << "Perception packet processed.";
             }, interface);

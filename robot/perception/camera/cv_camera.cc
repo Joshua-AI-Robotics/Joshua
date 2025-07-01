@@ -6,7 +6,10 @@
 
 namespace robot::perception {
 
-CvCamera::CvCamera() {
+CvCamera::CvCamera(const robot::perception::Sensor& sensor_config) {
+    auto camera_config = sensor_config.camera_config();
+    camera_id_ = camera_config.id();
+    id_ = GetId();
     // Open the default camera (device 0).
     cap_.open(0);
 
@@ -33,21 +36,27 @@ CvCamera::~CvCamera() {
 
 std::unique_ptr<robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
     auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
-    if (!last_frame_.empty()) {
-        std::vector<uchar> buffer;
-        cv::imencode(".jpg", last_frame_, buffer);
-        packet->mutable_camera_perception()->set_image_data(buffer.data(), buffer.size());
+    // Capture the frame.
+    cv::Mat frame;
+    cap_ >> frame;
+    if (frame.empty()) {
+        LOG(ERROR) << "Failed to capture an image from camera.";
+        return nullptr;
     }
+    std::vector<uchar> buffer;
+    cv::imencode(".jpg", frame, buffer);
+    packet->mutable_camera_perception()->set_image_data(buffer.data(), buffer.size());
 
     // Set other fields in the packet as needed.
     packet->set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-    packet->set_perception_id("cv_camera_0"); // Example ID
+    packet->set_perception_id(id_);
 
     return packet;
 }
 
 std::string CvCamera::GetId() {
-    return "cv_camera_0"; // Example ID
+    auto id = "cv_camera_" + std::to_string(camera_id_);
+    return id;
 }
 
 }  // namespace robot::perception

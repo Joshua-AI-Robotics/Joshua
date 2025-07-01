@@ -27,6 +27,7 @@ class Sts3215Driver : public robot::actuation::ActuationInterface {
   std::vector<uint8_t> create_torque_packet(uint8_t enable);
 
   std::shared_ptr<robot::comm_interface::Serial> serial_;
+  std::string id_;
   uint8_t servo_id_;
   uint16_t move_speed_;
   uint16_t move_time_in_ms_;

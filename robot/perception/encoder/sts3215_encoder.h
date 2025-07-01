@@ -17,6 +17,7 @@ public:
 
 private:
     std::shared_ptr<robot::comm_interface::Serial> serial_;
+    std::string id_;
     uint8_t servo_id_;
     uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);
     std::vector<uint8_t> create_read_position_packet();

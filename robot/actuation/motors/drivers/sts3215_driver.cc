@@ -20,7 +20,7 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial
         operational_lower_limit_ = sts_config.operational_lower_limit();
         operational_upper_limit_ = sts_config.operational_upper_limit();
         idle_position_ = sts_config.idle_position();
-
+        id_ = GetId();
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
     }
 
@@ -123,7 +123,8 @@ void Sts3215Driver::SetAction(std::unique_ptr<robot::nexus::NexusActionPacket> a
 }
 
 std::string Sts3215Driver::GetId() {
-    return std::to_string(servo_id_);
+    auto id = "sts3215_driver_" + std::to_string(servo_id_);
+    return id;
 }
 
 void Sts3215Driver::SetMiddlePosition(){
