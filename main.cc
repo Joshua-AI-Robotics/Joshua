@@ -37,14 +37,14 @@ int main(int argc, char* argv[]) {
     const int trigger_frequency = 30;
     robot::nexus::Nexus nexus(trigger_frequency);
 
-    // Register motors.
+    // Register actuators.
     robot::actuation::ActuationFactory actuator_factory;
     for (const auto& single_actuation : robot_config.actuations().single_actuation()){
         const auto& actuator_proto = single_actuation.actuator();
         nexus.Register(actuator_factory.CreateActuator(actuator_proto));
     }    
 
-    // Register cameras.
+    // Register sensors.
     robot::perception::PerceptionFactory perception_factory; 
     for (const auto& single_perception : robot_config.perceptions().single_perception()){
         const auto& sensor_proto = single_perception.sensor();

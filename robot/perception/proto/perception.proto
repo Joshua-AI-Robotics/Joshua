@@ -23,7 +23,7 @@ message Sensor {
     }
     oneof sensor_config {
         CameraConfig camera_config = 6;
-        EncoderConfig encoder_config = 7;
+        Sts3215EncoderConfig sts3215_encoder_config = 7;
     }
 }
 
@@ -34,7 +34,7 @@ message CameraConfig {
     uint32 fps = 4;
 }
 
-message EncoderConfig {
+message Sts3215EncoderConfig {
     uint64 id = 1;
 }
 

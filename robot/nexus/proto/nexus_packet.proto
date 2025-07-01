@@ -18,6 +18,7 @@ message NexusPerceptionPacket {
     string perception_id = 2;
     oneof perception_packet_type {
         robot.perception.CameraPerceptionPayload camera_perception = 3;
+        robot.perception.EncoderPerceptionPayload encoder_perception = 4;
     }
 }
 

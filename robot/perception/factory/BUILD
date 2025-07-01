@@ -7,7 +7,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/perception/camera:cv_camera",
-        "//robot/perception/encoder:encoder",
+        "//robot/perception/encoder:sts3215_encoder",
         "//robot/perception/interfaces:perception_interface",
         "//robot/config:robot_cc_proto",
     ],

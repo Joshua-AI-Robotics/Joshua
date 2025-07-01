@@ -1,11 +1,12 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "encoder",
-    srcs = ["encoder.cc"],
-    hdrs = ["encoder.h"],
+    name = "sts3215_encoder",
+    srcs = ["sts3215_encoder.cc"],
+    hdrs = ["sts3215_encoder.h"],
     deps = [
         "//robot/perception/interfaces:encoder_interface",
+        "//robot/perception/proto:perception_cc_proto",
         "@com_github_google_glog//:glog",
     ],
     visibility = ["//visibility:public"],

@@ -33,7 +33,7 @@ actuations {
       actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
-        id: 1
+        id: 2
         port: "/dev/ttyACM0"
         baudrate: 1000000
       }
@@ -56,7 +56,7 @@ actuations {
       actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
-        id: 1
+        id: 3
         port: "/dev/ttyACM0"
         baudrate: 1000000
       }
@@ -79,7 +79,7 @@ actuations {
       actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
-        id: 1
+        id: 4
         port: "/dev/ttyACM0"
         baudrate: 1000000
       }
@@ -103,7 +103,7 @@ actuations {
       actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
-        id: 1
+        id: 5
         port: "/dev/ttyACM0"
         baudrate: 1000000
       }
@@ -126,7 +126,7 @@ actuations {
       actuation_type: STS3215
       comm_type: SERIAL
       serial_config {
-        id: 1
+        id: 6
         port: "/dev/ttyACM0"
         baudrate: 1000000
       }
@@ -150,6 +150,7 @@ perceptions {
       sensor_name: "webcam"
       id: 1
       sensor_type: CAMERA
+      comm_type: COMM_INVALID
       camera_config {
         id: 1
       }
@@ -157,11 +158,97 @@ perceptions {
   }
   single_perception {
     sensor {
-      sensor_name: "test_encoder"
+      sensor_name: "sts3215_encoder_1"
       id: 2
       sensor_type: ENCODER
-      encoder_config {
+      comm_type: SERIAL
+      serial_config {
         id: 1
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 1
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "sts3215_encoder_2"
+      id: 2
+      sensor_type: ENCODER
+      comm_type: SERIAL
+      serial_config {
+        id: 2
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 2
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "sts3215_encoder_3"
+      id: 2
+      sensor_type: ENCODER
+      comm_type: SERIAL
+      serial_config {
+        id: 3
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 3
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "sts3215_encoder_4"
+      id: 4
+      sensor_type: ENCODER
+      comm_type: SERIAL
+      serial_config {
+        id: 4
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 4
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "sts3215_encoder_5"
+      id: 5
+      sensor_type: ENCODER
+      comm_type: SERIAL
+      serial_config {
+        id: 5
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 5
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "sts3215_encoder_6"
+      id: 6
+      sensor_type: ENCODER
+      comm_type: SERIAL
+      serial_config {
+        id: 6
+        port: "/dev/ttyACM0"
+        baudrate: 1000000
+      }
+      sts3215_encoder_config {
+        id: 6
       }
     }
   }
