@@ -36,28 +36,23 @@ def generate_mock_ai_output(serialized_input_packet):
     Deserializes a NexusModelInputPacket, creates a mock NexusModelOutputPacket,
     and returns it serialized.
     """
-    glog.info("Python AI function called")
     
     try:
-        glog.info("Parsing input packet...")
         input_packet = nexus_packet_pb2.NexusModelInputPacket()
         input_packet.ParseFromString(serialized_input_packet)
         glog.info(f"Input packet parsed successfully, ID: {input_packet.model_input_id}")
 
-        glog.info("Creating output packet...")
         output_packet = nexus_packet_pb2.NexusModelOutputPacket()
         output_packet.timestamp = int(time.time() * 1e9)
         output_packet.model_output_id = "py_model_output_0"
 
-        glog.info("Adding action packets...")
-        # Mimic the logic from the C++ version
+        # Fake action packets for sts3215_driver.
         for i in range(1, 6):
             action_packet = output_packet.action_packets.add()
             action_packet.timestamp = int(time.time() * 1e9)
-            action_packet.action_id = str(i)
+            action_packet.action_id = "sts3215_driver_" + str(i)
             action_packet.sts3215_action.position = random.randint(1950, 2050)
 
-        glog.info("Serializing output packet...")
         result = output_packet.SerializeToString()
         glog.info(f"Serialization complete, result length: {len(result)}")
         return result
