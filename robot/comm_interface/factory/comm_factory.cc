@@ -5,7 +5,13 @@ namespace robot::comm_interface {
 
 CommFactory::CommFactory() : io_context_(std::make_shared<boost::asio::io_context>()) {}
 
-CommFactory::~CommFactory() = default;
+CommFactory::~CommFactory() {
+    if (io_context_thread_.joinable()) {
+        work_guard_.reset(); // Allow io_context::run() to exit.
+        io_context_->stop();
+        io_context_thread_.join();
+    }
+}
 
 std::shared_ptr<Serial> CommFactory::GetSerial(const robot::comm_interface::SerialConfig& config) {
     auto key = std::make_pair(config.port(), config.baudrate());
@@ -17,12 +23,10 @@ std::shared_ptr<Serial> CommFactory::GetSerial(const robot::comm_interface::Seri
 
     // If we are creating the first serial port, start the io_context.
     if (serials_.empty()) {
-        // The work guard is necessary to keep io_context::run() from returning 
+        // The work guard is necessary to keep io_context::run() from returning
         // when it has no more work to do.
-        auto work_guard = std::make_unique<boost::asio::io_context::work>(*io_context_);
-        std::thread([this, wg = std::move(work_guard)]() {
-            io_context_->run();
-        }).detach();
+        work_guard_ = std::make_unique<boost::asio::io_context::work>(*io_context_);
+        io_context_thread_ = std::thread([this]() { io_context_->run(); });
     }
 
     auto new_serial = std::make_shared<Serial>(io_context_, config.port(), config.baudrate());

@@ -2,15 +2,12 @@
 
 #include "robot/comm_interface/serial/serial.h"
 #include "robot/config/robot.pb.h"
+#include <boost/asio.hpp>
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
+#include <thread>
 #include <utility> // For std::pair
-
-// Forward declare Boost.Asio io_context
-namespace boost::asio {
-    class io_context;
-}
 
 namespace robot::comm_interface {
 
@@ -32,8 +29,10 @@ private:
     CommFactory();
     ~CommFactory();
 
-    // Need one io_context for every serial.
+    // One io_context for all serial communication.
     std::shared_ptr<boost::asio::io_context> io_context_;
+    std::unique_ptr<boost::asio::io_context::work> work_guard_;
+    std::thread io_context_thread_;
     std::map<std::pair<std::string, uint32_t>, std::shared_ptr<Serial>> serials_;
 };
 
