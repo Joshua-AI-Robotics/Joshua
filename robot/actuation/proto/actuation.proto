@@ -10,8 +10,6 @@ enum ActuationType {
     // Add more motor type here.
 }
 
-// TODO: Update the ID to be a string like sts3215_1.
-// TODO: 
 message Actuator {
     string actuator_name = 1;
     uint64 id = 2;

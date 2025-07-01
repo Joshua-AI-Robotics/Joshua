@@ -2,8 +2,8 @@
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
 #include "robot/config/robot.pb.h"
 #include "robot/config/config_utils.h"
-#include "robot/perception/factory/camera_factory.h"
-#include "robot/perception/interfaces/camera_interface.h"
+#include "robot/perception/factory/perception_factory.h"
+#include "robot/perception/interfaces/perception_interface.h"
 #include "robot/nexus/nexus.h"
 #include <map>
 #include <glog/logging.h>
@@ -45,10 +45,10 @@ int main(int argc, char* argv[]) {
     }    
 
     // Register cameras.
-    robot::perception::CameraFactory camera_factory; 
+    robot::perception::PerceptionFactory perception_factory; 
     for (const auto& single_perception : robot_config.perceptions().single_perception()){
-        const auto& camera_proto = single_perception.camera();
-        nexus.Register(camera_factory.CreateCamera(camera_proto));
+        const auto& sensor_proto = single_perception.sensor();
+        nexus.Register(perception_factory.CreatePerception(sensor_proto));
     }
 
     // Initialize the nexus.

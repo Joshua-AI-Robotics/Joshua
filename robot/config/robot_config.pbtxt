@@ -146,10 +146,23 @@ actuations {
 
 perceptions {
   single_perception {
-    camera {
-      camera_name: "webcam"
+    sensor {
+      sensor_name: "webcam"
       id: 1
-      perception_type: CAMERA
+      sensor_type: CAMERA
+      camera_config {
+        id: 1
+      }
+    }
+  }
+  single_perception {
+    sensor {
+      sensor_name: "test_encoder"
+      id: 2
+      sensor_type: ENCODER
+      encoder_config {
+        id: 1
+      }
     }
   }
 }

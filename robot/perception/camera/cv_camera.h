@@ -2,6 +2,7 @@
 
 #include "robot/perception/interfaces/camera_interface.h"
 #include <opencv2/videoio.hpp>
+#include <opencv2/core/mat.hpp>
 #include <glog/logging.h>
 #include <memory>
 
@@ -13,11 +14,13 @@ public:
     CvCamera();
     ~CvCamera() override;
 
-    cv::Mat Capture() override;
-    std::unique_ptr<::robot::nexus::NexusPerceptionPacket> GetData() override;
+    void Capture() override;
+    std::unique_ptr<robot::nexus::NexusPerceptionPacket> GetData() override;
+    std::string GetId() override;
 
 private:
     cv::VideoCapture cap_;
+    cv::Mat last_frame_;
 };
 
 }  // namespace robot::perception

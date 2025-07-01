@@ -30,7 +30,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/actuation/interfaces:actuation_interface",
-        "//robot/perception/interfaces:camera_interface",
+        "//robot/perception/interfaces:perception_interface",
     ]
 )
 

@@ -1,6 +1,7 @@
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/nexus/proto/nexus_packet.pb.h"
 #include <vector>
+#include <chrono>
 #include <opencv2/imgcodecs.hpp>
 
 namespace robot::perception {
@@ -30,24 +31,17 @@ CvCamera::~CvCamera() {
     }
 }
 
-cv::Mat CvCamera::Capture() {
-    cv::Mat frame;
+void CvCamera::Capture() {
     if (cap_.isOpened()) {
-        cap_ >> frame;
+        cap_ >> last_frame_;
     }
-    return frame;
 }
 
-std::unique_ptr<::robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
-    cv::Mat frame;
-    if (cap_.isOpened()) {
-        cap_ >> frame;
-    }
-
-    auto packet = std::make_unique<::robot::nexus::NexusPerceptionPacket>();
-    if (!frame.empty()) {
+std::unique_ptr<robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
+    auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
+    if (!last_frame_.empty()) {
         std::vector<uchar> buffer;
-        cv::imencode(".jpg", frame, buffer);
+        cv::imencode(".jpg", last_frame_, buffer);
         packet->mutable_camera_perception()->set_image_data(buffer.data(), buffer.size());
     }
 
@@ -56,6 +50,10 @@ std::unique_ptr<::robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
     packet->set_perception_id("cv_camera_0"); // Example ID
 
     return packet;
+}
+
+std::string CvCamera::GetId() {
+    return "cv_camera_0"; // Example ID
 }
 
 }  // namespace robot::perception

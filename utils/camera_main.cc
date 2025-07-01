@@ -1,6 +1,6 @@
 #include "robot/config/config_utils.h"
 #include "robot/config/robot.pb.h"
-#include "robot/perception/factory/camera_factory.h"
+#include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/camera_interface.h"
 #include "robot/nexus/proto/nexus_packet.pb.h"
 #include <glog/logging.h>
@@ -26,21 +26,21 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    const robot::perception::Camera* camera_config = nullptr;
+    const robot::perception::Sensor* sensor_config = nullptr;
     for (const auto& perception : robot_config.perceptions().single_perception()) {
-        if (perception.has_camera()) {
-            camera_config = &perception.camera();
+        if (perception.has_sensor() && perception.sensor().sensor_type() == robot::perception::SensorType::CAMERA) {
+            sensor_config = &perception.sensor();
             break;
         }
     }
 
-    if (camera_config == nullptr) {
+    if (sensor_config == nullptr) {
         LOG(ERROR) << "No cameras found in robot config.";
         return -1;
     }
 
-    robot::perception::CameraFactory camera_factory;
-    std::unique_ptr<robot::perception::CameraInterface> camera = camera_factory.CreateCamera(*camera_config);
+    robot::perception::PerceptionFactory perception_factory;
+    std::unique_ptr<robot::perception::PerceptionInterface> camera = perception_factory.CreatePerception(*sensor_config);
 
     if (!camera) {
         LOG(ERROR) << "Failed to create camera.";

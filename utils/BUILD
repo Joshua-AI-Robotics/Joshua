@@ -33,8 +33,8 @@ cc_binary(
     data = ["//robot/config:robot_config_pbtxt"],
     deps = [
         "//robot/config:config_utils",
-        "//robot/perception/factory:camera_factory",
-        "//robot/perception/interfaces:camera_interface",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/interfaces:perception_interface",
         "//robot/nexus/proto:nexus_packet_cc_proto",
         "@com_github_google_glog//:glog",
         "@local_deps//:highgui",

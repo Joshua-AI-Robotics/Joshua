@@ -14,7 +14,7 @@ public:
     ActuationFactory() = default;
     ~ActuationFactory() = default;
 
-    std::unique_ptr<robot::actuation::ActuationInterface> CreateActuator(robot::actuation::Actuator actuator_config)
+    std::unique_ptr<robot::actuation::ActuationInterface> CreateActuator(const robot::actuation::Actuator actuator_config)
     {
         // TODO: Fix this nested switch case. Probably should make comm_factory.
         switch (actuator_config.actuation_type())

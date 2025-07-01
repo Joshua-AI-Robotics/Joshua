@@ -6,6 +6,9 @@ package(default_visibility = ["//visibility:public"])
 proto_library(
     name = "perception_proto",
     srcs = ["perception.proto"],
+    deps = [
+        "//robot/comm_interface/proto:comm_interface_proto",
+    ],
 )
 
 proto_library(

@@ -1,24 +1,46 @@
 syntax = "proto3";
 
+import "robot/comm_interface/proto/comm_interface.proto";
+
 package robot.perception;
 
-enum PerceptionType {
-    PERCEPTION_INVALID = 0;
+enum SensorType {
+    SENSOR_INVALID = 0;
     CAMERA = 1;
-    LIDAR = 2;
-    RADAR = 3;
+    ENCODER = 2;
+    LIDAR = 3;
+    RADAR = 4;
 }
 
-//TODO: Add camera config here.
-message Camera {
-    string camera_name = 1;
+message Sensor {
+    string sensor_name = 1;
     uint64 id = 2;
-    PerceptionType perception_type = 3;
+    SensorType sensor_type = 3;
+    robot.comm_interface.CommType comm_type = 4;
+    oneof comm_config {
+        robot.comm_interface.SerialConfig serial_config = 5;
+        // Add other comm type here.
+    }
+    oneof sensor_config {
+        CameraConfig camera_config = 6;
+        EncoderConfig encoder_config = 7;
+    }
+}
+
+message CameraConfig {
+    uint64 id = 1;
+    uint32 width = 2;
+    uint32 height = 3;
+    uint32 fps = 4;
+}
+
+message EncoderConfig {
+    uint64 id = 1;
 }
 
 message SinglePerception {
     oneof perception_type {
-        Camera camera = 1;
+        Sensor sensor = 1;
     }
 }
 

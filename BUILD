@@ -12,8 +12,8 @@ cc_binary(
     deps = [
         "//robot/actuation/factory:actuation_factory",
         "//robot/config:config_utils",
-        "//robot/perception/factory:camera_factory",
-        "//robot/perception/interfaces:camera_interface",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/interfaces:perception_interface",
         "//robot/nexus:nexus",
         "@com_github_google_glog//:glog",
         "@com_github_gflags_gflags//:gflags",
