@@ -13,9 +13,6 @@ public:
     // The specific data type will be inside the NexusPerceptionPacket.
     virtual std::unique_ptr<robot::nexus::NexusPerceptionPacket> GetData() = 0;
 
-    // A method to trigger a capture or reading from the sensor.
-    virtual void Capture() = 0;
-
     virtual std::string GetId() = 0;
 };
 

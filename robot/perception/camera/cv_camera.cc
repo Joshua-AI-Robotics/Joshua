@@ -31,12 +31,6 @@ CvCamera::~CvCamera() {
     }
 }
 
-void CvCamera::Capture() {
-    if (cap_.isOpened()) {
-        cap_ >> last_frame_;
-    }
-}
-
 std::unique_ptr<robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
     auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
     if (!last_frame_.empty()) {

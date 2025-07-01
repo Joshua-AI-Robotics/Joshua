@@ -10,5 +10,6 @@ cc_library(
         "//robot/perception/encoder:sts3215_encoder",
         "//robot/perception/interfaces:perception_interface",
         "//robot/config:robot_cc_proto",
+        "//robot/comm_interface/factory:comm_factory",
     ],
 )

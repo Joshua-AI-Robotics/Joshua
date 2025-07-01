@@ -14,7 +14,6 @@ public:
     CvCamera();
     ~CvCamera() override;
 
-    void Capture() override;
     std::unique_ptr<robot::nexus::NexusPerceptionPacket> GetData() override;
     std::string GetId() override;
 
