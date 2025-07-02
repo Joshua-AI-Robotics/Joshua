@@ -10,7 +10,6 @@ cc_binary(
         "//robot/perception/interfaces:perception_interface",
         "//robot/nexus/proto:nexus_packet_cc_proto",
         "@com_github_google_glog//:glog",
-        "@local_deps//:highgui",
-        "@local_deps//:imgcodecs",
+        "@opencv//:opencv",
     ],
 )

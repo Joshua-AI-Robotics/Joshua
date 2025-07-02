@@ -9,6 +9,7 @@ bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "protobuf", version = "29.0")
 bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "boost.asio", version = "1.87.0")
+bazel_dep(name = "opencv", version = "4.11.0.bcr.2")
 # bazel_dep(name = "libevdev", version = "1.13.2") # This is for xbox controller but deprecated.
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
@@ -44,14 +45,3 @@ http_archive(
     strip_prefix = "glog-0.7.1",
     urls = ["https://github.com/google/glog/archive/v0.7.1.zip"],
 )
-
-# My custom rule for system dependencies
-system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
-system_libs(name = "local_deps")
-
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
