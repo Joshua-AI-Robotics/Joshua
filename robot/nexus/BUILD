@@ -18,7 +18,7 @@ pybind_library(
     srcs = ["ai_executor.cc"],
     hdrs = ["ai_executor.h"],
     data = [
-        "//ai:model",
+        "//ai:ai_layer_gateway",
     ],
     visibility = ["//visibility:public"],
     deps = [

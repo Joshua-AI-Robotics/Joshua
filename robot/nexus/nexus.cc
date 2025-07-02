@@ -46,7 +46,7 @@ bool Nexus::Init(){
         LOG(WARNING) << "No interfaces registered with Nexus.";
     }
     // TODO: Update this by using the model name and function name from the config.
-    if (!ai_executor_->Init("ai.model", "generate_mock_ai_output")) {
+    if (!ai_executor_->Init("ai.ai_layer_gateway", "generate_mock_ai_output")) {
         LOG(ERROR) << "Failed to initialize AI executor.";
         return false;
     }
