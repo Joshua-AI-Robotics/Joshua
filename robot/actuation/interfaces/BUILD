@@ -5,7 +5,7 @@ cc_library(
     hdrs = ["actuation_interface.h"],
     deps = [
         "//robot/nexus/proto:nexus_packet_cc_proto",
-        "@com_github_google_glog//:glog",
+        "@glog//:glog",
     ],
     visibility = ["//visibility:public"],
 )

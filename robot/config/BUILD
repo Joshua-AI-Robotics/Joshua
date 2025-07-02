@@ -21,7 +21,7 @@ cc_library(
     name = "config_utils",
     hdrs = ["config_utils.h"],
     deps = [
-        "@com_github_google_glog//:glog",
+        "@glog//:glog",
         ":robot_cc_proto",
     ],
     visibility = ["//visibility:public"],

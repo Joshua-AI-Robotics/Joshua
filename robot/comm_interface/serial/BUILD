@@ -6,7 +6,7 @@ cc_library(
     hdrs = ["serial.h"],
     deps = [
         "@boost.asio",
-        "@com_github_google_glog//:glog",
+        "@glog//:glog",
     ],
     visibility = ["//visibility:public"],
 )

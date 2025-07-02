@@ -7,7 +7,7 @@ cc_library(
     deps = [
         "//robot/comm_interface/serial:serial",
         "//robot/config:robot_cc_proto",
-        "@com_github_google_glog//:glog",
+        "@glog//:glog",
         "@boost.asio",
     ],
     visibility = ["//visibility:public"],

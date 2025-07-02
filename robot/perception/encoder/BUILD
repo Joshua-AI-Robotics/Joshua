@@ -8,7 +8,7 @@ cc_library(
         "//robot/perception/interfaces:encoder_interface",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/comm_interface/serial:serial",
-        "@com_github_google_glog//:glog",
+        "@glog//:glog",
     ],
     visibility = ["//visibility:public"],
 ) 
