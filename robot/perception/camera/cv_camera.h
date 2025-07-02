@@ -2,7 +2,6 @@
 
 #include "robot/perception/interfaces/camera_interface.h"
 #include <opencv2/videoio.hpp>
-#include <opencv2/core/mat.hpp>
 #include <glog/logging.h>
 #include <memory>
 #include "robot/perception/proto/perception.pb.h"

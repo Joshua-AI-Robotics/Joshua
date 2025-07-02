@@ -45,3 +45,7 @@ http_archive(
     strip_prefix = "glog-0.7.1",
     urls = ["https://github.com/google/glog/archive/v0.7.1.zip"],
 )
+
+# Custom rule for system dependencies
+system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
+system_libs(name = "local_deps")

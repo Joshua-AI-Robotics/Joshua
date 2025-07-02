@@ -8,6 +8,8 @@ cc_library(
     deps = [
         "//robot/perception/interfaces:camera_interface",
         "@com_github_google_glog//:glog",
-        "@opencv//:opencv",
+        "@local_deps//:videoio",
+        "@local_deps//:core",
+        "@local_deps//:imgcodecs",
     ],
 )
