@@ -8,14 +8,6 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# libevdev
-cc_library(
-    name = "libevdev",
-    hdrs = glob(["usr/include/libevdev-1.0/libevdev/*.h"], allow_empty = True),
-    includes = ["usr/include/libevdev-1.0", "usr/include"],
-    linkopts = ["-levdev"],
-)
-
 # opencv
 cc_library(
     name = "opencv",

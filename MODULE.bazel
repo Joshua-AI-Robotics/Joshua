@@ -9,8 +9,7 @@ bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "protobuf", version = "29.0")
 bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "boost.asio", version = "1.87.0")
-# bazel_dep(name = "boost.system", version = "1.85.0")
-# bazel_dep(name = "boost.thread", version = "1.85.0")
+# bazel_dep(name = "libevdev", version = "1.13.2") # This is for xbox controller but deprecated.
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(

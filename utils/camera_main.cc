@@ -50,7 +50,6 @@ int main(int argc, char** argv) {
     cv::namedWindow("Camera", cv::WINDOW_AUTOSIZE);
 
     while (true) {
-        camera->Capture();
         auto packet = camera->GetData();
         if (!packet) {
             LOG(WARNING) << "Failed to get data packet.";
