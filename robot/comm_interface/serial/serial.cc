@@ -58,7 +58,7 @@ std::vector<uint8_t> Serial::Read(size_t bytes_to_read){
     
     // Set up a deadline timer for the read operation
     boost::asio::steady_timer timer(*io_context_);
-    timer.expires_from_now(std::chrono::milliseconds(100)); // 100ms timeout
+    timer.expires_after(std::chrono::milliseconds(10)); // 10ms timeout
     timer.async_wait([&](const boost::system::error_code& e) {
         if (!e) { // Timer not cancelled, means timeout occurred
             serial_->cancel(); // Cancel the pending read operation

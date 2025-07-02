@@ -8,7 +8,7 @@ cc_library(
         "//robot/comm_interface/serial:serial",
         "//robot/config:robot_cc_proto",
         "@com_github_google_glog//:glog",
-        "@local_deps//:boost_asio",
+        "@boost.asio",
     ],
     visibility = ["//visibility:public"],
 ) 

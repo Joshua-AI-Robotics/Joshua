@@ -31,7 +31,7 @@ private:
 
     // One io_context for all serial communication.
     std::shared_ptr<boost::asio::io_context> io_context_;
-    std::unique_ptr<boost::asio::io_context::work> work_guard_;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
     std::thread io_context_thread_;
     std::map<std::pair<std::string, uint32_t>, std::shared_ptr<Serial>> serials_;
 };

@@ -16,40 +16,6 @@ cc_library(
     linkopts = ["-levdev"],
 )
 
-# boost
-cc_library(
-    name = "boost_system",
-    hdrs = glob([
-        "usr/include/boost/system/**/*.hpp",
-        "usr/include/boost/system/**/*.h",
-    ], allow_empty = True),
-    includes = ["usr/include"],
-    linkopts = ["-lboost_system"],
-)
-
-cc_library(
-    name = "boost_thread",
-    hdrs = glob([
-        "usr/include/boost/thread/**/*.hpp",
-        "usr/include/boost/thread/**/*.h",
-    ], allow_empty = True),
-    includes = ["usr/include"],
-    linkopts = ["-lboost_thread"],
-)
-
-cc_library(
-    name = "boost_asio",
-    hdrs = glob([
-        "usr/include/boost/asio/**/*.hpp",
-        "usr/include/boost/asio/**/*.h",
-    ], allow_empty = True),
-    includes = ["usr/include"],
-    deps = [
-        ":boost_system",
-        ":boost_thread",
-    ],
-)
-
 # opencv
 cc_library(
     name = "opencv",
