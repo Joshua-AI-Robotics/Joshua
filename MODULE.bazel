@@ -27,10 +27,6 @@ pip.parse(
 )
 use_repo(pip, "ubirobotics_pip_deps")
 
-use_ext = use_extension("@pybind11_bazel//:extensions.bzl", "pybind11")
-use_ext.pybind11_repository(name = "pybind11")
-use_repo(use_ext, "pybind11")
-
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
 system_libs(name = "local_deps")
