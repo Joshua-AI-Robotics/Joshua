@@ -1,32 +1,10 @@
 import random
 import time
-import sys
-import os
 import logging as glog
+from ai.base_ai_layer import BaseAiLayer
 
 # Configure logging
 glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
-
-# Add protobuf paths to ensure google module is found
-# TODO: Update the project setting to avoid this manual dependency check.
-if hasattr(sys, '_getframe'):
-    # Running under Bazel - add runfiles protobuf paths
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    runfiles_root = None
-    path_parts = current_dir.split(os.sep)
-    for i, part in enumerate(path_parts):
-        if part.endswith('.runfiles'):
-            runfiles_root = os.sep.join(path_parts[:i+1])
-            break
-    
-    if runfiles_root:
-        protobuf_paths = [
-            os.path.join(runfiles_root, 'protobuf+', 'python'),
-            os.path.join(runfiles_root, 'rules_python++pip+ubirobotics_pip_deps_310_protobuf', 'site-packages')
-        ]
-        for path in protobuf_paths:
-            if os.path.exists(path) and path not in sys.path:
-                sys.path.insert(0, path)
 
 # This will be available at runtime because of the bazel dependencies.
 from robot.nexus.proto import nexus_packet_pb2
