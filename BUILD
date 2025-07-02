@@ -6,8 +6,6 @@ cc_binary(
     srcs = ["main.cc"],
     data = [
         "//robot/config:robot_config_pbtxt",
-        "//ai:model",
-        requirement("protobuf"),
     ],
     deps = [
         "//robot/actuation/factory:actuation_factory",

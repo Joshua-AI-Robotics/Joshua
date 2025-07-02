@@ -17,6 +17,9 @@ pybind_library(
     name = "ai_executor",
     srcs = ["ai_executor.cc"],
     hdrs = ["ai_executor.h"],
+    data = [
+        "//ai:model",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//robot/nexus/proto:nexus_packet_cc_proto",
