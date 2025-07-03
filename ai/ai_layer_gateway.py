@@ -25,7 +25,7 @@ def generate_mock_ai_output(serialized_input_packet):
         output_packet.model_output_id = "py_model_output_0"
 
         # Fake action packets for sts3215_driver.
-        for i in range(1, 6):
+        for i in range(1, 7):
             action_packet = output_packet.action_packets.add()
             action_packet.timestamp = int(time.time() * 1e9)
             action_packet.action_id = "sts3215_driver_" + str(i)
