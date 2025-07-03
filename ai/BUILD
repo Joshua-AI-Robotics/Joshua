@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@rules_python//python:defs.bzl", "py_library")
-load("@ubirobotics_pip_deps//:requirements.bzl", "requirement")
+load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 
 py_library(
     name = "ai_layer_gateway",

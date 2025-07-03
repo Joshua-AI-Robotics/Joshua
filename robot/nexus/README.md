@@ -1,6 +1,6 @@
 # Nexus: The Robotic System's Central Hub
 
-The `Nexus` class is the core of the UbiRobotics architecture, acting as the central nervous system for the robot. It is responsible for orchestrating the flow of information between the robot's perception systems (sensors like cameras) and its action systems (actuators like motors).
+The `Nexus` class is the core of the architecture, acting as the central nervous system for the robot. It is responsible for orchestrating the flow of information between the robot's perception systems (sensors like cameras) and its action systems (actuators like motors).
 
 ## Core Responsibilities
 

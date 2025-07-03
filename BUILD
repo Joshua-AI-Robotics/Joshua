@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
-load("@ubirobotics_pip_deps//:requirements.bzl", "requirement")
+load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 
 cc_binary(
     name = "main_program",

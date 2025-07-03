@@ -16,8 +16,8 @@ if hasattr(sys, '_getframe'):
     if runfiles_root:
         dependency_paths = [
             os.path.join(runfiles_root, 'protobuf+', 'python'),
-            os.path.join(runfiles_root, 'rules_python++pip+ubirobotics_pip_deps_310_protobuf', 'site-packages'),
-            os.path.join(runfiles_root, 'rules_python++pip+ubirobotics_pip_deps_310_numpy', 'site-packages')
+            os.path.join(runfiles_root, 'rules_python++pip+project_joshua_pip_deps_310_protobuf', 'site-packages'),
+            os.path.join(runfiles_root, 'rules_python++pip+project_joshua_pip_deps_310_numpy', 'site-packages')
         ]
         for path in dependency_paths:
             if os.path.exists(path) and path not in sys.path:

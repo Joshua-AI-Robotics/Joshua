@@ -1,6 +1,6 @@
-# UbiRobotics
+# Project Joshua
 
-UbiRobotics is a flexible and modular C++ framework for building and controlling robotic systems. It is designed around a central "Nexus" architecture that orchestrates the flow of data from perception sensors to an AI decision-making layer, and finally to motor actuators.
+Project Joshua is a flexible and modular C++ framework for building and controlling robotic systems. It is designed around a central "Nexus" architecture that orchestrates the flow of data from perception sensors to an AI decision-making layer, and finally to motor actuators.
 
 ## Core Concepts
 
