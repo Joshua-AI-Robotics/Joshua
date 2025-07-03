@@ -22,3 +22,6 @@
 *~
 .*.swp
 /output/
+
+# Python virtual environment
+/venv/
