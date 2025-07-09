@@ -4,19 +4,21 @@ load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 package(default_visibility = ["//visibility:public"])
 
 py_library(
-    name = "ai_layer_gateway",
-    srcs = ["ai_layer_gateway.py"],
+    name = "factory",
+    srcs = ["factory.py"],
     deps = [
-        ":base_ai_layer",
-    ],
-) 
-
-py_library(
-    name = "base_ai_layer",
-    srcs = ["base_ai_layer.py"],
-    deps = [
-        "//robot/nexus/proto:nexus_packet_py_proto",
-        requirement("protobuf"),
-        requirement("numpy"),
+        ":base_policy",
+        "//ai/configs:base_policy_config",
+        "//ai/policy/pi0",
+        "//ai/policy/tdmpc",
     ],
 )
+
+py_library(
+    name = "base_policy",
+    srcs = ["base_policy.py"],
+    deps = [
+        requirement("protobuf"),
+    ],
+)
+
