@@ -37,7 +37,6 @@ message NexusModelInputPacket {
 
 // A message that is the output from the AI layer.
 message NexusModelOutputPacket {
-    uint64 timestamp = 1; // TODO: this might be redundant.
-    string model_output_id = 2;
+    uint64 timestamp = 1;
     repeated NexusActionPacket action_packets = 3;
 }

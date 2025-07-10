@@ -76,7 +76,6 @@ void Nexus::run(){
         for(auto& interface : perception_interfaces_){
             std::visit([this](auto&& arg) {
                 auto packet = arg->GetData();
-                LOG(INFO) << "Perception packet: " << packet->DebugString();
                 perception_packet_queue_.push(std::move(packet));
             }, interface);
         }
@@ -90,7 +89,6 @@ void Nexus::run(){
 
         // Psudo code for the model input.
         nexus_model_input_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        nexus_model_input_packet.set_model_input_id("example_model_input_0");
         LOG(INFO) << "Nexus model input packet passed to AI layer.";
 
         // Psudo code of the output from the AI layer.

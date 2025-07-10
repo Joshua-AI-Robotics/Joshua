@@ -8,6 +8,7 @@ py_library(
     srcs = ["ai_layer_gateway.py"],
     deps = [
         ":base_ai_layer",
+        "//ai/policy:factory",
     ],
 ) 
 

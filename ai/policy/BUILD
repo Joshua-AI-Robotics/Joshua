@@ -7,8 +7,7 @@ py_library(
     name = "factory",
     srcs = ["factory.py"],
     deps = [
-        ":decision_transformer",
-        requirement("protobuf"),
+        "//ai/policy/decision_transformer",
         # TODO: Add other policies here.
     ],
 )
