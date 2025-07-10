@@ -1,5 +1,6 @@
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@rules_python//python:proto.bzl", "py_proto_library")
 
 proto_library(
     name = "config_proto",
@@ -24,6 +25,12 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    visibility = ["//visibility:public"],
+)
+
+py_proto_library(
+    name = "ai_py_proto",
+    deps = [":ai_proto"],
     visibility = ["//visibility:public"],
 )
 

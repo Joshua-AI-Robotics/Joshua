@@ -36,81 +36,90 @@ glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
 
 # This will be available at runtime because of the bazel dependencies.
 from robot.nexus.proto import nexus_packet_pb2
+from config.proto import ai_pb2
 
 from ai.policy.factory import create_policy_config, create_policy
 
 
-# Global cache for policies to avoid re-instantiation on every call.
-_policy_cache = {}
-
-
-def _get_or_create_policy(policy_name: str):
+class AILayerGateway:
     """
-    Lazily initializes and caches a policy object.
-    If the policy is already in the cache, it returns the cached instance.
-    Otherwise, it creates a new one, caches it, and returns it.
+    Manages AI policies, providing a clean interface for C++ to call.
+    An instance of this class should be created by the C++ AIExecutor,
+    which will then call its methods for inference.
     """
-    if policy_name not in _policy_cache:
-        glog.info(f"Policy '{policy_name}' not found in cache. Creating a new instance.")
-        config = create_policy_config(policy_name)
-        _policy_cache[policy_name] = create_policy(config)
-    return _policy_cache[policy_name]
+    def __init__(self, serialized_config):
+        glog.info("Initializing AILayerGateway and loading policies.")
+        try:
+            # Deserialize the Ai config from C++.
+            self.config = ai_pb2.Ai()
+            self.config.ParseFromString(serialized_config)
 
+            # Load policies once during initialization.
+            self.policy_config = create_policy_config(self.config.policy_name)
+            self.policy = create_policy(self.policy_config)
+            glog.info(f"{self.config.policy_name} policy loaded successfully.")
+        except Exception as e:
+            policy_name = "unknown"
+            if hasattr(self, 'config') and self.config.policy_name:
+                policy_name = self.config.policy_name
+            glog.error(f"Failed to load {policy_name} policy: {e}")
 
-def get_mock_action_from_decision_transformer(serialized_input_packet):
-    try:
-        policy = _get_or_create_policy("decision_transformer")
+    def get_action(self, serialized_input_packet):
+        """
+        Runs inference using the pre-loaded Decision Transformer policy.
+        """
+        if not self.policy:
+            glog.error(f"{self.config.policy_name} policy not available.")
+            return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
         
-        input_packet = nexus_packet_pb2.NexusModelInputPacket()
-        input_packet.ParseFromString(serialized_input_packet)
-        glog.info(f"Input packet parsed successfully.")
+        try:
+            input_packet = nexus_packet_pb2.NexusModelInputPacket()
+            input_packet.ParseFromString(serialized_input_packet)
+            glog.info(f"{self.config.policy_name} policy: Input packet parsed successfully.")
 
-        output_packet = nexus_packet_pb2.NexusModelOutputPacket()
-        output_packet.timestamp = int(time.time() * 1e9)
-        
-        # Fake action packets for sts3215_driver.
-        for i in range(1, 7):
-            action_packet = output_packet.action_packets.add()
-            action_packet.timestamp = int(time.time() * 1e9)
-            action_packet.action_id = "sts3215_driver_" + str(i)
-            action_packet.sts3215_action.position = random.randint(1950, 2050)
+            output_packet = nexus_packet_pb2.NexusModelOutputPacket()
+            output_packet.timestamp = int(time.time() * 1e9)
+            
+            # TODO: Replace this mock implementation with a call to the actual
+            # policy like: action = policy.get_action(input_packet)
+            # and then populate the output_packet from that action.
 
-        result = output_packet.SerializeToString()
-        glog.info(f"Serialization complete, result length: {len(result)}")
-        return result
+            for i in range(1, 7):
+                action_packet = output_packet.action_packets.add()
+                action_packet.timestamp = int(time.time() * 1e9)
+                action_packet.action_id = "sts3215_driver_" + str(i)
+                action_packet.sts3215_action.position = random.randint(1950, 2050)
 
-    except Exception as e:
-        glog.error(f"Error in Python AI function: {e}")
-        # Return empty packet on error
-        return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString() 
-    
+            return output_packet.SerializeToString()
 
-def generate_mock_ai_output(serialized_input_packet):
-    """
-    Deserializes a NexusModelInputPacket, creates a mock NexusModelOutputPacket,
-    and returns it serialized.
-    """
-    
-    try:
-        input_packet = nexus_packet_pb2.NexusModelInputPacket()
-        input_packet.ParseFromString(serialized_input_packet)
-        glog.info(f"Input packet parsed successfully.")
+        except Exception as e:
+            glog.error(f"Error in get_action: {e}")
+            return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
 
-        output_packet = nexus_packet_pb2.NexusModelOutputPacket()
-        output_packet.timestamp = int(time.time() * 1e9)
+    def generate_mock_ai_output(self, serialized_input_packet):
+        """
+        Deserializes an input packet and returns a mock output packet without
+        using a policy.
+        """
+        try:
+            input_packet = nexus_packet_pb2.NexusModelInputPacket()
+            input_packet.ParseFromString(serialized_input_packet)
+            glog.info(f"Mock: Input packet parsed successfully.")
 
-        # Fake action packets for sts3215_driver.
-        for i in range(1, 7):
-            action_packet = output_packet.action_packets.add()
-            action_packet.timestamp = int(time.time() * 1e9)
-            action_packet.action_id = "sts3215_driver_" + str(i)
-            action_packet.sts3215_action.position = random.randint(1950, 2050)
+            output_packet = nexus_packet_pb2.NexusModelOutputPacket()
+            output_packet.timestamp = int(time.time() * 1e9)
 
-        result = output_packet.SerializeToString()
-        glog.info(f"Serialization complete, result length: {len(result)}")
-        return result
-        
-    except Exception as e:
-        glog.error(f"Error in Python AI function: {e}")
-        # Return empty packet on error
-        return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString() 
+            # Fake action packets for sts3215_driver.
+            for i in range(1, 7):
+                action_packet = output_packet.action_packets.add()
+                action_packet.timestamp = int(time.time() * 1e9)
+                action_packet.action_id = "sts3215_driver_" + str(i)
+                action_packet.sts3215_action.position = random.randint(1950, 2050)
+
+            result = output_packet.SerializeToString()
+            glog.info(f"Serialization complete, result length: {len(result)}")
+            return result
+            
+        except Exception as e:
+            glog.error(f"Error in Python AI function: {e}")
+            return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString() 

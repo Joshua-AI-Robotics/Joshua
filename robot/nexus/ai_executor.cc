@@ -11,11 +11,16 @@ namespace py = pybind11;
 
 namespace robot::nexus {
 
+namespace {
+    constexpr auto kModuleName = "ai.ai_layer_gateway";
+    constexpr auto kClassName = "AILayerGateway";
+    constexpr auto kInferenceMethodName = "get_action";
+}
+
 struct AIExecutor::PybindData {
     pybind11::scoped_interpreter guard;
     PyThreadState* main_thread_state;
-    std::unordered_map<std::string, py::module> modules;
-    std::unordered_map<std::string, py::object> functions;
+    py::object gateway_instance;
 };
 
 AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pybind_data_(std::make_unique<PybindData>()) {
@@ -25,9 +30,11 @@ AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pyb
     // We need to save the thread state and release the GIL so other threads can use it
     pybind_data_->main_thread_state = PyEval_SaveThread();
 
-    // TODO: Remove this hardcode and update config and add map or enum.
-    module_name_ = "ai.ai_layer_gateway";
-    function_name_ = "get_mock_action_from_decision_transformer";
+    // These will be configurable via the ai_config_ in a future change.
+    module_name_ = kModuleName;
+    class_name_ = kClassName;
+    // The specific method to call for inference.
+    inference_method_name_ = kInferenceMethodName;
 }
 
 AIExecutor::~AIExecutor() {
@@ -44,8 +51,19 @@ bool AIExecutor::Init() {
     try {
         py::gil_scoped_acquire acquire;
 
-        pybind_data_->modules[module_name_] = py::module::import(module_name_.c_str());
-        pybind_data_->functions[function_name_] = pybind_data_->modules[module_name_].attr(function_name_.c_str());
+        // Import the module, get the class, and instantiate it.
+        py::module module = py::module::import(module_name_.c_str());
+        py::object gateway_class = module.attr(class_name_.c_str());
+
+        // Serialize the protobuf config to pass it to Python.
+        // pybind11 cannot automatically cast custom C++ types like protobuf objects.
+        std::string serialized_config;
+        if (!ai_config_.SerializeToString(&serialized_config)) {
+            LOG(ERROR) << "Failed to serialize Ai config protobuf.";
+            return false;
+        }
+        
+        pybind_data_->gateway_instance = gateway_class(py::bytes(serialized_config)); // This calls the Python __init__
         
         LOG(INFO) << "AI executor initialized successfully";
     } catch (py::error_already_set &e) {
@@ -69,7 +87,9 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
         py::gil_scoped_acquire acquire;
                 
         py::bytes py_input(serialized_input);
-        auto result = pybind_data_->functions[function_name_](py_input);
+        
+        // Call the method on the stored class instance.
+        auto result = pybind_data_->gateway_instance.attr(inference_method_name_.c_str())(py_input);
         
         std::string serialized_output = result.cast<std::string>();
         

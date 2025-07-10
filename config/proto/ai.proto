@@ -3,6 +3,5 @@ syntax = "proto3";
 package config;
 
 message Ai {
-    string name = 1;
-    string config_path = 2;
+    string policy_name = 1;
 }

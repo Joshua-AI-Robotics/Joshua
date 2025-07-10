@@ -257,6 +257,5 @@ robot {
 }
 
 ai {
-  name: "decision_transformer_bc"
-  config_path: "ai/policy/decision_transformer/config_decision_transformer.py"
+  policy_name: "decision_transformer"
 }

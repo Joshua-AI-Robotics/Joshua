@@ -21,7 +21,8 @@ private:
     config::Ai ai_config_;
     // TODO: Convert this to enum or map for multiple models and functions on ai_layer_gateway.py.
     std::string module_name_;
-    std::string function_name_;
+    std::string class_name_;
+    std::string inference_method_name_;
 };
 
 } // namespace robot::nexus 

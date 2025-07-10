@@ -10,5 +10,6 @@ py_library(
         "//ai/policy:factory",
         requirement("protobuf"),
         requirement("numpy"),
+        "//config/proto:ai_py_proto",
     ],
 ) 
