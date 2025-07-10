@@ -39,18 +39,28 @@ from robot.nexus.proto import nexus_packet_pb2
 
 from ai.policy.factory import create_policy_config, create_policy
 
-# Create a default policy instance.
-# In a real scenario, the config might be loaded from a file.
-dt_config = create_policy_config("decision_transformer")
-policy = create_policy(dt_config)
+
+# Global cache for policies to avoid re-instantiation on every call.
+_policy_cache = {}
+
+
+def _get_or_create_policy(policy_name: str):
+    """
+    Lazily initializes and caches a policy object.
+    If the policy is already in the cache, it returns the cached instance.
+    Otherwise, it creates a new one, caches it, and returns it.
+    """
+    if policy_name not in _policy_cache:
+        glog.info(f"Policy '{policy_name}' not found in cache. Creating a new instance.")
+        config = create_policy_config(policy_name)
+        _policy_cache[policy_name] = create_policy(config)
+    return _policy_cache[policy_name]
 
 
 def get_mock_action_from_decision_transformer(serialized_input_packet):
-    """
-    Deserializes a NexusModelInputPacket, creates a mock NexusModelOutputPacket,
-    and returns it serialized.
-    """
     try:
+        policy = _get_or_create_policy("decision_transformer")
+        
         input_packet = nexus_packet_pb2.NexusModelInputPacket()
         input_packet.ParseFromString(serialized_input_packet)
         glog.info(f"Input packet parsed successfully.")
@@ -58,7 +68,16 @@ def get_mock_action_from_decision_transformer(serialized_input_packet):
         output_packet = nexus_packet_pb2.NexusModelOutputPacket()
         output_packet.timestamp = int(time.time() * 1e9)
         
-        # TODO: Add get_action() here.
+        # Fake action packets for sts3215_driver.
+        for i in range(1, 7):
+            action_packet = output_packet.action_packets.add()
+            action_packet.timestamp = int(time.time() * 1e9)
+            action_packet.action_id = "sts3215_driver_" + str(i)
+            action_packet.sts3215_action.position = random.randint(1950, 2050)
+
+        result = output_packet.SerializeToString()
+        glog.info(f"Serialization complete, result length: {len(result)}")
+        return result
 
     except Exception as e:
         glog.error(f"Error in Python AI function: {e}")

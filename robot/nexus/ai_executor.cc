@@ -27,7 +27,7 @@ AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pyb
 
     // TODO: Remove this hardcode and update config and add map or enum.
     module_name_ = "ai.ai_layer_gateway";
-    function_name_ = "generate_mock_ai_output";
+    function_name_ = "get_mock_action_from_decision_transformer";
 }
 
 AIExecutor::~AIExecutor() {
