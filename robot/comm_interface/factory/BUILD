@@ -6,7 +6,7 @@ cc_library(
     hdrs = ["comm_factory.h"],
     deps = [
         "//robot/comm_interface/serial:serial",
-        "//configs/proto:robot_cc_proto",
+        "//config/proto:robot_cc_proto",
         "@glog//:glog",
         "@boost.asio",
     ],

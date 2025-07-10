@@ -6,19 +6,19 @@ namespace {
     // These constants are no longer needed here, they are in the python script.
 }
 
-Nexus::Nexus(const configs::Config& config):
+Nexus::Nexus(const config::Config& config):
 stop_(false)
 {
-    auto robot_config = config.robot();
-    auto ai_config = config.ai();
-    auto trigger_frequency = robot_config.trigger_frequency();
+    robot_config_ = config.robot();
+    ai_config_ = config.ai();
+    auto trigger_frequency = robot_config_.trigger_frequency();
     if (trigger_frequency == 0) {
         LOG(ERROR) << "Trigger frequency is 0, which is not allowed.";
         throw std::runtime_error("Trigger frequency is 0, which is not allowed.");
     }
 
     scheduler_ = std::make_unique<NexusScheduler>(trigger_frequency);
-    ai_executor_ = std::make_unique<AIExecutor>();
+    ai_executor_ = std::make_unique<AIExecutor>(ai_config_);
     LOG(INFO) << "Nexus construted.";
 }
 
@@ -54,7 +54,7 @@ bool Nexus::Init(){
         LOG(WARNING) << "No interfaces registered with Nexus.";
     }
     // TODO: Update this by using the model name and function name from the config.
-    if (!ai_executor_->Init("ai.ai_layer_gateway", "generate_mock_ai_output")) {
+    if (!ai_executor_->Init()) {
         LOG(ERROR) << "Failed to initialize AI executor.";
         return false;
     }

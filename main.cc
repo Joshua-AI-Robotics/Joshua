@@ -1,7 +1,7 @@
 #include "robot/actuation/factory/actuation_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
-#include "configs/proto/config.pb.h"
-#include "configs/config_utils.h"
+#include "config/proto/config.pb.h"
+#include "config/config_utils.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/nexus/nexus.h"
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    configs::Config config = configs::config_util::LoadConfig("configs/config_preset/so100_with_dt.pbtxt");
+    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_dt.pbtxt");
     auto robot_config = config.robot();
     auto ai_config = config.ai();
     LOG(INFO) << "Robot Name: " << robot_config.name();

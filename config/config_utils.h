@@ -8,12 +8,12 @@
 
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
-#include "configs/proto/config.pb.h"
+#include "config/proto/config.pb.h"
 
-namespace configs::config_util{
+namespace config::config_util{
 
-    configs::Config LoadConfig(const std::string& config_path) {
-    configs::Config config;
+    config::Config LoadConfig(const std::string& config_path) {
+    config::Config config;
     std::ifstream input(config_path);       
     if (!input) {
         LOG(ERROR) << "Failed to open config file: " << config_path;

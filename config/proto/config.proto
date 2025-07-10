@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "config/proto/robot.proto";
+import "config/proto/ai.proto";
+
+package config;
+
+message Config {
+    config.Robot robot = 1;
+    config.Ai ai = 2;
+}

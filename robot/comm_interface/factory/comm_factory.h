@@ -1,7 +1,7 @@
 #pragma once
 
 #include "robot/comm_interface/serial/serial.h"
-#include "configs/proto/robot.pb.h"
+#include "config/proto/robot.pb.h"
 #include <boost/asio.hpp>
 #include <map>
 #include <memory>

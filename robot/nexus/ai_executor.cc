@@ -18,12 +18,16 @@ struct AIExecutor::PybindData {
     std::unordered_map<std::string, py::object> functions;
 };
 
-AIExecutor::AIExecutor() : pybind_data_(std::make_unique<PybindData>()) {
+AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pybind_data_(std::make_unique<PybindData>()) {
     LOG(INFO) << "AIExecutor constructor started";
     
     // The scoped_interpreter initializes Python and acquires the GIL
     // We need to save the thread state and release the GIL so other threads can use it
-    pybind_data_->main_thread_state = PyEval_SaveThread();    
+    pybind_data_->main_thread_state = PyEval_SaveThread();
+
+    // TODO: Remove this hardcode and update config and add map or enum.
+    module_name_ = "ai.ai_layer_gateway";
+    function_name_ = "generate_mock_ai_output";
 }
 
 AIExecutor::~AIExecutor() {
@@ -35,13 +39,13 @@ AIExecutor::~AIExecutor() {
 
 // TODO: This only allows one model and one function to be loaded at a time.
 // Fix this to store multiple models and functions.
-bool AIExecutor::Init(const std::string& module_name, const std::string& function_name) {
+bool AIExecutor::Init() {
     LOG(INFO) << "AIExecutor::Init called on thread: " << std::this_thread::get_id();
     try {
         py::gil_scoped_acquire acquire;
 
-        pybind_data_->modules[module_name] = py::module::import(module_name.c_str());
-        pybind_data_->functions[function_name] = pybind_data_->modules[module_name].attr(function_name.c_str());
+        pybind_data_->modules[module_name_] = py::module::import(module_name_.c_str());
+        pybind_data_->functions[function_name_] = pybind_data_->modules[module_name_].attr(function_name_.c_str());
         
         LOG(INFO) << "AI executor initialized successfully";
     } catch (py::error_already_set &e) {
@@ -65,7 +69,7 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
         py::gil_scoped_acquire acquire;
                 
         py::bytes py_input(serialized_input);
-        auto result = pybind_data_->functions["generate_mock_ai_output"](py_input);
+        auto result = pybind_data_->functions[function_name_](py_input);
         
         std::string serialized_output = result.cast<std::string>();
         

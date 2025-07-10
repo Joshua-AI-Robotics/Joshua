@@ -5,7 +5,7 @@ cc_library(
     hdrs = ["config_utils.h"],
     deps = [
         "@glog//:glog",
-        "//configs/proto:config_cc_proto",
+        "//config/proto:config_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

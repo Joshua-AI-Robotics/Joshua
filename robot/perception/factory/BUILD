@@ -9,7 +9,7 @@ cc_library(
         "//robot/perception/camera:cv_camera",
         "//robot/perception/encoder:sts3215_encoder",
         "//robot/perception/interfaces:perception_interface",
-        "//configs/proto:robot_cc_proto",
+        "//config/proto:robot_cc_proto",
         "//robot/comm_interface/factory:comm_factory",
     ],
 )

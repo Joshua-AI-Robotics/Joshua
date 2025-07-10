@@ -5,11 +5,11 @@ cc_binary(
     name = "main_program",
     srcs = ["main.cc"],
     data = [
-        "//configs/config_preset:so100_with_dt",
+        "//config/config_preset:so100_with_dt",
     ],
     deps = [
         "//robot/actuation/factory:actuation_factory",
-        "//configs:config_utils",
+        "//config:config_utils",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/interfaces:perception_interface",
         "//robot/nexus:nexus",

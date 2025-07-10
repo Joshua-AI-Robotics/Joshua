@@ -3,7 +3,7 @@ syntax = "proto3";
 import "robot/actuation/proto/actuation.proto";
 import "robot/perception/proto/perception.proto";
 
-package robot;
+package config;
 
 enum RobotType {
     ROBOT_INVALID = 0;

@@ -7,7 +7,7 @@ cc_library(
         "//robot/actuation/interfaces:actuation_interface",
         "//robot/actuation/motors/drivers:sts3215_driver",
         "//robot/comm_interface/factory:comm_factory",
-        "//configs/proto:robot_cc_proto",
+        "//config/proto:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )
