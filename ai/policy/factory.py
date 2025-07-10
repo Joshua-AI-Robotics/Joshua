@@ -1,23 +1,34 @@
 import logging as glog
-from ai.policy.base_policy import BasePolicy
-from ai.configs.base_policy_config import BasePolicyConfig
-from ai.policy.pi0.pi0_policy import Pi0Policy  
-from ai.policy.tdmpc.tdmpc_policy import TdmpcPolicy
-from ai.policy.pi0.pi0_config import Pi0Config
-from ai.policy.tdmpc.tdmpc_config import TdmpcConfig
+from typing import Union
 
-def create_policy(policy_config: BasePolicyConfig) -> BasePolicy:
-    if policy_config.policy_name == "pi0":
-        return Pi0Policy()
-    elif policy_config.policy_name == "tdmpc":
-        return TdmpcPolicy()
+from transformers import PreTrainedModel
+
+from ai.policy.decision_transformer.config_decision_transformer import (
+    DecisionTransformerConfig,
+)
+from ai.policy.decision_transformer.modeling_decision_transformer import (
+    MultiModalDecisionTransformer,
+)
+
+# A type hint for any valid policy configuration.
+PolicyConfig = Union[DecisionTransformerConfig]
+
+
+def create_policy(policy_config: PolicyConfig) -> PreTrainedModel:
+    """Creates a policy instance from a policy config. The model *is* the policy."""
+    if isinstance(policy_config, DecisionTransformerConfig):
+        return MultiModalDecisionTransformer(policy_config)
     else:
-        raise ValueError(f"Invalid policy name: {policy_config.policy_name}")
+        config_class_name = policy_config.__class__.__name__
+        raise ValueError(f"Invalid policy config type: {config_class_name}")
 
-def create_policy_config(policy_name: str) -> BasePolicyConfig:
-    if policy_name == "pi0":
-        return Pi0Config()
-    elif policy_name == "tdmpc":
-        return TdmpcConfig()
+
+def create_policy_config(policy_name: str, **kwargs) -> PolicyConfig:
+    """
+    Creates a policy configuration object from a policy name.
+    Any extra kwargs are passed to the config's constructor.
+    """
+    if policy_name == "decision_transformer":
+        return DecisionTransformerConfig(**kwargs)
     else:
         raise ValueError(f"Invalid policy name: {policy_name}")

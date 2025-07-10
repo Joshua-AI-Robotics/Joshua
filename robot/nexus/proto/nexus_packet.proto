@@ -24,9 +24,15 @@ message NexusPerceptionPacket {
 
 // A message to pass to the AI layer for model input.
 message NexusModelInputPacket {
-    uint64 timestamp = 1; // TODO: this might be redundant.
-    string model_input_id = 2;
-    repeated NexusPerceptionPacket perception_packets = 3;
+    uint64 timestamp = 1;
+    repeated NexusPerceptionPacket perception_packets = 2;
+
+    // This field provides a command or goal for the AI model.
+    // It's designed to be generic to support different types of policies.
+    oneof command {
+        float target_return_to_go = 3; // For Decision Transformer style models
+        string text_command = 4;       // For future language-conditioned models
+    }
 }
 
 // A message that is the output from the AI layer.
