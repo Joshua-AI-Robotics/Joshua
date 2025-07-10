@@ -2,7 +2,23 @@ syntax = "proto3";
 
 package config;
 
+message DecisionTransformerConfig {
+  int32 hidden_size = 1;
+  int32 n_layer = 2;
+  int32 n_head = 3;
+  string activation_function = 4;
+  double dropout = 5;
+  int32 n_inner = 6;
+  int32 context_length = 7;
+  int32 vision_embedding_dim = 8;
+}
+
 message Ai {
-    string policy_name = 1;
-    string pretrained_model_path = 2;
+  string policy_name = 1;
+  string pretrained_model_path = 2;
+  int32 act_dim = 3;
+  int32 state_dim = 4;
+  oneof policy_config {
+    DecisionTransformerConfig decision_transformer_config = 5;
+  }
 }

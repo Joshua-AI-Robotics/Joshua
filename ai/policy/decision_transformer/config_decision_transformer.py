@@ -2,6 +2,7 @@ from transformers.models.decision_transformer.configuration_decision_transformer
     DecisionTransformerConfig as HFDecisionTransformerConfig,
 )
 
+
 class DecisionTransformerConfig(HFDecisionTransformerConfig):
     """
     This is the configuration class for a [`DecisionTransformer`].
@@ -11,68 +12,86 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
 
     model_type = "decision_transformer"
 
-    def __init__(self, config, **kwargs):
-        # Set default values for our custom parameters.
-        image_size_h = 128
-        image_size_w = 128
-        embedding_dim = 128
-        motor_encoder_dim = 6
-
-        # If a config proto is passed, parse the values.
-        # This is placeholder logic that you can adapt later.
-        # if config and hasattr(config, "robot"):
-        #     if (
-        #         config.robot.perceptions
-        #         and len(config.robot.perceptions.camera_configs) > 0
-        #     ):
-        #         image_size_h = config.robot.perceptions.camera_configs[0].height
-        #         image_size_w = config.robot.perceptions.camera_configs[0].width
-
-        #     if (
-        #         config.robot.actuations
-        #         and len(config.robot.actuations.motor_configs) > 0
-        #     ):
-        #         motor_encoder_dim = len(config.robot.actuations.motor_configs)
-
+    def __init__(
+        self,
+        # Custom vision/motor parameters
+        image_size_h=128,
+        image_size_w=128,
+        embedding_dim=128,
+        non_visual_state_dim=6,
+        # Other standard DT parameters can be passed in kwargs
+        **kwargs,
+    ):
         # Assign our custom parameters to the instance.
         self.image_size_h = image_size_h
         self.image_size_w = image_size_w
         self.embedding_dim = embedding_dim
-        self.motor_encoder_dim = motor_encoder_dim
+        self.non_visual_state_dim = non_visual_state_dim
 
         # Calculate the full state dimension for the parent class.
-        state_dim = embedding_dim + motor_encoder_dim
+        state_dim = embedding_dim + non_visual_state_dim
+        kwargs["state_dim"] = state_dim
 
-        # Call the parent constructor with the correct arguments.
-        super().__init__(state_dim=state_dim, **kwargs)
+        # Call the parent constructor with all arguments.
+        super().__init__(**kwargs)
 
     @classmethod
     def from_proto(cls, proto_message):
         """
-        Creates a DecisionTransformerConfig from a protobuf message.
-        
-        This method should be implemented to parse the specific protobuf
-        file that contains the model configuration.
-        
+        Creates a DecisionTransformerConfig from the main Config protobuf message.
+        This method parses the protobuf message to extract all necessary
+        hyperparameters for the model, including custom parameters and standard
+        Hugging Face transformer parameters.
         Args:
-            proto_message: The loaded protobuf message object.
-            
+            proto_message: The loaded top-level Config protobuf object.
         Returns:
             An instance of DecisionTransformerConfig.
         """
-        # --- Placeholder Implementation ---
-        # TODO: Replace this with your actual protobuf parsing logic.
-        # Example:
-        # config_dict = {
-        #     "image_size_h": proto_message.ai_config.vision.image_height,
-        #     "image_size_w": proto_message.ai_config.vision.image_width,
-        #     "embedding_dim": proto_message.ai_config.vision.embedding_dim,
-        #     "motor_encoder_dim": proto_message.ai_config.motor.dimension,
-        #     "act_dim": proto_message.ai_config.action_dimension,
-        #     "hidden_size": proto_message.ai_config.dt.hidden_size,
-        #     # ... and so on for all other parameters
-        # }
-        # return cls(**config_dict)
+        if proto_message is None:
+            return cls()
+
+        ai_config = proto_message.ai
+        robot_config = proto_message.robot
+        dt_config = ai_config.decision_transformer_config
+
+        # --- Dynamically determine dimensions from robot config ---
         
-        # glog.warning("DecisionTransformerConfig.from_proto() is not implemented. Using default config.")
-        return cls() 
+        # Action dimension from number of actuators
+        act_dim = len(robot_config.actuations.single_actuation)
+
+        # State dimensions from perception sensors
+        image_size_h = 128  # Default
+        image_size_w = 128  # Default
+        non_visual_state_size = 0
+        
+        for perception in robot_config.perceptions.single_perception:
+            sensor = perception.sensor
+            # The sensor_type enum for CAMERA is 1.
+            if sensor.sensor_type == 1: # CAMERA
+                # For a 'oneof', we must check which field is active.
+                if sensor.WhichOneof('sensor_config') == 'camera_config':
+                    cam_config = sensor.camera_config
+                    # Use configured height/width, but provide a sensible default if not set.
+                    image_size_h = cam_config.height or 128
+                    image_size_w = cam_config.width or 128
+            else:
+                non_visual_state_size += 1
+        
+        # Create a dictionary of all parameters for the constructor
+        config_dict = {
+            "image_size_h": image_size_h,
+            "image_size_w": image_size_w,
+            "non_visual_state_dim": non_visual_state_size,
+            "embedding_dim": dt_config.vision_embedding_dim,
+            "hidden_size": dt_config.hidden_size,
+            "n_layer": dt_config.n_layer,
+            "n_head": dt_config.n_head,
+            "activation_function": dt_config.activation_function,
+            "dropout": dt_config.dropout,
+            "n_inner": dt_config.n_inner,
+            "max_length": dt_config.context_length,
+            "act_dim": act_dim,
+        }
+
+        # Instantiate the class with the parsed parameters
+        return cls(**config_dict) 

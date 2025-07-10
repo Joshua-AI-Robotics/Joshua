@@ -34,6 +34,7 @@ def create_policy_config(config: config_pb2.Config) -> PolicyConfig:
     """
     config_class = CONFIG_MAPPING.get(config.ai.policy_name)
     if config_class:
-        return config_class(config)
+        # The from_proto method is now the standard way to create configs.
+        return config_class.from_proto(config)
     else:
         raise ValueError(f"Invalid policy name: {config.ai.policy_name}")

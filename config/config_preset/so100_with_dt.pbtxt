@@ -258,4 +258,14 @@ robot {
 
 ai {
   policy_name: "decision_transformer"
+  decision_transformer_config {
+    hidden_size: 256
+    n_layer: 4
+    n_head: 4
+    activation_function: "relu"
+    dropout: 0.1
+    n_inner: 1024
+    context_length: 20
+    vision_embedding_dim: 128
+  }
 }

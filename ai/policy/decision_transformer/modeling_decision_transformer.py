@@ -56,7 +56,7 @@ class DecisionTransformerPolicy(PreTrainedModel):
             embedding_dim=config.embedding_dim,
             image_size=(config.image_size_h, config.image_size_w)
         )
-        self.motor_encoder_dim = config.motor_encoder_dim
+        self.non_visual_state_dim = config.non_visual_state_dim
 
         self.dt = DecisionTransformerModel(config)
 
@@ -64,13 +64,13 @@ class DecisionTransformerPolicy(PreTrainedModel):
         self.context_length = config.max_length
         self.action_dim = config.act_dim
         self.image_history = deque(maxlen=self.context_length)
-        self.motor_history = deque(maxlen=self.context_length)
+        self.non_visual_state_history = deque(maxlen=self.context_length)
         self.action_history = deque(maxlen=self.context_length)
         self.rtg_history = deque(maxlen=self.context_length)
         self.timestep_history = deque(maxlen=self.context_length)
         self.timestep = 0
 
-    def forward(self, image_states, motor_states, actions, returns_to_go, timesteps, attention_mask=None):
+    def forward(self, image_states, non_visual_states, actions, returns_to_go, timesteps, attention_mask=None):
         batch_size, seq_len = image_states.shape[0], image_states.shape[1]
 
         # Embed images
@@ -78,7 +78,7 @@ class DecisionTransformerPolicy(PreTrainedModel):
         image_embeddings = image_embeddings.view(batch_size, seq_len, -1)
 
         # Combine with motor states
-        state_embeddings = torch.cat([image_embeddings, motor_states], dim=-1)
+        state_embeddings = torch.cat([image_embeddings, non_visual_states], dim=-1)
 
         # Pass to the underlying transformer
         return self.dt(
@@ -95,19 +95,19 @@ class DecisionTransformerPolicy(PreTrainedModel):
         # --- 1. Update History Buffers ---
         if self.timestep == 0: # Reset for new episode
             self.image_history.clear()
-            self.motor_history.clear()
+            self.non_visual_state_history.clear()
             self.action_history.clear()
             self.rtg_history.clear()
             self.timestep_history.clear()
 
         # TODO: Implement robust logic to parse image and motor data from perception_packets
         current_image_state = torch.zeros(1, 3, self.config.image_size_h, self.config.image_size_w)
-        current_motor_state = torch.zeros(1, self.motor_encoder_dim)
+        current_non_visual_state = torch.zeros(1, self.non_visual_state_dim)
 
         current_rtg = self.rtg_history[-1] - reward if len(self.rtg_history) > 0 else nexus_input.target_return_to_go
 
         self.image_history.append(current_image_state)
-        self.motor_history.append(current_motor_state)
+        self.non_visual_state_history.append(current_non_visual_state)
         self.rtg_history.append(current_rtg)
         self.timestep_history.append(self.timestep)
         self.action_history.append(torch.zeros(1, self.action_dim)) # Placeholder for current action
@@ -116,7 +116,7 @@ class DecisionTransformerPolicy(PreTrainedModel):
         pad_len = self.context_length - len(self.image_history)
         
         images = torch.cat([torch.zeros(pad_len, 3, self.config.image_size_h, self.config.image_size_w)] + list(self.image_history), dim=0).unsqueeze(0)
-        motors = torch.cat([torch.zeros(pad_len, self.motor_encoder_dim)] + list(self.motor_history), dim=0).unsqueeze(0)
+        non_visual_states = torch.cat([torch.zeros(pad_len, self.non_visual_state_dim)] + list(self.non_visual_state_history), dim=0).unsqueeze(0)
         actions = torch.cat([torch.zeros(pad_len, self.action_dim)] + list(self.action_history), dim=0).unsqueeze(0)
         rtgs = torch.tensor(list(self.rtg_history) + [0.0] * pad_len, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
         timesteps = torch.tensor(list(self.timestep_history) + [0] * pad_len, dtype=torch.long).unsqueeze(0)
@@ -125,7 +125,7 @@ class DecisionTransformerPolicy(PreTrainedModel):
         # --- 3. Get Action from Model ---
         model_output = self(
             image_states=images,
-            motor_states=motors,
+            non_visual_states=non_visual_states,
             actions=actions,
             returns_to_go=rtgs,
             timesteps=timesteps,
