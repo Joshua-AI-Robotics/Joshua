@@ -4,7 +4,7 @@
 #include <vector>
 #include "robot/comm_interface/serial/serial.h"
 #include "robot/actuation/interfaces/actuation_interface.h"
-#include "robot/config/robot.pb.h"
+#include "configs/proto/robot.pb.h"
 #include <memory>
 
 namespace robot::actuation{

@@ -1,7 +1,7 @@
 #include "robot/actuation/factory/actuation_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
-#include "robot/config/robot.pb.h"
-#include "robot/config/config_utils.h"
+#include "configs/proto/config.pb.h"
+#include "configs/config_utils.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/nexus/nexus.h"
@@ -30,11 +30,13 @@ int main(int argc, char* argv[]) {
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    robot::Robot robot_config = robot::config_util::LoadRobotConfig("robot/config/robot_config.pbtxt");
+    configs::Config config = configs::config_util::LoadConfig("configs/config_preset/so100_with_dt.pbtxt");
+    auto robot_config = config.robot();
+    auto ai_config = config.ai();
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "ID:" << robot_config.id();
 
-    const int trigger_frequency = 30;
+    const int trigger_frequency = robot_config.trigger_frequency();
     robot::nexus::Nexus nexus(trigger_frequency);
 
     // Register actuators.

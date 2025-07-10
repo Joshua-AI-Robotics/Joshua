@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "robot/actuation/proto/actuation.proto";
+import "robot/perception/proto/perception.proto";
+
+package robot;
+
+enum RobotType {
+    ROBOT_INVALID = 0;
+    MANIPULATOR_ARM = 1;
+}
+
+message Robot {
+    string name = 1;
+    uint64 id = 2;
+    RobotType robot_type = 3;
+    uint32 trigger_frequency = 4;
+    robot.actuation.Actuation actuations = 5;
+    robot.perception.Perception perceptions = 6;
+}

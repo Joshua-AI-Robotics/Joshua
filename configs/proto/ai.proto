@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package ai;
+
+message Ai {
+    string name = 1;
+    string config_path = 2;
+}

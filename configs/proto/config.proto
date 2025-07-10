@@ -1,30 +1,11 @@
 syntax = "proto3";
 
-import "robot/actuation/proto/actuation.proto";
-import "robot/perception/proto/perception.proto";
+import "configs/proto/robot.proto";
+import "configs/proto/ai.proto";
 
 package configs;
 
-enum RobotType {
-    ROBOT_INVALID = 0;
-    MANIPULATOR_ARM = 1;
-}
-
-message Robot {
-    string name = 1;
-    uint64 id = 2;
-    RobotType robot_type = 3;
-    uint32 trigger_frequency = 4;
-    robot.actuation.Actuation actuations = 5;
-    robot.perception.Perception perceptions = 6;
-}
-
-message Ai {
-    string name = 1;
-    string config_path = 2;
-}
-
 message Config {
-    Robot robot = 1;
-    Ai ai = 2;
+    robot.Robot robot = 1;
+    ai.Ai ai = 2;
 }

@@ -3,7 +3,7 @@
 #include "robot/actuation/interfaces/actuation_interface.h"
 #include "robot/comm_interface/factory/comm_factory.h"
 #include "robot/actuation/motors/drivers/sts3215_driver.h"
-#include "robot/config/robot.pb.h"
+#include "configs/proto/robot.pb.h"
 
 #include <memory>
 #include <string>

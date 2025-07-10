@@ -7,7 +7,7 @@ cc_library(
     deps = [
         "//robot/actuation/interfaces:actuation_interface",
         "//robot/comm_interface/serial:serial",
-        "//robot/config:robot_cc_proto",
+        "//configs/proto:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

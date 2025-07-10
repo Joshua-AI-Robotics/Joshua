@@ -14,7 +14,7 @@ cc_library(
     hdrs = ["camera_interface.h"],
     deps = [
         ":perception_interface",
-        "//robot/config:robot_cc_proto",
+        "//configs/proto:robot_cc_proto",
         "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],

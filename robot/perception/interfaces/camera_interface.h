@@ -1,6 +1,6 @@
 #pragma once
 
-#include "robot/config/robot.pb.h"
+#include "configs/proto/robot.pb.h"
 #include "robot/nexus/proto/nexus_packet.pb.h"
 #include "robot/perception/interfaces/perception_interface.h"
 

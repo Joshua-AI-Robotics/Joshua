@@ -1,5 +1,5 @@
-#include "robot/config/config_utils.h"
-#include "robot/config/robot.pb.h"
+#include "configs/config_utils.h"
+#include "configs/proto/config.pb.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/camera_interface.h"
 #include "robot/nexus/proto/nexus_packet.pb.h"
@@ -12,13 +12,14 @@ int main(int argc, char** argv) {
     FLAGS_logtostderr = 1;
 
     // Load robot config.
-    robot::Robot robot_config;
+    configs::Config config;
     try {
-        robot_config = robot::config_util::LoadRobotConfig("robot/config/robot_config.pbtxt");
+        config = configs::config_util::LoadConfig("configs/config_preset/so100_with_dt.pbtxt");
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to load robot config: " << e.what();
+        LOG(ERROR) << "Failed to load config: " << e.what();
         return -1;
     }
+    const auto& robot_config = config.robot();
 
     // For this main, we only use the first camera.
     if (robot_config.perceptions().single_perception_size() == 0) {

@@ -1,5 +1,5 @@
 filegroup(
-    name = "so100_config_with_dt",
-    srcs = ["so100_config_with_dt.pbtxt"],
+    name = "so100_with_dt",
+    srcs = ["so100_with_dt.pbtxt"],
     visibility = ["//visibility:public"],
 )
