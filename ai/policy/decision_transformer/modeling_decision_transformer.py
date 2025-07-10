@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from collections import deque
 
-from transformers import PreTrainedModel, DecisionTransformerModel as HFDecisionTransformerModel
+from transformers import PreTrainedModel, DecisionTransformerModel
 from .config_decision_transformer import DecisionTransformerConfig
 
 # This will be available at runtime because of the bazel dependencies.
@@ -41,7 +41,7 @@ class VisionEncoder(nn.Module):
         x = self.ln(x)
         return x
 
-class MultiModalDecisionTransformer(PreTrainedModel):
+class DecisionTransformer(PreTrainedModel):
     """
     A Decision Transformer model that processes both image and low-dimensional state inputs.
     This class contains the full policy logic, including history management for inference.
@@ -58,7 +58,7 @@ class MultiModalDecisionTransformer(PreTrainedModel):
         )
         self.motor_encoder_dim = config.motor_encoder_dim
 
-        self.dt = HFDecisionTransformerModel(config)
+        self.dt = DecisionTransformerModel(config)
 
         # --- Inference History Buffers ---
         self.context_length = config.max_length

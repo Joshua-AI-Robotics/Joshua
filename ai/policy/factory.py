@@ -7,7 +7,7 @@ from ai.policy.decision_transformer.config_decision_transformer import (
     DecisionTransformerConfig,
 )
 from ai.policy.decision_transformer.modeling_decision_transformer import (
-    MultiModalDecisionTransformer,
+    DecisionTransformer,
 )
 
 # A type hint for any valid policy configuration.
@@ -17,7 +17,7 @@ PolicyConfig = Union[DecisionTransformerConfig]
 def create_policy(policy_config: PolicyConfig) -> PreTrainedModel:
     """Creates a policy instance from a policy config. The model *is* the policy."""
     if isinstance(policy_config, DecisionTransformerConfig):
-        return MultiModalDecisionTransformer(policy_config)
+        return DecisionTransformer(policy_config)
     else:
         config_class_name = policy_config.__class__.__name__
         raise ValueError(f"Invalid policy config type: {config_class_name}")
