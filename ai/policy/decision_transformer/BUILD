@@ -30,6 +30,7 @@ py_library(
     name = "decision_transformer_config",
     srcs = ["config_decision_transformer.py"],
     deps = [
+        "//config/proto:config_py_proto",
         requirement("transformers"),
     ],
 ) 

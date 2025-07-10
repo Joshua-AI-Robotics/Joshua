@@ -11,25 +11,39 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
 
     model_type = "decision_transformer"
 
-    def __init__(
-        self,
-        # Custom vision/motor encoder args
-        image_size_h=128,
-        image_size_w=128,
-        embedding_dim=128,
-        motor_encoder_dim=6,
-        # Include standard DT args and pass them to the parent
-        **kwargs,
-    ):
-        # Pop our custom args before calling super
+    def __init__(self, config, **kwargs):
+        # Set default values for our custom parameters.
+        image_size_h = 128
+        image_size_w = 128
+        embedding_dim = 128
+        motor_encoder_dim = 6
+
+        # If a config proto is passed, parse the values.
+        # This is placeholder logic that you can adapt later.
+        # if config and hasattr(config, "robot"):
+        #     if (
+        #         config.robot.perceptions
+        #         and len(config.robot.perceptions.camera_configs) > 0
+        #     ):
+        #         image_size_h = config.robot.perceptions.camera_configs[0].height
+        #         image_size_w = config.robot.perceptions.camera_configs[0].width
+
+        #     if (
+        #         config.robot.actuations
+        #         and len(config.robot.actuations.motor_configs) > 0
+        #     ):
+        #         motor_encoder_dim = len(config.robot.actuations.motor_configs)
+
+        # Assign our custom parameters to the instance.
         self.image_size_h = image_size_h
         self.image_size_w = image_size_w
         self.embedding_dim = embedding_dim
         self.motor_encoder_dim = motor_encoder_dim
-        
-        # Calculate the full state dimension
+
+        # Calculate the full state dimension for the parent class.
         state_dim = embedding_dim + motor_encoder_dim
-        
+
+        # Call the parent constructor with the correct arguments.
         super().__init__(state_dim=state_dim, **kwargs)
 
     @classmethod

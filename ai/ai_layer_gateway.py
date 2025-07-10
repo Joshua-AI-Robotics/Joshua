@@ -54,34 +54,26 @@ class AILayerGateway:
             self.config = config_pb2.Config()
             self.config.ParseFromString(serialized_config)
 
-            # Parse the robot config.
-            self.robot_config = self.config.robot
-
-            # Parse the ai config.
-            self.ai_config = self.config.ai
-
             # Load policies once during initialization.
-            self.policy_config = create_policy_config(self.ai_config.policy_name)
+            self.policy_config = create_policy_config(self.config)
             self.policy = create_policy(self.policy_config)
-            glog.info(f"{self.ai_config.policy_name} policy loaded successfully.")
+            glog.info(f"{self.config.ai.policy_name} policy loaded successfully.")
         except Exception as e:
-            policy_name = "unknown"
-            if hasattr(self, 'ai_config') and self.ai_config.policy_name:
-                policy_name = self.ai_config.policy_name
-            glog.error(f"Failed to load {policy_name} policy: {e}")
+            glog.error(f"Failed to load {self.config.ai.policy_name} policy: {e}")
+            raise e
 
     def get_action(self, serialized_input_packet):
         """
         Runs inference using the pre-loaded policy.
         """
         if not self.policy:
-            glog.error(f"{self.ai_config.policy_name} policy not available.")
+            glog.error(f"{self.config.ai.policy_name} policy not available.")
             return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
         
         try:
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
-            glog.info(f"{self.ai_config.policy_name} policy: Input packet parsed successfully.")
+            glog.info(f"{self.config.ai.policy_name} policy: Input packet parsed successfully.")
 
             output_packet = nexus_packet_pb2.NexusModelOutputPacket()
             output_packet.timestamp = int(time.time() * 1e9)

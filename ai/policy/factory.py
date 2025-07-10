@@ -1,6 +1,7 @@
 import logging as glog
 from typing import Union
 
+from config.proto import config_pb2
 from transformers import PreTrainedModel, PretrainedConfig
 
 from ai.policy.decision_transformer.config_decision_transformer import (
@@ -26,13 +27,13 @@ def create_policy(policy_config: PolicyConfig) -> PreTrainedModel:
         raise ValueError(f"Invalid policy model type: {policy_config.model_type}")
 
 
-def create_policy_config(policy_name: str, **kwargs) -> PolicyConfig:
+def create_policy_config(config: config_pb2.Config) -> PolicyConfig:
     """
     Creates a policy configuration object from a policy name.
     Any extra kwargs are passed to the config's constructor.
     """
-    config_class = CONFIG_MAPPING.get(policy_name)
+    config_class = CONFIG_MAPPING.get(config.ai.policy_name)
     if config_class:
-        return config_class(**kwargs)
+        return config_class(config)
     else:
-        raise ValueError(f"Invalid policy name: {policy_name}")
+        raise ValueError(f"Invalid policy name: {config.ai.policy_name}")
