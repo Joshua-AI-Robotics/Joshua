@@ -6,16 +6,14 @@ namespace robot::nexus {
 Nexus::Nexus(const config::Config& config):
 stop_(false)
 {
-    robot_config_ = config.robot();
-    ai_config_ = config.ai();
-    auto trigger_frequency = robot_config_.trigger_frequency();
+    auto trigger_frequency = config.robot().trigger_frequency();
     if (trigger_frequency == 0) {
         LOG(ERROR) << "Trigger frequency is 0, which is not allowed.";
         throw std::runtime_error("Trigger frequency is 0, which is not allowed.");
     }
 
     scheduler_ = std::make_unique<NexusScheduler>(trigger_frequency);
-    ai_executor_ = std::make_unique<AIExecutor>(ai_config_);
+    ai_executor_ = std::make_unique<AIExecutor>(config);
     LOG(INFO) << "Nexus construted.";
 }
 

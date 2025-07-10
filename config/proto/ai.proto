@@ -4,4 +4,5 @@ package config;
 
 message Ai {
     string policy_name = 1;
+    string pretrained_model_path = 2;
 }

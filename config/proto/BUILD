@@ -12,6 +12,12 @@ proto_library(
     visibility = ["//visibility:public"],
 )
 
+py_proto_library(
+    name = "config_py_proto",
+    deps = [":config_proto"],
+    visibility = ["//visibility:public"],
+)
+
 proto_library(
     name = "robot_proto",
     srcs = ["robot.proto"],
@@ -25,12 +31,6 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
-    visibility = ["//visibility:public"],
-)
-
-py_proto_library(
-    name = "ai_py_proto",
-    deps = [":ai_proto"],
     visibility = ["//visibility:public"],
 )
 

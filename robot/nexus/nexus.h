@@ -41,7 +41,6 @@ std::unique_ptr<AIExecutor> ai_executor_;
 std::map<std::string, ActionInterface> action_interfaces_;
 std::vector<PerceptionInterface> perception_interfaces_;
 config::Robot robot_config_;
-config::Ai ai_config_;
 
 struct PerceptionPacketCompare {
     bool operator()(const std::shared_ptr<robot::nexus::NexusPerceptionPacket>& a, const std::shared_ptr<robot::nexus::NexusPerceptionPacket>& b) const {

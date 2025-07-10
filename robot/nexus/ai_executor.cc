@@ -24,7 +24,7 @@ struct AIExecutor::PybindData {
     py::object gateway_instance;
 };
 
-AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pybind_data_(std::make_unique<PybindData>()) {
+AIExecutor::AIExecutor(const config::Config& config) : config_(config), pybind_data_(std::make_unique<PybindData>()) {
     LOG(INFO) << "AIExecutor constructor started";
     
     // The scoped_interpreter initializes Python and acquires the GIL
@@ -51,8 +51,8 @@ bool AIExecutor::Init() {
         // Serialize the protobuf config to pass it to Python.
         // pybind11 cannot automatically cast custom C++ types like protobuf objects.
         std::string serialized_config;
-        if (!ai_config_.SerializeToString(&serialized_config)) {
-            LOG(ERROR) << "Failed to serialize Ai config protobuf.";
+        if (!config_.SerializeToString(&serialized_config)) {
+            LOG(ERROR) << "Failed to serialize Config protobuf.";
             return false;
         }
         
