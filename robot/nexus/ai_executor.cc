@@ -12,6 +12,7 @@ namespace py = pybind11;
 namespace robot::nexus {
 
 namespace {
+    // Defined in ai_layer_gateway.py.
     constexpr auto kModuleName = "ai.ai_layer_gateway";
     constexpr auto kClassName = "AILayerGateway";
     constexpr auto kInferenceMethodName = "get_action";
@@ -29,12 +30,6 @@ AIExecutor::AIExecutor(const config::Ai& ai_config) : ai_config_(ai_config), pyb
     // The scoped_interpreter initializes Python and acquires the GIL
     // We need to save the thread state and release the GIL so other threads can use it
     pybind_data_->main_thread_state = PyEval_SaveThread();
-
-    // These will be configurable via the ai_config_ in a future change.
-    module_name_ = kModuleName;
-    class_name_ = kClassName;
-    // The specific method to call for inference.
-    inference_method_name_ = kInferenceMethodName;
 }
 
 AIExecutor::~AIExecutor() {
@@ -44,16 +39,14 @@ AIExecutor::~AIExecutor() {
     }
 }
 
-// TODO: This only allows one model and one function to be loaded at a time.
-// Fix this to store multiple models and functions.
 bool AIExecutor::Init() {
     LOG(INFO) << "AIExecutor::Init called on thread: " << std::this_thread::get_id();
     try {
         py::gil_scoped_acquire acquire;
 
         // Import the module, get the class, and instantiate it.
-        py::module module = py::module::import(module_name_.c_str());
-        py::object gateway_class = module.attr(class_name_.c_str());
+        py::module module = py::module::import(kModuleName);
+        py::object gateway_class = module.attr(kClassName);
 
         // Serialize the protobuf config to pass it to Python.
         // pybind11 cannot automatically cast custom C++ types like protobuf objects.
@@ -89,7 +82,7 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
         py::bytes py_input(serialized_input);
         
         // Call the method on the stored class instance.
-        auto result = pybind_data_->gateway_instance.attr(inference_method_name_.c_str())(py_input);
+        auto result = pybind_data_->gateway_instance.attr(kInferenceMethodName)(py_input);
         
         std::string serialized_output = result.cast<std::string>();
         

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """ Single executable python script to control so100 arm with keyboard."""
 
-# TODO: Create class and constants for this single executable.
-
 import serial
 import time
 import termios

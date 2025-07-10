@@ -53,7 +53,6 @@ int main(int argc, char* argv[]) {
     }
 
     // Initialize the nexus.
-    // TODO: Initialize the nexus with the robot config (number of actuators, sensors, actions, etc for ai layer).
     if (!nexus.Init()) {
         LOG(ERROR) << "Failed to initialize nexus. Exiting.";
         return -1;

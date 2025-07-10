@@ -2,9 +2,6 @@
 #include "robot/nexus/nexus_scheduler.h"
 
 namespace robot::nexus {
-namespace {
-    // These constants are no longer needed here, they are in the python script.
-}
 
 Nexus::Nexus(const config::Config& config):
 stop_(false)
@@ -53,7 +50,7 @@ bool Nexus::Init(){
     if (perception_interfaces_.empty() && action_interfaces_.empty()) {
         LOG(WARNING) << "No interfaces registered with Nexus.";
     }
-    // TODO: Update this by using the model name and function name from the config.
+    
     if (!ai_executor_->Init()) {
         LOG(ERROR) << "Failed to initialize AI executor.";
         return false;

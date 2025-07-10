@@ -66,7 +66,7 @@ class AILayerGateway:
 
     def get_action(self, serialized_input_packet):
         """
-        Runs inference using the pre-loaded Decision Transformer policy.
+        Runs inference using the pre-loaded policy.
         """
         if not self.policy:
             glog.error(f"{self.config.policy_name} policy not available.")
