@@ -1,4 +1,3 @@
-import logging as glog
 from typing import Union
 
 from config.proto import config_pb2

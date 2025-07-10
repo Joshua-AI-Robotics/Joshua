@@ -1,3 +1,4 @@
+import logging as glog
 from transformers.models.decision_transformer.configuration_decision_transformer import (
     DecisionTransformerConfig as HFDecisionTransformerConfig,
 )
@@ -18,7 +19,7 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
         image_size_h=128,
         image_size_w=128,
         embedding_dim=128,
-        non_visual_state_dim=6,
+        non_visual_state_dim=0,
         # Other standard DT parameters can be passed in kwargs
         **kwargs,
     ):
@@ -54,8 +55,10 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
         robot_config = proto_message.robot
         dt_config = ai_config.decision_transformer_config
 
-        # --- Dynamically determine dimensions from robot config ---
         
+        # TODO: There will be a better and generic way to parse this.
+        # Make a this as a function so that it can be used for other policies.
+
         # Action dimension from number of actuators
         act_dim = len(robot_config.actuations.single_actuation)
 
@@ -76,7 +79,6 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
                     image_size_w = cam_config.width or 128
             else:
                 non_visual_state_size += 1
-        
         # Create a dictionary of all parameters for the constructor
         config_dict = {
             "image_size_h": image_size_h,
@@ -92,6 +94,8 @@ class DecisionTransformerConfig(HFDecisionTransformerConfig):
             "max_length": dt_config.context_length,
             "act_dim": act_dim,
         }
+
+        glog.info(f"Decision Transformer Config dictionary: {config_dict}")
 
         # Instantiate the class with the parsed parameters
         return cls(**config_dict) 
