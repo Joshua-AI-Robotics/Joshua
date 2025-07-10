@@ -36,8 +36,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "ID:" << robot_config.id();
 
-    const int trigger_frequency = robot_config.trigger_frequency();
-    robot::nexus::Nexus nexus(trigger_frequency);
+    robot::nexus::Nexus nexus(config);
 
     // Register actuators.
     robot::actuation::ActuationFactory actuator_factory;

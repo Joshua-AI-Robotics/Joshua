@@ -6,9 +6,17 @@ namespace {
     // These constants are no longer needed here, they are in the python script.
 }
 
-Nexus::Nexus(const int& trigger_frequency):
+Nexus::Nexus(const configs::Config& config):
 stop_(false)
 {
+    auto robot_config = config.robot();
+    auto ai_config = config.ai();
+    auto trigger_frequency = robot_config.trigger_frequency();
+    if (trigger_frequency == 0) {
+        LOG(ERROR) << "Trigger frequency is 0, which is not allowed.";
+        throw std::runtime_error("Trigger frequency is 0, which is not allowed.");
+    }
+
     scheduler_ = std::make_unique<NexusScheduler>(trigger_frequency);
     ai_executor_ = std::make_unique<AIExecutor>();
     LOG(INFO) << "Nexus construted.";

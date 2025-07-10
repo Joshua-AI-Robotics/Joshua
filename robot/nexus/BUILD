@@ -23,6 +23,7 @@ pybind_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/nexus/proto:nexus_packet_cc_proto",
+        "//configs/proto:config_cc_proto",
         "@glog//:glog",
     ],
 )
@@ -51,6 +52,7 @@ cc_library(
         ":nexus_scheduler",
         ":interface_variant",
         ":thread_pool",
+        "//configs/proto:config_cc_proto",
         "@glog//:glog",
     ],
 )

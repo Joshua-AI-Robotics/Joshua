@@ -1,5 +1,6 @@
 #pragma once
 
+#include "configs/proto/config.pb.h"
 #include "robot/nexus/nexus_packet.h"
 #include "robot/nexus/interface_variant.h"
 #include "robot/nexus/thread_pool.h"
@@ -23,7 +24,7 @@ class NexusScheduler;
 
 class Nexus {
 public:
-explicit Nexus(const int& trigger_frequency = 30);
+explicit Nexus(const configs::Config& config);
 ~Nexus();
 bool Init();
 void Register(ActionInterface&& interface);
