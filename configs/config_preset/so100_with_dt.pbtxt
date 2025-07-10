@@ -1,5 +1,9 @@
+config {
+    robot{
+
 name: "so100"
 id: 1
+trigger_frequency: 10
 robot_type: MANIPULATOR_ARM
 
 actuations {
@@ -252,4 +256,13 @@ perceptions {
       }
     }
   }
+}
+
+
+    }
+
+    ai {
+        name: "decision_transformer"
+        config_path: "test_path"
+    }
 }

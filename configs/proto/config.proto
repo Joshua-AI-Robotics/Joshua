@@ -3,7 +3,7 @@ syntax = "proto3";
 import "robot/actuation/proto/actuation.proto";
 import "robot/perception/proto/perception.proto";
 
-package robot;
+package configs;
 
 enum RobotType {
     ROBOT_INVALID = 0;
@@ -14,6 +14,17 @@ message Robot {
     string name = 1;
     uint64 id = 2;
     RobotType robot_type = 3;
-    robot.actuation.Actuation actuations = 4;
-    robot.perception.Perception perceptions = 5;
+    uint32 trigger_frequency = 4;
+    robot.actuation.Actuation actuations = 5;
+    robot.perception.Perception perceptions = 6;
+}
+
+message Ai {
+    string name = 1;
+    string config_path = 2;
+}
+
+message Config {
+    Robot robot = 1;
+    Ai ai = 2;
 }
