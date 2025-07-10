@@ -4,12 +4,12 @@ from transformers.models.decision_transformer.configuration_decision_transformer
 
 class DecisionTransformerConfig(HFDecisionTransformerConfig):
     """
-    This is the configuration class for a [`MultiModalDecisionTransformer`].
+    This is the configuration class for a [`DecisionTransformer`].
     It extends the standard DecisionTransformerConfig with parameters for our
     custom vision and motor encoders.
     """
 
-    model_type = "multi_modal_decision_transformer"
+    model_type = "decision_transformer"
 
     def __init__(
         self,

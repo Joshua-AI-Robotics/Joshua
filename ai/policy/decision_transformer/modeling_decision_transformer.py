@@ -41,7 +41,7 @@ class VisionEncoder(nn.Module):
         x = self.ln(x)
         return x
 
-class DecisionTransformer(PreTrainedModel):
+class DecisionTransformerPolicy(PreTrainedModel):
     """
     A Decision Transformer model that processes both image and low-dimensional state inputs.
     This class contains the full policy logic, including history management for inference.
