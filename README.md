@@ -14,7 +14,7 @@ While the project began as a startup endeavor, the vision for its widespread pub
 
 ### Simplified Configuration
 
-At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., config/config_preset/so100_with_dt.pbtxt) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
+At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., `config/config_preset/so100_with_dt.pbtxt`) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
 
 ### Automated System Setup
 
@@ -26,11 +26,11 @@ From a single configuration, Project Joshua automatically handles the creation a
 
 - **Parameters**: Manages all necessary system parameters, ensuring consistent behavior across deployments.
 
-- **Tasks**: Configures and initiates the specific robotic tasks the system is designed to perform.
+- **Tasks**: Configures and initiates the specific robotic tasks the system is designed to perform. (e.g. Inference, Train)
 
 ### Modular Architecture
 
-The framework's modular design ensures high flexibility and extensibility. New hardware components, AI models, or tasks can be easily integrated without significant refactoring of the core system. This promotes rapid prototyping and iterative development.
+The framework's modular design ensures flexibility and extensibility. New hardware components, AI models, or tasks can be easily integrated without significant refactoring of the core system. This promotes rapid prototyping and iterative development.
 
 ### Reduced Learning Curve
 
@@ -43,10 +43,6 @@ The streamlined configuration and automated setup capabilities drastically reduc
 ### Scalability
 
 Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
-
-### Core Architecture
-
-At its core is the "Nexus," a C++-based architecture that orchestrates a real-time data pipeline: from sensor perception to a Python-based AI layer for decision-making, and back to motor actuation. This decoupled design enables rapid integration of new hardware and sophisticated AI models, providing a robust foundation for advanced robotics research and development.
 
 ## Core Concepts
 
