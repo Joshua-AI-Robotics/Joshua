@@ -2,7 +2,7 @@
 
 Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of robotic AI systems. **A single configuration file** automatically generates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run robots with your selected hardware and AI policy.
 
-For example, a single configuration file like `config/config_preset/so100_with_dt.pbtxt` defines your entire robot and AI system.
+For example, a single configuration file like [so100_with_dt.pbtxt](`config/config_preset/so100_with_dt.pbtxt`) defines your entire robot and AI system.
 
 ## Vision
 
@@ -14,7 +14,7 @@ While the project began as a startup endeavor, the vision for its widespread pub
 
 ### Simplified Configuration
 
-At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., `config/config_preset/so100_with_dt.pbtxt`) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
+At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., [so100_with_dt.pbtxt](`config/config_preset/so100_with_dt.pbtxt`)) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
 
 ### Automated System Setup
 
@@ -56,7 +56,7 @@ The architecture is centered around the **Nexus**, which acts as the robot's cen
 
 4.  **Train(TODO)**: Send the packaged sensor and action data to train the policy.
 
-This decoupled design allows for modular development, where new sensors, actuators, and AI models can be integrated with minimal changes to the core system. For a more detailed explanation on **Nexus**, see the `README.md` in `robot/nexus/`.
+This decoupled design allows for modular development, where new sensors, actuators, and AI models can be integrated with minimal changes to the core system. For a more detailed explanation on **Nexus**, see the [README.md](robot/nexus/README.md).
 
 ## Technology Stack
 
