@@ -1,16 +1,66 @@
-# Project Joshua
+# Project Joshua: Modular Framework for Robotic AI Systems
 
-Project Joshua is a flexible and modular C++ framework for building and controlling robotic systems. It is designed around a central "Nexus" architecture that orchestrates the flow of data from perception sensors to an AI decision-making layer, and finally to motor actuators.
+Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of robotic AI systems. **A single configuration file** automatically generates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run robots with your selected hardware and AI policy.
+
+For example, a single configuration file like `config/config_preset/so100_with_dt.pbtxt` defines your entire robot and AI system.
+
+## Vision
+
+Project Joshua was initiated to bridge a critical gap: the inherent challenge AI/ML and hardware engineers face when seamlessly integrating robotics and AI into a single, cohesive platform. By addressing this, our aim is to democratize access to advanced robotic AI development.
+
+While the project began as a startup endeavor, the vision for its widespread public benefit through open-sourcing quickly became clear. I firmly believe that by providing a user-friendly, accessible, modular, and community-driven platform, Project Joshua can accelerate innovation and benefit the robotics and AI landscape.
+
+## Key Features & Benefits:
+
+### Simplified Configuration
+
+At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., config/config_preset/so100_with_dt.pbtxt) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
+
+### Automated System Setup
+
+From a single configuration, Project Joshua automatically handles the creation and setup of:
+
+- **Hardware Interfaces**: Seamlessly integrates with various robotic hardware components, abstracting away low-level complexities.
+
+- **AI Model Policies**: Defines and loads the specific AI models and their operational policies.
+
+- **Parameters**: Manages all necessary system parameters, ensuring consistent behavior across deployments.
+
+- **Tasks**: Configures and initiates the specific robotic tasks the system is designed to perform.
+
+### Modular Architecture
+
+The framework's modular design ensures high flexibility and extensibility. New hardware components, AI models, or tasks can be easily integrated without significant refactoring of the core system. This promotes rapid prototyping and iterative development.
+
+### Reduced Learning Curve
+
+By abstracting away the intricacies of hardware-software integration, Project Joshua significantly lowers the barrier to entry for both AI/ML engineers and robotics hardware specialists. This fosters greater collaboration and accelerates the development cycle.
+
+### Accelerated Deployment
+
+The streamlined configuration and automated setup capabilities drastically reduce the time from development to real-world deployment, allowing teams to iterate faster and bring robotic AI solutions to market more efficiently.
+
+### Scalability
+
+Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
+
+### Core Architecture
+
+At its core is the "Nexus," a C++-based architecture that orchestrates a real-time data pipeline: from sensor perception to a Python-based AI layer for decision-making, and back to motor actuation. This decoupled design enables rapid integration of new hardware and sophisticated AI models, providing a robust foundation for advanced robotics research and development.
 
 ## Core Concepts
 
-The architecture is centered around the **Nexus**, which acts as the robot's central nervous system. It operates on a simple yet powerful loop:
+![Project Joshua Core Concept](assets/images/project_joshua_core.png)
+
+The architecture is centered around the **Nexus**, which acts as the robot's central nervous system. It operates on a simple loop:
 
 1.  **Perception**: Gathers data from all registered sensors (like cameras).
 2.  **Decision Making**: Packages the sensor data and sends it to an AI layer for processing.
 3.  **Action**: Receives action commands from the AI layer and dispatches them to the appropriate motors or actuators.
 
-This decoupled design allows for modular development, where new sensors, actuators, and AI models can be integrated with minimal changes to the core system. For a more detailed explanation, see the `README.md` in `robot/nexus/`.
+4.  **Train(TODO)**: Send the packaged sensor and action data to train the policy.
+
+This decoupled design allows for modular development, where new sensors, actuators, and AI models can be integrated with minimal changes to the core system. For a more detailed explanation on **Nexus**, see the `README.md` in `robot/nexus/`.
 
 ## Technology Stack
 
@@ -18,22 +68,11 @@ This decoupled design allows for modular development, where new sensors, actuato
 - **Bazel**: The build system used for managing dependencies and ensuring reproducible builds.
 - **Protobuf**: Used for serializing structured data for communication between different parts of the system.
 - **glog / gflags**: For robust logging and command-line argument parsing.
+- **pybind**: Integrate both C++ Robot layer and Python AI layer.
 - **OpenCV**: For camera and computer vision-related tasks.
+- **HuggingFace**: To import policies, configs, and tools.
 
-## Project Structure
-
-The project is organized into the following main directories:
-
-- `robot/`: Contains the core logic for the robot's operation.
-  - `nexus/`: The central hub that orchestrates perception and action.
-  - `perception/`: Interfaces and drivers for sensors.
-  - `actuation/`: Interfaces and drivers for motors and actuators.
-  - `comm_interface/`: Low-level communication protocols (e.g., Serial).
-  - `config/`: Configuration files for the robot.
-- `ai/`: Intended for the AI and machine learning models that will power the robot's decisions. (Currently a work in progress).
-- `utils/`: Contains various utility programs, controllers, and scripts for testing and debugging.
-
-## Getting Started
+## Getting Started (WIP)
 
 ### Prerequisites
 
@@ -53,7 +92,7 @@ bazel build //...
 To run the primary Nexus application, which starts the robot's main control loop, use the following command:
 
 ```bash
-bazel run //:nexus_main
+bazel run //:main_program
 ```
 
 ### Working with Python Dependencies
