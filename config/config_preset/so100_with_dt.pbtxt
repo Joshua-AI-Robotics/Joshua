@@ -153,7 +153,10 @@ robot {
         sensor_type: CAMERA
         comm_type: COMM_INVALID
         camera_config {
-          id: 1
+          id: 0
+          width: 160
+          height: 120
+          fps: 30
         }
       }
     }
