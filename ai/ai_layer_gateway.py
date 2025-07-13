@@ -38,8 +38,6 @@ glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
 from robot.nexus.proto import nexus_packet_pb2
 from config.proto import config_pb2
 
-from ai.policy.factory import create_policy_config, create_policy
-
 
 class AILayerGateway:
     """
@@ -55,8 +53,8 @@ class AILayerGateway:
             self.config.ParseFromString(serialized_config)
 
             # Load policies once during initialization.
-            self.policy_config = create_policy_config(self.config)
-            self.policy = create_policy(self.policy_config)
+            # TODO: Load policies here.
+            # self.policy = xx
             glog.info(f"{self.config.ai.policy_name} policy loaded successfully.")
         except Exception as e:
             glog.error(f"Failed to load {self.config.ai.policy_name} policy: {e}")
@@ -66,9 +64,9 @@ class AILayerGateway:
         """
         Runs inference using the pre-loaded policy.
         """
-        if not self.policy:
-            glog.error(f"{self.config.ai.policy_name} policy not available.")
-            return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
+        # if not self.policy:
+        #     glog.error(f"{self.config.ai.policy_name} policy not available.")
+        #     return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
         
         try:
             input_packet = nexus_packet_pb2.NexusModelInputPacket()

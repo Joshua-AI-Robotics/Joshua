@@ -7,9 +7,9 @@ py_library(
     name = "ai_layer_gateway",
     srcs = ["ai_layer_gateway.py"],
     deps = [
-        "//ai/policy:factory",
         requirement("protobuf"),
         requirement("numpy"),
         "//config/proto:config_py_proto",
+        "//robot/nexus/proto:nexus_packet_py_proto",
     ],
 ) 
