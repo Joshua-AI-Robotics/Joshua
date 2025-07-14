@@ -69,11 +69,20 @@ void Nexus::Register(PerceptionInterface&& interface) {
     perception_interfaces_.push_back(std::move(interface));
 }
 
-void Nexus::Start() {
-    main_thread_ = std::thread(&Nexus::run, this);
+void Nexus::StartInference() {
+    main_thread_ = std::thread(&Nexus::run_inference, this);
 }
 
-void Nexus::run(){
+void Nexus::StartLeRobotDatasetCollection() {
+    main_thread_ = std::thread(&Nexus::run_lerobot_dataset_collection, this);
+}
+
+void Nexus::SaveLeRobotDataset(const std::string& output_dir) {
+    ai_executor_->SaveDataset(output_dir);
+    LOG(INFO) << "LeRobot dataset saved to: " << output_dir;
+}
+
+void Nexus::run_inference(){
     while(!stop_){
         // In this new design, the run loop itself triggers the data acquisition.
         for(auto& interface : perception_interfaces_){
@@ -105,6 +114,61 @@ void Nexus::run(){
                     arg->SetAction(std::make_unique<NexusActionPacket>(action_packet));
                 }, it->second);
             }
+        }
+
+        scheduler_->WaitForNextTrigger();
+    }
+}
+
+void Nexus::run_lerobot_dataset_collection(){
+    int episode_index = 0;
+    int timestep = 0;
+    const int MAX_EPISODE_LENGTH = 100; // Adjust as needed
+    
+    while(!stop_){
+        // In this new design, the run loop itself triggers the data acquisition.
+        for(auto& interface : perception_interfaces_){
+            std::visit([this](auto&& arg) {
+                auto packet = arg->GetData();
+                perception_packet_queue_.push(std::move(packet));
+            }, interface);
+        }
+        
+        // Process the perception packets and make the nexus_packet.
+        NexusModelInputPacket nexus_model_input_packet;
+        while(!perception_packet_queue_.empty()){
+            auto perception_packet = perception_packet_queue_.top();
+            perception_packet_queue_.pop();            
+            nexus_model_input_packet.add_perception_packets()->CopyFrom(*perception_packet);
+        }
+
+        // Set timestamp for the input packet
+        nexus_model_input_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        LOG(INFO) << "Collecting LeRobot dataset data for episode " << episode_index << ", timestep " << timestep;
+
+        // Get output packet from AI layer (this contains the actions)
+        auto nexus_model_output_packet = ai_executor_->Inference(nexus_model_input_packet);
+        
+        // Store the data for supervised learning (both input and output packets)
+        ai_executor_->StoreAsLeRobotDataset(nexus_model_input_packet, nexus_model_output_packet, episode_index);
+        
+        // Process the action packets (optional - you might want to skip this during data collection)
+        for(const auto& action_packet : nexus_model_output_packet.action_packets()){
+            auto it = action_interfaces_.find(action_packet.action_id());
+            if(it != action_interfaces_.end()){
+                std::visit([&action_packet](auto&& arg){
+                    arg->SetAction(std::make_unique<NexusActionPacket>(action_packet));
+                }, it->second);
+            }
+        }
+
+        timestep++;
+        
+        // Start new episode when appropriate
+        if (timestep >= MAX_EPISODE_LENGTH) {
+            episode_index++;
+            timestep = 0;
+            LOG(INFO) << "Starting new episode: " << episode_index;
         }
 
         scheduler_->WaitForNextTrigger();

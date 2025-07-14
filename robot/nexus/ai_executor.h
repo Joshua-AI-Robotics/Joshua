@@ -14,6 +14,12 @@ public:
 
     bool Init();
     NexusModelOutputPacket Inference(const NexusModelInputPacket& input_packet);
+    
+    // Dataset storage methods
+    void StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet, 
+                               const NexusModelOutputPacket& output_packet, 
+                               int episode_index);
+    void SaveDataset(const std::string& output_dir);
 
 private:
     struct PybindData;

@@ -30,11 +30,15 @@ bool Init();
 void Register(ActionInterface&& interface);
 void Register(PerceptionInterface&& interface);
 void Start();
+void StartInference();
+void StartLeRobotDatasetCollection();
+void SaveLeRobotDataset(const std::string& output_dir);
 void SetTriggerFrequency(int frequency);
 int GetTriggerFrequency() const;
 
 private:
-void run();
+void run_inference();
+void run_lerobot_dataset_collection();
 
 std::unique_ptr<NexusScheduler> scheduler_;
 std::unique_ptr<AIExecutor> ai_executor_;

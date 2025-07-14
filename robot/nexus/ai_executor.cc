@@ -1,11 +1,14 @@
 #define PYBIND11_NO_ASSERT_GIL_HELD_INCREF_DECREF
 #include "robot/nexus/ai_executor.h"
+#include "robot/nexus/proto/nexus_packet.pb.h"
+#include "config/proto/config.pb.h"
 #include <glog/logging.h>
 #include <pybind11/embed.h>
 #include <pybind11/pybind11.h>
 #include <thread>
 #include <chrono>
 #include <unordered_map>
+#include <memory>
 
 namespace py = pybind11;
 
@@ -16,6 +19,7 @@ namespace {
     constexpr auto kModuleName = "ai.ai_layer_gateway";
     constexpr auto kClassName = "AILayerGateway";
     constexpr auto kInferenceMethodName = "get_action";
+    constexpr auto kStoreDatasetMethodName = "store_as_lerobot_dataset";
 }
 
 struct AIExecutor::PybindData {
@@ -81,7 +85,7 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
                 
         py::bytes py_input(serialized_input);
         
-        // Call the method on the stored class instance.
+        // Call the inference method on the stored class instance.
         auto result = pybind_data_->gateway_instance.attr(kInferenceMethodName)(py_input);
         
         std::string serialized_output = result.cast<std::string>();
@@ -95,6 +99,50 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
     }
 
     return output_packet;
+}
+
+void AIExecutor::StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet, 
+                                       const NexusModelOutputPacket& output_packet, 
+                                       int episode_index) {
+    std::string serialized_input, serialized_output;
+    
+    if (!input_packet.SerializeToString(&serialized_input)) {
+        LOG(ERROR) << "Failed to serialize input packet for dataset storage.";
+        return;
+    }
+    
+    if (!output_packet.SerializeToString(&serialized_output)) {
+        LOG(ERROR) << "Failed to serialize output packet for dataset storage.";
+        return;
+    }
+
+    try {        
+        py::gil_scoped_acquire acquire;
+        
+        py::bytes py_input(serialized_input);
+        py::bytes py_output(serialized_output);
+        py::int_ py_episode(episode_index);
+        
+        // Call the dataset storage method
+        pybind_data_->gateway_instance.attr(kStoreDatasetMethodName)(py_input, py_output, py_episode);
+        
+    } catch (py::error_already_set &e) {
+        LOG(ERROR) << "Python error in AIExecutor::StoreAsLeRobotDataset: " << e.what();
+    }
+}
+
+void AIExecutor::SaveDataset(const std::string& output_dir) {
+    try {        
+        py::gil_scoped_acquire acquire;
+        
+        py::str py_output_dir(output_dir);
+        
+        // Call the save dataset method
+        pybind_data_->gateway_instance.attr("save_dataset")(py_output_dir);
+        
+    } catch (py::error_already_set &e) {
+        LOG(ERROR) << "Python error in AIExecutor::SaveDataset: " << e.what();
+    }
 }
 
 } // namespace robot::nexus 

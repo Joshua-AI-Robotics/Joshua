@@ -58,13 +58,51 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Start the nexus.
-    nexus.Start();
+    // Start LeRobot dataset collection for fake training
+    LOG(INFO) << "Starting LeRobot dataset collection for fake training...";
+    nexus.StartLeRobotDatasetCollection();
 
-    while(!quit){
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    // Simulate training data collection
+    int training_episodes = 5;  // Number of episodes to collect
+    int episode_duration = 10;  // Seconds per episode
+    
+    LOG(INFO) << "Collecting " << training_episodes << " episodes of training data...";
+    LOG(INFO) << "Each episode will run for " << episode_duration << " seconds.";
+    LOG(INFO) << "Press Ctrl+C to stop early.";
+
+    for (int episode = 0; episode < training_episodes && !quit; episode++) {
+        LOG(INFO) << "=== Training Episode " << (episode + 1) << "/" << training_episodes << " ===";
+        
+        // Run episode for specified duration
+        auto start_time = std::chrono::steady_clock::now();
+        while (!quit) {
+            auto current_time = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time);
+            
+            if (elapsed.count() >= episode_duration) {
+                break;
+            }
+            
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        
+        if (!quit) {
+            LOG(INFO) << "Episode " << (episode + 1) << " completed.";
+        }
     }
-    LOG(INFO) << "Nexus stopped.";
+
+    if (!quit) {
+        // Save the collected training dataset
+        LOG(INFO) << "Training data collection completed!";
+        LOG(INFO) << "Saving LeRobot dataset...";
+        nexus.SaveLeRobotDataset("fake_training_dataset");
+        LOG(INFO) << "Dataset saved to 'fake_training_dataset' directory.";
+        LOG(INFO) << "This dataset can be used for supervised learning training.";
+    } else {
+        LOG(INFO) << "Training interrupted by user.";
+    }
+    
+    LOG(INFO) << "Fake training completed.";
 
     
     return 0;

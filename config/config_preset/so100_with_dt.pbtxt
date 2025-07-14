@@ -260,8 +260,8 @@ robot {
 }
 
 ai {
-  policy_name: "decision_transformer"
-  decision_transformer_config {
+  policy_name: "example_policy"
+  example_policy_config {
     hidden_size: 256
     n_layer: 4
     n_head: 4
