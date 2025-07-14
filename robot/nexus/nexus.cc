@@ -134,6 +134,8 @@ void Nexus::run_lerobot_dataset_collection(){
             }, interface);
         }
         
+        LOG(INFO) << "Collecting LeRobot dataset\nEpisode: " << episode_index << " Timestep: " << timestep;
+
         // Process the perception packets and make the nexus_packet.
         NexusModelInputPacket nexus_model_input_packet;
         while(!perception_packet_queue_.empty()){
@@ -144,17 +146,12 @@ void Nexus::run_lerobot_dataset_collection(){
 
         // Set timestamp for the input packet
         nexus_model_input_packet.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        LOG(INFO) << "Collecting LeRobot dataset data for episode " << episode_index << ", timestep " << timestep;
 
-        // Get output packet from AI layer (this contains the actions)
+        // TODO: This should be replaced with real input.
         auto nexus_model_output_packet = ai_executor_->Inference(nexus_model_input_packet);
         
         // Store the data for supervised learning (both input and output packets)
-        LOG(INFO) << "About to store dataset - Input packets: " << nexus_model_input_packet.perception_packets_size() 
-                  << ", Output packets: " << nexus_model_output_packet.action_packets_size() 
-                  << ", Episode: " << episode_index;
         ai_executor_->StoreAsLeRobotDataset(nexus_model_input_packet, nexus_model_output_packet, episode_index);
-        LOG(INFO) << "Dataset storage call completed.";
         
         // Process the action packets (optional - you might want to skip this during data collection)
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){

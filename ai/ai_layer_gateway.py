@@ -80,22 +80,17 @@ class AILayerGateway:
             serialized_output_packet: Serialized NexusModelOutputPacket (required for supervised learning)
             episode_index: Current episode index for tracking
         """
-        try:
-            glog.info(f"Python: Starting to store dataset for episode {episode_index}")
-            
+        try:            
             # Parse input packet
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
-            glog.info(f"Python: Input packet parsed - {len(input_packet.perception_packets)} perception packets")
             
             # Parse output packet (required for supervised learning)
             output_packet = nexus_packet_pb2.NexusModelOutputPacket()
             output_packet.ParseFromString(serialized_output_packet)
-            glog.info(f"Python: Output packet parsed - {len(output_packet.action_packets)} action packets")
             
             # Store the data
             self.dataset_storage.add_data_point(input_packet, output_packet, episode_index)
-            glog.info(f"Python: Supervised learning data stored for episode {episode_index}")
             
         except Exception as e:
             glog.error(f"Python: Error storing supervised learning data as LeRobot dataset: {e}")
@@ -126,7 +121,6 @@ class AILayerGateway:
         try:
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
-            glog.info(f"{self.config.ai.policy_name} policy: Input packet parsed successfully.")
 
             output_packet = nexus_packet_pb2.NexusModelOutputPacket()
             output_packet.timestamp = int(time.time() * 1e9)
@@ -147,7 +141,7 @@ class AILayerGateway:
             glog.error(f"Error in get_action: {e}")
             return nexus_packet_pb2.NexusModelOutputPacket().SerializeToString()
 
-    def generate_mock_ai_output(self, serialized_input_packet):
+    def get_fake_action(self, serialized_input_packet):
         """
         Deserializes an input packet and returns a mock output packet without
         using a policy.
@@ -155,7 +149,6 @@ class AILayerGateway:
         try:
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
-            glog.info(f"Mock: Input packet parsed successfully.")
 
             output_packet = nexus_packet_pb2.NexusModelOutputPacket()
             output_packet.timestamp = int(time.time() * 1e9)
@@ -168,7 +161,6 @@ class AILayerGateway:
                 action_packet.sts3215_action.position = random.randint(1950, 2050)
 
             result = output_packet.SerializeToString()
-            glog.info(f"Serialization complete, result length: {len(result)}")
             return result
             
         except Exception as e:
@@ -207,7 +199,7 @@ class LeRobotDatasetStorage:
         # Extract observations from input packet
         observations = self._extract_observations(input_packet)
         
-        # Extract actions from output packet
+        # Extract actions from output_packet
         actions = self._extract_actions(output_packet) if output_packet else None
         
         # Store the data point
@@ -328,7 +320,6 @@ class LeRobotDatasetStorage:
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        glog.info(f"Dataset saved with {len(self.current_episode_data)} data points")
     
     def _convert_to_lerobot_format(self):
         """
@@ -350,10 +341,12 @@ class LeRobotDatasetStorage:
         }
         
         # Convert data points
-        for data_point in self.current_episode_data:
+        for i, data_point in enumerate(self.current_episode_data):
             # Add observations
             if data_point["observation"]["image"]:
-                lerobot_data["observation"]["image"].append(data_point["observation"]["image"])
+                # Use image file path instead of PIL Image object
+                image_path = f"images/image_{i:06d}.jpg"
+                lerobot_data["observation"]["image"].append(image_path)
             else:
                 lerobot_data["observation"]["image"].append(None)
                 
