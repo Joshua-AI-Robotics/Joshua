@@ -150,7 +150,11 @@ void Nexus::run_lerobot_dataset_collection(){
         auto nexus_model_output_packet = ai_executor_->Inference(nexus_model_input_packet);
         
         // Store the data for supervised learning (both input and output packets)
+        LOG(INFO) << "About to store dataset - Input packets: " << nexus_model_input_packet.perception_packets_size() 
+                  << ", Output packets: " << nexus_model_output_packet.action_packets_size() 
+                  << ", Episode: " << episode_index;
         ai_executor_->StoreAsLeRobotDataset(nexus_model_input_packet, nexus_model_output_packet, episode_index);
+        LOG(INFO) << "Dataset storage call completed.";
         
         // Process the action packets (optional - you might want to skip this during data collection)
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){

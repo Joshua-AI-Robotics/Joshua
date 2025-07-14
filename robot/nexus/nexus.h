@@ -29,7 +29,6 @@ explicit Nexus(const config::Config& config);
 bool Init();
 void Register(ActionInterface&& interface);
 void Register(PerceptionInterface&& interface);
-void Start();
 void StartInference();
 void StartLeRobotDatasetCollection();
 void SaveLeRobotDataset(const std::string& output_dir);

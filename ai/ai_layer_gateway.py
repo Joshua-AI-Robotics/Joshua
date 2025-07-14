@@ -81,20 +81,26 @@ class AILayerGateway:
             episode_index: Current episode index for tracking
         """
         try:
+            glog.info(f"Python: Starting to store dataset for episode {episode_index}")
+            
             # Parse input packet
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
+            glog.info(f"Python: Input packet parsed - {len(input_packet.perception_packets)} perception packets")
             
             # Parse output packet (required for supervised learning)
             output_packet = nexus_packet_pb2.NexusModelOutputPacket()
             output_packet.ParseFromString(serialized_output_packet)
+            glog.info(f"Python: Output packet parsed - {len(output_packet.action_packets)} action packets")
             
             # Store the data
             self.dataset_storage.add_data_point(input_packet, output_packet, episode_index)
-            glog.info(f"Supervised learning data stored for episode {episode_index}")
+            glog.info(f"Python: Supervised learning data stored for episode {episode_index}")
             
         except Exception as e:
-            glog.error(f"Error storing supervised learning data as LeRobot dataset: {e}")
+            glog.error(f"Python: Error storing supervised learning data as LeRobot dataset: {e}")
+            import traceback
+            glog.error(f"Python: Traceback: {traceback.format_exc()}")
 
     def save_dataset(self, output_dir: str = "robot_dataset"):
         """
