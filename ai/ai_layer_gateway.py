@@ -37,6 +37,8 @@ from typing import Dict, List, Any, Optional
 import numpy as np
 from PIL import Image
 import io
+import pandas as pd
+from collections import defaultdict
 
 # Configure logging
 glog.basicConfig(level=glog.INFO, format='%(levelname)s: %(message)s')
@@ -71,16 +73,17 @@ class AILayerGateway:
             glog.error(f"Failed to load {self.config.ai.policy_name} policy: {e}")
             raise e
 
-    def store_as_lerobot_dataset(self, serialized_input_packet, serialized_output_packet, episode_index=0):
+    def store_as_lerobot_dataset(self, serialized_input_packet, serialized_output_packet, episode_index=0, is_last_step=False):
         """
         Stores input and output packets as LeRobot dataset format for supervised learning.
         
         Args:
-            serialized_input_packet: Serialized NexusModelInputPacket
-            serialized_output_packet: Serialized NexusModelOutputPacket (required for supervised learning)
+            serialized_input_packet: Serialized NexusModelInputPacket (REQUIRED)
+            serialized_output_packet: Serialized NexusModelOutputPacket (REQUIRED for supervised learning)
             episode_index: Current episode index for tracking
+            is_last_step: Flag indicating if this is the last step in an episode
         """
-        try:            
+        try:
             # Parse input packet
             input_packet = nexus_packet_pb2.NexusModelInputPacket()
             input_packet.ParseFromString(serialized_input_packet)
@@ -90,7 +93,7 @@ class AILayerGateway:
             output_packet.ParseFromString(serialized_output_packet)
             
             # Store the data
-            self.dataset_storage.add_data_point(input_packet, output_packet, episode_index)
+            self.dataset_storage.add_data_point(input_packet, output_packet, episode_index, is_last_step)
             
         except Exception as e:
             glog.error(f"Python: Error storing supervised learning data as LeRobot dataset: {e}")
@@ -170,197 +173,157 @@ class AILayerGateway:
 
 class LeRobotDatasetStorage:
     """
-    Handles storage and conversion of robot data to LeRobot dataset format.
+    Handles storage and conversion of robot data to a LeRobot-compliant
+    Hugging Face dataset format.
     """
     
     def __init__(self):
-        self.dataset = {
-            "observation": {
-                "image": [],
-                "joint_pos": [],
-            },
-            "action": [],
-            "episode_index": [],
-            "timestamp": [],
-            "episode_length": []
-        }
-        self.current_episode_data = []
-        self.episode_lengths = {}
+        self.steps = []
+        self.global_index = 0
+        self.frame_indices = defaultdict(int)
         
-    def add_data_point(self, input_packet, output_packet=None, episode_index=0):
+    def add_data_point(self, input_packet, output_packet, episode_index, is_last_step):
         """
-        Adds a data point to the dataset.
-        
-        Args:
-            input_packet: NexusModelInputPacket containing sensor data
-            output_packet: Optional NexusModelOutputPacket containing actions
-            episode_index: Current episode index
+        Adds a single data point (a step) to the buffer.
         """
-        # Extract observations from input packet
-        observations = self._extract_observations(input_packet)
-        
-        # Extract actions from output_packet
-        actions = self._extract_actions(output_packet) if output_packet else None
-        
-        # Store the data point
-        data_point = {
-            "observation": observations,
-            "action": actions,
-            "episode_index": episode_index,
-            "timestamp": input_packet.timestamp
+        state, image_bytes = self._extract_observations(input_packet)
+        action = self._extract_actions(output_packet)
+
+        step = {
+            'index': self.global_index,
+            'episode_index': episode_index,
+            'frame_index': self.frame_indices[episode_index],
+            'timestamp': input_packet.timestamp / 1e9,  # Convert ns to seconds
+            'observation.state': state,
+            'action': action,
+            'next': not is_last_step,
+            'done': is_last_step,
+            # Temporary fields, will be replaced/removed before saving.
+            'raw_image': image_bytes, 
+            'image_path': None,
         }
+
+        self.steps.append(step)
         
-        self.current_episode_data.append(data_point)
-        
-        # Update episode length
-        if episode_index not in self.episode_lengths:
-            self.episode_lengths[episode_index] = 0
-        self.episode_lengths[episode_index] += 1
+        self.global_index += 1
+        self.frame_indices[episode_index] += 1
         
     def _extract_observations(self, input_packet):
         """
-        Extracts observations from NexusModelInputPacket.
-        
-        Args:
-            input_packet: NexusModelInputPacket
-            
-        Returns:
-            Dict containing image and joint position data
+        Extracts observations into a flat state vector and raw image bytes.
         """
-        observations = {
-            "image": None,
-            "joint_pos": []
-        }
+        # Extract encoder positions for the state vector.
+        # Ensure a consistent order by sorting based on the perception_id suffix.
+        encoder_perceptions = [
+            p for p in input_packet.perception_packets 
+            if p.perception_id.startswith("sts3215_encoder")
+        ]
+        encoder_perceptions.sort(key=lambda p: int(p.perception_id.split('_')[-1]))
+        state = [p.encoder_perception.position for p in encoder_perceptions]
         
-        # Extract encoder positions (joint positions)
-        encoder_positions = []
-        for perception_packet in input_packet.perception_packets:
-            if perception_packet.perception_id.startswith("sts3215_encoder"):
-                if perception_packet.HasField("encoder_perception"):
-                    encoder_positions.append(perception_packet.encoder_perception.position)
+        # Extract camera image bytes.
+        image_bytes = None
+        for p in input_packet.perception_packets:
+            if p.perception_id.startswith("cv_camera"):
+                image_bytes = p.camera_perception.image_data
+                break # Assume one camera
         
-        observations["joint_pos"] = encoder_positions
-        
-        # Extract camera image
-        for perception_packet in input_packet.perception_packets:
-            if perception_packet.perception_id.startswith("cv_camera"):
-                if perception_packet.HasField("camera_perception"):
-                    # Convert bytes to PIL Image
-                    image_data = perception_packet.camera_perception.image_data
-                    try:
-                        image = Image.open(io.BytesIO(image_data))
-                        observations["image"] = image
-                    except Exception as e:
-                        glog.warning(f"Failed to decode image: {e}")
-                        observations["image"] = None
-        
-        return observations
+        return state, image_bytes
     
     def _extract_actions(self, output_packet):
         """
-        Extracts actions from NexusModelOutputPacket.
-        
-        Args:
-            output_packet: NexusModelOutputPacket
-            
-        Returns:
-            List of motor positions
+        Extracts actions into a flat vector.
         """
-        if not output_packet:
-            return None
-            
-        actions = []
-        for action_packet in output_packet.action_packets:
-            if action_packet.action_id.startswith("sts3215_driver"):
-                if action_packet.HasField("sts3215_action"):
-                    actions.append(action_packet.sts3215_action.position)
-        
-        return actions
+        # Ensure a consistent order by sorting based on the action_id suffix.
+        action_packets = sorted(
+            output_packet.action_packets, 
+            key=lambda a: int(a.action_id.split('_')[-1])
+        )
+        action = [a.sts3215_action.position for a in action_packets]
+        return action
     
     def save_dataset(self, output_dir: str):
         """
-        Saves the dataset to disk in LeRobot format.
-        
-        Args:
-            output_dir: Directory to save the dataset
+        Saves the buffered data to a LeRobot-compliant dataset structure
+        with Parquet files.
         """
+        if not self.steps:
+            glog.warning("No data to save.")
+            return
+
         output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+        images_path = output_path / "images"
+        chunk_path = output_path / "chunk-0"
         
-        # Convert current episode data to LeRobot format
-        lerobot_dataset = self._convert_to_lerobot_format()
-        
-        # Save as JSON (LeRobot compatible format)
-        dataset_file = output_path / "dataset.json"
-        with open(dataset_file, 'w') as f:
-            json.dump(lerobot_dataset, f, indent=2)
-        
-        # Save images separately if they exist
-        if any(dp["observation"]["image"] is not None for dp in self.current_episode_data):
-            images_dir = output_path / "images"
-            images_dir.mkdir(exist_ok=True)
-            
-            for i, data_point in enumerate(self.current_episode_data):
-                if data_point["observation"]["image"]:
-                    image_path = images_dir / f"image_{i:06d}.jpg"
-                    data_point["observation"]["image"].save(image_path, "JPEG")
-                    # Update the image reference to file path
-                    data_point["observation"]["image"] = str(image_path)
-        
-        # Save metadata
-        metadata = {
-            "num_episodes": len(self.episode_lengths),
-            "episode_lengths": self.episode_lengths,
-            "total_data_points": len(self.current_episode_data),
-            "sensor_types": ["camera", "encoder"],
-            "action_types": ["sts3215_motor"]
-        }
-        
-        metadata_file = output_path / "metadata.json"
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-    
-    def _convert_to_lerobot_format(self):
-        """
-        Converts the collected data to LeRobot format.
-        
-        Returns:
-            Dict in LeRobot dataset format
-        """
-        # Initialize LeRobot format
-        lerobot_data = {
-            "observation": {
-                "image": [],
-                "joint_pos": [],
-            },
-            "action": [],
-            "episode_index": [],
-            "timestamp": [],
-            "episode_length": []
-        }
-        
-        # Convert data points
-        for i, data_point in enumerate(self.current_episode_data):
-            # Add observations
-            if data_point["observation"]["image"]:
-                # Use image file path instead of PIL Image object
-                image_path = f"images/image_{i:06d}.jpg"
-                lerobot_data["observation"]["image"].append(image_path)
-            else:
-                lerobot_data["observation"]["image"].append(None)
+        images_path.mkdir(parents=True, exist_ok=True)
+        chunk_path.mkdir(exist_ok=True)
+
+        # Group steps by episode
+        episodes = defaultdict(list)
+        for step in self.steps:
+            episodes[step['episode_index']].append(step)
+
+        # Process and save each episode
+        for episode_idx, steps in episodes.items():
+            for step in steps:
+                # Save image and create relative path
+                if step['raw_image']:
+                    ep_images_path = images_path / f"episode_{episode_idx:05d}"
+                    ep_images_path.mkdir(exist_ok=True)
+                    
+                    frame_idx = step['frame_index']
+                    image_path = ep_images_path / f"frame_{frame_idx:05d}.jpg"
+                    
+                    step['image_path'] = str(image_path.relative_to(output_path))
+                    with open(image_path, 'wb') as f:
+                        f.write(step['raw_image'])
                 
-            lerobot_data["observation"]["joint_pos"].append(data_point["observation"]["joint_pos"])
+                del step['raw_image'] # Remove temporary raw image data
+
+            # Create and save Parquet file for the episode
+            df = pd.DataFrame(steps)
+            # Reorder columns for clarity
+            cols = ['index', 'frame_index', 'episode_index', 'timestamp', 'observation.state', 'image_path', 'action', 'next', 'done']
+            df = df[cols]
             
-            # Add actions
-            lerobot_data["action"].append(data_point["action"])
-            
-            # Add metadata
-            lerobot_data["episode_index"].append(data_point["episode_index"])
-            lerobot_data["timestamp"].append(data_point["timestamp"])
+            parquet_path = chunk_path / f"episode_{episode_idx:05d}.parquet"
+            df.to_parquet(parquet_path)
+
+        # Save metadata and stats
+        self._save_metadata(output_path)
+        glog.info(f"Dataset saved successfully to {output_dir}")
+
+    def _save_metadata(self, output_path: Path):
+        # Create dataset_info.json
+        dataset_info = {
+            "key_to_features": {
+                "observation.state": {"shape": [len(self.steps[0]['observation.state'])], "dtype": "float32"},
+                "image_path": {"shape": [], "dtype": "string"},
+                "action": {"shape": [len(self.steps[0]['action'])], "dtype": "float32"},
+                "episode_index": {"shape": [], "dtype": "int64"},
+                "frame_index": {"shape": [], "dtype": "int64"},
+                "index": {"shape": [], "dtype": "int64"},
+                "timestamp": {"shape": [], "dtype": "float64"},
+                "next": {"shape": [], "dtype": "bool"},
+                "done": {"shape": [], "dtype": "bool"},
+            }
+        }
+        with open(output_path / "dataset_info.json", 'w') as f:
+            json.dump(dataset_info, f, indent=2)
+
+        # Create stats.json
+        all_states = np.array([s['observation.state'] for s in self.steps])
+        all_actions = np.array([s['action'] for s in self.steps])
         
-        # Add episode lengths
-        for episode_idx in sorted(self.episode_lengths.keys()):
-            lerobot_data["episode_length"].append(self.episode_lengths[episode_idx])
-        
-        return lerobot_data 
+        stats = {
+            "observation.state": {
+                "mean": all_states.mean(axis=0).tolist(),
+                "std": all_states.std(axis=0).tolist(),
+            },
+            "action": {
+                "mean": all_actions.mean(axis=0).tolist(),
+                "std": all_actions.std(axis=0).tolist(),
+            }
+        }
+        with open(output_path / "stats.json", 'w') as f:
+            json.dump(stats, f, indent=2) 

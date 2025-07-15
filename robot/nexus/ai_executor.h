@@ -18,7 +18,8 @@ public:
     // Dataset storage methods
     void StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet, 
                                const NexusModelOutputPacket& output_packet, 
-                               int episode_index);
+                               int episode_index,
+                               bool is_last_step);
     void SaveDataset(const std::string& output_dir);
 
 private:

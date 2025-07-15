@@ -101,9 +101,10 @@ NexusModelOutputPacket AIExecutor::Inference(const NexusModelInputPacket& input_
     return output_packet;
 }
 
-void AIExecutor::StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet, 
-                                       const NexusModelOutputPacket& output_packet, 
-                                       int episode_index) {
+void AIExecutor::StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet,
+                                       const NexusModelOutputPacket& output_packet,
+                                       int episode_index,
+                                       bool is_last_step) {
     std::string serialized_input, serialized_output;
     
     if (!input_packet.SerializeToString(&serialized_input)) {
@@ -122,9 +123,10 @@ void AIExecutor::StoreAsLeRobotDataset(const NexusModelInputPacket& input_packet
         py::bytes py_input(serialized_input);
         py::bytes py_output(serialized_output);
         py::int_ py_episode(episode_index);
+        py::bool_ py_is_last(is_last_step);
         
         // Call the dataset storage method
-        pybind_data_->gateway_instance.attr(kStoreDatasetMethodName)(py_input, py_output, py_episode);
+        pybind_data_->gateway_instance.attr(kStoreDatasetMethodName)(py_input, py_output, py_episode, py_is_last);
         
     } catch (py::error_already_set &e) {
         LOG(ERROR) << "Python error in AIExecutor::StoreAsLeRobotDataset: " << e.what();

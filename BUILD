@@ -6,6 +6,7 @@ cc_binary(
     srcs = ["main.cc"],
     data = [
         "//config/config_preset:so100_with_dt",
+        "//ai:ai_layer_gateway",
     ],
     deps = [
         "//robot/actuation/factory:actuation_factory",

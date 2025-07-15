@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     nexus.StartLeRobotDatasetCollection();
 
     // Simulate training data collection
-    int training_episodes = 2;  // Number of episodes to collect
+    int training_episodes = 1;  // Number of episodes to collect
     int episode_duration = 10;  // Seconds per episode
     
     LOG(INFO) << "Collecting " << training_episodes << " episodes of training data...";
@@ -94,10 +94,8 @@ int main(int argc, char* argv[]) {
     if (!quit) {
         // Save the collected training dataset
         LOG(INFO) << "Training data collection completed!";
-        LOG(INFO) << "Saving LeRobot dataset...";
         nexus.SaveLeRobotDataset("/home/hmoon/ProjectJoshuaTrainingData");
-        LOG(INFO) << "Dataset saved to 'fake_training_dataset' directory.";
-        LOG(INFO) << "This dataset can be used for supervised learning training.";
+        LOG(INFO) << "Dataset saved to '/home/hmoon/ProjectJoshuaTrainingData' directory.";
     } else {
         LOG(INFO) << "Training interrupted by user.";
     }

@@ -150,8 +150,11 @@ void Nexus::run_lerobot_dataset_collection(){
         // TODO: This should be replaced with real input.
         auto nexus_model_output_packet = ai_executor_->Inference(nexus_model_input_packet);
         
+        // Determine if this is the last step of the episode.
+        bool is_last_step = (timestep + 1) >= MAX_EPISODE_LENGTH;
+
         // Store the data for supervised learning (both input and output packets)
-        ai_executor_->StoreAsLeRobotDataset(nexus_model_input_packet, nexus_model_output_packet, episode_index);
+        ai_executor_->StoreAsLeRobotDataset(nexus_model_input_packet, nexus_model_output_packet, episode_index, is_last_step);
         
         // Process the action packets (optional - you might want to skip this during data collection)
         for(const auto& action_packet : nexus_model_output_packet.action_packets()){
