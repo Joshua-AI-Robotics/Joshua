@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package config;
+
+// Defines a 3D vector for position, orientation, or axis representation.
+message Vector3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+  
+// Describes a single joint and the link attached to it.
+message KinematicLink {
+  string name = 1;
+
+  // The position of this joint's origin relative to the *previous* joint.
+  // This vector effectively defines the "length between motors".
+  // For the very first link, this is its position relative to the arm's base.
+  Vector3 translation = 2;
+
+  // The axis of rotation for the joint, specified as a unit vector.
+  // For example, a rotation around the Y-axis would be (0, 1, 0).
+  Vector3 rotation_axis = 3;
+
+  // The type of joint. Most manipulator arms use REVOLUTE joints.
+  enum JointType {
+    JOINT_INVALID = 0;
+    REVOLUTE = 1;  // Rotational joint (like a motor).
+    PRISMATIC = 2; // Sliding or linear joint.
+    FIXED = 3;     // A non-moving, rigid connection.
+  }
+
+  JointType joint_type = 4;
+
+  // Motion limits for the joint. This is crucial for the AI model
+  // to understand the valid range of motion.
+  // For REVOLUTE joints, units are in radians.
+  double lower_limit = 5;
+  double upper_limit = 6;
+}
+  
+  // The complete physical layout and kinematic structure of the manipulator arm.
+  message PhysicalLayout {
+    // The sequence of links that make up the arm, starting from the base.
+    repeated KinematicLink links = 1;
+  }

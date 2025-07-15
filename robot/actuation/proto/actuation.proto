@@ -27,8 +27,8 @@ message Actuator {
 
 message STS3215Config {
     uint64 id = 1;
-    uint32 physical_lower_limit = 2;
-    uint32 physical_upper_limit = 3;
+    uint32 physical_lower_limit = 2; // TODO: Move this to physical layout.
+    uint32 physical_upper_limit = 3; // TODO: Move this to physical layout.
     uint32 operational_lower_limit = 4;
     uint32 operational_upper_limit = 5;
     uint32 move_time_in_ms = 6;
