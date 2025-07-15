@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
 
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_dt.pbtxt");
+    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_example_ai.pbtxt");
     auto robot_config = config.robot();
     auto ai_config = config.ai();
     LOG(INFO) << "Robot Name: " << robot_config.name();

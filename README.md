@@ -1,8 +1,8 @@
 # Project Joshua: Modular Framework for Robotic AI Systems
 
-Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of robotic AI systems. **A single configuration file** automatically generates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run robots with your selected hardware and AI policy.
+Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI systems. **A single configuration file** automatically generates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, sepcs and AI policy.
 
-For example, a single configuration file like [so100_with_dt.pbtxt](`config/config_preset/so100_with_dt.pbtxt`) defines your entire robot and AI system.
+For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system.
 
 ## Vision
 
@@ -14,7 +14,7 @@ While the project began as a startup endeavor, the vision for its widespread pub
 
 ### Simplified Configuration
 
-At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., [so100_with_dt.pbtxt](`config/config_preset/so100_with_dt.pbtxt`)) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
+At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`)) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
 
 ### Automated System Setup
 

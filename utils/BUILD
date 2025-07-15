@@ -3,7 +3,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 cc_binary(
     name = "camera_main",
     srcs = ["camera_main.cc"],
-    data = ["//config/config_preset:so100_with_dt"],
+    data = ["//config/config_preset:so100_with_example_ai"],
     deps = [
         "//robot/perception/camera:cv_camera",
         "//config:config_utils",

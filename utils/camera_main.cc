@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
     // Load robot config.
     config::Config config;
     try {
-        config = config::config_util::LoadConfig("config/config_preset/so100_with_dt.pbtxt");
+        config = config::config_util::LoadConfig("config/config_preset/so100_with_example_ai.pbtxt");
     } catch (const std::exception& e) {
         LOG(ERROR) << "Failed to load config: " << e.what();
         return -1;
