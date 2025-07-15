@@ -8,10 +8,26 @@ bazel_dep(name = "rules_python", version = "0.40.0")
 bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "protobuf", version = "29.0")
 bazel_dep(name = "pybind11_bazel", version = "2.13.6")
-bazel_dep(name = "boost.asio", version = "1.87.0")
+bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
 bazel_dep(name = "gflags", version = "2.2.2")
 bazel_dep(name = "glog", version = "0.7.1")
 # bazel_dep(name = "libevdev", version = "1.13.2") # This is for xbox controller but deprecated.
+
+# ROS2 Bazel rules - local copy
+local_path_override(
+    module_name = "com_github_mvukov_rules_ros2",
+    path = "external/rules_ros2",
+)
+
+bazel_dep(name = "com_github_mvukov_rules_ros2")
+
+# Use the rules_ros2 extension to load ROS2 repositories
+rules_ros2_non_module_deps = use_extension("@com_github_mvukov_rules_ros2//ros2:extensions.bzl", "non_module_deps")
+use_repo(
+    rules_ros2_non_module_deps,
+    "ros2_rclcpp",
+    "ros2_common_interfaces",
+)
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(

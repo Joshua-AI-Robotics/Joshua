@@ -6,6 +6,37 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# ROS2 libraries
+cc_library(
+    name = "rclcpp",
+    hdrs = glob([
+        "opt/ros/jazzy/include/rclcpp/**/*.hpp",
+        "opt/ros/jazzy/include/rclcpp/**/*.h",
+    ], allow_empty = True),
+    includes = ["opt/ros/jazzy/include"],
+    linkopts = ["-lrclcpp"],
+)
+
+cc_library(
+    name = "std_msgs",
+    hdrs = glob([
+        "opt/ros/jazzy/include/std_msgs/**/*.hpp",
+        "opt/ros/jazzy/include/std_msgs/**/*.h",
+    ], allow_empty = True),
+    includes = ["opt/ros/jazzy/include"],
+    linkopts = ["-lstd_msgs__rosidl_typesupport_cpp"],
+)
+
+cc_library(
+    name = "rosidl_typesupport_cpp",
+    hdrs = glob([
+        "opt/ros/jazzy/include/rosidl_typesupport_cpp/**/*.hpp",
+        "opt/ros/jazzy/include/rosidl_typesupport_cpp/**/*.h",
+    ], allow_empty = True),
+    includes = ["opt/ros/jazzy/include"],
+    linkopts = ["-lrosidl_typesupport_cpp"],
+)
+
 # opencv
 cc_library(
     name = "opencv",
@@ -86,10 +117,11 @@ cc_library(
 )
 """
     ctx.symlink("/usr", "usr")
+    ctx.symlink("/opt/ros/jazzy", "opt/ros/jazzy")
     ctx.file("BUILD.bazel", build_content)
     ctx.file("WORKSPACE", 'workspace(name = "{}")'.format(ctx.name))
 
 system_libs_repo = repository_rule(
     implementation = _system_libs_repo_impl,
-    doc = "Creates a repository for local system libraries by symlinking /usr.",
+    doc = "Creates a repository for local system libraries by symlinking /usr and /opt/ros/jazzy.",
 ) 
