@@ -1,14 +1,8 @@
 # Project Joshua: Modular Framework for Robotic AI Systems
 
-Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI systems. **A single configuration file** automatically generates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, sepcs and AI policy.
+Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI systems. **A single configuration file** automatically instantiates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, specs and AI policy.
 
-For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system.
-
-## Vision
-
-Project Joshua was initiated to bridge a critical gap: the inherent challenge AI/ML and hardware engineers face when seamlessly integrating robotics and AI into a single, cohesive platform. By addressing this, our aim is to democratize access to advanced robotic AI development.
-
-While the project began as a startup endeavor, the vision for its widespread public benefit through open-sourcing quickly became clear. I firmly believe that by providing a user-friendly, accessible, modular, and community-driven platform, Project Joshua can accelerate innovation and benefit the robotics and AI landscape.
+This system utilized the ROS2 and protobuf. A configuration file should contain all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system. Based on this single file, ROS2 nodes will be instantiated and make the robot operational.
 
 ## Key Features & Benefits:
 
