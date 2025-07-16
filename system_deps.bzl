@@ -17,15 +17,7 @@ cc_library(
     linkopts = ["-lrclcpp"],
 )
 
-cc_library(
-    name = "std_msgs",
-    hdrs = glob([
-        "opt/ros/jazzy/include/std_msgs/**/*.hpp",
-        "opt/ros/jazzy/include/std_msgs/**/*.h",
-    ], allow_empty = True),
-    includes = ["opt/ros/jazzy/include"],
-    linkopts = ["-lstd_msgs__rosidl_typesupport_cpp"],
-)
+
 
 cc_library(
     name = "rosidl_typesupport_cpp",
