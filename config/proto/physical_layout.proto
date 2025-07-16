@@ -39,8 +39,8 @@ message KinematicLink {
   double upper_limit = 6;
 }
   
-  // The complete physical layout and kinematic structure of the manipulator arm.
-  message PhysicalLayout {
-    // The sequence of links that make up the arm, starting from the base.
-    repeated KinematicLink links = 1;
-  }
+// The complete physical layout and kinematic structure of the manipulator arm.
+message PhysicalLayout {
+  // The sequence of links that make up the arm, starting from the base.
+  repeated KinematicLink links = 1;
+}

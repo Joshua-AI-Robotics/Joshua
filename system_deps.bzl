@@ -115,6 +115,14 @@ cc_library(
     linkopts = ["-lopencv_dnn"],
     deps = [":core", ":imgproc"],
 )
+
+# libevdev for Xbox controller
+cc_library(
+    name = "libevdev",
+    hdrs = glob(["usr/include/libevdev-1.0/libevdev/*.h"], allow_empty = True),
+    includes = ["usr/include/libevdev-1.0"],
+    linkopts = ["-levdev"],
+)
 """
     ctx.symlink("/usr", "usr")
     ctx.symlink("/opt/ros/jazzy", "opt/ros/jazzy")

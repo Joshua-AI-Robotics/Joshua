@@ -195,7 +195,7 @@ robot {
     single_perception {
       sensor {
         sensor_name: "sts3215_encoder_3"
-        id: 2
+        id: 3
         sensor_type: ENCODER
         comm_type: SERIAL
         serial_config {
