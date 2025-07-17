@@ -27,6 +27,7 @@ use_repo(
     rules_ros2_non_module_deps,
     "ros2_rclcpp",
     "ros2_common_interfaces",
+    "ros2_rclpy",
 )
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
