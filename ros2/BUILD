@@ -61,13 +61,3 @@ ros2_cpp_binary(
         "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
 )
-
-ros2_py_binary(
-    name = "launcher",
-    srcs = ["launcher.py"],
-    main = "launcher.py",
-    deps = [
-        "@ros2_launch//:launch",
-        "@ros2_launch_ros//:launch_ros",
-    ],
-)
