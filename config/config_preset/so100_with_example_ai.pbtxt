@@ -154,8 +154,8 @@ robot {
         comm_type: COMM_INVALID
         camera_config {
           id: 0
-          width: 160
-          height: 120
+          width: 640
+          height: 480
           fps: 30
         }
       }

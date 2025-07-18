@@ -32,7 +32,7 @@ cc_library(
 # opencv
 cc_library(
     name = "opencv",
-    deps = [":videoio", ":features2d", ":flann", ":dnn"],
+    deps = [":videoio", ":features2d", ":flann"], # :dnn excluded here due to protobuf version conflict.
 )
 
 cc_library(

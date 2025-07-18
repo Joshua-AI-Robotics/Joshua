@@ -1,11 +1,13 @@
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/byte_multi_array.hpp"
+#include "sensor_msgs/msg/image.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "config/proto/robot.pb.h"
 #include "config/config_utils.h"
 #include <memory>
 #include <sstream>
 #include <iomanip>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
 class CameraPublisher : public rclcpp::Node {
 public:
@@ -30,8 +32,8 @@ public:
       return;
     }
     
-    // Create publisher for raw image data as bytes
-    image_publisher_ = this->create_publisher<std_msgs::msg::ByteMultiArray>("camera/image_bytes", 10);
+    // Create publisher for sensor_msgs Image
+    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>("camera/image_raw", 10);
     
     // Timer for publishing at specified rate
     timer_ = this->create_wall_timer(
@@ -39,6 +41,7 @@ public:
       std::bind(&CameraPublisher::publish_camera_data, this));
       
     RCLCPP_INFO(this->get_logger(), "Camera publisher node started!");
+    RCLCPP_INFO(this->get_logger(), "Publishing on topic: /camera/image_raw");
   }
 
 private:
@@ -58,22 +61,50 @@ private:
       // Extract image data from your custom protobuf format
       const auto& image_data = packet->camera_perception().image_data();
       
-      auto now = this->now();
+      if (image_data.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Empty image data received from camera!");
+        return;
+      }
       
-      // Publish raw image data as bytes (matching your protobuf definition)
-      auto image_msg = std::make_unique<std_msgs::msg::ByteMultiArray>();
-      // Copy protobuf bytes directly to ByteMultiArray
-      image_msg->data.assign(image_data.begin(), image_data.end());
+      // Convert JPEG bytes to OpenCV Mat
+      std::vector<uchar> buffer(image_data.begin(), image_data.end());
+      cv::Mat frame = cv::imdecode(buffer, cv::IMREAD_COLOR);
+      
+      if (frame.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Failed to decode image from camera data!");
+        return;
+      }
+      
+      // Convert BGR to RGB (OpenCV uses BGR, ROS2 typically expects RGB)
+      cv::Mat rgb_frame;
+      cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);
+      
+      // Create sensor_msgs Image message
+      auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
+      image_msg->header.stamp = this->now();
+      image_msg->header.frame_id = "camera_frame";
+      image_msg->height = rgb_frame.rows;
+      image_msg->width = rgb_frame.cols;
+      image_msg->encoding = "rgb8";
+      image_msg->is_bigendian = false;
+      image_msg->step = rgb_frame.cols * 3; // 3 bytes per pixel for RGB
+      
+      // Copy image data - ensure we copy the correct amount of data
+      size_t data_size = rgb_frame.total() * rgb_frame.elemSize();
+      image_msg->data.resize(data_size);
+      std::memcpy(image_msg->data.data(), rgb_frame.data, data_size);
+      
       image_publisher_->publish(*image_msg);
       
-      RCLCPP_DEBUG(this->get_logger(), "Published camera image data: %zu bytes", image_data.size());
+      RCLCPP_DEBUG(this->get_logger(), "Published camera image: %dx%d, %zu bytes", 
+                   rgb_frame.cols, rgb_frame.rows, image_msg->data.size());
       
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error publishing camera data: %s", e.what());
     }
   }
   
-  rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr image_publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::unique_ptr<robot::perception::PerceptionInterface> camera_;
 };

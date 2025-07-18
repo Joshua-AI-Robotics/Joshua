@@ -26,7 +26,7 @@ ros2_cpp_binary(
     srcs = ["camera_subscriber.cc"],
     deps = [
         "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_common_interfaces//:cpp_sensor_msgs",
         "@local_deps//:opencv",
     ],
     visibility = ["//visibility:public"],
