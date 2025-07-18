@@ -28,6 +28,8 @@ use_repo(
     "ros2_rclcpp",
     "ros2_common_interfaces",
     "ros2_rclpy",
+    "ros2_launch",
+    "ros2_launch_ros",
 )
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
