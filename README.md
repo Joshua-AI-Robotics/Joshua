@@ -84,36 +84,3 @@ To run the primary Nexus application, which starts the robot's main control loop
 ```bash
 bazel run //:main_program
 ```
-
-### Working with Python Dependencies
-
-This project uses a robust, Bazel-compatible setup for managing Python dependencies to ensure builds are hermetic and reproducible. The system relies on `pip-tools` and a locked set of requirements.
-
-#### Structure Overview
-
-- **`requirements.txt`**: This is a simple, human-readable file where you declare the project's **direct** Python dependencies (e.g., `numpy`, `torch`). You only list the packages you directly `import`.
-
-- **`requirements.lock`**: This is the single source of truth for Bazel. It is an auto-generated file containing the exact versions of _all_ packages (including transitive dependencies). This file is created by `pip-compile` and ensures that every build is identical. **You must commit this file to the repository whenever it changes.**
-
-- **`venv/`**: This project includes a local virtual environment. Its only role in the build process is to provide a consistent environment for running `pip-compile`. It is **not** used by Bazel for building or running code, which uses its own hermetic toolchain. You can, however, activate it for local development and IDE support (e.g., for autocomplete).
-
-#### How to Add or Update a Python Dependency
-
-Follow this two-step process to modify the Python dependencies:
-
-1.  **Edit `requirements.txt`**: Add, remove, or change the version specifier for any top-level package in the `requirements.txt` file.
-
-2.  **Regenerate the Lock File**: Run the following commands from the project root to update `requirements.lock` with your changes and all the necessary transitive dependencies.
-
-    ```bash
-    # Activate the local virtual environment
-    source venv/bin/activate
-
-    # Re-compile the requirements to update the lock file
-    pip-compile --allow-unsafe requirements.txt -o requirements.lock
-
-    # You can now deactivate the venv if you wish
-    deactivate
-    ```
-
-3.  **Commit Your Changes**: Add both the modified `requirements.txt` and the newly generated `requirements.lock` to your git commit.
