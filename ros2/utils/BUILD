@@ -34,5 +34,22 @@ ros2_cpp_binary(
 
 ros2_py_binary(
     name = "example_inference_node",
-
+    srcs = ["example_inference_node.py"],
+    main = "example_inference_node.py",
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "@ros2_common_interfaces//:py_std_msgs",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "@ros2_common_interfaces//:py_geometry_msgs",
+        "@ros2_common_interfaces//:py_std_srvs",
+        requirement("opencv-python"),
+        requirement("numpy"),
+        requirement("torch"),
+        requirement("transformers"),
+        requirement("huggingface-hub"),
+        requirement("pillow"),
+        requirement("protobuf"),
+    ],
+    data = [],
+    tags = ["manual"],
 )
