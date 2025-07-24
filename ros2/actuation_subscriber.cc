@@ -4,6 +4,7 @@
 #include "config/config_utils.h"
 #include "robot/actuation/factory/actuation_factory.h"
 #include <gflags/gflags.h>
+#include <thread>
 
 class ActuationSubscriber : public rclcpp::Node {
 public:
@@ -29,7 +30,28 @@ public:
       return;
     }
 
+    for (const auto& actuator : actuators_) {
+      actuator->SetTorque(1);
+      actuator->SetMiddlePosition();
+    }
+
     RCLCPP_INFO(this->get_logger(), "Actuation subscriber node started with %zu actuators!", actuators_.size());
+  }
+
+  ~ActuationSubscriber() {
+    std::vector<std::thread> threads;
+    
+    // Start all shutdown threads in parallel
+    for (const auto& actuator : actuators_) {
+      threads.emplace_back([&actuator]() {
+        actuator->GracefulShutdown();
+      });
+    }
+    
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+      thread.join();
+    }
   }
 
 private:
