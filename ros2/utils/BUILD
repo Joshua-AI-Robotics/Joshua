@@ -1,5 +1,6 @@
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
+load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -29,6 +30,15 @@ ros2_cpp_binary(
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_sensor_msgs",
         "@local_deps//:opencv",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "keyboard_publisher",
+    srcs = ["keyboard_publisher.cc"],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
     ],
 )
 
