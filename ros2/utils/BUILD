@@ -1,4 +1,7 @@
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
+load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
+
+package(default_visibility = ["//visibility:public"])
 
 ros2_cpp_binary(
     name = "simple_publisher",
@@ -7,7 +10,6 @@ ros2_cpp_binary(
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
     ],
-    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary(
@@ -18,7 +20,6 @@ ros2_cpp_binary(
         "@ros2_common_interfaces//:cpp_std_msgs",
         "//utils:xbox_controller",
     ],
-    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary(
@@ -29,5 +30,9 @@ ros2_cpp_binary(
         "@ros2_common_interfaces//:cpp_sensor_msgs",
         "@local_deps//:opencv",
     ],
-    visibility = ["//visibility:public"],
+)
+
+ros2_py_binary(
+    name = "example_inference_node",
+
 )
