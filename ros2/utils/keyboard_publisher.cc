@@ -20,7 +20,7 @@ public:
         new_tio_.c_lflag &= (~ICANON & ~ECHO);
         tcsetattr(STDIN_FILENO, TCSANOW, &new_tio_);
         
-        RCLCPP_INFO(this->get_logger(), "Keyboard publisher started. Press W, A, S, D keys (or 'q' to quit)");
+        RCLCPP_INFO(this->get_logger(), "Keyboard publisher started. Press W, A, S, D, arrow keys, or number keys (0-9) (or 'q' to quit)");
         
         // Start keyboard input thread
         running_ = true;
@@ -50,41 +50,94 @@ private:
                 std_msgs::msg::String msg;
                 bool should_publish = false;
                 
-                switch (input)
+                // Check for escape sequence (arrow keys)
+                if (input == '\033') // ESC character
                 {
-                    case 'w':
-                    case 'W':
-                        msg.data = "W";
-                        RCLCPP_INFO(this->get_logger(), "W key pressed");
-                        should_publish = true;
-                        break;
-                    case 'a':
-                    case 'A':
-                        msg.data = "A";
-                        RCLCPP_INFO(this->get_logger(), "A key pressed");
-                        should_publish = true;
-                        break;
-                    case 's':
-                    case 'S':
-                        msg.data = "S";
-                        RCLCPP_INFO(this->get_logger(), "S key pressed");
-                        should_publish = true;
-                        break;
-                    case 'd':
-                    case 'D':
-                        msg.data = "D";
-                        RCLCPP_INFO(this->get_logger(), "D key pressed");
-                        should_publish = true;
-                        break;
-                    case 'q':
-                    case 'Q':
-                        RCLCPP_INFO(this->get_logger(), "Quitting...");
-                        running_ = false;
-                        rclcpp::shutdown();
-                        return;
-                    default:
-                        // Ignore other keys - no publishing
-                        break;
+                    char next_char;
+                    if (read(STDIN_FILENO, &next_char, 1) > 0 && next_char == '[')
+                    {
+                        char arrow_char;
+                        if (read(STDIN_FILENO, &arrow_char, 1) > 0)
+                        {
+                            switch (arrow_char)
+                            {
+                                case 'A': // Up arrow
+                                    msg.data = "UP";
+                                    RCLCPP_INFO(this->get_logger(), "UP arrow pressed");
+                                    should_publish = true;
+                                    break;
+                                case 'B': // Down arrow
+                                    msg.data = "DOWN";
+                                    RCLCPP_INFO(this->get_logger(), "DOWN arrow pressed");
+                                    should_publish = true;
+                                    break;
+                                case 'C': // Right arrow
+                                    msg.data = "RIGHT";
+                                    RCLCPP_INFO(this->get_logger(), "RIGHT arrow pressed");
+                                    should_publish = true;
+                                    break;
+                                case 'D': // Left arrow
+                                    msg.data = "LEFT";
+                                    RCLCPP_INFO(this->get_logger(), "LEFT arrow pressed");
+                                    should_publish = true;
+                                    break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Handle regular keys
+                    switch (input)
+                    {
+                        case 'w':
+                        case 'W':
+                            msg.data = "W";
+                            RCLCPP_INFO(this->get_logger(), "W key pressed");
+                            should_publish = true;
+                            break;
+                        case 'a':
+                        case 'A':
+                            msg.data = "A";
+                            RCLCPP_INFO(this->get_logger(), "A key pressed");
+                            should_publish = true;
+                            break;
+                        case 's':
+                        case 'S':
+                            msg.data = "S";
+                            RCLCPP_INFO(this->get_logger(), "S key pressed");
+                            should_publish = true;
+                            break;
+                        case 'd':
+                        case 'D':
+                            msg.data = "D";
+                            RCLCPP_INFO(this->get_logger(), "D key pressed");
+                            should_publish = true;
+                            break;
+                        case 'q':
+                        case 'Q':
+                            RCLCPP_INFO(this->get_logger(), "Quitting...");
+                            running_ = false;
+                            rclcpp::shutdown();
+                            return;
+                        case '0':
+                        case '1':
+                        case '2':
+                        case '3':
+                        case '4':
+                        case '5':
+                        case '6':
+                        case '7':
+                        case '8':
+                        case '9':
+                            msg.data = std::string(1, input);
+                            RCLCPP_INFO(this->get_logger(), "Number key %c pressed", input);
+                            should_publish = true;
+                            break;
+                        default:
+                            // Ignore other keys - no publishing
+                            break;
+                    }
                 }
                 
                 if (should_publish) {

@@ -65,11 +65,18 @@ ros2_cpp_binary(
 ros2_cpp_binary(
     name = "actuation_subscriber",
     srcs = ["actuation_subscriber.cc"],
+    data = [
+        "//config/config_preset:so100_with_example_ai",
+    ],
     deps = [
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
         "@ros2_common_interfaces//:cpp_sensor_msgs",
         "@ros2_common_interfaces//:cpp_geometry_msgs",
         "@ros2_common_interfaces//:cpp_std_srvs",
+        "@gflags//:gflags",
+        "//config/proto:config_cc_proto",
+        "//config:config_utils",
+        "//robot/actuation/factory:actuation_factory",
     ],
 )
