@@ -71,12 +71,18 @@ ros2_cpp_binary(
     deps = [
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@ros2_common_interfaces//:cpp_geometry_msgs",
         "@ros2_common_interfaces//:cpp_std_srvs",
-        "@gflags//:gflags",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
         "//robot/actuation/factory:actuation_factory",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "mock_actuation_publisher",
+    srcs = ["mock_actuation_publisher.cc"],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
     ],
 )
