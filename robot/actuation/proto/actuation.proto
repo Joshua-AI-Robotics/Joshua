@@ -15,25 +15,29 @@ message Actuator {
     uint64 id = 2;
     ActuationType actuation_type = 3;
     robot.comm_interface.CommType comm_type = 4;
+
+    uint32 physical_lower_limit = 5; // TODO: Move this to physical layout.
+    uint32 physical_upper_limit = 6; // TODO: Move this to physical layout.
+    uint32 operational_lower_limit = 7;
+    uint32 operational_upper_limit = 8;
+
     oneof comm_config {
-        robot.comm_interface.SerialConfig serial_config = 5;
+        robot.comm_interface.SerialConfig serial_config = 9;
         // Add other comm type here.
     }
     oneof actuator_config {
-        STS3215Config sts3215_config = 6;
+        STS3215Config sts3215_config = 10;
         // Add other motor type here.
     }
+
+    
 }
 
 message STS3215Config {
     uint64 id = 1;
-    uint32 physical_lower_limit = 2; // TODO: Move this to physical layout.
-    uint32 physical_upper_limit = 3; // TODO: Move this to physical layout.
-    uint32 operational_lower_limit = 4;
-    uint32 operational_upper_limit = 5;
-    uint32 move_time_in_ms = 6;
-    uint32 move_speed = 7;
-    uint32 idle_position = 8;
+    uint32 move_time_in_ms = 2;
+    uint32 move_speed = 3;
+    uint32 idle_position = 4;
 }
 
 message SingleActuation {

@@ -15,10 +15,10 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial
         servo_id_ = sts_config.id();
         move_speed_ = sts_config.move_speed();
         move_time_in_ms_ = sts_config.move_time_in_ms();
-        physical_lower_limit_ = sts_config.physical_lower_limit();
-        physical_upper_limit_ = sts_config.physical_upper_limit();
-        operational_lower_limit_ = sts_config.operational_lower_limit();
-        operational_upper_limit_ = sts_config.operational_upper_limit();
+        physical_lower_limit_ = actuator_config.physical_lower_limit();
+        physical_upper_limit_ = actuator_config.physical_upper_limit();
+        operational_lower_limit_ = actuator_config.operational_lower_limit();
+        operational_upper_limit_ = actuator_config.operational_upper_limit();
         idle_position_ = sts_config.idle_position();
         id_ = GetId();
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";

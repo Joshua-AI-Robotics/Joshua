@@ -23,8 +23,7 @@ public:
 
     for (const auto& single_actuation : config.robot().actuations().single_actuation()) {
       const auto& actuator_proto = single_actuation.actuator();
-      // TODO: Move operational limits to actuator proto, not motor specific proto.
-      actuation_limits_.push_back(std::make_pair(actuator_proto.sts3215_config().operational_lower_limit(), actuator_proto.sts3215_config().operational_upper_limit()));
+      actuation_limits_.push_back(std::make_pair(actuator_proto.operational_lower_limit(), actuator_proto.operational_upper_limit()));
     }
 
     if (actuators_.empty()) {
