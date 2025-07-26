@@ -9,11 +9,22 @@ class ActuationSubscriber : public rclcpp::Node {
 
 public:
   ActuationSubscriber(const std::string& actuation_topic) : Node("actuation_subscriber") {
-    subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
-      "encoder_positions", 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
-    // To subscribe the mock input, use "mock_actuation_input".
-
+    // TOOD: Move this into NodeGenerator.
     config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
+
+    if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
+      operation_mode_ = "encoder_positions";
+    }
+    else if (config.operation_mode() == config::OperationMode::MODE_INFERENCE) {
+      operation_mode_ = "mock_actuation_input";
+    }
+    else {
+      RCLCPP_ERROR(this->get_logger(), "Invalid operation mode!");
+      return;
+    }
+
+    subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
+      operation_mode_, 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
     
     robot::actuation::ActuationFactory actuation_factory;
 
@@ -66,7 +77,8 @@ private:
       actuators_[i]->SetPosition(mapped_position);
     }
   }
-
+  
+  std::string operation_mode_;
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr subscription_;
   std::vector<std::unique_ptr<robot::actuation::ActuationInterface>> actuators_;
   std::vector<std::pair<float, float>> actuation_limits_;
