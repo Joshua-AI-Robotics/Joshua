@@ -108,8 +108,8 @@ robot {
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
-          operational_lower_limit: 10
-          operational_upper_limit: 3000
+          operational_lower_limit: 921
+          operational_upper_limit: 2954
         serial_config {
           id: 5
           port: "/dev/ttyACM0"
@@ -133,7 +133,7 @@ robot {
         physical_lower_limit: 0
           physical_upper_limit: 4095
           operational_lower_limit: 1762
-          operational_upper_limit: 2400
+          operational_upper_limit: 3216
         serial_config {
           id: 6
           port: "/dev/ttyACM0"
@@ -176,7 +176,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 1
         }
       }
@@ -192,7 +192,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 2
         }
       }
@@ -208,7 +208,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 3
         }
       }
@@ -224,7 +224,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 4
         }
       }
@@ -240,7 +240,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 5
         }
       }
@@ -256,7 +256,7 @@ robot {
           port: "/dev/ttyACM0"
           baudrate: 1000000
         }
-        sts3215_encoder_config {
+        encoder_config {
           id: 6
         }
       }

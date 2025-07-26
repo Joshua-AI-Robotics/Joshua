@@ -57,7 +57,6 @@ private:
         
         // TODO: Reconsider the proto message to primitive types.
         float position = data_packet->encoder_perception().position();
-        RCLCPP_INFO(this->get_logger(), "Encoder %zu position: %f", i, position);
         auto normalized_position = 2.0f * (position - encoder_limits_[i].first) / (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
         message.data.push_back(normalized_position);
       }
