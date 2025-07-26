@@ -10,8 +10,9 @@ class ActuationSubscriber : public rclcpp::Node {
 public:
   ActuationSubscriber(const std::string& actuation_topic) : Node("actuation_subscriber") {
     subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
-      "actuation_input", 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
-    
+      "encoder_positions", 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
+    // To subscribe the mock input, use "mock_actuation_input".
+
     config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
     
     robot::actuation::ActuationFactory actuation_factory;
@@ -58,11 +59,11 @@ public:
 private:
   void actuation_callback(const std_msgs::msg::Float32MultiArray::SharedPtr actuation_msg) {
     for (size_t i = 0; i < actuation_msg->data.size() && i < actuators_.size(); ++i) {
-      float actuation_value = actuation_msg->data[i];
-      RCLCPP_INFO(this->get_logger(), "Actuator %zu: %f", i, actuation_value);
-      
-      auto middle_value = (actuation_limits_[i].first + actuation_limits_[i].second) / 2;
-      actuators_[i]->SetPosition(middle_value + actuation_value * kActuationStep);
+      float actuation_value = actuation_msg->data[i]; // normalized in [-1, 1]
+
+      float mapped_position = actuation_limits_[i].first + (actuation_value + 1.0f) * (actuation_limits_[i].second - actuation_limits_[i].first) / 2.0f;
+
+      actuators_[i]->SetPosition(mapped_position);
     }
   }
 

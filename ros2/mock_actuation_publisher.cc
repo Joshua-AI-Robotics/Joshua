@@ -7,7 +7,7 @@ class MockActuationPublisher : public rclcpp::Node {
 public:
   MockActuationPublisher() : Node("mock_actuation_publisher") {
     publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-      "actuation_input", 10);
+      "mock_actuation_input", 10);
     
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
@@ -18,7 +18,7 @@ public:
     distribution_ = std::uniform_real_distribution<float>(-1.0f, 1.0f);
     
     RCLCPP_INFO(this->get_logger(), "Mock actuation publisher started!");
-    RCLCPP_INFO(this->get_logger(), "Publishing 6-element arrays on topic: /actuation_input");
+    RCLCPP_INFO(this->get_logger(), "Publishing 6-element arrays on topic: /mock_actuation_input");
   }
 
 private:
