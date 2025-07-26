@@ -10,6 +10,12 @@ This system utilized the ROS2 and protobuf. A configuration file should contain 
 
 The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all the hardware interface and AI inference API as a ROS2 node. 
 
+### TODO
+- Implement auto calibration for actuator and store it as a config file.
+- Implement UI for generating the config file.
+- Implement automatic node executors based on config file.
+
+
 
 ## Key Features & Benefits:
 
