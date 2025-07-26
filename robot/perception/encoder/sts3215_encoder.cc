@@ -10,7 +10,7 @@ namespace {
 
 Sts3215Encoder::Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Sensor& sensor_config)
     : serial_(serial) {
-    servo_id_ = sensor_config.sts3215_encoder_config().id();
+    servo_id_ = sensor_config.encoder_config().id();
     id_ = GetId();
 }
 

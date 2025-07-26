@@ -11,7 +11,7 @@ std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::Creat
             // Assuming CvCamera for now. Add logic for other camera types if needed.
             return std::make_unique<CvCamera>(sensor_config);
         case SensorType::ENCODER:
-            if (sensor_config.has_sts3215_encoder_config()) {
+            if (sensor_config.has_encoder_config()) {
                 auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(sensor_config.serial_config());
                 return std::make_unique<Sts3215Encoder>(serial,sensor_config);
             }

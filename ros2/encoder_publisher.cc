@@ -9,7 +9,7 @@
 class EncoderPublisher : public rclcpp::Node {
 public:
   EncoderPublisher() : Node("encoder_publisher") {
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_example_ai.pbtxt");
+    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
     
     robot::perception::PerceptionFactory perception_factory;
     
@@ -17,6 +17,7 @@ public:
       const auto& sensor_proto = single_perception.sensor();
       if (sensor_proto.sensor_type() == robot::perception::SensorType::ENCODER) {
         encoders_.push_back(perception_factory.CreatePerception(sensor_proto));
+        encoder_limits_.push_back(std::make_pair(sensor_proto.encoder_config().operational_lower_limit(), sensor_proto.encoder_config().operational_upper_limit()));
         RCLCPP_INFO(this->get_logger(), "Found encoder in configuration");
       }
     }
@@ -54,8 +55,11 @@ private:
           continue;
         }
         
+        // TODO: Reconsider the proto message to primitive types.
         float position = data_packet->encoder_perception().position();
-        message.data.push_back(position);
+        RCLCPP_INFO(this->get_logger(), "Encoder %zu position: %f", i, position);
+        auto normalized_position = 2.0f * (position - encoder_limits_[i].first) / (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
+        message.data.push_back(normalized_position);
       }
       
       // Publish the message with all encoder positions
@@ -70,6 +74,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::vector<std::unique_ptr<robot::perception::PerceptionInterface>> encoders_;
+  std::vector<std::pair<float, float>> encoder_limits_;
 };
 
 int main(int argc, char * argv[]) {

@@ -12,7 +12,7 @@ public:
     subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
       "actuation_input", 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
     
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_example_ai.pbtxt");
+    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
     
     robot::actuation::ActuationFactory actuation_factory;
 

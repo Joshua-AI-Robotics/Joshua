@@ -1,0 +1,383 @@
+robot {
+  name: "so100"
+  id: 1
+  trigger_frequency: 10
+  robot_type: MANIPULATOR_ARM
+
+  actuations {
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_1"
+        id: 1
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+        physical_upper_limit: 4095
+        operational_lower_limit: 1024
+        operational_upper_limit: 3072
+        serial_config {
+          id: 1
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 1
+          move_time_in_ms: 40
+          move_speed: 1500
+          idle_position: 2070
+        }
+      }
+    }
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_2"
+        id: 2
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 800
+          operational_upper_limit: 3000
+        serial_config {
+          id: 2
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 2
+          
+          move_time_in_ms: 40
+          move_speed: 1500
+          idle_position: 847
+        }
+      }
+    }
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_3"
+        id: 3
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 950
+          operational_upper_limit: 3000
+        serial_config {
+          id: 3
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 3
+          
+          move_time_in_ms: 40
+          move_speed: 1500
+          idle_position: 3011
+        }
+      }
+    }
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_4"
+        id: 4
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 900
+          operational_upper_limit: 3072
+        serial_config {
+          id: 4
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 4
+          
+          move_time_in_ms: 40
+          move_speed: 1500
+          idle_position: 655
+        }
+      }
+    }
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_5"
+        id: 5
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 10
+          operational_upper_limit: 3000
+        serial_config {
+          id: 5
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 5
+          
+          move_time_in_ms: 40
+          move_speed: 1500
+          idle_position: 1838
+        }
+      }
+    }
+    single_actuation {
+      actuator {
+        actuator_name: "sts_motor_6"
+        id: 6
+        actuation_type: STS3215
+        comm_type: SERIAL
+        physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 1762
+          operational_upper_limit: 2400
+        serial_config {
+          id: 6
+          port: "/dev/ttyACM0"
+          baudrate: 1000000
+        }
+        sts3215_config {
+          id: 6
+          
+          move_time_in_ms: 40
+          move_speed: 2200
+          idle_position: 1806
+        }
+      }
+    }
+  }
+
+  perceptions {
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_1"
+        id: 1
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 1
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 1
+          operational_lower_limit: 952
+          operational_upper_limit: 3200
+        }
+      }
+    }
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_2"
+        id: 2
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 2
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 2
+          operational_lower_limit: 1669
+          operational_upper_limit: 3985
+        }
+      }
+    }
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_3"
+        id: 3
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 3
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 3
+          operational_lower_limit: 920
+          operational_upper_limit: 3113
+        }
+      }
+    }
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_4"
+        id: 4
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 4
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 4
+          operational_lower_limit: 37
+          operational_upper_limit: 2177
+        }
+      }
+    }
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_5"
+        id: 5
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 5
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 5
+          operational_lower_limit: 1623
+          operational_upper_limit: 3690
+        }
+      }
+    }
+    single_perception {
+      sensor {
+        sensor_name: "sts3215_encoder_6"
+        id: 6
+        sensor_type: ENCODER
+        comm_type: SERIAL
+        serial_config {
+          id: 6
+          port: "/dev/ttyACM1"
+          baudrate: 1000000
+        }
+        encoder_config {
+          id: 6
+          operational_lower_limit: 2010
+          operational_upper_limit: 3092
+        }
+      }
+    }
+  }
+}
+
+ai {
+  policy_name: "example_policy"
+  example_policy_config {
+    hidden_size: 256
+    n_layer: 4
+    n_head: 4
+    activation_function: "relu"
+    dropout: 0.1
+    n_inner: 1024
+    context_length: 20
+    vision_embedding_dim: 128
+  }
+}
+
+physical_layout {
+  links {
+    name: "joint_1"
+    translation {
+      x: 0.0
+      y: 0.0
+      z: 0.12
+    }
+    # The base rotates around the vertical Z-axis.
+    rotation_axis {
+      x: 0.0
+      y: 0.0
+      z: 1.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+  links {
+    name: "joint_2"
+    # Translation from joint 1 to joint 2.
+    translation {
+      x: 0.0
+      y: 0.0
+      z: 0.05
+    }
+    rotation_axis {
+      x: 0.0
+      y: 1.0
+      z: 0.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+  links {
+    name: "joint_3"
+    # Translation from joint 2 to joint 3.
+    translation {
+      x: 0.25
+      y: 0.0
+      z: 0.0
+    }
+    rotation_axis {
+      x: 0.0
+      y: 1.0
+      z: 0.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+  links {
+    name: "joint_4"
+    # Translation from joint 3 to joint 4.
+    translation {
+      x: 0.22
+      y: 0.0
+      z: 0.0
+    }
+    rotation_axis {
+      x: 1.0
+      y: 0.0
+      z: 0.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+  links {
+    name: "joint_5"
+    # Translation from joint 4 to joint 5.
+    translation {
+      x: 0.08
+      y: 0.0
+      z: 0.0
+    }
+    # The wrist pitches up and down around the Y-axis.
+    rotation_axis {
+      x: 0.0
+      y: 1.0
+      z: 0.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+  links {
+    name: "joint_6"
+    # Translation from joint 5.
+    translation {
+      x: 0.06
+      y: 0.0
+      z: 0.0
+    }
+    rotation_axis {
+      x: 1.0
+      y: 0.0
+      z: 0.0
+    }
+    joint_type: REVOLUTE
+    lower_limit: -3.14159
+    upper_limit: 3.14159
+  }
+}

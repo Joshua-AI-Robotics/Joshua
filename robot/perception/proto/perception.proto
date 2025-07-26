@@ -23,7 +23,7 @@ message Sensor {
     }
     oneof sensor_config {
         CameraConfig camera_config = 6;
-        Sts3215EncoderConfig sts3215_encoder_config = 7;
+        EncoderConfig encoder_config = 7;
     }
 }
 
@@ -34,8 +34,10 @@ message CameraConfig {
     uint32 fps = 4;
 }
 
-message Sts3215EncoderConfig {
+message EncoderConfig {
     uint64 id = 1;
+    uint32 operational_lower_limit = 2;
+    uint32 operational_upper_limit = 3;
 }
 
 message SinglePerception {

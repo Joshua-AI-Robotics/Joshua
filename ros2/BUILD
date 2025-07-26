@@ -32,7 +32,7 @@ ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
     data = [
-        "//config/config_preset:so100_with_example_ai",
+        "//config/config_preset:config_presets",
     ],
     deps = [
         "@ros2_rclcpp//:rclcpp",
@@ -50,7 +50,7 @@ ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
     data = [
-        "//config/config_preset:so100_with_example_ai",
+        "//config/config_preset:config_presets",
     ],
     deps = [
         "@ros2_rclcpp//:rclcpp",
@@ -66,7 +66,7 @@ ros2_cpp_binary(
     name = "actuation_subscriber",
     srcs = ["actuation_subscriber.cc"],
     data = [
-        "//config/config_preset:so100_with_example_ai",
+        "//config/config_preset:config_presets",
     ],
     deps = [
         "@ros2_rclcpp//:rclcpp",
