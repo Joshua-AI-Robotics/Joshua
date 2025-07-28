@@ -132,32 +132,30 @@ void XboxController::ProcessEvent(const input_event& ev, XboxControllerState& st
 
 bool XboxController::ProcessEvents(XboxControllerState& state) {
     struct input_event ev;
+    bool events_processed = false;
     
-    // Read event with a timeout
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(fd_, &rfds);
-
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 1000; // 1ms timeout for non-blocking behavior
-
-    int retval = select(fd_ + 1, &rfds, NULL, NULL, &tv);
-    if (retval == -1) {
-        LOG(ERROR) << "Error in select(): " << strerror(errno);
-        return false;
-    } else if (retval) { // Data is available to read
+    // Process ALL available events in a single call to avoid lag
+    while (true) {
         int rc = libevdev_next_event(dev_, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (rc == LIBEVDEV_READ_STATUS_SYNC || rc == LIBEVDEV_READ_STATUS_SUCCESS) {
+        
+        if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
             ProcessEvent(ev, state);
-            return true; // Event was processed
+            events_processed = true;
+        } else if (rc == LIBEVDEV_READ_STATUS_SYNC) {
+            // Handle sync events (device state resync)
+            ProcessEvent(ev, state);
+            events_processed = true;
+        } else if (rc == -EAGAIN) {
+            // No more events available, break out of loop
+            break;
         } else {
+            // Real error occurred
             LOG(WARNING) << "Error reading event: " << strerror(-rc);
-            return false;
+            break;
         }
     }
     
-    return false; // No events available
+    return events_processed;
 }
 
 void XboxController::Run(XboxControllerState& state) {

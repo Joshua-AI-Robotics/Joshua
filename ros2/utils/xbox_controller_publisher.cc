@@ -1,16 +1,14 @@
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 #include "utils/xbox_controller/xbox_controller.h"
-#include <sstream>
-#include <iomanip>
 #include <csignal>
 
 class XboxControllerPublisher : public rclcpp::Node {
 public:
   XboxControllerPublisher() : Node("xbox_controller_publisher") {
-    publisher_ = this->create_publisher<std_msgs::msg::String>("xbox_controller_data", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("xbox_controller_data", 10);
     timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(100), // 10Hz update rate
+      std::chrono::milliseconds(16), // 60Hz update rate
       std::bind(&XboxControllerPublisher::publish_message, this));
     
     // Initialize Xbox controller
@@ -18,6 +16,9 @@ public:
       RCLCPP_ERROR(this->get_logger(), "Failed to initialize Xbox controller!");
     } else {
       RCLCPP_INFO(this->get_logger(), "Xbox controller publisher node started!");
+      RCLCPP_INFO(this->get_logger(), "Publishing Float32MultiArray with 19 elements:");
+      RCLCPP_INFO(this->get_logger(), "  [0-7]: Axes (left_stick_x, left_stick_y, right_stick_x, right_stick_y, dpad_x, dpad_y, left_trigger, right_trigger)");
+      RCLCPP_INFO(this->get_logger(), "  [8-18]: Buttons (a, b, x, y, left_bumper, right_bumper, start, back, left_stick_click, right_stick_click, guide)");
     }
   }
   
@@ -32,41 +33,37 @@ private:
     // Process any pending controller events
     xbox_controller_.ProcessEvents(controller_state_);
     
-    // Create JSON-like string with controller data
-    std::ostringstream oss;
-    oss << "{";
-    oss << "\"axes\":{";
-    oss << "\"left_stick\":{\"x\":" << controller_state_.abs_x_value << ",\"y\":" << controller_state_.abs_y_value << "},";
-    oss << "\"right_stick\":{\"x\":" << controller_state_.abs_rx_value << ",\"y\":" << controller_state_.abs_ry_value << "},";
-    oss << "\"dpad\":{\"x\":" << controller_state_.abs_hat0x_value << ",\"y\":" << controller_state_.abs_hat0y_value << "},";
-    oss << "\"triggers\":{\"left\":" << controller_state_.abs_z_value << ",\"right\":" << controller_state_.abs_rz_value << "}";
-    oss << "},";
-    oss << "\"buttons\":{";
-    oss << "\"a\":" << controller_state_.btn_south_state << ",";
-    oss << "\"b\":" << controller_state_.btn_east_state << ",";
-    oss << "\"x\":" << controller_state_.btn_west_state << ",";
-    oss << "\"y\":" << controller_state_.btn_north_state << ",";
-    oss << "\"left_bumper\":" << controller_state_.btn_tl_state << ",";
-    oss << "\"right_bumper\":" << controller_state_.btn_tr_state << ",";
-    oss << "\"start\":" << controller_state_.btn_start_state << ",";
-    oss << "\"back\":" << controller_state_.btn_select_state << ",";
-    oss << "\"left_stick_click\":" << controller_state_.btn_thumbl_state << ",";
-    oss << "\"right_stick_click\":" << controller_state_.btn_thumbr_state << ",";
-    oss << "\"guide\":" << controller_state_.btn_mode_state;
-    oss << "}";
-    oss << "}";
+    // Create Float32MultiArray message
+    auto message = std_msgs::msg::Float32MultiArray();
+    message.data.reserve(19); // 8 axes + 11 buttons
     
-    auto message = std_msgs::msg::String();
-    message.data = oss.str();
+    // Add axes data (8 elements)
+    message.data.push_back(static_cast<float>(controller_state_.abs_x_value));      // left_stick_x
+    message.data.push_back(static_cast<float>(controller_state_.abs_y_value));      // left_stick_y
+    message.data.push_back(static_cast<float>(controller_state_.abs_rx_value));     // right_stick_x
+    message.data.push_back(static_cast<float>(controller_state_.abs_ry_value));     // right_stick_y
+    message.data.push_back(static_cast<float>(controller_state_.abs_hat0x_value));  // dpad_x
+    message.data.push_back(static_cast<float>(controller_state_.abs_hat0y_value));  // dpad_y
+    message.data.push_back(static_cast<float>(controller_state_.abs_z_value));      // left_trigger
+    message.data.push_back(static_cast<float>(controller_state_.abs_rz_value));     // right_trigger
+    
+    // Add button data (11 elements)
+    message.data.push_back(static_cast<float>(controller_state_.btn_south_state));  // a
+    message.data.push_back(static_cast<float>(controller_state_.btn_east_state));   // b
+    message.data.push_back(static_cast<float>(controller_state_.btn_west_state));   // x
+    message.data.push_back(static_cast<float>(controller_state_.btn_north_state));  // y
+    message.data.push_back(static_cast<float>(controller_state_.btn_tl_state));     // left_bumper
+    message.data.push_back(static_cast<float>(controller_state_.btn_tr_state));     // right_bumper
+    message.data.push_back(static_cast<float>(controller_state_.btn_start_state));  // start
+    message.data.push_back(static_cast<float>(controller_state_.btn_select_state)); // back
+    message.data.push_back(static_cast<float>(controller_state_.btn_thumbl_state)); // left_stick_click
+    message.data.push_back(static_cast<float>(controller_state_.btn_thumbr_state)); // right_stick_click
+    message.data.push_back(static_cast<float>(controller_state_.btn_mode_state));   // guide
+    
     publisher_->publish(message);
-    
-    // Log some key values for debugging
-    if (controller_state_.btn_start_state == 1) {
-      RCLCPP_INFO(this->get_logger(), "Start button pressed - controller data: %s", message.data.c_str());
-    }
   }
   
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   utils::XboxController xbox_controller_;
   utils::XboxControllerState controller_state_;
