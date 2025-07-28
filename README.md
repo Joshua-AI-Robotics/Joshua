@@ -6,7 +6,7 @@ This system utilized the ROS2 and protobuf. A configuration file should contain 
 
 ## Core Concepts
 
-![Project Joshua Core Concept](assets/images/prototype.png)
+![Project Joshua Core Concept](assets/images/project_joshua_diagram.png)
 
 The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all the hardware interface and AI inference API as a ROS2 node. 
 
