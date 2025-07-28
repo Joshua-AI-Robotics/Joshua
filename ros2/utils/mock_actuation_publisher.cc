@@ -34,11 +34,6 @@ private:
     
     // Publish the message
     publisher_->publish(message);
-    
-    // Log the published values
-    RCLCPP_INFO(this->get_logger(), "Published actuation array: [%.3f, %.3f, %.3f, %.3f, %.3f, %.3f]",
-                message.data[0], message.data[1], message.data[2],
-                message.data[3], message.data[4], message.data[5]);
   }
   
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;

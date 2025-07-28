@@ -115,12 +115,3 @@ ros2_cpp_binary_with_wrapper(
         "//robot/actuation/factory:actuation_factory",
     ],
 )
-
-ros2_cpp_binary_with_wrapper(
-    name = "mock_actuation_publisher",
-    srcs = ["mock_actuation_publisher.cc"],
-    deps = [
-        "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-    ],
-)
