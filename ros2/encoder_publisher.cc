@@ -8,9 +8,7 @@
 // TODO: Separate each encoder into a separate node.
 class EncoderPublisher : public rclcpp::Node {
 public:
-  EncoderPublisher() : Node("encoder_publisher") {
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
-    
+  EncoderPublisher(const std::string& topic_name, const config::Config& config) : Node("encoder_publisher") {
     robot::perception::PerceptionFactory perception_factory;
     
     for (const auto& single_perception : config.robot().perceptions().single_perception()) {
@@ -27,10 +25,10 @@ public:
       return;
     }
     
-    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("encoder_positions", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic_name, 10);
     
     timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(33), // 30 Hz update rate
+      std::chrono::milliseconds(16), // 60 Hz update rate
       std::bind(&EncoderPublisher::publish_encoder_data, this));
       
     RCLCPP_INFO(this->get_logger(), "Encoder publisher node started with %zu encoders!", encoders_.size());
@@ -64,7 +62,6 @@ private:
       // Publish the message with all encoder positions
       publisher_->publish(message);
       
-      RCLCPP_INFO(this->get_logger(), "Publishing %zu encoder positions", message.data.size());
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error reading encoders: %s", e.what());
     }
@@ -78,7 +75,10 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<EncoderPublisher>());
+  config::Config config = config::config_util::LoadConfig(argv[1]);
+  
+  //TODO: Update the subscription topic based on the operation mode and config.
+  rclcpp::spin(std::make_shared<EncoderPublisher>("encoder_positions", config));
   rclcpp::shutdown();
   return 0;
 } 

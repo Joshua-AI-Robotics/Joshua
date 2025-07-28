@@ -11,10 +11,7 @@
 
 class CameraPublisher : public rclcpp::Node {
 public:
-  CameraPublisher() : Node("camera_publisher") {
-    // Load configuration
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_example_ai.pbtxt");
-    
+  CameraPublisher(const std::string& topic_name, const config::Config& config) : Node("camera_publisher") {
     robot::perception::PerceptionFactory perception_factory;
     
     // Find camera in configuration
@@ -33,7 +30,7 @@ public:
     }
     
     // Create publisher for sensor_msgs Image
-    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>("camera/image_raw", 10);
+    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(topic_name, 10);
     
     // Timer for publishing at specified rate
     timer_ = this->create_wall_timer(
@@ -41,7 +38,7 @@ public:
       std::bind(&CameraPublisher::publish_camera_data, this));
       
     RCLCPP_INFO(this->get_logger(), "Camera publisher node started!");
-    RCLCPP_INFO(this->get_logger(), "Publishing on topic: /camera/image_raw");
+    RCLCPP_INFO(this->get_logger(), "Publishing on topic: %s", topic_name.c_str());
   }
 
 private:
@@ -111,7 +108,10 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraPublisher>());
+  config::Config config = config::config_util::LoadConfig(argv[1]);
+  
+  //TODO: Update the subscription topic based on the operation mode and config.
+  rclcpp::spin(std::make_shared<CameraPublisher>("camera/image_raw", config));
   rclcpp::shutdown();
   return 0;
 } 

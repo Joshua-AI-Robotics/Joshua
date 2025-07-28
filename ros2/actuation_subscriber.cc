@@ -8,7 +8,7 @@
 class ActuationSubscriber : public rclcpp::Node {
 
 public:
-  ActuationSubscriber(const std::string& actuation_topic, const config::Config& config) : Node("actuation_subscriber") {
+  ActuationSubscriber(const std::string& topic_name, const config::Config& config) : Node("actuation_subscriber") {
     if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
       operation_mode_ = "encoder_positions";
     }
@@ -41,8 +41,7 @@ public:
     }
 
     for (const auto& actuator : actuators_) {
-      actuator->SetTorque(1);
-      actuator->SetMiddlePosition();
+      actuator->SetTorque(true);
     }
 
     RCLCPP_INFO(this->get_logger(), "Actuation subscriber node started with %zu actuators!", actuators_.size());

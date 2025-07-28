@@ -35,40 +35,92 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Clean Bazel cache to resolve module dependency issues
-    LOG(INFO) << "Cleaning Bazel cache...";
-    std::string clean_command = "bazel clean --expunge";
-    int clean_exit = system(clean_command.c_str());
-    if (clean_exit != 0) {
-        LOG(WARNING) << "Failed to clean Bazel cache, continuing anyway...";
+    bool has_camera = false;
+    bool has_encoder = false;
+    bool has_actuator = false;
+
+    for (const auto& single_perception : robot_config.perceptions().single_perception()) {
+        if (single_perception.has_sensor()) {
+            if (single_perception.sensor().sensor_config_case() == robot::perception::Sensor::kCameraConfig) {
+                has_camera = true;
+            }
+            if (single_perception.sensor().sensor_config_case() == robot::perception::Sensor::kEncoderConfig) {
+                has_encoder = true;
+            }
+        }
     }
 
-    // Build the nodes with bazel build from repository root
-    LOG(INFO) << "Building ros2:actuation_subscriber...";
-    std::string bazel_build_command = "bazel build ros2:actuation_subscriber --verbose_failures";
-    int exit_code = system(bazel_build_command.c_str());
-    if (exit_code != 0) {
-        LOG(ERROR) << "Failed to build the nodes with bazel build.";
-        return 1;
+    for (const auto& single_actuation : robot_config.actuations().single_actuation()) {
+        if (single_actuation.has_actuator()) {
+            has_actuator = true;
+        }
     }
 
-    // Locate the wrapper script in bazel-bin after building
-    std::filesystem::path wrapper_script_path = std::filesystem::path(repo_root) / "bazel-bin" / "ros2" / "actuation_subscriber_wrapper.sh";
+    std::filesystem::path wrapper_script_path = std::filesystem::path(repo_root) / "bazel-bin" / "ros2";
+
+    //TODO: Implement what nodes need to be built based on the config.
+    //TODO: Update the config to contain the node names, topics, and parameters.
+
+    // Build all required nodes first (sequential to avoid build conflicts)
+    std::vector<std::string> nodes_to_run;
     
-    // Check if wrapper script exists
-    if (!std::filesystem::exists(wrapper_script_path)) {
-        LOG(ERROR) << "Wrapper script not found at: " << wrapper_script_path;
-        return 1;
-    }
-    
-    // Execute the wrapper script with config parameter
-    std::string command = wrapper_script_path.string() + " " + FLAGS_config;
-    LOG(INFO) << "Executing: " << command;
-    exit_code = system(command.c_str());
-    if (exit_code != 0) {
-        LOG(ERROR) << "Failed to run the nodes from wrapper scripts.";
-        return 1;
+    if (has_camera) {
+        LOG(INFO) << "Building ros2:camera_publisher...";
+        std::string bazel_build_command = "bazel build ros2:camera_publisher";
+        int exit_code = system(bazel_build_command.c_str());
+        if (exit_code != 0) {
+            LOG(ERROR) << "Failed to build camera_publisher with bazel build.";
+            return 1;
+        }
+        nodes_to_run.push_back("camera_publisher");
     }
 
+    if (has_encoder) {
+        LOG(INFO) << "Building ros2:encoder_publisher...";
+        std::string bazel_build_command = "bazel build ros2:encoder_publisher";
+        int exit_code = system(bazel_build_command.c_str());
+        if (exit_code != 0) {
+            LOG(ERROR) << "Failed to build encoder_publisher with bazel build.";
+            return 1;
+        }
+        nodes_to_run.push_back("encoder_publisher");
+    }
+
+    if (has_actuator) {
+        LOG(INFO) << "Building ros2:actuation_subscriber...";
+        std::string bazel_build_command = "bazel build ros2:actuation_subscriber";
+        int exit_code = system(bazel_build_command.c_str());
+        if (exit_code != 0) {
+            LOG(ERROR) << "Failed to build actuation_subscriber with bazel build.";
+            return 1;
+        }
+        nodes_to_run.push_back("actuation_subscriber");
+    }
+
+    // Launch all nodes in parallel using threads
+    std::vector<std::thread> node_threads;
+    
+    for (const auto& node_name : nodes_to_run) {
+        node_threads.emplace_back([&wrapper_script_path, &node_name, &FLAGS_config]() {
+            std::string command = wrapper_script_path.string() + "/" + node_name + "_wrapper.sh " + FLAGS_config;
+            LOG(INFO) << "Executing in parallel: " << command;
+            int exit_code = system(command.c_str());
+            if (exit_code != 0) {
+                LOG(ERROR) << "Node " << node_name << " exited with error code: " << exit_code;
+            } else {
+                LOG(INFO) << "Node " << node_name << " completed successfully.";
+            }
+        });
+    }
+
+    LOG(INFO) << "All " << node_threads.size() << " nodes launched in parallel.";
+    
+    // Wait for all node threads to complete (or run indefinitely)
+    for (auto& thread : node_threads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    
     return 0;
 }
