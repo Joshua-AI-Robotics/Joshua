@@ -12,7 +12,7 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial
     serial_(serial)
     {   
         auto sts_config = actuator_config.sts3215_config();
-        servo_id_ = sts_config.id();
+        servo_id_ = sts_config.servo_id();
         move_speed_ = sts_config.move_speed();
         move_time_in_ms_ = sts_config.move_time_in_ms();
         physical_lower_limit_ = actuator_config.physical_lower_limit();

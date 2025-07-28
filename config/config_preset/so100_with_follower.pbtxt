@@ -23,7 +23,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 1
+          servo_id: 1
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 2070
@@ -46,8 +46,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 2
-          
+          servo_id: 2
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 847
@@ -70,8 +69,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 3
-          
+          servo_id: 3
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 3011
@@ -94,8 +92,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 4
-          
+          servo_id: 4
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 655
@@ -118,8 +115,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 5
-          
+          servo_id: 5
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 1838
@@ -142,8 +138,7 @@ robot {
           baudrate: 1000000
         }
         sts3215_config {
-          id: 6
-          
+          servo_id: 6
           move_time_in_ms: 40
           move_speed: 3000
           idle_position: 1806

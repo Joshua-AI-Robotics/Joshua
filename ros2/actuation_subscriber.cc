@@ -9,11 +9,13 @@ class ActuationSubscriber : public rclcpp::Node {
 
 public:
   ActuationSubscriber(const std::string& topic_name, const config::Config& config) : Node("actuation_subscriber") {
+    // TODO: Currently actuator operates based on encoder positions with fixed and ordered number of encoders.
+    // This needs to be updated by adding a config that each perception has a unique name and id and need to map to actuators.
     if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
-      operation_mode_ = "encoder_positions";
+      subscription_topic_name_ = "encoder_positions";
     }
     else if (config.operation_mode() == config::OperationMode::MODE_INFERENCE) {
-      operation_mode_ = "mock_actuation_input";
+      subscription_topic_name_ = "mock_actuation_input";
     }
     else {
       RCLCPP_ERROR(this->get_logger(), "Invalid operation mode!");
@@ -21,7 +23,7 @@ public:
     }
 
     subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
-      operation_mode_, 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
+      subscription_topic_name_, 10, std::bind(&ActuationSubscriber::actuation_callback, this, std::placeholders::_1));
     
     robot::actuation::ActuationFactory actuation_factory;
 
@@ -74,7 +76,7 @@ private:
     }
   }
   
-  std::string operation_mode_;
+  std::string subscription_topic_name_;
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr subscription_;
   std::vector<std::unique_ptr<robot::actuation::ActuationInterface>> actuators_;
   std::vector<std::pair<float, float>> actuation_limits_;

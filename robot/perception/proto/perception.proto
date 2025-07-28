@@ -10,7 +10,7 @@ enum SensorType {
     ENCODER = 2;
     LIDAR = 3;
     RADAR = 4;
-    HID = 5; # Human Interface Device
+    HID = 5; // Human Interface Device
 }
 
 message Sensor {
