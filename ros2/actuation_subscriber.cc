@@ -8,10 +8,7 @@
 class ActuationSubscriber : public rclcpp::Node {
 
 public:
-  ActuationSubscriber(const std::string& actuation_topic) : Node("actuation_subscriber") {
-    // TOOD: Move this into NodeGenerator.
-    config::Config config = config::config_util::LoadConfig("config/config_preset/so100_with_follower.pbtxt");
-
+  ActuationSubscriber(const std::string& actuation_topic, const config::Config& config) : Node("actuation_subscriber") {
     if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
       operation_mode_ = "encoder_positions";
     }
@@ -88,7 +85,11 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<ActuationSubscriber>("keyboard_input"));
+
+  config::Config config = config::config_util::LoadConfig(argv[1]);
+  
+  //TODO: Update the subscription topic based on the operation mode and config.
+  rclcpp::spin(std::make_shared<ActuationSubscriber>("encoder_positions", config));
   rclcpp::shutdown();
   return 0;
 } 

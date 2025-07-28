@@ -5,7 +5,7 @@ cc_binary(
     name = "main",
     srcs = ["main.cc"],
     data = [
-        "//config/config_preset:so100_with_example_ai",
+        "//config/config_preset:config_presets",
     ],
     deps = [
         "//config:config_utils",
