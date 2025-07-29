@@ -56,12 +56,13 @@ message Encoder {
     robot.comm_interface.CommType comm_type = 4;
     uint32 operational_lower_limit = 5;
     uint32 operational_upper_limit = 6;
+    bool publish_unnormalized_data = 7;
     oneof comm_config {
-        robot.comm_interface.SerialConfig serial_config = 7;
+        robot.comm_interface.SerialConfig serial_config = 8;
         // Add other comm type here.
     }
     oneof encoder_config {
-        Sts3215EncoderConfig sts3215_encoder_config = 8;
+        Sts3215EncoderConfig sts3215_encoder_config = 9;
     }
 }
 

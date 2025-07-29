@@ -16,8 +16,8 @@ robot {
         comm_type: SERIAL
         physical_lower_limit: 0
         physical_upper_limit: 4095
-        operational_lower_limit: 1024
-        operational_upper_limit: 3072
+        operational_lower_limit: 973
+        operational_upper_limit: 3034
         serial_config {
           id: 1
           port: "/dev/ttyACM0"
@@ -40,9 +40,9 @@ robot {
         actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
-          physical_upper_limit: 4095
-          operational_lower_limit: 800
-          operational_upper_limit: 3000
+        physical_upper_limit: 4095
+        operational_lower_limit: 858
+        operational_upper_limit: 3154
         serial_config {
           id: 2
           port: "/dev/ttyACM0"
@@ -65,9 +65,9 @@ robot {
         actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
-          physical_upper_limit: 4095
-          operational_lower_limit: 950
-          operational_upper_limit: 3000
+         physical_upper_limit: 4095
+        operational_lower_limit: 798
+        operational_upper_limit: 3015
         serial_config {
           id: 3
           port: "/dev/ttyACM0"
@@ -90,9 +90,9 @@ robot {
         actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
-          physical_upper_limit: 4095
-          operational_lower_limit: 900
-          operational_upper_limit: 3072
+        physical_upper_limit: 4095
+        operational_lower_limit: 668
+        operational_upper_limit: 3124
         serial_config {
           id: 4
           port: "/dev/ttyACM0"
@@ -115,9 +115,9 @@ robot {
         actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
-          physical_upper_limit: 4095
-          operational_lower_limit: 921
-          operational_upper_limit: 2954
+        physical_upper_limit: 4095
+        operational_lower_limit: 902
+        operational_upper_limit: 2955
         serial_config {
           id: 5
           port: "/dev/ttyACM0"
@@ -140,9 +140,9 @@ robot {
         actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
-          physical_upper_limit: 4095
-          operational_lower_limit: 1762
-          operational_upper_limit: 3216
+        physical_upper_limit: 4095
+        operational_lower_limit: 1795
+        operational_upper_limit: 3235
         serial_config {
           id: 6
           port: "/dev/ttyACM0"

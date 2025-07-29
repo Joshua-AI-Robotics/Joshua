@@ -15,6 +15,7 @@ private:
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
     std::pair<float, float> limits;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
+    bool publish_unnormalized_data = false;
   };
 
 public:
@@ -27,11 +28,20 @@ public:
           single_perception.node_id() == node_id) {
         const auto& encoder_proto = single_perception.encoder();
         
+        // First, create the interface and check if it's valid.
+        auto interface = perception_factory.CreatePerception(single_perception);
+        if (!interface) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to create perception interface for encoder '%s'. Check hardware connection or permissions.", 
+                         encoder_proto.encoder_name().c_str());
+            continue; // Skip this encoder if initialization failed.
+        }
+
         encoders_.emplace_back(Encoder{
           .topic = single_perception.publish_topic(),
-          .interface = perception_factory.CreatePerception(single_perception),
+          .interface = std::move(interface),
           .limits = {encoder_proto.operational_lower_limit(), encoder_proto.operational_upper_limit()},
-          .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10)
+          .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10),
+          .publish_unnormalized_data = encoder_proto.publish_unnormalized_data()
         });
 
         RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s", 
@@ -70,14 +80,18 @@ private:
         
         // Get encoder position and normalize to [-1, 1]
         uint16_t raw_position = *data_opt;
-        float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder.limits.first) / 
-                                   (encoder.limits.second - encoder.limits.first) - 1.0f;
+        float position_data;
+
+        if (encoder.publish_unnormalized_data) {
+          position_data = static_cast<float>(raw_position);
+        } else {
+          position_data = 2.0f * (static_cast<float>(raw_position) - encoder.limits.first) / 
+                                     (encoder.limits.second - encoder.limits.first) - 1.0f;
+                                     position_data = std::max(-1.0f, std::min(1.0f, position_data));
+                                    }
         
-        // Clamp to [-1, 1] range
-        normalized_position = std::max(-1.0f, std::min(1.0f, normalized_position));
-        
-        auto message = std_msgs::msg::Float32();
-        message.data = normalized_position;
+                auto message = std_msgs::msg::Float32();
+        message.data = position_data;
         encoder.publisher->publish(message);
       }
     } catch (const std::exception& e) {
