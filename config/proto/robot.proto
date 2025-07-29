@@ -14,7 +14,6 @@ message Robot {
     string name = 1;
     uint64 id = 2;
     RobotType robot_type = 3;
-    uint32 trigger_frequency = 4;
-    robot.action.Action actions = 5;
-    robot.perception.Perception perceptions = 6;
+    robot.action.Action actions = 4;
+    robot.perception.Perception perceptions = 5;
 }
