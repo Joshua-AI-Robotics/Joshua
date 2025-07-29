@@ -5,7 +5,6 @@
 DEFINE_string(config, "config/config_preset/so100_with_follower.pbtxt", "Path to the robot config file");
 
 int main(int argc, char* argv[]) {
-    // Initialize logging and command line flags
     google::InitGoogleLogging(argv[0]);
     FLAGS_logtostderr = 1;
     gflags::ParseCommandLineFlags(&argc, &argv, true);    

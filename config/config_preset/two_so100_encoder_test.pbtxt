@@ -27,7 +27,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 2
       sensor {
         sensor_name: "sts3215_encoder_2"
         id: 2
@@ -46,7 +46,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 3
       sensor {
         sensor_name: "sts3215_encoder_3"
         id: 3
@@ -65,7 +65,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 4
       sensor {
         sensor_name: "sts3215_encoder_4"
         id: 4
@@ -84,7 +84,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 5
       sensor {
         sensor_name: "sts3215_encoder_5"
         id: 5
@@ -103,7 +103,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 6
       sensor {
         sensor_name: "sts3215_encoder_6"
         id: 6
@@ -122,7 +122,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 7
       sensor {
         sensor_name: "sts3215_encoder_a"
         id: 1
@@ -141,7 +141,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 8
       sensor {
         sensor_name: "sts3215_encoder_b"
         id: 2
@@ -160,7 +160,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 9
       sensor {
         sensor_name: "sts3215_encoder_c"
         id: 3
@@ -179,7 +179,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 10
       sensor {
         sensor_name: "sts3215_encoder_d"
         id: 4
@@ -198,7 +198,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 11
       sensor {
         sensor_name: "sts3215_encoder_e"
         id: 5
@@ -217,7 +217,7 @@ robot {
       }
     }
     single_perception {
-      node_id: 1
+      node_id: 12
       sensor {
         sensor_name: "sts3215_encoder_f"
         id: 6
