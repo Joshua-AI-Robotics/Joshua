@@ -8,16 +8,16 @@
 
 class CameraSubscriber : public rclcpp::Node {
 public:
-  CameraSubscriber() : Node("camera_subscriber") {
+  CameraSubscriber(const std::string& subscribe_topic) : Node("camera_subscriber") {
     // Create subscriber for camera image data
     subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-      "camera/image_raw", 10, std::bind(&CameraSubscriber::image_callback, this, std::placeholders::_1));
+      subscribe_topic, 10, std::bind(&CameraSubscriber::image_callback, this, std::placeholders::_1));
     
     // Create OpenCV window
     cv::namedWindow("Camera Feed", cv::WINDOW_AUTOSIZE);
-    
+
     RCLCPP_INFO(this->get_logger(), "Camera subscriber node started!");
-    RCLCPP_INFO(this->get_logger(), "Listening on topic: /camera/image_raw");
+    RCLCPP_INFO(this->get_logger(), "Listening on topic: %s", subscribe_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Press 'q' to quit");
   }
   
@@ -97,7 +97,14 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<CameraSubscriber>());
+
+  if (argc < 2) {
+    RCLCPP_WARN(rclcpp::get_logger("camera_subscriber"), 
+                 "No topic provided, using default topic: /camera_1");
+    argv[1] = "/camera_1";
+  }
+
+  rclcpp::spin(std::make_shared<CameraSubscriber>(argv[1]));
   rclcpp::shutdown();
   return 0;
 } 

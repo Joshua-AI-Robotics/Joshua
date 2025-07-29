@@ -8,6 +8,7 @@ robot {
   perceptions {
     single_perceptions {
       node_id: 1
+      publish_topic: "camera_1"
       perception_type: CAMERA
       camera {
         camera_name: "webcam"

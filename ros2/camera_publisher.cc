@@ -11,17 +11,38 @@
 #include <opencv2/core/mat.hpp>
 
 class CameraPublisher : public rclcpp::Node {
+private:
+  struct Camera {
+    std::string topic;
+    std::unique_ptr<robot::perception::PerceptionInterface> interface;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher;
+  };
+
 public:
-  CameraPublisher(const std::string& node_name, const std::string& topic_name, const config::Config& config, int node_id)
+  CameraPublisher(const std::string& node_name, const int node_id, const config::Config& config)
   : Node(node_name) {
     robot::perception::PerceptionFactory perception_factory;
 
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA && 
           single_perception.node_id() == node_id) {
-        cameras_.push_back(perception_factory.CreatePerception(single_perception));
-        RCLCPP_INFO(this->get_logger(), "Found camera '%s' in configuration for node_id %d", 
-                   single_perception.camera().camera_name().c_str(), node_id);
+        const auto& camera_proto = single_perception.camera();
+
+        auto interface = perception_factory.CreatePerception(single_perception);  
+        if (!interface) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to create perception interface for camera '%s'. Check hardware connection or permissions.", 
+                         camera_proto.camera_name().c_str());
+            continue; // Skip this camera if initialization failed.
+        }
+
+        cameras_.emplace_back(Camera{
+          .topic = single_perception.publish_topic(),
+          .interface = std::move(interface),
+          .publisher = this->create_publisher<sensor_msgs::msg::Image>(single_perception.publish_topic(), 10)
+        });
+
+        RCLCPP_INFO(this->get_logger(), "Found camera '%s' in configuration for node_id %d. Publishing on topic: %s", 
+                    camera_proto.camera_name().c_str(), node_id, single_perception.publish_topic().c_str());
       }
     }
     
@@ -30,17 +51,12 @@ public:
       return;
     }
     
-    // Create publisher for sensor_msgs Image
-    image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(topic_name, 10);
-    
-    // Timer for publishing at specified rate
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(33), // ~30 Hz
       std::bind(&CameraPublisher::publish_camera_data, this));
       
     RCLCPP_INFO(this->get_logger(), "Camera publisher node started with %zu cameras for node_id %d!", 
                cameras_.size(), node_id);
-    RCLCPP_INFO(this->get_logger(), "Publishing on topic: %s", topic_name.c_str());
   }
 
 private:
@@ -52,7 +68,7 @@ private:
     
     try {
       for (const auto& camera : cameras_) {
-        auto data = camera->GetData();
+        auto data = camera.interface->GetData();
         if (!data.has_value()) {
             RCLCPP_WARN(this->get_logger(), "Failed to get camera data!");
             return;
@@ -83,16 +99,15 @@ private:
         image_msg->data.resize(data_size);
         std::memcpy(image_msg->data.data(), rgb_frame.data, data_size);
         
-        image_publisher_->publish(*image_msg);
+        camera.publisher->publish(*image_msg);
       }
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error publishing camera data: %s", e.what());
     }
   }
   
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::vector<std::unique_ptr<robot::perception::PerceptionInterface>> cameras_;
+  std::vector<Camera> cameras_;
 };
 
 int main(int argc, char* argv[]) {
@@ -100,17 +115,17 @@ int main(int argc, char* argv[]) {
   
   if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger("camera_publisher"), 
-                 "Usage: camera_publisher <config_path> <node_id> <node_name>");
+                 "Usage: camera_publisher <node_name> <node_id> <config_path>");
     return 1;
   }
   
-  std::string config_path = argv[1];
+  std::string node_name = argv[1];
   int node_id = std::stoi(argv[2]);
-  std::string node_name = argv[3];
+  std::string config_path = argv[3];
   
   config::Config config = config::config_util::LoadConfig(config_path);
   
-  rclcpp::spin(std::make_shared<CameraPublisher>(node_name, "camera_image", config, node_id));
+  rclcpp::spin(std::make_shared<CameraPublisher>(node_name, node_id, config));
   rclcpp::shutdown();
   return 0;
 } 
