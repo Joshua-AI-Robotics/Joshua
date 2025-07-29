@@ -28,7 +28,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 2
+      node_id: 1
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_2"
@@ -48,11 +48,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 3
+      node_id: 2
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_3"
-        id: 3
+        id: 2
         encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
@@ -68,7 +68,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 4
+      node_id: 2
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_4"
@@ -88,7 +88,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 5
+      node_id: 3
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_5"
@@ -108,7 +108,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 6
+      node_id: 3
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_6"
@@ -128,7 +128,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 7
+      node_id: 4
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_a"
@@ -146,7 +146,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 8
+      node_id: 4
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_b"
@@ -164,7 +164,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 9
+      node_id: 5
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_c"
@@ -182,7 +182,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 10
+      node_id: 5
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_d"
@@ -200,7 +200,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 11
+      node_id: 6
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_e"
@@ -218,7 +218,7 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 12
+      node_id: 6
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_f"

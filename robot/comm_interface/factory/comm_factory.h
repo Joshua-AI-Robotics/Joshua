@@ -7,33 +7,48 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <utility> // For std::pair
+#include <mutex>
+#include <utility> 
 
 namespace robot::comm_interface {
 
 class CommFactory {
 public:
-    // Singleton access method
     static CommFactory& GetInstance() {
         static CommFactory instance;
         return instance;
     }
 
-    // Delete copy constructor and assignment operator for singleton
     CommFactory(const CommFactory&) = delete;
     void operator=(const CommFactory&) = delete;
 
     std::shared_ptr<Serial> GetSerial(const robot::comm_interface::SerialConfig& config);
 
 private:
-    CommFactory();
+    CommFactory() = default;
     ~CommFactory();
 
-    // One io_context for all serial communication.
-    std::shared_ptr<boost::asio::io_context> io_context_;
-    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard_;
-    std::thread io_context_thread_;
-    std::map<std::pair<std::string, uint32_t>, std::shared_ptr<Serial>> serials_;
+    struct PortResources {
+        std::shared_ptr<boost::asio::io_context> io_context;
+        boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard;
+        std::thread io_context_thread;
+        std::map<uint32_t, std::shared_ptr<Serial>> serials;
+
+        PortResources()
+            : io_context(std::make_shared<boost::asio::io_context>()),
+              work_guard(boost::asio::make_work_guard(*io_context)),
+              io_context_thread([this] { io_context->run(); }) {}
+
+        ~PortResources() {
+            work_guard.reset();
+            if (io_context_thread.joinable()) {
+                io_context_thread.join();
+            }
+        }
+    };
+
+    std::map<std::string, std::unique_ptr<PortResources>> port_resources_;
+    std::mutex mutex_;
 };
 
-} // namespace robot::comm_interface 
+} 
