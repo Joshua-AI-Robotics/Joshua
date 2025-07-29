@@ -166,7 +166,7 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
         
         std::string binary_impl = binary_path + "/" + node_type + "_impl";
         std::string node_id_str = std::to_string(node_id);
-        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), node_id_str.c_str(), nullptr);
+        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), node_id_str.c_str(), node_name.c_str(), nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
@@ -181,6 +181,7 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
 
 
 // TODO: pass node_id to the node_type like perception node.
+// TODO: Make this generic for all action.
 pid_t NodeGenerator::LaunchActionNode() {
     pid_t pid = fork();
     
@@ -197,7 +198,7 @@ pid_t NodeGenerator::LaunchActionNode() {
         }
         
         std::string binary_impl = binary_path + "/actuator_subscriber_impl";
-        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), nullptr);
+        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), "actuator_subscriber", nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);

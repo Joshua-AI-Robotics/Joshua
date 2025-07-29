@@ -4,6 +4,7 @@
 #include "robot/perception/proto/perception.pb.h"
 #include "robot/comm_interface/serial/serial.h"
 #include <any>
+#include <optional>
 
 namespace robot::perception {
 
@@ -22,7 +23,7 @@ private:
     uint8_t servo_id_;
     uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);
     std::vector<uint8_t> create_read_position_packet();
-    uint16_t read_servo_position();    
+    std::optional<uint16_t> read_servo_position();    
 };
 
 } // namespace robot::perception 

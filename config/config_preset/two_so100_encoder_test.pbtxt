@@ -142,6 +142,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 1
+          operational_lower_limit: 952
+          operational_upper_limit: 3200
         }
       }
     }
@@ -160,6 +162,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 2
+          operational_lower_limit: 1669
+          operational_upper_limit: 3985
         }
       }
     }
@@ -178,6 +182,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 3
+          operational_lower_limit: 920
+          operational_upper_limit: 3113
         }
       }
     }
@@ -196,6 +202,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 4
+          operational_lower_limit: 37
+          operational_upper_limit: 2177
         }
       }
     }
@@ -214,6 +222,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 5
+          operational_lower_limit: 1623
+          operational_upper_limit: 3690
         }
       }
     }
@@ -232,6 +242,8 @@ robot {
         }
         sts3215_encoder_config {
           servo_id: 6
+          operational_lower_limit: 2010
+          operational_upper_limit: 3092
         }
       }
     }

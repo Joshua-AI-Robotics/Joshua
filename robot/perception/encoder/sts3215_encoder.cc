@@ -23,7 +23,11 @@ std::any Sts3215Encoder::GetData() {
 }
 
 float Sts3215Encoder::GetPosition() {
-    return read_servo_position();
+    auto position_opt = read_servo_position();
+    if (position_opt) {
+        return static_cast<float>(*position_opt);
+    }
+    return -1.0f; // Return -1.0 on failure
 }
 
 uint8_t Sts3215Encoder::calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end) {
@@ -48,7 +52,7 @@ std::vector<uint8_t> Sts3215Encoder::create_read_position_packet() {
     return packet;
 }
 
-uint16_t Sts3215Encoder::read_servo_position() {
+std::optional<uint16_t> Sts3215Encoder::read_servo_position() {
     // 0. Flush the serial port to clear any stale data from previous reads
     serial_->Flush();
 
@@ -56,7 +60,7 @@ uint16_t Sts3215Encoder::read_servo_position() {
     std::vector<uint8_t> packet = create_read_position_packet();
     if (!serial_) {
         LOG(ERROR) << "Serial port interface not initialized.";
-        return 0; // Indicate error
+        return std::nullopt; // Indicate error
     }
     serial_->Write(packet);
 
@@ -70,7 +74,7 @@ uint16_t Sts3215Encoder::read_servo_position() {
         std::vector<uint8_t> first_byte_vec = serial_->Read(1);
         if (first_byte_vec.empty()) {
             LOG(WARNING) << "Serial read timeout during header search (first byte) for servo " << static_cast<int>(servo_id_);
-            return 0;
+            return std::nullopt;
         }
         uint8_t first_byte = first_byte_vec[0];
 
@@ -78,7 +82,7 @@ uint16_t Sts3215Encoder::read_servo_position() {
             std::vector<uint8_t> second_byte_vec = serial_->Read(1);
             if (second_byte_vec.empty()) {
                 LOG(WARNING) << "Serial read timeout during header search (second byte) for servo " << static_cast<int>(servo_id_);
-                return 0;
+                return std::nullopt;
             }
             uint8_t second_byte = second_byte_vec[0];
 
@@ -95,14 +99,14 @@ uint16_t Sts3215Encoder::read_servo_position() {
 
     if (!header_found) {
         LOG(ERROR) << "Failed to find 0xFF 0xFF header after multiple attempts for servo " << static_cast<int>(servo_id_);
-        return 0;
+        return std::nullopt;
     }
 
     // Now read the remaining 6 bytes of the packet
     std::vector<uint8_t> remaining_bytes = serial_->Read(6);
     if (remaining_bytes.size() != 6) {
         LOG(ERROR) << "Failed to read remaining 6 bytes after header sync for servo " << static_cast<int>(servo_id_);
-        return 0;
+        return std::nullopt;
     }
     response.insert(response.end(), remaining_bytes.begin(), remaining_bytes.end());
 
@@ -116,7 +120,7 @@ uint16_t Sts3215Encoder::read_servo_position() {
             response_str += std::to_string(static_cast<int>(response[i])) + " ";
         }
         LOG(ERROR) << response_str;
-        return 0;
+        return std::nullopt;
     }
 
     // Validate checksum
@@ -132,7 +136,7 @@ uint16_t Sts3215Encoder::read_servo_position() {
             response_str += std::to_string(static_cast<int>(response[i])) + " ";
         }
         LOG(ERROR) << response_str;
-        return 0;
+        return std::nullopt;
     }
 
     // 4. Extract position bytes safely

@@ -12,8 +12,8 @@
 
 class CameraPublisher : public rclcpp::Node {
 public:
-  CameraPublisher(const std::string& topic_name, const config::Config& config, int node_id) 
-    : Node("camera_publisher") {
+  CameraPublisher(const std::string& node_name, const std::string& topic_name, const config::Config& config, int node_id)
+  : Node(node_name) {
     robot::perception::PerceptionFactory perception_factory;
 
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
@@ -98,19 +98,19 @@ private:
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
   
-  if (argc < 3) {
+  if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger("camera_publisher"), 
-                 "Usage: camera_publisher <config_path> <node_id>");
+                 "Usage: camera_publisher <config_path> <node_id> <node_name>");
     return 1;
   }
   
   std::string config_path = argv[1];
   int node_id = std::stoi(argv[2]);
+  std::string node_name = argv[3];
   
-  config::Config config = config::config_util::LoadConfig(config_path);  
+  config::Config config = config::config_util::LoadConfig(config_path);
   
-  // TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<CameraPublisher>("camera/image_raw", config, node_id));
+  rclcpp::spin(std::make_shared<CameraPublisher>(node_name, "camera_image", config, node_id));
   rclcpp::shutdown();
   return 0;
 } 

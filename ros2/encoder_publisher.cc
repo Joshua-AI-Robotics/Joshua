@@ -8,8 +8,8 @@
 // TODO: Separate each encoder into a separate node.
 class EncoderPublisher : public rclcpp::Node {
 public:
-  EncoderPublisher(const std::string& topic_name, const config::Config& config, int node_id) 
-    : Node("encoder_publisher") {
+  EncoderPublisher(const std::string& node_name, const std::string& topic_name, const config::Config& config, int node_id) 
+    : Node(node_name) {
     robot::perception::PerceptionFactory perception_factory;
     
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
@@ -54,13 +54,14 @@ private:
       
       for (size_t i = 0; i < encoders_.size(); ++i) {
         auto data = encoders_[i]->GetData();
-        if (!data.has_value()) {
+        auto data_opt = std::any_cast<std::optional<uint16_t>>(data);
+        if (!data_opt.has_value()) {
             RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder %zu!", i);
             continue;
         }
         
         // Get encoder position and normalize to [-1, 1]
-        uint16_t raw_position = std::any_cast<uint16_t>(data);
+        uint16_t raw_position = *data_opt;
         float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder_limits_[i].first) / 
                                    (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
         
@@ -84,19 +85,20 @@ private:
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
   
-  if (argc < 3) {
+  if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger("encoder_publisher"), 
-                 "Usage: encoder_publisher <config_path> <node_id>");
+                 "Usage: encoder_publisher <config_path> <node_id> <node_name>");
     return 1;
   }
   
   std::string config_path = argv[1];
   int node_id = std::stoi(argv[2]);
+  std::string node_name = argv[3];
   
   config::Config config = config::config_util::LoadConfig(config_path);
   
   // TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<EncoderPublisher>("encoder_positions", config, node_id));
+  rclcpp::spin(std::make_shared<EncoderPublisher>(node_name, "encoder_positions", config, node_id));
   rclcpp::shutdown();
   return 0;
 } 

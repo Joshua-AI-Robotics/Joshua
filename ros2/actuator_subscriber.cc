@@ -8,7 +8,8 @@
 class ActionSubscriber : public rclcpp::Node {
 
 public:
-  ActionSubscriber(const std::string& topic_name, const config::Config& config) : Node("action_subscriber") {
+  ActionSubscriber(const std::string& node_name, const std::string& topic_name, const config::Config& config) 
+  : Node(node_name) {
     // TODO: Currently actions operates based on encoder positions with fixed and ordered number of encoders.
     // This needs to be updated by adding a config that each perception has a unique name and id and need to map to actions.
     if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
@@ -88,11 +89,20 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-
-  config::Config config = config::config_util::LoadConfig(argv[1]);
   
-  //TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<ActionSubscriber>("encoder_positions", config));
+  if (argc < 3) {
+    RCLCPP_ERROR(rclcpp::get_logger("actuator_subscriber"), 
+                 "Usage: actuator_subscriber <config_path> <node_name>");
+    return 1;
+  }
+  
+  std::string config_path = argv[1];
+  std::string node_name = argv[2];
+  
+  config::Config config = config::config_util::LoadConfig(config_path);
+  
+  // TODO: Update the subscription topic based on the operation mode and config.
+  rclcpp::spin(std::make_shared<ActionSubscriber>(node_name, "actuator_commands", config));
   rclcpp::shutdown();
   return 0;
 } 
