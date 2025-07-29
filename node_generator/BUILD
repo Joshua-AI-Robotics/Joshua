@@ -1,5 +1,16 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
+
+cc_library(
+    name = "node_generator",
+    srcs = ["node_generator.cc"],
+    hdrs = ["node_generator.h"],
+    deps = [
+        "//config:config_utils",
+        "@glog//:glog",
+    ],
+    visibility = ["//visibility:public"],
+)
 
 cc_binary(
     name = "main",
@@ -8,7 +19,7 @@ cc_binary(
         "//config/config_preset:config_presets",
     ],
     deps = [
-        "//config:config_utils",
+        ":node_generator",
         "@glog//:glog",
         "@gflags//:gflags",
     ],
