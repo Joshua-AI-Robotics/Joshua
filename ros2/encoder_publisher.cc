@@ -19,8 +19,8 @@ public:
         encoders_.push_back(perception_factory.CreatePerception(single_perception));
         // TODO: Make this generic for all encoders.
         encoder_limits_.push_back(std::make_pair(
-          encoder_proto.sts3215_encoder_config().operational_lower_limit(), 
-          encoder_proto.sts3215_encoder_config().operational_upper_limit()));
+          encoder_proto.operational_lower_limit(), 
+          encoder_proto.operational_upper_limit()));
         RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d", 
                    encoder_proto.encoder_name().c_str(), node_id);
       }
