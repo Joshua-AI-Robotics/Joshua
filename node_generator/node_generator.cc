@@ -56,20 +56,22 @@ bool NodeGenerator::Initialize() {
         return false;
     }
     
-    AnalyzeConfiguration();
+    GroupEntitiesByNodeId();
+    if (!CheckConfigIntegrity()) {
+        return false;
+    }
     DetermineRequiredBuilds();
     SetupSignalHandlers();
     
     return true;
 }
 
-void NodeGenerator::AnalyzeConfiguration() {
+void NodeGenerator::GroupEntitiesByNodeId() {
     auto robot_config = config_.robot();
     
-    // Group sensors by node_id
+    // Group perception sensors by the node_id they are associated with.
     for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
         uint32_t node_id = single_perception.node_id();
-        
         if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA) {
             node_perception_types_[node_id].insert("camera");
         } else if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER) {
@@ -77,15 +79,58 @@ void NodeGenerator::AnalyzeConfiguration() {
         }
     }
     
-    // TODO: Group actions by node_id
+    // Group actions by the node_id they are associated with.
     for (const auto& single_action : robot_config.actions().single_actions()) {
         uint32_t node_id = single_action.node_id();
-        
         if (single_action.action_type() == robot::action::ActionType::ACTUATOR) {
             node_action_types_[node_id].insert("actuator");
             has_action_ = true;
         }
     }
+}
+
+bool NodeGenerator::CheckConfigIntegrity() {
+    auto robot_config = config_.robot();
+    std::map<std::string, uint32_t> port_to_node_id;
+
+    // Helper lambda to extract serial port from a perception's config if it exists.
+    auto get_serial_port = [](const auto& perception_details) -> std::string {
+        if (perception_details.comm_type() == robot::comm_interface::CommType::SERIAL) {
+            return perception_details.serial_config().port();
+        }
+        return "";
+    };
+    
+    // Check for serial port conflicts among all perception devices.
+    // This ensures a single physical port is not managed by multiple node processes.
+    for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
+        uint32_t node_id = single_perception.node_id();
+        std::string port_name;
+        
+        if (single_perception.has_camera()) {
+            port_name = get_serial_port(single_perception.camera());
+        } else if (single_perception.has_encoder()) {
+            port_name = get_serial_port(single_perception.encoder());
+        }
+
+        if (!port_name.empty()) {
+            if (port_to_node_id.count(port_name)) {
+                if (port_to_node_id[port_name] != node_id) {
+                    LOG(ERROR) << "Configuration Integrity Failure: Serial port '" << port_name 
+                                 << "' is assigned to multiple node_ids (" 
+                                 << port_to_node_id[port_name] << " and " << node_id
+                                 << "). This is not allowed as it will cause resource conflicts.";
+                    return false;
+                }
+            } else {
+                port_to_node_id[port_name] = node_id;
+            }
+        }
+    }
+
+    // TODO: Add more check here for the config.
+
+    return true;
 }
 
 void NodeGenerator::DetermineRequiredBuilds() {
@@ -119,9 +164,6 @@ bool NodeGenerator::BuildRequiredTargets() {
 }
 
 bool NodeGenerator::LaunchAllNodes() {
-    LOG(INFO) << "Launching nodes...";
-    
-    // Launch perception nodes - one per unique node_id
     for (const auto& [node_id, perception_types] : node_perception_types_) {
         std::string node_type = GetNodeTypePriority(perception_types);
         if (node_type.empty()) {
@@ -166,7 +208,7 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
         
         std::string binary_impl = binary_path + "/" + node_type + "_impl";
         std::string node_id_str = std::to_string(node_id);
-        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), node_id_str.c_str(), node_name.c_str(), nullptr);
+        execl(binary_impl.c_str(), binary_impl.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
@@ -198,7 +240,7 @@ pid_t NodeGenerator::LaunchActionNode() {
         }
         
         std::string binary_impl = binary_path + "/actuator_subscriber_impl";
-        execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), "actuator_subscriber", nullptr);
+        execl(binary_impl.c_str(), binary_impl.c_str(), "actuator_subscriber", 0, config_path_.c_str(), nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);

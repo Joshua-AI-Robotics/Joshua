@@ -8,21 +8,8 @@
 class ActionSubscriber : public rclcpp::Node {
 
 public:
-  ActionSubscriber(const std::string& node_name, const std::string& topic_name, const config::Config& config) 
+  ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config) 
   : Node(node_name) {
-    // TODO: Currently actions operates based on encoder positions with fixed and ordered number of encoders.
-    // This needs to be updated by adding a config that each perception has a unique name and id and need to map to actions.
-    if (config.operation_mode() == config::OperationMode::MODE_TELEOPERATE) {
-      subscription_topic_name_ = "encoder_positions";
-    }
-    else if (config.operation_mode() == config::OperationMode::MODE_INFERENCE) {
-      subscription_topic_name_ = "mock_action_input"; // Need to manually run the mock action node.
-      // bazel run ros2/utils:mock_action_publisher
-    }
-    else {
-      RCLCPP_ERROR(this->get_logger(), "Invalid operation mode!");
-      return;
-    }
 
     subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
       subscription_topic_name_, 10, std::bind(&ActionSubscriber::action_callback, this, std::placeholders::_1));
@@ -93,17 +80,17 @@ int main(int argc, char * argv[]) {
   
   if (argc < 3) {
     RCLCPP_ERROR(rclcpp::get_logger("actuator_subscriber"), 
-                 "Usage: actuator_subscriber <config_path> <node_name>");
+                 "Usage: actuator_subscriber <node_id> <node_name> <config_path>");
     return 1;
   }
   
-  std::string config_path = argv[1];
   std::string node_name = argv[2];
+  int node_id = std::stoi(argv[3]);
+  std::string config_path = argv[4];
   
   config::Config config = config::config_util::LoadConfig(config_path);
   
-  // TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<ActionSubscriber>(node_name, "actuator_commands", config));
+  rclcpp::spin(std::make_shared<ActionSubscriber>(node_name, node_id, config));
   rclcpp::shutdown();
   return 0;
 } 

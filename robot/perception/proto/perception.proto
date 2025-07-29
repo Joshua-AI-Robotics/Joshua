@@ -78,10 +78,11 @@ message Sts3215EncoderConfig {
 
 message SinglePerception {
     uint32 node_id = 1;
-    PerceptionType perception_type = 2;
+    string publish_topic = 2;
+    PerceptionType perception_type = 3;
     oneof perception_data {
-        Camera camera = 3;
-        Encoder encoder = 4;
+        Camera camera = 4;
+        Encoder encoder = 5;
     }
 }
 

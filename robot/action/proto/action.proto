@@ -44,9 +44,10 @@ message Sts3215Config {
 
 message SingleAction {
     uint32 node_id = 1;
-    ActionType action_type = 2;
+    string subscribe_topic = 2;
+    ActionType action_type = 3;
     oneof action_data {
-        Actuator actuator = 3;
+        Actuator actuator = 4;
     }
 }
 

@@ -31,7 +31,8 @@ public:
     bool HasNodes() const { return !launched_nodes_.empty(); }
 
 private:
-    void AnalyzeConfiguration();
+    void GroupEntitiesByNodeId();
+    bool CheckConfigIntegrity();
     void DetermineRequiredBuilds();
 
     pid_t LaunchPerceptionNode(const std::string& node_type, uint32_t node_id, 

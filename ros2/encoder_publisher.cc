@@ -1,14 +1,24 @@
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/float32.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "config/proto/robot.pb.h"
 #include "config/config_utils.h"
 #include <memory>
+#include <string>
+#include <vector>
+#include <utility>
 
-// TODO: Separate each encoder into a separate node.
 class EncoderPublisher : public rclcpp::Node {
+private:
+  struct Encoder {
+    std::string topic;
+    std::unique_ptr<robot::perception::PerceptionInterface> interface;
+    std::pair<float, float> limits;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
+  };
+
 public:
-  EncoderPublisher(const std::string& node_name, const std::string& topic_name, const config::Config& config, int node_id) 
+  EncoderPublisher(const std::string& node_name, const int node_id, const config::Config& config) 
     : Node(node_name) {
     robot::perception::PerceptionFactory perception_factory;
     
@@ -16,13 +26,16 @@ public:
       if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER && 
           single_perception.node_id() == node_id) {
         const auto& encoder_proto = single_perception.encoder();
-        encoders_.push_back(perception_factory.CreatePerception(single_perception));
-        // TODO: Make this generic for all encoders.
-        encoder_limits_.push_back(std::make_pair(
-          encoder_proto.operational_lower_limit(), 
-          encoder_proto.operational_upper_limit()));
-        RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d", 
-                   encoder_proto.encoder_name().c_str(), node_id);
+        
+        encoders_.emplace_back(Encoder{
+          .topic = single_perception.publish_topic(),
+          .interface = perception_factory.CreatePerception(single_perception),
+          .limits = {encoder_proto.operational_lower_limit(), encoder_proto.operational_upper_limit()},
+          .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10)
+        });
+
+        RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s", 
+                   encoder_proto.encoder_name().c_str(), node_id, single_perception.publish_topic().c_str());
       }
     }
     
@@ -30,8 +43,6 @@ public:
       RCLCPP_ERROR(this->get_logger(), "No encoders found in configuration for node_id %d!", node_id);
       return;
     }
-    
-    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic_name, 10);
     
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(16), // 60 Hz update rate
@@ -44,42 +55,38 @@ public:
 private:
   void publish_encoder_data() {
     if (encoders_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "No encoders initialized!");
+      RCLCPP_WARN(this->get_logger(), "No encoders initialized, skipping publish cycle.");
       return;
     }
     
     try {
-      auto message = std_msgs::msg::Float32MultiArray();
-      message.data.reserve(encoders_.size());
-      
-      for (size_t i = 0; i < encoders_.size(); ++i) {
-        auto data = encoders_[i]->GetData();
+      for (auto& encoder : encoders_) {
+        auto data = encoder.interface->GetData();
         auto data_opt = std::any_cast<std::optional<uint16_t>>(data);
         if (!data_opt.has_value()) {
-            RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder %zu!", i);
+            RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder '%s'!", encoder.topic.c_str());
             continue;
         }
         
         // Get encoder position and normalize to [-1, 1]
         uint16_t raw_position = *data_opt;
-        float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder_limits_[i].first) / 
-                                   (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
+        float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder.limits.first) / 
+                                   (encoder.limits.second - encoder.limits.first) - 1.0f;
         
         // Clamp to [-1, 1] range
         normalized_position = std::max(-1.0f, std::min(1.0f, normalized_position));
-        message.data.push_back(normalized_position);
+        
+        auto message = std_msgs::msg::Float32();
+        message.data = normalized_position;
+        encoder.publisher->publish(message);
       }
-      
-      publisher_->publish(message);
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error publishing encoder data: %s", e.what());
     }
   }
   
-  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::vector<std::unique_ptr<robot::perception::PerceptionInterface>> encoders_;
-  std::vector<std::pair<float, float>> encoder_limits_;
+  std::vector<Encoder> encoders_;
 };
 
 int main(int argc, char* argv[]) {
@@ -87,18 +94,17 @@ int main(int argc, char* argv[]) {
   
   if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger("encoder_publisher"), 
-                 "Usage: encoder_publisher <config_path> <node_id> <node_name>");
+                 "Usage: encoder_publisher <node_name> <node_id> <config_path>");
     return 1;
   }
   
-  std::string config_path = argv[1];
+  std::string node_name = argv[1];
   int node_id = std::stoi(argv[2]);
-  std::string node_name = argv[3];
+  std::string config_path = argv[3];
   
   config::Config config = config::config_util::LoadConfig(config_path);
   
-  // TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<EncoderPublisher>(node_name, "encoder_positions", config, node_id));
+  rclcpp::spin(std::make_shared<EncoderPublisher>(node_name, node_id, config));
   rclcpp::shutdown();
   return 0;
 } 

@@ -8,6 +8,7 @@ robot {
   actions {
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_1"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_1"
@@ -33,6 +34,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_2"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_2"
@@ -58,6 +60,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_3"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_3"
@@ -83,6 +86,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_4"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_4"
@@ -108,6 +112,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_5"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_5"
@@ -133,6 +138,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "sts3215_servo_6"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_6"
@@ -161,6 +167,7 @@ robot {
   perceptions {    
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_1"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_1"
@@ -181,6 +188,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_2"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_2"
@@ -202,6 +210,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_3"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_3"
@@ -223,6 +232,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_4"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_4"
@@ -244,6 +254,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_5"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_5"
@@ -264,6 +275,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
+      subscribe_topic: "sts3215_encoder_6"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_6"
