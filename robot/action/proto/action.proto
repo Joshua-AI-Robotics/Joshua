@@ -2,10 +2,10 @@ syntax = "proto3";
 
 import "robot/comm_interface/proto/comm_interface.proto";
 
-package robot.actuation;
+package robot.action;
 
-enum ActuationType {
-    ACTUATOR_INVALID = 0;
+enum ActionType {
+    ACTION_INVALID = 0;
     STS3215 = 1;
     // Add more motor type here.
 }
@@ -13,7 +13,7 @@ enum ActuationType {
 message Actuator {
     string actuator_name = 1;
     uint64 id = 2;
-    ActuationType actuation_type = 3;
+    ActionType action_type = 3;
     robot.comm_interface.CommType comm_type = 4;
 
     uint32 physical_lower_limit = 5; // TODO: Move this to physical layout.
@@ -25,12 +25,10 @@ message Actuator {
         robot.comm_interface.SerialConfig serial_config = 9;
         // Add other comm type here.
     }
-    oneof actuator_config {
+    oneof action_config {
         STS3215Config sts3215_config = 10;
         // Add other motor type here.
-    }
-
-    
+    }    
 }
 
 message STS3215Config {
@@ -40,13 +38,13 @@ message STS3215Config {
     uint32 idle_position = 4;
 }
 
-message SingleActuation {
+message SingleAction {
     uint32 node_id = 1;
-    oneof actuation_type {
+    oneof action_type {
         Actuator actuator = 2;
     }
 }
 
-message Actuation {
-    repeated SingleActuation single_actuation = 1;
+message Action {
+    repeated SingleAction single_action = 1;
 }

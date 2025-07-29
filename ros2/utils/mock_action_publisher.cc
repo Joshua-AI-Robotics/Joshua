@@ -3,26 +3,26 @@
 #include <random>
 #include <chrono>
 
-class MockActuationPublisher : public rclcpp::Node {
+class MockActionPublisher : public rclcpp::Node {
 public:
-  MockActuationPublisher() : Node("mock_actuation_publisher") {
+  MockActionPublisher() : Node("mock_action_publisher") {
     publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-      "mock_actuation_input", 10);
+      "mock_action_input", 10);
     
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
-      std::bind(&MockActuationPublisher::publish_mock_actuation_data, this));
+      std::bind(&MockActionPublisher::publish_mock_action_data, this));
     
     std::random_device rd;
     random_generator_ = std::mt19937(rd());
     distribution_ = std::uniform_real_distribution<float>(-1.0f, 1.0f);
     
-    RCLCPP_INFO(this->get_logger(), "Mock actuation publisher started!");
-    RCLCPP_INFO(this->get_logger(), "Publishing 6-element arrays on topic: /mock_actuation_input");
+    RCLCPP_INFO(this->get_logger(), "Mock action publisher started!");
+    RCLCPP_INFO(this->get_logger(), "Publishing 6-element arrays on topic: /mock_action_input");
   }
 
 private:
-  void publish_mock_actuation_data() {
+  void publish_mock_action_data() {
     auto message = std_msgs::msg::Float32MultiArray();
     
     // Generate 6 random float values between -1 and 1
@@ -44,7 +44,7 @@ private:
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MockActuationPublisher>());
+  rclcpp::spin(std::make_shared<MockActionPublisher>());
   rclcpp::shutdown();
   return 0;
 }

@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/core/mat.hpp>
 
 class CameraPublisher : public rclcpp::Node {
 public:
@@ -51,29 +52,18 @@ private:
     
     try {
       for (const auto& camera : cameras_) {
-        auto packet = camera->GetData();
-        if (!packet) {
-          RCLCPP_WARN(this->get_logger(), "Failed to get camera data!");
-          return;
+        auto data = camera->GetData();
+        if (!data.has_value()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get camera data!");
+            return;
         }
-      
-        // Extract image data from your custom protobuf format
-        const auto& image_data = packet->camera_perception().image_data();
-        
-        if (image_data.empty()) {
-          RCLCPP_WARN(this->get_logger(), "Empty image data received from camera!");
-          return;
-        }
-        
-        // Convert JPEG bytes to OpenCV Mat
-        std::vector<uchar> buffer(image_data.begin(), image_data.end());
-        cv::Mat frame = cv::imdecode(buffer, cv::IMREAD_COLOR);
-        
+
+        cv::Mat frame = std::any_cast<cv::Mat>(data);
         if (frame.empty()) {
-          RCLCPP_WARN(this->get_logger(), "Failed to decode image from camera data!");
-          return;
+            RCLCPP_WARN(this->get_logger(), "Empty image data received from camera!");
+            return;
         }
-        
+
         // Convert BGR to RGB (OpenCV uses BGR, ROS2 typically expects RGB)
         cv::Mat rgb_frame;
         cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);

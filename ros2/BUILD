@@ -20,19 +20,19 @@ package(default_visibility = ["//visibility:public"])
 #
 # How it works:
 # 1. ros2_cpp_binary_with_wrapper() creates the normal ROS2 binary with set_up_ament=True
-# 2. It also generates a wrapper script (e.g., actuation_subscriber_wrapper.sh)
+# 2. It also generates a wrapper script (e.g., action_subscriber_wrapper.sh)
 # 3. The wrapper script is added as a data dependency to ensure it builds automatically
 #
 # Benefits:
-# - Single build command: `bazel build ros2:actuation_subscriber` 
+# - Single build command: `bazel build ros2:action_subscriber` 
 # - Generates both binary and wrapper script in one go
 # - No need to remember to build wrapper scripts separately
 # - Standalone execution without Bazel dependency
 #
 # Usage:
-# 1. Build: `bazel build ros2:actuation_subscriber`
-# 2. Run standalone: `cd bazel-bin && ./ros2/actuation_subscriber_wrapper.sh [args]`
-# 3. Or use traditional: `bazel run ros2:actuation_subscriber [args]` (still works!)
+# 1. Build: `bazel build ros2:action_subscriber`
+# 2. Run standalone: `cd bazel-bin && ./ros2/action_subscriber_wrapper.sh [args]`
+# 3. Or use traditional: `bazel run ros2:action_subscriber [args]` (still works!)
 #
 # The wrapper scripts:
 # - Set up proper environment variables (AMENT_PREFIX_PATH)
@@ -80,7 +80,6 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
-        "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
 )
 
@@ -96,13 +95,12 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
-        "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
 )
 
 ros2_cpp_binary_with_wrapper(
-    name = "actuation_subscriber",
-    srcs = ["actuation_subscriber.cc"],
+    name = "action_subscriber",
+    srcs = ["action_subscriber.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -112,6 +110,6 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_common_interfaces//:cpp_std_srvs",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
-        "//robot/actuation/factory:actuation_factory",
+        "//robot/action/factory:action_factory",
     ],
 )

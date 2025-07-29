@@ -18,7 +18,7 @@ proto_library(
     name = "robot_proto",
     srcs = ["robot.proto"],
     deps = [
-        "//robot/actuation/proto:actuation_proto",
+        "//robot/action/proto:action_proto",
         "//robot/perception/proto:perception_proto",
     ],
     visibility = ["//visibility:public"],

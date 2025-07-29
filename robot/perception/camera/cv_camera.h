@@ -1,10 +1,10 @@
 #pragma once
 
+#include <any>
 #include "robot/perception/interfaces/camera_interface.h"
 #include <opencv2/videoio.hpp>
 #include <glog/logging.h>
 #include <memory>
-#include "robot/perception/proto/perception.pb.h"
 
 namespace robot::perception {
 
@@ -14,7 +14,7 @@ public:
     CvCamera(const robot::perception::Sensor& sensor_config);
     ~CvCamera() override;
 
-    std::unique_ptr<robot::nexus::NexusPerceptionPacket> GetData() override;
+    std::any GetData() override;
     std::string GetId() override;
 
 private:

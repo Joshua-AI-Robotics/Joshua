@@ -1,24 +1,24 @@
-#include "robot/actuation/motors/drivers/sts3215_driver.h"
+#include "robot/action/motors/drivers/sts3215_driver.h"
 
 
 
-namespace robot::actuation {
+namespace robot::action {
 
 namespace {
     constexpr auto kReadAttempt = 50;
 }
 
-Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::actuation::Actuator& actuator_config):
+Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::action::Actuator& action_config):
     serial_(serial)
     {   
-        auto sts_config = actuator_config.sts3215_config();
+        auto sts_config = action_config.sts3215_config();
         servo_id_ = sts_config.servo_id();
         move_speed_ = sts_config.move_speed();
         move_time_in_ms_ = sts_config.move_time_in_ms();
-        physical_lower_limit_ = actuator_config.physical_lower_limit();
-        physical_upper_limit_ = actuator_config.physical_upper_limit();
-        operational_lower_limit_ = actuator_config.operational_lower_limit();
-        operational_upper_limit_ = actuator_config.operational_upper_limit();
+        physical_lower_limit_ = action_config.physical_lower_limit();
+        physical_upper_limit_ = action_config.physical_upper_limit();
+        operational_lower_limit_ = action_config.operational_lower_limit();
+        operational_upper_limit_ = action_config.operational_upper_limit();
         idle_position_ = sts_config.idle_position();
         id_ = GetId();
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
@@ -100,28 +100,6 @@ void Sts3215Driver::SetTorque(float torque) {
     }
 }
 
-void Sts3215Driver::SetAction(std::unique_ptr<robot::nexus::NexusActionPacket> action_packet) {
-    if (!action_packet) {
-        return;
-    }
-    
-    try {
-        // Avoid default value.
-        if(!action_packet->sts3215_action().move_time_in_ms() == 0){
-            move_time_in_ms_ = action_packet->sts3215_action().move_time_in_ms();
-        }
-        if(!action_packet->sts3215_action().move_speed() == 0){
-            move_speed_ = action_packet->sts3215_action().move_speed();
-        }
-        if(!action_packet->sts3215_action().position() == 0){
-            serial_->Write(create_move_packet(action_packet->sts3215_action().position()));
-        }
-    } catch (const std::exception& e) {
-        LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set action.");
-    }
-}
-
 std::string Sts3215Driver::GetId() {
     auto id = "sts3215_driver_" + std::to_string(servo_id_);
     return id;
@@ -158,4 +136,4 @@ void Sts3215Driver::GracefulShutdown(){
     }
 }
 
-} // namespace robot::actuation
+} // namespace robot::action

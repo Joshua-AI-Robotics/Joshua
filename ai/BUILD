@@ -9,7 +9,6 @@ py_library(
         requirement("numpy"),
         requirement("Pillow"),
         "//config/proto:config_py_proto",
-        "//robot/nexus/proto:nexus_packet_py_proto",
     ],
     data = [
         requirement("pandas"),

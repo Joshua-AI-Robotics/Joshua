@@ -6,13 +6,13 @@ robot {
   trigger_frequency: 10
   robot_type: MANIPULATOR_ARM
 
-  actuations {
-    single_actuation {
+  actions {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_1"
         id: 1
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
         physical_upper_limit: 4095
@@ -31,12 +31,12 @@ robot {
         }
       }
     }
-    single_actuation {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_2"
         id: 2
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -55,12 +55,12 @@ robot {
         }
       }
     }
-    single_actuation {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_3"
         id: 3
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -79,12 +79,12 @@ robot {
         }
       }
     }
-    single_actuation {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_4"
         id: 4
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -103,12 +103,12 @@ robot {
         }
       }
     }
-    single_actuation {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_5"
         id: 5
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -127,12 +127,12 @@ robot {
         }
       }
     }
-    single_actuation {
+    single_action {
       node_id: 1
       actuator {
         actuator_name: "sts_motor_6"
         id: 6
-        actuation_type: STS3215
+        action_type: STS3215
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095

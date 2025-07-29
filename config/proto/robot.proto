@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "robot/actuation/proto/actuation.proto";
+import "robot/action/proto/action.proto";
 import "robot/perception/proto/perception.proto";
 
 package config;
@@ -15,6 +15,6 @@ message Robot {
     uint64 id = 2;
     RobotType robot_type = 3;
     uint32 trigger_frequency = 4;
-    robot.actuation.Actuation actuations = 5;
+    robot.action.Action actions = 5;
     robot.perception.Perception perceptions = 6;
 }

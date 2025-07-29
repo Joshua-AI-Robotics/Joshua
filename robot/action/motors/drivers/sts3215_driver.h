@@ -3,19 +3,18 @@
 #include <boost/asio.hpp>
 #include <vector>
 #include "robot/comm_interface/serial/serial.h"
-#include "robot/actuation/interfaces/actuation_interface.h"
+#include "robot/action/interfaces/action_interface.h"
 #include "config/proto/robot.pb.h"
 #include <memory>
 
-namespace robot::actuation{
-class Sts3215Driver : public robot::actuation::ActuationInterface {
+namespace robot::action{
+class Sts3215Driver : public robot::action::ActionInterface {
   public:
-  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::actuation::Actuator& actuator_config);
+  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::action::Actuator& action_config);
   ~Sts3215Driver();
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
-  void SetAction(std::unique_ptr<::robot::nexus::NexusActionPacket> action_packet) override;
   std::string GetId() override; // TODO: Update the ID scheme.
   void SetMiddlePosition() override;
   void SetIdlePosition() override;

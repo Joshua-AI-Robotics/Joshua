@@ -1,6 +1,5 @@
 #include "robot/perception/encoder/sts3215_encoder.h"
 #include <glog/logging.h>
-#include "robot/nexus/proto/nexus_packet.pb.h"
 
 namespace robot::perception {
 
@@ -14,16 +13,13 @@ Sts3215Encoder::Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Seri
     id_ = GetId();
 }
 
-std::unique_ptr<robot::nexus::NexusPerceptionPacket> Sts3215Encoder::GetData() {
-    auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
-    packet->set_perception_id(id_);
-    packet->mutable_encoder_perception()->set_position(read_servo_position());
-    return packet;
-}
-
 std::string Sts3215Encoder::GetId() {
     auto id = "sts3215_encoder_" + std::to_string(servo_id_);
     return id;
+}
+
+std::any Sts3215Encoder::GetData() {
+    return read_servo_position();
 }
 
 float Sts3215Encoder::GetPosition() {

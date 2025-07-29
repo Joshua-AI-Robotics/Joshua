@@ -66,8 +66,7 @@ private:
       cv::Mat display_frame = bgr_frame.clone();
       
       // Add info text to the frame
-      std::string info = "Size: " + std::to_string(bgr_frame.cols) + "x" + std::to_string(bgr_frame.rows) + 
-                        " | Data: " + std::to_string(msg->data.size()) + " bytes";
+      std::string info = "Size: " + std::to_string(bgr_frame.cols) + "x" + std::to_string(bgr_frame.rows);
       cv::putText(display_frame, info, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
       
       // Add timestamp info

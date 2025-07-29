@@ -36,7 +36,7 @@ private:
 
     pid_t LaunchPerceptionNode(const std::string& node_type, uint32_t node_id, 
                               const std::string& node_name);
-    pid_t LaunchActuationNode();
+    pid_t LaunchActionNode();
 
     // Process management
     void SetupSignalHandlers();
@@ -52,7 +52,7 @@ private:
     
     std::map<uint32_t, std::set<std::string>> node_sensor_types_;
     std::set<std::string> required_builds_;
-    bool has_actuator_;
+    bool has_action_;
     
     std::vector<NodeInfo> launched_nodes_;
     volatile bool shutdown_requested_;

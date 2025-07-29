@@ -52,14 +52,14 @@ private:
       message.data.reserve(encoders_.size());
       
       for (size_t i = 0; i < encoders_.size(); ++i) {
-        auto data_packet = encoders_[i]->GetData();
-        if (!data_packet) {
-          RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder %zu!", i);
-          continue;
+        auto data = encoders_[i]->GetData();
+        if (!data.has_value()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder %zu!", i);
+            continue;
         }
         
         // Get encoder position and normalize to [-1, 1]
-        uint32_t raw_position = data_packet->encoder_perception().position();
+        uint16_t raw_position = std::any_cast<uint16_t>(data);
         float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder_limits_[i].first) / 
                                    (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
         

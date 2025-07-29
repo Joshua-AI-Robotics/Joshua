@@ -14,7 +14,7 @@ namespace {
     constexpr auto kROS2Target = "ros2:";
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
-    constexpr auto kActuationSubscriber = "actuation_subscriber";
+    constexpr auto kActionSubscriber = "action_subscriber";
 }
 
 // Static member initialization
@@ -23,7 +23,7 @@ NodeGenerator* NodeGenerator::instance_ = nullptr;
 NodeGenerator::NodeGenerator(const std::string& config_path) 
     : config_path_(config_path), 
       repo_root_("/home/hmoon/Projects/ProjectJoshua"),
-      has_actuator_(false),
+      has_action_(false),
       shutdown_requested_(false) {
     instance_ = this;
 }
@@ -47,7 +47,7 @@ bool NodeGenerator::Initialize() {
     
     auto robot_config = config_.robot();
     LOG(INFO) << "Robot Name: " << robot_config.name();
-    LOG(INFO) << "Actuator Size: " << robot_config.actuations().single_actuation_size();
+    LOG(INFO) << "Action Size: " << robot_config.actions().single_action_size();
     LOG(INFO) << "Perception Size: " << robot_config.perceptions().single_perception_size();
     
     // Change to repository root
@@ -79,8 +79,8 @@ void NodeGenerator::AnalyzeConfiguration() {
         }
     }
     
-    // TODO: Group actuators by node_id
-    has_actuator_ = !robot_config.actuations().single_actuation().empty();
+    // TODO: Group actions by node_id
+    has_action_ = !robot_config.actions().single_action().empty();
 }
 
 void NodeGenerator::DetermineRequiredBuilds() {
@@ -95,8 +95,8 @@ void NodeGenerator::DetermineRequiredBuilds() {
         }
     }
     
-    if (has_actuator_) {
-        required_builds_.insert(std::string(kROS2Target) + kActuationSubscriber);
+    if (has_action_) {
+        required_builds_.insert(std::string(kROS2Target) + kActionSubscriber);
     }
 }
 
@@ -132,11 +132,10 @@ bool NodeGenerator::LaunchAllNodes() {
         }
     }
     
-    // Launch actuation node if needed
-    if (has_actuator_) {
-        pid_t pid = LaunchActuationNode();
+    if (has_action_) {
+        pid_t pid = LaunchActionNode();
         if (pid > 0) {
-            launched_nodes_.push_back({"actuation_subscriber", "actuation_subscriber", 0, pid});
+            launched_nodes_.push_back({"action_subscriber", "action_subscriber", 0, pid});
         }
     }
     
@@ -175,31 +174,31 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
     }
 }
 
-pid_t NodeGenerator::LaunchActuationNode() {
+pid_t NodeGenerator::LaunchActionNode() {
     pid_t pid = fork();
     
     if (pid == 0) {
         // Child process
         std::string binary_path = GetBinaryPath();
-        std::string ament_path = binary_path + "/actuation_subscriber_launch_ament_setup";
+        std::string ament_path = binary_path + "/action_subscriber_launch_ament_setup";
         setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
         
-        std::string runfiles_dir = binary_path + "/actuation_subscriber.runfiles/_main";
+        std::string runfiles_dir = binary_path + "/action_subscriber.runfiles/_main";
         if (chdir(runfiles_dir.c_str()) != 0) {
             LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
             _exit(1);
         }
         
-        std::string binary_impl = binary_path + "/actuation_subscriber_impl";
+        std::string binary_impl = binary_path + "/action_subscriber_impl";
         execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
     } else if (pid > 0) {
-        LOG(INFO) << "Launched actuation_subscriber with PID: " << pid;
+        LOG(INFO) << "Launched action_subscriber with PID: " << pid;
         return pid;
     } else {
-        LOG(ERROR) << "Failed to fork process for actuation_subscriber: " << strerror(errno);
+        LOG(ERROR) << "Failed to fork process for action_subscriber: " << strerror(errno);
         return -1;
     }
 }

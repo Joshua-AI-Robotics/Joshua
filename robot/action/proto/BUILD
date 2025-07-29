@@ -4,29 +4,29 @@ load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 package(default_visibility = ["//visibility:public"])
 
 proto_library(
-    name = "actuation_proto",
-    srcs = ["actuation.proto"],
+    name = "action_proto",
+    srcs = ["action.proto"],
     deps = [
         "//robot/comm_interface/proto:comm_interface_proto",
     ],
 )
 
 cc_proto_library(
-    name = "actuation_cc_proto",
+    name = "action_cc_proto",
     deps = [
-        ":actuation_proto",
+        ":action_proto",
     ],
 )
 
 proto_library(
-    name = "actuation_packet_proto",
-    srcs = ["actuation_packet.proto"],
+    name = "action_packet_proto",
+    srcs = ["action_packet.proto"],
     deps = [
-        ":actuation_proto",
+        ":action_proto",
     ],
 )
 
 cc_proto_library(
-    name = "actuation_packet_cc_proto",
-    deps = [":actuation_packet_proto"],
+    name = "action_packet_cc_proto",
+    deps = [":action_packet_proto"],
 )

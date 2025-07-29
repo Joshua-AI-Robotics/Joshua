@@ -3,6 +3,7 @@
 #include "robot/perception/interfaces/encoder_interface.h"
 #include "robot/perception/proto/perception.pb.h"
 #include "robot/comm_interface/serial/serial.h"
+#include <any>
 
 namespace robot::perception {
 
@@ -11,7 +12,7 @@ public:
     explicit Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Sensor& sensor_config);
     ~Sts3215Encoder() override = default;
 
-    std::unique_ptr<robot::nexus::NexusPerceptionPacket> GetData() override;
+    std::any GetData() override;
     std::string GetId() override;
     float GetPosition() override;
 

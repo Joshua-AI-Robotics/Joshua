@@ -13,7 +13,7 @@ The architecture is centered around the **Node Generator**. Single configuration
 ### TODO
 - Implement auto calibration for actuator and store it as a config file.
 - Implement UI for generating the config file.
-- Leverage commonly used data type for perception and actuation.
+- Leverage commonly used data type for perception and action.
 - Implement raspberry pi 5 platform.
 
 

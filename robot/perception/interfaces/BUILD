@@ -4,7 +4,6 @@ cc_library(
     name = "perception_interface",
     hdrs = ["perception_interface.h"],
     deps = [
-        "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -15,7 +14,6 @@ cc_library(
     deps = [
         ":perception_interface",
         "//config/proto:robot_cc_proto",
-        "//robot/nexus/proto:nexus_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

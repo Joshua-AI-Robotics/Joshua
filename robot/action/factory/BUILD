@@ -1,11 +1,11 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "actuation_factory",
-    hdrs = ["actuation_factory.h"],
+    name = "action_factory",
+    hdrs = ["action_factory.h"],
     deps = [
-        "//robot/actuation/interfaces:actuation_interface",
-        "//robot/actuation/motors/drivers:sts3215_driver",
+        "//robot/action/interfaces:action_interface",
+        "//robot/action/motors/drivers:sts3215_driver",
         "//robot/comm_interface/factory:comm_factory",
         "//config/proto:robot_cc_proto",
     ],

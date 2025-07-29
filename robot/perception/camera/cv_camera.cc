@@ -1,5 +1,4 @@
 #include "robot/perception/camera/cv_camera.h"
-#include "robot/nexus/proto/nexus_packet.pb.h"
 #include <vector>
 #include <chrono>
 #include <opencv2/imgcodecs.hpp>
@@ -43,24 +42,15 @@ CvCamera::~CvCamera() {
     }
 }
 
-std::unique_ptr<robot::nexus::NexusPerceptionPacket> CvCamera::GetData() {
-    auto packet = std::make_unique<robot::nexus::NexusPerceptionPacket>();
+std::any CvCamera::GetData() {
     // Capture the frame.
     cv::Mat frame;
     cap_ >> frame;
     if (frame.empty()) {
         LOG(ERROR) << "Failed to capture an image from camera.";
-        return nullptr;
+        return {};
     }
-    std::vector<uchar> buffer;
-    cv::imencode(".jpg", frame, buffer);
-    packet->mutable_camera_perception()->set_image_data(buffer.data(), buffer.size());
-
-    // Set other fields in the packet as needed.
-    packet->set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-    packet->set_perception_id(id_);
-
-    return packet;
+    return frame;
 }
 
 std::string CvCamera::GetId() {
