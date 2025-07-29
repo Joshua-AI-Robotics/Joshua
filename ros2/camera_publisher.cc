@@ -16,12 +16,12 @@ public:
     : Node("camera_publisher") {
     robot::perception::PerceptionFactory perception_factory;
 
-    for (const auto& single_perception : config.robot().perceptions().single_perception()) {
-      if (single_perception.sensor().sensor_type() == robot::perception::SensorType::CAMERA && 
+    for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
+      if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA && 
           single_perception.node_id() == node_id) {
-        cameras_.push_back(perception_factory.CreatePerception(single_perception.sensor()));
+        cameras_.push_back(perception_factory.CreatePerception(single_perception));
         RCLCPP_INFO(this->get_logger(), "Found camera '%s' in configuration for node_id %d", 
-                   single_perception.sensor().sensor_name().c_str(), node_id);
+                   single_perception.camera().camera_name().c_str(), node_id);
       }
     }
     

@@ -17,16 +17,3 @@ cc_proto_library(
         ":action_proto",
     ],
 )
-
-proto_library(
-    name = "action_packet_proto",
-    srcs = ["action_packet.proto"],
-    deps = [
-        ":action_proto",
-    ],
-)
-
-cc_proto_library(
-    name = "action_packet_cc_proto",
-    deps = [":action_packet_proto"],
-)

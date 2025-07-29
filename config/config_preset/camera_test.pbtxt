@@ -6,14 +6,15 @@ robot {
   robot_type: MANIPULATOR_ARM
 
   perceptions {
-    single_perception {
+    single_perceptions {
       node_id: 1
-      sensor {
-        sensor_name: "webcam"
+      perception_type: CAMERA
+      camera {
+        camera_name: "webcam"
         id: 1
-        sensor_type: CAMERA
+        camera_type: OPENCV
         comm_type: COMM_INVALID
-        camera_config {
+        opencv_config {
           id: 0
           width: 640
           height: 480

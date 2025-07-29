@@ -12,16 +12,17 @@ public:
     : Node("encoder_publisher") {
     robot::perception::PerceptionFactory perception_factory;
     
-    for (const auto& single_perception : config.robot().perceptions().single_perception()) {
-      if (single_perception.sensor().sensor_type() == robot::perception::SensorType::ENCODER && 
+    for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
+      if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER && 
           single_perception.node_id() == node_id) {
-        const auto& sensor_proto = single_perception.sensor();
-        encoders_.push_back(perception_factory.CreatePerception(sensor_proto));
+        const auto& encoder_proto = single_perception.encoder();
+        encoders_.push_back(perception_factory.CreatePerception(single_perception));
+        // TODO: Make this generic for all encoders.
         encoder_limits_.push_back(std::make_pair(
-          sensor_proto.encoder_config().operational_lower_limit(), 
-          sensor_proto.encoder_config().operational_upper_limit()));
+          encoder_proto.sts3215_encoder_config().operational_lower_limit(), 
+          encoder_proto.sts3215_encoder_config().operational_upper_limit()));
         RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d", 
-                   sensor_proto.sensor_name().c_str(), node_id);
+                   encoder_proto.encoder_name().c_str(), node_id);
       }
     }
     

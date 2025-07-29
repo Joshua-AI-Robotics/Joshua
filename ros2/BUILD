@@ -76,8 +76,8 @@ ros2_cpp_binary_with_wrapper(
 )
 
 ros2_cpp_binary_with_wrapper(
-    name = "action_subscriber",
-    srcs = ["action_subscriber.cc"],
+    name = "actuator_subscriber",
+    srcs = ["actuator_subscriber.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],

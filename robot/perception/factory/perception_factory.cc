@@ -5,17 +5,23 @@
 
 namespace robot::perception {
 
-std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::CreatePerception(const robot::perception::Sensor& sensor_config) {
-    switch (sensor_config.sensor_type()) {
-        case SensorType::CAMERA:
+std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::CreatePerception(const robot::perception::SinglePerception& single_perception) {
+    switch (single_perception.perception_type()) {
+        case PerceptionType::CAMERA:
+        {
+            const auto& camera = single_perception.camera();
             // Assuming CvCamera for now. Add logic for other camera types if needed.
-            return std::make_unique<CvCamera>(sensor_config);
-        case SensorType::ENCODER:
-            if (sensor_config.has_encoder_config()) {
-                auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(sensor_config.serial_config());
-                return std::make_unique<Sts3215Encoder>(serial,sensor_config);
+            return std::make_unique<CvCamera>(camera);
+        }
+        case PerceptionType::ENCODER:
+        {
+            const auto& encoder = single_perception.encoder();
+            if (encoder.comm_type() == robot::comm_interface::CommType::SERIAL) {
+                auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(encoder.serial_config());
+                return std::make_unique<Sts3215Encoder>(serial, encoder);
             }
             return nullptr;
+        }
         default:
             return nullptr;
     }

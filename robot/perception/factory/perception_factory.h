@@ -12,7 +12,7 @@ public:
     PerceptionFactory() = default;
     ~PerceptionFactory() = default;
 
-    std::unique_ptr<robot::perception::PerceptionInterface> CreatePerception(const robot::perception::Sensor& sensor_config);
+    std::unique_ptr<robot::perception::PerceptionInterface> CreatePerception(const robot::perception::SinglePerception& single_perception);
     
 private:
 };

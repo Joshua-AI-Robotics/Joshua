@@ -50,7 +50,8 @@ private:
     std::string repo_root_;
     config::Config config_;
     
-    std::map<uint32_t, std::set<std::string>> node_sensor_types_;
+    std::map<uint32_t, std::set<std::string>> node_perception_types_;
+    std::map<uint32_t, std::set<std::string>> node_action_types_;
     std::set<std::string> required_builds_;
     bool has_action_;
     

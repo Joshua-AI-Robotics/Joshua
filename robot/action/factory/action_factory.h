@@ -14,21 +14,32 @@ public:
     ActionFactory() = default;
     ~ActionFactory() = default;
 
-    std::unique_ptr<robot::action::ActionInterface> CreateAction(const robot::action::Actuator& action_config)
+    std::unique_ptr<robot::action::ActionInterface> CreateAction(const robot::action::SingleAction& single_action)
     {
-        // TODO: Fix this nested switch case. Probably should make comm_factory.
-        switch (action_config.action_type())
+        switch (single_action.action_type())
         {
-            case robot::action::ActionType::STS3215:
+            case robot::action::ActionType::ACTUATOR:
             {
-                switch (action_config.comm_type()){
-                    case robot::comm_interface::CommType::SERIAL:
+                const auto& actuator = single_action.actuator();
+                switch (actuator.actuator_type())
+                {
+                    case robot::action::ActuatorType::STS3215_SERVO:
                     {
-                        auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(action_config.serial_config());
-                        return std::make_unique<robot::action::Sts3215Driver>(serial, action_config);
+                        switch (actuator.comm_type()){
+                            case robot::comm_interface::CommType::SERIAL:
+                            {
+                                auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(actuator.serial_config());
+                                return std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+                            }
+                        }
                     }
+                    default:
+                        return nullptr;
                 }
             }
+            // TODO: Add other action types here when they are implemented
+            // case robot::action::ActionType::GRIPPER:
+            // case robot::action::ActionType::END_EFFECTOR:
             default:
                 return nullptr;
         }

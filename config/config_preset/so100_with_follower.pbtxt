@@ -7,12 +7,13 @@ robot {
   robot_type: MANIPULATOR_ARM
 
   actions {
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_1"
+        actuator_name: "sts3215_servo_1"
         id: 1
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
         physical_upper_limit: 4095
@@ -31,12 +32,13 @@ robot {
         }
       }
     }
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_2"
+        actuator_name: "sts3215_servo_2"
         id: 2
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -55,12 +57,13 @@ robot {
         }
       }
     }
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_3"
+        actuator_name: "sts3215_servo_3"
         id: 3
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -79,12 +82,13 @@ robot {
         }
       }
     }
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_4"
+        actuator_name: "sts3215_servo_4"
         id: 4
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
@@ -103,17 +107,18 @@ robot {
         }
       }
     }
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_5"
+        actuator_name: "sts3215_servo_5"
         id: 5
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
-          operational_lower_limit: 10
-          operational_upper_limit: 3000
+          operational_lower_limit: 921
+          operational_upper_limit: 2954
         serial_config {
           id: 5
           port: "/dev/ttyACM0"
@@ -127,17 +132,18 @@ robot {
         }
       }
     }
-    single_action {
+    single_actions {
       node_id: 1
+      action_type: ACTUATOR
       actuator {
-        actuator_name: "sts_motor_6"
+        actuator_name: "sts3215_servo_6"
         id: 6
-        action_type: STS3215
+        actuator_type: STS3215_SERVO
         comm_type: SERIAL
         physical_lower_limit: 0
           physical_upper_limit: 4095
           operational_lower_limit: 1762
-          operational_upper_limit: 2400
+          operational_upper_limit: 3216
         serial_config {
           id: 6
           port: "/dev/ttyACM0"
@@ -146,123 +152,129 @@ robot {
         sts3215_config {
           servo_id: 6
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 2200
           idle_position: 1806
         }
       }
     }
   }
 
-  perceptions {
-    single_perception {
+  perceptions {    
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_1"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_1"
         id: 1
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 1
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 1
+        sts3215_encoder_config {
+          servo_id: 1
           operational_lower_limit: 952
           operational_upper_limit: 3200
         }
       }
     }
-    single_perception {
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_2"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_2"
         id: 2
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 2
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 2
+        sts3215_encoder_config {
+          servo_id: 2
           operational_lower_limit: 1669
           operational_upper_limit: 3985
         }
       }
     }
-    single_perception {
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_3"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_3"
         id: 3
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 3
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 3
+        sts3215_encoder_config {
+          servo_id: 3
           operational_lower_limit: 920
           operational_upper_limit: 3113
         }
       }
     }
-    single_perception {
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_4"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_4"
         id: 4
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 4
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 4
+        sts3215_encoder_config {
+          servo_id: 4
           operational_lower_limit: 37
           operational_upper_limit: 2177
         }
       }
     }
-    single_perception {
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_5"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_5"
         id: 5
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 5
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 5
+        sts3215_encoder_config {
+          servo_id: 5
           operational_lower_limit: 1623
           operational_upper_limit: 3690
         }
       }
     }
-    single_perception {
+    single_perceptions {
       node_id: 2
-      sensor {
-        sensor_name: "sts3215_encoder_6"
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_6"
         id: 6
-        sensor_type: ENCODER
+        encoder_type: STS3215_ENCODER
         comm_type: SERIAL
         serial_config {
           id: 6
           port: "/dev/ttyACM1"
           baudrate: 1000000
         }
-        encoder_config {
-          id: 6
+        sts3215_encoder_config {
+          servo_id: 6
           operational_lower_limit: 2010
           operational_upper_limit: 3092
         }

@@ -9,7 +9,7 @@ namespace robot::perception {
 
 class Sts3215Encoder : public EncoderInterface {
 public:
-    explicit Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Sensor& sensor_config);
+    explicit Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Encoder& encoder_config);
     ~Sts3215Encoder() override = default;
 
     std::any GetData() override;

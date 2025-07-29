@@ -27,13 +27,16 @@ public:
     
     robot::action::ActionFactory action_factory;
 
-    for (const auto& single_action : config.robot().actions().single_action()) {
-      actions_.push_back(action_factory.CreateAction(single_action.actuator()));
+    for (const auto& single_action : config.robot().actions().single_actions()) {
+      actions_.push_back(action_factory.CreateAction(single_action));
     }
 
-    for (const auto& single_action : config.robot().actions().single_action()) {
-      const auto& action_proto = single_action.actuator();
-      action_limits_.push_back(std::make_pair(action_proto.operational_lower_limit(), action_proto.operational_upper_limit()));
+    for (const auto& single_action : config.robot().actions().single_actions()) {
+      if (single_action.action_type() == robot::action::ActionType::ACTUATOR) {
+        const auto& action_proto = single_action.actuator();
+        action_limits_.push_back(std::make_pair(action_proto.operational_lower_limit(), action_proto.operational_upper_limit()));
+      }
+      // TODO: Add handling for other action types when they are implemented
     }
 
     if (actions_.empty()) {

@@ -14,7 +14,7 @@ namespace {
     constexpr auto kROS2Target = "ros2:";
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
-    constexpr auto kActionSubscriber = "action_subscriber";
+    constexpr auto kActuatorSubscriber = "actuator_subscriber";
 }
 
 // Static member initialization
@@ -47,8 +47,8 @@ bool NodeGenerator::Initialize() {
     
     auto robot_config = config_.robot();
     LOG(INFO) << "Robot Name: " << robot_config.name();
-    LOG(INFO) << "Action Size: " << robot_config.actions().single_action_size();
-    LOG(INFO) << "Perception Size: " << robot_config.perceptions().single_perception_size();
+    LOG(INFO) << "Action Size: " << robot_config.actions().single_actions_size();
+    LOG(INFO) << "Perception Size: " << robot_config.perceptions().single_perceptions_size();
     
     // Change to repository root
     if (chdir(repo_root_.c_str()) != 0) {
@@ -67,36 +67,41 @@ void NodeGenerator::AnalyzeConfiguration() {
     auto robot_config = config_.robot();
     
     // Group sensors by node_id
-    for (const auto& single_perception : robot_config.perceptions().single_perception()) {
-        if (single_perception.has_sensor()) {
-            uint32_t node_id = single_perception.node_id();
-            
-            if (single_perception.sensor().sensor_type() == robot::perception::SensorType::CAMERA) {
-                node_sensor_types_[node_id].insert("camera");
-            } else if (single_perception.sensor().sensor_type() == robot::perception::SensorType::ENCODER) {
-                node_sensor_types_[node_id].insert("encoder");
-            }
+    for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
+        uint32_t node_id = single_perception.node_id();
+        
+        if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA) {
+            node_perception_types_[node_id].insert("camera");
+        } else if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER) {
+            node_perception_types_[node_id].insert("encoder");
         }
     }
     
     // TODO: Group actions by node_id
-    has_action_ = !robot_config.actions().single_action().empty();
+    for (const auto& single_action : robot_config.actions().single_actions()) {
+        uint32_t node_id = single_action.node_id();
+        
+        if (single_action.action_type() == robot::action::ActionType::ACTUATOR) {
+            node_action_types_[node_id].insert("actuator");
+            has_action_ = true;
+        }
+    }
 }
 
 void NodeGenerator::DetermineRequiredBuilds() {
     // Determine required builds based on sensor types
-    for (const auto& [node_id, sensor_types] : node_sensor_types_) {
-        for (const auto& sensor_type : sensor_types) {
-            if (sensor_type == "camera") {
+    for (const auto& [node_id, perception_types] : node_perception_types_) {
+        for (const auto& perception_type : perception_types) {
+            if (perception_type == "camera") {
                 required_builds_.insert(std::string(kROS2Target) + kCameraPublisher);
-            } else if (sensor_type == "encoder") {
+            } else if (perception_type == "encoder") {
                 required_builds_.insert(std::string(kROS2Target) + kEncoderPublisher);
             }
         }
     }
     
     if (has_action_) {
-        required_builds_.insert(std::string(kROS2Target) + kActionSubscriber);
+        required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
     }
 }
 
@@ -117,8 +122,8 @@ bool NodeGenerator::LaunchAllNodes() {
     LOG(INFO) << "Launching nodes...";
     
     // Launch perception nodes - one per unique node_id
-    for (const auto& [node_id, sensor_types] : node_sensor_types_) {
-        std::string node_type = GetNodeTypePriority(sensor_types);
+    for (const auto& [node_id, perception_types] : node_perception_types_) {
+        std::string node_type = GetNodeTypePriority(perception_types);
         if (node_type.empty()) {
             LOG(WARNING) << "Unknown sensor types for node_id " << node_id;
             continue;
@@ -135,7 +140,7 @@ bool NodeGenerator::LaunchAllNodes() {
     if (has_action_) {
         pid_t pid = LaunchActionNode();
         if (pid > 0) {
-            launched_nodes_.push_back({"action_subscriber", "action_subscriber", 0, pid});
+            launched_nodes_.push_back({"actuator_subscriber", "actuator_subscriber", 0, pid});
         }
     }
     
@@ -174,31 +179,33 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
     }
 }
 
+
+// TODO: pass node_id to the node_type like perception node.
 pid_t NodeGenerator::LaunchActionNode() {
     pid_t pid = fork();
     
     if (pid == 0) {
         // Child process
         std::string binary_path = GetBinaryPath();
-        std::string ament_path = binary_path + "/action_subscriber_launch_ament_setup";
+        std::string ament_path = binary_path + "/actuator_subscriber_launch_ament_setup";
         setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
         
-        std::string runfiles_dir = binary_path + "/action_subscriber.runfiles/_main";
+        std::string runfiles_dir = binary_path + "/actuator_subscriber.runfiles/_main";
         if (chdir(runfiles_dir.c_str()) != 0) {
             LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
             _exit(1);
         }
         
-        std::string binary_impl = binary_path + "/action_subscriber_impl";
+        std::string binary_impl = binary_path + "/actuator_subscriber_impl";
         execl(binary_impl.c_str(), binary_impl.c_str(), config_path_.c_str(), nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
     } else if (pid > 0) {
-        LOG(INFO) << "Launched action_subscriber with PID: " << pid;
+        LOG(INFO) << "Launched actuator_subscriber with PID: " << pid;
         return pid;
     } else {
-        LOG(ERROR) << "Failed to fork process for action_subscriber: " << strerror(errno);
+        LOG(ERROR) << "Failed to fork process for actuator_subscriber: " << strerror(errno);
         return -1;
     }
 }

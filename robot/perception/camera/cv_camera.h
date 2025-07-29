@@ -11,7 +11,7 @@ namespace robot::perception {
 // TODO: Update the ID, and logic.
 class CvCamera : public CameraInterface {
 public:
-    CvCamera(const robot::perception::Sensor& sensor_config);
+    CvCamera(const robot::perception::Camera& camera_config);
     ~CvCamera() override;
 
     std::any GetData() override;

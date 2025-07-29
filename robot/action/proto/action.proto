@@ -6,14 +6,18 @@ package robot.action;
 
 enum ActionType {
     ACTION_INVALID = 0;
-    STS3215 = 1;
-    // Add more motor type here.
+    ACTUATOR = 1;
+}
+
+enum ActuatorType {
+    ACTUATOR_INVALID = 0;
+    STS3215_SERVO = 1;
 }
 
 message Actuator {
     string actuator_name = 1;
     uint64 id = 2;
-    ActionType action_type = 3;
+    ActuatorType actuator_type = 3;
     robot.comm_interface.CommType comm_type = 4;
 
     uint32 physical_lower_limit = 5; // TODO: Move this to physical layout.
@@ -26,12 +30,12 @@ message Actuator {
         // Add other comm type here.
     }
     oneof action_config {
-        STS3215Config sts3215_config = 10;
+        Sts3215Config sts3215_config = 10;
         // Add other motor type here.
     }    
 }
 
-message STS3215Config {
+message Sts3215Config {
     uint64 servo_id = 1;
     uint32 move_time_in_ms = 2;
     uint32 move_speed = 3;
@@ -40,11 +44,12 @@ message STS3215Config {
 
 message SingleAction {
     uint32 node_id = 1;
-    oneof action_type {
-        Actuator actuator = 2;
+    ActionType action_type = 2;
+    oneof action_data {
+        Actuator actuator = 3;
     }
 }
 
 message Action {
-    repeated SingleAction single_action = 1;
+    repeated SingleAction single_actions = 1;
 }
