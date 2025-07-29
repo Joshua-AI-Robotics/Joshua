@@ -2,7 +2,7 @@
 
 The `Node Generator` is a core component of Project Joshua, responsible for dynamically instantiating and managing ROS2 nodes based on a single configuration file. It acts as an orchestrator, parsing the user-defined robot configuration, building the necessary binaries, launching the nodes, and monitoring their lifecycle.
 
-![Node Generator Workflow](assets/images/NodeGenerator.png)
+![Node Generator Workflow](../assets/images/node_generator.png)
 
 ## Workflow
 
@@ -24,25 +24,18 @@ The Node Generator follows a clear, sequential process to bring the robotic syst
 
 The Node Generator is executed from the command line, pointing to a specific configuration file.
 
-### Prerequisites
-
-Ensure you have built the `main` target:
-```bash
-bazel build //node_generator:main
-```
-
 ### Running the Node Generator
 
 To run the Node Generator, execute the following command from the workspace root:
 
 ```bash
-./bazel-bin/node_generator/main --config=config/config_preset/your_config_file.pbtxt
+bazel run //node_generator:main -- --config="config/config_preset/your_config_file.pbtxt"
 ```
 
 Replace `your_config_file.pbtxt` with the path to your desired robot configuration. For example, to run the `so100_with_follower` configuration, you would use:
 
 ```bash
-./bazel-bin/node_generator/main --config=config/config_preset/so100_with_follower.pbtxt
+bazel run //node_generator:main -- --config="config/config_preset/so100_with_follower.pbtxt"
 ```
 
 The application will then:
