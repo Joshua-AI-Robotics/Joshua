@@ -23,7 +23,6 @@ NodeGenerator* NodeGenerator::instance_ = nullptr;
 NodeGenerator::NodeGenerator(const std::string& config_path) 
     : config_path_(config_path), 
       repo_root_("/home/hmoon/Projects/ProjectJoshua"),
-      has_action_(false),
       shutdown_requested_(false) {
     instance_ = this;
 }
@@ -84,7 +83,6 @@ void NodeGenerator::GroupEntitiesByNodeId() {
         uint32_t node_id = single_action.node_id();
         if (single_action.action_type() == robot::action::ActionType::ACTUATOR) {
             node_action_types_[node_id].insert("actuator");
-            has_action_ = true;
         }
     }
 }
@@ -145,8 +143,12 @@ void NodeGenerator::DetermineRequiredBuilds() {
         }
     }
     
-    if (has_action_) {
-        required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
+    for (const auto& [node_id, action_types] : node_action_types_) {
+        for (const auto& action_type : action_types) {
+            if (action_type == "actuator") {
+                required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
+            }
+        }
     }
 }
 
@@ -165,7 +167,7 @@ bool NodeGenerator::BuildRequiredTargets() {
 
 bool NodeGenerator::LaunchAllNodes() {
     for (const auto& [node_id, perception_types] : node_perception_types_) {
-        std::string node_type = GetNodeTypePriority(perception_types);
+        std::string node_type = GetPerceptionNodeTypePriority(perception_types);
         if (node_type.empty()) {
             LOG(WARNING) << "Unknown sensor types for node_id " << node_id;
             continue;
@@ -179,10 +181,18 @@ bool NodeGenerator::LaunchAllNodes() {
         }
     }
     
-    if (has_action_) {
-        pid_t pid = LaunchActionNode();
+    for (const auto& [node_id, action_types] : node_action_types_) {
+        std::string node_type = GetActionNodeTypePriority(action_types);
+        if (node_type.empty()) {
+            LOG(WARNING) << "Unknown action types for node_id " << node_id;
+            continue;
+        }
+        
+        std::string node_name = node_type + "_node_" + std::to_string(node_id);
+        pid_t pid = LaunchActionNode(node_type, node_id, node_name);
+        
         if (pid > 0) {
-            launched_nodes_.push_back({"actuator_subscriber", "actuator_subscriber", 0, pid});
+            launched_nodes_.push_back({node_type, node_name, node_id, pid});
         }
     }
     
@@ -221,34 +231,39 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
     }
 }
 
-
-// TODO: pass node_id to the node_type like perception node.
-// TODO: Make this generic for all action.
-pid_t NodeGenerator::LaunchActionNode() {
+pid_t NodeGenerator::LaunchActionNode(const std::string& node_type, uint32_t node_id, 
+                                      const std::string& node_name) {
     pid_t pid = fork();
     
     if (pid == 0) {
         // Child process
         std::string binary_path = GetBinaryPath();
-        std::string ament_path = binary_path + "/actuator_subscriber_launch_ament_setup";
+        std::string ament_path = binary_path + "/" + node_type + "_launch_ament_setup";
         setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
         
-        std::string runfiles_dir = binary_path + "/actuator_subscriber.runfiles/_main";
+        std::string runfiles_dir = binary_path + "/" + node_type + ".runfiles/_main";
         if (chdir(runfiles_dir.c_str()) != 0) {
             LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
             _exit(1);
         }
         
-        std::string binary_impl = binary_path + "/actuator_subscriber_impl";
-        execl(binary_impl.c_str(), binary_impl.c_str(), "actuator_subscriber", 0, config_path_.c_str(), nullptr);
+        std::string binary_impl = binary_path + "/" + node_type + "_impl";
+        std::string node_id_str = std::to_string(node_id);
+        
+        execl(binary_impl.c_str(), 
+              binary_impl.c_str(), 
+              node_id_str.c_str(), 
+              node_name.c_str(), 
+              config_path_.c_str(), 
+              nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
     } else if (pid > 0) {
-        LOG(INFO) << "Launched actuator_subscriber with PID: " << pid;
+        LOG(INFO) << "Launched " << node_name << " with PID: " << pid;
         return pid;
     } else {
-        LOG(ERROR) << "Failed to fork process for actuator_subscriber: " << strerror(errno);
+        LOG(ERROR) << "Failed to fork process for " << node_name << ": " << strerror(errno);
         return -1;
     }
 }
@@ -334,11 +349,18 @@ std::string NodeGenerator::GetBinaryPath() const {
     return wrapper_script_path.string();
 }
 
-std::string NodeGenerator::GetNodeTypePriority(const std::set<std::string>& sensor_types) const {
+std::string NodeGenerator::GetPerceptionNodeTypePriority(const std::set<std::string>& sensor_types) const {
     if (sensor_types.count("camera")) {
         return kCameraPublisher;
     } else if (sensor_types.count("encoder")) {
         return kEncoderPublisher;
+    }
+    return "";
+}
+
+std::string NodeGenerator::GetActionNodeTypePriority(const std::set<std::string>& action_types) const {
+    if (action_types.count("actuator")) {
+        return kActuatorSubscriber;
     }
     return "";
 }

@@ -37,7 +37,8 @@ private:
 
     pid_t LaunchPerceptionNode(const std::string& node_type, uint32_t node_id, 
                               const std::string& node_name);
-    pid_t LaunchActionNode();
+    pid_t LaunchActionNode(const std::string& node_type, uint32_t node_id, 
+                          const std::string& node_name);
 
     // Process management
     void SetupSignalHandlers();
@@ -45,7 +46,8 @@ private:
     void MonitorChildProcesses();
 
     std::string GetBinaryPath() const;
-    std::string GetNodeTypePriority(const std::set<std::string>& sensor_types) const;
+    std::string GetPerceptionNodeTypePriority(const std::set<std::string>& sensor_types) const;
+    std::string GetActionNodeTypePriority(const std::set<std::string>& action_types) const;
 
     std::string config_path_;
     std::string repo_root_;
@@ -54,7 +56,6 @@ private:
     std::map<uint32_t, std::set<std::string>> node_perception_types_;
     std::map<uint32_t, std::set<std::string>> node_action_types_;
     std::set<std::string> required_builds_;
-    bool has_action_;
     
     std::vector<NodeInfo> launched_nodes_;
     volatile bool shutdown_requested_;

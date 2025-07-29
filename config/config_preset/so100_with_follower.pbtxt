@@ -8,7 +8,7 @@ robot {
   actions {
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_1"
+      subscribe_topic: "sts3215_encoder_1"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_1"
@@ -34,7 +34,7 @@ robot {
     }
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_2"
+      subscribe_topic: "sts3215_encoder_2"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_2"
@@ -60,7 +60,7 @@ robot {
     }
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_3"
+      subscribe_topic: "sts3215_encoder_3"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_3"
@@ -86,7 +86,7 @@ robot {
     }
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_4"
+      subscribe_topic: "sts3215_encoder_4"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_4"
@@ -112,7 +112,7 @@ robot {
     }
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_5"
+      subscribe_topic: "sts3215_encoder_5"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_5"
@@ -138,7 +138,7 @@ robot {
     }
     single_actions {
       node_id: 1
-      subscribe_topic: "sts3215_servo_6"
+      subscribe_topic: "sts3215_encoder_6"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts3215_servo_6"
@@ -167,7 +167,7 @@ robot {
   perceptions {    
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_1"
+      publish_topic: "sts3215_encoder_1"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_1"
@@ -188,7 +188,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_2"
+      publish_topic: "sts3215_encoder_2"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_2"
@@ -210,7 +210,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_3"
+      publish_topic: "sts3215_encoder_3"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_3"
@@ -232,7 +232,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_4"
+      publish_topic: "sts3215_encoder_4"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_4"
@@ -254,7 +254,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_5"
+      publish_topic: "sts3215_encoder_5"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_5"
@@ -275,7 +275,7 @@ robot {
     }
     single_perceptions {
       node_id: 2
-      subscribe_topic: "sts3215_encoder_6"
+      publish_topic: "sts3215_encoder_6"
       perception_type: ENCODER
       encoder {
         encoder_name: "sts3215_encoder_6"
