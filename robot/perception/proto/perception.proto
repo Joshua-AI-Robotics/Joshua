@@ -42,8 +42,9 @@ message EncoderConfig {
 }
 
 message SinglePerception {
+    uint32 node_id = 1;
     oneof perception_type {
-        Sensor sensor = 1;
+        Sensor sensor = 2;
     }
 }
 

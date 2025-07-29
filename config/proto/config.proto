@@ -11,6 +11,7 @@ enum OperationMode {
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
     MODE_TRAINING = 3;
+    MODE_TEST = 4;
 }
 
 message Config {

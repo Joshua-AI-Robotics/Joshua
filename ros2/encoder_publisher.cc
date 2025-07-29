@@ -8,20 +8,25 @@
 // TODO: Separate each encoder into a separate node.
 class EncoderPublisher : public rclcpp::Node {
 public:
-  EncoderPublisher(const std::string& topic_name, const config::Config& config) : Node("encoder_publisher") {
+  EncoderPublisher(const std::string& topic_name, const config::Config& config, int node_id) 
+    : Node("encoder_publisher") {
     robot::perception::PerceptionFactory perception_factory;
     
     for (const auto& single_perception : config.robot().perceptions().single_perception()) {
-      const auto& sensor_proto = single_perception.sensor();
-      if (sensor_proto.sensor_type() == robot::perception::SensorType::ENCODER) {
+      if (single_perception.sensor().sensor_type() == robot::perception::SensorType::ENCODER && 
+          single_perception.node_id() == node_id) {
+        const auto& sensor_proto = single_perception.sensor();
         encoders_.push_back(perception_factory.CreatePerception(sensor_proto));
-        encoder_limits_.push_back(std::make_pair(sensor_proto.encoder_config().operational_lower_limit(), sensor_proto.encoder_config().operational_upper_limit()));
-        RCLCPP_INFO(this->get_logger(), "Found encoder in configuration");
+        encoder_limits_.push_back(std::make_pair(
+          sensor_proto.encoder_config().operational_lower_limit(), 
+          sensor_proto.encoder_config().operational_upper_limit()));
+        RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d", 
+                   sensor_proto.sensor_name().c_str(), node_id);
       }
     }
     
     if (encoders_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "No encoders found in configuration!");
+      RCLCPP_ERROR(this->get_logger(), "No encoders found in configuration for node_id %d!", node_id);
       return;
     }
     
@@ -31,7 +36,8 @@ public:
       std::chrono::milliseconds(16), // 60 Hz update rate
       std::bind(&EncoderPublisher::publish_encoder_data, this));
       
-    RCLCPP_INFO(this->get_logger(), "Encoder publisher node started with %zu encoders!", encoders_.size());
+    RCLCPP_INFO(this->get_logger(), "Encoder publisher node started with %zu encoders for node_id %d!", 
+               encoders_.size(), node_id);
   }
 
 private:
@@ -48,22 +54,23 @@ private:
       for (size_t i = 0; i < encoders_.size(); ++i) {
         auto data_packet = encoders_[i]->GetData();
         if (!data_packet) {
-          RCLCPP_ERROR(this->get_logger(), "Failed to get encoder %zu data!", i);
-          message.data.push_back(0.0f); // Use 0.0 as fallback
+          RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder %zu!", i);
           continue;
         }
         
-        // TODO: Reconsider the proto message to primitive types.
-        float position = data_packet->encoder_perception().position();
-        auto normalized_position = 2.0f * (position - encoder_limits_[i].first) / (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
+        // Get encoder position and normalize to [-1, 1]
+        uint32_t raw_position = data_packet->encoder_perception().position();
+        float normalized_position = 2.0f * (static_cast<float>(raw_position) - encoder_limits_[i].first) / 
+                                   (encoder_limits_[i].second - encoder_limits_[i].first) - 1.0f;
+        
+        // Clamp to [-1, 1] range
+        normalized_position = std::max(-1.0f, std::min(1.0f, normalized_position));
         message.data.push_back(normalized_position);
       }
       
-      // Publish the message with all encoder positions
       publisher_->publish(message);
-      
     } catch (const std::exception& e) {
-      RCLCPP_ERROR(this->get_logger(), "Error reading encoders: %s", e.what());
+      RCLCPP_ERROR(this->get_logger(), "Error publishing encoder data: %s", e.what());
     }
   }
   
@@ -73,12 +80,22 @@ private:
   std::vector<std::pair<float, float>> encoder_limits_;
 };
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
-  config::Config config = config::config_util::LoadConfig(argv[1]);
   
-  //TODO: Update the subscription topic based on the operation mode and config.
-  rclcpp::spin(std::make_shared<EncoderPublisher>("encoder_positions", config));
+  if (argc < 3) {
+    RCLCPP_ERROR(rclcpp::get_logger("encoder_publisher"), 
+                 "Usage: encoder_publisher <config_path> <node_id>");
+    return 1;
+  }
+  
+  std::string config_path = argv[1];
+  int node_id = std::stoi(argv[2]);
+  
+  config::Config config = config::config_util::LoadConfig(config_path);
+  
+  // TODO: Update the subscription topic based on the operation mode and config.
+  rclcpp::spin(std::make_shared<EncoderPublisher>("encoder_positions", config, node_id));
   rclcpp::shutdown();
   return 0;
 } 

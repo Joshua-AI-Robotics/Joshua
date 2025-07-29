@@ -41,8 +41,9 @@ message STS3215Config {
 }
 
 message SingleActuation {
+    uint32 node_id = 1;
     oneof actuation_type {
-        Actuator actuator = 1;
+        Actuator actuator = 2;
     }
 }
 

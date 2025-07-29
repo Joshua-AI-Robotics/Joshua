@@ -1,0 +1,25 @@
+operation_mode: MODE_TEST
+
+robot {
+  name: "camera_test"
+  id: 1
+  robot_type: MANIPULATOR_ARM
+
+  perceptions {
+    single_perception {
+      node_id: 1
+      sensor {
+        sensor_name: "webcam"
+        id: 1
+        sensor_type: CAMERA
+        comm_type: COMM_INVALID
+        camera_config {
+          id: 0
+          width: 640
+          height: 480
+          fps: 30
+        }
+      }
+    }
+  }
+}
