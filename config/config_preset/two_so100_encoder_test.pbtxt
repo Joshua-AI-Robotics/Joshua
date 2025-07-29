@@ -3,7 +3,6 @@ operation_mode: MODE_TELEOPERATE
 robot {
   name: "so100"
   id: 1
-  trigger_frequency: 10
   robot_type: MANIPULATOR_ARM
 
   perceptions {

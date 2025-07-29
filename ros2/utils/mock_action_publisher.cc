@@ -15,7 +15,7 @@ public:
     
     std::random_device rd;
     random_generator_ = std::mt19937(rd());
-    distribution_ = std::uniform_real_distribution<float>(-1.0f, 1.0f);
+    distribution_ = std::uniform_real_distribution<float>(-0.1f, 0.1f);
     
     RCLCPP_INFO(this->get_logger(), "Mock action publisher started!");
     RCLCPP_INFO(this->get_logger(), "Publishing 6-element arrays on topic: /mock_action_input");

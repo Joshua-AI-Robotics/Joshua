@@ -16,7 +16,8 @@ public:
       subscription_topic_name_ = "encoder_positions";
     }
     else if (config.operation_mode() == config::OperationMode::MODE_INFERENCE) {
-      subscription_topic_name_ = "mock_action_input";
+      subscription_topic_name_ = "mock_action_input"; // Need to manually run the mock action node.
+      // bazel run ros2/utils:mock_action_publisher
     }
     else {
       RCLCPP_ERROR(this->get_logger(), "Invalid operation mode!");

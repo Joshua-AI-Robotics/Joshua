@@ -3,7 +3,6 @@ operation_mode: MODE_INFERENCE
 robot {
   name: "so100"
   id: 1
-  trigger_frequency: 10
   robot_type: MANIPULATOR_ARM
 
   actions {
@@ -173,114 +172,6 @@ robot {
           width: 640
           height: 480
           fps: 30
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_1"
-        id: 1
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 1
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 1
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_2"
-        id: 2
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 2
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 2
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_3"
-        id: 3
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 3
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 3
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_4"
-        id: 4
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 4
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 4
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_5"
-        id: 5
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 5
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 5
-        }
-      }
-    }
-    single_perceptions {
-      node_id: 3
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_6"
-        id: 6
-        encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
-        serial_config {
-          id: 6
-          port: "/dev/ttyACM0"
-          baudrate: 1000000
-        }
-        sts3215_encoder_config {
-          servo_id: 6
         }
       }
     }
