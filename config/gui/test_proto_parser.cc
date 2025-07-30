@@ -1,89 +1,89 @@
-#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
 #include <memory>
-#include "config/gui/proto_parser.h"
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/reflection.h"
+#include "google/protobuf/message.h"
 #include "config/proto/config.pb.h"
+#include <glog/logging.h>
 
-int main() {
-    std::cout << "Testing Dynamic Proto Parser..." << std::endl;
+struct ProtoField {
+    const google::protobuf::FieldDescriptor* descriptor;
+    std::vector<ProtoField> nested_fields; 
     
-    // Create a proto parser
-    auto parser = std::make_shared<config_gui::ProtoParser>();
+    ProtoField(const google::protobuf::FieldDescriptor* d)
+        : descriptor(d) {}
     
-    // Create a sample config
+    bool is_repeated() const {
+        return descriptor->is_repeated();
+    }
+
+    bool is_message() const {
+        return descriptor->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE;
+    }
+
+    std::string name() const {
+        return descriptor->name();
+    }
+
+    std::string type() const {
+        return descriptor->type_name();
+    }
+};
+
+void populate_nested_fields(ProtoField& proto_field) {
+    if (!proto_field.is_message()) {
+        return;
+    }
+    
+    const google::protobuf::Descriptor* message_descriptor = proto_field.descriptor->message_type();
+    if (!message_descriptor) {
+        return;
+    }
+    
+    for (int i = 0; i < message_descriptor->field_count(); ++i) {
+        const google::protobuf::FieldDescriptor* nested_field = message_descriptor->field(i);
+        ProtoField nested_proto_field(nested_field);
+        
+        // Recursively populate nested fields
+        populate_nested_fields(nested_proto_field);
+        
+        proto_field.nested_fields.push_back(nested_proto_field);
+    }
+}
+
+void print_fields(const std::vector<ProtoField>& fields, int indent = 0) {
+    std::string indent_str(indent * 2, ' ');
+    
+    for (const auto& field : fields) {
+        LOG(INFO) << indent_str << field.name() << " (" << field.type() << ")" << (field.is_repeated() ? " [repeated]" : "");
+        
+        if (!field.nested_fields.empty()) {
+            print_fields(field.nested_fields, indent + 1);
+        }
+    }
+}
+
+int main(int argc, char* argv[]) {
     config::Config config;
-    config.set_operation_mode(config::MODE_INFERENCE);
-    
-    auto* robot = config.mutable_robot();
-    robot->set_name("test_robot");
-    robot->set_id(123);
-    robot->set_robot_type(config::MANIPULATOR_ARM);
-    
-    auto* ai = config.mutable_ai();
-    ai->set_policy_name("test_policy");
-    ai->set_pretrained_model_path("/path/to/test/model");
-    ai->set_act_dim(6);
-    ai->set_state_dim(18);
-    
-    // Parse the config
-    config_gui::MessageInfo config_info = parser->parseConfigMessage(config);
-    
-    std::cout << "\n=== Parsed Config Message ===" << std::endl;
-    std::cout << "Name: " << config_info.name << std::endl;
-    std::cout << "Display Name: " << config_info.display_name << std::endl;
-    std::cout << "Number of fields: " << config_info.fields.size() << std::endl;
-    
-    std::cout << "\n=== Fields ===" << std::endl;
-    for (const auto& field : config_info.fields) {
-        std::cout << "Field: " << field.name << std::endl;
-        std::cout << "  Display Name: " << field.display_name << std::endl;
-        std::cout << "  Type: " << field.field_type << std::endl;
-        std::cout << "  Value: " << field.value << std::endl;
-        std::cout << "  Is Enum: " << (field.is_enum ? "Yes" : "No") << std::endl;
-        std::cout << "  Is Repeated: " << (field.is_repeated ? "Yes" : "No") << std::endl;
-        std::cout << "  Is Message: " << (field.is_message ? "Yes" : "No") << std::endl;
-        std::cout << "  Is Oneof: " << (field.is_oneof ? "Yes" : "No") << std::endl;
         
-        if (field.is_enum) {
-            std::cout << "  Enum Values: ";
-            for (const auto& enum_value : field.enum_values) {
-                std::cout << enum_value << " ";
-            }
-            std::cout << std::endl;
-        }
+    std::vector<ProtoField> existing_attributes;
+
+    const google::protobuf::Descriptor* descriptor = config.GetDescriptor();
+    
+    for (int i = 0; i < descriptor->field_count(); ++i) {
+        const google::protobuf::FieldDescriptor* field = descriptor->field(i);
+        ProtoField proto_field(field);
         
-        if (field.is_oneof) {
-            std::cout << "  Oneof Name: " << field.oneof_name << std::endl;
-        }
+        // Populate nested fields recursively
+        populate_nested_fields(proto_field);
         
-        std::cout << std::endl;
+        existing_attributes.push_back(proto_field);
     }
-    
-    // Test parsing individual messages
-    std::cout << "\n=== Testing Individual Message Parsing ===" << std::endl;
-    
-    // Parse robot message
-    config_gui::MessageInfo robot_info = parser->parseMessage(*robot);
-    std::cout << "Robot Message:" << std::endl;
-    std::cout << "  Name: " << robot_info.name << std::endl;
-    std::cout << "  Display Name: " << robot_info.display_name << std::endl;
-    std::cout << "  Fields: " << robot_info.fields.size() << std::endl;
-    
-    for (const auto& field : robot_info.fields) {
-        std::cout << "    " << field.display_name << " (" << field.field_type << "): " << field.value << std::endl;
-    }
-    
-    // Parse AI message
-    config_gui::MessageInfo ai_info = parser->parseMessage(*ai);
-    std::cout << "\nAI Message:" << std::endl;
-    std::cout << "  Name: " << ai_info.name << std::endl;
-    std::cout << "  Display Name: " << ai_info.display_name << std::endl;
-    std::cout << "  Fields: " << ai_info.fields.size() << std::endl;
-    
-    for (const auto& field : ai_info.fields) {
-        std::cout << "    " << field.display_name << " (" << field.field_type << "): " << field.value << std::endl;
-    }
-    
-    std::cout << "\nDynamic parsing test completed successfully!" << std::endl;
-    
+
+    // Print all fields with proper indentation for nested fields
+    print_fields(existing_attributes);
+
     return 0;
-} 
+}

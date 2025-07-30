@@ -29,22 +29,6 @@ cc_binary(
 )
 
 cc_binary(
-    name = "advanced_fltk_gui",
-    srcs = ["advanced_fltk_gui.cc"],
-    deps = [
-        "@local_deps//:fltk",
-        "//config/proto:config_cc_proto",
-        "//robot/action/proto:action_cc_proto",
-        "//robot/perception/proto:perception_cc_proto",
-        "//robot/comm_interface/proto:comm_interface_cc_proto",
-        "@protobuf//:protobuf",
-    ],
-    copts = [
-        "-std=c++17",
-    ],
-)
-
-cc_binary(
     name = "dynamic_fltk_gui",
     srcs = ["dynamic_fltk_gui.cc"],
     deps = [
@@ -70,6 +54,7 @@ cc_binary(
         "//robot/perception/proto:perception_cc_proto",
         "//robot/comm_interface/proto:comm_interface_cc_proto",
         "@protobuf//:protobuf",
+        "@glog//:glog",
         ":proto_parser",
     ],
     copts = [

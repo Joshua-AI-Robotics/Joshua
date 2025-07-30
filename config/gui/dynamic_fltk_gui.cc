@@ -395,8 +395,8 @@ public:
         // Parse the config message to get all fields (including empty ones)
         createMainConfigTab();
         createRobotTab();
-        createAITab();
-        createAllFieldsTab();
+        // createAITab();
+        // createAllFieldsTab();
     }
     
     void createMainConfigTab() {
