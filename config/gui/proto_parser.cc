@@ -26,15 +26,12 @@ MessageInfo ProtoParser::parseMessage(const google::protobuf::Message& message) 
 void ProtoParser::parseMessageFields(const google::protobuf::Message& message, 
                                     MessageInfo& message_info) {
     const google::protobuf::Descriptor* descriptor = message.GetDescriptor();
-    const google::protobuf::Reflection* reflection = message.GetReflection();
     
     for (int i = 0; i < descriptor->field_count(); ++i) {
         const google::protobuf::FieldDescriptor* field = descriptor->field(i);
         
-        // Skip if field is not set (for optional fields)
-        if (!reflection->HasField(message, field)) {
-            continue;
-        }
+        // Include all fields for GUI representation, even if not set
+        // This ensures the GUI shows all possible fields for user input
         
         FieldInfo field_info;
         field_info.name = field->name();
@@ -76,6 +73,26 @@ std::vector<std::string> ProtoParser::getEnumValues(const google::protobuf::Fiel
 std::string ProtoParser::getFieldValueAsString(const google::protobuf::Message& message, 
                                               const google::protobuf::FieldDescriptor* field) {
     const google::protobuf::Reflection* reflection = message.GetReflection();
+    
+    // Handle unset fields - return default values for GUI
+    if (!reflection->HasField(message, field)) {
+        if (field->type() == google::protobuf::FieldDescriptor::TYPE_MESSAGE) {
+            return "[Message]";
+        } else if (field->type() == google::protobuf::FieldDescriptor::TYPE_ENUM) {
+            // Return the first enum value as default
+            const google::protobuf::EnumDescriptor* enum_desc = field->enum_type();
+            if (enum_desc->value_count() > 0) {
+                return enum_desc->value(0)->name();
+            }
+            return "";
+        } else if (field->type() == google::protobuf::FieldDescriptor::TYPE_BOOL) {
+            return "false";
+        } else if (field->type() == google::protobuf::FieldDescriptor::TYPE_STRING) {
+            return "";
+        } else {
+            return "0";  // Default for numeric types
+        }
+    }
     
     switch (field->type()) {
         case google::protobuf::FieldDescriptor::TYPE_INT32:

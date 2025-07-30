@@ -52,6 +52,7 @@ private:
     static const int LABEL_FONT_SIZE = 24;
     static const int INPUT_FONT_SIZE = 20;
     static const int TEXT_DISPLAY_FONT_SIZE = 20;
+    static const int TAB_FONT_SIZE = 18;
 
     const std::string TITLE = "Project Joshua - Configuration Generator";
     const std::string MAIN_CONFIG = "Main Config";
@@ -206,6 +207,7 @@ public:
         
         // Main Configuration Tab
         Fl_Group* main_group = new Fl_Group(MARGIN, MENU_HEIGHT + MARGIN + TAB_HEIGHT, tab_content_width_, tab_content_height_, MAIN_CONFIG.c_str());
+        main_group->labelsize(TAB_FONT_SIZE);  // Set tab font size
         
         // Title
         Fl_Box* title = new Fl_Box(MARGIN * 2, MENU_HEIGHT + MARGIN + TAB_HEIGHT + MARGIN, tab_content_width_ - MARGIN, INPUT_HEIGHT, TITLE.c_str());
@@ -257,6 +259,7 @@ public:
         
         // AI Configuration Tab
         Fl_Group* ai_group = new Fl_Group(MARGIN, MENU_HEIGHT + MARGIN + TAB_HEIGHT, tab_content_width_, tab_content_height_, AI_CONFIG.c_str());
+        ai_group->labelsize(TAB_FONT_SIZE);  // Set tab font size
         
         Fl_Box* ai_title = new Fl_Box(MARGIN * 2, MENU_HEIGHT + MARGIN + TAB_HEIGHT + MARGIN, tab_content_width_ - MARGIN, INPUT_HEIGHT, AI_CONFIG.c_str());
         ai_title->labelsize(TITLE_FONT_SIZE);
@@ -301,6 +304,7 @@ public:
         
         // Actuator Configuration Tab
         Fl_Group* actuator_group = new Fl_Group(MARGIN, MENU_HEIGHT + MARGIN + TAB_HEIGHT, tab_content_width_, tab_content_height_, ACTUATORS.c_str());
+        actuator_group->labelsize(TAB_FONT_SIZE);  // Set tab font size
         
         Fl_Box* actuator_title = new Fl_Box(MARGIN * 2, MENU_HEIGHT + MARGIN + TAB_HEIGHT + MARGIN, tab_content_width_ - MARGIN, INPUT_HEIGHT, ACTUATORS.c_str());
         actuator_title->labelsize(TITLE_FONT_SIZE);
@@ -462,6 +466,7 @@ public:
         
         // Output Tab
         Fl_Group* output_group = new Fl_Group(MARGIN, MENU_HEIGHT + MARGIN + TAB_HEIGHT, tab_content_width_, tab_content_height_, OUTPUT.c_str());
+        output_group->labelsize(TAB_FONT_SIZE);  // Set tab font size
         
         Fl_Box* output_title = new Fl_Box(MARGIN * 2, MENU_HEIGHT + MARGIN + TAB_HEIGHT + MARGIN, tab_content_width_ - MARGIN, INPUT_HEIGHT, OUTPUT.c_str());
         output_title->labelsize(TITLE_FONT_SIZE);

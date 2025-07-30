@@ -81,10 +81,12 @@ public:
     bool setOneofField(google::protobuf::Message* message,
                       const std::string& oneof_name,
                       const std::string& field_name);
+    
+    // Get display name for a field
+    std::string getDisplayName(const std::string& field_name);
 
 private:
     // Helper methods
-    std::string getDisplayName(const std::string& field_name);
     std::string getFieldTypeName(const google::protobuf::FieldDescriptor* field);
     bool isRepeatedMessage(const google::protobuf::FieldDescriptor* field);
     void parseMessageFields(const google::protobuf::Message& message, 

@@ -18,9 +18,17 @@ This directory contains the configuration GUI for Project Joshua, with both stat
 - **Approach**: Dynamic protobuf parsing and widget generation
 - **Features**:
   - Automatic field discovery from protobuf definitions
-  - Dynamic UI generation
+  - Dynamic UI generation with proper hierarchy
   - No hardcoded field handling
   - Extensible to any protobuf message
+  - **Hierarchical Structure**:
+    - **Main Config**: Top-level configuration fields (operation_mode)
+    - **Robot**: Robot configuration with nested tabs:
+      - **Basic Info**: Robot name, ID, type
+      - **Actions**: Action management (actuators, etc.)
+      - **Perceptions**: Perception management (cameras, encoders, etc.)
+    - **AI**: AI configuration fields
+    - **All Fields**: Complete field overview
 
 ## Proto Parser Library
 
@@ -201,9 +209,28 @@ for (const auto& field : info.fields) {
 - Protocol Buffers (message serialization)
 - C++17 standard library
 
+## Recent Improvements
+
+### Font Size Enhancement
+- **Tab Font Size**: Increased from default to 18pt for better readability
+- **Consistency**: Applied to both static and dynamic GUIs
+- **User Experience**: Improved visibility of tab labels
+
+### Hierarchical Structure Implementation
+- **Proper Hierarchy**: Actions and perceptions are now correctly nested under the Robot tab
+- **Nested Tabs**: Robot tab contains sub-tabs for Basic Info, Actions, and Perceptions
+- **Logical Organization**: Follows the actual protobuf message structure
+- **Dynamic Discovery**: Automatically detects and displays all fields, including empty ones
+
+### Enhanced Field Discovery
+- **Complete Field Listing**: Parser now shows all fields, even if empty
+- **Empty Message Handling**: Proper display of unset message fields
+- **Better GUI Representation**: More accurate reflection of the actual data structure
+
 ## Notes
 
 - The dynamic GUI is currently a simplified implementation
 - Physical layout configuration is not yet implemented (marked with TODO)
 - The proto parser supports all basic protobuf types and features
-- Both GUIs maintain the same file format (.pbtxt) for compatibility 
+- Both GUIs maintain the same file format (.pbtxt) for compatibility
+- Tab font size is now consistent across all GUI components 
