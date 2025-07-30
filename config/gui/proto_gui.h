@@ -206,8 +206,168 @@ private:
         tab_groups_[tab_index].row_count++;
 
         tab_groups_[tab_index].group->end();
-    }   
-   
+    }
+
+    // Create nested tabs within an existing tab
+    void create_nested_tabs(const int& parent_tab_index) {
+        if (parent_tab_index >= tab_groups_.size()) return;
+        
+        auto& parent_tab = tab_groups_[parent_tab_index];
+        
+        // Create nested tabs container directly in the parent tab
+        // Position it below the existing content with proper coordinates
+        int nested_tabs_x = parent_tab.group->x() + MARGIN;
+        int nested_tabs_y = parent_tab.group->y() + MARGIN + parent_tab.row_count * (INPUT_HEIGHT + MARGIN) + MARGIN;
+        int nested_tabs_width = parent_tab.group->w() - 2 * MARGIN;
+        int nested_tabs_height = parent_tab.group->h() - (nested_tabs_y - parent_tab.group->y()) - MARGIN;
+        
+        parent_tab.nested_tabs = new Fl_Tabs(nested_tabs_x, nested_tabs_y, 
+                                            nested_tabs_width, nested_tabs_height);
+        
+        // Add nested tabs directly to the parent group
+        parent_tab.group->add(parent_tab.nested_tabs);
+    }
+
+    // Create a nested tab within nested tabs
+    void create_nested_tab(const int& parent_tab_index, const std::string& nested_tab_name) {
+        if (parent_tab_index >= tab_groups_.size() || !tab_groups_[parent_tab_index].nested_tabs) return;
+        
+        auto& parent_tab = tab_groups_[parent_tab_index];
+        
+        // Create a group for this nested tab with proper coordinates
+        auto nested_group = new Fl_Group(0, TAB_HEIGHT,
+                                        parent_tab.nested_tabs->w(),
+                                        parent_tab.nested_tabs->h() - TAB_HEIGHT);
+
+        // Set the label on the nested group
+        nested_group->copy_label(nested_tab_name.c_str());
+        nested_group->labelsize(TAB_FONT_SIZE);
+        
+        // Add the nested group to the nested tabs container
+        parent_tab.nested_tabs->add(nested_group);
+        
+        // Store the nested group reference
+        parent_tab.nested_tab_groups.push_back({nested_group, 0, nullptr, {}});
+    }
+
+    // Fill content in nested tabs
+    void fill_nested_tab_content(const int& parent_tab_index, const int& nested_tab_index, Fl_Box* label, Fl_Input* input) {
+        if (parent_tab_index >= tab_groups_.size() || 
+            nested_tab_index >= tab_groups_[parent_tab_index].nested_tab_groups.size()) return;
+        
+        auto& nested_tab = tab_groups_[parent_tab_index].nested_tab_groups[nested_tab_index];
+        
+        int existing_rows = nested_tab.row_count;
+        int content_x = nested_tab.group->x() + MARGIN;
+        int content_y = nested_tab.group->y() + MARGIN + existing_rows * (INPUT_HEIGHT + MARGIN);
+        
+        nested_tab.group->begin();
+        
+        nested_tab.group->add(label);
+        nested_tab.group->add(input);
+        
+        label->position(content_x, content_y);
+        input->resize(content_x + LABEL_WIDTH + MARGIN, content_y, INPUT_WIDTH, INPUT_HEIGHT);
+        
+        nested_tab.row_count++;
+        
+        nested_tab.group->end();
+    }
+    
+    void fill_nested_tab_content(const int& parent_tab_index, const int& nested_tab_index, Fl_Box* label, Fl_Choice* choice) {
+        if (parent_tab_index >= tab_groups_.size() || 
+            nested_tab_index >= tab_groups_[parent_tab_index].nested_tab_groups.size()) return;
+        
+        auto& nested_tab = tab_groups_[parent_tab_index].nested_tab_groups[nested_tab_index];
+        
+        int existing_rows = nested_tab.row_count;
+        int content_x = nested_tab.group->x() + MARGIN;
+        int content_y = nested_tab.group->y() + MARGIN + existing_rows * (INPUT_HEIGHT + MARGIN);
+        
+        nested_tab.group->begin();
+        
+        nested_tab.group->add(label);
+        nested_tab.group->add(choice);
+        
+        label->position(content_x, content_y);
+        choice->resize(content_x + LABEL_WIDTH + MARGIN, content_y, INPUT_WIDTH, INPUT_HEIGHT);
+        
+        nested_tab.row_count++;
+        
+        nested_tab.group->end();
+    }
+
+    // Process proto fields and create appropriate tabs and content
+    void process_proto_fields() {
+        for (int i = 0; i < proto_fields_.size(); i++) {
+            const auto& field = proto_fields_[i];
+            
+            if (field.is_message()) {
+                // For message fields, create nested tabs to show their content
+                create_nested_tabs(i);
+                
+                // Process each nested field
+                for (const auto& nested_field : field.nested_fields) {
+                    if (nested_field.is_message()) {
+                        if (nested_field.is_repeated()) {
+                            // For repeated messages (like single_actions), create multiple nested tabs
+                            for (int j = 1; j <= 3; j++) { // Create 3 sample entries
+                                std::string tab_name = nested_field.name() + " " + std::to_string(j);
+                                create_nested_tab(i, tab_name);
+                                
+                                // Add fields from the repeated message to this nested tab
+                                int nested_tab_index = tab_groups_[i].nested_tab_groups.size() - 1;
+                                for (const auto& sub_field : nested_field.nested_fields) {
+                                    add_field_to_nested_tab(i, nested_tab_index, sub_field);
+                                }
+                            }
+                        } else {
+                            // Single message - create one nested tab
+                            create_nested_tab(i, nested_field.name());
+                            int nested_tab_index = tab_groups_[i].nested_tab_groups.size() - 1;
+                            
+                            // Add fields from this message to the nested tab
+                            for (const auto& sub_field : nested_field.nested_fields) {
+                                add_field_to_nested_tab(i, nested_tab_index, sub_field);
+                            }
+                        }
+                    } else {
+                        // Primitive field - add directly to main tab
+                        add_field_to_main_tab(i, nested_field);
+                    }
+                }
+            } else {
+                // Primitive field - add directly to main tab
+                add_field_to_main_tab(i, field);
+            }
+        }
+    }
+
+    // Helper function to add a field to a main tab
+    void add_field_to_main_tab(int tab_index, const config::config_util::ProtoField& field) {
+        if (is_enum_field(field)) {
+            Fl_Choice* choice = create_drop_down(field.descriptor->enum_type());
+            Fl_Box* label = create_label(field.name());
+            fill_tab_content(tab_index, label, choice);
+        } else if (is_primitive_field(field)) {
+            Fl_Input* input = create_input_field();
+            Fl_Box* label = create_label(field.name());
+            fill_tab_content(tab_index, label, input);
+        }
+    }
+
+    // Helper function to add a field to a nested tab
+    void add_field_to_nested_tab(int parent_tab_index, int nested_tab_index, const config::config_util::ProtoField& field) {
+        if (is_enum_field(field)) {
+            Fl_Choice* choice = create_drop_down(field.descriptor->enum_type());
+            Fl_Box* label = create_label(field.name());
+            fill_nested_tab_content(parent_tab_index, nested_tab_index, label, choice);
+        } else if (is_primitive_field(field)) {
+            Fl_Input* input = create_input_field();
+            Fl_Box* label = create_label(field.name());
+            fill_nested_tab_content(parent_tab_index, nested_tab_index, label, input);
+        }
+    }
 
     // Helper methods to check field types
     bool is_enum_field(const config::config_util::ProtoField& field) {
@@ -248,6 +408,9 @@ public:
         for (int i = 0; i < proto_fields_.size(); i++) {
             create_tab(proto_fields_[i].name());
         }
+        
+        // Process proto fields to create nested tabs and content
+        process_proto_fields();
         
         window_->end();
     }
