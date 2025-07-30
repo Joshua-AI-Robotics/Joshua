@@ -5,16 +5,19 @@ import "config/proto/ai.proto";
 
 package config;
 
-enum OperationMode {
+message General {
+    enum OperationMode {
     MODE_INVALID = 0;
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
     MODE_TRAINING = 3;
     MODE_TEST = 4;
+    }
+    OperationMode operation_mode = 1;
 }
 
 message Config {
-    OperationMode operation_mode = 1;
+    General general = 1;
     config.Robot robot = 2;
     config.Ai ai = 3;
 }

@@ -1,5 +1,6 @@
-operation_mode: MODE_TELEOPERATE
-
+general{
+  operation_mode: MODE_TELEOPERATE
+}
 robot {
   name: "so100"
   id: 1

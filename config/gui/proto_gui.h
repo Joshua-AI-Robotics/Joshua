@@ -61,11 +61,21 @@ private:
     Fl_Window* window_;
     Fl_Menu_Bar* menu_bar_;
 
+    struct TabGroups {
+        Fl_Group* group;
+        int row_count;
+        Fl_Tabs* nested_tabs;  // For nested tabs within this tab
+        std::vector<TabGroups> nested_tab_groups;  // For nested tab groups
+    };
+
     Fl_Tabs* tabs_container_;
-    std::vector<Fl_Group*> tab_groups_;
+    std::vector<TabGroups> tab_groups_;
 
     config::Config config_;
     std::vector<config::config_util::ProtoField> proto_fields_;
+    
+    // Track number of rows added to each tab
+    std::vector<int> tab_row_counts_;
     
     void create_menu_bar() {
         static Fl_Menu_Item menu_items[] = {
@@ -139,7 +149,7 @@ private:
         tabs_container_->add(group);
         
         // Store the group reference
-        tab_groups_.push_back(group);
+        tab_groups_.push_back({group, 0, nullptr, {}});
     }
 
     Fl_Input* create_input_field(const int& x = 0, const int& y = 0) {
@@ -150,57 +160,74 @@ private:
 
     void fill_tab_content(const int& tab_index, Fl_Box* label, Fl_Input* input) {
 
-        tab_groups_[tab_index]->begin();
+        // Use our tracked row count instead of counting children
+        int existing_rows = tab_groups_[tab_index].row_count;
 
-        // Count existing Fl_Box labels in the group
-        int existing_labels = 0;
-        for (int i = 0; i < tab_groups_[tab_index]->children(); ++i) {
-            Fl_Widget* child = tab_groups_[tab_index]->child(i);
-            if (dynamic_cast<Fl_Box*>(child)) {
-                ++existing_labels;
-            }
-        }
-
-        int content_x = tab_groups_[tab_index]->x() + MARGIN;
-        int content_y = tab_groups_[tab_index]->y() + MARGIN + existing_labels * (INPUT_HEIGHT + MARGIN);
+        int content_x = tab_groups_[tab_index].group->x() + MARGIN;
+        int content_y = tab_groups_[tab_index].group->y() + MARGIN + existing_rows * (INPUT_HEIGHT + MARGIN);
+        
+        tab_groups_[tab_index].group->begin();
 
         // Add widgets to group first, then position them
-        tab_groups_[tab_index]->add(label);
-        tab_groups_[tab_index]->add(input);
+        tab_groups_[tab_index].group->add(label);
+        tab_groups_[tab_index].group->add(input);
         
         // Position the label and input at the calculated coordinates
         label->position(content_x, content_y);
         input->resize(content_x + LABEL_WIDTH + MARGIN, content_y, INPUT_WIDTH, INPUT_HEIGHT);
+        
 
-        tab_groups_[tab_index]->end();
+
+        // Increment row count for this tab
+        tab_groups_[tab_index].row_count++;
+
+        tab_groups_[tab_index].group->end();
     }
     
     void fill_tab_content(const int& tab_index, Fl_Box* label, Fl_Choice* choice) {
 
-        tab_groups_[tab_index]->begin();
+        // Use our tracked row count instead of counting children
+        int existing_rows = tab_groups_[tab_index].row_count;
 
-        // Count existing Fl_Box labels in the group
-        int existing_labels = 0;
-        for (int i = 0; i < tab_groups_[tab_index]->children(); ++i) {
-            Fl_Widget* child = tab_groups_[tab_index]->child(i);
-            if (dynamic_cast<Fl_Box*>(child)) {
-                ++existing_labels;
-            }
-        }
+        int content_x = tab_groups_[tab_index].group->x() + MARGIN;
+        int content_y = tab_groups_[tab_index].group->y() + MARGIN + existing_rows * (INPUT_HEIGHT + MARGIN);
 
-        int content_x = tab_groups_[tab_index]->x() + MARGIN;
-        int content_y = tab_groups_[tab_index]->y() + MARGIN + existing_labels * (INPUT_HEIGHT + MARGIN);
+        tab_groups_[tab_index].group->begin();
 
         // Add widgets to group first, then position them  
-        tab_groups_[tab_index]->add(label);
-        tab_groups_[tab_index]->add(choice);
+        tab_groups_[tab_index].group->add(label);
+        tab_groups_[tab_index].group->add(choice);
         
         // Position the label and choice at the calculated coordinates
         label->position(content_x, content_y);
         choice->resize(content_x + LABEL_WIDTH + MARGIN, content_y, INPUT_WIDTH, INPUT_HEIGHT);
 
-        tab_groups_[tab_index]->end();
+        // Increment row count for this tab
+        tab_groups_[tab_index].row_count++;
+
+        tab_groups_[tab_index].group->end();
     }   
+   
+
+    // Helper methods to check field types
+    bool is_enum_field(const config::config_util::ProtoField& field) {
+        return field.descriptor && 
+               field.descriptor->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_ENUM;
+    }
+
+    bool is_primitive_field(const config::config_util::ProtoField& field) {
+        if (!field.descriptor) return false;
+        
+        auto cpp_type = field.descriptor->cpp_type();
+        return cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_INT32 ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_INT64 ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_UINT32 ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_UINT64 ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_FLOAT ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_BOOL ||
+               cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_STRING;
+    }
 
 public:
     ProtoGUI() {
@@ -218,16 +245,9 @@ public:
         proto_fields_ = config::config_util::GetProtoFields(config_);
 
         // Create tabs for the highest level of the proto (config.proto).
-        for (const auto& field : proto_fields_) {
-            create_tab(field.name());
+        for (int i = 0; i < proto_fields_.size(); i++) {
+            create_tab(proto_fields_[i].name());
         }
-
-        // Find the field descriptor for operation_mode
-        const google::protobuf::Descriptor* config_descriptor = config_.GetDescriptor();
-        const google::protobuf::FieldDescriptor* op_mode_field = config_descriptor->FindFieldByName("operation_mode");
-
-        fill_tab_content(0, create_label("Operation Mode:"), create_drop_down(op_mode_field->enum_type()));
-        fill_tab_content(0, create_label("Test Mode:"), create_input_field());
         
         window_->end();
     }

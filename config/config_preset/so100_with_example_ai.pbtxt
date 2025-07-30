@@ -1,5 +1,6 @@
-operation_mode: MODE_INFERENCE
-
+general{
+  operation_mode: MODE_INFERENCE
+}
 robot {
   name: "so100"
   id: 1

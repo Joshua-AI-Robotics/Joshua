@@ -1,4 +1,6 @@
-operation_mode: MODE_TEST
+general{
+  operation_mode: MODE_TEST
+}
 
 robot {
   name: "camera_test"
