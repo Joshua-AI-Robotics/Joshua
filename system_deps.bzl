@@ -115,6 +115,17 @@ cc_library(
     includes = ["usr/include/libevdev-1.0"],
     linkopts = ["-levdev"],
 )
+
+# FLTK library
+cc_library(
+    name = "fltk",
+    hdrs = glob([
+        "usr/include/FL/**/*.H",
+        "usr/include/FL/**/*.h",
+    ], allow_empty = True),
+    includes = ["usr/include"],
+    linkopts = ["-lfltk"],
+)
 """
     ctx.symlink("/usr", "usr")
     ctx.symlink("/opt/ros/jazzy", "opt/ros/jazzy")

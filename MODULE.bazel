@@ -12,7 +12,6 @@ bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
 bazel_dep(name = "gflags", version = "2.2.2")
 bazel_dep(name = "glog", version = "0.7.1")
-bazel_dep(name = "imgui", version = "1.91.8")
 
 # ROS2 Bazel rules - local copy
 local_path_override(
