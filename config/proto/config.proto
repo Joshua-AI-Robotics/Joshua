@@ -2,7 +2,6 @@ syntax = "proto3";
 
 import "config/proto/robot.proto";
 import "config/proto/ai.proto";
-import "config/proto/physical_layout.proto";
 
 package config;
 
@@ -18,5 +17,4 @@ message Config {
     OperationMode operation_mode = 1;
     config.Robot robot = 2;
     config.Ai ai = 3;
-    config.PhysicalLayout physical_layout = 4;
 }

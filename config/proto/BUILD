@@ -9,7 +9,6 @@ proto_library(
     deps = [
         ":robot_proto",
         ":ai_proto",
-        ":physical_layout_proto",
     ],
     visibility = ["//visibility:public"],
 )
