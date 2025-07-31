@@ -93,10 +93,17 @@ private:
         image_msg->is_bigendian = false;
         image_msg->step = image_data.width() * 3; // 3 bytes per pixel for RGB
         
-        // Copy image data - ensure we copy the correct amount of data
+        // Convert BGR to RGB and copy image data
         size_t data_size = image_data.width() * image_data.height() * 3;
         image_msg->data.resize(data_size);
-        std::memcpy(image_msg->data.data(), image_data.data().data(), data_size);
+        
+        // BGR to RGB conversion
+        const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
+        for (size_t i = 0; i < data_size; i += 3) {
+            image_msg->data[i] = bgr_data[i + 2];     // R = B
+            image_msg->data[i + 1] = bgr_data[i + 1]; // G = G  
+            image_msg->data[i + 2] = bgr_data[i];     // B = R
+        }
         
         camera.publisher->publish(*image_msg);
       }
