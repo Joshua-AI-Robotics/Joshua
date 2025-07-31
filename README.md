@@ -50,3 +50,50 @@ The streamlined configuration and automated setup capabilities drastically reduc
 ### Scalability
 
 Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
+
+## Data Type Architecture
+
+Project Joshua employs a **dual-layer data type system** that ensures type safety, scalability, and modularity throughout the entire robotic system:
+
+### Configuration Layer (Protobuf)
+The system uses **Protocol Buffers (protobuf)** for all configuration and internal data structures:
+
+- **`config.proto`**: Defines the main configuration structure with `General`, `Robot`, and `Ai` components
+- **`robot.proto`**: Specifies robot hardware configuration including actions and perceptions
+- **`ai.proto`**: Defines AI policy configurations and model parameters
+- **`action.proto`**: Configures actuator types, communication interfaces, and operational parameters
+- **`perception.proto`**: Defines sensor configurations for cameras, encoders, and other perception devices
+
+### Runtime Data Layer (Protobuf + ROS2)
+During runtime, the system uses a **hybrid approach** for optimal performance and compatibility:
+
+#### Internal Communication (Protobuf)
+- **`action_packet.proto`**: Structured action commands with support for:
+  - Simple commands (position, torque, speed)
+  - Preset commands (middle position, idle, graceful shutdown)
+  - Complex multi-parameter actions
+- **`perception_packet.proto`**: Unified perception data format supporting:
+  - Image data (width, height, channels, encoding, raw bytes)
+  - Position data (position, velocity)
+  - Sensor data (multi-value arrays with labels)
+  - Point cloud data (for future LiDAR/Radar sensors)
+
+#### ROS2 Node Communication (Standard ROS2 Messages)
+Between ROS2 nodes, the system uses **standard ROS2 message types** for maximum compatibility:
+
+- **`std_msgs/msg/Float32`**: For encoder position data and actuator commands
+- **`sensor_msgs/msg/Image`**: For camera image data with proper encoding conversion
+- **Future**: Support for custom ROS2 messages compatible with protobuf definitions
+
+### Data Flow Architecture
+
+```
+Hardware Interface → Protobuf Packets → ROS2 Publishers → ROS2 Messages → ROS2 Subscribers → Protobuf Packets → Hardware Interface
+```
+
+This architecture provides:
+- **Type Safety**: Protobuf ensures data integrity at the hardware interface level
+- **Performance**: Efficient serialization/deserialization for internal communication
+- **Compatibility**: Standard ROS2 messages enable integration with existing ROS2 ecosystem
+- **Extensibility**: Easy addition of new sensor types and action commands
+- **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
