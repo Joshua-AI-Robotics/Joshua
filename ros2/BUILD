@@ -53,7 +53,6 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
         "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@local_deps//:opencv",
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//config:config_utils",

@@ -43,7 +43,6 @@ CvCamera::~CvCamera() {
 }
 
 robot::perception::PerceptionPacket CvCamera::GetData() {
-    LOG(INFO) << "CvCamera::GetData() - Starting frame capture";
     cv::Mat frame;
     cap_ >> frame;
     if (frame.empty()) {
@@ -52,16 +51,11 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
         return reusable_packet_;
     }
 
-    LOG(INFO) << "CvCamera::GetData() - Frame captured: " << frame.cols << "x" << frame.rows 
-              << ", channels: " << frame.channels() << ", type: " << frame.type();
-
     // Clear and populate the reusable packet
     reusable_packet_.Clear();
     reusable_packet_.set_perception_id(id_);
     reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count());
-
-    LOG(INFO) << "CvCamera::GetData() - Packet metadata set";
 
     // Populate ImageData fields
     auto* image_data = reusable_packet_.mutable_image();
@@ -70,18 +64,14 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
     image_data->set_channels(frame.channels());
     image_data->set_encoding("bgr8");  // OpenCV default is BGR
     
-    LOG(INFO) << "CvCamera::GetData() - Image metadata set";
     
     // Set image data using string assignment to be safe
     size_t data_size = frame.total() * frame.elemSize();
-    LOG(INFO) << "CvCamera::GetData() - Setting image data, size: " << data_size;
     
     // Create a string from the image data and assign it
     std::string image_string(reinterpret_cast<const char*>(frame.data), data_size);
     image_data->set_data(image_string);
-    
-    LOG(INFO) << "CvCamera::GetData() - Image data set successfully";
-    
+        
     return reusable_packet_;
 }
 
