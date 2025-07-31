@@ -3,8 +3,10 @@
 #include "config/proto/robot.pb.h"
 #include "config/config_utils.h"
 #include "robot/action/factory/action_factory.h"
+#include "robot/action/proto/action_packet.pb.h"
 #include <thread>
 #include <list>
+#include <chrono>
 
 class ActionSubscriber : public rclcpp::Node {
 private:
@@ -13,6 +15,7 @@ private:
     std::unique_ptr<robot::action::ActionInterface> interface;
     std::pair<float, float> limits;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription;
+    robot::action::ActionPacket reusable_packet;  // Pre-allocated packet for reuse
   };
 
 public:
@@ -31,15 +34,16 @@ public:
             continue;
         }
 
-        // Enable torque immediately after a successful interface creation.
-        interface->SetTorque(true);
-
         // Add a new actuator to the list and get a stable reference to it.
         Actuator& actuator = actuators_.emplace_back(Actuator{
           .topic = single_action.subscribe_topic(),
           .interface = std::move(interface),
           .limits = {action_proto.operational_lower_limit(), action_proto.operational_upper_limit()}
         });
+
+        actuator.reusable_packet.Clear();
+        actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
+        actuator.interface->SetAction(actuator.reusable_packet);
         
         // With std::list, the reference captured here is stable and will not be
         // invalidated by adding more elements to the list. The callback only
@@ -48,7 +52,10 @@ public:
             float action_value = msg->data; // action_value is in [-1, 1] range
             float mapped_position = actuator.limits.first + 
                                     ((action_value + 1.0f) / 2.0f) * (actuator.limits.second - actuator.limits.first);
-            actuator.interface->SetPosition(mapped_position);
+            
+            actuator.reusable_packet.Clear();
+            actuator.reusable_packet.set_position(mapped_position);
+            actuator.interface->SetAction(actuator.reusable_packet);
         };
         
         actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
@@ -68,9 +75,11 @@ public:
     std::vector<std::thread> threads;
     
     // Start all shutdown threads in parallel for graceful shutdown.
-    for (const auto& actuator : actuators_) {
+    for (auto& actuator : actuators_) {
       threads.emplace_back([&actuator]() {
-        actuator.interface->GracefulShutdown();
+        actuator.reusable_packet.Clear();
+        actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_GRACEFUL_SHUTDOWN);
+        actuator.interface->SetAction(actuator.reusable_packet);
       });
     }
     

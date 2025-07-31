@@ -11,9 +11,21 @@ proto_library(
     ],
 )
 
+proto_library(
+    name = "action_packet_proto",
+    srcs = ["action_packet.proto"],
+)
+
 cc_proto_library(
     name = "action_cc_proto",
     deps = [
         ":action_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "action_packet_cc_proto",
+    deps = [
+        ":action_packet_proto",
     ],
 )

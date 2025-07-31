@@ -78,8 +78,137 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
     return packet;
 }
 
-void Sts3215Driver::SetAction() {
-    LOG(WARNING) << "SetAction not implemented.";
+void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
+    try {
+        LOG(INFO) << "Executing action [ID: " << action_packet.action_id() 
+                  << ", Timestamp: " << action_packet.timestamp_ms() << "]";
+        
+        switch(action_packet.action_type_case()) {
+            case robot::action::ActionPacket::kPreset:
+                switch(action_packet.preset()){
+                    case robot::action::PresetCommand::PRESET_MIDDLE_POSITION:
+                        LOG(INFO) << "Executing preset: MIDDLE_POSITION";
+                        SetMiddlePosition();
+                        break;
+                    case robot::action::PresetCommand::PRESET_IDLE_POSITION:
+                        LOG(INFO) << "Executing preset: IDLE_POSITION";
+                        SetIdlePosition();
+                        break;
+                    case robot::action::PresetCommand::PRESET_GRACEFUL_SHUTDOWN:
+                        LOG(INFO) << "Executing preset: GRACEFUL_SHUTDOWN";
+                        GracefulShutdown();
+                        break;
+                    case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
+                        LOG(INFO) << "Executing preset: ENABLE_TORQUE";
+                        SetTorque(1.0f);
+                        break;
+                    case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
+                        LOG(INFO) << "Executing preset: DISABLE_TORQUE";
+                        SetTorque(0.0f);
+                        break;
+                    default:
+                        LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
+                        break;
+                }
+                break;
+
+            case robot::action::ActionPacket::kComplex: {
+                const auto& complex_action = action_packet.complex();
+                
+                // Validate at least one field is set
+                if (!complex_action.has_position() && !complex_action.has_speed() && 
+                    !complex_action.has_torque()) {
+                    LOG(WARNING) << "Complex action has no fields set";
+                    break;
+                }
+                
+                LOG(INFO) << "Executing complex action";
+                
+                // Apply changes in order: speed first, then torque, then position
+                if(complex_action.has_speed()) {
+                    if (complex_action.speed() >= 0) {
+                        SetSpeed(complex_action.speed());
+                        LOG(INFO) << "Set speed: " << complex_action.speed();
+                    } else {
+                        LOG(WARNING) << "Invalid speed value: " << complex_action.speed();
+                    }
+                }
+                
+                if(complex_action.has_torque()) {
+                    if (complex_action.torque() >= 0.0f) {
+                        SetTorque(complex_action.torque());
+                        LOG(INFO) << "Set torque: " << complex_action.torque();
+                    } else {
+                        LOG(WARNING) << "Invalid torque value: " << complex_action.torque();
+                    }
+                }
+                
+                if(complex_action.has_position()) {
+                    float pos = complex_action.position();
+                    if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
+                        SetPosition(pos);
+                        LOG(INFO) << "Set position: " << pos;
+                    } else {
+                        LOG(WARNING) << "Position " << pos << " outside operational limits ["
+                                     << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
+                    }
+                }
+                
+                // Handle duration if specified (for future timing control)
+                if(complex_action.has_duration_ms()) {
+                    LOG(INFO) << "Action duration: " << complex_action.duration_ms() << "ms";
+                    // TODO: Implement duration-based execution
+                }
+                break;
+            }
+
+            case robot::action::ActionPacket::kPosition: {
+                float pos = action_packet.position();
+                if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
+                    SetPosition(pos);
+                    LOG(INFO) << "Set position: " << pos;
+                } else {
+                    LOG(WARNING) << "Position " << pos << " outside operational limits ["
+                                 << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
+                }
+                break;
+            }
+
+            case robot::action::ActionPacket::kTorque: {
+                float torque = action_packet.torque();
+                if (torque >= 0.0f) {
+                    SetTorque(torque);
+                    LOG(INFO) << "Set torque: " << torque;
+                } else {
+                    LOG(WARNING) << "Invalid torque value: " << torque;
+                }
+                break;
+            }
+
+            case robot::action::ActionPacket::kSpeed: {
+                float speed = action_packet.speed();
+                if (speed >= 0) {
+                    SetSpeed(speed);
+                    LOG(INFO) << "Set speed: " << speed;
+                } else {
+                    LOG(WARNING) << "Invalid speed value: " << speed;
+                }
+                break;
+            }
+
+            case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
+            default:
+                LOG(WARNING) << "No action type set in ActionPacket [ID: " << action_packet.action_id() << "]";
+                break;
+        }
+        
+        LOG(INFO) << "Action completed successfully [ID: " << action_packet.action_id() << "]";
+        
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Failed to execute action [ID: " << action_packet.action_id() 
+                   << "]: " << e.what();
+        throw;
+    }
 }
 
 void Sts3215Driver::SetSpeed(float value) {

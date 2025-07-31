@@ -14,7 +14,7 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   ~Sts3215Driver();
   
   // ActionInterface methods
-  void SetAction() override;
+  void SetAction(const robot::action::ActionPacket& action_packet) override;
   std::string GetId() override; // TODO: Update the ID scheme.
   
   // ActuatorInterface methods

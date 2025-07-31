@@ -88,5 +88,6 @@ ros2_cpp_binary_with_wrapper(
         "//config/proto:config_cc_proto",
         "//config:config_utils",
         "//robot/action/factory:action_factory",
+        "//robot/action/proto:action_packet_cc_proto",
     ],
 )

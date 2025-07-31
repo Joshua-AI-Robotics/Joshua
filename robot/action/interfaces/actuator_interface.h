@@ -13,10 +13,6 @@ class ActuatorInterface : public ActionInterface{
     ActuatorInterface() = default;
     virtual ~ActuatorInterface() = default;
     
-    // Inherited from ActionInterface:
-    // virtual std::string GetId() = 0;
-    // virtual void SetAction() = 0;
-    
     // Actuator-specific interface methods
     virtual void SetSpeed(float value) = 0;
     virtual void SetPosition(float angle) = 0;

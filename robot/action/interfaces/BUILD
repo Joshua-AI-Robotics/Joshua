@@ -5,6 +5,7 @@ cc_library(
     hdrs = ["action_interface.h"],
     deps = [
         "@glog//:glog",
+        "//robot/action/proto:action_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )
