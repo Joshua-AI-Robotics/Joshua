@@ -1,5 +1,6 @@
 #include "robot/perception/encoder/sts3215_encoder.h"
 #include <glog/logging.h>
+#include <chrono>
 
 namespace robot::perception {
 
@@ -18,8 +19,20 @@ std::string Sts3215Encoder::GetId() {
     return id;
 }
 
-std::any Sts3215Encoder::GetData() {
-    return read_servo_position();
+robot::perception::PerceptionPacket Sts3215Encoder::GetData() {
+    auto position_opt = read_servo_position();
+    if (position_opt) {
+        reusable_packet_.Clear();
+        reusable_packet_.set_perception_id(id_);
+        reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+        reusable_packet_.mutable_position()->set_position(static_cast<float>(*position_opt));
+        return reusable_packet_;
+    }
+    
+    // Return empty packet on failure
+    reusable_packet_.Clear();
+    return reusable_packet_;
 }
 
 float Sts3215Encoder::GetPosition() {

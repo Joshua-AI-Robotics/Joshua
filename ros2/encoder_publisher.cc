@@ -2,6 +2,7 @@
 #include "std_msgs/msg/float32.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "config/proto/robot.pb.h"
+#include "robot/perception/proto/perception_packet.pb.h"
 #include "config/config_utils.h"
 #include <memory>
 #include <string>
@@ -71,26 +72,27 @@ private:
     
     try {
       for (auto& encoder : encoders_) {
-        auto data = encoder.interface->GetData();
-        auto data_opt = std::any_cast<std::optional<uint16_t>>(data);
-        if (!data_opt.has_value()) {
-            RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder '%s'!", encoder.topic.c_str());
+        auto packet = encoder.interface->GetData();
+        
+        // Check if packet contains position data
+        if (!packet.has_position()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get position data from encoder '%s'!", encoder.topic.c_str());
             continue;
         }
         
         // Get encoder position and normalize to [-1, 1]
-        uint16_t raw_position = *data_opt;
+        float raw_position = packet.position().position();
         float position_data;
 
         if (encoder.publish_unnormalized_data) {
-          position_data = static_cast<float>(raw_position);
+          position_data = raw_position;
         } else {
-          position_data = 2.0f * (static_cast<float>(raw_position) - encoder.limits.first) / 
-                                     (encoder.limits.second - encoder.limits.first) - 1.0f;
-                                     position_data = std::max(-1.0f, std::min(1.0f, position_data));
-                                    }
+          position_data = 2.0f * (raw_position - encoder.limits.first) / 
+                                (encoder.limits.second - encoder.limits.first) - 1.0f;
+          position_data = std::max(-1.0f, std::min(1.0f, position_data));
+        }
         
-                auto message = std_msgs::msg::Float32();
+        auto message = std_msgs::msg::Float32();
         message.data = position_data;
         encoder.publisher->publish(message);
       }

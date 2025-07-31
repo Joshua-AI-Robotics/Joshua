@@ -1,7 +1,8 @@
 #pragma once
 
-#include <any>
 #include <memory>
+#include <string>
+#include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
 
@@ -10,7 +11,7 @@ public:
     virtual ~PerceptionInterface() = default;
 
     virtual std::string GetId() = 0;
-    virtual std::any GetData() = 0;
+    virtual robot::perception::PerceptionPacket GetData() = 0;
 };
 
 }  // namespace robot::perception

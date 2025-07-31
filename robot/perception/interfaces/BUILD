@@ -14,6 +14,7 @@ cc_library(
     deps = [
         ":perception_interface",
         "//config/proto:robot_cc_proto",
+        "//robot/perception/proto:perception_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -23,6 +24,7 @@ cc_library(
     hdrs = ["encoder_interface.h"],
     deps = [
         ":perception_interface",
+        "//robot/perception/proto:perception_packet_cc_proto",
     ],
     visibility = ["//visibility:public"],
 )

@@ -9,14 +9,12 @@ message ImageData {
   int32 channels = 3;           // 1=grayscale, 3=RGB, 4=RGBA
   string encoding = 4;          // "bgr8", "rgb8", "mono8", etc.
   bytes data = 5;               // Raw image bytes
-  int64 timestamp_ns = 6;
 }
 
 // Position data for encoders
 message PositionData {
   float position = 1;
   optional float velocity = 2;
-  int64 timestamp_ns = 3;
 }
 
 // IMU/sensor data
@@ -24,7 +22,6 @@ message SensorData {
   repeated float values = 1;
   repeated string labels = 2;
   string unit = 3;
-  int64 timestamp_ns = 4;
 }
 
 // Point cloud data (for future LiDAR Radar sensors)
@@ -32,7 +29,6 @@ message PointCloudData {
   repeated float points = 1;
   int32 point_count = 2;
   bool has_color = 3;
-  int64 timestamp_ns = 4;
 }
 
 // Main perception packet - uses oneof for type safety

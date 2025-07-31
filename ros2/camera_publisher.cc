@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "robot/perception/factory/perception_factory.h"
+#include "robot/perception/proto/perception_packet.pb.h"
 #include "config/proto/robot.pb.h"
 #include "config/config_utils.h"
 #include <memory>
@@ -68,21 +69,86 @@ private:
     
     try {
       for (const auto& camera : cameras_) {
-        auto data = camera.interface->GetData();
-        if (!data.has_value()) {
-            RCLCPP_WARN(this->get_logger(), "Failed to get camera data!");
-            return;
+        RCLCPP_DEBUG(this->get_logger(), "Getting data from camera...");
+        auto packet = camera.interface->GetData();
+        
+        // Check if packet contains image data
+        if (!packet.has_image()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get image data from camera!");
+            continue;
         }
 
-        cv::Mat frame = std::any_cast<cv::Mat>(data);
+        const auto& image_data = packet.image();
+        RCLCPP_DEBUG(this->get_logger(), "Image data: %dx%d, channels=%d, encoding=%s, data_size=%zu", 
+                    image_data.width(), image_data.height(), image_data.channels(), 
+                    image_data.encoding().c_str(), image_data.data().size());
+        
+        // Verify image data is valid
+        if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
+            RCLCPP_ERROR(this->get_logger(), "Invalid image dimensions: %dx%d, channels=%d", 
+                        image_data.width(), image_data.height(), image_data.channels());
+            continue;
+        }
+        
+        // Convert protobuf ImageData to cv::Mat
+        cv::Mat frame;
+        int cv_type;
+        
+        // Determine OpenCV type based on channels
+        if (image_data.channels() == 1) {
+            cv_type = CV_8UC1;  // Grayscale
+        } else if (image_data.channels() == 3) {
+            cv_type = CV_8UC3;  // RGB/BGR
+        } else if (image_data.channels() == 4) {
+            cv_type = CV_8UC4;  // RGBA/BGRA
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Unsupported number of channels: %d", image_data.channels());
+            continue;
+        }
+        
+        // Verify data size matches expected size
+        size_t expected_size = image_data.height() * image_data.width() * image_data.channels();
+        if (image_data.data().size() != expected_size) {
+            RCLCPP_ERROR(this->get_logger(), "Image data size mismatch. Expected: %zu, Got: %zu", 
+                        expected_size, image_data.data().size());
+            continue;
+        }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Creating cv::Mat...");
+        
+        // Create cv::Mat using the safest possible approach
+        frame = cv::Mat::zeros(image_data.height(), image_data.width(), cv_type);
+        
+        // Copy data byte by byte to be absolutely safe
+        const std::string& data_str = image_data.data();
+        if (data_str.size() == expected_size) {
+            std::memcpy(frame.data, data_str.data(), data_str.size());
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Data size mismatch during copy");
+            continue;
+        }
+        
         if (frame.empty()) {
             RCLCPP_WARN(this->get_logger(), "Empty image data received from camera!");
-            return;
+            continue;
         }
 
-        // Convert BGR to RGB (OpenCV uses BGR, ROS2 typically expects RGB)
+        RCLCPP_DEBUG(this->get_logger(), "Converting color space...");
+        
+        // Convert to RGB if needed (check encoding from protobuf)
         cv::Mat rgb_frame;
-        cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);
+        if (image_data.encoding() == "bgr8" && image_data.channels() == 3) {
+            cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);
+        } else if (image_data.encoding() == "rgb8") {
+            rgb_frame = frame.clone();
+        } else if (image_data.encoding() == "mono8" && image_data.channels() == 1) {
+            cv::cvtColor(frame, rgb_frame, cv::COLOR_GRAY2RGB);
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Unsupported encoding: %s, using as-is", image_data.encoding().c_str());
+            rgb_frame = frame.clone();
+        }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Creating ROS message...");
         
         // Create sensor_msgs Image message
         auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
@@ -99,7 +165,9 @@ private:
         image_msg->data.resize(data_size);
         std::memcpy(image_msg->data.data(), rgb_frame.data, data_size);
         
+        RCLCPP_DEBUG(this->get_logger(), "Publishing image...");
         camera.publisher->publish(*image_msg);
+        RCLCPP_DEBUG(this->get_logger(), "Image published successfully");
       }
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error publishing camera data: %s", e.what());

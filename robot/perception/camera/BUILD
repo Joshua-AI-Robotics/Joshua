@@ -7,6 +7,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/perception/interfaces:camera_interface",
+        "//robot/perception/proto:perception_packet_cc_proto",
         "@glog//:glog",
         "@local_deps//:videoio",
         "@local_deps//:core",

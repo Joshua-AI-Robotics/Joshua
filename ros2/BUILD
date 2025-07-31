@@ -57,6 +57,7 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
+        "//robot/perception/proto:perception_packet_cc_proto",
     ],
 )
 
@@ -72,6 +73,7 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//config:config_utils",
+        "//robot/perception/proto:perception_packet_cc_proto",
     ],
 )
 
