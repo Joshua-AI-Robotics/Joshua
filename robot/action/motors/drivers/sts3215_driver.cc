@@ -78,6 +78,10 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
     return packet;
 }
 
+void Sts3215Driver::SetAction() {
+    LOG(WARNING) << "SetAction not implemented.";
+}
+
 void Sts3215Driver::SetSpeed(float value) {
     move_speed_ = static_cast<uint16_t>(value);
 }

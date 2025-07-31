@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 
+// Abstract camera interface.
 namespace robot::perception {
 
 class CameraInterface : public PerceptionInterface {

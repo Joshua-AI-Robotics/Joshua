@@ -2,6 +2,7 @@
 
 #include "robot/perception/interfaces/perception_interface.h"
 
+// Abstract encoder interface.
 namespace robot::perception {
 
 class EncoderInterface : public PerceptionInterface {

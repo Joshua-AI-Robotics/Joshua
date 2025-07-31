@@ -8,3 +8,13 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "actuator_interface",
+    hdrs = ["actuator_interface.h"],
+    deps = [
+        "@glog//:glog",
+        ":action_interface",
+    ],
+    visibility = ["//visibility:public"],
+)

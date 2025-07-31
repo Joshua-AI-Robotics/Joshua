@@ -3,19 +3,24 @@
 #include <boost/asio.hpp>
 #include <vector>
 #include "robot/comm_interface/serial/serial.h"
-#include "robot/action/interfaces/action_interface.h"
+#include "robot/action/interfaces/actuator_interface.h"
 #include "config/proto/robot.pb.h"
 #include <memory>
 
 namespace robot::action{
-class Sts3215Driver : public robot::action::ActionInterface {
+class Sts3215Driver : public robot::action::ActuatorInterface {
   public:
   Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::action::Actuator& action_config);
   ~Sts3215Driver();
+  
+  // ActionInterface methods
+  void SetAction() override;
+  std::string GetId() override; // TODO: Update the ID scheme.
+  
+  // ActuatorInterface methods
   void SetSpeed(float value) override;
   void SetPosition(float angle) override;
   void SetTorque(float torque) override;
-  std::string GetId() override; // TODO: Update the ID scheme.
   void SetMiddlePosition() override;
   void SetIdlePosition() override;
   void GracefulShutdown() override;
