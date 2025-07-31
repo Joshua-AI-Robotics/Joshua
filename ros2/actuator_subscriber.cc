@@ -53,6 +53,7 @@ public:
             float mapped_position = actuator.limits.first + 
                                     ((action_value + 1.0f) / 2.0f) * (actuator.limits.second - actuator.limits.first);
             
+            // Reuse pre-allocated packet for optimal performance
             actuator.reusable_packet.Clear();
             actuator.reusable_packet.set_position(mapped_position);
             actuator.interface->SetAction(actuator.reusable_packet);
