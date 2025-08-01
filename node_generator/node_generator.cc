@@ -218,7 +218,12 @@ pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t
         
         std::string binary_impl = binary_path + "/" + node_type + "_impl";
         std::string node_id_str = std::to_string(node_id);
-        execl(binary_impl.c_str(), binary_impl.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr);
+        execl(binary_impl.c_str(),
+            binary_impl.c_str(),
+            node_name.c_str(),
+            node_id_str.c_str(),
+            config_path_.c_str(),
+            nullptr);
         
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
@@ -251,9 +256,9 @@ pid_t NodeGenerator::LaunchActionNode(const std::string& node_type, uint32_t nod
         std::string node_id_str = std::to_string(node_id);
         
         execl(binary_impl.c_str(), 
-              binary_impl.c_str(), 
-              node_id_str.c_str(), 
-              node_name.c_str(), 
+              binary_impl.c_str(),
+              node_name.c_str(),  
+              node_id_str.c_str(),              
               config_path_.c_str(), 
               nullptr);
         

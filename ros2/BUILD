@@ -92,3 +92,17 @@ ros2_cpp_binary_with_wrapper(
         "//robot/action/proto:action_packet_cc_proto",
     ],
 )
+
+ros2_cpp_binary_with_wrapper(
+    name = "calibration_subscriber",
+    srcs = ["calibration_subscriber.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "//config/proto:config_cc_proto",
+        "//config:config_utils",
+    ],
+)

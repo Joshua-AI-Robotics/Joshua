@@ -98,12 +98,12 @@ int main(int argc, char * argv[]) {
   
   if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger("actuator_subscriber"), 
-                 "Usage: actuator_subscriber <node_id> <node_name> <config_path>");
+                 "Usage: actuator_subscriber <node_name> <node_id> <config_path>");
     return 1;
   }
   
-  int node_id = std::stoi(argv[1]);
-  std::string node_name = argv[2];
+  std::string node_name = argv[1];
+  int node_id = std::stoi(argv[2]);
   std::string config_path = argv[3];
   
   config::Config config = config::config_util::LoadConfig(config_path);
