@@ -1,5 +1,5 @@
 general{
-  operation_mode: MODE_TELEOPERATE
+  operation_mode: MODE_TEST
 }
 robot {
   name: "so100"
