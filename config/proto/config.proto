@@ -11,7 +11,8 @@ message General {
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
     MODE_TRAINING = 3;
-    MODE_TEST = 4;
+    MODE_CALIBRATION = 4;
+    MODE_TEST = 5;
     }
     OperationMode operation_mode = 1;
 }
