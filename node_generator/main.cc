@@ -2,7 +2,7 @@
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 
-DEFINE_string(config, "config/config_preset/so100_with_follower.pbtxt", "Path to the robot config file");
+DEFINE_string(config, "config/config_preset/so100_teleoperate_with_follower.pbtxt", "Path to the robot config file");
 
 int main(int argc, char* argv[]) {
     google::InitGoogleLogging(argv[0]);

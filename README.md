@@ -10,12 +10,38 @@ This system utilized the ROS2 and protobuf. A configuration file should contain 
 
 The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all the hardware interface and AI inference API as a ROS2 node. 
 
-### TODO
-- Implement auto calibration for actuator and store it as a config file.
-- Implement UI for generating the config file.
-- Leverage commonly used data type for perception and action.
-- Implement raspberry pi 5 platform.
+## Quick Start Example
 
+### Prerequisites
+
+- **Operating System:** Ubuntu 22.04 LTS
+- **ROS2:**  
+  ```bash
+  sudo apt-get install ros2
+  ```
+- **OpenCV:**  
+  ```bash
+  sudo apt-get install libopencv-dev
+  ```
+- **Bazel Build System:**  
+  [Install Bazel](https://bazel.build/install) following the official instructions.
+
+- **User Permissions:**  
+  Add your user to the appropriate groups if required (e.g., for hardware access):
+  ```bash
+  sudo usermod -aG dialout $USER # Then reboot
+  ```
+
+### Example: Running SO100 Teleoperation with Follower and Lead Arm
+
+This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate_with_follower.pbtxt`](config/config_preset/so100_teleoperate_with_follower.pbtxt).
+
+To start the system, run:
+```bash
+bazel run node_generator:main
+```
+
+**Please make sure to calibrate the operational limits for your servo motors.**
 
 ## Key Features & Benefits:
 
