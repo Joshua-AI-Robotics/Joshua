@@ -94,8 +94,8 @@ ros2_cpp_binary_with_wrapper(
 )
 
 ros2_cpp_binary_with_wrapper(
-    name = "calibration_subscriber",
-    srcs = ["calibration_subscriber.cc"],
+    name = "operational_limit_calibration_subscriber",
+    srcs = ["operational_limit_calibration_subscriber.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
