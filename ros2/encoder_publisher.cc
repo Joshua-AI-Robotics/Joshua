@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <cmath>
 
 class EncoderPublisher : public rclcpp::Node {
 private:
@@ -16,7 +17,7 @@ private:
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
     std::pair<float, float> limits;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
-    bool publish_unnormalized_data = false;
+    robot::perception::EncoderDataMode encoder_data_mode;
   };
 
 public:
@@ -42,11 +43,11 @@ public:
           .interface = std::move(interface),
           .limits = {encoder_proto.operational_lower_limit(), encoder_proto.operational_upper_limit()},
           .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10),
-          .publish_unnormalized_data = encoder_proto.publish_unnormalized_data()
+          .encoder_data_mode = encoder_proto.encoder_data_mode()
         });
 
-        RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s", 
-                   encoder_proto.encoder_name().c_str(), node_id, single_perception.publish_topic().c_str());
+        RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s with data mode: %d", 
+                   encoder_proto.encoder_name().c_str(), node_id, single_perception.publish_topic().c_str(), encoder_proto.encoder_data_mode());
       }
     }
     
@@ -80,16 +81,27 @@ private:
             continue;
         }
         
-        // Get encoder position and normalize to [-1, 1]
-        float raw_position = packet.position().position();
-        float position_data;
+        float position_data = packet.position().position();
 
-        if (encoder.publish_unnormalized_data) {
-          position_data = raw_position;
-        } else {
-          position_data = 2.0f * (raw_position - encoder.limits.first) / 
+        switch(encoder.encoder_data_mode) {
+          case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_RAW:
+            break;
+          case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE:
+            position_data = (position_data - encoder.limits.first) / 
+                                (encoder.limits.second - encoder.limits.first);
+            position_data = std::max(0.0f, std::min(1.0f, position_data));
+            break;
+          case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE:
+            position_data = 2.0f * (position_data - encoder.limits.first) / 
                                 (encoder.limits.second - encoder.limits.first) - 1.0f;
-          position_data = std::max(-1.0f, std::min(1.0f, position_data));
+            position_data = std::max(-1.0f, std::min(1.0f, position_data));
+            break;
+          case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
+            position_data = position_data * M_PI / 180.0f;
+            break;
+          default:
+            RCLCPP_WARN(this->get_logger(), "Invalid publish data mode for encoder '%s'!", encoder.topic.c_str());
+            continue;
         }
         
         auto message = std_msgs::msg::Float32();

@@ -13,6 +13,14 @@ enum PerceptionType {
     HID = 5; // Human Interface Device
 }
 
+enum EncoderDataMode {
+    ENCODER_DATA_MODE_INVALID = 0;
+    ENCODER_DATA_MODE_RAW = 1;
+    ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE = 2;
+    ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE = 3;
+    ENCODER_DATA_MODE_NORMALIZED_RADIAN = 4;
+}
+
 enum CameraType {
     CAMERA_INVLAID = 0;
     OPENCV = 1;
@@ -56,7 +64,7 @@ message Encoder {
     robot.comm_interface.CommType comm_type = 4;
     uint32 operational_lower_limit = 5;
     uint32 operational_upper_limit = 6;
-    bool publish_unnormalized_data = 7;
+    EncoderDataMode encoder_data_mode = 7;
     oneof comm_config {
         robot.comm_interface.SerialConfig serial_config = 8;
         // Add other comm type here.

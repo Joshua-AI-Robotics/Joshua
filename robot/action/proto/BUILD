@@ -8,6 +8,7 @@ proto_library(
     srcs = ["action.proto"],
     deps = [
         "//robot/comm_interface/proto:comm_interface_proto",
+        "//robot/perception/proto:perception_proto",
     ],
 )
 

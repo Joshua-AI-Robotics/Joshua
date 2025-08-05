@@ -20,6 +20,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 973
         operational_upper_limit: 3034
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 1
           port: "/dev/ttyACM0"
@@ -46,6 +47,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 858
         operational_upper_limit: 3154
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 2
           port: "/dev/ttyACM0"
@@ -72,6 +74,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 798
         operational_upper_limit: 3015
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 3
           port: "/dev/ttyACM0"
@@ -98,6 +101,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 668
         operational_upper_limit: 3124
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 4
           port: "/dev/ttyACM0"
@@ -124,6 +128,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 902
         operational_upper_limit: 2955
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 5
           port: "/dev/ttyACM0"
@@ -150,6 +155,7 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 1795
         operational_upper_limit: 3235
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 6
           port: "/dev/ttyACM0"
@@ -177,6 +183,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1147
         operational_upper_limit: 3154
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 1
           port: "/dev/ttyACM1"
@@ -198,6 +205,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1670
         operational_upper_limit: 3986
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 2
           port: "/dev/ttyACM1"
@@ -220,6 +228,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 910
         operational_upper_limit: 3113
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 3
           port: "/dev/ttyACM1"
@@ -242,6 +251,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 0
         operational_upper_limit: 2407
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 4
           port: "/dev/ttyACM1"
@@ -264,6 +274,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1730
         operational_upper_limit: 3811
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 5
           port: "/dev/ttyACM1"
@@ -285,6 +296,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 2028
         operational_upper_limit: 3100
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         serial_config {
           id: 6
           port: "/dev/ttyACM1"

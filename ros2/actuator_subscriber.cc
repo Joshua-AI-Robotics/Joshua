@@ -4,6 +4,7 @@
 #include "config/config_utils.h"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "robot/action/proto/action.pb.h"
 #include <thread>
 #include <list>
 #include <chrono>
@@ -14,6 +15,7 @@ private:
     std::string topic;
     std::unique_ptr<robot::action::ActionInterface> interface;
     std::pair<float, float> limits;
+    robot::perception::EncoderDataMode encoder_data_mode;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription;
     robot::action::ActionPacket reusable_packet;  // Pre-allocated packet for reuse
   };
@@ -38,7 +40,8 @@ public:
         Actuator& actuator = actuators_.emplace_back(Actuator{
           .topic = single_action.subscribe_topic(),
           .interface = std::move(interface),
-          .limits = {action_proto.operational_lower_limit(), action_proto.operational_upper_limit()}
+          .limits = {action_proto.operational_lower_limit(), action_proto.operational_upper_limit()},
+          .encoder_data_mode = action_proto.encoder_data_mode()
         });
 
         actuator.reusable_packet.Clear();
@@ -49,9 +52,26 @@ public:
         // invalidated by adding more elements to the list. The callback only
         // needs to set the position.
         auto callback = [this, &actuator](const std_msgs::msg::Float32::SharedPtr msg) {
-            float action_value = msg->data; // action_value is in [-1, 1] range
-            float mapped_position = actuator.limits.first + 
-                                    ((action_value + 1.0f) / 2.0f) * (actuator.limits.second - actuator.limits.first);
+            float action_value = msg->data;
+            float mapped_position;
+            switch(actuator.encoder_data_mode) {
+              case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_RAW:
+                mapped_position = action_value;
+                break;
+              case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE:
+                mapped_position = (action_value + 1.0f) / 2.0f;
+                break;
+              case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE:
+                mapped_position = actuator.limits.first + 
+                                  ((action_value + 1.0f) / 2.0f) * (actuator.limits.second - actuator.limits.first);
+                break;
+              case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
+                mapped_position = action_value * M_PI / 180.0f;
+                break;
+              default:
+                RCLCPP_WARN(this->get_logger(), "Invalid encoder data mode for actuator '%s'!", actuator.topic.c_str());
+                return;
+            }
             
             // Reuse pre-allocated packet for optimal performance
             actuator.reusable_packet.Clear();

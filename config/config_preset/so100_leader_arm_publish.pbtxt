@@ -19,7 +19,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1147
         operational_upper_limit: 3154
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 1
           port: "/dev/ttyACM1"
@@ -41,7 +41,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1670
         operational_upper_limit: 3986
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 2
           port: "/dev/ttyACM1"
@@ -63,7 +63,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 910
         operational_upper_limit: 3113
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 3
           port: "/dev/ttyACM1"
@@ -85,7 +85,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 0
         operational_upper_limit: 2407
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 4
           port: "/dev/ttyACM1"
@@ -107,7 +107,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 1730
         operational_upper_limit: 3811
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 5
           port: "/dev/ttyACM1"
@@ -129,7 +129,7 @@ robot {
         comm_type: SERIAL
         operational_lower_limit: 2028
         operational_upper_limit: 3100
-        publish_unnormalized_data: True
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
           id: 6
           port: "/dev/ttyACM1"

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "robot/comm_interface/proto/comm_interface.proto";
+import "robot/perception/proto/perception.proto";
 
 package robot.action;
 
@@ -19,18 +20,17 @@ message Actuator {
     uint64 id = 2;
     ActuatorType actuator_type = 3;
     robot.comm_interface.CommType comm_type = 4;
-
     uint32 physical_lower_limit = 5; // TODO: Move this to physical layout.
     uint32 physical_upper_limit = 6; // TODO: Move this to physical layout.
     uint32 operational_lower_limit = 7;
     uint32 operational_upper_limit = 8;
-
+    robot.perception.EncoderDataMode encoder_data_mode = 9; // How the actuator data is processed for action.
     oneof comm_config {
-        robot.comm_interface.SerialConfig serial_config = 9;
+        robot.comm_interface.SerialConfig serial_config = 10;
         // Add other comm type here.
     }
     oneof action_config {
-        Sts3215Config sts3215_config = 10;
+        Sts3215Config sts3215_config = 11;
         // Add other motor type here.
     }    
 }
