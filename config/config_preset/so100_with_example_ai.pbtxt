@@ -169,6 +169,7 @@ robot {
     single_perceptions {
       node_id: 2
       perception_type: CAMERA
+      publish_rate_hz: 30
       camera {
         camera_name: "webcam"
         id: 1

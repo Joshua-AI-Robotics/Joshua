@@ -14,6 +14,7 @@ private:
     std::string topic;
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher;
+    rclcpp::TimerBase::SharedPtr timer;
   };
 
 public:
@@ -36,7 +37,10 @@ public:
         cameras_.emplace_back(Camera{
           .topic = single_perception.publish_topic(),
           .interface = std::move(interface),
-          .publisher = this->create_publisher<sensor_msgs::msg::Image>(single_perception.publish_topic(), 10)
+          .publisher = this->create_publisher<sensor_msgs::msg::Image>(single_perception.publish_topic(), 10),
+          .timer = this->create_wall_timer(
+            std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
+            std::bind(&CameraPublisher::publish_camera_data, this))
         });
 
         RCLCPP_INFO(this->get_logger(), "Found camera '%s' in configuration for node_id %d. Publishing on topic: %s", 
@@ -49,10 +53,6 @@ public:
       return;
     }
     
-    timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(33), // ~30 Hz
-      std::bind(&CameraPublisher::publish_camera_data, this));
-      
     RCLCPP_INFO(this->get_logger(), "Camera publisher node started with %zu cameras for node_id %d!", 
                cameras_.size(), node_id);
   }
@@ -112,7 +112,6 @@ private:
     }
   }
   
-  rclcpp::TimerBase::SharedPtr timer_;
   std::vector<Camera> cameras_;
 };
 

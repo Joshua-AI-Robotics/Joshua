@@ -176,6 +176,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_1"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_1"
         id: 1
@@ -198,6 +199,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_2"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_2"
         id: 2
@@ -221,6 +223,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_3"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_3"
         id: 3
@@ -244,6 +247,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_4"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_4"
         id: 4
@@ -267,6 +271,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_5"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_5"
         id: 5
@@ -289,6 +294,7 @@ robot {
       node_id: 2
       publish_topic: "sts3215_encoder_6"
       perception_type: ENCODER
+      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_6"
         id: 6

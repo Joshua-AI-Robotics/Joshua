@@ -18,6 +18,7 @@ private:
     std::pair<float, float> limits;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
     robot::perception::EncoderDataMode encoder_data_mode;
+    rclcpp::TimerBase::SharedPtr timer;
   };
 
 public:
@@ -43,7 +44,10 @@ public:
           .interface = std::move(interface),
           .limits = {encoder_proto.operational_lower_limit(), encoder_proto.operational_upper_limit()},
           .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10),
-          .encoder_data_mode = encoder_proto.encoder_data_mode()
+          .encoder_data_mode = encoder_proto.encoder_data_mode(),
+          .timer = this->create_wall_timer(
+            std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
+            std::bind(&EncoderPublisher::publish_encoder_data, this))
         });
 
         RCLCPP_INFO(this->get_logger(), "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s with data mode: %d", 
@@ -55,10 +59,6 @@ public:
       RCLCPP_ERROR(this->get_logger(), "No encoders found in configuration for node_id %d!", node_id);
       return;
     }
-    
-    timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(16), // 60 Hz update rate
-      std::bind(&EncoderPublisher::publish_encoder_data, this));
       
     RCLCPP_INFO(this->get_logger(), "Encoder publisher node started with %zu encoders for node_id %d!", 
                encoders_.size(), node_id);
@@ -113,7 +113,7 @@ private:
     }
   }
   
-  rclcpp::TimerBase::SharedPtr timer_;
+  
   std::vector<Encoder> encoders_;
 };
 
