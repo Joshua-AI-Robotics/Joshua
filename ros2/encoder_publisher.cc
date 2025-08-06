@@ -97,6 +97,7 @@ private:
             position_data = std::max(-1.0f, std::min(1.0f, position_data));
             break;
           case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
+            // TODO: Check if this is correct
             position_data = position_data * M_PI / 180.0f;
             break;
           default:
