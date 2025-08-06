@@ -59,14 +59,15 @@ public:
                 mapped_position = action_value;
                 break;
               case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE:
-                mapped_position = (action_value + 1.0f) / 2.0f;
+                mapped_position = actuator.limits.first + action_value * (actuator.limits.second - actuator.limits.first);
                 break;
               case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE:
                 mapped_position = actuator.limits.first + 
                                   ((action_value + 1.0f) / 2.0f) * (actuator.limits.second - actuator.limits.first);
                 break;
               case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
-                mapped_position = action_value * M_PI / 180.0f;
+                mapped_position = actuator.limits.first + ((action_value + (static_cast<float>(M_PI) / 2.0f)) / static_cast<float>(M_PI)) *
+                                  (actuator.limits.second - actuator.limits.first);
                 break;
               default:
                 RCLCPP_WARN(this->get_logger(), "Invalid encoder data mode for actuator '%s'!", actuator.topic.c_str());

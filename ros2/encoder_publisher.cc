@@ -97,8 +97,9 @@ private:
             position_data = std::max(-1.0f, std::min(1.0f, position_data));
             break;
           case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
-            // TODO: Check if this is correct
-            position_data = position_data * M_PI / 180.0f;
+            position_data = static_cast<float>(M_PI) * (position_data - encoder.limits.first) /
+                                (encoder.limits.second - encoder.limits.first) - (static_cast<float>(M_PI) / 2.0f);
+            position_data = std::max(-static_cast<float>(M_PI) / 2.0f, std::min(static_cast<float>(M_PI) / 2.0f, position_data));
             break;
           default:
             RCLCPP_WARN(this->get_logger(), "Invalid publish data mode for encoder '%s'!", encoder.topic.c_str());
