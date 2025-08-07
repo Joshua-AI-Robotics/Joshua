@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GeneralTab</class>
+ <widget class="QWidget" name="GeneralTab">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1000</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_root">
+   <item>
+    <widget class="QSplitter" name="splitter">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <widget class="QWidget" name="controlPanel">
+      <layout class="QVBoxLayout" name="controlLayout">
+       <item>
+        <widget class="QGroupBox" name="robotGroup">
+         <property name="title">
+          <string>Robot Control</string>
+         </property>
+         <layout class="QVBoxLayout" name="robotLayout">
+          <item>
+           <widget class="QPushButton" name="emergencyStopBtn">
+            <property name="text">
+             <string>EMERGENCY STOP</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="controlButtonsLayout">
+            <item>
+             <widget class="QPushButton" name="startBtn">
+              <property name="text">
+               <string>Start</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="stopBtn">
+              <property name="text">
+               <string>Stop</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="resetBtn">
+              <property name="text">
+               <string>Reset</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="speedGroup">
+         <property name="title">
+          <string>Speed Control</string>
+         </property>
+         <layout class="QVBoxLayout" name="speedLayout">
+          <item>
+           <widget class="QSlider" name="speedSlider">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="tickPosition">
+             <enum>QSlider::TicksBelow</enum>
+            </property>
+            <property name="tickInterval">
+             <number>10</number>
+            </property>
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>100</number>
+            </property>
+            <property name="value">
+             <number>50</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="speedDisplayLayout">
+            <item>
+             <widget class="QLabel" name="speedLabel">
+              <property name="text">
+               <string>Speed: 50%</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="speedSpinBox">
+              <property name="suffix">
+               <string>%</string>
+              </property>
+              <property name="minimum">
+               <number>0</number>
+              </property>
+              <property name="maximum">
+               <number>100</number>
+              </property>
+              <property name="value">
+               <number>50</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="modeGroup">
+         <property name="title">
+          <string>Operation Mode</string>
+         </property>
+         <layout class="QVBoxLayout" name="modeLayout">
+          <item>
+           <widget class="QComboBox" name="modeComboBox">
+            <item><property name="text"><string>Manual Control</string></property></item>
+            <item><property name="text"><string>Autonomous</string></property></item>
+            <item><property name="text"><string>Teleoperation</string></property></item>
+            <item><property name="text"><string>Calibration</string></property></item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="autoModeCheckBox">
+            <property name="text">
+             <string>Enable Auto Mode</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="controlSpacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="statusPanel">
+      <layout class="QVBoxLayout" name="statusLayout">
+       <item>
+        <widget class="QGroupBox" name="systemGroup">
+         <property name="title"><string>System Status</string></property>
+         <layout class="QVBoxLayout" name="systemLayout">
+          <item>
+           <layout class="QHBoxLayout" name="cpuLayout">
+            <item><widget class="QLabel" name="cpuLabel"><property name="text"><string>CPU: 0%</string></property></widget></item>
+            <item><widget class="QProgressBar" name="cpuBar"><property name="value"><number>0</number></property></widget></item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="memoryLayout">
+            <item><widget class="QLabel" name="memoryLabel"><property name="text"><string>Memory: 0%</string></property></widget></item>
+            <item><widget class="QProgressBar" name="memoryBar"><property name="value"><number>0</number></property></widget></item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="uptimeLabel">
+            <property name="text"><string>Uptime: 00:00:00</string></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="robotStatusGroup">
+         <property name="title"><string>Robot Status</string></property>
+         <layout class="QVBoxLayout" name="robotStatusLayout">
+          <item>
+           <widget class="QLabel" name="robotStatusLabel">
+            <property name="text"><string>Status: Stopped</string></property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="batteryLayout">
+            <item><widget class="QLabel" name="batteryLabel"><property name="text"><string>Battery: 100%</string></property></widget></item>
+            <item><widget class="QProgressBar" name="batteryBar"><property name="value"><number>100</number></property></widget></item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="tempLayout">
+            <item><widget class="QLabel" name="temperatureLabel"><property name="text"><string>Temperature: 25.0°C</string></property></widget></item>
+            <item><widget class="QProgressBar" name="temperatureBar"><property name="value"><number>25</number></property></widget></item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="currentSpeedLabel">
+            <property name="text"><string>Speed: 0.0 m/s</string></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="logGroup">
+         <property name="title"><string>System Log</string></property>
+         <layout class="QVBoxLayout" name="logLayout">
+          <item>
+           <widget class="QTextEdit" name="logTextEdit">
+            <property name="readOnly"><bool>true</bool></property>
+            <property name="maximumHeight"><number>150</number></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui> 

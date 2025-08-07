@@ -1,6 +1,7 @@
 #include "main_window.h"
-#include "control_panel.h"
-#include "status_panel.h"
+#include "general_tab.h"
+#include "config_tab.h"
+#include "monitor_tab.h"
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QStatusBar>
@@ -10,6 +11,9 @@
 #include <QtCore/QStandardPaths>
 #include <QtWidgets/QStyle>
 #include <QtGui/QScreen>
+#include <QtWidgets/QTabWidget>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -39,9 +43,11 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() = default;
 
 void MainWindow::setupUI() {
-    // Create UI components
-    controlPanel_ = std::make_unique<ControlPanel>();
-    statusPanel_ = std::make_unique<StatusPanel>();
+    // Create tabs
+    tabWidget_ = new QTabWidget(this);
+    generalTab_ = new GeneralTab(this);
+    configTab_ = new ConfigTab(this);
+    monitorTab_ = new MonitorTab(this);
 }
 
 void MainWindow::setupMenuBar() {
@@ -70,29 +76,24 @@ void MainWindow::setupStatusBar() {
 }
 
 void MainWindow::setupCentralWidget() {
-    // Create main splitter
-    mainSplitter_ = new QSplitter(Qt::Vertical);
-    
-    // Add panels to main splitter
-    mainSplitter_->addWidget(controlPanel_.get());
-    mainSplitter_->addWidget(statusPanel_.get());
-    
-    // Set initial sizes for main splitter
-    mainSplitter_->setSizes({400, 200});
-    
+    // Add tabs to tab widget
+    tabWidget_->addTab(generalTab_, "General");
+    tabWidget_->addTab(configTab_, "Config");
+    tabWidget_->addTab(monitorTab_, "Monitor");
+
     // Set as central widget
-    setCentralWidget(mainSplitter_);
+    setCentralWidget(tabWidget_);
 }
 
 void MainWindow::connectSignals() {
-    // Connect control panel signals to other components
-    connect(controlPanel_.get(), &ControlPanel::robotCommand,
-            statusPanel_.get(), &StatusPanel::onRobotCommand);
+    // Connections are handled within individual tabs where appropriate
 }
 
 void MainWindow::onUpdateTimer() {
-    // Update status panel
-    statusPanel_->updateStatus();
+    // Forward periodic updates to the General tab (if needed)
+    if (generalTab_) {
+        generalTab_->updateStatus();
+    }
 }
 
 void MainWindow::onAbout() {

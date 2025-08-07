@@ -12,8 +12,11 @@
 #include <memory>
 
 // Forward declarations
-class ControlPanel;
-class StatusPanel;
+class QTabWidget;
+class QWidget;
+class GeneralTab;
+class ConfigTab;
+class MonitorTab;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -37,9 +40,11 @@ private:
     void setupCentralWidget();
     void connectSignals();
 
-    // UI Components
-    std::unique_ptr<ControlPanel> controlPanel_;
-    std::unique_ptr<StatusPanel> statusPanel_;
+    // Tabs
+    QTabWidget* tabWidget_;
+    GeneralTab* generalTab_;
+    ConfigTab* configTab_;
+    MonitorTab* monitorTab_;
     
     // Layout components
     QSplitter* mainSplitter_;
