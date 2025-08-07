@@ -1,8 +1,9 @@
-# Project Joshua: Modular Framework for Robotic AI Systems
+# Project JOSHUA (**J**oint **O**pen-source **S**ystems **H**ub for **U**niversal **A**utomation)
+## *A Modular Framework for Robotic AI Systems*
 
-Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI system using ROS2. **A single configuration file** automatically instantiates all actuator and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, specs and AI policy.
+Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI system using ROS2. **A single configuration file** automatically instantiates all action and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, configuration, and AI policy.
 
-This system utilized the ROS2 and protobuf. A configuration file should contain all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system. Based on this single file, ROS2 nodes will be instantiated and make the robot operational.
+This system utilized the ROS2 and protobuf. A configuration file should contain all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system. Based on this single file, ROS2 nodes will be instantiated and executes the nodes to make a robot operational based on the configuration.
 
 ## Core Concepts
 
@@ -76,6 +77,15 @@ The streamlined configuration and automated setup capabilities drastically reduc
 ### Scalability
 
 Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
+
+## Used Open Source
+
+Project Joshua is built on top of several excellent open-source technologies:
+
+- **[ROS2](https://docs.ros.org/en/humble/)** - Robot Operating System 2 for distributed robotics software
+- **[Protobuf](https://developers.google.com/protocol-buffers)** - Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data
+- **[Bazel](https://bazel.build/)** - Fast, scalable, multi-language build system
+- **[PyQt](https://www.riverbankcomputing.com/software/pyqt/)** - Python bindings for the Qt application framework
 
 ## Data Type Architecture
 
