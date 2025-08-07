@@ -15,41 +15,21 @@ public:
     ~GeneralTab();
 
     void updateStatus();
+    void updateSystemStatus();
+    void updateRobotStatus();
 
 private slots:
     // Auto-connected slots based on objectName and signal
-    void on_emergencyStopBtn_clicked();
-    void on_startBtn_clicked();
-    void on_stopBtn_clicked();
-    void on_resetBtn_clicked();
-    void on_speedSlider_valueChanged(int value);
-    void on_speedSpinBox_valueChanged(int value);
-    void on_modeComboBox_currentIndexChanged(int index);
-
-    void onRobotCommand(const QString &command, const QVariantMap &params);
 
 private:
-    // Previous handlers converted to helpers
-    void onEmergencyStop();
-    void onStartRobot();
-    void onStopRobot();
-    void onResetRobot();
-    void onSpeedChanged(int value);
-    void onModeChanged(int index);
-
-    void updateSystemStatus();
-    void updateRobotStatus();
+    void updateSystemInfo();
     void addLogEntry(const QString &message);
 
     Ui::GeneralTab* ui; // owns the UI
 
-    // State
-    bool robotRunning_ = false;
-    QString robotStatus_ = "Stopped";
+    QDateTime startTime_;
     int batteryLevel_ = 100;
     double temperature_ = 25.0;
-    double currentSpeed_ = 0.0;
-    QDateTime startTime_;
 
     // Internal status update timer (1s)
     QTimer* statusTimer_ = nullptr;

@@ -7,169 +7,123 @@
     <x>0</x>
     <y>0</y>
     <width>1000</width>
-    <height>700</height>
+    <height>744</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_root">
    <item>
     <widget class="QSplitter" name="splitter">
      <property name="orientation">
-      <enum>Qt::Vertical</enum>
+      <enum>Qt::Orientation::Vertical</enum>
      </property>
-     <widget class="QWidget" name="controlPanel">
-      <layout class="QVBoxLayout" name="controlLayout">
-       <item>
-        <widget class="QGroupBox" name="robotGroup">
-         <property name="title">
-          <string>Robot Control</string>
-         </property>
-         <layout class="QVBoxLayout" name="robotLayout">
-          <item>
-           <widget class="QPushButton" name="emergencyStopBtn">
-            <property name="text">
-             <string>EMERGENCY STOP</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="controlButtonsLayout">
-            <item>
-             <widget class="QPushButton" name="startBtn">
-              <property name="text">
-               <string>Start</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="stopBtn">
-              <property name="text">
-               <string>Stop</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="resetBtn">
-              <property name="text">
-               <string>Reset</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="speedGroup">
-         <property name="title">
-          <string>Speed Control</string>
-         </property>
-         <layout class="QVBoxLayout" name="speedLayout">
-          <item>
-           <widget class="QSlider" name="speedSlider">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="tickPosition">
-             <enum>QSlider::TicksBelow</enum>
-            </property>
-            <property name="tickInterval">
-             <number>10</number>
-            </property>
-            <property name="minimum">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <number>100</number>
-            </property>
-            <property name="value">
-             <number>50</number>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="speedDisplayLayout">
-            <item>
-             <widget class="QLabel" name="speedLabel">
-              <property name="text">
-               <string>Speed: 50%</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QSpinBox" name="speedSpinBox">
-              <property name="suffix">
-               <string>%</string>
-              </property>
-              <property name="minimum">
-               <number>0</number>
-              </property>
-              <property name="maximum">
-               <number>100</number>
-              </property>
-              <property name="value">
-               <number>50</number>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="modeGroup">
-         <property name="title">
-          <string>Operation Mode</string>
-         </property>
-         <layout class="QVBoxLayout" name="modeLayout">
-          <item>
-           <widget class="QComboBox" name="modeComboBox">
-            <item><property name="text"><string>Manual Control</string></property></item>
-            <item><property name="text"><string>Autonomous</string></property></item>
-            <item><property name="text"><string>Teleoperation</string></property></item>
-            <item><property name="text"><string>Calibration</string></property></item>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="autoModeCheckBox">
-            <property name="text">
-             <string>Enable Auto Mode</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <spacer name="controlSpacer">
-         <property name="orientation"><enum>Qt::Vertical</enum></property>
-         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-        </spacer>
-       </item>
-      </layout>
-     </widget>
      <widget class="QWidget" name="statusPanel">
       <layout class="QVBoxLayout" name="statusLayout">
        <item>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <widget class="QTextEdit" name="textEdit">
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+           <property name="html">
+            <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Ubuntu'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:6px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:16pt; font-weight:600;&quot;&gt;Project Joshua&lt;/span&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:6px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt;&quot;&gt;This GUI provides a streamlined workflow to &lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt; font-weight:700;&quot;&gt;Build and run the ROS2 Nodes&lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt;&quot;&gt;, &lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt; font-weight:700;&quot;&gt;Generate Configuration&lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt;&quot;&gt; for the system, and &lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt; font-weight:700;&quot;&gt;Monitor&lt;/span&gt;&lt;span style=&quot; font-family:'Sans Serif'; font-size:10.5pt;&quot;&gt; your robot.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
         <widget class="QGroupBox" name="systemGroup">
-         <property name="title"><string>System Status</string></property>
+         <property name="title">
+          <string>System Status</string>
+         </property>
          <layout class="QVBoxLayout" name="systemLayout">
           <item>
-           <layout class="QHBoxLayout" name="cpuLayout">
-            <item><widget class="QLabel" name="cpuLabel"><property name="text"><string>CPU: 0%</string></property></widget></item>
-            <item><widget class="QProgressBar" name="cpuBar"><property name="value"><number>0</number></property></widget></item>
+           <layout class="QHBoxLayout" name="systemInfoLayout">
+            <item>
+             <widget class="QLabel" name="os_label">
+              <property name="text">
+               <string>OS:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="os_lineEdit">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="cpu_label">
+              <property name="text">
+               <string>CPU:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="cpu_lineEdit">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
            </layout>
           </item>
           <item>
+           <widget class="QLabel" name="gpu_label">
+            <property name="text">
+             <string>GPU</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextEdit" name="gpu_textEdit"/>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="memoryLayout">
-            <item><widget class="QLabel" name="memoryLabel"><property name="text"><string>Memory: 0%</string></property></widget></item>
-            <item><widget class="QProgressBar" name="memoryBar"><property name="value"><number>0</number></property></widget></item>
+            <item>
+             <widget class="QLabel" name="memoryLabel">
+              <property name="text">
+               <string>Memory Usage: </string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="memory_usage_lineEdit">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
            </layout>
           </item>
           <item>
            <widget class="QLabel" name="uptimeLabel">
-            <property name="text"><string>Uptime: 00:00:00</string></property>
+            <property name="text">
+             <string>Uptime: 00:00:00</string>
+            </property>
            </widget>
           </item>
          </layout>
@@ -177,28 +131,33 @@
        </item>
        <item>
         <widget class="QGroupBox" name="robotStatusGroup">
-         <property name="title"><string>Robot Status</string></property>
+         <property name="title">
+          <string>Robot Status</string>
+         </property>
          <layout class="QVBoxLayout" name="robotStatusLayout">
           <item>
-           <widget class="QLabel" name="robotStatusLabel">
-            <property name="text"><string>Status: Stopped</string></property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="batteryLayout">
-            <item><widget class="QLabel" name="batteryLabel"><property name="text"><string>Battery: 100%</string></property></widget></item>
-            <item><widget class="QProgressBar" name="batteryBar"><property name="value"><number>100</number></property></widget></item>
-           </layout>
-          </item>
-          <item>
            <layout class="QHBoxLayout" name="tempLayout">
-            <item><widget class="QLabel" name="temperatureLabel"><property name="text"><string>Temperature: 25.0°C</string></property></widget></item>
-            <item><widget class="QProgressBar" name="temperatureBar"><property name="value"><number>25</number></property></widget></item>
+            <item>
+             <widget class="QLabel" name="temperatureLabel">
+              <property name="text">
+               <string>Test Bar</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QProgressBar" name="temperatureBar">
+              <property name="value">
+               <number>25</number>
+              </property>
+             </widget>
+            </item>
            </layout>
           </item>
           <item>
            <widget class="QLabel" name="currentSpeedLabel">
-            <property name="text"><string>Speed: 0.0 m/s</string></property>
+            <property name="text">
+             <string>Test Label</string>
+            </property>
            </widget>
           </item>
          </layout>
@@ -206,12 +165,15 @@
        </item>
        <item>
         <widget class="QGroupBox" name="logGroup">
-         <property name="title"><string>System Log</string></property>
+         <property name="title">
+          <string>System Log</string>
+         </property>
          <layout class="QVBoxLayout" name="logLayout">
           <item>
            <widget class="QTextEdit" name="logTextEdit">
-            <property name="readOnly"><bool>true</bool></property>
-            <property name="maximumHeight"><number>150</number></property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
            </widget>
           </item>
          </layout>
@@ -225,4 +187,4 @@
  </widget>
  <resources/>
  <connections/>
-</ui> 
+</ui>
