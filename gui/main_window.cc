@@ -26,7 +26,7 @@ MainWindow::MainWindow(QWidget *parent)
     connectSignals();
     
     // Set window properties
-    setWindowTitle("Project Joshua - Robot Control Interface");
+    setWindowTitle("JOSHUA Mission Control Interface");
     setMinimumSize(1200, 800);
     
     // Center window on screen
