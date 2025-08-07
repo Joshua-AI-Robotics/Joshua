@@ -17,7 +17,6 @@ GeneralTab::GeneralTab(QWidget* parent)
     statusTimer_->start(1000);
 
     updateSystemInfo();
-    addLogEntry("System initialized");
 }
 
 GeneralTab::~GeneralTab() {
@@ -62,20 +61,3 @@ void GeneralTab::updateSystemInfo() {
     QString output = process.readAllStandardOutput();
     ui->gpu_textEdit->setText(output);
 }
-
-void GeneralTab::addLogEntry(const QString &message) {
-    QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    QString logEntry = QString("[%1] %2").arg(timestamp).arg(message);
-
-    ui->logTextEdit->append(logEntry);
-
-    QStringList lines = ui->logTextEdit->toPlainText().split('\n');
-    if (lines.size() > 100) {
-        lines = lines.mid(lines.size() - 100);
-        ui->logTextEdit->setPlainText(lines.join('\n'));
-    }
-
-    QTextCursor cursor = ui->logTextEdit->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    ui->logTextEdit->setTextCursor(cursor);
-} 

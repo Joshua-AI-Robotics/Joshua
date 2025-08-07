@@ -11,6 +11,11 @@ public:
     explicit MonitorTab(QWidget* parent = nullptr);
     ~MonitorTab();
 
+private slots:
+    void on_launchButton_clicked();
+    void on_stopButton_clicked();
+    void on_restartButton_clicked();
+
 private:
     Ui::MonitorTab* ui;
 };

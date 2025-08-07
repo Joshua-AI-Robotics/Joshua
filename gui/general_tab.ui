@@ -143,56 +143,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </layout>
         </widget>
        </item>
-       <item>
-        <widget class="QGroupBox" name="robotStatusGroup">
-         <property name="title">
-          <string>Robot Status</string>
-         </property>
-         <layout class="QVBoxLayout" name="robotStatusLayout">
-          <item>
-           <layout class="QHBoxLayout" name="tempLayout">
-            <item>
-             <widget class="QLabel" name="temperatureLabel">
-              <property name="text">
-               <string>Test Bar</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QProgressBar" name="temperatureBar">
-              <property name="value">
-               <number>25</number>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QLabel" name="currentSpeedLabel">
-            <property name="text">
-             <string>Test Label</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="logGroup">
-         <property name="title">
-          <string>System Log</string>
-         </property>
-         <layout class="QVBoxLayout" name="logLayout">
-          <item>
-           <widget class="QTextEdit" name="logTextEdit">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
       </layout>
      </widget>
     </widget>

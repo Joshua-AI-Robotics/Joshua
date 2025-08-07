@@ -23,13 +23,10 @@ private slots:
 
 private:
     void updateSystemInfo();
-    void addLogEntry(const QString &message);
 
     Ui::GeneralTab* ui; // owns the UI
 
     QDateTime startTime_;
-    int batteryLevel_ = 100;
-    double temperature_ = 25.0;
 
     // Internal status update timer (1s)
     QTimer* statusTimer_ = nullptr;
