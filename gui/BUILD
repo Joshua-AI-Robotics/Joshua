@@ -61,6 +61,7 @@ cc_library(
     copts = ["-std=c++17", "-fPIC"],
     deps = [
         "@local_deps//:qt6_widgets",
+        "//config/proto:config_cc_proto",
     ],
 )
 
