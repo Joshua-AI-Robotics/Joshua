@@ -15,6 +15,8 @@
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QMessageBox>
+#include <QtGui/QPixmap>
+#include <QtCore/QFile>
 #include <QtCore/QString>
 #include <QtCore/QDebug>
 
@@ -36,49 +38,33 @@ ConfigTab::ConfigTab(QWidget* parent)
 {
     ui->setupUi(this);
 
-    // Reuse and clear the existing vertical layout created by the .ui file
-    QVBoxLayout* outerLayout = this->findChild<QVBoxLayout*>("verticalLayout");
-    bool createdLayout = false;
-    if (!outerLayout) {
-        outerLayout = new QVBoxLayout(this);
-        createdLayout = true;
-    } else {
-        // Remove placeholder widgets/spacers
-        while (outerLayout->count() > 0) {
-            QLayoutItem* item = outerLayout->takeAt(0);
-            if (item->widget()) {
-                item->widget()->deleteLater();
-            }
+    // Use widgets from .ui
+    saveButton_ = ui->saveButton;
+    loadButton_ = ui->loadButton;
+    clearButton_ = ui->clearButton;
+
+    scrollArea_ = ui->scrollArea;
+    formContainer_ = ui->formContainer;
+    formLayout_ = ui->formLayout;
+
+    // Clean default spacer in formLayout
+    for (int i = formLayout_->count() - 1; i >= 0; --i) {
+        QLayoutItem* item = formLayout_->itemAt(i);
+        if (item && item->spacerItem()) {
+            formLayout_->removeItem(item);
             delete item;
         }
     }
-
-    scrollArea_ = new QScrollArea(this);
-    scrollArea_->setWidgetResizable(true);
-    formContainer_ = new QWidget(scrollArea_);
-    formLayout_ = new QVBoxLayout(formContainer_);
-    formLayout_->setContentsMargins(8, 8, 8, 8);
-    formLayout_->setSpacing(12);
-
-    scrollArea_->setWidget(formContainer_);
-    outerLayout->addWidget(scrollArea_);
-
-    auto* actionsRow = new QHBoxLayout();
-    actionsRow->addStretch();
-    saveButton_ = new QPushButton("Save .pbtxt", this);
-    actionsRow->addWidget(saveButton_);
-    outerLayout->addLayout(actionsRow);
-
-    if (createdLayout) {
-        setLayout(outerLayout);
-    }
-
-    connect(saveButton_, &QPushButton::clicked, this, &ConfigTab::onSavePbtxt);
 
     buildRootForm();
 }
 
 ConfigTab::~ConfigTab() { delete ui; }
+
+// Auto-connected slots
+void ConfigTab::on_saveButton_clicked() { onSavePbtxt(); }
+void ConfigTab::on_loadButton_clicked() { onLoadPbtxt(); }
+void ConfigTab::on_clearButton_clicked() { onClear(); }
 
 void ConfigTab::buildRootForm() {
     // Root is config::Config
@@ -311,6 +297,32 @@ void ConfigTab::onSavePbtxt() {
     QMessageBox::information(this, "Saved", "Configuration saved to " + filename);
 }
 
+void ConfigTab::onLoadPbtxt() {
+    if (!rootNode_) return;
+    QString filename = QFileDialog::getOpenFileName(this, "Load configuration", QString(), "Prototxt (*.pbtxt)");
+    if (filename.isEmpty()) return;
+
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Failed to open file for reading.");
+        return;
+    }
+    QByteArray data = file.readAll();
+
+    config::Config cfg;
+    if (!google::protobuf::TextFormat::ParseFromString(data.toStdString(), &cfg)) {
+        QMessageBox::critical(this, "Error", "Failed to parse text proto.");
+        return;
+    }
+
+    readMessageIntoNode(cfg, rootNode_.get());
+}
+
+void ConfigTab::onClear() {
+    if (!rootNode_) return;
+    clearMessageNode(rootNode_.get());
+}
+
 void ConfigTab::writeMessageFromNode(const MessageNode& node, Message* message) {
     // Scalars
     for (const auto& s : node.scalarFields) {
@@ -438,6 +450,215 @@ void ConfigTab::writeOneofField(const OneofNode& node, Message* message) {
     const FieldDescriptor* field = node.choiceFields[choiceIdx];
     Message* sub = refl->MutableMessage(message, field);
     writeMessageFromNode(*node.choiceNodes[choiceIdx], sub);
+}
+
+void ConfigTab::readMessageIntoNode(const Message& message, MessageNode* node) {
+    // Scalars
+    for (auto& s : node->scalarFields) {
+        readScalarFieldIntoEditor(message, &s);
+    }
+    // Enums
+    for (auto& e : node->enumFields) {
+        readEnumFieldIntoEditor(message, &e);
+    }
+    // Non-repeated messages
+    for (auto& m : node->messageFields) {
+        readMessageFieldIntoChild(message, &m);
+    }
+    // Repeated messages
+    for (auto& r : node->repeatedMessageFields) {
+        readRepeatedMessageFieldIntoChildren(message, &r);
+    }
+    // Oneofs
+    for (auto& o : node->oneofs) {
+        readOneofIntoNode(message, &o);
+    }
+}
+
+void ConfigTab::readScalarFieldIntoEditor(const Message& message, ScalarFieldNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const FieldDescriptor* field = node->field;
+    if (!refl->HasField(message, field)) {
+        clearScalarField(node);
+        return;
+    }
+    switch (field->type()) {
+        case FieldDescriptor::TYPE_BOOL: {
+            auto* box = qobject_cast<QCheckBox*>(node->editor);
+            if (box) box->setChecked(refl->GetBool(message, field));
+            break;
+        }
+        case FieldDescriptor::TYPE_STRING: {
+            auto* edit = qobject_cast<QLineEdit*>(node->editor);
+            if (edit) edit->setText(QString::fromStdString(refl->GetString(message, field)));
+            break;
+        }
+        case FieldDescriptor::TYPE_INT32: {
+            auto* spin = qobject_cast<QSpinBox*>(node->editor);
+            if (spin) spin->setValue(refl->GetInt32(message, field));
+            break;
+        }
+        case FieldDescriptor::TYPE_UINT32: {
+            auto* spin = qobject_cast<QSpinBox*>(node->editor);
+            if (spin) spin->setValue(static_cast<int>(refl->GetUInt32(message, field)));
+            break;
+        }
+        case FieldDescriptor::TYPE_INT64: {
+            auto* edit = qobject_cast<QLineEdit*>(node->editor);
+            if (edit) edit->setText(QString::number(refl->GetInt64(message, field)));
+            break;
+        }
+        case FieldDescriptor::TYPE_UINT64: {
+            auto* edit = qobject_cast<QLineEdit*>(node->editor);
+            if (edit) edit->setText(QString::number(refl->GetUInt64(message, field)));
+            break;
+        }
+        case FieldDescriptor::TYPE_FLOAT: {
+            auto* spin = qobject_cast<QDoubleSpinBox*>(node->editor);
+            if (spin) spin->setValue(refl->GetFloat(message, field));
+            break;
+        }
+        case FieldDescriptor::TYPE_DOUBLE: {
+            auto* spin = qobject_cast<QDoubleSpinBox*>(node->editor);
+            if (spin) spin->setValue(refl->GetDouble(message, field));
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void ConfigTab::readEnumFieldIntoEditor(const Message& message, EnumFieldNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const FieldDescriptor* field = node->field;
+    if (!refl->HasField(message, field)) {
+        node->combo->setCurrentIndex(0);
+        return;
+    }
+    const auto* ev = refl->GetEnum(message, field);
+    int number = ev ? ev->number() : -1;
+    // Find combo index with matching data
+    for (int i = 0; i < node->combo->count(); ++i) {
+        if (node->combo->itemData(i).toInt() == number) {
+            node->combo->setCurrentIndex(i);
+            return;
+        }
+    }
+    node->combo->setCurrentIndex(0);
+}
+
+void ConfigTab::readMessageFieldIntoChild(const Message& message, MessageFieldNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const FieldDescriptor* field = node->field;
+    if (!refl->HasField(message, field)) {
+        clearMessageNode(node->child.get());
+        return;
+    }
+    const Message& sub = refl->GetMessage(message, field);
+    readMessageIntoNode(sub, node->child.get());
+}
+
+void ConfigTab::readRepeatedMessageFieldIntoChildren(const Message& message, RepeatedMessageFieldNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const FieldDescriptor* field = node->field;
+
+    // Clear current items
+    for (auto& item : node->items) {
+        if (item && item->group) {
+            node->itemsLayout->removeWidget(item->group);
+            item->group->deleteLater();
+        }
+    }
+    node->items.clear();
+
+    int count = refl->FieldSize(message, field);
+    for (int i = 0; i < count; ++i) {
+        auto child = buildMessageNode(field->message_type(), QString::fromStdString(field->message_type()->name()));
+        node->itemsLayout->addWidget(child->group);
+        node->items.emplace_back(std::move(child));
+        const Message& sub = refl->GetRepeatedMessage(message, field, i);
+        readMessageIntoNode(sub, node->items.back().get());
+    }
+}
+
+void ConfigTab::readOneofIntoNode(const Message& message, OneofNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const OneofDescriptor* oneof = node->oneof;
+    const FieldDescriptor* setField = refl->GetOneofFieldDescriptor(message, oneof);
+    if (!setField) {
+        node->selector->setCurrentIndex(0);
+        return;
+    }
+    // Find index for the set field
+    int idx = 0;
+    for (size_t i = 0; i < node->choiceFields.size(); ++i) {
+        if (node->choiceFields[i] == setField) {
+            idx = static_cast<int>(i) + 1; // +1 because 0 is <none>
+            break;
+        }
+    }
+    node->selector->setCurrentIndex(idx);
+    if (idx > 0) {
+        const Message& sub = message.GetReflection()->GetMessage(message, setField);
+        readMessageIntoNode(sub, node->choiceNodes[idx - 1].get());
+    }
+}
+
+void ConfigTab::clearMessageNode(MessageNode* node) {
+    for (auto& s : node->scalarFields) clearScalarField(&s);
+    for (auto& e : node->enumFields) clearEnumField(&e);
+    for (auto& m : node->messageFields) clearMessageNode(m.child.get());
+
+    // Clear repeated items visually and model-wise
+    for (auto& r : node->repeatedMessageFields) {
+        for (auto& item : r.items) {
+            if (item && item->group) {
+                r.itemsLayout->removeWidget(item->group);
+                item->group->deleteLater();
+            }
+        }
+        r.items.clear();
+    }
+
+    // Reset oneofs
+    for (auto& o : node->oneofs) {
+        o.selector->setCurrentIndex(0);
+        if (o.stacked) o.stacked->setCurrentIndex(0);
+    }
+}
+
+void ConfigTab::clearScalarField(ScalarFieldNode* node) {
+    switch (node->field->type()) {
+        case FieldDescriptor::TYPE_BOOL: {
+            if (auto* box = qobject_cast<QCheckBox*>(node->editor)) box->setChecked(false);
+            break;
+        }
+        case FieldDescriptor::TYPE_STRING: {
+            if (auto* edit = qobject_cast<QLineEdit*>(node->editor)) edit->clear();
+            break;
+        }
+        case FieldDescriptor::TYPE_INT32:
+        case FieldDescriptor::TYPE_UINT32: {
+            if (auto* spin = qobject_cast<QSpinBox*>(node->editor)) spin->setValue(0);
+            break;
+        }
+        case FieldDescriptor::TYPE_INT64:
+        case FieldDescriptor::TYPE_UINT64: {
+            if (auto* edit = qobject_cast<QLineEdit*>(node->editor)) edit->clear();
+            break;
+        }
+        case FieldDescriptor::TYPE_FLOAT:
+        case FieldDescriptor::TYPE_DOUBLE: {
+            if (auto* spin = qobject_cast<QDoubleSpinBox*>(node->editor)) spin->setValue(0.0);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void ConfigTab::clearEnumField(EnumFieldNode* node) {
+    if (node->combo) node->combo->setCurrentIndex(0);
 }
 
 QString ConfigTab::prettyLabelForField(const FieldDescriptor* field) {

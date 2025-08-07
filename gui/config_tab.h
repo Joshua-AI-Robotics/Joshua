@@ -37,6 +37,12 @@ public:
 
 private slots:
     void onSavePbtxt();
+    void onLoadPbtxt();
+    void onClear();
+    // Auto-connected button slots
+    void on_saveButton_clicked();
+    void on_loadButton_clicked();
+    void on_clearButton_clicked();
 
 private:
     // Protobuf-driven UI model
@@ -95,7 +101,7 @@ private:
     RepeatedMessageFieldNode buildRepeatedMessageField(const google::protobuf::FieldDescriptor* field);
     OneofNode buildOneofNode(const google::protobuf::OneofDescriptor* oneof);
 
-    // Serialization
+    // Serialization (UI -> proto)
     void writeMessageFromNode(const MessageNode& node, google::protobuf::Message* message);
     void writeScalarField(const ScalarFieldNode& node, google::protobuf::Message* message);
     void writeEnumField(const EnumFieldNode& node, google::protobuf::Message* message);
@@ -103,16 +109,33 @@ private:
     void writeRepeatedMessageField(const RepeatedMessageFieldNode& node, google::protobuf::Message* message);
     void writeOneofField(const OneofNode& node, google::protobuf::Message* message);
 
+    // Deserialization (proto -> UI)
+    void readMessageIntoNode(const google::protobuf::Message& message, MessageNode* node);
+    void readScalarFieldIntoEditor(const google::protobuf::Message& message, ScalarFieldNode* node);
+    void readEnumFieldIntoEditor(const google::protobuf::Message& message, EnumFieldNode* node);
+    void readMessageFieldIntoChild(const google::protobuf::Message& message, MessageFieldNode* node);
+    void readRepeatedMessageFieldIntoChildren(const google::protobuf::Message& message, RepeatedMessageFieldNode* node);
+    void readOneofIntoNode(const google::protobuf::Message& message, OneofNode* node);
+
+    // Clearing helpers (reset UI)
+    void clearMessageNode(MessageNode* node);
+    void clearScalarField(ScalarFieldNode* node);
+    void clearEnumField(EnumFieldNode* node);
+
     // Helpers
     static QString prettyLabelForField(const google::protobuf::FieldDescriptor* field);
 
     Ui::ConfigTab* ui;
 
+    // Top action buttons
+    QPointer<QPushButton> saveButton_;
+    QPointer<QPushButton> loadButton_;
+    QPointer<QPushButton> clearButton_;
+
     // Dynamic content
     QPointer<QScrollArea> scrollArea_;
     QPointer<QWidget> formContainer_;
     QPointer<QVBoxLayout> formLayout_;
-    QPointer<QPushButton> saveButton_;
 
     std::unique_ptr<MessageNode> rootNode_;
 };
