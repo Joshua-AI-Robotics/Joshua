@@ -17,6 +17,7 @@ class QWidget;
 class GeneralTab;
 class ConfigTab;
 class MonitorTab;
+class CalibrationTab;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -45,6 +46,7 @@ private:
     GeneralTab* generalTab_;
     ConfigTab* configTab_;
     MonitorTab* monitorTab_;
+    CalibrationTab* calibrationTab_;
     
     // Layout components
     QSplitter* mainSplitter_;

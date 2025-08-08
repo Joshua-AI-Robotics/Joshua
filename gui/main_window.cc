@@ -2,6 +2,7 @@
 #include "general_tab.h"
 #include "config_tab.h"
 #include "monitor_tab.h"
+#include "calibration_tab.h"
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QStatusBar>
@@ -48,6 +49,7 @@ void MainWindow::setupUI() {
     generalTab_ = new GeneralTab(this);
     configTab_ = new ConfigTab(this);
     monitorTab_ = new MonitorTab(this);
+    calibrationTab_ = new CalibrationTab(this);
 }
 
 void MainWindow::setupMenuBar() {
@@ -80,6 +82,7 @@ void MainWindow::setupCentralWidget() {
     tabWidget_->addTab(generalTab_, "General");
     tabWidget_->addTab(configTab_, "Config");
     tabWidget_->addTab(monitorTab_, "Monitor");
+    tabWidget_->addTab(calibrationTab_, "Calibration");
 
     // Set as central widget
     setCentralWidget(tabWidget_);
@@ -97,11 +100,11 @@ void MainWindow::onUpdateTimer() {
 }
 
 void MainWindow::onAbout() {
-    QMessageBox::about(this, "About Project Joshua",
-        "<h3>Project Joshua - Robot Control Interface</h3>"
+    QMessageBox::about(this, "About JOSHUA Mission Control Interface",
+        "<h3>JOSHUA Mission Control Interface</h3>"
         "<p>Version 0.1.0</p>"
         "<p>A modern Qt6-based GUI for controlling and monitoring "
-        "the Project Joshua robot system.</p>"
+        "the JOSHUA robot system.</p>"
         "<p>Built with Qt6 and C++</p>");
 }
 

@@ -10,6 +10,7 @@ qt_moc(
         "general_tab.h",
         "config_tab.h",
         "monitor_tab.h",
+        "calibration_tab.h",
     ],
 )
 
@@ -37,6 +38,13 @@ genrule(
     cmd = "/usr/lib/qt6/libexec/uic $(location monitor_tab.ui) -o $@",
 )
 
+genrule(
+    name = "uic_calibration_tab",
+    srcs = ["calibration_tab.ui"],
+    outs = ["ui_calibration_tab.h"],
+    cmd = "/usr/lib/qt6/libexec/uic $(location calibration_tab.ui) -o $@",
+)
+
 cc_library(
     name = "gui_lib",
     srcs = [
@@ -44,6 +52,7 @@ cc_library(
         "general_tab.cc",
         "config_tab.cc",
         "monitor_tab.cc",
+        "calibration_tab.cc",
         # Generated MOC sources
         ":moc_sources",
     ],
@@ -52,10 +61,12 @@ cc_library(
         "general_tab.h",
         "config_tab.h",
         "monitor_tab.h",
+        "calibration_tab.h",
         # Generated UI headers
         ":uic_general_tab",
         ":uic_config_tab",
         ":uic_monitor_tab",
+        ":uic_calibration_tab",
     ],
     includes = ["."],
     copts = ["-std=c++17", "-fPIC"],
