@@ -394,6 +394,10 @@ void NodeGenerator::Shutdown() {
     LOG(INFO) << "All processes terminated successfully.";
 }
 
+void NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
+    nodes = launched_nodes_;
+}
+
 void NodeGenerator::SetupSignalHandlers() {
     signal(SIGINT, SignalHandler);
     signal(SIGTERM, SignalHandler);

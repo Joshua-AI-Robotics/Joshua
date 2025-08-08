@@ -29,6 +29,7 @@ public:
     bool LaunchAllNodes();
     void MonitorNodes();
     void Shutdown();
+    void GetLaunchedNodes(std::vector<NodeInfo>& nodes);
 
     size_t GetLaunchedNodeCount() const { return launched_nodes_.size(); }
     bool HasNodes() const { return !launched_nodes_.empty(); }

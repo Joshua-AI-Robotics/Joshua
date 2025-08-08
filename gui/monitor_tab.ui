@@ -82,6 +82,12 @@
             <height>0</height>
            </size>
           </property>
+          <property name="cursor">
+           <cursorShape>ArrowCursor</cursorShape>
+          </property>
+          <property name="styleSheet">
+           <string notr="true"/>
+          </property>
           <property name="text">
            <string>IDLE</string>
           </property>

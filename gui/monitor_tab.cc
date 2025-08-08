@@ -8,13 +8,16 @@
 #include <QtCore/QDir>
 #include <QtCore/QStringListModel>
 #include <QtCore/QItemSelectionModel>
+#include <QtCore/QTimer>
 
 namespace {
     constexpr auto kConfigPresetPrefix = "config/config_preset/";
     constexpr auto kErrorStyle = "QLabel { background-color: #ff0000; padding: 5px; border-radius: 5px; }";
     constexpr auto kBuildStyle = "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }";
     constexpr auto kRunningStyle = "QLabel { background-color: #4caf50; padding: 5px; border-radius: 5px; }";
-    constexpr auto kIdleStyle = "QLabel { background-color: #cccccc; padding: 5px; border-radius: 5px; }";
+    constexpr auto kStoppingStyle = "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }";
+    constexpr auto kIdleStyle = "QLabel { background-color: #cccccc; color:rgb(0, 0, 0); padding: 5px; border-radius: 5px; }";
+    constexpr auto kDisabledStyle = "QPushButton { background-color:rgb(225, 220, 220);}";
 }
 
 MonitorTab::MonitorTab(QWidget* parent)
@@ -81,6 +84,11 @@ void MonitorTab::onUpdateStatus(const QString& status, const QString& style) {
 
 void MonitorTab::onSetLaunchButtonEnabled(bool enabled) {
     ui->launchButton->setEnabled(enabled);
+    if (enabled) {
+        ui->launchButton->setStyleSheet("");
+    } else {
+        ui->launchButton->setStyleSheet(kDisabledStyle);
+    }
 }
 
 void MonitorTab::onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
@@ -105,17 +113,21 @@ void MonitorTab::on_launchButton_clicked() {
 }
 
 void MonitorTab::on_stopButton_clicked() {
-    emit updateStatus("STOPPING", kErrorStyle);
+    emit updateStatus("STOPPING", kStoppingStyle);
     emit logMessage("[INFO] Stop requested.");
 
+    // Request cancellation; defer heavy work so UI can repaint first
     stop_node_generator_build_.store(true);
 
     if (node_generator_thread_.joinable()) {
         node_generator_thread_.join();
     }
-    
-    // Clear table
-    ui->nodeTable->setRowCount(0);
+
+    // Shutdown the node generator
+    if (node_generator_) {
+        node_generator_->Shutdown();
+    }
+        
     emit updateStatus("IDLE", kIdleStyle);
     emit setLaunchButtonEnabled(true);
 }
@@ -139,12 +151,14 @@ bool MonitorTab::setup_node_generator() {
         }
         emit logMessage("[INFO] Required targets built");
 
-        // emit logMessage("[INFO] Launching nodes");
-        // if(!node_generator_->LaunchAllNodes()) {
-        //     emit logMessage("[ERROR] Failed to launch nodes");
-        //     return false;
-        // }
-        // emit logMessage("[INFO] Nodes launched");
+        emit logMessage("[INFO] Launching nodes");
+        if(!node_generator_->LaunchAllNodes()) {
+            emit logMessage("[ERROR] Failed to launch nodes");
+            emit updateStatus("ERROR", kErrorStyle);
+            return false;
+        }
+        emit logMessage("[INFO] Nodes launched");
+        emit updateStatus("RUNNING", kRunningStyle);
     } catch (const std::exception& e) {
         onLogMessage("[ERROR] Exception during node generator setup: " + QString::fromStdString(e.what()));
         return false;
