@@ -93,7 +93,11 @@ void MonitorTab::onUpdateNodeTable() {
         ui->nodeTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(node.node_name)));
         ui->nodeTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(std::to_string(node.node_id))));
         ui->nodeTable->setItem(i, 3, new QTableWidgetItem(QString::number(static_cast<qlonglong>(node.pid))));
-        // ui->nodeTable->setItem(i, 4, new QTableWidgetItem(QString::fromStdString(node.topics)));
+        QString topics;
+        for (const auto& topic : node.topics) {
+            topics += QString::fromStdString(topic) + " ";
+        }
+        ui->nodeTable->setItem(i, 4, new QTableWidgetItem(topics));
     }
     ui->nodeTable->resizeColumnsToContents();
 }

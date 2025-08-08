@@ -16,6 +16,7 @@ struct NodeInfo {
     std::string node_name;
     uint32_t node_id;
     pid_t pid;
+    std::vector<std::string> topics;
 };
 
 class NodeGenerator {
@@ -48,17 +49,19 @@ private:
     void SetupSignalHandlers();
     void CleanupAndExit(int exit_code);
     void MonitorChildProcesses();
+    std::vector<std::string> GetPublishTopicsForNode(const uint32_t node_id);
+    std::vector<std::string> GetSubscribeTopicsForNode(const uint32_t node_id);
 
     std::string GetBinaryPath() const;
-    std::string GetPerceptionNodeTypePriority(const std::set<std::string>& sensor_types) const;
-    std::string GetActionNodeTypePriority(const std::set<std::string>& action_types) const;
+    std::string GetPerceptionNodeTypeName(const std::set<robot::perception::PerceptionType>& sensor_types) const;
+    std::string GetActionNodeTypeName(const std::set<robot::action::ActionType>& action_types) const;
 
     std::string config_path_;
     std::string repo_root_;
     config::Config config_;
     
-    std::map<uint32_t, std::set<std::string>> node_perception_types_;
-    std::map<uint32_t, std::set<std::string>> node_action_types_;
+    std::map<uint32_t, std::set<robot::perception::PerceptionType>> node_perception_types_;
+    std::map<uint32_t, std::set<robot::action::ActionType>> node_action_types_;
     std::set<std::string> required_builds_;
     
     std::vector<NodeInfo> launched_nodes_;

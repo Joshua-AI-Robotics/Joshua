@@ -75,19 +75,13 @@ void NodeGenerator::GroupEntitiesByNodeId() {
     // Group perception sensors by the node_id they are associated with.
     for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
         uint32_t node_id = single_perception.node_id();
-        if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA) {
-            node_perception_types_[node_id].insert("camera");
-        } else if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER) {
-            node_perception_types_[node_id].insert("encoder");
-        }
+        node_perception_types_[node_id].insert(single_perception.perception_type());
     }
     
     // Group actions by the node_id they are associated with.
     for (const auto& single_action : robot_config.actions().single_actions()) {
         uint32_t node_id = single_action.node_id();
-        if (single_action.action_type() == robot::action::ActionType::ACTUATOR) {
-            node_action_types_[node_id].insert("actuator");
-        }
+        node_action_types_[node_id].insert(single_action.action_type());
     }
 }
 
@@ -139,9 +133,9 @@ void NodeGenerator::DetermineRequiredBuilds() {
     // Determine required builds based on sensor types
     for (const auto& [node_id, perception_types] : node_perception_types_) {
         for (const auto& perception_type : perception_types) {
-            if (perception_type == "camera") {
+            if (perception_type == robot::perception::PerceptionType::CAMERA) {
                 required_builds_.insert(std::string(kROS2Target) + kCameraPublisher);
-            } else if (perception_type == "encoder") {
+            } else if (perception_type == robot::perception::PerceptionType::ENCODER) {
                 required_builds_.insert(std::string(kROS2Target) + kEncoderPublisher);
             }
         }
@@ -149,7 +143,7 @@ void NodeGenerator::DetermineRequiredBuilds() {
     
     for (const auto& [node_id, action_types] : node_action_types_) {
         for (const auto& action_type : action_types) {
-            if (action_type == "actuator") {
+            if (action_type == robot::action::ActionType::ACTUATOR) {
                 required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
             }
         }
@@ -222,9 +216,9 @@ bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
 
 bool NodeGenerator::LaunchAllNodes() {
     for (const auto& [node_id, perception_types] : node_perception_types_) {
-        std::string node_type = GetPerceptionNodeTypePriority(perception_types);
+        std::string node_type = GetPerceptionNodeTypeName(perception_types);
         if (node_type.empty()) {
-            LOG(WARNING) << "Unknown sensor types for node_id " << node_id;
+            LOG(WARNING) << "Unknown perception types for node_id " << node_id;
             continue;
         }
         
@@ -232,12 +226,12 @@ bool NodeGenerator::LaunchAllNodes() {
         pid_t pid = LaunchPerceptionNode(node_type, node_id, node_name);
         
         if (pid > 0) {
-            launched_nodes_.push_back({node_type, node_name, node_id, pid});
+            launched_nodes_.push_back({node_type, node_name, node_id, pid, GetPublishTopicsForNode(node_id)});
         }
     }
     
     for (const auto& [node_id, action_types] : node_action_types_) {
-        std::string node_type = GetActionNodeTypePriority(action_types);
+        std::string node_type = GetActionNodeTypeName(action_types);
         if (node_type.empty()) {
             LOG(WARNING) << "Unknown action types for node_id " << node_id;
             continue;
@@ -247,7 +241,7 @@ bool NodeGenerator::LaunchAllNodes() {
         pid_t pid = LaunchActionNode(node_type, node_id, node_name);
         
         if (pid > 0) {
-            launched_nodes_.push_back({node_type, node_name, node_id, pid});
+            launched_nodes_.push_back({node_type, node_name, node_id, pid, GetSubscribeTopicsForNode(node_id)});
         }
     }
     
@@ -413,17 +407,17 @@ std::string NodeGenerator::GetBinaryPath() const {
     return wrapper_script_path.string();
 }
 
-std::string NodeGenerator::GetPerceptionNodeTypePriority(const std::set<std::string>& sensor_types) const {
-    if (sensor_types.count("camera")) {
+std::string NodeGenerator::GetPerceptionNodeTypeName(const std::set<robot::perception::PerceptionType>& sensor_types) const {
+    if (sensor_types.count(robot::perception::PerceptionType::CAMERA)) {
         return kCameraPublisher;
-    } else if (sensor_types.count("encoder")) {
+    } else if (sensor_types.count(robot::perception::PerceptionType::ENCODER)) {
         return kEncoderPublisher;
     }
     return "";
 }
 
-std::string NodeGenerator::GetActionNodeTypePriority(const std::set<std::string>& action_types) const {
-    if (action_types.count("actuator")) {
+std::string NodeGenerator::GetActionNodeTypeName(const std::set<robot::action::ActionType>& action_types) const {
+    if (action_types.count(robot::action::ActionType::ACTUATOR)) {
         return kActuatorSubscriber;
     }
     return "";
@@ -433,6 +427,37 @@ void NodeGenerator::SignalHandler(int sig) {
     if (instance_) {
         instance_->shutdown_requested_ = true;
     }
+}
+
+std::vector<std::string> NodeGenerator::GetPublishTopicsForNode(const uint32_t node_id) {
+    if(node_perception_types_.count(node_id) == 0) {
+        LOG(WARNING) << "No perception types found for node_id " << node_id;
+        return {};
+    }
+
+    std::vector<std::string> topics;
+    for(const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
+        if(single_perception.node_id() == node_id) {
+            topics.push_back(single_perception.publish_topic());
+        }
+    }
+
+    return topics;
+}
+
+std::vector<std::string> NodeGenerator::GetSubscribeTopicsForNode(const uint32_t node_id) {
+    if(node_action_types_.count(node_id) == 0) {
+        LOG(WARNING) << "No action types found for node_id " << node_id;
+        return {};
+    }
+
+    std::vector<std::string> topics;
+    for(const auto& single_action : config_.robot().actions().single_actions()) {
+        if(single_action.node_id() == node_id) {
+            topics.push_back(single_action.subscribe_topic());
+        }
+    }
+    return topics;
 }
 
 } // namespace node_generator 
