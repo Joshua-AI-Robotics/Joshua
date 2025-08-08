@@ -111,12 +111,17 @@
        <widget class="QTableWidget" name="nodeTable">
         <column>
          <property name="text">
-          <string>Name</string>
+          <string>Node Type</string>
          </property>
         </column>
         <column>
          <property name="text">
-          <string>State</string>
+          <string>NodeName</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Node ID</string>
          </property>
         </column>
         <column>
@@ -126,17 +131,7 @@
         </column>
         <column>
          <property name="text">
-          <string>CPU%</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Mem</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Uptime</string>
+          <string>Topics</string>
          </property>
         </column>
        </widget>

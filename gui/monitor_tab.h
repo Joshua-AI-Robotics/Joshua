@@ -21,6 +21,7 @@ public:
 signals:
     void logMessage(const QString& message);
     void updateStatus(const QString& status, const QString& style);
+    void updateNodeTable();
     void enableLaunchButton();
     void setLaunchButtonEnabled(bool enabled);
 
@@ -30,6 +31,7 @@ private slots:
     void onLogMessage(const QString& message);
     void onUpdateStatus(const QString& status, const QString& style);
     void onSetLaunchButtonEnabled(bool enabled);
+    void onUpdateNodeTable();
     void onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
 
 private:

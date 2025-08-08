@@ -26,31 +26,11 @@ MonitorTab::MonitorTab(QWidget* parent)
     , stop_node_generator_build_(false)
 {
     ui->setupUi(this);
-
-    // Initialize node table headers if needed (already set in .ui)
-    ui->nodeTable->setColumnCount(6);
-    QStringList headers{"Name", "State", "PID", "CPU%", "Mem", "Uptime"};
-    ui->nodeTable->setHorizontalHeaderLabels(headers);
-    ui->nodeTable->setRowCount(0);
-
-    // Initialize status label
-    ui->statusLabel->setText("IDLE");
-    ui->statusLabel->setStyleSheet(kIdleStyle);
-
+  
     // Initialize config_preset list view.
     QDir config_preset_dir("config/config_preset");
     QStringList config_preset_files = config_preset_dir.entryList(QDir::Files);
     ui->config_preset_listView->setModel(new QStringListModel(config_preset_files));
-
-    // Initialize current config_ from selection if available
-    if (ui->config_preset_listView->model()->rowCount() > 0) {
-        QModelIndex currentIndex = ui->config_preset_listView->currentIndex();
-        if (!currentIndex.isValid()) {
-            currentIndex = ui->config_preset_listView->model()->index(0, 0);
-            ui->config_preset_listView->setCurrentIndex(currentIndex);
-        }
-        config_ = std::string(kConfigPresetPrefix) + currentIndex.data().toString().toStdString();
-    }
 
     // Connect selection change to update config_
     connect(ui->config_preset_listView->selectionModel(), &QItemSelectionModel::currentChanged,
@@ -60,9 +40,10 @@ MonitorTab::MonitorTab(QWidget* parent)
     connect(this, &MonitorTab::logMessage, this, &MonitorTab::onLogMessage, Qt::QueuedConnection);
     connect(this, &MonitorTab::updateStatus, this, &MonitorTab::onUpdateStatus, Qt::QueuedConnection);
     connect(this, &MonitorTab::setLaunchButtonEnabled, this, &MonitorTab::onSetLaunchButtonEnabled, Qt::QueuedConnection);
+    connect(this, &MonitorTab::updateNodeTable, this, &MonitorTab::onUpdateNodeTable, Qt::QueuedConnection);
 
-    // Placeholder initial log
-    ui->logTextEdit->append("[INFO] Monitor ready. Use Launch to start ROS2 nodes.");
+    emit updateStatus("IDLE", kIdleStyle);
+    emit logMessage("[INFO] Monitor ready. Use Launch to start ROS2 nodes.");
 }
 
 MonitorTab::~MonitorTab() { 
@@ -89,6 +70,32 @@ void MonitorTab::onSetLaunchButtonEnabled(bool enabled) {
     } else {
         ui->launchButton->setStyleSheet(kDisabledStyle);
     }
+}
+
+void MonitorTab::onUpdateNodeTable() {
+    if(!node_generator_) {
+        return;
+    }
+
+    if(node_generator_->GetLaunchedNodeCount() == 0) {
+        ui->nodeTable->clearContents();
+        ui->nodeTable->setRowCount(0);
+        return;
+    }
+
+    std::vector<node_generator::NodeInfo> launched_nodes;
+    node_generator_->GetLaunchedNodes(launched_nodes);
+
+    ui->nodeTable->setRowCount(launched_nodes.size());
+    for (size_t i = 0; i < launched_nodes.size(); ++i) {
+        const auto& node = launched_nodes[i];
+        ui->nodeTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(node.node_type)));
+        ui->nodeTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(node.node_name)));
+        ui->nodeTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(std::to_string(node.node_id))));
+        ui->nodeTable->setItem(i, 3, new QTableWidgetItem(QString::number(static_cast<qlonglong>(node.pid))));
+        // ui->nodeTable->setItem(i, 4, new QTableWidgetItem(QString::fromStdString(node.topics)));
+    }
+    ui->nodeTable->resizeColumnsToContents();
 }
 
 void MonitorTab::onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
@@ -126,6 +133,8 @@ void MonitorTab::on_stopButton_clicked() {
     // Shutdown the node generator
     if (node_generator_) {
         node_generator_->Shutdown();
+
+        emit updateNodeTable();
     }
         
     emit updateStatus("IDLE", kIdleStyle);
@@ -159,6 +168,7 @@ bool MonitorTab::setup_node_generator() {
         }
         emit logMessage("[INFO] Nodes launched");
         emit updateStatus("RUNNING", kRunningStyle);
+        emit updateNodeTable();
     } catch (const std::exception& e) {
         onLogMessage("[ERROR] Exception during node generator setup: " + QString::fromStdString(e.what()));
         return false;
