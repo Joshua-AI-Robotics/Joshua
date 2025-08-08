@@ -7,6 +7,10 @@
 #include <signal.h>
 #include <chrono>
 #include <thread>
+#include <atomic>
+#include <spawn.h>
+
+extern char** environ;
 
 namespace node_generator {
 
@@ -153,15 +157,66 @@ void NodeGenerator::DetermineRequiredBuilds() {
 }
 
 bool NodeGenerator::BuildRequiredTargets() {    
+    std::atomic_bool dummy_stop{false};
+    return BuildRequiredTargets(dummy_stop);
+}
+
+bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
     for (const auto& build_target : required_builds_) {
-        std::string bazel_build_command = "bazel build " + build_target;
-        int exit_code = system(bazel_build_command.c_str());
-        if (exit_code != 0) {
-            LOG(ERROR) << "Failed to build " << build_target << " with bazel build.";
+        if (stop_flag.load()) {
+            LOG(WARNING) << "Build stopped before starting target: " << build_target;
             return false;
         }
+
+        pid_t pid = -1;
+        const char* argv[] = {"bazel", "build", build_target.c_str(), nullptr};
+        int spawn_rc = posix_spawnp(&pid, "bazel", nullptr, nullptr, const_cast<char* const*>(argv), environ);
+        if (spawn_rc != 0) {
+            LOG(ERROR) << "posix_spawnp failed for target " << build_target << ": " << strerror(spawn_rc);
+            return false;
+        }
+
+        int status = 0;
+        while (true) {
+            pid_t res = waitpid(pid, &status, WNOHANG);
+            if (res == pid) {
+                if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+                    LOG(INFO) << "Built target: " << build_target;
+                    break; // proceed to next target
+                } else {
+                    if (WIFEXITED(status)) {
+                        LOG(ERROR) << "bazel build exited with status " << WEXITSTATUS(status)
+                                   << " for target " << build_target;
+                    } else if (WIFSIGNALED(status)) {
+                        LOG(ERROR) << "bazel build killed by signal " << WTERMSIG(status)
+                                   << " for target " << build_target;
+                    }
+                    return false;
+                }
+            } else if (res == 0) {
+                if (stop_flag.load()) {
+                    LOG(WARNING) << "Stop requested. Terminating build for target: " << build_target;
+                    kill(pid, SIGTERM);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    pid_t res2 = waitpid(pid, &status, WNOHANG);
+                    if (res2 == 0) {
+                        kill(pid, SIGKILL);
+                        waitpid(pid, &status, 0);
+                    }
+                    return false;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            } else {
+                if (errno == ECHILD) {
+                    LOG(ERROR) << "waitpid returned ECHILD for build target: " << build_target;
+                } else {
+                    LOG(ERROR) << "waitpid error for build target " << build_target << ": " << strerror(errno);
+                }
+                return false;
+            }
+        }
     }
-    
+
     return true;
 }
 

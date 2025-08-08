@@ -5,6 +5,8 @@
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <string>
+#include <QtCore/QModelIndex>
 #include "node_generator/node_generator.h"
 
 
@@ -28,14 +30,17 @@ private slots:
     void onLogMessage(const QString& message);
     void onUpdateStatus(const QString& status, const QString& style);
     void onSetLaunchButtonEnabled(bool enabled);
+    void onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
 
 private:
     bool setup_node_generator();
     void setup_node_generator_thread_func();
 
     Ui::MonitorTab* ui;
+    std::string config_;
     std::unique_ptr<node_generator::NodeGenerator> node_generator_;
     std::atomic<bool> stop_node_generator_build_;
+    std::thread node_generator_thread_;
 };
 
 #endif // MONITOR_TAB_H 

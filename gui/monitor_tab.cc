@@ -7,9 +7,14 @@
 #include <QtWidgets/QLabel>
 #include <QtCore/QDir>
 #include <QtCore/QStringListModel>
+#include <QtCore/QItemSelectionModel>
 
 namespace {
     constexpr auto kConfigPresetPrefix = "config/config_preset/";
+    constexpr auto kErrorStyle = "QLabel { background-color: #ff0000; padding: 5px; border-radius: 5px; }";
+    constexpr auto kBuildStyle = "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }";
+    constexpr auto kRunningStyle = "QLabel { background-color: #4caf50; padding: 5px; border-radius: 5px; }";
+    constexpr auto kIdleStyle = "QLabel { background-color: #cccccc; padding: 5px; border-radius: 5px; }";
 }
 
 MonitorTab::MonitorTab(QWidget* parent)
@@ -27,12 +32,26 @@ MonitorTab::MonitorTab(QWidget* parent)
 
     // Initialize status label
     ui->statusLabel->setText("IDLE");
-    ui->statusLabel->setStyleSheet("QLabel { background-color: #cccccc; padding: 5px; border-radius: 5px; }");
+    ui->statusLabel->setStyleSheet(kIdleStyle);
 
     // Initialize config_preset list view.
     QDir config_preset_dir("config/config_preset");
     QStringList config_preset_files = config_preset_dir.entryList(QDir::Files);
     ui->config_preset_listView->setModel(new QStringListModel(config_preset_files));
+
+    // Initialize current config_ from selection if available
+    if (ui->config_preset_listView->model()->rowCount() > 0) {
+        QModelIndex currentIndex = ui->config_preset_listView->currentIndex();
+        if (!currentIndex.isValid()) {
+            currentIndex = ui->config_preset_listView->model()->index(0, 0);
+            ui->config_preset_listView->setCurrentIndex(currentIndex);
+        }
+        config_ = std::string(kConfigPresetPrefix) + currentIndex.data().toString().toStdString();
+    }
+
+    // Connect selection change to update config_
+    connect(ui->config_preset_listView->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, &MonitorTab::onConfigPresetSelectionChanged);
 
     // Connect signals for thread-safe UI updates
     connect(this, &MonitorTab::logMessage, this, &MonitorTab::onLogMessage, Qt::QueuedConnection);
@@ -44,7 +63,10 @@ MonitorTab::MonitorTab(QWidget* parent)
 }
 
 MonitorTab::~MonitorTab() { 
-    // TODO: Stop any running thread
+    stop_node_generator_build_.store(true);
+    if (node_generator_thread_.joinable()) {
+        node_generator_thread_.join();
+    }
     delete ui; 
 }
 
@@ -61,75 +83,82 @@ void MonitorTab::onSetLaunchButtonEnabled(bool enabled) {
     ui->launchButton->setEnabled(enabled);
 }
 
-void MonitorTab::on_launchButton_clicked() {
-    // Placeholder: simulate nodes launching
-    onUpdateStatus("LAUNCHING", "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }");
-    onLogMessage("[INFO] Launch requested.");
-    onSetLaunchButtonEnabled(false);
-
-    if(!setup_node_generator()) {
-        onLogMessage("[ERROR] Failed to setup node generator");
-        onUpdateStatus("ERROR", "QLabel { background-color: #ff0000; padding: 5px; border-radius: 5px; }");
-        onSetLaunchButtonEnabled(true);
-        return;
+void MonitorTab::onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
+    if (current.isValid()) {
+        config_ = std::string(kConfigPresetPrefix) + current.data().toString().toStdString();
+        emit logMessage("[INFO] Selected config preset: " + current.data().toString());
     }
-    
-    // Add example row
-    int row = ui->nodeTable->rowCount();
-    ui->nodeTable->insertRow(row);
-    ui->nodeTable->setItem(row, 0, new QTableWidgetItem("example_node"));
-    ui->nodeTable->setItem(row, 1, new QTableWidgetItem("running"));
-    ui->nodeTable->setItem(row, 2, new QTableWidgetItem("12345"));
-    ui->nodeTable->setItem(row, 3, new QTableWidgetItem("1.2"));
-    ui->nodeTable->setItem(row, 4, new QTableWidgetItem("48MB"));
-    ui->nodeTable->setItem(row, 5, new QTableWidgetItem("00:00:05"));
+}
 
-    onUpdateStatus("RUNNING", "QLabel { background-color: #4caf50; padding: 5px; border-radius: 5px; }");
+void MonitorTab::on_launchButton_clicked() {
+    emit updateStatus("LAUNCHING", kRunningStyle);
+    emit logMessage("[INFO] Launch requested.");
+    emit setLaunchButtonEnabled(false);
+
+    // Ensure previous thread is not running
+    stop_node_generator_build_.store(false);
+    if (node_generator_thread_.joinable()) {
+        node_generator_thread_.join();
+    }
+
+    node_generator_thread_ = std::thread([this]() { setup_node_generator_thread_func(); });
 }
 
 void MonitorTab::on_stopButton_clicked() {
-    // Placeholder: simulate nodes stopping
-    onUpdateStatus("STOPPING", "QLabel { background-color: #ff0000; padding: 5px; border-radius: 5px; }");
-    onLogMessage("[INFO] Stop requested.");
+    emit updateStatus("STOPPING", kErrorStyle);
+    emit logMessage("[INFO] Stop requested.");
 
-    // Signal thread to stop
-    stop_node_generator_build_ = true;
+    stop_node_generator_build_.store(true);
+
+    if (node_generator_thread_.joinable()) {
+        node_generator_thread_.join();
+    }
     
     // Clear table
     ui->nodeTable->setRowCount(0);
-    onUpdateStatus("IDLE", "QLabel { background-color: #cccccc; padding: 5px; border-radius: 5px; }");
-    onSetLaunchButtonEnabled(true);
+    emit updateStatus("IDLE", kIdleStyle);
+    emit setLaunchButtonEnabled(true);
 }
 
 bool MonitorTab::setup_node_generator() {
     try {
-        std::string config = kConfigPresetPrefix + ui->config_preset_listView->currentIndex().data().toString().toStdString();
-        node_generator_ = std::make_unique<node_generator::NodeGenerator>(config);  
+        node_generator_ = std::make_unique<node_generator::NodeGenerator>(config_);  
 
-        onLogMessage("[INFO] Initializing node generator with config: " + QString::fromStdString(config));
+        emit logMessage("[INFO] Initializing node generator with config: " + QString::fromStdString(config_));
         if(!node_generator_->Initialize()) {
-            onLogMessage("[ERROR] Failed to initialize node generator");
+            emit logMessage("[ERROR] Failed to initialize node generator");
             return false;
         }
-        onLogMessage("[INFO] Node generator initialized");
+        emit logMessage("[INFO] Node generator initialized");
 
-        onLogMessage("[INFO] Building required targets");
-        if(!node_generator_->BuildRequiredTargets()) {
-            onLogMessage("[ERROR] Failed to build required targets");
+        emit logMessage("[INFO] Building required targets");
+        emit updateStatus("BUILDING", kBuildStyle);
+        if(!node_generator_->BuildRequiredTargets(stop_node_generator_build_)) {
+            emit logMessage("[ERROR] Build stopped or failed");
             return false;
         }
-        onLogMessage("[INFO] Required targets built");
+        emit logMessage("[INFO] Required targets built");
 
-        // onLogMessage("[INFO] Launching nodes");
+        // emit logMessage("[INFO] Launching nodes");
         // if(!node_generator_->LaunchAllNodes()) {
-        //     onLogMessage("[ERROR] Failed to launch nodes");
+        //     emit logMessage("[ERROR] Failed to launch nodes");
         //     return false;
         // }
-        // onLogMessage("[INFO] Nodes launched");
+        // emit logMessage("[INFO] Nodes launched");
     } catch (const std::exception& e) {
         onLogMessage("[ERROR] Exception during node generator setup: " + QString::fromStdString(e.what()));
         return false;
     }
     
     return true;
+}
+
+void MonitorTab::setup_node_generator_thread_func() {
+    if (!setup_node_generator()) {
+        emit updateStatus("ERROR", kErrorStyle);
+        emit setLaunchButtonEnabled(true);
+        return;
+    }
+
+    emit updateStatus("RUNNING", kRunningStyle);
 }

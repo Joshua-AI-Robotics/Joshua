@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <atomic>
+#include <sys/types.h>
 
 namespace node_generator {
 
@@ -23,6 +25,7 @@ public:
 
     bool Initialize();
     bool BuildRequiredTargets();
+    bool BuildRequiredTargets(std::atomic_bool& stop_flag);
     bool LaunchAllNodes();
     void MonitorNodes();
     void Shutdown();

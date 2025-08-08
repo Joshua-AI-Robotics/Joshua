@@ -70,6 +70,7 @@ cc_library(
     ],
     includes = ["."],
     copts = ["-std=c++17", "-fPIC"],
+    linkopts = ["-pthread"],
     deps = [
         "@local_deps//:qt6_widgets",
         "//config/proto:config_cc_proto",
@@ -84,5 +85,6 @@ cc_binary(
         "//config/config_preset:config_presets",
     ],
     copts = ["-std=c++17", "-fPIC"],
+    linkopts = ["-pthread"],
     deps = [":gui_lib"],
 )
