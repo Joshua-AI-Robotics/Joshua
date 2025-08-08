@@ -12,54 +12,88 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QGroupBox" name="controlGroup">
-     <property name="title">
-      <string>ROS2 Control</string>
-     </property>
-     <layout class="QHBoxLayout" name="controlLayout">
-      <item>
-       <widget class="QPushButton" name="launchButton">
-        <property name="text">
-         <string>Launch Nodes</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="stopButton">
-        <property name="text">
-         <string>Stop Nodes</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="restartButton">
-        <property name="text">
-         <string>Restart</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="controlSpacer">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QLabel" name="statusLabel">
-        <property name="text">
-         <string>Status: Idle</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+    <layout class="QVBoxLayout" name="controlGroup">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="font">
+        <font>
+         <bold>false</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>Config Preset List (config/config_preset/*)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QListView" name="config_preset_listView"/>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="buttonGroup">
+       <property name="title">
+        <string/>
+       </property>
+       <layout class="QHBoxLayout" name="controlLayout">
+        <item>
+         <widget class="QPushButton" name="launchButton">
+          <property name="text">
+           <string>Launch</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="stopButton">
+          <property name="text">
+           <string>Stop</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="controlSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Status:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="statusLabel">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>70</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>IDLE</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QGroupBox" name="nodesGroup">
@@ -124,4 +158,4 @@
  </widget>
  <resources/>
  <connections/>
-</ui> 
+</ui>

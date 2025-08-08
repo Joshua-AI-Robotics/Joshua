@@ -73,12 +73,16 @@ cc_library(
     deps = [
         "@local_deps//:qt6_widgets",
         "//config/proto:config_cc_proto",
+        "//node_generator:node_generator",
     ],
 )
 
 cc_binary(
     name = "gui_app",
     srcs = ["main.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
     copts = ["-std=c++17", "-fPIC"],
     deps = [":gui_lib"],
-) 
+)
