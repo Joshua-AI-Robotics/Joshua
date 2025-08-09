@@ -43,6 +43,9 @@ package(default_visibility = ["//visibility:public"])
 #
 # ==============================================================================
 
+# TODO: Create a node_runner for python nodes.
+# TODO: Create a ros2_wrapper for python nodes.
+
 cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
