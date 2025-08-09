@@ -61,10 +61,23 @@
           </property>
          </spacer>
         </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="nodesGroup">
+     <property name="title">
+      <string/>
+     </property>
+     <layout class="QVBoxLayout" name="nodesLayout">
+      <item>
+       <layout class="QHBoxLayout" name="node_status_horizontalLayout">
         <item>
          <widget class="QLabel" name="label_2">
           <property name="text">
-           <string>Status:</string>
+           <string>Operation Status:</string>
           </property>
          </widget>
         </item>
@@ -78,7 +91,7 @@
           </property>
           <property name="minimumSize">
            <size>
-            <width>70</width>
+            <width>250</width>
             <height>0</height>
            </size>
           </property>
@@ -96,17 +109,21 @@
           </property>
          </widget>
         </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
        </layout>
-      </widget>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="nodesGroup">
-     <property name="title">
-      <string>Node Status</string>
-     </property>
-     <layout class="QVBoxLayout" name="nodesLayout">
+      </item>
       <item>
        <widget class="QTableWidget" name="nodeTable">
         <column>

@@ -46,6 +46,15 @@ genrule(
 )
 
 cc_library(
+    name = "gui_utils",
+    srcs = ["gui_utils.cc"],
+    hdrs = ["gui_utils.h"],
+    includes = ["."],
+    copts = ["-std=c++17", "-fPIC"],
+    deps = ["@local_deps//:qt6_widgets"],
+)
+
+cc_library(
     name = "gui_lib",
     srcs = [
         "main_window.cc",
@@ -75,6 +84,7 @@ cc_library(
         "@local_deps//:qt6_widgets",
         "//config/proto:config_cc_proto",
         "//node_generator:node_generator",
+        ":gui_utils",
     ],
 )
 

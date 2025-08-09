@@ -5,10 +5,14 @@
 #include <QtWidgets/QTableWidgetItem>
 #include <QtWidgets/QTextEdit>
 #include <QtWidgets/QLabel>
+#include <QtWidgets/QProgressDialog>
 #include <QtCore/QDir>
 #include <QtCore/QStringListModel>
 #include <QtCore/QItemSelectionModel>
 #include <QtCore/QTimer>
+#include <QtCore/QCoreApplication>
+
+#include "gui_utils.h"
 
 namespace {
     constexpr auto kConfigPresetPrefix = "config/config_preset/";
@@ -127,19 +131,33 @@ void MonitorTab::on_stopButton_clicked() {
     emit updateStatus("STOPPING", kStoppingStyle);
     emit logMessage("[INFO] Stop requested.");
 
+    gui::StepProgressDialog progress(this,
+                                           "Stopping",
+                                           QStringList{
+                                               "Cancelling ongoing builds",
+                                               "Waiting for worker thread to finish",
+                                               "Shutting down nodes",
+                                           });
+    progress.show();
+
     // Request cancellation; defer heavy work so UI can repaint first
     stop_node_generator_build_.store(true);
+    progress.markStepDone(0);
 
     if (node_generator_thread_.joinable()) {
         node_generator_thread_.join();
     }
+    progress.markStepDone(1);
 
     // Shutdown the node generator
     if (node_generator_) {
         node_generator_->Shutdown();
-
+        progress.markStepDone(2);
         emit updateNodeTable();
     }
+
+    progress.setFinalMessage("- Finalizing cleanup...");
+    progress.close();
         
     emit updateStatus("IDLE", kIdleStyle);
     emit setLaunchButtonEnabled(true);
@@ -151,22 +169,22 @@ bool MonitorTab::setup_node_generator() {
 
         emit logMessage("[INFO] Initializing node generator with config: " + QString::fromStdString(config_));
         if(!node_generator_->Initialize()) {
-            emit logMessage("[ERROR] Failed to initialize node generator");
+            emit logMessage("[ERROR] Failed to initialize node generator.");
             return false;
         }
-        emit logMessage("[INFO] Node generator initialized");
+        emit logMessage("[INFO] Node generator initialized.");
 
-        emit logMessage("[INFO] Building required targets");
+        emit logMessage("[INFO] Building required targets.");
         emit updateStatus("BUILDING", kBuildStyle);
         if(!node_generator_->BuildRequiredTargets(stop_node_generator_build_)) {
-            emit logMessage("[ERROR] Build stopped or failed");
+            emit logMessage("[ERROR] Build stopped or failed.");
             return false;
         }
-        emit logMessage("[INFO] Required targets built");
+        emit logMessage("[INFO] Required targets built.");
 
-        emit logMessage("[INFO] Launching nodes");
+        emit logMessage("[INFO] Launching nodes.");
         if(!node_generator_->LaunchAllNodes()) {
-            emit logMessage("[ERROR] Failed to launch nodes");
+            emit logMessage("[ERROR] Failed to launch nodes.");
             emit updateStatus("ERROR", kErrorStyle);
             return false;
         }
