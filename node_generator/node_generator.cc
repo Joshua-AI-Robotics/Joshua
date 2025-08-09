@@ -105,7 +105,7 @@ void NodeGenerator::IdentifyNodeTypes() {
         const uint32_t node_id = single_perception.node_id();
         auto it = kPerceptionToNodeType.find(single_perception.perception_type());
         if (it != kPerceptionToNodeType.end()) {
-            identified_nodes_[node_id].insert(it->second);
+            identified_nodes_[node_id] = it->second;
         }
     }
     
@@ -114,7 +114,7 @@ void NodeGenerator::IdentifyNodeTypes() {
         const uint32_t node_id = single_action.node_id();
         auto it = kActionToNodeType.find(single_action.action_type());
         if (it != kActionToNodeType.end()) {
-            identified_nodes_[node_id].insert(it->second);
+            identified_nodes_[node_id] = it->second;
         }
     }
 
@@ -122,7 +122,7 @@ void NodeGenerator::IdentifyNodeTypes() {
     const auto ai_config = config_.ai();
     auto it = kAiModeToNodeType.find(ai_config.ai_mode());
     if (it != kAiModeToNodeType.end()) {
-        identified_nodes_[ai_config.node_id()].insert(it->second);
+        identified_nodes_[ai_config.node_id()] = it->second;
     }
 }
 
@@ -172,10 +172,8 @@ bool NodeGenerator::CheckConfigIntegrity() {
 
 void NodeGenerator::DetermineRequiredBuilds() {
     // Each declared node type implies a build target `ros2:<node_type>`
-    for (const auto& [node_id, node_types] : identified_nodes_) {
-        for (const auto& node_type : node_types) {
-            required_builds_.insert(std::string(kROS2Target) + node_type);
-        }
+    for (const auto& [_, node_type] : identified_nodes_) {
+        required_builds_.insert(std::string(kROS2Target) + node_type);
     }
 }
 
@@ -244,15 +242,14 @@ bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
 }
 
 bool NodeGenerator::LaunchAllNodes() {
-    for (const auto& [node_id, node_types] : identified_nodes_) {
-        for (const auto& node_type : node_types) {
-            const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
-            pid_t pid = LaunchNode(node_type, node_id, node_name);
-            if (pid > 0) {
-                std::vector<std::string> publish_topics = GetPublishTopicsForNode(node_id);
-                std::vector<std::string> subscribe_topics = GetSubscribeTopicsForNode(node_id);
-                launched_nodes_.push_back({node_type, node_name, node_id, pid, publish_topics, subscribe_topics});
-            }
+    for (const auto& [node_id, node_type] : identified_nodes_) {
+        const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
+        pid_t pid = LaunchNode(node_type, node_id, node_name);
+        if (pid > 0) {
+            std::vector<std::string> publish_topics;
+            std::vector<std::string> subscribe_topics;
+            GetTopicsForNode(node_id, publish_topics, subscribe_topics);
+            launched_nodes_.push_back({node_type, node_name, node_id, pid, publish_topics, subscribe_topics});
         }
     }
     
@@ -387,13 +384,12 @@ void NodeGenerator::SignalHandler(int sig) {
     }
 }
 
-std::vector<std::string> NodeGenerator::GetPublishTopicsForNode(const uint32_t node_id) {
+void NodeGenerator::GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics) {
     if(identified_nodes_.count(node_id) == 0) {
         LOG(WARNING) << "Node " << node_id << " not found in the config.";
-        return {};
+        return;
     }
 
-    std::vector<std::string> publish_topics;
     // Get publish topics from perceptions.
     for(const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
         if(single_perception.node_id() == node_id) {
@@ -401,23 +397,6 @@ std::vector<std::string> NodeGenerator::GetPublishTopicsForNode(const uint32_t n
         }
     }
 
-    // Get publish topics for AI node.
-    if(config_.ai().node_id() == node_id) {
-        for(const auto& pub_topic : config_.ai().publish_topics()) {
-            publish_topics.push_back(pub_topic);
-        }
-    }
-
-    return publish_topics;
-}
-
-std::vector<std::string> NodeGenerator::GetSubscribeTopicsForNode(const uint32_t node_id) {
-    if(identified_nodes_.count(node_id) == 0) {
-        LOG(WARNING) << "Node " << node_id << " not found in the config.";
-        return {};
-    }
-
-    std::vector<std::string> subscribe_topics;
     // Get subscribe topics from actions.
     for(const auto& single_action : config_.robot().actions().single_actions()) {
         if(single_action.node_id() == node_id) {
@@ -425,14 +404,15 @@ std::vector<std::string> NodeGenerator::GetSubscribeTopicsForNode(const uint32_t
         }
     }
 
-    // Get subscribe topics for AI node.
+    // Get publish and subscribe topics for AI node.
     if(config_.ai().node_id() == node_id) {
+        for(const auto& pub_topic : config_.ai().publish_topics()) {
+            publish_topics.push_back(pub_topic);
+        }
         for(const auto& sub_topic : config_.ai().subscribe_topics()) {
             subscribe_topics.push_back(sub_topic);
         }
     }
-
-    return subscribe_topics;
 }
 
 } // namespace node_generator 

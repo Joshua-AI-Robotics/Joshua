@@ -50,14 +50,13 @@ private:
     void SetupSignalHandlers();
     void CleanupAndExit(int exit_code);
     void MonitorChildProcesses();
-    std::vector<std::string> GetPublishTopicsForNode(const uint32_t node_id);
-    std::vector<std::string> GetSubscribeTopicsForNode(const uint32_t node_id);
+
+    void GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics);
 
     std::string get_binary_path() const;
 
-    // Map from node_id to set of node type identifiers.
-    // Single node_id can have a single node type.
-    std::map<uint32_t, std::set<std::string>> identified_nodes_;
+    // Map from node_id to node type.
+    std::map<uint32_t, std::string> identified_nodes_;
 
     std::string config_path_;
     std::string repo_root_;
