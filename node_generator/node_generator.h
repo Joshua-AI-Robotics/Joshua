@@ -8,6 +8,7 @@
 #include <memory>
 #include <atomic>
 #include <any>
+#include <optional>
 #include <sys/types.h>
 
 namespace node_generator {
@@ -37,7 +38,7 @@ public:
     bool HasNodes() const { return !launched_nodes_.empty(); }
 
 private:
-    void GroupEntitiesByNodeId();
+    void IdentifyNodeTypes();
     bool CheckConfigIntegrity();
     void DetermineRequiredBuilds();
 
@@ -52,16 +53,15 @@ private:
     std::vector<std::string> GetSubscribeTopicsForNode(const uint32_t node_id);
 
     std::string get_binary_path() const;
-    std::string get_node_type_name(const std::any& node_type) const;
+
+    // Map from node_id to set of node type identifiers.
+    // Single node_id can have a single node type.
+    std::map<uint32_t, std::set<std::string>> identified_nodes_;
 
     std::string config_path_;
     std::string repo_root_;
     config::Config config_;
     
-    std::map<uint32_t, std::set<robot::perception::PerceptionType>> node_perception_types_;
-    std::map<uint32_t, std::set<robot::action::ActionType>> node_action_types_;
-    std::map<uint32_t, config::AiMode> node_ai_type_; // Doesn't need to be plural.
-
     std::set<std::string> required_builds_;
     
     std::vector<NodeInfo> launched_nodes_;

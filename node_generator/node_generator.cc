@@ -9,6 +9,8 @@
 #include <thread>
 #include <atomic>
 #include <spawn.h>
+#include <unordered_map>
+#include <unordered_set>
 
 extern char** environ;
 
@@ -22,6 +24,29 @@ namespace {
     constexpr auto kInference = "inference";
     constexpr auto kTraining = "training";
     constexpr auto kMockInference = "mock_inference"; // TODO: Remove this.
+
+    // Centralized mappings for easy future extension
+    // <perception_type, node_type>
+    const std::unordered_map<robot::perception::PerceptionType, const char*> kPerceptionToNodeType = {
+        {robot::perception::PerceptionType::CAMERA, kCameraPublisher},
+        {robot::perception::PerceptionType::ENCODER, kEncoderPublisher},
+    };
+
+    // <action_type, node_type>
+    const std::unordered_map<robot::action::ActionType, const char*> kActionToNodeType = {
+        {robot::action::ActionType::ACTUATOR, kActuatorSubscriber},
+    };
+
+    // <ai_mode, node_type>
+    const std::unordered_map<config::AiMode, const char*> kAiModeToNodeType = {
+        {config::AiMode::MODE_INFERENCE, kInference}, // Not yet implemented.
+        {config::AiMode::MODE_TRAINING,  kTraining}, // Not yet implemented.
+        {config::AiMode::MODE_MOCK_INFERENCE, kMockInference}, // TODO: Remove this.
+    };
+
+    // Role sets for topic selection behavior
+    const std::unordered_set<std::string> kPublisherNodeTypes = {kCameraPublisher, kEncoderPublisher};
+    const std::unordered_set<std::string> kSubscriberNodeTypes = {kActuatorSubscriber};
 }
 
 // Static member initialization
@@ -62,7 +87,7 @@ bool NodeGenerator::Initialize() {
         return false;
     }
     
-    GroupEntitiesByNodeId();
+    IdentifyNodeTypes();
     if (!CheckConfigIntegrity()) {
         return false;
     }
@@ -72,23 +97,33 @@ bool NodeGenerator::Initialize() {
     return true;
 }
 
-void NodeGenerator::GroupEntitiesByNodeId() {
+void NodeGenerator::IdentifyNodeTypes() {
     auto robot_config = config_.robot();
     
-    // Group perception sensors by the node_id they are associated with.
+    // Perceptions -> add node type(s)
     for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
-        uint32_t node_id = single_perception.node_id();
-        node_perception_types_[node_id].insert(single_perception.perception_type());
+        const uint32_t node_id = single_perception.node_id();
+        auto it = kPerceptionToNodeType.find(single_perception.perception_type());
+        if (it != kPerceptionToNodeType.end()) {
+            identified_nodes_[node_id].insert(it->second);
+        }
     }
     
-    // Group actions by the node_id they are associated with.
+    // Actions -> add node type(s)
     for (const auto& single_action : robot_config.actions().single_actions()) {
-        uint32_t node_id = single_action.node_id();
-        node_action_types_[node_id].insert(single_action.action_type());
+        const uint32_t node_id = single_action.node_id();
+        auto it = kActionToNodeType.find(single_action.action_type());
+        if (it != kActionToNodeType.end()) {
+            identified_nodes_[node_id].insert(it->second);
+        }
     }
 
-    auto ai_config = config_.ai();
-    node_ai_type_[ai_config.node_id()] = ai_config.ai_mode();
+    // AI -> add node type
+    const auto ai_config = config_.ai();
+    auto it = kAiModeToNodeType.find(ai_config.ai_mode());
+    if (it != kAiModeToNodeType.end()) {
+        identified_nodes_[ai_config.node_id()].insert(it->second);
+    }
 }
 
 bool NodeGenerator::CheckConfigIntegrity() {
@@ -136,35 +171,10 @@ bool NodeGenerator::CheckConfigIntegrity() {
 }
 
 void NodeGenerator::DetermineRequiredBuilds() {
-    // Determine required builds based on perception types.
-    for (const auto& [node_id, perception_types] : node_perception_types_) {
-        for (const auto& perception_type : perception_types) {
-            if (perception_type == robot::perception::PerceptionType::CAMERA) {
-                required_builds_.insert(std::string(kROS2Target) + kCameraPublisher);
-            } else if (perception_type == robot::perception::PerceptionType::ENCODER) {
-                required_builds_.insert(std::string(kROS2Target) + kEncoderPublisher);
-            }
-        }
-    }
-    
-    for (const auto& [node_id, action_types] : node_action_types_) {
-        for (const auto& action_type : action_types) {
-            if (action_type == robot::action::ActionType::ACTUATOR) {
-                required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
-            }
-        }
-    }
-
-    // Determine required builds based on AI types.
-    for (const auto& [node_id, ai_type] : node_ai_type_) {
-        if (ai_type == config::AiMode::MODE_INFERENCE) {
-            required_builds_.insert(std::string(kROS2Target) + kInference);
-        }
-        else if (ai_type == config::AiMode::MODE_MOCK_INFERENCE) { // TODO: Remove this.
-            required_builds_.insert(std::string(kROS2Target) + kMockInference);
-        }
-        else if (ai_type == config::AiMode::MODE_TRAINING) {
-            required_builds_.insert(std::string(kROS2Target) + kTraining);
+    // Each declared node type implies a build target `ros2:<node_type>`
+    for (const auto& [node_id, node_types] : identified_nodes_) {
+        for (const auto& node_type : node_types) {
+            required_builds_.insert(std::string(kROS2Target) + node_type);
         }
     }
 }
@@ -234,49 +244,22 @@ bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
 }
 
 bool NodeGenerator::LaunchAllNodes() {
-    for (const auto& [node_id, perception_types] : node_perception_types_) {
-        std::string node_type = get_node_type_name(std::any(perception_types));
-        if (node_type.empty()) {
-            LOG(WARNING) << "Unknown perception types for node_id " << node_id;
-            continue;
-        }
-        
-        std::string node_name = node_type + "_node_" + std::to_string(node_id);
-        pid_t pid = LaunchNode(node_type, node_id, node_name);
-        
-        if (pid > 0) {
-            launched_nodes_.push_back({node_type, node_name, node_id, pid, GetPublishTopicsForNode(node_id)});
-        }
-    }
-    
-    for (const auto& [node_id, action_types] : node_action_types_) {
-        std::string node_type = get_node_type_name(std::any(action_types));
-        if (node_type.empty()) {
-            LOG(WARNING) << "Unknown action types for node_id " << node_id;
-            continue;
-        }
-        
-        std::string node_name = node_type + "_node_" + std::to_string(node_id);
-        pid_t pid = LaunchNode(node_type, node_id, node_name);
-        
-        if (pid > 0) {
-            launched_nodes_.push_back({node_type, node_name, node_id, pid, GetSubscribeTopicsForNode(node_id)});
-        }
-    }
-
-    for (const auto& [node_id, ai_type] : node_ai_type_) {
-        std::string node_type = get_node_type_name(std::any(ai_type));
-        if (node_type.empty()) {
-            LOG(WARNING) << "Unknown AI types for node_id " << node_id;
-            continue;
-        }
-
-        std::string node_name = node_type + "_node_" + std::to_string(node_id);
-        pid_t pid = LaunchNode(node_type, node_id, node_name);
-        
-        if (pid > 0) {
-            // TODO: Update the topics.
-            launched_nodes_.push_back({node_type, node_name, node_id, pid, {}});
+    for (const auto& [node_id, node_types] : identified_nodes_) {
+        for (const auto& node_type : node_types) {
+            const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
+            pid_t pid = LaunchNode(node_type, node_id, node_name);
+            if (pid > 0) {
+                // Choose topics based on node_type role
+                std::vector<std::string> topics;
+                if (kPublisherNodeTypes.count(node_type) != 0) {
+                    topics = GetPublishTopicsForNode(node_id);
+                } else if (kSubscriberNodeTypes.count(node_type) != 0) {
+                    topics = GetSubscribeTopicsForNode(node_id);
+                } else {
+                    // AI or other types: no topics for now
+                }
+                launched_nodes_.push_back({node_type, node_name, node_id, pid, topics});
+            }
         }
     }
     
@@ -405,36 +388,6 @@ std::string NodeGenerator::get_binary_path() const {
     return wrapper_script_path.string();
 }
 
-std::string NodeGenerator::get_node_type_name(const std::any& node_type) const {
-    if (node_type.type() == typeid(std::set<robot::perception::PerceptionType>)) {
-        const auto& sensor_types = std::any_cast<const std::set<robot::perception::PerceptionType>&>(node_type);
-        if (sensor_types.count(robot::perception::PerceptionType::CAMERA)) {
-            return kCameraPublisher;
-        } else if (sensor_types.count(robot::perception::PerceptionType::ENCODER)) {
-            return kEncoderPublisher;
-        }
-        return "";
-    } else if (node_type.type() == typeid(std::set<robot::action::ActionType>)) {
-        const auto& action_types = std::any_cast<const std::set<robot::action::ActionType>&>(node_type);
-        if (action_types.count(robot::action::ActionType::ACTUATOR)) {
-            return kActuatorSubscriber;
-        }
-        return "";
-    } else if (node_type.type() == typeid(config::AiMode)) {
-        const auto& ai_type = std::any_cast<const config::AiMode&>(node_type);
-        if (ai_type == config::AiMode::MODE_INFERENCE) {
-            return kInference;
-        } else if (ai_type == config::AiMode::MODE_MOCK_INFERENCE) { // TODO: Remove this.
-            return kMockInference;
-        }
-        else if (ai_type == config::AiMode::MODE_TRAINING) {
-            return kTraining;
-        }
-        return "";
-    }
-    return "";
-}
-
 void NodeGenerator::SignalHandler(int sig) {
     if (instance_) {
         instance_->shutdown_requested_ = true;
@@ -442,8 +395,8 @@ void NodeGenerator::SignalHandler(int sig) {
 }
 
 std::vector<std::string> NodeGenerator::GetPublishTopicsForNode(const uint32_t node_id) {
-    if(node_perception_types_.count(node_id) == 0) {
-        LOG(WARNING) << "No perception types found for node_id " << node_id;
+    if(identified_nodes_.count(node_id) == 0) {
+        LOG(WARNING) << "No capabilities found for node_id " << node_id;
         return {};
     }
 
@@ -458,8 +411,8 @@ std::vector<std::string> NodeGenerator::GetPublishTopicsForNode(const uint32_t n
 }
 
 std::vector<std::string> NodeGenerator::GetSubscribeTopicsForNode(const uint32_t node_id) {
-    if(node_action_types_.count(node_id) == 0) {
-        LOG(WARNING) << "No action types found for node_id " << node_id;
+    if(identified_nodes_.count(node_id) == 0) {
+        LOG(WARNING) << "No capabilities found for node_id " << node_id;
         return {};
     }
 
