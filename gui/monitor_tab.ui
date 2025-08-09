@@ -12,62 +12,96 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <layout class="QVBoxLayout" name="controlGroup">
-     <item>
-      <widget class="QLabel" name="label">
-       <property name="font">
-        <font>
-         <bold>false</bold>
-        </font>
-       </property>
-       <property name="text">
-        <string>Config Preset List (config/config_preset/*)</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QListView" name="config_preset_listView"/>
-     </item>
-     <item>
-      <widget class="QGroupBox" name="buttonGroup">
-       <property name="title">
-        <string/>
-       </property>
-       <layout class="QHBoxLayout" name="controlLayout">
-        <item>
-         <widget class="QPushButton" name="launchButton">
-          <property name="text">
-           <string>Launch</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="stopButton">
-          <property name="text">
-           <string>Stop</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="controlSpacer">
-          <property name="orientation">
-           <enum>Qt::Orientation::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
-      </widget>
-     </item>
-    </layout>
+    <widget class="QGroupBox" name="configGroup">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <layout class="QVBoxLayout" name="controlGroup">
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="font">
+         <font>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Config Preset List (config/config_preset/*)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QListView" name="config_preset_listView">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>100</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="buttonGroup">
+        <property name="title">
+         <string/>
+        </property>
+        <layout class="QHBoxLayout" name="controlLayout">
+         <item>
+          <widget class="QPushButton" name="launchButton">
+           <property name="text">
+            <string>Launch</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="stopButton">
+           <property name="text">
+            <string>Stop</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton">
+           <property name="text">
+            <string>Load Custom Config</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="controlSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item>
     <widget class="QGroupBox" name="nodesGroup">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="title">
       <string/>
      </property>
@@ -125,38 +159,35 @@
        </layout>
       </item>
       <item>
-       <widget class="QTableWidget" name="nodeTable">
-        <column>
-         <property name="text">
-          <string>Node Type</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>NodeName</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Node ID</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>PID</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Publish Topics</string>
-         </property>
-        </column>
-        <column>
-         <property name="text">
-          <string>Subscribe Topics</string>
-         </property>
-        </column>
-       </widget>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QTableWidget" name="nodeTable">
+          <column>
+           <property name="text">
+            <string>Node Type</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>NodeName</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Node ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>PID</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTreeView" name="topicTree"/>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>

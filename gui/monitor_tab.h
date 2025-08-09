@@ -9,6 +9,9 @@
 #include <QtCore/QModelIndex>
 #include "node_generator/node_generator.h"
 
+// Forward declarations to avoid heavy includes in header
+class QStandardItemModel;
+class QSortFilterProxyModel;
 
 namespace Ui { class MonitorTab; }
 
@@ -37,12 +40,17 @@ private slots:
 private:
     bool setup_node_generator();
     void setup_node_generator_thread_func();
+    void rebuildTopicTree(const std::vector<node_generator::NodeInfo>& launched_nodes);
 
     Ui::MonitorTab* ui;
     std::string config_;
     std::unique_ptr<node_generator::NodeGenerator> node_generator_;
     std::atomic<bool> stop_node_generator_build_;
     std::thread node_generator_thread_;
+
+    // Model/view for topics
+    QStandardItemModel* topic_model_ = nullptr;
+    QSortFilterProxyModel* topic_filter_model_ = nullptr;
 };
 
 #endif // MONITOR_TAB_H 

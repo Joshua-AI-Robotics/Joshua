@@ -6,11 +6,15 @@
 #include <QtWidgets/QTextEdit>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QProgressDialog>
+#include <QtWidgets/QTreeView>
+#include <QtGui/QStandardItemModel>
+#include <QtCore/QSortFilterProxyModel>
 #include <QtCore/QDir>
 #include <QtCore/QStringListModel>
 #include <QtCore/QItemSelectionModel>
 #include <QtCore/QTimer>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QSet>
 
 #include "gui_utils.h"
 
@@ -35,6 +39,23 @@ MonitorTab::MonitorTab(QWidget* parent)
     QDir config_preset_dir("config/config_preset");
     QStringList config_preset_files = config_preset_dir.entryList(QDir::Files);
     ui->config_preset_listView->setModel(new QStringListModel(config_preset_files));
+
+    // Initialize topic tree view with model + filter
+    topic_model_ = new QStandardItemModel(this);
+    topic_model_->setHorizontalHeaderLabels({"Topics"});
+
+    topic_filter_model_ = new QSortFilterProxyModel(this);
+    topic_filter_model_->setSourceModel(topic_model_);
+    topic_filter_model_->setRecursiveFilteringEnabled(true);
+    topic_filter_model_->setFilterCaseSensitivity(Qt::CaseInsensitive);
+
+    ui->topicTree->setModel(topic_filter_model_);
+    ui->topicTree->setAlternatingRowColors(true);
+    ui->topicTree->setHeaderHidden(false);
+    ui->topicTree->setUniformRowHeights(true);
+    ui->topicTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->topicTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->topicTree->setSelectionMode(QAbstractItemView::SingleSelection);
 
     // Connect selection change to update config_
     connect(ui->config_preset_listView->selectionModel(), &QItemSelectionModel::currentChanged,
@@ -72,7 +93,7 @@ void MonitorTab::onSetLaunchButtonEnabled(bool enabled) {
     if (enabled) {
         ui->launchButton->setStyleSheet("");
     } else {
-        ui->launchButton->setStyleSheet(kDisabledStyle);
+ ui->launchButton->setStyleSheet(kDisabledStyle);
     }
 }
 
@@ -84,6 +105,8 @@ void MonitorTab::onUpdateNodeTable() {
     if(node_generator_->GetLaunchedNodeCount() == 0) {
         ui->nodeTable->clearContents();
         ui->nodeTable->setRowCount(0);
+        // Clear tree
+        topic_model_->removeRows(0, topic_model_->rowCount());
         return;
     }
 
@@ -97,19 +120,10 @@ void MonitorTab::onUpdateNodeTable() {
         ui->nodeTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(node.node_name)));
         ui->nodeTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(std::to_string(node.node_id))));
         ui->nodeTable->setItem(i, 3, new QTableWidgetItem(QString::number(static_cast<qlonglong>(node.pid))));
-        QString publish_topics;
-        for (const auto& topic : node.publish_topics) {
-            publish_topics += QString::fromStdString(topic) + " ";
-        }
-        ui->nodeTable->setItem(i, 4, new QTableWidgetItem(publish_topics));
-        
-        QString subscribe_topics;
-        for (const auto& topic : node.subscribe_topics) {
-            subscribe_topics += QString::fromStdString(topic) + " ";
-        }
-        ui->nodeTable->setItem(i, 5, new QTableWidgetItem(subscribe_topics));
     }
     ui->nodeTable->resizeColumnsToContents();
+
+    rebuildTopicTree(launched_nodes);
 }
 
 void MonitorTab::onConfigPresetSelectionChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
@@ -213,4 +227,50 @@ void MonitorTab::setup_node_generator_thread_func() {
     }
 
     emit updateStatus("RUNNING", kRunningStyle);
+}
+
+void MonitorTab::rebuildTopicTree(const std::vector<node_generator::NodeInfo>& launched_nodes) {
+    // Preserve expansion state by key (node_name)
+    QSet<QString> expanded;
+    for (int r = 0; r < topic_model_->rowCount(); ++r) {
+        auto idx = topic_model_->index(r, 0);
+        if (!idx.isValid()) continue;
+        QModelIndex proxyIdx = topic_filter_model_->mapFromSource(idx);
+        if (proxyIdx.isValid() && ui->topicTree->isExpanded(proxyIdx)) {
+            expanded.insert(topic_model_->data(idx).toString());
+        }
+    }
+
+    topic_model_->removeRows(0, topic_model_->rowCount());
+
+    for (const auto& node : launched_nodes) {
+        auto nodeItem = new QStandardItem(QString::fromStdString(node.node_name));
+        topic_model_->invisibleRootItem()->appendRow(nodeItem);
+
+        // Publish group
+        auto pubGroup = new QStandardItem(QString("Publish (%1)").arg(node.publish_topics.size()));
+        nodeItem->appendRow(pubGroup);
+        for (const auto& topic : node.publish_topics) {
+            auto tItem = new QStandardItem(QString::fromStdString(topic));
+            pubGroup->appendRow(tItem);
+        }
+
+        // Subscribe group
+        auto subGroup = new QStandardItem(QString("Subscribe (%1)").arg(node.subscribe_topics.size()));
+        nodeItem->appendRow(subGroup);
+        for (const auto& topic : node.subscribe_topics) {
+            auto tItem = new QStandardItem(QString::fromStdString(topic));
+            subGroup->appendRow(tItem);
+        }
+
+        // Restore previous expansion where possible
+        QModelIndex nodeIdx = topic_model_->indexFromItem(nodeItem);
+        QModelIndex proxyNodeIdx = topic_filter_model_->mapFromSource(nodeIdx);
+        if (expanded.contains(nodeItem->text())) {
+            ui->topicTree->expand(proxyNodeIdx);
+        }
+    }
+
+    ui->topicTree->expandToDepth(1);
+    ui->topicTree->resizeColumnToContents(0);
 }
