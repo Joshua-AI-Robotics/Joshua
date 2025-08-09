@@ -8,7 +8,7 @@ message Ai {
   string pretrained_model_path = 3;
   uint32 node_id = 4;
   repeated string subscribe_topics = 5;
-  string publish_topic = 6;
+  repeated string publish_topics = 6;
   oneof policy_config {
     ExamplePolicyConfig example_policy_config = 7;
   }

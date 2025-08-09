@@ -20,22 +20,23 @@ public:
       return;
     }
 
-    action_size_ = static_cast<size_t>(config.robot().actions().single_actions().size());
-    // TODO: This should be updated for multi-modal states, but for now align state count with subscribed topics.
-    subscribe_topics_.assign(config.ai().subscribe_topics().begin(), config.ai().subscribe_topics().end());
-    subscribe_size_ = subscribe_topics_.size();
-    state_size_ = subscribe_size_;
-    
+    /*
+    TODO
+    1. Define the state(input) size. Currently set as subscribe_topics_size().
+    2. Define the action size. Currently set as publish_topics_size().
+    3. Define subscibe data type for subscriptions_. Currently hardcoded as sensor_msgs::msg::Image.
+    4. Add check for size, topics, and so on.
+    */
+
     // Initialize publishers.
-    for (size_t i = 1; i <= action_size_; ++i) {
-      // TODO: Topic should not be hardcoded.
-      auto topic = "mock_action_" + std::to_string(i);
+    for (size_t i = 0; i < config.ai().publish_topics_size(); ++i) {
+      auto topic = config.ai().publish_topics(i);
       publishers_.push_back(this->create_publisher<std_msgs::msg::Float32>(topic, 10));
     }
 
     // Initialize state tracking
-    latest_states_.assign(state_size_, 0.0f);
-    received_.assign(state_size_, false);
+    latest_states_.assign(config.ai().subscribe_topics_size(), 0.0f);
+    received_.assign(config.ai().subscribe_topics_size(), false);
 
     // Random noise generator (example action output)
     std::random_device rd;
@@ -43,8 +44,8 @@ public:
     distribution_ = std::uniform_real_distribution<float>(-0.02f, 0.02f);
 
     // Subscriptions for all configured topics (images)
-    for (size_t i = 0; i < subscribe_size_; ++i) {
-      auto topic = subscribe_topics_[i];
+    for (size_t i = 0; i < config.ai().subscribe_topics_size(); ++i) {
+      auto topic = config.ai().subscribe_topics(i);
       // TODO: Message type should not be hardcoded.
       subscriptions_.push_back(this->create_subscription<sensor_msgs::msg::Image>(
         topic, 10,
@@ -54,7 +55,7 @@ public:
     }
 
     RCLCPP_INFO(this->get_logger(), "Mock inference node started (%zu actions, %zu states).",
-                action_size_, state_size_);
+                config.ai().publish_topics_size(), config.ai().subscribe_topics_size());
   }
 
 private:
@@ -89,11 +90,6 @@ private:
     }
   }
 
-  size_t action_size_{0};
-  size_t state_size_{0};
-  size_t subscribe_size_{0};
-  std::vector<std::string> subscribe_topics_;
-
   std::vector<rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr> publishers_;
   std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> subscriptions_;
 
@@ -101,7 +97,6 @@ private:
   std::vector<bool> received_;
 
   std::mutex mutex_;
-
   std::mt19937 random_generator_;
   std::uniform_real_distribution<float> distribution_;
 };

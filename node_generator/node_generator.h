@@ -18,7 +18,8 @@ struct NodeInfo {
     std::string node_name;
     uint32_t node_id;
     pid_t pid;
-    std::vector<std::string> topics;
+    std::vector<std::string> publish_topics;
+    std::vector<std::string> subscribe_topics;
 };
 
 class NodeGenerator {

@@ -197,9 +197,13 @@ ai {
   ai_mode: MODE_MOCK_INFERENCE
   policy_name: "example_policy"
   node_id: 3
-  publish_topic: "mock_action"
+  publish_topics: "mock_action_1" # For STS3215_SERVO_1
+  publish_topics: "mock_action_2" # For STS3215_SERVO_2
+  publish_topics: "mock_action_3" # For STS3215_SERVO_3
+  publish_topics: "mock_action_4" # For STS3215_SERVO_4
+  publish_topics: "mock_action_5" # For STS3215_SERVO_5
+  publish_topics: "mock_action_6" # For STS3215_SERVO_6
   subscribe_topics: "camera_1"
-  
   example_policy_config {
     hidden_size: 256
     n_layer: 4

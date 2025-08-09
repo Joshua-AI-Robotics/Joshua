@@ -148,7 +148,12 @@
         </column>
         <column>
          <property name="text">
-          <string>Topics</string>
+          <string>Publish Topics</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Subscribe Topics</string>
          </property>
         </column>
        </widget>

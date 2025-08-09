@@ -97,11 +97,17 @@ void MonitorTab::onUpdateNodeTable() {
         ui->nodeTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(node.node_name)));
         ui->nodeTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(std::to_string(node.node_id))));
         ui->nodeTable->setItem(i, 3, new QTableWidgetItem(QString::number(static_cast<qlonglong>(node.pid))));
-        QString topics;
-        for (const auto& topic : node.topics) {
-            topics += QString::fromStdString(topic) + " ";
+        QString publish_topics;
+        for (const auto& topic : node.publish_topics) {
+            publish_topics += QString::fromStdString(topic) + " ";
         }
-        ui->nodeTable->setItem(i, 4, new QTableWidgetItem(topics));
+        ui->nodeTable->setItem(i, 4, new QTableWidgetItem(publish_topics));
+        
+        QString subscribe_topics;
+        for (const auto& topic : node.subscribe_topics) {
+            subscribe_topics += QString::fromStdString(topic) + " ";
+        }
+        ui->nodeTable->setItem(i, 5, new QTableWidgetItem(subscribe_topics));
     }
     ui->nodeTable->resizeColumnsToContents();
 }
