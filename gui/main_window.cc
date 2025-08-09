@@ -27,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
     connectSignals();
     
     // Set window properties
-    setWindowTitle("JOSHUA Mission Control Interface");
+    setWindowTitle("Joshua Control Panel");
     setMinimumSize(1200, 800);
     
     // Center window on screen
@@ -100,11 +100,11 @@ void MainWindow::onUpdateTimer() {
 }
 
 void MainWindow::onAbout() {
-    QMessageBox::about(this, "About JOSHUA Mission Control Interface",
-        "<h3>JOSHUA Mission Control Interface</h3>"
+    QMessageBox::about(this, "About Joshua Control Panel",
+        "<h3>Joshua Control Panel</h3>"
         "<p>Version 0.1.0</p>"
         "<p>A modern Qt6-based GUI for controlling and monitoring "
-        "the JOSHUA robot system.</p>"
+        "the Joshua robot system.</p>"
         "<p>Built with Qt6 and C++</p>");
 }
 

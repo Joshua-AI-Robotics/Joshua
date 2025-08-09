@@ -1,9 +1,16 @@
-# Project JOSHUA (**J**oint **O**pen-source **S**ystems **H**ub for **U**niversal **A**utomation)
+# Project JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
 ## *A Modular Framework for Robotic AI Systems*
 
 Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI system using ROS2. **A single configuration file** automatically instantiates all action and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, configuration, and AI policy.
 
 This system utilized the ROS2 and protobuf. A configuration file should contain all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system. Based on this single file, ROS2 nodes will be instantiated and executes the nodes to make a robot operational based on the configuration.
+
+
+<p align="center">
+  <strong>Joshua Control Panel</strong><br>
+  <img src="assets/images/joshua_control_panel.png" alt="Control Panel" width="800"/>
+</p>
+
 
 ## Core Concepts
 

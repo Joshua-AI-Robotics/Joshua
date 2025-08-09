@@ -89,7 +89,7 @@ cc_library(
 )
 
 cc_binary(
-    name = "gui_app",
+    name = "joshua_control_panel",
     srcs = ["main.cc"],
     data = [
         "//config/config_preset:config_presets",

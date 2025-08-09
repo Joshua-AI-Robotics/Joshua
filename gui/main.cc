@@ -8,9 +8,9 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     
     // Set application properties
-    app.setApplicationName("Project Joshua GUI");
+    app.setApplicationName("Joshua Control Panel");
     app.setApplicationVersion("0.1.0");
-    app.setOrganizationName("Project Joshua");
+    app.setOrganizationName("Joshua");
     
     // Set dark theme for modern look
     app.setStyle(QStyleFactory::create("Fusion"));
