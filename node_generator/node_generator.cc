@@ -19,6 +19,9 @@ namespace {
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
     constexpr auto kActuatorSubscriber = "actuator_subscriber";
+    constexpr auto kInference = "inference";
+    constexpr auto kTraining = "training";
+    constexpr auto kMockInference = "mock_inference"; // TODO: Remove this.
 }
 
 // Static member initialization
@@ -50,9 +53,9 @@ bool NodeGenerator::Initialize() {
     
     auto robot_config = config_.robot();
     LOG(INFO) << "Robot Name: " << robot_config.name();
-    LOG(INFO) << "Action Size: " << robot_config.actions().single_actions_size();
-    LOG(INFO) << "Perception Size: " << robot_config.perceptions().single_perceptions_size();
-    
+    LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
+    LOG(INFO) << "AI Mode: " << config_.ai().ai_mode();
+
     // Change to repository root
     if (chdir(repo_root_.c_str()) != 0) {
         LOG(ERROR) << "Failed to change to repository root: " << repo_root_;
@@ -83,6 +86,9 @@ void NodeGenerator::GroupEntitiesByNodeId() {
         uint32_t node_id = single_action.node_id();
         node_action_types_[node_id].insert(single_action.action_type());
     }
+
+    auto ai_config = config_.ai();
+    node_ai_type_[ai_config.node_id()] = ai_config.ai_mode();
 }
 
 bool NodeGenerator::CheckConfigIntegrity() {
@@ -130,7 +136,7 @@ bool NodeGenerator::CheckConfigIntegrity() {
 }
 
 void NodeGenerator::DetermineRequiredBuilds() {
-    // Determine required builds based on sensor types
+    // Determine required builds based on perception types.
     for (const auto& [node_id, perception_types] : node_perception_types_) {
         for (const auto& perception_type : perception_types) {
             if (perception_type == robot::perception::PerceptionType::CAMERA) {
@@ -146,6 +152,19 @@ void NodeGenerator::DetermineRequiredBuilds() {
             if (action_type == robot::action::ActionType::ACTUATOR) {
                 required_builds_.insert(std::string(kROS2Target) + kActuatorSubscriber);
             }
+        }
+    }
+
+    // Determine required builds based on AI types.
+    for (const auto& [node_id, ai_type] : node_ai_type_) {
+        if (ai_type == config::AiMode::MODE_INFERENCE) {
+            required_builds_.insert(std::string(kROS2Target) + kInference);
+        }
+        else if (ai_type == config::AiMode::MODE_MOCK_INFERENCE) { // TODO: Remove this.
+            required_builds_.insert(std::string(kROS2Target) + kMockInference);
+        }
+        else if (ai_type == config::AiMode::MODE_TRAINING) {
+            required_builds_.insert(std::string(kROS2Target) + kTraining);
         }
     }
 }
@@ -216,14 +235,14 @@ bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
 
 bool NodeGenerator::LaunchAllNodes() {
     for (const auto& [node_id, perception_types] : node_perception_types_) {
-        std::string node_type = GetPerceptionNodeTypeName(perception_types);
+        std::string node_type = get_node_type_name(std::any(perception_types));
         if (node_type.empty()) {
             LOG(WARNING) << "Unknown perception types for node_id " << node_id;
             continue;
         }
         
         std::string node_name = node_type + "_node_" + std::to_string(node_id);
-        pid_t pid = LaunchPerceptionNode(node_type, node_id, node_name);
+        pid_t pid = LaunchNode(node_type, node_id, node_name);
         
         if (pid > 0) {
             launched_nodes_.push_back({node_type, node_name, node_id, pid, GetPublishTopicsForNode(node_id)});
@@ -231,17 +250,33 @@ bool NodeGenerator::LaunchAllNodes() {
     }
     
     for (const auto& [node_id, action_types] : node_action_types_) {
-        std::string node_type = GetActionNodeTypeName(action_types);
+        std::string node_type = get_node_type_name(std::any(action_types));
         if (node_type.empty()) {
             LOG(WARNING) << "Unknown action types for node_id " << node_id;
             continue;
         }
         
         std::string node_name = node_type + "_node_" + std::to_string(node_id);
-        pid_t pid = LaunchActionNode(node_type, node_id, node_name);
+        pid_t pid = LaunchNode(node_type, node_id, node_name);
         
         if (pid > 0) {
             launched_nodes_.push_back({node_type, node_name, node_id, pid, GetSubscribeTopicsForNode(node_id)});
+        }
+    }
+
+    for (const auto& [node_id, ai_type] : node_ai_type_) {
+        std::string node_type = get_node_type_name(std::any(ai_type));
+        if (node_type.empty()) {
+            LOG(WARNING) << "Unknown AI types for node_id " << node_id;
+            continue;
+        }
+
+        std::string node_name = node_type + "_node_" + std::to_string(node_id);
+        pid_t pid = LaunchNode(node_type, node_id, node_name);
+        
+        if (pid > 0) {
+            // TODO: Update the topics.
+            launched_nodes_.push_back({node_type, node_name, node_id, pid, {}});
         }
     }
     
@@ -249,68 +284,31 @@ bool NodeGenerator::LaunchAllNodes() {
     return !launched_nodes_.empty();
 }
 
-pid_t NodeGenerator::LaunchPerceptionNode(const std::string& node_type, uint32_t node_id, 
-                                         const std::string& node_name) {
+pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
+                                const std::string& node_name) {
     pid_t pid = fork();
-    
-    if (pid == 0) {
-        // Child process
-        std::string binary_path = GetBinaryPath();
-        std::string ament_path = binary_path + "/" + node_type + "_launch_ament_setup";
-        setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
-        
-        std::string runfiles_dir = binary_path + "/" + node_type + ".runfiles/_main";
-        if (chdir(runfiles_dir.c_str()) != 0) {
-            LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
-            _exit(1);
-        }
-        
-        std::string binary_impl = binary_path + "/" + node_type + "_impl";
-        std::string node_id_str = std::to_string(node_id);
-        execl(binary_impl.c_str(),
-            binary_impl.c_str(),
-            node_name.c_str(),
-            node_id_str.c_str(),
-            config_path_.c_str(),
-            nullptr);
-        
-        LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
-        _exit(1);
-    } else if (pid > 0) {
-        LOG(INFO) << "Launched " << node_name << " with PID: " << pid;
-        return pid;
-    } else {
-        LOG(ERROR) << "Failed to fork process for " << node_name << ": " << strerror(errno);
-        return -1;
-    }
-}
 
-pid_t NodeGenerator::LaunchActionNode(const std::string& node_type, uint32_t node_id, 
-                                      const std::string& node_name) {
-    pid_t pid = fork();
-    
     if (pid == 0) {
-        // Child process
-        std::string binary_path = GetBinaryPath();
+        std::string binary_path = get_binary_path();
         std::string ament_path = binary_path + "/" + node_type + "_launch_ament_setup";
         setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
-        
+
         std::string runfiles_dir = binary_path + "/" + node_type + ".runfiles/_main";
         if (chdir(runfiles_dir.c_str()) != 0) {
             LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
             _exit(1);
         }
-        
+
         std::string binary_impl = binary_path + "/" + node_type + "_impl";
         std::string node_id_str = std::to_string(node_id);
-        
-        execl(binary_impl.c_str(), 
+
+        execl(binary_impl.c_str(),
               binary_impl.c_str(),
-              node_name.c_str(),  
-              node_id_str.c_str(),              
-              config_path_.c_str(), 
+              node_name.c_str(),
+              node_id_str.c_str(),
+              config_path_.c_str(),
               nullptr);
-        
+
         LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
         _exit(1);
     } else if (pid > 0) {
@@ -402,23 +400,37 @@ void NodeGenerator::CleanupAndExit(int exit_code) {
     exit(exit_code);
 }
 
-std::string NodeGenerator::GetBinaryPath() const {
+std::string NodeGenerator::get_binary_path() const {
     std::filesystem::path wrapper_script_path = std::filesystem::path(repo_root_) / "bazel-bin" / "ros2";
     return wrapper_script_path.string();
 }
 
-std::string NodeGenerator::GetPerceptionNodeTypeName(const std::set<robot::perception::PerceptionType>& sensor_types) const {
-    if (sensor_types.count(robot::perception::PerceptionType::CAMERA)) {
-        return kCameraPublisher;
-    } else if (sensor_types.count(robot::perception::PerceptionType::ENCODER)) {
-        return kEncoderPublisher;
-    }
-    return "";
-}
-
-std::string NodeGenerator::GetActionNodeTypeName(const std::set<robot::action::ActionType>& action_types) const {
-    if (action_types.count(robot::action::ActionType::ACTUATOR)) {
-        return kActuatorSubscriber;
+std::string NodeGenerator::get_node_type_name(const std::any& node_type) const {
+    if (node_type.type() == typeid(std::set<robot::perception::PerceptionType>)) {
+        const auto& sensor_types = std::any_cast<const std::set<robot::perception::PerceptionType>&>(node_type);
+        if (sensor_types.count(robot::perception::PerceptionType::CAMERA)) {
+            return kCameraPublisher;
+        } else if (sensor_types.count(robot::perception::PerceptionType::ENCODER)) {
+            return kEncoderPublisher;
+        }
+        return "";
+    } else if (node_type.type() == typeid(std::set<robot::action::ActionType>)) {
+        const auto& action_types = std::any_cast<const std::set<robot::action::ActionType>&>(node_type);
+        if (action_types.count(robot::action::ActionType::ACTUATOR)) {
+            return kActuatorSubscriber;
+        }
+        return "";
+    } else if (node_type.type() == typeid(config::AiMode)) {
+        const auto& ai_type = std::any_cast<const config::AiMode&>(node_type);
+        if (ai_type == config::AiMode::MODE_INFERENCE) {
+            return kInference;
+        } else if (ai_type == config::AiMode::MODE_MOCK_INFERENCE) { // TODO: Remove this.
+            return kMockInference;
+        }
+        else if (ai_type == config::AiMode::MODE_TRAINING) {
+            return kTraining;
+        }
+        return "";
     }
     return "";
 }

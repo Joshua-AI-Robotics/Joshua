@@ -96,6 +96,23 @@ ros2_cpp_binary_with_wrapper(
 )
 
 ros2_cpp_binary_with_wrapper(
+    name = "mock_inference",
+    srcs = ["mock_inference.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_common_interfaces//:cpp_sensor_msgs",
+        "//config/proto:config_cc_proto",
+        "//config:config_utils",
+        "//config/proto:robot_cc_proto",
+        "//config/proto:ai_cc_proto",
+    ],
+)
+
+ros2_cpp_binary_with_wrapper(
     name = "operational_limit_calibration_subscriber",
     srcs = ["operational_limit_calibration_subscriber.cc"],
     data = [

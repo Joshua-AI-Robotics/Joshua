@@ -9,6 +9,7 @@ robot {
   actions {
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_1"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_1"
@@ -35,6 +36,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_2"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_2"
@@ -61,6 +63,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_3"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_3"
@@ -87,6 +90,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_4"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_4"
@@ -113,6 +117,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_5"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_5"
@@ -139,6 +144,7 @@ robot {
     }
     single_actions {
       node_id: 1
+      subscribe_topic: "mock_action_6"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_6"
@@ -168,6 +174,7 @@ robot {
   perceptions {
     single_perceptions {
       node_id: 2
+      publish_topic: "camera_1"
       perception_type: CAMERA
       publish_rate_hz: 30
       camera {
@@ -187,7 +194,12 @@ robot {
 }
 
 ai {
+  ai_mode: MODE_MOCK_INFERENCE
   policy_name: "example_policy"
+  node_id: 3
+  publish_topic: "mock_action"
+  subscribe_topics: "camera_1"
+  
   example_policy_config {
     hidden_size: 256
     n_layer: 4

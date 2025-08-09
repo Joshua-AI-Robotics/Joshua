@@ -7,6 +7,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <any>
 #include <sys/types.h>
 
 namespace node_generator {
@@ -40,10 +41,8 @@ private:
     bool CheckConfigIntegrity();
     void DetermineRequiredBuilds();
 
-    pid_t LaunchPerceptionNode(const std::string& node_type, uint32_t node_id, 
-                              const std::string& node_name);
-    pid_t LaunchActionNode(const std::string& node_type, uint32_t node_id, 
-                          const std::string& node_name);
+    pid_t LaunchNode(const std::string& node_type, uint32_t node_id,
+                     const std::string& node_name);
 
     // Process management
     void SetupSignalHandlers();
@@ -52,9 +51,8 @@ private:
     std::vector<std::string> GetPublishTopicsForNode(const uint32_t node_id);
     std::vector<std::string> GetSubscribeTopicsForNode(const uint32_t node_id);
 
-    std::string GetBinaryPath() const;
-    std::string GetPerceptionNodeTypeName(const std::set<robot::perception::PerceptionType>& sensor_types) const;
-    std::string GetActionNodeTypeName(const std::set<robot::action::ActionType>& action_types) const;
+    std::string get_binary_path() const;
+    std::string get_node_type_name(const std::any& node_type) const;
 
     std::string config_path_;
     std::string repo_root_;
@@ -62,6 +60,8 @@ private:
     
     std::map<uint32_t, std::set<robot::perception::PerceptionType>> node_perception_types_;
     std::map<uint32_t, std::set<robot::action::ActionType>> node_action_types_;
+    std::map<uint32_t, config::AiMode> node_ai_type_; // Doesn't need to be plural.
+
     std::set<std::string> required_builds_;
     
     std::vector<NodeInfo> launched_nodes_;
