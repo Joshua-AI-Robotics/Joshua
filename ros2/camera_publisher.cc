@@ -2,11 +2,11 @@
 #include "sensor_msgs/msg/image.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
-#include "config/proto/robot.pb.h"
-#include "config/config_utils.h"
+#include "config/proto/config.pb.h"
 #include <memory>
 #include <sstream>
 #include <iomanip>
+#include "ros2/node_runner.h"
 
 class CameraPublisher : public rclcpp::Node {
 private:
@@ -116,21 +116,7 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-  rclcpp::init(argc, argv);
-  
-  if (argc < 4) {
-    RCLCPP_ERROR(rclcpp::get_logger("camera_publisher"), 
-                 "Usage: camera_publisher <node_name> <node_id> <config_path>");
-    return 1;
-  }
-  
-  std::string node_name = argv[1];
-  int node_id = std::stoi(argv[2]);
-  std::string config_path = argv[3];
-  
-  config::Config config = config::config_util::LoadConfig(config_path);
-  
-  rclcpp::spin(std::make_shared<CameraPublisher>(node_name, node_id, config));
-  rclcpp::shutdown();
-  return 0;
-} 
+  // For test run:
+  // bazel run ros2:camera_publisher -- test_camera 1 config/config_preset/publish_camera.pbtxt
+  return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
+}

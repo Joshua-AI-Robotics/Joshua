@@ -1,14 +1,14 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "robot/perception/factory/perception_factory.h"
-#include "config/proto/robot.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
-#include "config/config_utils.h"
+#include "config/proto/config.pb.h"
 #include <memory>
 #include <string>
 #include <vector>
 #include <utility>
 #include <cmath>
+#include "ros2/node_runner.h"
 
 class EncoderPublisher : public rclcpp::Node {
 private:
@@ -120,21 +120,7 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-  rclcpp::init(argc, argv);
-  
-  if (argc < 4) {
-    RCLCPP_ERROR(rclcpp::get_logger("encoder_publisher"), 
-                 "Usage: encoder_publisher <node_name> <node_id> <config_path>");
-    return 1;
-  }
-  
-  std::string node_name = argv[1];
-  int node_id = std::stoi(argv[2]);
-  std::string config_path = argv[3];
-  
-  config::Config config = config::config_util::LoadConfig(config_path);
-  
-  rclcpp::spin(std::make_shared<EncoderPublisher>(node_name, node_id, config));
-  rclcpp::shutdown();
-  return 0;
+  // For test run:
+  // bazel run ros2:encoder_publisher -- test_encoder 1 config/config_preset/so100_leader_arm_encoder_publish.pbtxt
+  return ros2_utils::RunNode<EncoderPublisher>(argc, argv, "encoder_publisher");
 } 

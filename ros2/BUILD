@@ -43,6 +43,20 @@ package(default_visibility = ["//visibility:public"])
 #
 # ==============================================================================
 
+cc_library(
+    name = "node_runner",
+    hdrs = ["node_runner.h"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "//config:config_utils",
+        "//config/proto:config_cc_proto",
+    ],
+)
+
 ros2_cpp_binary_with_wrapper(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
@@ -55,8 +69,8 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_common_interfaces//:cpp_sensor_msgs",
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
-        "//config:config_utils",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:node_runner",
     ],
 )
 
@@ -71,9 +85,9 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_common_interfaces//:cpp_std_msgs",
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
-        "//config:config_utils",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
+        "//ros2:node_runner",
     ],
 )
 
@@ -88,10 +102,10 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_common_interfaces//:cpp_std_msgs",
         "@ros2_common_interfaces//:cpp_std_srvs",
         "//config/proto:config_cc_proto",
-        "//config:config_utils",
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/action/proto:action_cc_proto",
+        "//ros2:node_runner",
     ],
 )
 
@@ -106,9 +120,9 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_common_interfaces//:cpp_std_msgs",
         "@ros2_common_interfaces//:cpp_sensor_msgs",
         "//config/proto:config_cc_proto",
-        "//config:config_utils",
         "//config/proto:robot_cc_proto",
         "//config/proto:ai_cc_proto",
+        "//ros2:node_runner",
     ],
 )
 
@@ -122,6 +136,6 @@ ros2_cpp_binary_with_wrapper(
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
         "//config/proto:config_cc_proto",
-        "//config:config_utils",
+        "//ros2:node_runner",
     ],
 )

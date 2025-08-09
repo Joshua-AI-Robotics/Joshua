@@ -32,10 +32,10 @@ To run the Node Generator, execute the following command from the workspace root
 bazel run //node_generator:main -- --config="config/config_preset/your_config_file.pbtxt"
 ```
 
-Replace `your_config_file.pbtxt` with the path to your desired robot configuration. For example, to run the `so100_teleoperate_with_follower` configuration, you would use:
+Replace `your_config_file.pbtxt` with the path to your desired robot configuration. For example, to run the `so100_teleoperate` configuration, you would use:
 
 ```bash
-bazel run //node_generator:main -- --config="config/config_preset/so100_teleoperate_with_follower.pbtxt"
+bazel run //node_generator:main -- --config="config/config_preset/so100_teleoperate.pbtxt"
 ```
 
 The application will then:

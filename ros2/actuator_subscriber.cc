@@ -1,13 +1,12 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
-#include "config/proto/robot.pb.h"
-#include "config/config_utils.h"
+#include "config/proto/config.pb.h"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
-#include "robot/action/proto/action.pb.h"
 #include <thread>
 #include <list>
 #include <chrono>
+#include "ros2/node_runner.h"
 
 class ActionSubscriber : public rclcpp::Node {
 private:
@@ -115,21 +114,5 @@ private:
 };
 
 int main(int argc, char * argv[]) {
-  rclcpp::init(argc, argv);
-  
-  if (argc < 4) {
-    RCLCPP_ERROR(rclcpp::get_logger("actuator_subscriber"), 
-                 "Usage: actuator_subscriber <node_name> <node_id> <config_path>");
-    return 1;
-  }
-  
-  std::string node_name = argv[1];
-  int node_id = std::stoi(argv[2]);
-  std::string config_path = argv[3];
-  
-  config::Config config = config::config_util::LoadConfig(config_path);
-  
-  rclcpp::spin(std::make_shared<ActionSubscriber>(node_name, node_id, config));
-  rclcpp::shutdown();
-  return 0;
+  return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber");
 } 

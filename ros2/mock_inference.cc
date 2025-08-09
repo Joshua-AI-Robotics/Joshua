@@ -1,16 +1,15 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
-#include "config/config_utils.h"
-#include "config/proto/robot.pb.h"
-#include "config/proto/ai.pb.h"
+#include "config/proto/config.pb.h"
 #include "sensor_msgs/msg/image.hpp"
-
+ 
 #include <algorithm>
 #include <mutex>
 #include <random>
 #include <string>
 #include <vector>
 #include <numeric>
+#include "ros2/node_runner.h"
 
 class MockInference : public rclcpp::Node {
 public:
@@ -108,21 +107,5 @@ private:
 };
 
 int main(int argc, char * argv[]) {
-  rclcpp::init(argc, argv);
-
-  if (argc < 4) {
-    RCLCPP_ERROR(rclcpp::get_logger("mock_inference"), 
-                 "Usage: mock_inference <node_name> <node_id> <config_path>");
-    return 1;
-  }
-  
-  std::string node_name = argv[1];
-  int node_id = std::stoi(argv[2]);
-  std::string config_path = argv[3];
-  
-  config::Config config = config::config_util::LoadConfig(config_path);
-
-  rclcpp::spin(std::make_shared<MockInference>(node_name, node_id, config));
-  rclcpp::shutdown();
-  return 0;
+  return ros2_utils::RunNode<MockInference>(argc, argv, "mock_inference");
 }

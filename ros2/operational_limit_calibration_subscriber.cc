@@ -1,8 +1,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
-#include "config/config_utils.h"
+#include "config/proto/config.pb.h"
 #include <list>
 #include <cfloat>
+#include "ros2/node_runner.h"
 
 // TODO: Maybe rename to operational_limit_calibration.
 class OperationalLimitCalibrationSubscriber : public rclcpp::Node {
@@ -55,24 +56,6 @@ private:
 
 int main(int argc, char *argv[]) {
     // For test run:
-    // bazel run ros2:encoder_calibration_subscriber -- --node_id="1" --node_name="test_calib" --config_path="config/config_preset/publish_two_so100_encoder_test.pbtxt"
-    rclcpp::init(argc, argv);
-
-    if (argc < 4) {
-        RCLCPP_ERROR(rclcpp::get_logger("operational_limit_calibration_subscriber"), 
-                     "Usage: operational_limit_calibration_subscriber <node_id> <node_name> <config_path>");
-        return 1;
-    }
-
-    std::string node_name = argv[1];
-    int node_id = std::stoi(argv[2]);    
-    std::string config_path = argv[3];
-
-    config::Config config = config::config_util::LoadConfig(config_path);
-
-    auto node = std::make_shared<OperationalLimitCalibrationSubscriber>(node_name, node_id, config);
-    rclcpp::spin(node);
-    
-    rclcpp::shutdown();
-    return 0;
+    // bazel run ros2:operational_limit_calibration_subscriber -- test_encoder 3 config/config_preset/publish_two_so100_encoders.pbtxt
+    return ros2_utils::RunNode<OperationalLimitCalibrationSubscriber>(argc, argv, "operational_limit_calibration_subscriber");
 }

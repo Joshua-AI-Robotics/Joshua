@@ -35,7 +35,7 @@ The architecture is centered around the **Node Generator**. Single configuration
 
 ### Example: Running SO100 Teleoperation with Follower and Lead Arm
 
-This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate_with_follower.pbtxt`](config/config_preset/so100_teleoperate_with_follower.pbtxt).
+This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate.pbtxt`](config/config_preset/so100_teleoperate.pbtxt).
 
 To start the system, run:
 ```bash
