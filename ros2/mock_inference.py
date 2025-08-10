@@ -8,8 +8,6 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Image
 
-from google.protobuf import text_format
-
 # Protobuf generated modules
 from config.proto import config_pb2
 from config.proto import ai_pb2

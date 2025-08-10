@@ -3,6 +3,7 @@ load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 load("//ros2:ros2_wrapper.bzl", "ros2_wrapper_script", "ros2_cpp_binary_with_wrapper", "ros2_py_binary_with_wrapper")
+load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -57,6 +58,19 @@ cc_library(
         "//config:config_utils",
         "//config/proto:config_cc_proto",
     ],
+)
+
+py_library(
+    name = "node_runner_py",
+    srcs = [
+        "node_runner.py",
+    ],
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "//config/proto:config_py_proto",
+        requirement("protobuf"),
+    ],
+    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary_with_wrapper(
@@ -132,7 +146,6 @@ ros2_py_binary_with_wrapper(
     name = "mock_inference_py",
     srcs = [
         "mock_inference.py",
-        "node_runner.py",
     ],
     main = "mock_inference.py",
     deps = [
@@ -140,8 +153,7 @@ ros2_py_binary_with_wrapper(
         "@ros2_common_interfaces//:py_std_msgs",
         "@ros2_common_interfaces//:py_sensor_msgs",
         "//config/proto:config_py_proto",
-        # Python packages
-        requirement("protobuf"),
+        "//ros2:node_runner_py",
     ],
     data = [
         "//config/config_preset:config_presets",
