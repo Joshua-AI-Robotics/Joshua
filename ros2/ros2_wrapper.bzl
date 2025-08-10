@@ -1,6 +1,7 @@
 """Custom Bazel rule to generate wrapper scripts for ROS2 binaries."""
 
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
+load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 
 def _ros2_wrapper_script_impl(ctx):
     """Implementation of the ros2_wrapper_script rule."""
@@ -59,4 +60,24 @@ def ros2_cpp_binary_with_wrapper(name, **kwargs):
     kwargs["data"] = existing_data + [wrapper_name]
     
     # Call the original ros2_cpp_binary rule
-    ros2_cpp_binary(name = name, **kwargs) 
+    ros2_cpp_binary(name = name, **kwargs)
+
+def ros2_py_binary_with_wrapper(name, **kwargs):
+    """ros2_py_binary that also generates a wrapper script in one go."""
+
+    # Ensure ament setup and runfiles are created
+    kwargs["set_up_ament"] = True
+
+    # Generate the wrapper script first
+    wrapper_name = name + "_wrapper"
+    ros2_wrapper_script(
+        name = wrapper_name,
+        binary_name = name,
+    )
+
+    # Add the wrapper script to the data of the main binary
+    existing_data = kwargs.get("data", [])
+    kwargs["data"] = existing_data + [wrapper_name]
+
+    # Call the original ros2_py_binary rule
+    ros2_py_binary(name = name, **kwargs) 

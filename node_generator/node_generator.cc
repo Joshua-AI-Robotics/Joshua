@@ -24,6 +24,7 @@ namespace {
     constexpr auto kInference = "inference";
     constexpr auto kTraining = "training";
     constexpr auto kMockInference = "mock_inference"; // TODO: Remove this.
+    constexpr auto kMockInferencePy = "mock_inference_py";
 
     // Centralized mappings for easy future extension
     // <perception_type, node_type>
