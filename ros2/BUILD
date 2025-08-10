@@ -7,11 +7,14 @@ load("//ros2:ros2_wrapper.bzl", "ros2_wrapper_script", "ros2_cpp_binary_with_wra
 package(default_visibility = ["//visibility:public"])
 
 # ==============================================================================
-# ROS2 Binary Wrapper System
+# ROS2 Binary Wrapper System (C++ and Python)
 # ==============================================================================
 # 
-# This BUILD file uses a custom macro `ros2_cpp_binary_with_wrapper` that 
-# automatically generates both the ROS2 binary and a standalone wrapper script.
+# This BUILD file uses custom macros that automatically generate both the ROS2
+# binary and a standalone wrapper script for execution outside of `bazel run`.
+#
+# - C++:   ros2_cpp_binary_with_wrapper(name = ...)
+# - Python:ros2_py_binary_with_wrapper(name = ...)
 #
 # PURPOSE: Enable running ROS2 nodes standalone without Bazel commands
 # - Wrapper scripts allow deployment/execution without Bazel installation
@@ -19,32 +22,28 @@ package(default_visibility = ["//visibility:public"])
 # - No need for `bazel run` in production environments
 #
 # How it works:
-# 1. ros2_cpp_binary_with_wrapper() creates the normal ROS2 binary with set_up_ament=True
-# 2. It also generates a wrapper script (e.g., action_subscriber_wrapper.sh)
-# 3. The wrapper script is added as a data dependency to ensure it builds automatically
+# 1. The macros create the normal ROS2 targets with set_up_ament=True
+# 2. They also generate a wrapper script (e.g., <name>_wrapper.sh)
+# 3. The wrapper script is added as a data dependency so it builds automatically
 #
 # Benefits:
-# - Single build command: `bazel build ros2:action_subscriber` 
-# - Generates both binary and wrapper script in one go
-# - No need to remember to build wrapper scripts separately
+# - Single build command: `bazel build ros2:<target>` builds both binary and wrapper
 # - Standalone execution without Bazel dependency
+# - Node generator can uniformly launch both C++ and Python nodes via wrappers
 #
-# Usage:
-# 1. Build: `bazel build ros2:action_subscriber`
-# 2. Run standalone: `cd bazel-bin && ./ros2/action_subscriber_wrapper.sh [args]`
-# 3. Or use traditional: `bazel run ros2:action_subscriber [args]` (still works!)
+# Usage examples:
+# - Build: `bazel build ros2:mock_inference_py`
+# - Run standalone: `cd bazel-bin && ./ros2/mock_inference_py_wrapper.sh <node_name> <node_id> <config_path>`
+# - Traditional still works: `bazel run ros2:mock_inference_py -- <args>`
 #
 # The wrapper scripts:
-# - Set up proper environment variables (AMENT_PREFIX_PATH)
-# - Change to the correct working directory for runfiles
-# - Execute the binary with all shared libraries found correctly
+# - Set up AMENT_PREFIX_PATH
+# - Change to the correct working directory for runfiles (when needed)
+# - Execute the underlying binary/launcher with all libraries resolved
 # - Work from the bazel-bin directory without needing `bazel run`
-# - Enable deployment to systems without Bazel installed
+# - Suitable for use by the node generator when spawning processes
 #
 # ==============================================================================
-
-# TODO: Create a node_runner for python nodes.
-# TODO: Create a ros2_wrapper for python nodes.
 
 cc_library(
     name = "node_runner",

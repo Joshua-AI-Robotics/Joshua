@@ -43,11 +43,8 @@ namespace {
         {config::AiMode::MODE_INFERENCE, kInference}, // Not yet implemented.
         {config::AiMode::MODE_TRAINING,  kTraining}, // Not yet implemented.
         {config::AiMode::MODE_MOCK_INFERENCE, kMockInference}, // TODO: Remove this.
+        {config::AiMode::MODE_MOCK_INFERENCE_PY, kMockInferencePy}, // TODO: Remove this.
     };
-
-    // Role sets for topic selection behavior
-    const std::unordered_set<std::string> kPublisherNodeTypes = {kCameraPublisher, kEncoderPublisher};
-    const std::unordered_set<std::string> kSubscriberNodeTypes = {kActuatorSubscriber};
 }
 
 // Static member initialization
@@ -264,26 +261,19 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
 
     if (pid == 0) {
         std::string binary_path = get_binary_path();
-        std::string ament_path = binary_path + "/" + node_type + "_launch_ament_setup";
-        setenv("AMENT_PREFIX_PATH", ament_path.c_str(), 1);
-
-        std::string runfiles_dir = binary_path + "/" + node_type + ".runfiles/_main";
-        if (chdir(runfiles_dir.c_str()) != 0) {
-            LOG(ERROR) << "Failed to change to runfiles directory: " << runfiles_dir;
-            _exit(1);
-        }
-
-        std::string binary_impl = binary_path + "/" + node_type + "_impl";
         std::string node_id_str = std::to_string(node_id);
 
-        execl(binary_impl.c_str(),
-              binary_impl.c_str(),
+        // Always use the wrapper script which handles AMENT setup and runfiles
+        std::string exec_path = binary_path + "/" + node_type + "_wrapper.sh";
+
+        execl(exec_path.c_str(),
+              exec_path.c_str(),
               node_name.c_str(),
               node_id_str.c_str(),
               config_path_.c_str(),
               nullptr);
 
-        LOG(ERROR) << "Failed to execute " << binary_impl << ": " << strerror(errno);
+        LOG(ERROR) << "Failed to execute " << exec_path << ": " << strerror(errno);
         _exit(1);
     } else if (pid > 0) {
         LOG(INFO) << "Launched " << node_name << " with PID: " << pid;

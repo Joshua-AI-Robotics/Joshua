@@ -21,7 +21,7 @@ class MockInferencePy(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
 
-        if config.ai.ai_mode != ai_pb2.MODE_MOCK_INFERENCE:
+        if config.ai.ai_mode != ai_pb2.MODE_MOCK_INFERENCE_PY:
             self.get_logger().error("Mock inference node is only supported in mock inference mode.")
             return
 

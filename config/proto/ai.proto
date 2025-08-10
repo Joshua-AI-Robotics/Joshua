@@ -19,6 +19,7 @@ enum AiMode {
   MODE_TRAINING = 1;
   MODE_INFERENCE = 2;
   MODE_MOCK_INFERENCE = 3; // TODO: Remove this.
+  MODE_MOCK_INFERENCE_PY = 4; // TODO: Remove this.
 }
 
 message ExamplePolicyConfig {
