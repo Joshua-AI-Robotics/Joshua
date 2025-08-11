@@ -17,16 +17,23 @@ extern char** environ;
 namespace node_generator {
 
 namespace {
+    // TODO: Make this configurable.
+    constexpr auto kRepoRoot = "/home/hmoon/Projects/ProjectJoshua";
+    
     constexpr auto kROS2Target = "ros2:";
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
     constexpr auto kActuatorSubscriber = "actuator_subscriber";
+    constexpr auto kTeleoperate = "teleoperate";
     constexpr auto kInference = "inference";
     constexpr auto kTraining = "training";
+    constexpr auto kCalibration = "calibration";
+    constexpr auto kTest = "test";
     constexpr auto kMockInference = "mock_inference"; // TODO: Remove this.
     constexpr auto kMockInferencePy = "mock_inference_py";
 
-    // Centralized mappings for easy future extension
+    // Centralized mappings for easy future extension.
+    
     // <perception_type, node_type>
     const std::unordered_map<robot::perception::PerceptionType, const char*> kPerceptionToNodeType = {
         {robot::perception::PerceptionType::CAMERA, kCameraPublisher},
@@ -38,12 +45,15 @@ namespace {
         {robot::action::ActionType::ACTUATOR, kActuatorSubscriber},
     };
 
-    // <ai_mode, node_type>
-    const std::unordered_map<config::AiMode, const char*> kAiModeToNodeType = {
-        {config::AiMode::MODE_INFERENCE, kInference}, // Not yet implemented.
-        {config::AiMode::MODE_TRAINING,  kTraining}, // Not yet implemented.
-        {config::AiMode::MODE_MOCK_INFERENCE, kMockInference}, // TODO: Remove this.
-        {config::AiMode::MODE_MOCK_INFERENCE_PY, kMockInferencePy}, // TODO: Remove this.
+    // <operation_mode, node_type>
+    const std::unordered_map<config::General::OperationMode, const char*> kOperationModeToNodeType = {
+        {config::General::MODE_TELEOPERATE, kTeleoperate},
+        {config::General::MODE_INFERENCE, kInference}, // Not yet implemented.
+        {config::General::MODE_TRAINING,  kTraining}, // Not yet implemented.
+        {config::General::MODE_CALIBRATION, kCalibration}, // Not yet implemented.
+        {config::General::MODE_TEST, kTest},
+        {config::General::MODE_MOCK_INFERENCE, kMockInference}, // TODO: Remove this.
+        {config::General::MODE_MOCK_INFERENCE_PY, kMockInferencePy}, // TODO: Remove this.
     };
 }
 
@@ -52,7 +62,7 @@ NodeGenerator* NodeGenerator::instance_ = nullptr;
 
 NodeGenerator::NodeGenerator(const std::string& config_path) 
     : config_path_(config_path), 
-      repo_root_("/home/hmoon/Projects/ProjectJoshua"),
+      repo_root_(kRepoRoot),
       shutdown_requested_(false) {
     instance_ = this;
 }
@@ -77,7 +87,7 @@ bool NodeGenerator::Initialize() {
     auto robot_config = config_.robot();
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
-    LOG(INFO) << "AI Mode: " << config_.ai().ai_mode();
+    LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
 
     // Change to repository root
     if (chdir(repo_root_.c_str()) != 0) {
@@ -118,8 +128,8 @@ void NodeGenerator::IdentifyNodeTypes() {
 
     // AI -> add node type
     const auto ai_config = config_.ai();
-    auto it = kAiModeToNodeType.find(ai_config.ai_mode());
-    if (it != kAiModeToNodeType.end()) {
+    auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
+    if (it != kOperationModeToNodeType.end()) {
         identified_nodes_[ai_config.node_id()] = it->second;
     }
 }

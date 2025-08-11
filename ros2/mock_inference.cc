@@ -15,7 +15,7 @@ class MockInference : public rclcpp::Node {
 public:
   MockInference(const std::string& node_name, const int node_id, const config::Config& config)
   : Node(node_name) {
-    if (config.ai().ai_mode() != config::AiMode::MODE_MOCK_INFERENCE) {
+    if (config.general().operation_mode() != config::General::MODE_MOCK_INFERENCE) {
       RCLCPP_ERROR(this->get_logger(), "Mock inference node is only supported in mock inference mode.");
       return;
     }

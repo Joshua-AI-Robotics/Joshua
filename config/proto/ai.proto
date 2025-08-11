@@ -3,23 +3,14 @@ syntax = "proto3";
 package config;
 
 message Ai {
-  AiMode ai_mode = 1;
-  string policy_name = 2;
-  string pretrained_model_path = 3;
-  uint32 node_id = 4;
-  repeated string subscribe_topics = 5;
-  repeated string publish_topics = 6;
+  string policy_name = 1;
+  string pretrained_model_path = 2;
+  uint32 node_id = 3;
+  repeated string subscribe_topics = 4;
+  repeated string publish_topics = 5;
   oneof policy_config {
-    ExamplePolicyConfig example_policy_config = 7;
+    ExamplePolicyConfig example_policy_config = 6;
   }
-}
-
-enum AiMode {
-  MODE_INVALID = 0;
-  MODE_TRAINING = 1;
-  MODE_INFERENCE = 2;
-  MODE_MOCK_INFERENCE = 3; // TODO: Remove this.
-  MODE_MOCK_INFERENCE_PY = 4; // TODO: Remove this.
 }
 
 message ExamplePolicyConfig {

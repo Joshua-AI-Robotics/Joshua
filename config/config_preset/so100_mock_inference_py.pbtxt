@@ -1,5 +1,5 @@
 general{
-    operation_mode: MODE_INFERENCE
+    operation_mode: MODE_MOCK_INFERENCE_PY
   }
   robot {
     name: "so100"
@@ -194,7 +194,6 @@ general{
   }
   
   ai {
-    ai_mode: MODE_MOCK_INFERENCE_PY
     policy_name: "example_policy"
     node_id: 3
     publish_topics: "mock_action_1" # For STS3215_SERVO_1
