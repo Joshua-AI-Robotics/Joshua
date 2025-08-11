@@ -88,6 +88,10 @@ std::unique_ptr<ConfigTab::MessageNode> ConfigTab::buildMessageNode(const Descri
     node->form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     node->form->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
+    // Reserve to keep pointers stable for repeated field add-button lambdas
+    node->repeatedMessageFields.reserve(descriptor->field_count());
+    node->repeatedPrimitiveFields.reserve(descriptor->field_count());
+
     // Scalars, enums, messages, repeated
     for (int i = 0; i < descriptor->field_count(); ++i) {
         const FieldDescriptor* field = descriptor->field(i);
@@ -119,6 +123,35 @@ std::unique_ptr<ConfigTab::MessageNode> ConfigTab::buildMessageNode(const Descri
                 auto itemNode = buildMessageNode(field->message_type(), QString::fromStdString(field->message_type()->name()));
                 repPtr->itemsLayout->addWidget(itemNode->group);
                 repPtr->items.emplace_back(std::move(itemNode));
+            });
+
+            v->addSpacing(6);
+            node->form->addRow(container);
+            continue;
+        }
+
+        // New: repeated primitive fields
+        if (field->is_repeated() && field->cpp_type() != FieldDescriptor::CPPTYPE_MESSAGE) {
+            auto repPrim = buildRepeatedPrimitiveField(field);
+
+            QWidget* container = new QWidget(node->group);
+            auto* v = new QVBoxLayout(container);
+
+            auto* header = new QHBoxLayout();
+            header->addWidget(new QLabel(prettyLabelForField(field)));
+            header->addStretch();
+            repPrim.addButton = new QPushButton("Add", container);
+            header->addWidget(repPrim.addButton);
+            v->addLayout(header);
+
+            repPrim.container = container;
+            repPrim.itemsLayout = new QVBoxLayout();
+            v->addLayout(repPrim.itemsLayout);
+
+            node->repeatedPrimitiveFields.emplace_back(std::move(repPrim));
+            RepeatedPrimitiveFieldNode* rpPtr = &node->repeatedPrimitiveFields.back();
+            QObject::connect(rpPtr->addButton, &QPushButton::clicked, container, [this, rpPtr]() {
+                addRepeatedPrimitiveRow(rpPtr);
             });
 
             v->addSpacing(6);
@@ -230,6 +263,104 @@ QWidget* ConfigTab::buildScalarEditor(const FieldDescriptor* field) {
     }
 }
 
+QWidget* ConfigTab::buildPrimitiveEditor(const FieldDescriptor* field) {
+    // Editor used inside repeated primitive rows
+    switch (field->type()) {
+        case FieldDescriptor::TYPE_STRING: {
+            auto* edit = new QLineEdit(this);
+            return edit;
+        }
+        case FieldDescriptor::TYPE_BOOL: {
+            auto* box = new QCheckBox(this);
+            return box;
+        }
+        case FieldDescriptor::TYPE_INT32:
+        case FieldDescriptor::TYPE_UINT32: {
+            auto* spin = new QSpinBox(this);
+            spin->setMinimum(std::numeric_limits<int>::min());
+            spin->setMaximum(std::numeric_limits<int>::max());
+            return spin;
+        }
+        case FieldDescriptor::TYPE_INT64:
+        case FieldDescriptor::TYPE_UINT64: {
+            auto* edit = new QLineEdit(this);
+            edit->setPlaceholderText("64-bit integer");
+            return edit;
+        }
+        case FieldDescriptor::TYPE_FLOAT:
+        case FieldDescriptor::TYPE_DOUBLE: {
+            auto* spin = new QDoubleSpinBox(this);
+            spin->setMinimum(-1e12);
+            spin->setMaximum(1e12);
+            spin->setDecimals(6);
+            return spin;
+        }
+        default:
+            return new QWidget(this);
+    }
+}
+
+void ConfigTab::addRepeatedPrimitiveRow(RepeatedPrimitiveFieldNode* node, const QVariant& initial) {
+    QWidget* row = new QWidget(node->container);
+    auto* h = new QHBoxLayout(row);
+    h->setContentsMargins(0,0,0,0);
+
+    QWidget* editor = buildPrimitiveEditor(node->field);
+    // Initialize with value if provided
+    if (initial.isValid()) {
+        switch (node->field->type()) {
+            case FieldDescriptor::TYPE_STRING:
+            case FieldDescriptor::TYPE_INT64:
+            case FieldDescriptor::TYPE_UINT64: {
+                if (auto* edit = qobject_cast<QLineEdit*>(editor)) {
+                    edit->setText(initial.toString());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_BOOL: {
+                if (auto* box = qobject_cast<QCheckBox*>(editor)) {
+                    box->setChecked(initial.toBool());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_INT32:
+            case FieldDescriptor::TYPE_UINT32: {
+                if (auto* spin = qobject_cast<QSpinBox*>(editor)) {
+                    spin->setValue(initial.toInt());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_FLOAT:
+            case FieldDescriptor::TYPE_DOUBLE: {
+                if (auto* dspin = qobject_cast<QDoubleSpinBox*>(editor)) {
+                    dspin->setValue(initial.toDouble());
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    QPushButton* removeBtn = new QPushButton("Remove", row);
+
+    h->addWidget(editor, 1);
+    h->addWidget(removeBtn, 0);
+
+    node->items.push_back({row, editor});
+    node->itemsLayout->addWidget(row);
+
+    QObject::connect(removeBtn, &QPushButton::clicked, row, [node, row]() {
+        // Find and remove this row
+        auto it = std::find_if(node->items.begin(), node->items.end(), [row](const RepeatedPrimitiveFieldNode::RowItem& it){ return it.rowWidget == row; });
+        if (it != node->items.end()) {
+            node->itemsLayout->removeWidget(it->rowWidget);
+            it->rowWidget->deleteLater();
+            node->items.erase(it);
+        }
+    });
+}
+
 QComboBox* ConfigTab::buildEnumEditor(const EnumDescriptor* enumDesc) {
     auto* combo = new QComboBox(this);
     combo->addItem("<unset>", -1);
@@ -247,6 +378,12 @@ std::unique_ptr<ConfigTab::MessageNode> ConfigTab::buildSingleMessageField(const
 
 ConfigTab::RepeatedMessageFieldNode ConfigTab::buildRepeatedMessageField(const FieldDescriptor* field) {
     RepeatedMessageFieldNode node;
+    node.field = field;
+    return node;
+}
+
+ConfigTab::RepeatedPrimitiveFieldNode ConfigTab::buildRepeatedPrimitiveField(const FieldDescriptor* field) {
+    RepeatedPrimitiveFieldNode node;
     node.field = field;
     return node;
 }
@@ -342,6 +479,11 @@ void ConfigTab::writeMessageFromNode(const MessageNode& node, Message* message) 
     // Repeated messages
     for (const auto& r : node.repeatedMessageFields) {
         writeRepeatedMessageField(r, message);
+    }
+
+    // Repeated primitives
+    for (const auto& rp : node.repeatedPrimitiveFields) {
+        writeRepeatedPrimitiveField(rp, message);
     }
 
     // Oneofs
@@ -440,6 +582,70 @@ void ConfigTab::writeRepeatedMessageField(const RepeatedMessageFieldNode& node, 
     }
 }
 
+void ConfigTab::writeRepeatedPrimitiveField(const RepeatedPrimitiveFieldNode& node, Message* message) {
+    const Reflection* refl = message->GetReflection();
+    const FieldDescriptor* field = node.field;
+
+    for (const auto& item : node.items) {
+        switch (field->type()) {
+            case FieldDescriptor::TYPE_STRING: {
+                if (auto* edit = qobject_cast<QLineEdit*>(item.editorWidget)) {
+                    refl->AddString(message, field, edit->text().toStdString());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_BOOL: {
+                if (auto* box = qobject_cast<QCheckBox*>(item.editorWidget)) {
+                    refl->AddBool(message, field, box->isChecked());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_INT32: {
+                if (auto* spin = qobject_cast<QSpinBox*>(item.editorWidget)) {
+                    refl->AddInt32(message, field, spin->value());
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_UINT32: {
+                if (auto* spin = qobject_cast<QSpinBox*>(item.editorWidget)) {
+                    refl->AddUInt32(message, field, static_cast<uint32_t>(spin->value()));
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_INT64: {
+                if (auto* edit = qobject_cast<QLineEdit*>(item.editorWidget)) {
+                    bool ok = false;
+                    qint64 v = static_cast<qint64>(edit->text().toLongLong(&ok));
+                    if (ok) refl->AddInt64(message, field, v);
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_UINT64: {
+                if (auto* edit = qobject_cast<QLineEdit*>(item.editorWidget)) {
+                    bool ok = false;
+                    quint64 v = edit->text().toULongLong(&ok);
+                    if (ok) refl->AddUInt64(message, field, v);
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_FLOAT: {
+                if (auto* dspin = qobject_cast<QDoubleSpinBox*>(item.editorWidget)) {
+                    refl->AddFloat(message, field, static_cast<float>(dspin->value()));
+                }
+                break;
+            }
+            case FieldDescriptor::TYPE_DOUBLE: {
+                if (auto* dspin = qobject_cast<QDoubleSpinBox*>(item.editorWidget)) {
+                    refl->AddDouble(message, field, dspin->value());
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
 void ConfigTab::writeOneofField(const OneofNode& node, Message* message) {
     const Reflection* refl = message->GetReflection();
     int index = node.selector->currentIndex();
@@ -468,6 +674,10 @@ void ConfigTab::readMessageIntoNode(const Message& message, MessageNode* node) {
     // Repeated messages
     for (auto& r : node->repeatedMessageFields) {
         readRepeatedMessageFieldIntoChildren(message, &r);
+    }
+    // Repeated primitives
+    for (auto& rp : node->repeatedPrimitiveFields) {
+        readRepeatedPrimitiveFieldIntoEditors(message, &rp);
     }
     // Oneofs
     for (auto& o : node->oneofs) {
@@ -581,6 +791,37 @@ void ConfigTab::readRepeatedMessageFieldIntoChildren(const Message& message, Rep
     }
 }
 
+void ConfigTab::readRepeatedPrimitiveFieldIntoEditors(const Message& message, RepeatedPrimitiveFieldNode* node) {
+    const Reflection* refl = message.GetReflection();
+    const FieldDescriptor* field = node->field;
+
+    // Clear current rows
+    for (auto& it : node->items) {
+        if (it.rowWidget) {
+            node->itemsLayout->removeWidget(it.rowWidget);
+            it.rowWidget->deleteLater();
+        }
+    }
+    node->items.clear();
+
+    int count = refl->FieldSize(message, field);
+    for (int i = 0; i < count; ++i) {
+        QVariant initial;
+        switch (field->type()) {
+            case FieldDescriptor::TYPE_STRING: initial = QString::fromStdString(refl->GetRepeatedString(message, field, i)); break;
+            case FieldDescriptor::TYPE_BOOL: initial = refl->GetRepeatedBool(message, field, i); break;
+            case FieldDescriptor::TYPE_INT32: initial = refl->GetRepeatedInt32(message, field, i); break;
+            case FieldDescriptor::TYPE_UINT32: initial = static_cast<int>(refl->GetRepeatedUInt32(message, field, i)); break;
+            case FieldDescriptor::TYPE_INT64: initial = QString::number(refl->GetRepeatedInt64(message, field, i)); break;
+            case FieldDescriptor::TYPE_UINT64: initial = QString::number(refl->GetRepeatedUInt64(message, field, i)); break;
+            case FieldDescriptor::TYPE_FLOAT: initial = static_cast<double>(refl->GetRepeatedFloat(message, field, i)); break;
+            case FieldDescriptor::TYPE_DOUBLE: initial = refl->GetRepeatedDouble(message, field, i); break;
+            default: break;
+        }
+        addRepeatedPrimitiveRow(node, initial);
+    }
+}
+
 void ConfigTab::readOneofIntoNode(const Message& message, OneofNode* node) {
     const Reflection* refl = message.GetReflection();
     const OneofDescriptor* oneof = node->oneof;
@@ -618,6 +859,17 @@ void ConfigTab::clearMessageNode(MessageNode* node) {
             }
         }
         r.items.clear();
+    }
+
+    // Clear repeated primitive rows
+    for (auto& rp : node->repeatedPrimitiveFields) {
+        for (auto& it : rp.items) {
+            if (it.rowWidget) {
+                rp.itemsLayout->removeWidget(it.rowWidget);
+                it.rowWidget->deleteLater();
+            }
+        }
+        rp.items.clear();
     }
 
     // Reset oneofs

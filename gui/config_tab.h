@@ -16,6 +16,7 @@
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QStackedLayout>
 #include <QtCore/QPointer>
+#include <QtCore/QVariant>
 #include <memory>
 #include <vector>
 #include <limits>
@@ -71,6 +72,19 @@ private:
         std::vector<std::unique_ptr<MessageNode>> items;
     };
 
+    // New: Support repeated primitive fields (e.g. repeated string)
+    struct RepeatedPrimitiveFieldNode {
+        struct RowItem {
+            QWidget* rowWidget = nullptr;    // container holding editor + remove button
+            QWidget* editorWidget = nullptr; // the actual editor for the primitive
+        };
+        const google::protobuf::FieldDescriptor* field = nullptr;
+        QWidget* container = nullptr;
+        QVBoxLayout* itemsLayout = nullptr;
+        QPushButton* addButton = nullptr;
+        std::vector<RowItem> items;
+    };
+
     struct OneofNode {
         const google::protobuf::OneofDescriptor* oneof = nullptr;
         QComboBox* selector = nullptr; // index 0 == none
@@ -89,6 +103,8 @@ private:
         std::vector<EnumFieldNode> enumFields;
         std::vector<MessageFieldNode> messageFields;
         std::vector<RepeatedMessageFieldNode> repeatedMessageFields;
+        // New: store repeated primitive fields per message
+        std::vector<RepeatedPrimitiveFieldNode> repeatedPrimitiveFields;
         std::vector<OneofNode> oneofs;
     };
 
@@ -99,6 +115,11 @@ private:
     QComboBox* buildEnumEditor(const google::protobuf::EnumDescriptor* enumDesc);
     std::unique_ptr<MessageNode> buildSingleMessageField(const google::protobuf::FieldDescriptor* field);
     RepeatedMessageFieldNode buildRepeatedMessageField(const google::protobuf::FieldDescriptor* field);
+    // New helpers for repeated primitives
+    RepeatedPrimitiveFieldNode buildRepeatedPrimitiveField(const google::protobuf::FieldDescriptor* field);
+    QWidget* buildPrimitiveEditor(const google::protobuf::FieldDescriptor* field);
+    void addRepeatedPrimitiveRow(RepeatedPrimitiveFieldNode* node, const QVariant& initial = QVariant());
+
     OneofNode buildOneofNode(const google::protobuf::OneofDescriptor* oneof);
 
     // Serialization (UI -> proto)
@@ -107,6 +128,8 @@ private:
     void writeEnumField(const EnumFieldNode& node, google::protobuf::Message* message);
     void writeMessageField(const MessageFieldNode& node, google::protobuf::Message* message);
     void writeRepeatedMessageField(const RepeatedMessageFieldNode& node, google::protobuf::Message* message);
+    // New: write repeated primitive fields
+    void writeRepeatedPrimitiveField(const RepeatedPrimitiveFieldNode& node, google::protobuf::Message* message);
     void writeOneofField(const OneofNode& node, google::protobuf::Message* message);
 
     // Deserialization (proto -> UI)
@@ -115,6 +138,8 @@ private:
     void readEnumFieldIntoEditor(const google::protobuf::Message& message, EnumFieldNode* node);
     void readMessageFieldIntoChild(const google::protobuf::Message& message, MessageFieldNode* node);
     void readRepeatedMessageFieldIntoChildren(const google::protobuf::Message& message, RepeatedMessageFieldNode* node);
+    // New: read repeated primitive fields
+    void readRepeatedPrimitiveFieldIntoEditors(const google::protobuf::Message& message, RepeatedPrimitiveFieldNode* node);
     void readOneofIntoNode(const google::protobuf::Message& message, OneofNode* node);
 
     // Clearing helpers (reset UI)
