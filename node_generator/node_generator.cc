@@ -19,11 +19,15 @@ namespace node_generator {
 namespace {
     // TODO: Make this configurable.
     constexpr auto kRepoRoot = "/home/hmoon/Projects/ProjectJoshua";
-    
     constexpr auto kROS2Target = "ros2:";
+
+    // Node types.
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
     constexpr auto kActuatorSubscriber = "actuator_subscriber";
+    constexpr auto kOperationalLimitCalibrationSubscriber = "operational_limit_calibration_subscriber";
+
+    // Operation modes.
     constexpr auto kTeleoperate = "teleoperate";
     constexpr auto kInference = "inference";
     constexpr auto kTraining = "training";
@@ -31,7 +35,7 @@ namespace {
     constexpr auto kTest = "test";
     constexpr auto kMockInference = "mock_inference"; // TODO: Remove this.
     constexpr auto kMockInferencePy = "mock_inference_py";
-
+    
     // Centralized mappings for easy future extension.
     
     // <perception_type, node_type>
@@ -50,11 +54,17 @@ namespace {
         {config::General::MODE_TELEOPERATE, kTeleoperate},
         {config::General::MODE_INFERENCE, kInference}, // Not yet implemented.
         {config::General::MODE_TRAINING,  kTraining}, // Not yet implemented.
-        {config::General::MODE_CALIBRATION, kCalibration}, // Not yet implemented.
+        {config::General::MODE_CALIBRATION, kCalibration},
         {config::General::MODE_TEST, kTest},
         {config::General::MODE_MOCK_INFERENCE, kMockInference}, // TODO: Remove this.
         {config::General::MODE_MOCK_INFERENCE_PY, kMockInferencePy}, // TODO: Remove this.
     };
+
+    // <calibration_mode, node_type>
+    const std::unordered_map<config::CalibrationMode, const char*> kCalibrationModeToNodeType = {
+        {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibrationSubscriber},
+    };
+    
 }
 
 // Static member initialization
@@ -106,19 +116,8 @@ bool NodeGenerator::Initialize() {
 }
 
 void NodeGenerator::IdentifyNodeTypes() {
-    auto robot_config = config_.robot();
-    
-    // Perceptions -> add node type(s)
-    for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
-        const uint32_t node_id = single_perception.node_id();
-        auto it = kPerceptionToNodeType.find(single_perception.perception_type());
-        if (it != kPerceptionToNodeType.end()) {
-            identified_nodes_[node_id] = it->second;
-        }
-    }
-    
     // Actions -> add node type(s)
-    for (const auto& single_action : robot_config.actions().single_actions()) {
+    for (const auto& single_action : config_.robot().actions().single_actions()) {
         const uint32_t node_id = single_action.node_id();
         auto it = kActionToNodeType.find(single_action.action_type());
         if (it != kActionToNodeType.end()) {
@@ -126,11 +125,29 @@ void NodeGenerator::IdentifyNodeTypes() {
         }
     }
 
+    // Perceptions -> add node type(s)
+    for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
+        const uint32_t node_id = single_perception.node_id();
+        auto it = kPerceptionToNodeType.find(single_perception.perception_type());
+        if (it != kPerceptionToNodeType.end()) {
+            identified_nodes_[node_id] = it->second;
+        }
+    }    
+
     // AI -> add node type
-    const auto ai_config = config_.ai();
-    auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
-    if (it != kOperationModeToNodeType.end()) {
-        identified_nodes_[ai_config.node_id()] = it->second;
+    if(config_.has_ai()) {
+        auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
+        if (it != kOperationModeToNodeType.end()) {
+            identified_nodes_[config_.ai().node_id()] = it->second;
+        }
+    }
+
+    // Calibration -> add node type
+    if(config_.has_calibration()) {
+        auto it = kCalibrationModeToNodeType.find(config_.calibration().calibration_mode());
+        if (it != kCalibrationModeToNodeType.end()) {
+            identified_nodes_[config_.calibration().node_id()] = it->second;
+        }
     }
 }
 

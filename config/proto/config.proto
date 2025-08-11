@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "config/proto/robot.proto";
 import "config/proto/ai.proto";
+import "config/proto/calibration.proto";
 
 package config;
 
@@ -23,4 +24,5 @@ message Config {
     General general = 1;
     config.Robot robot = 2;
     config.Ai ai = 3;
+    config.Calibration calibration = 4;
 }

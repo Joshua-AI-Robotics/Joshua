@@ -9,6 +9,7 @@ proto_library(
     deps = [
         ":robot_proto",
         ":ai_proto",
+        ":calibration_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -26,6 +27,12 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "calibration_proto",
+    srcs = ["calibration.proto"],
     visibility = ["//visibility:public"],
 )
 
@@ -51,6 +58,12 @@ cc_proto_library(
 cc_proto_library(
     name = "ai_cc_proto",
     deps = [":ai_proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "calibration_cc_proto",
+    deps = [":calibration_proto"],
     visibility = ["//visibility:public"],
 )
 

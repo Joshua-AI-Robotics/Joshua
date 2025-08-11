@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package config;
+
+enum CalibrationMode {
+    CALIBRATION_MODE_INVALID = 0;
+    CALIBRATION_MODE_OPERATIONAL_LIMIT = 1;
+}
+
+message Calibration {
+    uint64 node_id = 1;
+    CalibrationMode calibration_mode = 2;
+    repeated string publish_topics = 3;
+    repeated string subscribe_topics = 4;
+    // TODO: Add calibration config.
+}
