@@ -356,18 +356,36 @@ void NodeGenerator::MonitorChildProcesses() {
 void NodeGenerator::Shutdown() {
     LOG(INFO) << "Shutting down all nodes...";
     
-    // Terminate all child processes
+    // Ask all child processes to shutdown gracefully (SIGINT preferred by ROS2)
     for (const auto& node : launched_nodes_) {
-        LOG(INFO) << "Terminating " << node.node_name << " with PID: " << node.pid;
-        kill(node.pid, SIGTERM);
+        LOG(INFO) << "Requesting shutdown (SIGINT) for " << node.node_name << " PID: " << node.pid;
+        kill(node.pid, SIGINT);
     }
     
-    // Wait for processes to terminate gracefully
+    // Wait up to 5 seconds total for graceful shutdown, then force kill
+    const int max_wait_ms = 5000;
+    const int poll_interval_ms = 100;
+    int waited_ms = 0;
+    while (waited_ms < max_wait_ms) {
+        bool any_running = false;
+        for (const auto& node : launched_nodes_) {
+            int status;
+            pid_t res = waitpid(node.pid, &status, WNOHANG);
+            if (res == 0) {
+                any_running = true;
+            }
+        }
+        if (!any_running) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
+        waited_ms += poll_interval_ms;
+    }
+
+    // Force kill any remaining
     for (const auto& node : launched_nodes_) {
         int status;
-        if (waitpid(node.pid, &status, WNOHANG) == 0) {
-            // Process still running, force kill after timeout
-            sleep(2);
+        pid_t res = waitpid(node.pid, &status, WNOHANG);
+        if (res == 0) {
+            LOG(WARNING) << node.node_name << " did not exit in time. Sending SIGKILL.";
             kill(node.pid, SIGKILL);
             waitpid(node.pid, &status, 0);
         }

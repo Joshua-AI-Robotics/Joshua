@@ -261,7 +261,8 @@ void Sts3215Driver::GracefulShutdown(){
     try{
         move_speed_ = 1000;
         SetIdlePosition();
-        sleep(2);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        LOG(INFO) << "Setting torque to 0 (servo " << static_cast<int>(servo_id_) << ")";
         SetTorque(0);
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();

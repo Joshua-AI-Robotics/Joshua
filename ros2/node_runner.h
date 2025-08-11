@@ -6,8 +6,16 @@
 
 #include <memory>
 #include <string>
+#include <csignal>
 
 namespace ros2_utils {
+
+namespace detail {
+inline void sigterm_handler(int) noexcept {
+  // Translate SIGTERM into a clean ROS2 shutdown so destructors run
+  rclcpp::shutdown();
+}
+}
 
 // Runs a standard ROS2 node main:
 // argv: <binary> <node_name> <node_id> <config_path>
@@ -16,6 +24,9 @@ namespace ros2_utils {
  template <typename NodeT>
  int RunNode(int argc, char* argv[], const char* logger_name) {
    rclcpp::init(argc, argv);
+
+   // Ensure external termination results in graceful shutdown
+   std::signal(SIGTERM, detail::sigterm_handler);
 
    if (argc < 4) {
      RCLCPP_ERROR(rclcpp::get_logger(logger_name),
@@ -36,4 +47,4 @@ namespace ros2_utils {
 
 }  // namespace ros2_utils
 
-#endif  // ROS2_NODE_RUNNER_H_ 
+#endif  // ROS2_NODE_RUNNER_H_
