@@ -32,7 +32,7 @@ public:
     bool BuildRequiredTargets(std::atomic_bool& stop_flag);
     bool LaunchAllNodes();
     void MonitorNodes();
-    void Shutdown();
+    void Shutdown(const int max_wait_ms = 5000);
     void GetLaunchedNodes(std::vector<NodeInfo>& nodes);
 
     size_t GetLaunchedNodeCount() const { return launched_nodes_.size(); }

@@ -293,6 +293,11 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
         // Always use the wrapper script which handles AMENT setup and runfiles
         std::string exec_path = binary_path + "/" + node_type + "_wrapper.sh";
 
+        // Put child in its own process group so we can signal the whole group (including grandchildren)
+        if (setpgid(0, 0) != 0) {
+            LOG(WARNING) << "Failed to set process group for " << node_name << ": " << strerror(errno) << ". This is not critical.";
+        }
+
         execl(exec_path.c_str(),
               exec_path.c_str(),
               node_name.c_str(),
@@ -353,41 +358,69 @@ void NodeGenerator::MonitorChildProcesses() {
     }
 }
 
-void NodeGenerator::Shutdown() {
+void NodeGenerator::Shutdown(const int max_wait_ms) {
     LOG(INFO) << "Shutting down all nodes...";
     
     // Ask all child processes to shutdown gracefully (SIGINT preferred by ROS2)
     for (const auto& node : launched_nodes_) {
+        if (node.pid <= 0) continue;
         LOG(INFO) << "Requesting shutdown (SIGINT) for " << node.node_name << " PID: " << node.pid;
-        kill(node.pid, SIGINT);
+        // Signal the entire process group (negative PID)
+        kill(-node.pid, SIGINT);
     }
     
-    // Wait up to 5 seconds total for graceful shutdown, then force kill
-    const int max_wait_ms = 5000;
+    // Split the total wait across SIGINT and SIGTERM phases
     const int poll_interval_ms = 100;
-    int waited_ms = 0;
-    while (waited_ms < max_wait_ms) {
-        bool any_running = false;
-        for (const auto& node : launched_nodes_) {
-            int status;
-            pid_t res = waitpid(node.pid, &status, WNOHANG);
-            if (res == 0) {
-                any_running = true;
+    const int int_wait_ms = static_cast<int>(max_wait_ms * 0.6);
+    const int term_wait_ms = max_wait_ms - int_wait_ms;
+
+    auto wait_until = [&](int timeout_ms) {
+        int waited_ms = 0;
+        while (waited_ms < timeout_ms) {
+            bool any_running = false;
+            for (const auto& node : launched_nodes_) {
+                if (node.pid <= 0) continue;
+                int status;
+                pid_t res = waitpid(node.pid, &status, WNOHANG);
+                if (res == 0) {
+                    any_running = true;
+                }
+            }
+            if (!any_running) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
+            waited_ms += poll_interval_ms;
+        }
+        return false;
+    };
+
+    // Wait for SIGINT grace
+    (void)wait_until(int_wait_ms);
+
+    // Send SIGTERM to any remaining
+    for (const auto& node : launched_nodes_) {
+        int status;
+        pid_t res = waitpid(node.pid, &status, WNOHANG);
+        if (res == 0) {
+            if (node.pid > 0) {
+                LOG(WARNING) << node.node_name << " still running. Sending SIGTERM to group.";
+                kill(-node.pid, SIGTERM);
             }
         }
-        if (!any_running) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
-        waited_ms += poll_interval_ms;
     }
+
+    // Wait for SIGTERM grace
+    (void)wait_until(term_wait_ms);
 
     // Force kill any remaining
     for (const auto& node : launched_nodes_) {
         int status;
         pid_t res = waitpid(node.pid, &status, WNOHANG);
         if (res == 0) {
-            LOG(WARNING) << node.node_name << " did not exit in time. Sending SIGKILL.";
-            kill(node.pid, SIGKILL);
-            waitpid(node.pid, &status, 0);
+            if (node.pid > 0) {
+                LOG(WARNING) << node.node_name << " did not exit in time. Sending SIGKILL to group.";
+                kill(-node.pid, SIGKILL);
+                waitpid(node.pid, &status, 0);
+            }
         }
     }
     
