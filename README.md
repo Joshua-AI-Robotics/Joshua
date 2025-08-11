@@ -1,24 +1,15 @@
 # Project JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
 ## *A Modular Framework for Robotic AI Systems*
 
-Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** hardware parts and AI system using ROS2. **A single configuration file** automatically instantiates all hardware (action and perception) interfaces, AI model policies, and parameters for training and inference. This allows users to effortlessly run **ANY** robots with user's selected hardware, configuration, and AI policy.
-
-This system utilized the ROS2 and protobuf. A configuration file is a single source of truth that contains all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_mock_inference.pbtxt](`config/config_preset/so100_mock_inference.pbtxt`) defines your entire robot and AI system. Based on this single configruation file, ROS2 nodes will be instantiated and executes the nodes to make a robot operational.
-
-
-<p align="center">
-  <strong>Joshua Control Panel</strong><br>
-  <img src="assets/images/joshua_control_panel.png" alt="Control Panel" width="800"/>
-</p>
-
+Project Joshua is a user‑friendly, modular framework that turns a single configuration file into a running robot system using ROS2 and Protocol Buffers. A single text config defines your robot hardware (actions and perceptions), AI policy, and operation mode. The system then builds and runs the corresponding ROS2 nodes and lets you monitor/control them from a Qt6 GUI.
 
 ## Core Concepts
+![Project Joshua Core Concept](assets/images/project_joshua_diagram_napkin.png)
 
-![Project Joshua Core Concept](assets/images/project_joshua_diagram.png)
+Project Joshua uses ROS2 and Protocol Buffers. A single configuration file is the source of truth for your robot: it declares actions (e.g., number of actuators, actuator type), perceptions (e.g., cameras, encoders), AI policy, and operation mode. For example, a file like [`config/config_preset/so100_mock_inference.pbtxt`](config/config_preset/so100_mock_inference.pbtxt) defines the entire robot and AI system. From this one file, the system instantiates the required ROS2 nodes and runs them to make the robot operational.
 
-The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all hardware(e.g. action, perception) and AI(e.g. train, inference) interfaces as ROS2 nodes.
+The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load the configuration, build required targets, launch the selected preset, and monitor running nodes and their publish/subscribe topics—all from one place.
 
-Joshua Control Panel is the GUI that allows to create configuration file, run the ROS2 nodes based on preset, and monitor the operation. 
 
 ## Quick Start Example
 
@@ -46,12 +37,14 @@ Joshua Control Panel is the GUI that allows to create configuration file, run th
 
 This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate.pbtxt`](config/config_preset/so100_teleoperate.pbtxt).
 
+**Please make sure to calibrate the operational limits for your servo motors.**
+
 To start the system, run:
 ```bash
-bazel run node_generator:main
+bazel run joshua_control_panel:joshua_control_panel
 ```
 
-**Please make sure to calibrate the operational limits for your servo motors.**
+TODO: Add calibration instruction here.
 
 ## Key Features & Benefits:
 
