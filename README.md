@@ -1,9 +1,9 @@
 # Project JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
 ## *A Modular Framework for Robotic AI Systems*
 
-Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** robots to AI system using ROS2. **A single configuration file** automatically instantiates all action and perception interfaces, AI model policies, and parameters. This allows users to effortlessly run **ANY** robots with your selected hardware, configuration, and AI policy.
+Project Joshua is an user-friendly, and modular framework designed to streamline the development and deployment of **ANY** hardware parts and AI system using ROS2. **A single configuration file** automatically instantiates all hardware (action and perception) interfaces, AI model policies, and parameters for training and inference. This allows users to effortlessly run **ANY** robots with user's selected hardware, configuration, and AI policy.
 
-This system utilized the ROS2 and protobuf. A configuration file should contain all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`) defines your entire robot and AI system. Based on this single file, ROS2 nodes will be instantiated and executes the nodes to make a robot operational based on the configuration.
+This system utilized the ROS2 and protobuf. A configuration file is a single source of truth that contains all the necessary information for the robot inlcuding actions (e.g. number of actuators, actuator type), perceptions (e.g. camera, encoders) and AI policy. For example, a single configuration file like [so100_mock_inference.pbtxt](`config/config_preset/so100_mock_inference.pbtxt`) defines your entire robot and AI system. Based on this single configruation file, ROS2 nodes will be instantiated and executes the nodes to make a robot operational.
 
 
 <p align="center">
@@ -16,7 +16,9 @@ This system utilized the ROS2 and protobuf. A configuration file should contain 
 
 ![Project Joshua Core Concept](assets/images/project_joshua_diagram.png)
 
-The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all the hardware interface and AI inference API as a ROS2 node. 
+The architecture is centered around the **Node Generator**. Single configuration file fed into the Node Generator and this will instantiate and run all hardware(e.g. action, perception) and AI(e.g. train, inference) interfaces as ROS2 nodes.
+
+Joshua Control Panel is the GUI that allows to create configuration file, run the ROS2 nodes based on preset, and monitor the operation. 
 
 ## Quick Start Example
 
