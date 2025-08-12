@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 #include <thread>
 #include <atomic>
 #include <QtWidgets/QPushButton>
@@ -28,14 +29,15 @@ public:
             }
 
             node_ = std::make_shared<rclcpp::Node>("calibration_tab_subscriber");
-            subscription_ = node_->create_subscription<std_msgs::msg::Float32>(
+            subscription_ = node_->create_subscription<std_msgs::msg::Float32MultiArray>(
                 topic_.toStdString(), 10,
-                [this](const std_msgs::msg::Float32::SharedPtr msg) {
+                [this](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
                     // Emit Qt signal on the UI receiver via queued connection
                     QMetaObject::invokeMethod(
                         ui_receiver_, "readingUpdated",
                         Qt::QueuedConnection,
-                        Q_ARG(float, msg->data));
+                        Q_ARG(float, msg->data[0]),
+                        Q_ARG(float, msg->data[1]));
                 });
 
             is_running_.store(true);
@@ -84,7 +86,7 @@ private:
     std::atomic<bool> is_running_;
 
     std::shared_ptr<rclcpp::Node> node_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription_;
+    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr subscription_;
     std::unique_ptr<rclcpp::Executor> executor_;
     std::thread spin_thread_;
 };
@@ -122,7 +124,7 @@ CalibrationTab::~CalibrationTab() {
 void CalibrationTab::on_start_subscribe_Button_clicked() {
     if (!subscriberRunner_) {
         // TODO: topic selection via UI; hardcode for now or use a sensible default
-        const QString topic = "sts3215_encoder_1";
+        const QString topic = "sts3215_encoder_1_operational_limit";
         subscriberRunner_ = std::make_unique<RosSubscriberRunner>(this, topic);
     }
     const bool ok = subscriberRunner_->start();
@@ -147,7 +149,6 @@ void CalibrationTab::on_stop_subscribe_Button_clicked() {
     if (ui->stop_subscribe_Button) ui->stop_subscribe_Button->setEnabled(false);
 }
 
-void CalibrationTab::onReadingUpdated(float value) {
-    ui->test_label->setText(QString("Latest: %1").arg(value));
-    std::cout << "Latest: " << value << std::endl;
+void CalibrationTab::onReadingUpdated(float min_value, float max_value) {
+    ui->test_label->setText(QString("Latest: %1 %2").arg(min_value).arg(max_value));
 }

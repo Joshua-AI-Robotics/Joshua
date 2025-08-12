@@ -14,12 +14,12 @@ public:
     ~CalibrationTab();
 
 signals:
-    void readingUpdated(float value);
+    void readingUpdated(float min_value, float max_value);
 
 private slots:
     void on_start_subscribe_Button_clicked();
     void on_stop_subscribe_Button_clicked();
-    void onReadingUpdated(float value);
+    void onReadingUpdated(float min_value, float max_value);
 
 private:
     class RosSubscriberRunner; // forward declaration, defined in .cc

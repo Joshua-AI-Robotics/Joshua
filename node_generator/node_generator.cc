@@ -481,6 +481,14 @@ void NodeGenerator::GetTopicsForNode(const uint32_t node_id, std::vector<std::st
             subscribe_topics.push_back(sub_topic);
         }
     }
+
+    // Get publish and subscribe topics for calibration node.
+    if(config_.calibration().node_id() == node_id) {
+        for(const auto& sub_topic : config_.calibration().subscribe_topics()) {
+            subscribe_topics.push_back(sub_topic);
+            publish_topics.push_back(sub_topic + "_operational_limit");
+        }
+    }
 }
 
 } // namespace node_generator 

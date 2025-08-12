@@ -1,5 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 #include "config/proto/config.pb.h"
 #include <algorithm>
 #include <list>
@@ -13,7 +14,9 @@ private:
         float min_value = FLT_MAX;
         float max_value = -FLT_MAX;
         std::string subscribe_topic;
+        std::string publish_topic;
         rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription;
+        rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher;
     };
 
 public:
@@ -23,15 +26,20 @@ public:
             operational_limits_.emplace_back();
             OperationalLimit& operational_limit = operational_limits_.back();
             operational_limit.subscribe_topic = subscribe_topic;
+            operational_limit.publish_topic = subscribe_topic + "_operational_limit";
 
             auto callback = [this, &operational_limit](const std_msgs::msg::Float32::SharedPtr msg) {
                 operational_limit.max_value = std::max(operational_limit.max_value, msg->data);
                 operational_limit.min_value = std::min(operational_limit.min_value, msg->data);
-                RCLCPP_INFO(this->get_logger(), "Encoder: %s [%f %f %f] (min, current, max)", operational_limit.subscribe_topic.c_str(),
-                            operational_limit.min_value, msg->data, operational_limit.max_value);
+                
+                std_msgs::msg::Float32MultiArray msg_array;
+                msg_array.data.push_back(operational_limit.min_value);
+                msg_array.data.push_back(operational_limit.max_value);
+                operational_limit.publisher->publish(msg_array);
             };
 
             operational_limit.subscription = this->create_subscription<std_msgs::msg::Float32>(operational_limit.subscribe_topic, 10, callback);
+            operational_limit.publisher = this->create_publisher<std_msgs::msg::Float32MultiArray>(operational_limit.publish_topic, 10);
         }
 
         if (operational_limits_.empty()) {
@@ -41,11 +49,7 @@ public:
     }
 
     ~OperationalLimitCalibrationSubscriber() {
-        RCLCPP_INFO(this->get_logger(), "Operational Limit Result");
-        for(auto& operational_limit : operational_limits_) {
-            RCLCPP_INFO(this->get_logger(), "\t%s [%f %f]\t(min, max)", operational_limit.subscribe_topic.c_str(),
-             operational_limit.min_value, operational_limit.max_value);
-        }
+        RCLCPP_INFO(this->get_logger(), "Operational Limit Calibration Subscriber Shutdown");
     }
 
 private:
