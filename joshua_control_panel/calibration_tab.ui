@@ -18,89 +18,40 @@
      </property>
      <layout class="QVBoxLayout" name="calibrationLayout">
       <item>
-       <widget class="QPushButton" name="startCalibrationButton">
+       <widget class="QListView" name="listView"/>
+      </item>
+      <item>
+       <widget class="QPushButton" name="start_subscribe_Button">
         <property name="text">
-         <string>Start Calibration</string>
+         <string>Start Subscribe Calibration Node</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="stopCalibrationButton">
+       <widget class="QPushButton" name="stop_subscribe_Button">
         <property name="text">
-         <string>Stop Calibration</string>
+         <string>Stop Subscribe Calibratoin Node</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="resetCalibrationButton">
+       <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Reset Calibration</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="statusGroup">
-     <property name="title">
-      <string>Calibration Status</string>
-     </property>
-     <layout class="QVBoxLayout" name="statusLayout">
-      <item>
-       <widget class="QLabel" name="calibrationStatusLabel">
-        <property name="text">
-         <string>Status: Ready</string>
+         <string>TextLabel</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QProgressBar" name="calibrationProgressBar">
-        <property name="value">
-         <number>0</number>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="parametersGroup">
-     <property name="title">
-      <string>Calibration Parameters</string>
-     </property>
-     <layout class="QGridLayout" name="parametersLayout">
-      <item row="0" column="0">
-       <widget class="QLabel" name="parameter1Label">
+       <widget class="QLabel" name="test_label">
         <property name="text">
-         <string>Parameter 1:</string>
+         <string>TextLabel</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QDoubleSpinBox" name="parameter1SpinBox">
-        <property name="minimum">
-         <double>-1000.000000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>1000.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="parameter2Label">
+      <item>
+       <widget class="QLabel" name="label_3">
         <property name="text">
-         <string>Parameter 2:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QDoubleSpinBox" name="parameter2SpinBox">
-        <property name="minimum">
-         <double>-1000.000000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>1000.000000000000000</double>
+         <string>TextLabel</string>
         </property>
        </widget>
       </item>

@@ -99,11 +99,8 @@ bool NodeGenerator::Initialize() {
     LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
     LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
 
-    // Change to repository root
-    if (chdir(repo_root_.c_str()) != 0) {
-        LOG(ERROR) << "Failed to change to repository root: " << repo_root_;
-        return false;
-    }
+    // Do NOT change the process-wide working directory here; use absolute paths and
+    // run child processes with their own working directory where needed.
     
     IdentifyNodeTypes();
     if (!CheckConfigIntegrity()) {
@@ -215,8 +212,10 @@ bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
         }
 
         pid_t pid = -1;
-        const char* argv[] = {"bazel", "build", build_target.c_str(), nullptr};
-        int spawn_rc = posix_spawnp(&pid, "bazel", nullptr, nullptr, const_cast<char* const*>(argv), environ);
+        // Run bazel build in the repository root without changing the parent's CWD
+        std::string cmd = std::string("cd ") + repo_root_ + " && bazel build " + build_target;
+        const char* argv[] = {"bash", "-lc", cmd.c_str(), nullptr};
+        int spawn_rc = posix_spawnp(&pid, "bash", nullptr, nullptr, const_cast<char* const*>(argv), environ);
         if (spawn_rc != 0) {
             LOG(ERROR) << "posix_spawnp failed for target " << build_target << ": " << strerror(spawn_rc);
             return false;

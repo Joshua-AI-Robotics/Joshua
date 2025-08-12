@@ -85,6 +85,9 @@ cc_library(
         "//config/proto:config_cc_proto",
         "//node_generator:node_generator",
         ":gui_utils",
+        # ROS 2 dependencies for in-process subscription
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
     ],
 )
 
