@@ -12,50 +12,16 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QGroupBox" name="calibrationGroup">
-     <property name="title">
-      <string>Calibration</string>
+    <widget class="QTabWidget" name="modeTabWidget">
+     <property name="tabPosition">
+      <enum>QTabWidget::North</enum>
      </property>
-     <layout class="QVBoxLayout" name="calibrationLayout">
-      <item>
-       <widget class="QListView" name="listView"/>
-      </item>
-      <item>
-       <widget class="QPushButton" name="start_subscribe_Button">
-        <property name="text">
-         <string>Start Subscribe Calibration Node</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="stop_subscribe_Button">
-        <property name="text">
-         <string>Stop Subscribe Calibratoin Node</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="test_label">
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
+     <property name="tabsClosable">
+      <bool>false</bool>
+     </property>
+     <property name="movable">
+      <bool>false</bool>
+     </property>
     </widget>
    </item>
    <item>

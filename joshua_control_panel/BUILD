@@ -11,6 +11,7 @@ qt_moc(
         "config_tab.h",
         "monitor_tab.h",
         "calibration_tab.h",
+        "operational_limit_tab.h",
     ],
 )
 
@@ -45,6 +46,13 @@ genrule(
     cmd = "/usr/lib/qt6/libexec/uic $(location calibration_tab.ui) -o $@",
 )
 
+genrule(
+    name = "uic_operational_limit_tab",
+    srcs = ["operational_limit_tab.ui"],
+    outs = ["ui_operational_limit_tab.h"],
+    cmd = "/usr/lib/qt6/libexec/uic $(location operational_limit_tab.ui) -o $@",
+)
+
 cc_library(
     name = "gui_utils",
     srcs = ["gui_utils.cc"],
@@ -62,6 +70,7 @@ cc_library(
         "config_tab.cc",
         "monitor_tab.cc",
         "calibration_tab.cc",
+        "operational_limit_tab.cc",
         # Generated MOC sources
         ":moc_sources",
     ],
@@ -71,11 +80,13 @@ cc_library(
         "config_tab.h",
         "monitor_tab.h",
         "calibration_tab.h",
+        "operational_limit_tab.h",
         # Generated UI headers
         ":uic_general_tab",
         ":uic_config_tab",
         ":uic_monitor_tab",
         ":uic_calibration_tab",
+        ":uic_operational_limit_tab",
     ],
     includes = ["."],
     copts = ["-std=c++17", "-fPIC"],
@@ -85,7 +96,6 @@ cc_library(
         "//config/proto:config_cc_proto",
         "//node_generator:node_generator",
         ":gui_utils",
-        # ROS 2 dependencies for in-process subscription
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
     ],
