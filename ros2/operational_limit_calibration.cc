@@ -8,7 +8,7 @@
 #include "ros2/node_runner.h"
 
 // TODO: Maybe rename to operational_limit_calibration.
-class OperationalLimitCalibrationSubscriber : public rclcpp::Node {
+class OperationalLimitCalibration : public rclcpp::Node {
 private:
     struct OperationalLimit {
         float min_value = FLT_MAX;
@@ -20,7 +20,7 @@ private:
     };
 
 public:
-    OperationalLimitCalibrationSubscriber(const std::string& node_name, const int node_id, const config::Config& config) : Node(node_name) {
+    OperationalLimitCalibration(const std::string& node_name, const int node_id, const config::Config& config) : Node(node_name) {
 
         for(const auto& subscribe_topic : config.calibration().subscribe_topics()) {
             operational_limits_.emplace_back();
@@ -48,7 +48,7 @@ public:
         }
     }
 
-    ~OperationalLimitCalibrationSubscriber() {
+    ~OperationalLimitCalibration() {
         RCLCPP_INFO(this->get_logger(), "Operational Limit Calibration Subscriber Shutdown");
     }
 
@@ -58,6 +58,6 @@ private:
 
 int main(int argc, char *argv[]) {
     // For test run:
-    // bazel run ros2:operational_limit_calibration_subscriber -- test_encoder 3 config/config_preset/calibrate_so100_operational_limit.pbtxt
-    return ros2_utils::RunNode<OperationalLimitCalibrationSubscriber>(argc, argv, "operational_limit_calibration_subscriber");
+    // bazel run ros2:operational_limit_calibration -- test_encoder 3 config/config_preset/calibrate_so100_operational_limit.pbtxt
+    return ros2_utils::RunNode<OperationalLimitCalibration>(argc, argv, "operational_limit_calibration");
 }

@@ -25,7 +25,7 @@ namespace {
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
     constexpr auto kActuatorSubscriber = "actuator_subscriber";
-    constexpr auto kOperationalLimitCalibrationSubscriber = "operational_limit_calibration_subscriber";
+    constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 
     // Operation modes.
     constexpr auto kTeleoperate = "teleoperate";
@@ -62,7 +62,7 @@ namespace {
 
     // <calibration_mode, node_type>
     const std::unordered_map<config::CalibrationMode, const char*> kCalibrationModeToNodeType = {
-        {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibrationSubscriber},
+        {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibration},
     };
     
 }

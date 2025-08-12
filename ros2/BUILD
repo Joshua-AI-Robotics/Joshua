@@ -161,8 +161,8 @@ ros2_py_binary_with_wrapper(
 )
 
 ros2_cpp_binary_with_wrapper(
-    name = "operational_limit_calibration_subscriber",
-    srcs = ["operational_limit_calibration_subscriber.cc"],
+    name = "operational_limit_calibration",
+    srcs = ["operational_limit_calibration.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
