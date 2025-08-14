@@ -5,6 +5,9 @@
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <thread>
 #include <atomic>
+#include <QtCore/QFile>
+#include <QtWidgets/QFileDialog>
+#include <QtWidgets/QMessageBox>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QLabel>
 #include <unordered_set>
@@ -86,6 +89,7 @@ public:
             subscription.reset();
         }
         node_.reset();
+        is_running_.store(false);
     }
 
     bool isRunning() const { return is_running_.load(); }
@@ -159,23 +163,23 @@ OperationalLimitTab::OperationalLimitTab(QWidget* parent)
     : QWidget(parent), ui(new Ui::OperationalLimitTab) {
     ui->setupUi(this);
 
+    connect(this, &OperationalLimitTab::logMessage,
+            this, &OperationalLimitTab::onLogMessage,
+            Qt::QueuedConnection);
+
     connect(this, &OperationalLimitTab::readingUpdated,
             this, &OperationalLimitTab::onReadingUpdated,
             Qt::QueuedConnection);
     connect(this, &OperationalLimitTab::readingUpdatedForTopic,
             this, &OperationalLimitTab::onReadingUpdatedForTopic,
             Qt::QueuedConnection);
-
-    if (ui->start_subscribe_Button) {
-        connect(ui->start_subscribe_Button, &QPushButton::clicked,
-                this, &OperationalLimitTab::on_start_subscribe_Button_clicked);
-    }
-    if (ui->stop_subscribe_Button) {
-        connect(ui->stop_subscribe_Button, &QPushButton::clicked,
+    connect(ui->start_subscribe_Button, &QPushButton::clicked,
+            this, &OperationalLimitTab::on_start_subscribe_Button_clicked);    
+    connect(ui->stop_subscribe_Button, &QPushButton::clicked,
                 this, &OperationalLimitTab::on_stop_subscribe_Button_clicked);
-    }
 
-    if (ui->stop_subscribe_Button) ui->stop_subscribe_Button->setEnabled(false);
+    emit logMessage("[INFO] Operational Limit Tab ready.");
+    
 }
 
 OperationalLimitTab::~OperationalLimitTab() {
@@ -183,11 +187,21 @@ OperationalLimitTab::~OperationalLimitTab() {
     delete ui;
 }
 
+void OperationalLimitTab::onLogMessage(const QString& message) {
+    ui->logTextEdit->append(message);
+}
+
 void OperationalLimitTab::on_start_subscribe_Button_clicked() {
     if (!subscriberRunner_) {
         // Automatically discover topics published by the ROS 2 node "operational_limit_calibration"
         const auto topics = findFloat32MultiArrayTopicsByNode("operational_limit_calibration");
-        
+        emit logMessage("[INFO] Found " + QString::number(topics.size()) + " topics.");
+
+        if (topics.empty()) {
+            emit logMessage("[WARN] No topics found to subscribe.");
+            return;
+        }
+
         // Dyamically generate labes based on topics. Each topic has min and max values.
         for (const auto& topic : topics) {
             if (!ui->limit_values_gridLayout) continue;
@@ -202,21 +216,91 @@ void OperationalLimitTab::on_start_subscribe_Button_clicked() {
             ui->limit_values_gridLayout->addWidget(maxLabel, next_row, 2);
 
             topicToMinMaxLabels_.insert(topic, qMakePair(minLabel, maxLabel));
+            topicToTopicLabel_.insert(topic, topicLabel);
         }
         subscriberRunner_ = std::make_unique<RosSubscriberRunner>(this, topics);
     }
-    const bool ok = subscriberRunner_->start();
 
-    if (ui->start_subscribe_Button) ui->start_subscribe_Button->setEnabled(!ok);
-    if (ui->stop_subscribe_Button) ui->stop_subscribe_Button->setEnabled(ok);
+    if (subscriberRunner_ && !subscriberRunner_->isRunning()) {
+        if (subscriberRunner_->start()) {
+            emit logMessage("[INFO] Topic subscriber started.");
+        } else {
+            emit logMessage("[ERROR] Failed to start topic subscriber.");
+        }
+    } else if (subscriberRunner_ && subscriberRunner_->isRunning()) {
+        emit logMessage("[INFO] Topic subscriber already running.");
+    }
 }
 
 void OperationalLimitTab::on_stop_subscribe_Button_clicked() {
     if (subscriberRunner_) {
         subscriberRunner_->stop();
     }
-    if (ui->start_subscribe_Button) ui->start_subscribe_Button->setEnabled(true);
-    if (ui->stop_subscribe_Button) ui->stop_subscribe_Button->setEnabled(false);
+
+    QString message;
+    for(const auto& topic : topicToMinMaxLabels_.keys()) {
+        const auto& minLabel = topicToMinMaxLabels_[topic].first;
+        const auto& maxLabel = topicToMinMaxLabels_[topic].second;
+        message += topic + " " + minLabel->text() + " " + maxLabel->text() + "\n";
+    }
+    emit logMessage("[INFO] Topic subscriber stopped.");
+    emit logMessage(message);
+    
+    // Remove and delete dynamic labels from the layout
+    if (ui->limit_values_gridLayout) {
+        const auto topics = topicToMinMaxLabels_.keys();
+        for (const auto& topic : topics) {
+            QLabel* topicLabel = topicToTopicLabel_.value(topic, nullptr);
+            if (topicLabel) {
+                ui->limit_values_gridLayout->removeWidget(topicLabel);
+                delete topicLabel;
+            }
+            QLabel* minLabel = topicToMinMaxLabels_[topic].first;
+            if (minLabel) {
+                ui->limit_values_gridLayout->removeWidget(minLabel);
+                delete minLabel;
+            }
+            QLabel* maxLabel = topicToMinMaxLabels_[topic].second;
+            if (maxLabel) {
+                ui->limit_values_gridLayout->removeWidget(maxLabel);
+                delete maxLabel;
+            }
+        }
+    }
+
+    topicToTopicLabel_.clear();
+    topicToMinMaxLabels_.clear();
+
+    // Reset subscriber so that starting again rebuilds labels from discovered topics
+    subscriberRunner_.reset();
+}
+
+void OperationalLimitTab::on_update_to_existing_preset_Button_clicked() {
+    // TODO: Implement
+}
+
+void OperationalLimitTab::on_save_as_raw_text_Button_clicked() {
+    QString filename = QFileDialog::getSaveFileName(this, "Save calibration data", QString(), "Prototxt (*.pbtxt)");
+    if (filename.isEmpty()) return;
+
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Failed to open file for writing.");
+        return;
+    }
+
+    // TODO: Implement proto and save as a proto.
+    std::string out;
+    for(const auto& topic : topicToMinMaxLabels_.keys()) {
+        const auto& minLabel = topicToMinMaxLabels_[topic].first;
+        const auto& maxLabel = topicToMinMaxLabels_[topic].second;
+        out += topic.toStdString() + " " + minLabel->text().toStdString() + " " + maxLabel->text().toStdString() + "\n";
+    }
+    file.write(QByteArray::fromStdString(out));
+    file.close();
+
+    QMessageBox::information(this, "Saved", "Configuration saved to " + filename);
+    emit logMessage("[INFO] Configuration saved to " + filename);
 }
 
 void OperationalLimitTab::onReadingUpdated(float /*min_value*/, float /*max_value*/) {
@@ -230,4 +314,4 @@ void OperationalLimitTab::onReadingUpdatedForTopic(QString topic, float min_valu
     auto* maxLabel = it.value().second;
     if (minLabel) minLabel->setText(QString::number(min_value));
     if (maxLabel) maxLabel->setText(QString::number(max_value));
-} 
+}
