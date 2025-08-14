@@ -276,7 +276,8 @@ void OperationalLimitTab::on_stop_subscribe_Button_clicked() {
 }
 
 void OperationalLimitTab::on_update_to_existing_preset_Button_clicked() {
-    // TODO: Implement
+    // TODO: Implement.
+    emit logMessage("[INFO] Update to existing preset not implemented.");
 }
 
 void OperationalLimitTab::on_save_as_raw_text_Button_clicked() {
@@ -289,7 +290,7 @@ void OperationalLimitTab::on_save_as_raw_text_Button_clicked() {
         return;
     }
 
-    // TODO: Implement proto and save as a proto.
+    // Do not use message format, because the message format is not suitable for the proto.
     std::string out;
     for(const auto& topic : topicToMinMaxLabels_.keys()) {
         const auto& minLabel = topicToMinMaxLabels_[topic].first;
