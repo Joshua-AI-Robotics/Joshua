@@ -37,11 +37,18 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 
 This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate.pbtxt`](config/config_preset/so100_teleoperate.pbtxt).
 
-**Please make sure to calibrate the operational limits for your servo motors.**
+*Please make sure to calibrate the operational limits for your servo motors.*
 
-To start the system, run:
+**To start the system with GUI:**
+
 ```bash
 bazel run joshua_control_panel:joshua_control_panel
+```
+
+**To start the system with terminal:**
+
+```bash
+bazel build node_generator:joshua_main
 ```
 
 TODO: Add calibration instruction here.

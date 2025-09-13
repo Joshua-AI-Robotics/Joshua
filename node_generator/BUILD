@@ -1,5 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
 cc_library(
     name = "node_generator",
@@ -13,8 +14,8 @@ cc_library(
 )
 
 cc_binary(
-    name = "main",
-    srcs = ["main.cc"],
+    name = "joshua_main",
+    srcs = ["joshua_main.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -23,5 +24,15 @@ cc_binary(
         "@glog//:glog",
         "@gflags//:gflags",
     ],
+    visibility = ["//visibility:public"],
+)
+
+# Package the native binary into a tar archive
+pkg_tar(
+    name = "joshua_main_tar",
+    srcs = [":joshua_main"],
+    extension = ".gz",
+    strip_prefix = "node_generator",
+    mode = "0755",
     visibility = ["//visibility:public"],
 )
