@@ -27,10 +27,12 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
-# Package the native binary into a tar archive
+# Package the native binary and runtime libs into a tar archive
 pkg_tar(
     name = "joshua_main_tar",
-    srcs = [":joshua_main"],
+    srcs = [
+        ":joshua_main",
+    ],
     extension = ".gz",
     strip_prefix = "node_generator",
     mode = "0755",

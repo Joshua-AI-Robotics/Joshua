@@ -1,1 +1,6 @@
-build --cxxopt='-std=c++17' 
+build --cxxopt='-std=c++17'
+
+# Cross-compile to NVIDIA Orin Nano (Linux ARM64)
+build:orin-nano --platforms=//:orin_nano
+build:orin-nano --cpu=arm64
+build:orin-nano --experimental_cc_static_library
