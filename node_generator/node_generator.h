@@ -28,8 +28,8 @@ public:
     ~NodeGenerator();
 
     bool Initialize();
-    bool BuildRequiredTargets();
-    bool BuildRequiredTargets(std::atomic_bool& stop_flag);
+    bool BuildRequiredTargets() { return true; }; // TODO: Remove this.
+    bool BuildRequiredTargets(std::atomic_bool& stop_flag) { return true; }; // TODO: Remove this.  
     bool LaunchAllNodes();
     void MonitorNodes();
     void Shutdown(const int max_wait_ms = 5000);
@@ -41,7 +41,6 @@ public:
 private:
     void IdentifyNodeTypes();
     bool CheckConfigIntegrity();
-    void DetermineRequiredBuilds();
 
     pid_t LaunchNode(const std::string& node_type, uint32_t node_id,
                      const std::string& node_name);
@@ -53,13 +52,10 @@ private:
 
     void GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics);
 
-    std::string get_binary_path() const;
-
     // Map from node_id to node type.
     std::map<uint32_t, std::string> identified_nodes_;
 
     std::string config_path_;
-    std::string repo_root_;
     config::Config config_;
     
     std::set<std::string> required_builds_;

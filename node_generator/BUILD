@@ -18,6 +18,7 @@ cc_binary(
     srcs = ["joshua_main.cc"],
     data = [
         "//config/config_preset:config_presets",
+        "//ros2:ros2_executables",
     ],
     deps = [
         ":node_generator",
@@ -33,10 +34,10 @@ pkg_tar(
     srcs = [
         ":joshua_main",
         "//config/config_preset:config_presets",
-        "//ros2:
     ],
     extension = ".gz",
-    strip_prefix = "node_generator",
+    package_dir = "joshua_main",
+    include_runfiles = True,
     mode = "0755",
     visibility = ["//visibility:public"],
 )

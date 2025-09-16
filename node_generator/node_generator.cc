@@ -11,14 +11,14 @@
 #include <spawn.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <limits.h>
+#include <cstdlib>
 
 extern char** environ;
 
 namespace node_generator {
 
 namespace {
-    // TODO: Make this configurable.
-    constexpr auto kRepoRoot = "/home/hmoon/Projects/ProjectJoshua";
     constexpr auto kROS2Target = "ros2:";
 
     // Node types.
@@ -65,6 +65,84 @@ namespace {
         {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibration},
     };
     
+    // Resolve current executable absolute path via /proc/self/exe
+    std::string GetSelfExecutablePath() {
+        char buffer[PATH_MAX];
+        ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+        if (len == -1) {
+            return "";
+        }
+        buffer[len] = '\0';
+        return std::string(buffer);
+    }
+
+    // Try to determine the Bazel runfiles root directory for this process
+    std::optional<std::filesystem::path> GetRunfilesRoot() {
+        const char* env_runfiles = std::getenv("RUNFILES_DIR");
+        if (env_runfiles && std::filesystem::exists(env_runfiles)) {
+            return std::filesystem::path(env_runfiles);
+        }
+
+        // Fallback: <self_exe>.runfiles
+        std::string self_exe = GetSelfExecutablePath();
+        if (!self_exe.empty()) {
+            std::filesystem::path candidate = std::filesystem::path(self_exe + ".runfiles");
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+        return std::nullopt;
+    }
+
+    // Locate the ROS2 launch script for a given node type within runfiles.
+    // Primary layout: <runfiles>/_main/ros2/<name>_launch, fallback: <runfiles>/__main__/ros2/<name>_launch
+    std::optional<std::filesystem::path> ResolveLaunchPath(const std::string& node_type, std::filesystem::path* out_workspace_dir) {
+        auto runfiles_root_opt = GetRunfilesRoot();
+        const std::string launch_name = node_type + std::string("_launch");
+        if (runfiles_root_opt) {
+            const std::filesystem::path runfiles_root = *runfiles_root_opt;
+            const char* workspace_dirs[] = {"_main", "__main__"};
+            for (const char* ws : workspace_dirs) {
+                std::filesystem::path ws_dir = runfiles_root / ws;
+                std::filesystem::path candidate = ws_dir / "ros2" / launch_name;
+                if (std::filesystem::exists(candidate)) {
+                    if (out_workspace_dir) {
+                        *out_workspace_dir = ws_dir;
+                    }
+                    return candidate;
+                }
+            }
+        }
+
+        // As a last resort, try locating next to bazel-bin of this binary: <exe_dir>/../../ros2/<name>_launch
+        std::string self_exe = GetSelfExecutablePath();
+        if (!self_exe.empty()) {
+            std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
+            // Heuristic: node_generator/joshua_main => go up two levels to reach bazel-bin root
+            std::filesystem::path candidate = exe_dir;
+            if (candidate.has_parent_path()) candidate = candidate.parent_path();
+            if (candidate.has_parent_path()) candidate = candidate.parent_path();
+            candidate = candidate / "ros2" / launch_name;
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+        return std::nullopt;
+    }
+
+    // Try to find the wrapper in Bazel's bin tree: <bazel-bin>/ros2/<name>_wrapper.sh
+    std::optional<std::filesystem::path> ResolveWrapperInBazelBin(const std::string& node_type) {
+        std::string self_exe = GetSelfExecutablePath();
+        if (self_exe.empty()) return std::nullopt;
+        std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
+        if (!exe_dir.has_parent_path()) return std::nullopt;
+        std::filesystem::path bazel_bin_root = exe_dir.parent_path();
+        std::filesystem::path candidate = bazel_bin_root / "ros2" / (node_type + std::string("_wrapper.sh"));
+        if (std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+        return std::nullopt;
+    }
 }
 
 // Static member initialization
@@ -72,7 +150,6 @@ NodeGenerator* NodeGenerator::instance_ = nullptr;
 
 NodeGenerator::NodeGenerator(const std::string& config_path) 
     : config_path_(config_path), 
-      repo_root_(kRepoRoot),
       shutdown_requested_(false) {
     instance_ = this;
 }
@@ -106,7 +183,7 @@ bool NodeGenerator::Initialize() {
     if (!CheckConfigIntegrity()) {
         return false;
     }
-    DetermineRequiredBuilds();
+
     SetupSignalHandlers();
     
     return true;
@@ -192,79 +269,6 @@ bool NodeGenerator::CheckConfigIntegrity() {
     return true;
 }
 
-void NodeGenerator::DetermineRequiredBuilds() {
-    // Each declared node type implies a build target `ros2:<node_type>`
-    for (const auto& [_, node_type] : identified_nodes_) {
-        required_builds_.insert(std::string(kROS2Target) + node_type);
-    }
-}
-
-bool NodeGenerator::BuildRequiredTargets() {    
-    std::atomic_bool dummy_stop{false};
-    return BuildRequiredTargets(dummy_stop);
-}
-
-bool NodeGenerator::BuildRequiredTargets(std::atomic_bool& stop_flag) {
-    for (const auto& build_target : required_builds_) {
-        if (stop_flag.load()) {
-            LOG(WARNING) << "Build stopped before starting target: " << build_target;
-            return false;
-        }
-
-        pid_t pid = -1;
-        // Run bazel build in the repository root without changing the parent's CWD
-        std::string cmd = std::string("cd ") + repo_root_ + " && bazel build " + build_target;
-        const char* argv[] = {"bash", "-lc", cmd.c_str(), nullptr};
-        int spawn_rc = posix_spawnp(&pid, "bash", nullptr, nullptr, const_cast<char* const*>(argv), environ);
-        if (spawn_rc != 0) {
-            LOG(ERROR) << "posix_spawnp failed for target " << build_target << ": " << strerror(spawn_rc);
-            return false;
-        }
-
-        int status = 0;
-        while (true) {
-            pid_t res = waitpid(pid, &status, WNOHANG);
-            if (res == pid) {
-                if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                    LOG(INFO) << "Built target: " << build_target;
-                    break; // proceed to next target
-                } else {
-                    if (WIFEXITED(status)) {
-                        LOG(ERROR) << "bazel build exited with status " << WEXITSTATUS(status)
-                                   << " for target " << build_target;
-                    } else if (WIFSIGNALED(status)) {
-                        LOG(ERROR) << "bazel build killed by signal " << WTERMSIG(status)
-                                   << " for target " << build_target;
-                    }
-                    return false;
-                }
-            } else if (res == 0) {
-                if (stop_flag.load()) {
-                    LOG(WARNING) << "Stop requested. Terminating build for target: " << build_target;
-                    kill(pid, SIGTERM);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    pid_t res2 = waitpid(pid, &status, WNOHANG);
-                    if (res2 == 0) {
-                        kill(pid, SIGKILL);
-                        waitpid(pid, &status, 0);
-                    }
-                    return false;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            } else {
-                if (errno == ECHILD) {
-                    LOG(ERROR) << "waitpid returned ECHILD for build target: " << build_target;
-                } else {
-                    LOG(ERROR) << "waitpid error for build target " << build_target << ": " << strerror(errno);
-                }
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
 bool NodeGenerator::LaunchAllNodes() {
     for (const auto& [node_id, node_type] : identified_nodes_) {
         const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
@@ -286,11 +290,27 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
     pid_t pid = fork();
 
     if (pid == 0) {
-        std::string binary_path = get_binary_path();
         std::string node_id_str = std::to_string(node_id);
 
-        // Always use the wrapper script which handles AMENT setup and runfiles
-        std::string exec_path = binary_path + "/" + node_type + "_wrapper.sh";
+        // Prefer executing the wrapper from bazel-bin so its sibling .runfiles is available
+        std::string exec_path;
+        if (auto wrapper_bin = ResolveWrapperInBazelBin(node_type)) {
+            exec_path = wrapper_bin->string();
+        } else {
+            // Fallback: run the launch script from runfiles by chdir-ing into the workspace dir
+            std::filesystem::path workspace_dir;
+            auto launch_path_opt = ResolveLaunchPath(node_type, &workspace_dir);
+            if (!launch_path_opt) {
+                LOG(ERROR) << "Could not locate ROS2 wrapper or launch for node type '" << node_type << "'. Ensure '//ros2:ros2_executables' is built.";
+                _exit(1);
+            }
+            if (!workspace_dir.empty()) {
+                if (chdir(workspace_dir.c_str()) != 0) {
+                    LOG(WARNING) << "Failed to chdir to runfiles workspace '" << workspace_dir << "': " << strerror(errno);
+                }
+            }
+            exec_path = launch_path_opt->string();
+        }
 
         // Put child in its own process group so we can signal the whole group (including grandchildren)
         if (setpgid(0, 0) != 0) {
@@ -439,11 +459,6 @@ void NodeGenerator::SetupSignalHandlers() {
 void NodeGenerator::CleanupAndExit(int exit_code) {
     Shutdown();
     exit(exit_code);
-}
-
-std::string NodeGenerator::get_binary_path() const {
-    std::filesystem::path wrapper_script_path = std::filesystem::path(repo_root_) / "bazel-bin" / "ros2";
-    return wrapper_script_path.string();
 }
 
 void NodeGenerator::SignalHandler(int sig) {

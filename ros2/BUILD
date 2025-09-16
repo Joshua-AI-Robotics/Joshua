@@ -174,9 +174,8 @@ ros2_cpp_binary_with_wrapper(
     ],
 )
 
-# Tarball of all ROS2 executables with wrappers and their runfiles
-pkg_tar(
-    name = "ros2_executables_tar",
+filegroup(
+    name = "ros2_executables",
     srcs = [
         ":camera_publisher",
         ":camera_publisher_wrapper",
@@ -196,11 +195,5 @@ pkg_tar(
         ":operational_limit_calibration",
         ":operational_limit_calibration_wrapper",
         ":operational_limit_calibration_impl",
-        "//config/config_preset:config_presets", # TODO: Remove this and move this to node_generator.
     ],
-    include_runfiles = True,
-    strip_prefix = "ros2",
-    extension = ".gz",
-    mode = "0755",
-    visibility = ["//visibility:public"],
 )
