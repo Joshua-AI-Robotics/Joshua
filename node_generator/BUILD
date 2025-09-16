@@ -32,6 +32,7 @@ pkg_tar(
     name = "joshua_main_tar",
     srcs = [
         ":joshua_main",
+        "//config/config_preset:config_presets",
     ],
     extension = ".gz",
     strip_prefix = "node_generator",
