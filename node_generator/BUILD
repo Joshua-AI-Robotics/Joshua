@@ -33,6 +33,7 @@ pkg_tar(
     srcs = [
         ":joshua_main",
         "//config/config_preset:config_presets",
+        "//ros2:
     ],
     extension = ".gz",
     strip_prefix = "node_generator",

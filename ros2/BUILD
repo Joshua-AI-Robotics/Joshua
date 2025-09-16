@@ -173,3 +173,34 @@ ros2_cpp_binary_with_wrapper(
         "//ros2:node_runner",
     ],
 )
+
+# Tarball of all ROS2 executables with wrappers and their runfiles
+pkg_tar(
+    name = "ros2_executables_tar",
+    srcs = [
+        ":camera_publisher",
+        ":camera_publisher_wrapper",
+        ":camera_publisher_impl",
+        ":encoder_publisher",
+        ":encoder_publisher_wrapper",
+        ":encoder_publisher_impl",
+        ":actuator_subscriber",
+        ":actuator_subscriber_wrapper",
+        ":actuator_subscriber_impl",
+        ":mock_inference",
+        ":mock_inference_wrapper",
+        ":mock_inference_impl",
+        ":mock_inference_py",
+        ":mock_inference_py_wrapper",
+        ":mock_inference_py_impl",
+        ":operational_limit_calibration",
+        ":operational_limit_calibration_wrapper",
+        ":operational_limit_calibration_impl",
+        "//config/config_preset:config_presets", # TODO: Remove this and move this to node_generator.
+    ],
+    include_runfiles = True,
+    strip_prefix = "ros2",
+    extension = ".gz",
+    mode = "0755",
+    visibility = ["//visibility:public"],
+)
