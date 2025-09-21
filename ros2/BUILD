@@ -173,3 +173,27 @@ ros2_cpp_binary_with_wrapper(
         "//ros2:node_runner",
     ],
 )
+
+filegroup(
+    name = "ros2_executables",
+    srcs = [
+        ":camera_publisher",
+        ":camera_publisher_wrapper",
+        ":camera_publisher_impl",
+        ":encoder_publisher",
+        ":encoder_publisher_wrapper",
+        ":encoder_publisher_impl",
+        ":actuator_subscriber",
+        ":actuator_subscriber_wrapper",
+        ":actuator_subscriber_impl",
+        ":mock_inference",
+        ":mock_inference_wrapper",
+        ":mock_inference_impl",
+        ":mock_inference_py",
+        ":mock_inference_py_wrapper",
+        ":mock_inference_py_impl",
+        ":operational_limit_calibration",
+        ":operational_limit_calibration_wrapper",
+        ":operational_limit_calibration_impl",
+    ],
+)

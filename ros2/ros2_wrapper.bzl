@@ -10,7 +10,7 @@ def _ros2_wrapper_script_impl(ctx):
     script = ctx.actions.declare_file(binary_name + "_wrapper.sh")
 
     if is_python:
-        # For Python, cd into runfiles and use the generated _launch script
+        # For Python, cd into runfiles and execute the generated launcher inside runfiles
         script_content = """#!/bin/bash
 
 # Auto-generated wrapper script for {binary_name} (python)
@@ -21,14 +21,11 @@ SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
 # Change to the runfiles directory where the relative paths will work
 cd "${{SCRIPT_DIR}}/{binary_name}.runfiles/_main"
 
-# Set up the environment variables
-export AMENT_PREFIX_PATH="${{SCRIPT_DIR}}/{binary_name}_launch_ament_setup"
-
-# Execute the generated launcher which resolves the Python entrypoint inside runfiles
-exec "${{SCRIPT_DIR}}/{binary_name}_launch" "$@"
+# Execute the generated launcher within runfiles so it can locate _impl and ament setup
+exec "./ros2/{binary_name}_launch" "$@"
 """.format(binary_name = binary_name)
     else:
-        # For C++, set AMENT and cd into runfiles, then exec the _impl binary
+        # For C++, cd into runfiles and execute the generated launcher within runfiles
         script_content = """#!/bin/bash
 
 # Auto-generated wrapper script for {binary_name}
@@ -40,11 +37,8 @@ SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
 # Change to the runfiles directory where the relative paths will work
 cd "${{SCRIPT_DIR}}/{binary_name}.runfiles/_main"
 
-# Set up the environment variables  
-export AMENT_PREFIX_PATH="${{SCRIPT_DIR}}/{binary_name}_launch_ament_setup"
-
-# Execute the binary with all passed arguments
-exec "${{SCRIPT_DIR}}/{binary_name}_impl" "$@"
+# Execute the launcher which configures AMENT and locates the _impl binary
+exec "./ros2/{binary_name}_launch" "$@"
 """.format(binary_name = binary_name)
 
     ctx.actions.write(

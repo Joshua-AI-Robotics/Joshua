@@ -12,6 +12,13 @@ bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
 bazel_dep(name = "gflags", version = "2.2.2")
 bazel_dep(name = "glog", version = "0.7.1")
+bazel_dep(name = "platforms", version = "0.0.8")
+
+# Hermetic LLVM toolchain for Linux AArch64 (Jetson Orin Nano)
+bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.2.4")
+register_toolchains(
+    "@toolchains_llvm_bootstrapped//toolchain:linux_aarch64",
+)
 
 # ROS2 Bazel rules - local copy
 local_path_override(
