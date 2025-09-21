@@ -54,6 +54,7 @@ private:
     void GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics);
 
     std::string get_binary_path() const;
+    std::string DetermineRepoRoot() const;
 
     // Map from node_id to node type.
     std::map<uint32_t, std::string> identified_nodes_;

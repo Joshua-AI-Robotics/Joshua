@@ -17,8 +17,6 @@ extern char** environ;
 namespace node_generator {
 
 namespace {
-    // TODO: Make this configurable.
-    constexpr auto kRepoRoot = "/home/hmoon/Projects/ProjectJoshua";
     constexpr auto kROS2Target = "ros2:";
 
     // Node types.
@@ -72,7 +70,7 @@ NodeGenerator* NodeGenerator::instance_ = nullptr;
 
 NodeGenerator::NodeGenerator(const std::string& config_path) 
     : config_path_(config_path), 
-      repo_root_(kRepoRoot),
+      repo_root_(DetermineRepoRoot()),
       shutdown_requested_(false) {
     instance_ = this;
 }
@@ -444,6 +442,47 @@ void NodeGenerator::CleanupAndExit(int exit_code) {
 std::string NodeGenerator::get_binary_path() const {
     std::filesystem::path wrapper_script_path = std::filesystem::path(repo_root_) / "bazel-bin" / "ros2";
     return wrapper_script_path.string();
+}
+
+std::string NodeGenerator::DetermineRepoRoot() const {
+    // First, check if BUILD_WORKSPACE_DIRECTORY is set (when running via 'bazel run')
+    const char* workspace_dir = std::getenv("BUILD_WORKSPACE_DIRECTORY");
+    if (workspace_dir && std::filesystem::exists(workspace_dir)) {
+        LOG(INFO) << "Repository root detected from BUILD_WORKSPACE_DIRECTORY: " << workspace_dir;
+        return std::string(workspace_dir);
+    }
+    
+    // Otherwise, traverse up from current directory to find repository root
+    std::filesystem::path current_path = std::filesystem::current_path();
+    const std::vector<std::string> repo_indicators = {
+        "MODULE.bazel",
+        "WORKSPACE", 
+        "BUILD",
+        ".git"
+    };
+    
+    while (current_path != current_path.root_path()) {
+        bool found_indicator = false;
+        for (const auto& indicator : repo_indicators) {
+            std::filesystem::path indicator_path = current_path / indicator;
+            if (std::filesystem::exists(indicator_path)) {
+                found_indicator = true;
+                break;
+            }
+        }
+        
+        if (found_indicator) {
+            LOG(INFO) << "Repository root detected at: " << current_path.string();
+            return current_path.string();
+        }
+        
+        current_path = current_path.parent_path();
+    }
+    
+    // Fallback to current working directory if no indicators found
+    std::string fallback = std::filesystem::current_path().string();
+    LOG(WARNING) << "Could not detect repository root, using current directory: " << fallback;
+    return fallback;
 }
 
 void NodeGenerator::SignalHandler(int sig) {
