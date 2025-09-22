@@ -2,7 +2,7 @@ load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
-load("//ros2:ros2_wrapper.bzl", "ros2_wrapper_script", "ros2_cpp_binary_with_wrapper", "ros2_py_binary_with_wrapper")
+## Wrappers removed: use native ROS2 binaries directly
 load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -73,7 +73,7 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
     data = [
@@ -88,9 +88,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
     data = [
@@ -105,9 +106,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/proto:perception_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
     data = [
@@ -123,9 +125,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/action/proto:action_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "mock_inference",
     srcs = ["mock_inference.cc"],
     data = [
@@ -140,9 +143,10 @@ ros2_cpp_binary_with_wrapper(
         "//config/proto:ai_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_py_binary_with_wrapper(
+ros2_py_binary(
     name = "mock_inference_py",
     srcs = [
         "mock_inference.py",
@@ -158,9 +162,10 @@ ros2_py_binary_with_wrapper(
     data = [
         "//config/config_preset:config_presets",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "operational_limit_calibration",
     srcs = ["operational_limit_calibration.cc"],
     data = [
@@ -172,28 +177,24 @@ ros2_cpp_binary_with_wrapper(
         "//config/proto:config_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
 filegroup(
-    name = "ros2_executables",
+    name = "ros2_nodes",
     srcs = [
         ":camera_publisher",
-        ":camera_publisher_wrapper",
         ":camera_publisher_impl",
         ":encoder_publisher",
-        ":encoder_publisher_wrapper",
         ":encoder_publisher_impl",
         ":actuator_subscriber",
-        ":actuator_subscriber_wrapper",
         ":actuator_subscriber_impl",
         ":mock_inference",
-        ":mock_inference_wrapper",
         ":mock_inference_impl",
         ":mock_inference_py",
-        ":mock_inference_py_wrapper",
         ":mock_inference_py_impl",
         ":operational_limit_calibration",
-        ":operational_limit_calibration_wrapper",
         ":operational_limit_calibration_impl",
     ],
+    visibility = ["//visibility:public"],
 )

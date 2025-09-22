@@ -18,7 +18,7 @@ cc_binary(
     srcs = ["joshua_main.cc"],
     data = [
         "//config/config_preset:config_presets",
-        "//ros2:ros2_executables",
+        "//ros2:ros2_nodes",
     ],
     deps = [
         ":node_generator",
