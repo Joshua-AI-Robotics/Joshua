@@ -53,6 +53,58 @@ bazel build node_generator:joshua_main
 
 TODO: Add calibration instruction here.
 
+## Troubleshooting
+
+### Serial Device Permission Issues (`/dev/ttyACM0`)
+
+If you encounter permission errors when accessing serial devices like `/dev/ttyACM0`, follow these diagnostic steps:
+
+#### 1. Check Device Existence and Permissions
+```bash
+ls -la /dev/ttyACM*
+```
+**Expected output**: `crw-rw---- 1 root dialout 166, 0 /dev/ttyACM0`
+
+#### 2. Verify Your User Groups
+```bash
+groups $USER
+```
+**Check if**: `dialout` group is listed in your groups
+
+#### 3. Test Device Access
+```bash
+timeout 2 cat /dev/ttyACM0 2>&1 || echo "Cannot read from device"
+```
+
+#### 4. Diagnose the Issue
+- **If device doesn't exist**: Check hardware connection and power
+- **If permission denied**: You need `dialout` group membership
+- **If device exists but no permission**: Add yourself to dialout group
+
+#### 5. Fix Permission Issues
+```bash
+# Add your user to the dialout group
+sudo usermod -a -G dialout $USER
+
+# Restart your session (log out/in or restart terminal)
+# Then test access again
+timeout 2 cat /dev/ttyACM0
+```
+
+#### 6. Verify Hardware Connection
+```bash
+# Check USB devices
+lsusb
+
+# Check device information
+sudo udevadm info --name=/dev/ttyACM0
+```
+
+**Common Issues:**
+- **Permission denied**: User not in `dialout` group
+- **Device not found**: Hardware not connected or powered
+- **Access after group change**: Need to restart session for group membership to take effect
+
 ## Key Features & Benefits:
 
 ### Simplified Configuration
