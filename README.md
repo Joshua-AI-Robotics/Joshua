@@ -55,15 +55,15 @@ TODO: Add calibration instruction here.
 
 ## Troubleshooting
 
-### Serial Device Permission Issues (`/dev/ttyACM0`)
-
-If you encounter permission errors when accessing serial devices like `/dev/ttyACM0`, follow these diagnostic steps:
+### If your robot is not moving, check Serial Device Permission Issues (`/dev/ttyACM0`)
 
 #### 1. Check Device Existence and Permissions
 ```bash
 ls -la /dev/ttyACM*
 ```
 **Expected output**: `crw-rw---- 1 root dialout 166, 0 /dev/ttyACM0`
+
+If you encounter permission errors when accessing serial devices like `/dev/ttyACM0`, follow these diagnostic steps:
 
 #### 2. Verify Your User Groups
 ```bash
