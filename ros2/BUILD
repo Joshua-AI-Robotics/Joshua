@@ -1,9 +1,7 @@
 load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
-load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_library")
-
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
@@ -144,17 +142,46 @@ filegroup(
     name = "ros2_nodes",
     srcs = [
         ":camera_publisher",
-        ":camera_publisher_impl",
         ":encoder_publisher",
-        ":encoder_publisher_impl",
         ":actuator_subscriber",
-        ":actuator_subscriber_impl",
         ":mock_inference",
-        ":mock_inference_impl",
         ":mock_inference_py",
-        ":mock_inference_py_impl",
         ":operational_limit_calibration",
-        ":operational_limit_calibration_impl",
     ],
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "ros2_node_wrapper",
+    outs = [
+        "ros2_node_wrapper.sh",
+    ],
+    cmd = """
+cat > $(location ros2_node_wrapper.sh) << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $$# -lt 1 ]; then
+  echo "Usage: $$0 <node_name> [args...]" >&2
+  exit 1
+fi
+
+NODE="$$1"; shift || true
+SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
+RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
+
+if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
+  cd "$$RUNFILES_DIR/_main/ros2"
+  exec "./$${NODE}_impl" "$$@"
+elif [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
+  cd "$$RUNFILES_DIR/__main__/ros2"
+  exec "./$${NODE}_impl" "$$@"
+else
+  echo "Could not locate runfiles for '$${NODE}' relative to '$${SCRIPT_DIR}'." >&2
+  exit 1
+fi
+EOF
+chmod +x $(location ros2_node_wrapper.sh)
+""",
     visibility = ["//visibility:public"],
 )
