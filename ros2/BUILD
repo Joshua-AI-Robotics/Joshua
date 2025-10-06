@@ -168,18 +168,42 @@ fi
 
 NODE="$$1"; shift || true
 SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
-RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
 
+# Case 1: Bazel runfiles: impl sits in the same directory as this script
+if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
+  cd "$$SCRIPT_DIR"
+  # Export runfiles env vars to help ROS 2 locate resources
+  WS_DIR="$$(dirname "$$SCRIPT_DIR")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
+  exec "./$${NODE}_impl" "$$@"
+fi
+
+# Case 2: Packaged tar layout: use <node>.runfiles/_main or __main__
+RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
 if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
   cd "$$RUNFILES_DIR/_main/ros2"
+  WS_DIR="$$(dirname "$$PWD")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
   exec "./$${NODE}_impl" "$$@"
-elif [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
-  cd "$$RUNFILES_DIR/__main__/ros2"
-  exec "./$${NODE}_impl" "$$@"
-else
-  echo "Could not locate runfiles for '$${NODE}' relative to '$${SCRIPT_DIR}'." >&2
-  exit 1
 fi
+if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
+  cd "$$RUNFILES_DIR/__main__/ros2"
+  WS_DIR="$$(dirname "$$PWD")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
+  exec "./$${NODE}_impl" "$$@"
+fi
+
+echo "Could not locate '$${NODE}_impl' relative to '$$SCRIPT_DIR'." >&2
+exit 1
 EOF
 chmod +x $(location ros2_node_wrapper.sh)
 """,

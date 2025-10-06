@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <limits.h>
 #include <cstdlib>
+#include <mutex>
 
 extern char** environ;
 
@@ -160,6 +161,65 @@ namespace {
             return std::make_pair(launch, workdir);
         }
         return std::nullopt;
+    }
+
+    // Locate the generic wrapper script produced by //ros2:ros2_node_wrapper.sh
+    std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
+        // 1) Next to the current executable (packaged tar layout)
+        std::string self_exe = GetSelfExecutablePath();
+        if (!self_exe.empty()) {
+            std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
+            std::filesystem::path candidate = self_dir / "ros2_node_wrapper.sh";
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        // 2) In this process' runfiles
+        if (auto runfiles_root_opt = GetRunfilesRoot()) {
+            const std::filesystem::path runfiles_root = *runfiles_root_opt;
+            const char* workspace_dirs[] = {"_main", "__main__"};
+            for (const char* ws : workspace_dirs) {
+                std::filesystem::path ws_dir = runfiles_root / ws;
+                std::filesystem::path candidate = ws_dir / "ros2" / "ros2_node_wrapper.sh";
+                if (std::filesystem::exists(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+
+        // 3) In bazel-bin/ros2
+        if (!self_exe.empty()) {
+            std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
+            if (exe_dir.has_parent_path()) {
+                std::filesystem::path bazel_bin_root = exe_dir.parent_path();
+                std::filesystem::path candidate = bazel_bin_root / "ros2" / "ros2_node_wrapper.sh";
+                if (std::filesystem::exists(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    void TryRunFixSymlinksOnce() {
+        static std::once_flag run_once_flag;
+        std::call_once(run_once_flag, []() {
+            std::string self_exe = GetSelfExecutablePath();
+            if (self_exe.empty()) return;
+            std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
+            std::filesystem::path fixer = self_dir / "fix_symlinks.sh";
+            if (!std::filesystem::exists(fixer)) return;
+
+            pid_t pid = fork();
+            if (pid == 0) {
+                execl("/bin/bash", "/bin/bash", fixer.c_str(), nullptr);
+                _exit(127);
+            } else if (pid > 0) {
+                int status;
+                (void)waitpid(pid, &status, 0);
+            }
+        });
     }
 }
 
@@ -309,9 +369,13 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
 
     if (pid == 0) {
         std::string node_id_str = std::to_string(node_id);
+        TryRunFixSymlinksOnce();
 
-        // Prefer executing the sh_binary from bazel-bin with its own runfiles
+        // Prefer executing the native binary with its own runfiles when available (Bazel run),
+        // otherwise fall back to the generic wrapper (tar) or legacy launch script.
         std::string exec_path;
+        std::vector<const char*> argv_vec;
+
         if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type)) {
             exec_path = native_bin->string();
             std::filesystem::path bin_path(exec_path);
@@ -321,8 +385,6 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
                 setenv("TEST_SRCDIR", runfiles_dir.c_str(), 1);
                 unsetenv("RUNFILES_MANIFEST_FILE");
                 unsetenv("JAVA_RUNFILES");
-                // The generated script uses relative paths (e.g., ros2/<name>_impl),
-                // so set CWD to the runfiles workspace root: <tool>.runfiles/_main
                 std::filesystem::path workdir = runfiles_dir / "_main";
                 if (std::filesystem::exists(workdir) && std::filesystem::is_directory(workdir)) {
                     if (chdir(workdir.c_str()) != 0) {
@@ -335,8 +397,11 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
                 unsetenv("RUNFILES_MANIFEST_FILE");
                 unsetenv("JAVA_RUNFILES");
             }
+            argv_vec = {exec_path.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
+        } else if (auto wrapper = ResolveRos2WrapperPath()) {
+            exec_path = wrapper->string();
+            argv_vec = {exec_path.c_str(), node_type.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
         } else if (auto launch_and_dir = ResolveLaunchInChildRunfiles(node_type)) {
-            // Fallback: manually locate the launch script inside the child's own runfiles
             const std::filesystem::path& launch = launch_and_dir->first;
             const std::filesystem::path& workdir = launch_and_dir->second;
             const std::filesystem::path runfiles_root = workdir.parent_path();
@@ -348,8 +413,9 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
                 LOG(WARNING) << "Failed to chdir to runfiles workdir '" << workdir << "': " << strerror(errno);
             }
             exec_path = launch.string();
+            argv_vec = {exec_path.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
         } else {
-            LOG(ERROR) << "Could not locate ROS2 native binary or launch for node type '" << node_type << "'. Build '//ros2:ros2_nodes'.";
+            LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '" << node_type << "'. Build '//ros2:ros2_nodes'.";
             _exit(1);
         }
 
@@ -358,12 +424,7 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
             LOG(WARNING) << "Failed to set process group for " << node_name << ": " << strerror(errno) << ". This is not critical.";
         }
 
-        execl(exec_path.c_str(),
-              exec_path.c_str(),
-              node_name.c_str(),
-              node_id_str.c_str(),
-              config_path_.c_str(),
-              nullptr);
+        execv(exec_path.c_str(), const_cast<char* const*>(argv_vec.data()));
 
         LOG(ERROR) << "Failed to execute " << exec_path << ": " << strerror(errno);
         _exit(1);
