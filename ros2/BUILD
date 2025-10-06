@@ -147,6 +147,7 @@ filegroup(
         ":mock_inference",
         ":mock_inference_py",
         ":operational_limit_calibration",
+        # Add ROS2 nodes here.
     ],
     visibility = ["//visibility:public"],
 )
