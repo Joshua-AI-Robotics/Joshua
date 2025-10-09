@@ -8,6 +8,7 @@
 #include <string>
 #include <QtCore/QModelIndex>
 #include "node_generator/node_generator.h"
+#include "absl/status/status.h"
 
 // Forward declarations to avoid heavy includes in header
 class QStandardItemModel;

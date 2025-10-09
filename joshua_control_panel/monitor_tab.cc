@@ -102,7 +102,7 @@ void MonitorTab::onUpdateNodeTable() {
         return;
     }
 
-    if(node_generator_->GetLaunchedNodeCount() == 0) {
+    if(node_generator_->get_launched_node_count() == 0) {
         ui->nodeTable->clearContents();
         ui->nodeTable->setRowCount(0);
         // Clear tree
@@ -111,7 +111,7 @@ void MonitorTab::onUpdateNodeTable() {
     }
 
     std::vector<node_generator::NodeInfo> launched_nodes;
-    node_generator_->GetLaunchedNodes(launched_nodes);
+    node_generator_->GetLaunchedNodes(launched_nodes).ok();
 
     ui->nodeTable->setRowCount(launched_nodes.size());
     for (size_t i = 0; i < launched_nodes.size(); ++i) {
@@ -171,7 +171,7 @@ void MonitorTab::on_stopButton_clicked() {
 
     // Shutdown the node generator
     if (node_generator_) {
-        node_generator_->Shutdown();
+        node_generator_->Shutdown().ok();
         progress.markStepDone(2);
         emit updateNodeTable();
     }
@@ -188,7 +188,7 @@ bool MonitorTab::setup_node_generator() {
         node_generator_ = std::make_unique<node_generator::NodeGenerator>(config_);  
 
         emit logMessage("[INFO] Initializing node generator with config: " + QString::fromStdString(config_));
-        if(!node_generator_->Initialize()) {
+        if(!node_generator_->Initialize().ok()) {
             emit logMessage("[ERROR] Failed to initialize node generator.");
             return false;
         }
@@ -196,14 +196,14 @@ bool MonitorTab::setup_node_generator() {
 
         emit logMessage("[INFO] Building required targets.");
         emit updateStatus("BUILDING", kBuildStyle);
-        if(!node_generator_->BuildRequiredTargets(stop_node_generator_build_)) {
+        if(!node_generator_->BuildRequiredTargets(stop_node_generator_build_).ok()) {
             emit logMessage("[ERROR] Build stopped or failed.");
             return false;
         }
         emit logMessage("[INFO] Required targets built.");
 
         emit logMessage("[INFO] Launching nodes.");
-        if(!node_generator_->LaunchAllNodes()) {
+        if(!node_generator_->LaunchAllNodes().ok()) {
             emit logMessage("[ERROR] Failed to launch nodes.");
             emit updateStatus("ERROR", kErrorStyle);
             return false;

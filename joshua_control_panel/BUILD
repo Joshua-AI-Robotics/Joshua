@@ -98,6 +98,7 @@ cc_library(
         ":gui_utils",
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
+        "@abseil-cpp//absl/status:status",
     ],
 )
 
