@@ -7,6 +7,8 @@ cc_library(
     deps = [
         "@boost.asio",
         "@glog//:glog",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )

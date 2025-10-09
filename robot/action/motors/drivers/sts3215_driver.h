@@ -30,6 +30,7 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   std::vector<uint8_t> create_move_packet(uint16_t position);
   std::vector<uint8_t> create_torque_packet(uint8_t enable);
 
+  // TODO: This must be base pointer of comm interface. Not serial.
   std::shared_ptr<robot::comm_interface::Serial> serial_;
   std::string id_;
   uint8_t servo_id_;

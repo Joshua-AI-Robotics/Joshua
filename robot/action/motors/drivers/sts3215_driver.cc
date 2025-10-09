@@ -252,7 +252,10 @@ absl::Status Sts3215Driver::SetSpeed(float value) {
 
 absl::Status Sts3215Driver::SetPosition(float angle) {
     try{
-        serial_->Write(create_move_packet(static_cast<uint16_t>(angle)));
+        if(!serial_->Write(create_move_packet(static_cast<uint16_t>(angle))).ok()) {
+            LOG(ERROR) << "Failed to set position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
@@ -262,7 +265,10 @@ absl::Status Sts3215Driver::SetPosition(float angle) {
 
 absl::Status Sts3215Driver::SetTorque(float torque) {
     try{
-        serial_->Write(create_torque_packet(static_cast<uint16_t>(torque)));
+        if(!serial_->Write(create_torque_packet(static_cast<uint16_t>(torque))).ok()) {
+            LOG(ERROR) << "Failed to set torque.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
@@ -278,7 +284,10 @@ std::string Sts3215Driver::GetId() {
 absl::Status Sts3215Driver::SetMiddlePosition(){
     try{
         auto middle_position = (operational_lower_limit_ + operational_upper_limit_)/2;
-        serial_->Write(create_move_packet(middle_position));
+        if(!serial_->Write(create_move_packet(middle_position)).ok()) {
+            LOG(ERROR) << "Failed to set middle position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
@@ -288,7 +297,10 @@ absl::Status Sts3215Driver::SetMiddlePosition(){
 
 absl::Status Sts3215Driver::SetIdlePosition(){
     try{
-        serial_->Write(create_move_packet(idle_position_));
+        if(!serial_->Write(create_move_packet(idle_position_)).ok()) {
+            LOG(ERROR) << "Failed to set idle position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
         return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
