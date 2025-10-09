@@ -46,7 +46,6 @@ private:
     Ui::MonitorTab* ui;
     std::string config_;
     std::unique_ptr<node_generator::NodeGenerator> node_generator_;
-    std::atomic<bool> stop_node_generator_build_;
     std::thread node_generator_thread_;
 
     // Model/view for topics

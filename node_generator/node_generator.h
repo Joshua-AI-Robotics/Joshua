@@ -29,8 +29,6 @@ public:
     ~NodeGenerator();
 
     absl::Status Initialize();
-    absl::Status BuildRequiredTargets() { return absl::OkStatus(); }; // TODO: Remove this.
-    absl::Status BuildRequiredTargets(std::atomic_bool& stop_flag) { return absl::OkStatus(); }; // TODO: Remove this.  
     absl::Status LaunchAllNodes();
     absl::Status MonitorNodes();
     absl::Status Shutdown(const int max_wait_ms = 5000);

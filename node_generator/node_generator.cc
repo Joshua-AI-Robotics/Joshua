@@ -379,7 +379,7 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
             argv_vec = {exec_path.c_str(), node_type.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
         }
         else {
-            LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '" << node_type << "'. Build '//ros2:ros2_nodes'.";
+            LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '" << node_type;
             _exit(1);
         }
 
