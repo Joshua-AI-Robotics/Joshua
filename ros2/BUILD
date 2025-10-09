@@ -4,6 +4,16 @@ load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 package(default_visibility = ["//visibility:public"])
 
+# Central list of ROS2 node binary targets
+ROS2_NODE_TARGETS = [
+    ":camera_publisher",
+    ":encoder_publisher",
+    ":actuator_subscriber",
+    ":mock_inference",
+    ":mock_inference_py",
+    ":operational_limit_calibration",
+]
+
 cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
@@ -136,20 +146,6 @@ ros2_cpp_binary(
         "//ros2:node_runner",
     ],
     set_up_ament = True,
-)
-
-filegroup(
-    name = "ros2_nodes",
-    srcs = [
-        ":camera_publisher",
-        ":encoder_publisher",
-        ":actuator_subscriber",
-        ":mock_inference",
-        ":mock_inference_py",
-        ":operational_limit_calibration",
-        # Add ROS2 nodes here.
-    ],
-    visibility = ["//visibility:public"],
 )
 
 genrule(

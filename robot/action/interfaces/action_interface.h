@@ -15,7 +15,7 @@ class ActionInterface{
     virtual ~ActionInterface() = default;
     
     // Common interface methods for all action components
-    virtual absl::StatusOr<std::string> GetId() = 0;
+    virtual std::string GetId() = 0;
     virtual absl::Status SetAction(const robot::action::ActionPacket& action_packet) = 0;
 };
 }

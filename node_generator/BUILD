@@ -19,7 +19,12 @@ cc_binary(
     srcs = ["joshua_main.cc"],
     data = [
         "//config/config_preset:config_presets",
-        "//ros2:ros2_nodes",
+        "//ros2:camera_publisher",
+        "//ros2:encoder_publisher",
+        "//ros2:actuator_subscriber",
+        "//ros2:mock_inference",
+        "//ros2:mock_inference_py",
+        "//ros2:operational_limit_calibration",
     ],
     deps = [
         ":node_generator",
@@ -50,7 +55,7 @@ chmod +x $(location fix_symlinks.sh)
 
 # Package the native binary and runtime libs into a tar archive
 pkg_tar(
-    name = "joshua_main_tar",
+    name = "joshua_main_pkg",
     srcs = [
         ":joshua_main",
         "//config/config_preset:config_presets",
@@ -63,7 +68,7 @@ pkg_tar(
         "//ros2:ros2_node_wrapper.sh",
         ":fix_symlinks_script",
     ],
-    extension = ".gz",
+    extension = "tar.gz",
     package_dir = "joshua_main",
     include_runfiles = True,
     mode = "0755",

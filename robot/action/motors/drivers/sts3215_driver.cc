@@ -270,9 +270,9 @@ absl::Status Sts3215Driver::SetTorque(float torque) {
     return absl::OkStatus();
 }
 
-absl::StatusOr<std::string> Sts3215Driver::GetId() {
-    auto id = "sts3215_driver_" + std::to_string(servo_id_);
-    return absl::OkStatus(id);
+std::string Sts3215Driver::GetId() {
+    std::string id = "sts3215_driver_" + std::to_string(servo_id_);
+    return id;
 }
 
 absl::Status Sts3215Driver::SetMiddlePosition(){
