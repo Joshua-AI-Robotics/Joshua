@@ -19,11 +19,6 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         
-        if (!node_generator.BuildRequiredTargets().ok()) {
-            LOG(ERROR) << "Failed to build required targets";
-            return 1;
-        }
-        
         if (!node_generator.LaunchAllNodes().ok()) {
             LOG(ERROR) << "Failed to launch nodes";
             return 1;

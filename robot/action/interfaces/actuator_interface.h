@@ -14,12 +14,12 @@ class ActuatorInterface : public ActionInterface{
     virtual ~ActuatorInterface() = default;
     
     // Actuator-specific interface methods
-    virtual void SetSpeed(float value) = 0;
-    virtual void SetPosition(float angle) = 0;
-    virtual void SetTorque(float torque) = 0;
-    virtual void SetMiddlePosition(){ LOG(WARNING) << "SetMiddlePosition not implemented.";};
-    virtual void SetIdlePosition(){ LOG(WARNING) << "SetIdlePosition not implemented.";};
+    virtual absl::Status SetSpeed(float value) = 0;
+    virtual absl::Status SetPosition(float angle) = 0;
+    virtual absl::Status SetTorque(float torque) = 0;
+    virtual absl::Status SetMiddlePosition(){ LOG(WARNING) << "SetMiddlePosition not implemented.";};
+    virtual absl::Status SetIdlePosition(){ LOG(WARNING) << "SetIdlePosition not implemented.";};
     // TODO: Add this in the config. (e.g. what's the idle position, what's the torque, speed, etc.)
-    virtual void GracefulShutdown(){ LOG(WARNING) << "GracefulShutdown not implemented.";};
+    virtual absl::Status GracefulShutdown(){ LOG(WARNING) << "GracefulShutdown not implemented.";};
 };
 }
