@@ -125,6 +125,11 @@ namespace {
             if (std::filesystem::exists(candidate)) {
                 return candidate;
             }
+            // Also check under a ros2/ subdirectory in the same extracted tree
+            std::filesystem::path candidate_sub = self_dir / kROS2 / kROS2NodeWrapper;
+            if (std::filesystem::exists(candidate_sub)) {
+                return candidate_sub;
+            }
         }
 
         // 2) In this process' runfiles

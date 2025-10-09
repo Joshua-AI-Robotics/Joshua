@@ -58,13 +58,6 @@ pkg_tar(
     name = "joshua_main_pkg",
     srcs = [
         ":joshua_main",
-        "//config/config_preset:config_presets",
-        "//ros2:camera_publisher",
-        "//ros2:encoder_publisher",
-        "//ros2:actuator_subscriber",
-        "//ros2:mock_inference",
-        "//ros2:mock_inference_py",
-        "//ros2:operational_limit_calibration",
         "//ros2:ros2_node_wrapper.sh",
         ":fix_symlinks_script",
     ],

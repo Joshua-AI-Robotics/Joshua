@@ -166,7 +166,7 @@ fi
 NODE="$$1"; shift || true
 SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
 
-# Case 1: Bazel runfiles: impl sits in the same directory as this script
+# Case 1a: Impl sits next to this script
 if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
   cd "$$SCRIPT_DIR"
   # Export runfiles env vars to help ROS 2 locate resources
@@ -178,26 +178,40 @@ if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
   exec "./$${NODE}_impl" "$$@"
 fi
 
-# Case 2: Packaged tar layout: use <node>.runfiles/_main or __main__
-RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
-if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
-  cd "$$RUNFILES_DIR/_main/ros2"
-  WS_DIR="$$(dirname "$$PWD")"
+# Case 1b: Impl sits under ros2/ while this script is at top-level
+if [ -x "$$SCRIPT_DIR/ros2/$${NODE}_impl" ]; then
+  cd "$$SCRIPT_DIR/ros2"
+  WS_DIR="$$(dirname "$$SCRIPT_DIR")"
   export RUNFILES_DIR="$$WS_DIR"
   export TEST_SRCDIR="$$WS_DIR"
   unset RUNFILES_MANIFEST_FILE || true
   unset JAVA_RUNFILES || true
   exec "./$${NODE}_impl" "$$@"
 fi
-if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
-  cd "$$RUNFILES_DIR/__main__/ros2"
-  WS_DIR="$$(dirname "$$PWD")"
-  export RUNFILES_DIR="$$WS_DIR"
-  export TEST_SRCDIR="$$WS_DIR"
-  unset RUNFILES_MANIFEST_FILE || true
-  unset JAVA_RUNFILES || true
-  exec "./$${NODE}_impl" "$$@"
-fi
+
+# Case 2: Runfiles layout. Search any *.runfiles under top-level and ros2/ subdir.
+for CAND in "$$SCRIPT_DIR" "$$SCRIPT_DIR/ros2"; do
+  for RUNFILES_DIR in "$$CAND"/*.runfiles; do
+    if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
+      cd "$$RUNFILES_DIR/_main/ros2"
+      WS_DIR="$$(dirname "$$PWD")"
+      export RUNFILES_DIR="$$WS_DIR"
+      export TEST_SRCDIR="$$WS_DIR"
+      unset RUNFILES_MANIFEST_FILE || true
+      unset JAVA_RUNFILES || true
+      exec "./$${NODE}_impl" "$$@"
+    fi
+    if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
+      cd "$$RUNFILES_DIR/__main__/ros2"
+      WS_DIR="$$(dirname "$$PWD")"
+      export RUNFILES_DIR="$$WS_DIR"
+      export TEST_SRCDIR="$$WS_DIR"
+      unset RUNFILES_MANIFEST_FILE || true
+      unset JAVA_RUNFILES || true
+      exec "./$${NODE}_impl" "$$@"
+    fi
+  done
+done
 
 echo "Could not locate '$${NODE}_impl' relative to '$$SCRIPT_DIR'." >&2
 exit 1
