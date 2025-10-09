@@ -41,6 +41,13 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   sudo usermod -aG dialout $USER # Then reboot
   ```
 
+- **Camera Access:**  
+  For USB cameras (especially HHWei cameras), ensure proper video device access:
+  ```bash
+  sudo usermod -aG video $USER
+  newgrp video
+  ```
+
 ### Example: Running SO100 Teleoperation with Follower and Lead Arm
 
 This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate.pbtxt`](config/config_preset/so100_teleoperate.pbtxt).
@@ -60,6 +67,38 @@ bazel build node_generator:joshua_main
 ```
 
 TODO: Add calibration instruction here.
+
+## Troubleshooting
+
+### USB Camera Not Detected
+
+If your USB camera (especially HHWei cameras) is not showing up as `/dev/video*` devices:
+
+1. **Check if camera is detected by USB:**
+   ```bash
+   lsusb | grep -i camera
+   ```
+
+2. **Ensure you're in the video group:**
+   ```bash
+   sudo usermod -aG video $USER
+   newgrp video
+   ```
+
+3. **Check if UVC drivers are loaded:**
+   ```bash
+   lsmod | grep uvc
+   ```
+
+4. **If no video devices appear, try unplugging and reconnecting the camera** - this often resolves initialization issues.
+
+5. **Verify camera is working:**
+   ```bash
+   ls -l /dev/video*
+   v4l2-ctl --list-devices
+   ```
+
+**Solution Summary:** The most common fix is adding your user to the `video` group and unplugging/reconnecting the camera to trigger proper device node creation.
 
 ## Key Features & Benefits:
 
