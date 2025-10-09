@@ -4,6 +4,12 @@
 #include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "robot/comm_interface/serial/serial.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 #include <any>
 #include <optional>
 
@@ -14,9 +20,9 @@ public:
     explicit Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Encoder& encoder_config);
     ~Sts3215Encoder() override = default;
 
-    robot::perception::PerceptionPacket GetData() override;
+    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
     std::string GetId() override;
-    float GetPosition() override;
+    absl::StatusOr<float> GetPosition() override;
 
 private:
     std::shared_ptr<robot::comm_interface::Serial> serial_;

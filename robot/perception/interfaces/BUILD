@@ -4,6 +4,7 @@ cc_library(
     name = "perception_interface",
     hdrs = ["perception_interface.h"],
     deps = [
+        "@abseil-cpp//absl/status:status",
     ],
     visibility = ["//visibility:public"],
 )

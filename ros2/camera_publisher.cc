@@ -24,7 +24,7 @@ public:
 
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA && 
-          single_perception.node_id() == node_id) {
+          static_cast<int>(single_perception.node_id()) == node_id) {
         const auto& camera_proto = single_perception.camera();
 
         auto interface = perception_factory.CreatePerception(single_perception);  
@@ -68,13 +68,18 @@ private:
       for (const auto& camera : cameras_) {
         auto packet = camera.interface->GetData();
         
+        if (!packet.ok()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get data from camera '%s'!", camera.topic.c_str());
+            continue;
+        }
+        
         // Check if packet contains image data
-        if (!packet.has_image()) {
+        if (!packet.value().has_image()) {
             RCLCPP_WARN(this->get_logger(), "Failed to get image data from camera!");
             continue;
         }
 
-        const auto& image_data = packet.image();
+        const auto& image_data = packet.value().image();
         
         // Verify image data is valid
         if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {

@@ -74,14 +74,19 @@ private:
     try {
       for (auto& encoder : encoders_) {
         auto packet = encoder.interface->GetData();
+
+        if (!packet.ok()) {
+            RCLCPP_WARN(this->get_logger(), "Failed to get data from encoder '%s'!", encoder.topic.c_str());
+            continue;
+        }
         
         // Check if packet contains position data
-        if (!packet.has_position()) {
+        if (!packet.value().has_position()) {
             RCLCPP_WARN(this->get_logger(), "Failed to get position data from encoder '%s'!", encoder.topic.c_str());
             continue;
         }
         
-        float position_data = packet.position().position();
+        float position_data = packet.value().position().position();
 
         switch(encoder.encoder_data_mode) {
           case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_RAW:

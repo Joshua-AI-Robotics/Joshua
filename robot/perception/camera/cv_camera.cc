@@ -42,7 +42,7 @@ CvCamera::~CvCamera() {
     }
 }
 
-robot::perception::PerceptionPacket CvCamera::GetData() {
+absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     try {
         // Check if camera is still open
         if (!cap_.isOpened()) {
@@ -51,7 +51,7 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
             if (!cap_.isOpened()) {
                 LOG(ERROR) << "Failed to reopen camera " << id_ << " with id " << camera_id_;
                 reusable_packet_.Clear();
-                return reusable_packet_;
+                return absl::Status(absl::StatusCode::kInternal, "Failed to reopen camera");
             }
             LOG(INFO) << "Successfully reopened camera " << id_;
         }
@@ -62,7 +62,7 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
         if (frame.empty()) {
             LOG(ERROR) << "Failed to capture an image from camera " << id_ << " (camera_id: " << camera_id_ << ")";
             reusable_packet_.Clear();
-            return reusable_packet_;
+            return absl::Status(absl::StatusCode::kInternal, "Failed to capture an image from camera with empty frame");
         }
 
         // Validate frame properties
@@ -70,14 +70,14 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
             LOG(ERROR) << "Invalid frame dimensions from camera " << id_ << ": " 
                        << frame.cols << "x" << frame.rows;
             reusable_packet_.Clear();
-            return reusable_packet_;
+            return absl::Status(absl::StatusCode::kInternal, "Failed to capture an image from camera with invalid frame dimensions");
         }
 
         if (frame.channels() != 3) {
             LOG(ERROR) << "Unexpected number of channels from camera " << id_ << ": " 
                        << frame.channels() << " (expected 3 for BGR)";
             reusable_packet_.Clear();
-            return reusable_packet_;
+            return absl::Status(absl::StatusCode::kInternal, "Failed to capture an image from camera with unexpected number of channels");
         }
 
         // Clear and populate the reusable packet
@@ -99,13 +99,13 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
         if (data_size == 0) {
             LOG(ERROR) << "Frame data size is 0 for camera " << id_;
             reusable_packet_.Clear();
-            return reusable_packet_;
+            return absl::Status(absl::StatusCode::kInternal, "Failed to capture an image from camera with frame data size is 0");
         }
 
         if (frame.data == nullptr) {
             LOG(ERROR) << "Frame data pointer is null for camera " << id_;
             reusable_packet_.Clear();
-            return reusable_packet_;
+            return absl::Status(absl::StatusCode::kInternal, "Failed to capture an image from camera with frame data pointer is null");
         }
         
         // Create a string from the image data and assign it
@@ -121,15 +121,15 @@ robot::perception::PerceptionPacket CvCamera::GetData() {
     } catch (const cv::Exception& e) {
         LOG(ERROR) << "OpenCV exception in camera " << id_ << ": " << e.what();
         reusable_packet_.Clear();
-        return reusable_packet_;
+        return absl::Status(absl::StatusCode::kInternal, "OpenCV exception in camera");
     } catch (const std::exception& e) {
         LOG(ERROR) << "Standard exception in camera " << id_ << ": " << e.what();
         reusable_packet_.Clear();
-        return reusable_packet_;
+        return absl::Status(absl::StatusCode::kInternal, "Standard exception in camera");
     } catch (...) {
         LOG(ERROR) << "Unknown exception in camera " << id_;
         reusable_packet_.Clear();
-        return reusable_packet_;
+        return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
     }
 }
 

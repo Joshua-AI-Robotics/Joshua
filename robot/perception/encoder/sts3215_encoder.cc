@@ -19,7 +19,7 @@ std::string Sts3215Encoder::GetId() {
     return id;
 }
 
-robot::perception::PerceptionPacket Sts3215Encoder::GetData() {
+absl::StatusOr<robot::perception::PerceptionPacket> Sts3215Encoder::GetData() {
     auto position_opt = read_servo_position();
     if (position_opt) {
         reusable_packet_.Clear();
@@ -32,15 +32,15 @@ robot::perception::PerceptionPacket Sts3215Encoder::GetData() {
     
     // Return empty packet on failure
     reusable_packet_.Clear();
-    return reusable_packet_;
+    return absl::Status(absl::StatusCode::kInternal, "Failed to read servo position");
 }
 
-float Sts3215Encoder::GetPosition() {
+absl::StatusOr<float> Sts3215Encoder::GetPosition() {
     auto position_opt = read_servo_position();
     if (position_opt) {
         return static_cast<float>(*position_opt);
     }
-    return -1.0f; // Return -1.0 on failure
+    return absl::Status(absl::StatusCode::kInternal, "Failed to read servo position");
 }
 
 uint8_t Sts3215Encoder::calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end) {
@@ -81,7 +81,6 @@ std::optional<uint16_t> Sts3215Encoder::read_servo_position() {
     response.reserve(8); // Pre-allocate space
 
     // Synchronize to 0xFF 0xFF header
-    uint8_t byte;
     bool header_found = false;
     for (int attempts = 0; attempts < kReadAttempt; ++attempts) {
         std::vector<uint8_t> first_byte_vec = serial_->Read(1);
