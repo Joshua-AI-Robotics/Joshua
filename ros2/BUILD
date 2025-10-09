@@ -1,50 +1,8 @@
 load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
-load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
-load("//ros2:ros2_wrapper.bzl", "ros2_wrapper_script", "ros2_cpp_binary_with_wrapper", "ros2_py_binary_with_wrapper")
 load("@rules_python//python:defs.bzl", "py_library")
-
 package(default_visibility = ["//visibility:public"])
-
-# ==============================================================================
-# ROS2 Binary Wrapper System (C++ and Python)
-# ==============================================================================
-# 
-# This BUILD file uses custom macros that automatically generate both the ROS2
-# binary and a standalone wrapper script for execution outside of `bazel run`.
-#
-# - C++:   ros2_cpp_binary_with_wrapper(name = ...)
-# - Python:ros2_py_binary_with_wrapper(name = ...)
-#
-# PURPOSE: Enable running ROS2 nodes standalone without Bazel commands
-# - Wrapper scripts allow deployment/execution without Bazel installation
-# - Binaries can run independently on target systems
-# - No need for `bazel run` in production environments
-#
-# How it works:
-# 1. The macros create the normal ROS2 targets with set_up_ament=True
-# 2. They also generate a wrapper script (e.g., <name>_wrapper.sh)
-# 3. The wrapper script is added as a data dependency so it builds automatically
-#
-# Benefits:
-# - Single build command: `bazel build ros2:<target>` builds both binary and wrapper
-# - Standalone execution without Bazel dependency
-# - Node generator can uniformly launch both C++ and Python nodes via wrappers
-#
-# Usage examples:
-# - Build: `bazel build ros2:mock_inference_py`
-# - Run standalone: `cd bazel-bin && ./ros2/mock_inference_py_wrapper.sh <node_name> <node_id> <config_path>`
-# - Traditional still works: `bazel run ros2:mock_inference_py -- <args>`
-#
-# The wrapper scripts:
-# - Set up AMENT_PREFIX_PATH
-# - Change to the correct working directory for runfiles (when needed)
-# - Execute the underlying binary/launcher with all libraries resolved
-# - Work from the bazel-bin directory without needing `bazel run`
-# - Suitable for use by the node generator when spawning processes
-#
-# ==============================================================================
 
 cc_library(
     name = "node_runner",
@@ -73,7 +31,7 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
     data = [
@@ -88,9 +46,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
     data = [
@@ -105,9 +64,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/perception/proto:perception_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
     data = [
@@ -123,9 +83,10 @@ ros2_cpp_binary_with_wrapper(
         "//robot/action/proto:action_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "mock_inference",
     srcs = ["mock_inference.cc"],
     data = [
@@ -140,9 +101,10 @@ ros2_cpp_binary_with_wrapper(
         "//config/proto:ai_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
-ros2_py_binary_with_wrapper(
+ros2_py_binary(
     name = "mock_inference_py",
     srcs = [
         "mock_inference.py",
@@ -158,9 +120,10 @@ ros2_py_binary_with_wrapper(
     data = [
         "//config/config_preset:config_presets",
     ],
+    set_up_ament = True,
 )
 
-ros2_cpp_binary_with_wrapper(
+ros2_cpp_binary(
     name = "operational_limit_calibration",
     srcs = ["operational_limit_calibration.cc"],
     data = [
@@ -172,28 +135,78 @@ ros2_cpp_binary_with_wrapper(
         "//config/proto:config_cc_proto",
         "//ros2:node_runner",
     ],
+    set_up_ament = True,
 )
 
 filegroup(
-    name = "ros2_executables",
+    name = "ros2_nodes",
     srcs = [
         ":camera_publisher",
-        ":camera_publisher_wrapper",
-        ":camera_publisher_impl",
         ":encoder_publisher",
-        ":encoder_publisher_wrapper",
-        ":encoder_publisher_impl",
         ":actuator_subscriber",
-        ":actuator_subscriber_wrapper",
-        ":actuator_subscriber_impl",
         ":mock_inference",
-        ":mock_inference_wrapper",
-        ":mock_inference_impl",
         ":mock_inference_py",
-        ":mock_inference_py_wrapper",
-        ":mock_inference_py_impl",
         ":operational_limit_calibration",
-        ":operational_limit_calibration_wrapper",
-        ":operational_limit_calibration_impl",
+        # Add ROS2 nodes here.
     ],
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "ros2_node_wrapper",
+    outs = [
+        "ros2_node_wrapper.sh",
+    ],
+    cmd = """
+cat > $(location ros2_node_wrapper.sh) << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $$# -lt 1 ]; then
+  echo "Usage: $$0 <node_name> [args...]" >&2
+  exit 1
+fi
+
+NODE="$$1"; shift || true
+SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
+
+# Case 1: Bazel runfiles: impl sits in the same directory as this script
+if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
+  cd "$$SCRIPT_DIR"
+  # Export runfiles env vars to help ROS 2 locate resources
+  WS_DIR="$$(dirname "$$SCRIPT_DIR")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
+  exec "./$${NODE}_impl" "$$@"
+fi
+
+# Case 2: Packaged tar layout: use <node>.runfiles/_main or __main__
+RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
+if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
+  cd "$$RUNFILES_DIR/_main/ros2"
+  WS_DIR="$$(dirname "$$PWD")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
+  exec "./$${NODE}_impl" "$$@"
+fi
+if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
+  cd "$$RUNFILES_DIR/__main__/ros2"
+  WS_DIR="$$(dirname "$$PWD")"
+  export RUNFILES_DIR="$$WS_DIR"
+  export TEST_SRCDIR="$$WS_DIR"
+  unset RUNFILES_MANIFEST_FILE || true
+  unset JAVA_RUNFILES || true
+  exec "./$${NODE}_impl" "$$@"
+fi
+
+echo "Could not locate '$${NODE}_impl' relative to '$$SCRIPT_DIR'." >&2
+exit 1
+EOF
+chmod +x $(location ros2_node_wrapper.sh)
+""",
+    visibility = ["//visibility:public"],
 )

@@ -7,27 +7,30 @@
 #include <signal.h>
 #include <chrono>
 #include <thread>
-#include <atomic>
-#include <spawn.h>
 #include <unordered_map>
-#include <unordered_set>
 #include <limits.h>
 #include <cstdlib>
-
-extern char** environ;
+#include <mutex>
 
 namespace node_generator {
 
 namespace {
-    constexpr auto kROS2Target = "ros2:";
+    // Common environment variables.
+    constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
+    constexpr auto kROS2 = "ros2";
+
+    // Common file names.
+    constexpr auto kFixSymlinksScript = "fix_symlinks.sh";
 
     // Node types.
+    // Last Added: kOperationalLimitCalibration.
     constexpr auto kCameraPublisher = "camera_publisher";
     constexpr auto kEncoderPublisher = "encoder_publisher";
     constexpr auto kActuatorSubscriber = "actuator_subscriber";
     constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 
     // Operation modes.
+    // Last Added: mock_inference_py.
     constexpr auto kTeleoperate = "teleoperate";
     constexpr auto kInference = "inference";
     constexpr auto kTraining = "training";
@@ -37,19 +40,22 @@ namespace {
     constexpr auto kMockInferencePy = "mock_inference_py";
     
     // Centralized mappings for easy future extension.
-    
+
     // <perception_type, node_type>
+    // Last Added: kEncoderPublisher.
     const std::unordered_map<robot::perception::PerceptionType, const char*> kPerceptionToNodeType = {
         {robot::perception::PerceptionType::CAMERA, kCameraPublisher},
         {robot::perception::PerceptionType::ENCODER, kEncoderPublisher},
     };
 
     // <action_type, node_type>
+    // Last Added: kActuatorSubscriber.
     const std::unordered_map<robot::action::ActionType, const char*> kActionToNodeType = {
         {robot::action::ActionType::ACTUATOR, kActuatorSubscriber},
     };
 
     // <operation_mode, node_type>
+    // Last Added: kMockInferencePy.
     const std::unordered_map<config::General::OperationMode, const char*> kOperationModeToNodeType = {
         {config::General::MODE_TELEOPERATE, kTeleoperate},
         {config::General::MODE_INFERENCE, kInference}, // Not yet implemented.
@@ -61,6 +67,7 @@ namespace {
     };
 
     // <calibration_mode, node_type>
+    // Last Added: kOperationalLimitCalibration.
     const std::unordered_map<config::CalibrationMode, const char*> kCalibrationModeToNodeType = {
         {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibration},
     };
@@ -94,54 +101,81 @@ namespace {
         return std::nullopt;
     }
 
-    // Locate the ROS2 launch script for a given node type within runfiles.
-    // Primary layout: <runfiles>/_main/ros2/<name>_launch, fallback: <runfiles>/__main__/ros2/<name>_launch
-    std::optional<std::filesystem::path> ResolveLaunchPath(const std::string& node_type, std::filesystem::path* out_workspace_dir) {
-        auto runfiles_root_opt = GetRunfilesRoot();
-        const std::string launch_name = node_type + std::string("_launch");
-        if (runfiles_root_opt) {
-            const std::filesystem::path runfiles_root = *runfiles_root_opt;
-            const char* workspace_dirs[] = {"_main", "__main__"};
-            for (const char* ws : workspace_dirs) {
-                std::filesystem::path ws_dir = runfiles_root / ws;
-                std::filesystem::path candidate = ws_dir / "ros2" / launch_name;
-                if (std::filesystem::exists(candidate)) {
-                    if (out_workspace_dir) {
-                        *out_workspace_dir = ws_dir;
-                    }
-                    return candidate;
-                }
-            }
-        }
-
-        // As a last resort, try locating next to bazel-bin of this binary: <exe_dir>/../../ros2/<name>_launch
-        std::string self_exe = GetSelfExecutablePath();
-        if (!self_exe.empty()) {
-            std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
-            // Heuristic: node_generator/joshua_main => go up two levels to reach bazel-bin root
-            std::filesystem::path candidate = exe_dir;
-            if (candidate.has_parent_path()) candidate = candidate.parent_path();
-            if (candidate.has_parent_path()) candidate = candidate.parent_path();
-            candidate = candidate / "ros2" / launch_name;
-            if (std::filesystem::exists(candidate)) {
-                return candidate;
-            }
-        }
-        return std::nullopt;
-    }
-
-    // Try to find the wrapper in Bazel's bin tree: <bazel-bin>/ros2/<name>_wrapper.sh
-    std::optional<std::filesystem::path> ResolveWrapperInBazelBin(const std::string& node_type) {
+    // Try to find the native binary in Bazel's bin tree: <bazel-bin>/ros2/<name>
+    std::optional<std::filesystem::path> ResolveNativeBinaryInBazelBin(const std::string& node_type) {
         std::string self_exe = GetSelfExecutablePath();
         if (self_exe.empty()) return std::nullopt;
         std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
         if (!exe_dir.has_parent_path()) return std::nullopt;
         std::filesystem::path bazel_bin_root = exe_dir.parent_path();
-        std::filesystem::path candidate = bazel_bin_root / "ros2" / (node_type + std::string("_wrapper.sh"));
+        std::filesystem::path candidate = bazel_bin_root / kROS2 / node_type;
         if (std::filesystem::exists(candidate)) {
             return candidate;
         }
         return std::nullopt;
+    }
+
+    // Locate the generic wrapper script produced by //ros2:ros2_node_wrapper.sh
+    std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
+        // 1) Next to the current executable (packaged tar layout)
+        std::string self_exe = GetSelfExecutablePath();
+        if (!self_exe.empty()) {
+            std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
+            std::filesystem::path candidate = self_dir / kROS2NodeWrapper;
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        // 2) In this process' runfiles
+        if (auto runfiles_root_opt = GetRunfilesRoot()) {
+            const std::filesystem::path runfiles_root = *runfiles_root_opt;
+            const char* workspace_dirs[] = {"_main", "__main__"};
+            for (const char* ws : workspace_dirs) {
+                std::filesystem::path ws_dir = runfiles_root / ws;
+                std::filesystem::path candidate = ws_dir / kROS2 / kROS2NodeWrapper;
+                if (std::filesystem::exists(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+
+        // 3) In bazel-bin/ros2
+        if (!self_exe.empty()) {
+            std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
+            if (exe_dir.has_parent_path()) {
+                std::filesystem::path bazel_bin_root = exe_dir.parent_path();
+                std::filesystem::path candidate = bazel_bin_root / kROS2 / kROS2NodeWrapper;
+                if (std::filesystem::exists(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    void TryRunFixSymlinksOnce() {
+        static std::once_flag run_once_flag;
+        std::call_once(run_once_flag, []() {
+            std::string self_exe = GetSelfExecutablePath();
+            if (self_exe.empty()) return;
+            std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
+            std::filesystem::path fixer = self_dir / kFixSymlinksScript;
+            if (!std::filesystem::exists(fixer)) return;
+
+            pid_t pid = fork();
+            if (pid == 0) {
+                // Ensure the script runs from the directory that contains the *.runfiles folders
+                if (chdir(self_dir.c_str()) != 0) {
+                    _exit(127);
+                }
+                execl("/bin/bash", "/bin/bash", fixer.c_str(), nullptr);
+                _exit(127);
+            } else if (pid > 0) {
+                int status;
+                (void)waitpid(pid, &status, 0);
+            }
+        });
     }
 }
 
@@ -175,9 +209,6 @@ bool NodeGenerator::Initialize() {
     LOG(INFO) << "Robot Name: " << robot_config.name();
     LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
     LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
-
-    // Do NOT change the process-wide working directory here; use absolute paths and
-    // run child processes with their own working directory where needed.
     
     IdentifyNodeTypes();
     if (!CheckConfigIntegrity()) {
@@ -291,25 +322,54 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
 
     if (pid == 0) {
         std::string node_id_str = std::to_string(node_id);
-
-        // Prefer executing the wrapper from bazel-bin so its sibling .runfiles is available
+        TryRunFixSymlinksOnce();
         std::string exec_path;
-        if (auto wrapper_bin = ResolveWrapperInBazelBin(node_type)) {
-            exec_path = wrapper_bin->string();
-        } else {
-            // Fallback: run the launch script from runfiles by chdir-ing into the workspace dir
-            std::filesystem::path workspace_dir;
-            auto launch_path_opt = ResolveLaunchPath(node_type, &workspace_dir);
-            if (!launch_path_opt) {
-                LOG(ERROR) << "Could not locate ROS2 wrapper or launch for node type '" << node_type << "'. Ensure '//ros2:ros2_executables' is built.";
+        std::vector<const char*> argv_vec;
+        
+        // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
+        if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type)) {
+            exec_path = native_bin->string();
+            if (!std::filesystem::exists(exec_path)) {
+                LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type << "'";
                 _exit(1);
             }
-            if (!workspace_dir.empty()) {
-                if (chdir(workspace_dir.c_str()) != 0) {
-                    LOG(WARNING) << "Failed to chdir to runfiles workspace '" << workspace_dir << "': " << strerror(errno);
+            std::filesystem::path bin_path(exec_path);
+            std::filesystem::path runfiles_dir = bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
+            if (std::filesystem::exists(runfiles_dir)) {
+                setenv("RUNFILES_DIR", runfiles_dir.c_str(), 1);
+                setenv("TEST_SRCDIR", runfiles_dir.c_str(), 1);
+                unsetenv("RUNFILES_MANIFEST_FILE");
+                unsetenv("JAVA_RUNFILES");
+                std::filesystem::path workdir = runfiles_dir / "_main";
+                if (std::filesystem::exists(workdir) && std::filesystem::is_directory(workdir)) {
+                    if (chdir(workdir.c_str()) != 0) {
+                        LOG(WARNING) << "Failed to chdir to child runfiles workdir '" << workdir << "': " << strerror(errno);
+                    }
                 }
+            } else {
+                unsetenv("RUNFILES_DIR");
+                unsetenv("TEST_SRCDIR");
+                unsetenv("RUNFILES_MANIFEST_FILE");
+                unsetenv("JAVA_RUNFILES");
             }
-            exec_path = launch_path_opt->string();
+            argv_vec = {exec_path.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
+        }
+        // 2) Try to execute the generic wrapper from packaged tar layout.
+        else if (auto wrapper = ResolveRos2WrapperPath()) {
+            exec_path = wrapper->string();
+            if (!std::filesystem::exists(exec_path)) {
+                LOG(ERROR) << "Wrapper script not found at '" << exec_path << "'";
+                _exit(1);
+            }
+            if (access(exec_path.c_str(), X_OK) != 0) {
+                LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
+                _exit(1);
+            }
+            argv_vec = {exec_path.c_str(), node_type.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
+        }
+        else {
+            LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '" << node_type << "'. Build '//ros2:ros2_nodes'.";
+            _exit(1);
         }
 
         // Put child in its own process group so we can signal the whole group (including grandchildren)
@@ -317,12 +377,7 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
             LOG(WARNING) << "Failed to set process group for " << node_name << ": " << strerror(errno) << ". This is not critical.";
         }
 
-        execl(exec_path.c_str(),
-              exec_path.c_str(),
-              node_name.c_str(),
-              node_id_str.c_str(),
-              config_path_.c_str(),
-              nullptr);
+        execv(exec_path.c_str(), const_cast<char* const*>(argv_vec.data()));
 
         LOG(ERROR) << "Failed to execute " << exec_path << ": " << strerror(errno);
         _exit(1);
