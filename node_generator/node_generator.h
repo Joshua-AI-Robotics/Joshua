@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/proto/config.pb.h"
+#include "absl/status/status.h"
 #include <map>
 #include <set>
 #include <vector>
@@ -27,20 +28,20 @@ public:
     explicit NodeGenerator(const std::string& config_path);
     ~NodeGenerator();
 
-    bool Initialize();
-    bool BuildRequiredTargets() { return true; }; // TODO: Remove this.
-    bool BuildRequiredTargets(std::atomic_bool& stop_flag) { return true; }; // TODO: Remove this.  
-    bool LaunchAllNodes();
-    void MonitorNodes();
-    void Shutdown(const int max_wait_ms = 5000);
-    void GetLaunchedNodes(std::vector<NodeInfo>& nodes);
+    absl::Status Initialize();
+    absl::Status BuildRequiredTargets() { return absl::OkStatus(); }; // TODO: Remove this.
+    absl::Status BuildRequiredTargets(std::atomic_bool& stop_flag) { return absl::OkStatus(); }; // TODO: Remove this.  
+    absl::Status LaunchAllNodes();
+    absl::Status MonitorNodes();
+    absl::Status Shutdown(const int max_wait_ms = 5000);
+    absl::Status GetLaunchedNodes(std::vector<NodeInfo>& nodes);
 
-    size_t GetLaunchedNodeCount() const { return launched_nodes_.size(); }
-    bool HasNodes() const { return !launched_nodes_.empty(); }
+    size_t get_launched_node_count() const { return launched_nodes_.size(); }
+    bool has_nodes() const { return !launched_nodes_.empty(); }
 
 private:
-    void IdentifyNodeTypes();
-    bool CheckConfigIntegrity();
+    absl::Status identify_node_types();
+    absl::Status check_config_integrity();
 
     pid_t LaunchNode(const std::string& node_type, uint32_t node_id,
                      const std::string& node_name);
@@ -50,7 +51,7 @@ private:
     void CleanupAndExit(int exit_code);
     void MonitorChildProcesses();
 
-    void GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics);
+    absl::Status GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics);
 
     // Map from node_id to node type.
     std::map<uint32_t, std::string> identified_nodes_;

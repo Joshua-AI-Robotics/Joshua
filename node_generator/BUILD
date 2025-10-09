@@ -8,6 +8,7 @@ cc_library(
     hdrs = ["node_generator.h"],
     deps = [
         "//config:config_utils",
+        "@abseil-cpp//absl/status:status",
         "@glog//:glog",
     ],
     visibility = ["//visibility:public"],

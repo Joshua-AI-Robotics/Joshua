@@ -189,20 +189,23 @@ NodeGenerator::NodeGenerator(const std::string& config_path)
 }
 
 NodeGenerator::~NodeGenerator() {
-    if (HasNodes()) {
-        Shutdown();
+    if (has_nodes()) {
+        auto res = Shutdown();
+        if (!res.ok()) {
+            LOG(ERROR) << "Failed to shutdown nodes";
+        }
     }
     instance_ = nullptr;
 }
 
-bool NodeGenerator::Initialize() {
+absl::Status NodeGenerator::Initialize() {
     LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
     
     try {
         config_ = config::config_util::LoadConfig(config_path_);
     } catch (const std::exception& e) {
         LOG(ERROR) << "Failed to load config: " << e.what();
-        return false;
+        return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
     }
     
     auto robot_config = config_.robot();
@@ -210,17 +213,20 @@ bool NodeGenerator::Initialize() {
     LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
     LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
     
-    IdentifyNodeTypes();
-    if (!CheckConfigIntegrity()) {
-        return false;
+    if (!identify_node_types().ok()) {
+        return absl::Status(absl::StatusCode::kInvalidArgument, "Node types identification failed");
+    }
+
+    if (!check_config_integrity().ok()) {
+        return absl::Status(absl::StatusCode::kInvalidArgument, "Config integrity check failed");
     }
 
     SetupSignalHandlers();
     
-    return true;
+    return absl::OkStatus();
 }
 
-void NodeGenerator::IdentifyNodeTypes() {
+absl::Status NodeGenerator::identify_node_types() {
     // Actions -> add node type(s)
     for (const auto& single_action : config_.robot().actions().single_actions()) {
         const uint32_t node_id = single_action.node_id();
@@ -254,9 +260,11 @@ void NodeGenerator::IdentifyNodeTypes() {
             identified_nodes_[config_.calibration().node_id()] = it->second;
         }
     }
+
+    return absl::OkStatus();
 }
 
-bool NodeGenerator::CheckConfigIntegrity() {
+absl::Status NodeGenerator::check_config_integrity() {
     auto robot_config = config_.robot();
     std::map<std::string, uint32_t> port_to_node_id;
 
@@ -287,7 +295,7 @@ bool NodeGenerator::CheckConfigIntegrity() {
                                  << "' is assigned to multiple node_ids (" 
                                  << port_to_node_id[port_name] << " and " << node_id
                                  << "). This is not allowed as it will cause resource conflicts.";
-                    return false;
+                    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial port conflict");
                 }
             } else {
                 port_to_node_id[port_name] = node_id;
@@ -297,23 +305,26 @@ bool NodeGenerator::CheckConfigIntegrity() {
 
     // TODO: Add more check here for the config.
 
-    return true;
+    return absl::OkStatus();
 }
 
-bool NodeGenerator::LaunchAllNodes() {
+absl::Status NodeGenerator::LaunchAllNodes() {
     for (const auto& [node_id, node_type] : identified_nodes_) {
         const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
         pid_t pid = LaunchNode(node_type, node_id, node_name);
         if (pid > 0) {
             std::vector<std::string> publish_topics;
             std::vector<std::string> subscribe_topics;
-            GetTopicsForNode(node_id, publish_topics, subscribe_topics);
+            if (!GetTopicsForNode(node_id, publish_topics, subscribe_topics).ok()) {
+                LOG(ERROR) << "Failed to get topics for node " << node_id;
+                return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to get topics for node");
+            }
             launched_nodes_.push_back({node_type, node_name, node_id, pid, publish_topics, subscribe_topics});
         }
     }
     
     LOG(INFO) << "All " << launched_nodes_.size() << " nodes launched successfully.";
-    return !launched_nodes_.empty();
+    return !launched_nodes_.empty() ? absl::OkStatus() : absl::Status(absl::StatusCode::kInvalidArgument, "No nodes launched");
 }
 
 pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
@@ -390,7 +401,7 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type, uint32_t node_id,
     }
 }
 
-void NodeGenerator::MonitorNodes() {
+absl::Status NodeGenerator::MonitorNodes() {
     LOG(INFO) << "Starting node monitoring...";
     
     while (!shutdown_requested_) {
@@ -406,6 +417,7 @@ void NodeGenerator::MonitorNodes() {
     
     LOG(INFO) << "Shutdown requested, cleaning up...";
     CleanupAndExit(0);
+    return absl::OkStatus();
 }
 
 void NodeGenerator::MonitorChildProcesses() {
@@ -432,7 +444,7 @@ void NodeGenerator::MonitorChildProcesses() {
     }
 }
 
-void NodeGenerator::Shutdown(const int max_wait_ms) {
+absl::Status NodeGenerator::Shutdown(const int max_wait_ms) {
     LOG(INFO) << "Shutting down all nodes...";
     
     // Ask all child processes to shutdown gracefully (SIGINT preferred by ROS2)
@@ -500,10 +512,12 @@ void NodeGenerator::Shutdown(const int max_wait_ms) {
     
     launched_nodes_.clear();
     LOG(INFO) << "All processes terminated successfully.";
+    return absl::OkStatus();
 }
 
-void NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
+absl::Status NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
     nodes = launched_nodes_;
+    return absl::OkStatus();
 }
 
 void NodeGenerator::SetupSignalHandlers() {
@@ -512,7 +526,10 @@ void NodeGenerator::SetupSignalHandlers() {
 }
 
 void NodeGenerator::CleanupAndExit(int exit_code) {
-    Shutdown();
+    auto res = Shutdown();
+    if (!res.ok()) {
+        LOG(ERROR) << "Failed to shutdown nodes";
+    }
     exit(exit_code);
 }
 
@@ -522,10 +539,10 @@ void NodeGenerator::SignalHandler(int sig) {
     }
 }
 
-void NodeGenerator::GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics) {
+absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id, std::vector<std::string>& publish_topics, std::vector<std::string>& subscribe_topics) {
     if(identified_nodes_.count(node_id) == 0) {
         LOG(WARNING) << "Node " << node_id << " not found in the config.";
-        return;
+        return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");
     }
 
     // Get publish topics from perceptions.
@@ -559,6 +576,6 @@ void NodeGenerator::GetTopicsForNode(const uint32_t node_id, std::vector<std::st
             publish_topics.push_back(sub_topic + "_operational_limit");
         }
     }
+    return absl::OkStatus();
 }
-
 } // namespace node_generator 
