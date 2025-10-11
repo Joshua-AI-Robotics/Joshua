@@ -20,14 +20,6 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   sudo apt-get install ros2
   ```
-  **Add ROS2 Rules Dendency:**  
-  ```bash
-  git clone https://github.com/mvukov/rules_ros2.git external/rules_ros2
-  ```
-  **Installed Qt6 Development Packages**  
-  ```bash
-  sudo apt install -y qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools
-  ```
 - **OpenCV:**  
   ```bash
   sudo apt-get install libopencv-dev

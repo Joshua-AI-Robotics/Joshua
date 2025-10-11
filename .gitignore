@@ -1,7 +1,5 @@
 # Bazel outputs
 /bazel-*
-MODULE.bazel.lock
-/external/
 
 # IDE-specific files (adjust based on your IDEs)
 /.idea/
