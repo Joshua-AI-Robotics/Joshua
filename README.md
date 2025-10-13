@@ -1,4 +1,4 @@
-# Project JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
+# JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
 ## *A Modular Framework for Robotic AI Systems*
 
 Project Joshua is a user‑friendly, modular framework that turns a single configuration file into a running robot system using ROS2 and Protocol Buffers. A single text config defines your robot hardware (actions and perceptions), AI policy, and operation mode. The system then builds and runs the corresponding ROS2 nodes and lets you monitor/control them from a Qt6 GUI.
