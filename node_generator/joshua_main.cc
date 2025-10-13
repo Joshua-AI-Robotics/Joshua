@@ -14,28 +14,26 @@ int main(int argc, char* argv[]) {
     try {
         node_generator::NodeGenerator node_generator(FLAGS_config);
         
-        if (!node_generator.Initialize()) {
+        if (!node_generator.Initialize().ok()) {
             LOG(ERROR) << "Failed to initialize NodeGenerator";
             return 1;
         }
         
-        if (!node_generator.BuildRequiredTargets()) {
-            LOG(ERROR) << "Failed to build required targets";
-            return 1;
-        }
-        
-        if (!node_generator.LaunchAllNodes()) {
+        if (!node_generator.LaunchAllNodes().ok()) {
             LOG(ERROR) << "Failed to launch nodes";
             return 1;
         }
         
-        if (!node_generator.HasNodes()) {
+        if (!node_generator.has_nodes()) {
             LOG(WARNING) << "No nodes were launched successfully";
             return 1;
         }
         
-        node_generator.MonitorNodes();
-        
+        auto res = node_generator.MonitorNodes();
+        if (!res.ok()) {
+            LOG(ERROR) << "Failed to monitor nodes";
+            return 1;
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "NodeGenerator error: " << e.what();
         return 1;

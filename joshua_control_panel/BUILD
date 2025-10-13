@@ -98,6 +98,7 @@ cc_library(
         ":gui_utils",
         "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
+        "@abseil-cpp//absl/status:status",
     ],
 )
 
@@ -106,6 +107,14 @@ cc_binary(
     srcs = ["main.cc"],
     data = [
         "//config/config_preset:config_presets",
+        # Ensure ROS2 node runfiles (including *_impl) are available when launching from the panel
+        "//ros2:camera_publisher",
+        "//ros2:encoder_publisher",
+        "//ros2:actuator_subscriber",
+        "//ros2:mock_inference",
+        "//ros2:mock_inference_py",
+        "//ros2:operational_limit_calibration",
+        "//ros2:ros2_node_wrapper.sh",
     ],
     copts = ["-std=c++17", "-fPIC"],
     linkopts = ["-pthread"],

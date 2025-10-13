@@ -21,7 +21,6 @@
 namespace {
     constexpr auto kConfigPresetPrefix = "config/config_preset/";
     constexpr auto kErrorStyle = "QLabel { background-color: #ff0000; padding: 5px; border-radius: 5px; }";
-    constexpr auto kBuildStyle = "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }";
     constexpr auto kRunningStyle = "QLabel { background-color: #4caf50; padding: 5px; border-radius: 5px; }";
     constexpr auto kStoppingStyle = "QLabel { background-color: #ffa500; padding: 5px; border-radius: 5px; }";
     constexpr auto kIdleStyle = "QLabel { background-color: #cccccc; color:rgb(0, 0, 0); padding: 5px; border-radius: 5px; }";
@@ -31,7 +30,6 @@ namespace {
 MonitorTab::MonitorTab(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::MonitorTab)
-    , stop_node_generator_build_(false)
 {
     ui->setupUi(this);
   
@@ -72,7 +70,6 @@ MonitorTab::MonitorTab(QWidget* parent)
 }
 
 MonitorTab::~MonitorTab() { 
-    stop_node_generator_build_.store(true);
     if (node_generator_thread_.joinable()) {
         node_generator_thread_.join();
     }
@@ -102,7 +99,7 @@ void MonitorTab::onUpdateNodeTable() {
         return;
     }
 
-    if(node_generator_->GetLaunchedNodeCount() == 0) {
+    if(node_generator_->get_launched_node_count() == 0) {
         ui->nodeTable->clearContents();
         ui->nodeTable->setRowCount(0);
         // Clear tree
@@ -111,7 +108,7 @@ void MonitorTab::onUpdateNodeTable() {
     }
 
     std::vector<node_generator::NodeInfo> launched_nodes;
-    node_generator_->GetLaunchedNodes(launched_nodes);
+    node_generator_->GetLaunchedNodes(launched_nodes).ok();
 
     ui->nodeTable->setRowCount(launched_nodes.size());
     for (size_t i = 0; i < launched_nodes.size(); ++i) {
@@ -139,7 +136,6 @@ void MonitorTab::on_launchButton_clicked() {
     emit setLaunchButtonEnabled(false);
 
     // Ensure previous thread is not running
-    stop_node_generator_build_.store(false);
     if (node_generator_thread_.joinable()) {
         node_generator_thread_.join();
     }
@@ -154,14 +150,12 @@ void MonitorTab::on_stopButton_clicked() {
     gui::StepProgressDialog progress(this,
                                            "Stopping",
                                            QStringList{
-                                               "Cancelling ongoing builds",
                                                "Waiting for worker thread to finish",
                                                "Shutting down nodes",
                                            });
     progress.show();
 
     // Request cancellation; defer heavy work so UI can repaint first
-    stop_node_generator_build_.store(true);
     progress.markStepDone(0);
 
     if (node_generator_thread_.joinable()) {
@@ -171,7 +165,7 @@ void MonitorTab::on_stopButton_clicked() {
 
     // Shutdown the node generator
     if (node_generator_) {
-        node_generator_->Shutdown();
+        node_generator_->Shutdown().ok();
         progress.markStepDone(2);
         emit updateNodeTable();
     }
@@ -188,22 +182,14 @@ bool MonitorTab::setup_node_generator() {
         node_generator_ = std::make_unique<node_generator::NodeGenerator>(config_);  
 
         emit logMessage("[INFO] Initializing node generator with config: " + QString::fromStdString(config_));
-        if(!node_generator_->Initialize()) {
+        if(!node_generator_->Initialize().ok()) {
             emit logMessage("[ERROR] Failed to initialize node generator.");
             return false;
         }
         emit logMessage("[INFO] Node generator initialized.");
 
-        emit logMessage("[INFO] Building required targets.");
-        emit updateStatus("BUILDING", kBuildStyle);
-        if(!node_generator_->BuildRequiredTargets(stop_node_generator_build_)) {
-            emit logMessage("[ERROR] Build stopped or failed.");
-            return false;
-        }
-        emit logMessage("[INFO] Required targets built.");
-
         emit logMessage("[INFO] Launching nodes.");
-        if(!node_generator_->LaunchAllNodes()) {
+        if(!node_generator_->LaunchAllNodes().ok()) {
             emit logMessage("[ERROR] Failed to launch nodes.");
             emit updateStatus("ERROR", kErrorStyle);
             return false;

@@ -4,6 +4,16 @@ load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 package(default_visibility = ["//visibility:public"])
 
+# Central list of ROS2 node binary targets
+ROS2_NODE_TARGETS = [
+    ":camera_publisher",
+    ":encoder_publisher",
+    ":actuator_subscriber",
+    ":mock_inference",
+    ":mock_inference_py",
+    ":operational_limit_calibration",
+]
+
 cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
@@ -138,20 +148,6 @@ ros2_cpp_binary(
     set_up_ament = True,
 )
 
-filegroup(
-    name = "ros2_nodes",
-    srcs = [
-        ":camera_publisher",
-        ":encoder_publisher",
-        ":actuator_subscriber",
-        ":mock_inference",
-        ":mock_inference_py",
-        ":operational_limit_calibration",
-        # Add ROS2 nodes here.
-    ],
-    visibility = ["//visibility:public"],
-)
-
 genrule(
     name = "ros2_node_wrapper",
     outs = [
@@ -170,7 +166,7 @@ fi
 NODE="$$1"; shift || true
 SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
 
-# Case 1: Bazel runfiles: impl sits in the same directory as this script
+# Case 1a: Impl sits next to this script
 if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
   cd "$$SCRIPT_DIR"
   # Export runfiles env vars to help ROS 2 locate resources
@@ -182,26 +178,40 @@ if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
   exec "./$${NODE}_impl" "$$@"
 fi
 
-# Case 2: Packaged tar layout: use <node>.runfiles/_main or __main__
-RUNFILES_DIR="$$SCRIPT_DIR/$${NODE}.runfiles"
-if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
-  cd "$$RUNFILES_DIR/_main/ros2"
-  WS_DIR="$$(dirname "$$PWD")"
+# Case 1b: Impl sits under ros2/ while this script is at top-level
+if [ -x "$$SCRIPT_DIR/ros2/$${NODE}_impl" ]; then
+  cd "$$SCRIPT_DIR/ros2"
+  WS_DIR="$$(dirname "$$SCRIPT_DIR")"
   export RUNFILES_DIR="$$WS_DIR"
   export TEST_SRCDIR="$$WS_DIR"
   unset RUNFILES_MANIFEST_FILE || true
   unset JAVA_RUNFILES || true
   exec "./$${NODE}_impl" "$$@"
 fi
-if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
-  cd "$$RUNFILES_DIR/__main__/ros2"
-  WS_DIR="$$(dirname "$$PWD")"
-  export RUNFILES_DIR="$$WS_DIR"
-  export TEST_SRCDIR="$$WS_DIR"
-  unset RUNFILES_MANIFEST_FILE || true
-  unset JAVA_RUNFILES || true
-  exec "./$${NODE}_impl" "$$@"
-fi
+
+# Case 2: Runfiles layout. Search any *.runfiles under top-level and ros2/ subdir.
+for CAND in "$$SCRIPT_DIR" "$$SCRIPT_DIR/ros2"; do
+  for RUNFILES_DIR in "$$CAND"/*.runfiles; do
+    if [ -d "$$RUNFILES_DIR/_main/ros2" ]; then
+      cd "$$RUNFILES_DIR/_main/ros2"
+      WS_DIR="$$(dirname "$$PWD")"
+      export RUNFILES_DIR="$$WS_DIR"
+      export TEST_SRCDIR="$$WS_DIR"
+      unset RUNFILES_MANIFEST_FILE || true
+      unset JAVA_RUNFILES || true
+      exec "./$${NODE}_impl" "$$@"
+    fi
+    if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
+      cd "$$RUNFILES_DIR/__main__/ros2"
+      WS_DIR="$$(dirname "$$PWD")"
+      export RUNFILES_DIR="$$WS_DIR"
+      export TEST_SRCDIR="$$WS_DIR"
+      unset RUNFILES_MANIFEST_FILE || true
+      unset JAVA_RUNFILES || true
+      exec "./$${NODE}_impl" "$$@"
+    fi
+  done
+done
 
 echo "Could not locate '$${NODE}_impl' relative to '$$SCRIPT_DIR'." >&2
 exit 1

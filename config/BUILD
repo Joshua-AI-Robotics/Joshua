@@ -5,6 +5,7 @@ cc_library(
     hdrs = ["config_utils.h"],
     deps = [
         "@glog//:glog",
+        "@abseil-cpp//absl/status:status",
         "//config/proto:config_cc_proto",
     ],
     visibility = ["//visibility:public"],

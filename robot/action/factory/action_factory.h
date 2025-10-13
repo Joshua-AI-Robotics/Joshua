@@ -28,6 +28,7 @@ public:
                         switch (actuator.comm_type()){
                             case robot::comm_interface::CommType::SERIAL:
                             {
+                                // TODO: Serial should not be hardcoded.
                                 auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(actuator.serial_config());
                                 return std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
                             }

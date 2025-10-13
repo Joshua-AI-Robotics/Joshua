@@ -4,6 +4,8 @@
 #include <boost/asio/serial_port_base.hpp>
 #include <glog/logging.h>
 #include <mutex>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 
 namespace robot::comm_interface{
 
@@ -11,9 +13,9 @@ class Serial {
   public:
     Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate);
     ~Serial();
-    void Write(const std::vector<uint8_t>& data);
-    std::vector<uint8_t> Read(size_t bytes_to_read);
-    void Flush();
+    absl::Status Write(const std::vector<uint8_t>& data);
+    absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read);
+    absl::Status Flush();
 
   private:
     std::string uart_port_;

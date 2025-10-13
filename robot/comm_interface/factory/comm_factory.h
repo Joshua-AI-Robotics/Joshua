@@ -23,6 +23,7 @@ public:
     void operator=(const CommFactory&) = delete;
 
     std::shared_ptr<Serial> GetSerial(const robot::comm_interface::SerialConfig& config);
+    // TODO: Remove GetSerial and use 'CreateComm'.
 
 private:
     CommFactory() = default;

@@ -17,6 +17,7 @@ std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::Creat
         {
             const auto& encoder = single_perception.encoder();
             if (encoder.comm_type() == robot::comm_interface::CommType::SERIAL) {
+                // TODO: Serial should not be hardcoded.
                 auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(encoder.serial_config());
                 return std::make_unique<Sts3215Encoder>(serial, encoder);
             }

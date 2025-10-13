@@ -6,6 +6,10 @@
 #include <opencv2/videoio.hpp>
 #include <glog/logging.h>
 #include <memory>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include <cstdint>
+#include <string>
 
 namespace robot::perception {
 
@@ -15,7 +19,7 @@ public:
     CvCamera(const robot::perception::Camera& camera_config);
     ~CvCamera() override;
 
-    robot::perception::PerceptionPacket GetData() override;
+    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
     std::string GetId() override;
 
 private:

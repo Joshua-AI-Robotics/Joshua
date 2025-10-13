@@ -14,22 +14,23 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   ~Sts3215Driver();
   
   // ActionInterface methods
-  void SetAction(const robot::action::ActionPacket& action_packet) override;
+  absl::Status SetAction(const robot::action::ActionPacket& action_packet) override;
   std::string GetId() override; // TODO: Update the ID scheme.
   
   // ActuatorInterface methods
-  void SetSpeed(float value) override;
-  void SetPosition(float angle) override;
-  void SetTorque(float torque) override;
-  void SetMiddlePosition() override;
-  void SetIdlePosition() override;
-  void GracefulShutdown() override;
+  absl::Status SetSpeed(float value) override;
+  absl::Status SetPosition(float angle) override;
+  absl::Status SetTorque(float torque) override;
+  absl::Status SetMiddlePosition() override;
+  absl::Status SetIdlePosition() override;
+  absl::Status GracefulShutdown() override;
 
   private: 
   uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);
   std::vector<uint8_t> create_move_packet(uint16_t position);
   std::vector<uint8_t> create_torque_packet(uint8_t enable);
 
+  // TODO: This must be base pointer of comm interface. Not serial.
   std::shared_ptr<robot::comm_interface::Serial> serial_;
   std::string id_;
   uint8_t servo_id_;

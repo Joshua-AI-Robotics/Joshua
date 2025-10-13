@@ -78,7 +78,7 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
     return packet;
 }
 
-void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
+absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
     try {
         LOG(INFO) << "Executing action [ID: " << action_packet.action_id() 
                   << ", Timestamp: " << action_packet.timestamp_ms() << "]";
@@ -88,23 +88,38 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
                 switch(action_packet.preset()){
                     case robot::action::PresetCommand::PRESET_MIDDLE_POSITION:
                         LOG(INFO) << "Executing preset: MIDDLE_POSITION";
-                        SetMiddlePosition();
+                        if(!SetMiddlePosition().ok()) {
+                            LOG(ERROR) << "Failed to set middle position";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position");
+                        }
                         break;
                     case robot::action::PresetCommand::PRESET_IDLE_POSITION:
                         LOG(INFO) << "Executing preset: IDLE_POSITION";
-                        SetIdlePosition();
+                        if(!SetIdlePosition().ok()) {
+                            LOG(ERROR) << "Failed to set idle position";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position");
+                        }
                         break;
                     case robot::action::PresetCommand::PRESET_GRACEFUL_SHUTDOWN:
                         LOG(INFO) << "Executing preset: GRACEFUL_SHUTDOWN";
-                        GracefulShutdown();
+                        if(!GracefulShutdown().ok()) {
+                            LOG(ERROR) << "Failed to graceful shutdown";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to graceful shutdown");
+                        }
                         break;
                     case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
                         LOG(INFO) << "Executing preset: ENABLE_TORQUE";
-                        SetTorque(1.0f);
+                        if(!SetTorque(1.0f).ok()) {
+                            LOG(ERROR) << "Failed to set torque";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
+                        }
                         break;
                     case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
                         LOG(INFO) << "Executing preset: DISABLE_TORQUE";
-                        SetTorque(0.0f);
+                        if(!SetTorque(0.0f).ok()) {
+                            LOG(ERROR) << "Failed to set torque";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
+                        }
                         break;
                     default:
                         LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
@@ -127,7 +142,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
                 // Apply changes in order: speed first, then torque, then position
                 if(complex_action.has_speed()) {
                     if (complex_action.speed() >= 0) {
-                        SetSpeed(complex_action.speed());
+                        if(!SetSpeed(complex_action.speed()).ok()) {
+                            LOG(ERROR) << "Failed to set speed";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set speed");
+                        }
                         LOG(INFO) << "Set speed: " << complex_action.speed();
                     } else {
                         LOG(WARNING) << "Invalid speed value: " << complex_action.speed();
@@ -136,7 +154,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
                 
                 if(complex_action.has_torque()) {
                     if (complex_action.torque() >= 0.0f) {
-                        SetTorque(complex_action.torque());
+                        if(!SetTorque(complex_action.torque()).ok()) {
+                            LOG(ERROR) << "Failed to set torque";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
+                        }
                         LOG(INFO) << "Set torque: " << complex_action.torque();
                     } else {
                         LOG(WARNING) << "Invalid torque value: " << complex_action.torque();
@@ -146,7 +167,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
                 if(complex_action.has_position()) {
                     float pos = complex_action.position();
                     if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
-                        SetPosition(pos);
+                        if(!SetPosition(pos).ok()) {
+                            LOG(ERROR) << "Failed to set position";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to set position");
+                        }
                         LOG(INFO) << "Set position: " << pos;
                     } else {
                         LOG(WARNING) << "Position " << pos << " outside operational limits ["
@@ -165,7 +189,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
             case robot::action::ActionPacket::kPosition: {
                 float pos = action_packet.position();
                 if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
-                    SetPosition(pos);
+                    if(!SetPosition(pos).ok()) {
+                        LOG(ERROR) << "Failed to set position";
+                        return absl::Status(absl::StatusCode::kInternal, "Failed to set position");
+                    }
                     LOG(INFO) << "Set position: " << pos;
                 } else {
                     LOG(WARNING) << "Position " << pos << " outside operational limits ["
@@ -177,7 +204,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
             case robot::action::ActionPacket::kTorque: {
                 float torque = action_packet.torque();
                 if (torque >= 0.0f) {
-                    SetTorque(torque);
+                    if(!SetTorque(torque).ok()) {
+                        LOG(ERROR) << "Failed to set torque";
+                        return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
+                    }
                     LOG(INFO) << "Set torque: " << torque;
                 } else {
                     LOG(WARNING) << "Invalid torque value: " << torque;
@@ -188,7 +218,10 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
             case robot::action::ActionPacket::kSpeed: {
                 float speed = action_packet.speed();
                 if (speed >= 0) {
-                    SetSpeed(speed);
+                    if(!SetSpeed(speed).ok()) {
+                        LOG(ERROR) << "Failed to set speed";
+                        return absl::Status(absl::StatusCode::kInternal, "Failed to set speed");
+                    }
                     LOG(INFO) << "Set speed: " << speed;
                 } else {
                     LOG(WARNING) << "Invalid speed value: " << speed;
@@ -207,67 +240,92 @@ void Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) 
     } catch (const std::exception& e) {
         LOG(ERROR) << "Failed to execute action [ID: " << action_packet.action_id() 
                    << "]: " << e.what();
-        throw;
+        return absl::Status(absl::StatusCode::kInternal, "Failed to execute action");
     }
+    return absl::OkStatus();
 }
 
-void Sts3215Driver::SetSpeed(float value) {
+absl::Status Sts3215Driver::SetSpeed(float value) {
     move_speed_ = static_cast<uint16_t>(value);
+    return absl::OkStatus();
 }
 
-void Sts3215Driver::SetPosition(float angle) {
+absl::Status Sts3215Driver::SetPosition(float angle) {
     try{
-        serial_->Write(create_move_packet(static_cast<uint16_t>(angle)));
+        if(!serial_->Write(create_move_packet(static_cast<uint16_t>(angle))).ok()) {
+            LOG(ERROR) << "Failed to set position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set position.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
     }
+    return absl::OkStatus();
 }
 
-void Sts3215Driver::SetTorque(float torque) {
+absl::Status Sts3215Driver::SetTorque(float torque) {
     try{
-        serial_->Write(create_torque_packet(static_cast<uint16_t>(torque)));
+        if(!serial_->Write(create_torque_packet(static_cast<uint16_t>(torque))).ok()) {
+            LOG(ERROR) << "Failed to set torque.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set torque.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
     }
+    return absl::OkStatus();
 }
 
 std::string Sts3215Driver::GetId() {
-    auto id = "sts3215_driver_" + std::to_string(servo_id_);
+    std::string id = "sts3215_driver_" + std::to_string(servo_id_);
     return id;
 }
 
-void Sts3215Driver::SetMiddlePosition(){
+absl::Status Sts3215Driver::SetMiddlePosition(){
     try{
         auto middle_position = (operational_lower_limit_ + operational_upper_limit_)/2;
-        serial_->Write(create_move_packet(middle_position));
+        if(!serial_->Write(create_move_packet(middle_position)).ok()) {
+            LOG(ERROR) << "Failed to set middle position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set middle position.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
     }
+    return absl::OkStatus();
 }
 
-void Sts3215Driver::SetIdlePosition(){
+absl::Status Sts3215Driver::SetIdlePosition(){
     try{
-        serial_->Write(create_move_packet(idle_position_));
+        if(!serial_->Write(create_move_packet(idle_position_)).ok()) {
+            LOG(ERROR) << "Failed to set idle position.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to set idle position.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
     }
+    return absl::OkStatus();
 }
 
-void Sts3215Driver::GracefulShutdown(){
+absl::Status Sts3215Driver::GracefulShutdown(){
     try{
         move_speed_ = 1000;
-        SetIdlePosition();
+        if(!SetIdlePosition().ok()) {
+            LOG(ERROR) << "Failed to set idle position";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position");
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         LOG(INFO) << "Setting torque to 0 (servo " << static_cast<int>(servo_id_) << ")";
-        SetTorque(0);
+        if(!SetTorque(0).ok()) {
+            LOG(ERROR) << "Failed to set torque";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
+        }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        throw std::runtime_error("Failed to graceful shutdown.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to graceful shutdown.");
     }
+    return absl::OkStatus();
 }
 
 } // namespace robot::action
