@@ -99,7 +99,7 @@ robot {
         comm_type: SERIAL
         physical_lower_limit: 0
         physical_upper_limit: 4095
-        operational_lower_limit: 668
+        operational_lower_limit: 640
         operational_upper_limit: 3124
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
@@ -253,7 +253,7 @@ robot {
         id: 4
         encoder_type: STS3215_ENCODER
         comm_type: SERIAL
-        operational_lower_limit: 0
+        operational_lower_limit: 20
         operational_upper_limit: 2407
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         serial_config {
