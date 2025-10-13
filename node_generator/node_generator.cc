@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <cstdlib>
 #include <mutex>
+#include <filesystem>
 
 namespace node_generator {
 
@@ -188,9 +189,40 @@ namespace {
 NodeGenerator* NodeGenerator::instance_ = nullptr;
 
 NodeGenerator::NodeGenerator(const std::string& config_path) 
-    : config_path_(config_path), 
-      shutdown_requested_(false) {
+    : shutdown_requested_(false) {
     instance_ = this;
+
+    // Normalize config path so all children receive an absolute path
+    // 1) If absolute and exists -> keep
+    // 2) If relative and exists from CWD -> make absolute
+    // 3) Fallback: try relative to the executable directory
+    std::filesystem::path provided_path(config_path);
+    std::filesystem::path resolved_path;
+
+    if (provided_path.is_absolute() && std::filesystem::exists(provided_path)) {
+        resolved_path = provided_path;
+    } else {
+        std::filesystem::path abs_from_cwd = std::filesystem::absolute(provided_path);
+        if (std::filesystem::exists(abs_from_cwd)) {
+            resolved_path = abs_from_cwd;
+        } else {
+            const std::string self_exe = GetSelfExecutablePath();
+            if (!self_exe.empty()) {
+                std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
+                std::filesystem::path from_exe_dir = exe_dir / provided_path;
+                if (std::filesystem::exists(from_exe_dir)) {
+                    resolved_path = std::filesystem::absolute(from_exe_dir);
+                }
+            }
+        }
+    }
+
+    if (!resolved_path.empty()) {
+        config_path_ = resolved_path.lexically_normal().string();
+    } else {
+        // Fall back to the original value; LoadConfig will report a clear error.
+        config_path_ = config_path;
+    }
 }
 
 NodeGenerator::~NodeGenerator() {
@@ -207,7 +239,13 @@ absl::Status NodeGenerator::Initialize() {
     LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
     
     try {
-        config_ = config::config_util::LoadConfig(config_path_);
+        auto result = config::config_util::LoadConfig(config_path_);
+
+        if (!result.ok()) {
+            return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
+        }
+
+        config_ = result.value();
     } catch (const std::exception& e) {
         LOG(ERROR) << "Failed to load config: " << e.what();
         return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");

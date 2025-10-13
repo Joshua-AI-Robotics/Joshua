@@ -38,7 +38,14 @@ inline void sigterm_handler(int) noexcept {
    const int node_id = std::stoi(argv[2]);
    const std::string config_path = argv[3];
 
-   config::Config config = config::config_util::LoadConfig(config_path);
+   auto result = config::config_util::LoadConfig(config_path);
+
+   if (!result.ok()) {
+     LOG(ERROR) << "Failed to load config: " << result.status().message();
+     return 1;
+   }
+
+   config::Config config = result.value();
 
    rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
    rclcpp::shutdown();

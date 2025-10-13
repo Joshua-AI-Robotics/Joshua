@@ -60,6 +60,7 @@ pkg_tar(
         ":joshua_main",
         "//ros2:ros2_node_wrapper.sh",
         ":fix_symlinks_script",
+        "//config/config_preset:config_presets",
     ],
     extension = "tar.gz",
     package_dir = "joshua_main",
