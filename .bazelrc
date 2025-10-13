@@ -4,3 +4,8 @@ build --cxxopt='-std=c++17'
 build:orin-nano --platforms=//:orin_nano
 build:orin-nano --cpu=arm64
 build:orin-nano --experimental_cc_static_library
+build:orin-nano --features=-static_link_cpp_runtimes
+build:orin-nano --dynamic_mode=fully
+build:orin-nano --copt='-fPIC'
+build:orin-nano --copt='-ftls-model=global-dynamic'
+build:orin-nano --@toolchains_llvm_bootstrapped//config:empty_sysroot=False
