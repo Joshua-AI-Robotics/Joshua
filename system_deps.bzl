@@ -116,17 +116,6 @@ cc_library(
     linkopts = ["-levdev"],
 )
 
-# FLTK library
-cc_library(
-    name = "fltk",
-    hdrs = glob([
-        "usr/include/FL/**/*.H",
-        "usr/include/FL/**/*.h",
-    ], allow_empty = True),
-    includes = ["usr/include"],
-    linkopts = ["-lfltk"],
-)
-
 # Qt6 C++ libraries
 cc_library(
     name = "qt6_core",
