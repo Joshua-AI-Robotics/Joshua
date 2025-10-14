@@ -6,6 +6,17 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# Platform selectors for x86_64 vs aarch64
+config_setting(
+    name = "cpu_x86_64",
+    constraint_values = ["@platforms//cpu:x86_64"],
+)
+
+config_setting(
+    name = "cpu_aarch64",
+    constraint_values = ["@platforms//cpu:aarch64"],
+)
+
 # ROS2 libraries
 cc_library(
     name = "rclcpp",
@@ -48,7 +59,19 @@ cc_library(
     name = "core",
     hdrs = glob(["usr/include/opencv4/opencv2/core/**/*.h*"], allow_empty = True),
     includes = ["usr/include/opencv4"],
-    linkopts = ["-lopencv_core"],
+    linkopts = select({
+        "//:cpu_x86_64": [
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
+        ],
+        "//:cpu_aarch64": [
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
+        ],
+        "//conditions:default": [],
+    }) + [
+        "-lopencv_core",
+    ],
     deps = [":opencv_headers"],
 )
 
@@ -56,7 +79,19 @@ cc_library(
     name = "highgui",
     hdrs = glob(["usr/include/opencv4/opencv2/highgui/**/*.h*"], allow_empty = True),
     includes = ["usr/include/opencv4"],
-    linkopts = ["-lopencv_highgui"],
+    linkopts = select({
+        "//:cpu_x86_64": [
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
+        ],
+        "//:cpu_aarch64": [
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
+        ],
+        "//conditions:default": [],
+    }) + [
+        "-lopencv_highgui",
+    ],
     deps = [":core"],
 )
 
@@ -64,7 +99,19 @@ cc_library(
     name = "imgproc",
     hdrs = glob(["usr/include/opencv4/opencv2/imgproc/**/*.h*"], allow_empty = True),
     includes = ["usr/include/opencv4"],
-    linkopts = ["-lopencv_imgproc"],
+    linkopts = select({
+        "//:cpu_x86_64": [
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
+        ],
+        "//:cpu_aarch64": [
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
+        ],
+        "//conditions:default": [],
+    }) + [
+        "-lopencv_imgproc",
+    ],
     deps = [":core"],
 )
 
@@ -72,7 +119,19 @@ cc_library(
     name = "imgcodecs",
     hdrs = glob(["usr/include/opencv4/opencv2/imgcodecs/**/*.h*"], allow_empty = True),
     includes = ["usr/include/opencv4"],
-    linkopts = ["-lopencv_imgcodecs"],
+    linkopts = select({
+        "//:cpu_x86_64": [
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
+        ],
+        "//:cpu_aarch64": [
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
+        ],
+        "//conditions:default": [],
+    }) + [
+        "-lopencv_imgcodecs",
+    ],
     deps = [":core"],
 )
 
@@ -80,7 +139,19 @@ cc_library(
     name = "videoio",
     hdrs = glob(["usr/include/opencv4/opencv2/videoio/**/*.h*"], allow_empty = True),
     includes = ["usr/include/opencv4"],
-    linkopts = ["-lopencv_videoio"],
+    linkopts = select({
+        "//:cpu_x86_64": [
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
+        ],
+        "//:cpu_aarch64": [
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
+        ],
+        "//conditions:default": [],
+    }) + [
+        "-lopencv_videoio",
+    ],
     deps = [":highgui", ":imgproc", ":imgcodecs"],
 )
 

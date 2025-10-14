@@ -16,37 +16,18 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 ### Prerequisites
 
 - **Operating System:** Ubuntu 22.04 LTS
-- **ROS2:**  
+- **Setup Script:** Run the automated setup script to install all dependencies:
   ```bash
-  sudo apt-get install ros2
+  sudo ./scripts/joshua_setup.sh
   ```
-  **Add ROS2 Rules Dendency:**  
-  ```bash
-  git clone https://github.com/mvukov/rules_ros2.git external/rules_ros2
-  ```
-  **Installed Qt6 Development Packages**  
-  ```bash
-  sudo apt install -y qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools
-  ```
-- **OpenCV:**  
-  ```bash
-  sudo apt-get install libopencv-dev
-  ```
-- **Bazel Build System:**  
-  [Install Bazel](https://bazel.build/install) following the official instructions.
-
-- **User Permissions:**  
-  Add your user to the appropriate groups if required (e.g., for hardware access):
-  ```bash
-  sudo usermod -aG dialout $USER # Then reboot
-  ```
-
-- **Camera Access:**  
-  For USB cameras (especially HHWei cameras), ensure proper video device access:
-  ```bash
-  sudo usermod -aG video $USER
-  newgrp video
-  ```
+  
+  This script automatically installs:
+  - ROS2 Humble Desktop
+  - Qt6 development packages
+  - OpenCV (both x86_64 and ARM64)
+  - Bazel build system
+  - ARM64 cross-compilation tools
+  - User permissions for hardware access
 
 ### Example: Running SO100 Teleoperation with Follower and Lead Arm
 
