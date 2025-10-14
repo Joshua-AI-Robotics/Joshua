@@ -1,7 +1,33 @@
-# Bazel outputs
+git s# Bazel outputs
 /bazel-*
 MODULE.bazel.lock
-/external/
+# Don't ignore external/ directory as it contains submodules
+# /external/
+
+# IDE-specific files (adjust based on your IDEs)
+/.idea/
+/.ijwb/
+/.aswb/
+/.clwb/
+/.project
+/.classpath
+/.settings/
+/.factorypath
+*.iml
+/.vscode/
+/.prettierrc
+
+# Local configuration and user-specific files
+/.bazelrc.user
+/WORKSPACE.user.bzl
+
+# Other common temporary files
+*~
+.*.swp
+/output/
+
+# Python virtual environment
+/venv/
 
 # IDE-specific files (adjust based on your IDEs)
 /.idea/
