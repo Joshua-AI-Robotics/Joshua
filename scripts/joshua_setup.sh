@@ -11,6 +11,20 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Check if running with sudo
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}Error: This script must be run with sudo${NC}"
+    echo "Usage: sudo ./scripts/joshua_setup.sh"
+    exit 1
+fi
+
+# Check the script running directory. This script should be run from the root of the repository.
+if [ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]; then
+    echo -e "${RED}Error: This script must be run from the root of the repository${NC}"
+    echo "Usage: cd $(git rev-parse --show-toplevel) && sudo ./scripts/joshua_setup.sh"
+    exit 1
+fi
+
 # Function to check Ubuntu version
 check_ubuntu_version() {
     echo -e "${BLUE}Checking Ubuntu version...${NC}"
@@ -56,6 +70,50 @@ install_opencv() {
     echo -e "${BLUE}Installing OpenCV ARM64 libraries...${NC}"
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     sudo "$SCRIPT_DIR/install_opencv_arm64.sh"
+}
+
+# Function to ensure Git is installed
+install_git() {
+    echo -e "${BLUE}Ensuring Git is installed...${NC}"
+    if ! command -v git &> /dev/null; then
+        sudo apt-get install -y git
+    else
+        echo -e "${GREEN}Git is already installed${NC}"
+    fi
+}
+
+# Function to sync and update submodules to pinned commits
+update_submodules() {
+    echo -e "${BLUE}Syncing and updating Git submodules...${NC}"
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo -e "${YELLOW}Warning: Not inside a git repository; skipping submodule update${NC}"
+        return 0
+    fi
+
+    # Sync URLs from .gitmodules
+    git submodule sync --recursive || true
+
+    # Try updating; if SSH fails for rules_ros2, fall back to HTTPS
+    if ! git submodule update --init --recursive --jobs 4; then
+        echo -e "${YELLOW}Submodule update failed. Attempting SSH->HTTPS fallback for rules_ros2...${NC}"
+        RULES_URL=$(git config -f .gitmodules --get submodule.external/rules_ros2.url || true)
+        if echo "$RULES_URL" | grep -q "^git@github.com:"; then
+            RULES_PATH=${RULES_URL#git@github.com:}
+            RULES_PATH=${RULES_PATH%.git}
+            HTTPS_URL="https://github.com/${RULES_PATH}.git"
+            git config -f .gitmodules submodule.external/rules_ros2.url "$HTTPS_URL"
+            git submodule sync --recursive || true
+            git submodule update --init --recursive --jobs 4
+        else
+            echo -e "${RED}Submodule update failed, and no SSH URL to convert. Please check network/credentials.${NC}"
+            exit 1
+        fi
+    fi
+
+    # Show pinned commit for rules_ros2 (if present)
+    if [ -d "external/rules_ros2" ]; then
+        echo -e "${GREEN}rules_ros2 pinned at commit:${NC} $(git -C external/rules_ros2 rev-parse --short HEAD)"
+    fi
 }
 
 # Function to install ARM64 cross-compilation tools
@@ -118,6 +176,8 @@ main() {
     install_opencv
     install_arm64_tools
     install_bazel
+    install_git
+    update_submodules
     setup_user_permissions
     setup_ros2_environment
     
