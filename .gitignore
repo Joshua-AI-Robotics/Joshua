@@ -1,4 +1,4 @@
-git s# Bazel outputs
+# Bazel outputs
 /bazel-*
 MODULE.bazel.lock
 # Don't ignore external/ directory as it contains submodules
