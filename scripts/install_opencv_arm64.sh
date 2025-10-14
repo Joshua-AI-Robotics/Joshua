@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install OpenCV ARM64 libraries for cross-compilation to Jetson Orin Nano
+# Install OpenCV ARM64 libraries for cross-compilation to ARM64 Linux platforms
 # This script downloads and installs OpenCV 4.5.4 ARM64 libraries to /usr/lib/aarch64-linux-gnu/
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Installing OpenCV ARM64 libraries for cross-compilation${NC}"
+echo -e "${GREEN}Installing OpenCV ARM64 libraries for ARM64 cross-compilation${NC}"
 echo "Version: ${OPENCV_VERSION}"
 echo
 
@@ -102,6 +102,10 @@ echo "  - libopencv_imgcodecs.so"
 echo "  - libopencv_highgui.so"
 echo "  - libopencv_videoio.so"
 echo
-echo "You can now build the project with:"
-echo "  bazel build //node_generator:joshua_main --config=orin-nano"
+echo "You can now build the project for ARM64 platforms with:"
+echo "  bazel build //node_generator:joshua_main --config=<your-arm64-config>"
+echo "  # Examples:"
+echo "  #   --config=jetson-orin-nano    (for Jetson Orin Nano)"
+echo "  #   --config=raspberry-pi        (for Raspberry Pi)"
+echo "  #   --config=jetson-xavier        (for Jetson Xavier)"
 

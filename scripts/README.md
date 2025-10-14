@@ -61,7 +61,7 @@ This script will:
 #### 3. Build the Project
 
 ```bash
-bazel build //node_generator:joshua_main --config=orin-nano
+bazel build //node_generator:joshua_main --config=jetson-orin-nano
 ```
 
 The compiled binary will be at: `bazel-bin/node_generator/joshua_main`
@@ -76,7 +76,7 @@ sudo apt-get install -y g++-aarch64-linux-gnu
 sudo ./scripts/install_opencv_arm64.sh
 
 # 3. Build the project
-bazel build //node_generator:joshua_main --config=orin-nano
+bazel build //node_generator:joshua_main --config=jetson-orin-nano
 ```
 
 **Verification:**
@@ -216,7 +216,7 @@ If you see undefined symbols with `std::__1::` namespace (libc++) but the linker
 ### 1. Package the Binary
 
 ```bash
-bazel build //node_generator:joshua_main_pkg --config=orin-nano
+bazel build //node_generator:joshua_main_pkg --config=jetson-orin-nano
 ```
 
 This creates a tar.gz archive with all dependencies.

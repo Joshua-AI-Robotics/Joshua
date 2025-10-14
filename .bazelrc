@@ -1,11 +1,32 @@
 build --cxxopt='-std=c++17'
 
-# Cross-compile to NVIDIA Orin Nano (Linux ARM64)
-build:orin-nano --platforms=//:orin_nano
-build:orin-nano --cpu=arm64
-build:orin-nano --experimental_cc_static_library
-build:orin-nano --features=-static_link_cpp_runtimes
-build:orin-nano --dynamic_mode=fully
-build:orin-nano --copt='-fPIC'
-build:orin-nano --copt='-ftls-model=global-dynamic'
-build:orin-nano --@toolchains_llvm_bootstrapped//config:empty_sysroot=False
+# =============================================================================
+# Base Platform Configurations
+# =============================================================================
+
+# ARM64 Base Configuration
+build:arm64-base --cpu=arm64
+build:arm64-base --experimental_cc_static_library
+build:arm64-base --features=-static_link_cpp_runtimes
+build:arm64-base --dynamic_mode=fully
+build:arm64-base --copt='-fPIC'
+build:arm64-base --copt='-ftls-model=global-dynamic'
+build:arm64-base --@toolchains_llvm_bootstrapped//config:empty_sysroot=False
+
+# x86_64 Base Configuration
+build:x86-base --cpu=k8
+build:x86-base --copt='-fPIC'
+
+# =============================================================================
+# Specific Platform Configurations
+# =============================================================================
+
+# NVIDIA Jetson Orin Nano (ARM64)
+build:jetson-orin-nano --config=arm64-base
+build:jetson-orin-nano --platforms=//:jetson_orin_nano
+
+# Add more platforms here as needed:
+# build:raspberry-pi --config=arm64-base
+# build:jetson-xavier --config=arm64-base
+# build:intel-nuc --config=x86-base
+# build:amd-desktop --config=x86-base
