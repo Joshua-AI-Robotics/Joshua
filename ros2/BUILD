@@ -1,7 +1,7 @@
 load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 package(default_visibility = ["//visibility:public"])
 
 # Central list of ROS2 node binary targets
@@ -11,6 +11,7 @@ ROS2_NODE_TARGETS = [
     ":actuator_subscriber",
     ":mock_inference",
     ":mock_inference_py",
+    ":smolvla_inference",
     ":operational_limit_calibration",
 ]
 
@@ -51,9 +52,18 @@ py_library(
         "@ros2_common_interfaces//:py_std_msgs",
         "@ros2_common_interfaces//:py_sensor_msgs",
         "//config/proto:config_py_proto",
-        "//config/proto:ai_py_proto",
     ],
     visibility = ["//visibility:public"],
+)
+
+# Utility script for verifying SmolVLA setup
+py_binary(
+    name = "verify_smolvla_setup",
+    srcs = ["verify_smolvla_setup.py"],
+    main = "verify_smolvla_setup.py",
+    deps = [
+        # Optional dependencies - script handles missing imports gracefully
+    ],
 )
 
 ros2_cpp_binary(
@@ -142,6 +152,30 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
         "//ros2:inference_base",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    set_up_ament = True,
+)
+
+ros2_py_binary(
+    name = "smolvla_inference",
+    srcs = [
+        "smolvla_inference.py",
+    ],
+    main = "smolvla_inference.py",
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "@ros2_common_interfaces//:py_std_msgs",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2:inference_base",
+        requirement("torch"),
+        requirement("transformers"),
+        requirement("pillow"),
+        requirement("numpy"),
     ],
     data = [
         "//config/config_preset:config_presets",
