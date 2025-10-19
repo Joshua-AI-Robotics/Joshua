@@ -19,7 +19,5 @@ class ActuatorInterface : public ActionInterface{
     virtual absl::Status SetTorque(float torque) = 0;
     virtual absl::Status SetMiddlePosition(){ LOG(WARNING) << "SetMiddlePosition not implemented.";};
     virtual absl::Status SetIdlePosition(){ LOG(WARNING) << "SetIdlePosition not implemented.";};
-    // TODO: Add this in the config. (e.g. what's the idle position, what's the torque, speed, etc.)
-    virtual absl::Status GracefulShutdown(){ LOG(WARNING) << "GracefulShutdown not implemented.";};
 };
 }

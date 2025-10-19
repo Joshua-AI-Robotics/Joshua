@@ -4,7 +4,8 @@
 #include "robot/comm_interface/factory/comm_factory.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
 #include "config/proto/robot.pb.h"
-
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include <memory>
 #include <string>
 
@@ -14,7 +15,7 @@ public:
     ActionFactory() = default;
     ~ActionFactory() = default;
 
-    std::unique_ptr<robot::action::ActionInterface> CreateAction(const robot::action::SingleAction& single_action)
+    absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(const robot::action::SingleAction& single_action)
     {
         switch (single_action.action_type())
         {
@@ -28,21 +29,25 @@ public:
                         switch (actuator.comm_type()){
                             case robot::comm_interface::CommType::SERIAL:
                             {
-                                // TODO: Serial should not be hardcoded.
+                                // TODO: 1) Serial should not be hardcoded. 2) Serial should have Create or StatusOr.
                                 auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(actuator.serial_config());
-                                return std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+                                auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+                                if(!driver->Init().ok()) {
+                                    return absl::Status(absl::StatusCode::kInternal, "Failed to init driver.");
+                                }
+                                return driver;
                             }
                         }
                     }
                     default:
-                        return nullptr;
+                        return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid actuator type.");
                 }
             }
             // TODO: Add other action types here when they are implemented
             // case robot::action::ActionType::GRIPPER:
             // case robot::action::ActionType::END_EFFECTOR:
             default:
-                return nullptr;
+                return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid action type.");
         }
     }
 };

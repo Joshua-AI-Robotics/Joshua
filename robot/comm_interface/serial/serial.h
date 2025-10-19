@@ -16,6 +16,7 @@ class Serial {
     absl::Status Write(const std::vector<uint8_t>& data);
     absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read);
     absl::Status Flush();
+    absl::Status Open();
 
   private:
     std::string uart_port_;

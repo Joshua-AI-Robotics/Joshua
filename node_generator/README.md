@@ -18,7 +18,7 @@ The Node Generator follows a clear, sequential process to bring the robotic syst
 
 5.  **Deploy/Run All Nodes**: Once the binaries are successfully built, the generator launches each node as a separate process using `fork()` and `execl()`. It sets up the necessary environment variables (e.g., `AMENT_PREFIX_PATH`) for each node to function correctly within the ROS2 ecosystem.
 
-6.  **Monitor Running Nodes**: After launching, the Node Generator continuously monitors the status of all child processes. If a node terminates unexpectedly, it logs the event. It also handles graceful shutdown, ensuring that all node processes are terminated cleanly when the main program exits.
+6.  **Monitor Running Nodes**: After launching, the Node Generator continuously monitors the status of all child processes. If a node terminates unexpectedly, it logs the event. It also handles teardown, ensuring that all node processes are terminated cleanly when the main program exits.
 
 ## Usage
 

@@ -14,8 +14,10 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   ~Sts3215Driver();
   
   // ActionInterface methods
+  absl::Status Init() override;
+  std::string GetId() override;
   absl::Status SetAction(const robot::action::ActionPacket& action_packet) override;
-  std::string GetId() override; // TODO: Update the ID scheme.
+  absl::Status Teardown() override;
   
   // ActuatorInterface methods
   absl::Status SetSpeed(float value) override;
@@ -23,7 +25,6 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   absl::Status SetTorque(float torque) override;
   absl::Status SetMiddlePosition() override;
   absl::Status SetIdlePosition() override;
-  absl::Status GracefulShutdown() override;
 
   private: 
   uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);

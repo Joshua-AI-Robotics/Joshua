@@ -24,6 +24,20 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial
         LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " initialized";
     }
 
+absl::Status Sts3215Driver::Init() {
+    try{
+        if(!serial_->Open().ok()) {
+            LOG(ERROR) << "Failed to open serial port.";
+            return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
+        }
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Error: " << e.what();
+        return absl::Status(absl::StatusCode::kInternal, "Failed to init.");
+    }
+
+    return absl::OkStatus();
+}
+
 
 Sts3215Driver::~Sts3215Driver() {
     LOG(INFO) << "Sts3215Driver Servo ID: " << static_cast<int>(servo_id_)<< " destroyed.";
@@ -100,11 +114,11 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
                             return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position");
                         }
                         break;
-                    case robot::action::PresetCommand::PRESET_GRACEFUL_SHUTDOWN:
-                        LOG(INFO) << "Executing preset: GRACEFUL_SHUTDOWN";
-                        if(!GracefulShutdown().ok()) {
-                            LOG(ERROR) << "Failed to graceful shutdown";
-                            return absl::Status(absl::StatusCode::kInternal, "Failed to graceful shutdown");
+                    case robot::action::PresetCommand::PRESET_TEARDOWN:
+                        LOG(INFO) << "Executing preset: TEARDOWN";
+                        if(!Teardown().ok()) {
+                            LOG(ERROR) << "Failed to teardown";
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to teardown");
                         }
                         break;
                     case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
@@ -308,7 +322,7 @@ absl::Status Sts3215Driver::SetIdlePosition(){
     return absl::OkStatus();
 }
 
-absl::Status Sts3215Driver::GracefulShutdown(){
+absl::Status Sts3215Driver::Teardown(){
     try{
         move_speed_ = 1000;
         if(!SetIdlePosition().ok()) {
@@ -323,7 +337,7 @@ absl::Status Sts3215Driver::GracefulShutdown(){
         }
     } catch (const std::exception& e) {
         LOG(ERROR) << "Error: " << e.what();
-        return absl::Status(absl::StatusCode::kInternal, "Failed to graceful shutdown.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to teardown.");
     }
     return absl::OkStatus();
 }

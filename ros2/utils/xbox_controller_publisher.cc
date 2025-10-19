@@ -85,7 +85,7 @@ int main(int argc, char * argv[]) {
   
   auto node = std::make_shared<XboxControllerPublisher>();
   
-  // Set up signal handler for graceful shutdown
+  // Set up signal handler for teardown
   std::signal(SIGINT, [](int) {
     RCLCPP_INFO(rclcpp::get_logger("xbox_controller_publisher"), "Received interrupt signal, shutting down...");
     rclcpp::shutdown();

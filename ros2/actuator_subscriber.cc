@@ -34,7 +34,7 @@ public:
         const auto& action_proto = single_action.actuator();
         
         auto interface = action_factory.CreateAction(single_action);
-        if (!interface) {
+        if (!interface.ok()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to create action interface for actuator '%s'. Check hardware connection or permissions.", 
                          action_proto.actuator_name().c_str());
             continue;
@@ -43,7 +43,7 @@ public:
         // Add a new actuator to the list and get a stable reference to it.
         Actuator& actuator = actuators_.emplace_back(Actuator{
           .topic = single_action.subscribe_topic(),
-          .interface = std::move(interface),
+          .interface = std::move(interface.value()),
           .limits = {action_proto.operational_lower_limit(), action_proto.operational_upper_limit()},
           .encoder_data_mode = action_proto.encoder_data_mode()
         });
@@ -91,11 +91,11 @@ public:
   ~ActionSubscriber() {
     std::vector<std::thread> threads;
     
-    // Start all shutdown threads in parallel for graceful shutdown.
+    // Start all shutdown threads in parallel for teardown.
     for (auto& actuator : actuators_) {
       threads.emplace_back([&actuator]() {
         actuator.reusable_packet.Clear();
-        actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_GRACEFUL_SHUTDOWN);
+        actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         actuator.interface->SetAction(actuator.reusable_packet);
       });
     }

@@ -32,6 +32,14 @@ Serial::~Serial() {
     }
 }
 
+absl::Status Serial::Open(){
+    if (!serial_->is_open()) {
+        LOG(ERROR) << "Error: Serial port not open.";
+        return absl::Status(absl::StatusCode::kInternal, "Serial port not open.");
+    }
+    return absl::OkStatus();
+}
+
 absl::Status Serial::Write(const std::vector<uint8_t>& data){
     std::lock_guard<std::mutex> lock(mutex_);
     if (!serial_->is_open()) {
