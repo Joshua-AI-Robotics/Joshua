@@ -1,0 +1,44 @@
+# Configuration preset for SO100 robot with SmolVLA inference
+#
+# This configuration sets up the SO100 robot to use SmolVLA for
+# vision-based manipulation tasks.
+#
+# Usage:
+#   bazel run //ros2:smolvla_inference -- --config config/config_preset/so100_smolvla_inference.pbtxt
+
+general {
+  operation_mode: MODE_MOCK_INFERENCE_PY  # TODO: Add MODE_SMOLVLA_INFERENCE to config.proto
+  node_name: "smolvla_inference_node"
+  node_id: 1
+}
+
+ai {
+  # Camera input topics (adjust based on your camera setup)
+  subscribe_topics: "/camera/image_0"
+  subscribe_topics: "/camera/image_1"
+  
+  # Action output topics (adjust based on your robot's DOF)
+  publish_topics: "/action/joint_0"
+  publish_topics: "/action/joint_1"
+  publish_topics: "/action/joint_2"
+  publish_topics: "/action/joint_3"
+  publish_topics: "/action/joint_4"
+  publish_topics: "/action/joint_5"
+  
+  # Model configuration
+  # Option 1: Use HuggingFace model (requires internet on first run)
+  # model_checkpoint_path: "HuggingFaceH4/SmolVLA-1.7B"
+  
+  # Option 2: Use local checkpoint (after downloading or fine-tuning)
+  # model_checkpoint_path: "/path/to/local/checkpoint"
+  
+  # Task instruction (optional, can be empty for default behavior)
+  # task_instruction: "Pick up the red cube and place it in the box"
+}
+
+# Physical layout configuration (if needed)
+physical_layout {
+  # Add your robot's physical layout here
+  # This depends on your robot configuration
+}
+
