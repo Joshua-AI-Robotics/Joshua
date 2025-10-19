@@ -41,6 +41,21 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
+py_library(
+    name = "inference_base",
+    srcs = [
+        "inference_base.py",
+    ],
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "@ros2_common_interfaces//:py_std_msgs",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "//config/proto:config_py_proto",
+        "//config/proto:ai_py_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
@@ -126,6 +141,7 @@ ros2_py_binary(
         "@ros2_common_interfaces//:py_sensor_msgs",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
+        "//ros2:inference_base",
     ],
     data = [
         "//config/config_preset:config_presets",
