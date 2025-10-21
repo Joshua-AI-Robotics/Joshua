@@ -20,9 +20,11 @@ public:
     explicit Sts3215Encoder(const std::shared_ptr<robot::comm::Serial>& serial, const robot::perception::Encoder& encoder_config);
     ~Sts3215Encoder() override = default;
 
-    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
+    absl::Status Init() override;
     std::string GetId() override;
+    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
     absl::StatusOr<float> GetPosition() override;
+    absl::Status Teardown() override;
 
 private:
     std::shared_ptr<robot::comm::Serial> serial_;

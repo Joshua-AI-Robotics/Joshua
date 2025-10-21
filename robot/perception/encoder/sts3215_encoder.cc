@@ -14,6 +14,18 @@ Sts3215Encoder::Sts3215Encoder(const std::shared_ptr<robot::comm::Serial>& seria
     id_ = GetId();
 }
 
+absl::Status Sts3215Encoder::Init() {
+    if(!serial_->Open().ok()) {
+        LOG(ERROR) << "Failed to open serial port.";
+        return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
+    }
+    return absl::OkStatus();
+}
+
+absl::Status Sts3215Encoder::Teardown() {
+    return absl::OkStatus();
+}
+
 std::string Sts3215Encoder::GetId() {
     auto id = "sts3215_encoder_" + std::to_string(servo_id_);
     return id;

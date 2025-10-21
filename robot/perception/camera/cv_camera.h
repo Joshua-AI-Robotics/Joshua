@@ -17,16 +17,19 @@ namespace robot::perception {
 class CvCamera : public CameraInterface {
 public:
     CvCamera(const robot::perception::Camera& camera_config);
-    ~CvCamera() override;
+    ~CvCamera() = default;
 
-    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
+    absl::Status Init() override;
     std::string GetId() override;
+    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
+    absl::Status Teardown() override;
 
 private:
     cv::VideoCapture cap_;
     cv::Mat last_frame_;
     std::string id_;
     uint64_t camera_id_;
+    robot::perception::OpenCvConfig opencv_config_;
     mutable robot::perception::PerceptionPacket reusable_packet_;  // Pre-allocated packet for reuse
 };
 
