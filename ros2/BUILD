@@ -51,7 +51,6 @@ py_library(
         "@ros2_common_interfaces//:py_std_msgs",
         "@ros2_common_interfaces//:py_sensor_msgs",
         "//config/proto:config_py_proto",
-        "//config/proto:ai_py_proto",
     ],
     visibility = ["//visibility:public"],
 )
