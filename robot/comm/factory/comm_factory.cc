@@ -5,8 +5,6 @@
 
 namespace robot::comm {
 
-CommFactory::~CommFactory() {}
-
 namespace {
 // Singleton-like caches for serial resources scoped to this TU
 struct PortResources {

@@ -12,11 +12,7 @@
 namespace robot::action{
 class ActionFactory {
 public:
-    ActionFactory() = default;
-    ~ActionFactory() = default;
-
-    static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(const robot::action::SingleAction& single_action)
-    {
+    static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(const robot::action::SingleAction& single_action){
         switch (single_action.action_type())
         {
             case robot::action::ActionType::ACTUATOR:
@@ -48,5 +44,13 @@ public:
                 return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid action type.");
         }
     }
+
+    ~ActionFactory() = default;
+    ActionFactory(const ActionFactory&) = delete;
+    ActionFactory& operator=(const ActionFactory&) = delete;
+    ActionFactory(ActionFactory&&) = default;
+    ActionFactory& operator=(ActionFactory&&) = default;
+private:
+    ActionFactory() = default;
 };
 }

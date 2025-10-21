@@ -13,9 +13,6 @@
 namespace robot::perception{
 class PerceptionFactory {
 public:
-    PerceptionFactory() = default;
-    ~PerceptionFactory() = default;
-
     static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreatePerception(const robot::perception::SinglePerception& single_perception){
         switch (single_perception.perception_type()) {
             case PerceptionType::CAMERA:
@@ -49,6 +46,12 @@ public:
         }
     }
     
+    ~PerceptionFactory() = default;
+    PerceptionFactory(const PerceptionFactory&) = delete;
+    PerceptionFactory& operator=(const PerceptionFactory&) = delete;
+    PerceptionFactory(PerceptionFactory&&) = default;
+    PerceptionFactory& operator=(PerceptionFactory&&) = default;
 private:
+    PerceptionFactory() = default;
 };
 }
