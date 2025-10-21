@@ -10,6 +10,7 @@ cc_library(
         "//robot/perception/encoder:sts3215_encoder",
         "//robot/perception/interfaces:perception_interface",
         "//config/proto:robot_cc_proto",
-        "//robot/comm_interface/factory:comm_factory",
+        "//robot/comm/factory:comm_factory",
+        "@abseil-cpp//absl/status:status",
     ],
 )

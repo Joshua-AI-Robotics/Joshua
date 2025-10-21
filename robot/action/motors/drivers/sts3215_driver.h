@@ -2,7 +2,7 @@
 
 #include <boost/asio.hpp>
 #include <vector>
-#include "robot/comm_interface/serial/serial.h"
+#include "robot/comm/serial/serial.h"
 #include "robot/action/interfaces/actuator_interface.h"
 #include "config/proto/robot.pb.h"
 #include <memory>
@@ -10,7 +10,7 @@
 namespace robot::action{
 class Sts3215Driver : public robot::action::ActuatorInterface {
   public:
-  Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::action::Actuator& action_config);
+  Sts3215Driver(const std::shared_ptr<robot::comm::Serial>& serial, const robot::action::Actuator& action_config);
   ~Sts3215Driver();
   
   // ActionInterface methods
@@ -32,7 +32,7 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   std::vector<uint8_t> create_torque_packet(uint8_t enable);
 
   // TODO: This must be base pointer of comm interface. Not serial.
-  std::shared_ptr<robot::comm_interface::Serial> serial_;
+  std::shared_ptr<robot::comm::Serial> serial_;
   std::string id_;
   uint8_t servo_id_;
   uint16_t move_speed_;

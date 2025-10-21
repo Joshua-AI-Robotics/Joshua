@@ -8,7 +8,7 @@ namespace {
     constexpr auto kReadAttempt = 50;
 }
 
-Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::action::Actuator& action_config):
+Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm::Serial>& serial, const robot::action::Actuator& action_config):
     serial_(serial)
     {   
         auto sts_config = action_config.sts3215_config();

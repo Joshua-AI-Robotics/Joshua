@@ -6,7 +6,7 @@ cc_library(
     hdrs = ["sts3215_driver.h"],
     deps = [
         "//robot/action/interfaces:actuator_interface",
-        "//robot/comm_interface/serial:serial",
+        "//robot/comm/serial:serial",
         "//config/proto:robot_cc_proto",
     ],
     visibility = ["//visibility:public"],

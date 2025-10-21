@@ -27,13 +27,11 @@ private:
 public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config) 
   : Node(node_name) {      
-    robot::action::ActionFactory action_factory;
-
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() == robot::action::ActionType::ACTUATOR && single_action.node_id() == node_id) {
         const auto& action_proto = single_action.actuator();
         
-        auto interface = action_factory.CreateAction(single_action);
+        auto interface = robot::action::ActionFactory::CreateAction(single_action);
         if (!interface.ok()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to create action interface for actuator '%s'. Check hardware connection or permissions.", 
                          action_proto.actuator_name().c_str());

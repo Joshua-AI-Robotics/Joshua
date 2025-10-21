@@ -6,7 +6,7 @@ cc_library(
     deps = [
         "//robot/action/interfaces:action_interface",
         "//robot/action/motors/drivers:sts3215_driver",
-        "//robot/comm_interface/factory:comm_factory",
+        "//robot/comm/factory:comm_factory",
         "//config/proto:robot_cc_proto",
         "@glog//:glog",
         "@abseil-cpp//absl/status:status",

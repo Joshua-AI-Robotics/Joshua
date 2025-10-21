@@ -1,11 +1,11 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/encoder/sts3215_encoder.h"
-#include "robot/comm_interface/factory/comm_factory.h"
+#include "robot/comm/factory/comm_factory.h"
 
 namespace robot::perception {
 
-std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::CreatePerception(const robot::perception::SinglePerception& single_perception) {
+absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> PerceptionFactory::CreatePerception(const robot::perception::SinglePerception& single_perception) {
     switch (single_perception.perception_type()) {
         case PerceptionType::CAMERA:
         {
@@ -16,15 +16,14 @@ std::unique_ptr<robot::perception::PerceptionInterface> PerceptionFactory::Creat
         case PerceptionType::ENCODER:
         {
             const auto& encoder = single_perception.encoder();
-            if (encoder.comm_type() == robot::comm_interface::CommType::SERIAL) {
-                // TODO: Serial should not be hardcoded.
-                auto serial = robot::comm_interface::CommFactory::GetInstance().GetSerial(encoder.serial_config());
-                return std::make_unique<Sts3215Encoder>(serial, encoder);
+            auto serial = robot::comm::CommFactory::CreateSerial(encoder.comm());
+            if(!serial.ok()) {
+                return serial.status();
             }
-            return nullptr;
+            return std::make_unique<Sts3215Encoder>(serial.value(), encoder);
         }
         default:
-            return nullptr;
+            return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid perception type.");
     }
 }
 

@@ -28,7 +28,7 @@ public:
         const auto& camera_proto = single_perception.camera();
 
         auto interface = perception_factory.CreatePerception(single_perception);  
-        if (!interface) {
+        if (!interface.ok()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to create perception interface for camera '%s'. Check hardware connection or permissions.", 
                          camera_proto.camera_name().c_str());
             continue; // Skip this camera if initialization failed.
@@ -36,7 +36,7 @@ public:
 
         cameras_.emplace_back(Camera{
           .topic = single_perception.publish_topic(),
-          .interface = std::move(interface),
+          .interface = std::move(interface.value()),
           .publisher = this->create_publisher<sensor_msgs::msg::Image>(single_perception.publish_topic(), 10),
           .timer = this->create_wall_timer(
             std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),

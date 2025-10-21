@@ -7,7 +7,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 
-namespace robot::comm_interface{
+namespace robot::comm {
 
 class Serial {
   public:

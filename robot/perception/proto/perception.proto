@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "robot/comm_interface/proto/comm_interface.proto";
+import "robot/comm/proto/comm.proto";
 
 package robot.perception;
 
@@ -47,11 +47,7 @@ message Camera {
     string camera_name = 1;
     uint64 id = 2;
     CameraType camera_type = 3;
-    robot.comm_interface.CommType comm_type = 4;
-    oneof comm_config {
-        robot.comm_interface.SerialConfig serial_config = 5;
-        // Add other comm type here.
-    }
+    robot.comm.Comm comm = 4;
     oneof camera_config {
         OpenCvConfig opencv_config = 6;
     }
@@ -61,14 +57,10 @@ message Encoder {
     string encoder_name = 1;
     uint64 id = 2;
     EncoderType encoder_type = 3;
-    robot.comm_interface.CommType comm_type = 4;
+    robot.comm.Comm comm = 4;
     uint32 operational_lower_limit = 5;
     uint32 operational_upper_limit = 6;
     EncoderDataMode encoder_data_mode = 7;
-    oneof comm_config {
-        robot.comm_interface.SerialConfig serial_config = 8;
-        // Add other comm type here.
-    }
     oneof encoder_config {
         Sts3215EncoderConfig sts3215_encoder_config = 9;
     }
