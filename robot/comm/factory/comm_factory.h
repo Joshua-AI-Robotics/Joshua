@@ -25,5 +25,4 @@ private:
     CommFactory() = default;
     
 };
-
-} 
+}
