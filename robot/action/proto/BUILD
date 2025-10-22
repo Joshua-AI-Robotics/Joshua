@@ -7,7 +7,7 @@ proto_library(
     name = "action_proto",
     srcs = ["action.proto"],
     deps = [
-        "//robot/comm_interface/proto:comm_interface_proto",
+        "//robot/comm/proto:comm_proto",
         "//robot/perception/proto:perception_proto",
     ],
 )

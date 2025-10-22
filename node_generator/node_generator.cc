@@ -313,8 +313,8 @@ absl::Status NodeGenerator::check_config_integrity() {
 
     // Helper lambda to extract serial port from a perception's config if it exists.
     auto get_serial_port = [](const auto& perception_details) -> std::string {
-        if (perception_details.comm_type() == robot::comm_interface::CommType::SERIAL) {
-            return perception_details.serial_config().port();
+        if (perception_details.comm().comm_type() == robot::comm::CommType::SERIAL) {
+            return perception_details.comm().serial_config().port();
         }
         return "";
     };

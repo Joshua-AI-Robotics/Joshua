@@ -3,7 +3,7 @@
 #include "robot/perception/interfaces/encoder_interface.h"
 #include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
-#include "robot/comm_interface/serial/serial.h"
+#include "robot/comm/serial/serial.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include <cstdint>
@@ -17,15 +17,17 @@ namespace robot::perception {
 
 class Sts3215Encoder : public EncoderInterface {
 public:
-    explicit Sts3215Encoder(const std::shared_ptr<robot::comm_interface::Serial>& serial, const robot::perception::Encoder& encoder_config);
+    explicit Sts3215Encoder(const std::shared_ptr<robot::comm::Serial>& serial, const robot::perception::Encoder& encoder_config);
     ~Sts3215Encoder() override = default;
 
-    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
+    absl::Status Init() override;
     std::string GetId() override;
+    absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
     absl::StatusOr<float> GetPosition() override;
+    absl::Status Teardown() override;
 
 private:
-    std::shared_ptr<robot::comm_interface::Serial> serial_;
+    std::shared_ptr<robot::comm::Serial> serial_;
     std::string id_;
     uint8_t servo_id_;
     mutable robot::perception::PerceptionPacket reusable_packet_;  // Pre-allocated packet for reuse

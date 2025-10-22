@@ -143,7 +143,7 @@ During runtime, the system uses a **hybrid approach** for optimal performance an
 #### Internal Communication (Protobuf)
 - **`action_packet.proto`**: Structured action commands with support for:
   - Simple commands (position, torque, speed)
-  - Preset commands (middle position, idle, graceful shutdown)
+  - Preset commands (middle position, idle, teardown)
   - Complex multi-parameter actions
 - **`perception_packet.proto`**: Unified perception data format supporting:
   - Image data (width, height, channels, encoding, raw bytes)

@@ -10,10 +10,13 @@ namespace robot::perception {
 
 class PerceptionInterface {
 public:
+    PerceptionInterface() = default;
     virtual ~PerceptionInterface() = default;
 
+    virtual absl::Status Init() = 0;
     virtual std::string GetId() = 0;
     virtual absl::StatusOr<robot::perception::PerceptionPacket> GetData() = 0;
+    virtual absl::Status Teardown() = 0;
 };
 
 }  // namespace robot::perception

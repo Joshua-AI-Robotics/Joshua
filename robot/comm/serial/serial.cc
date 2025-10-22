@@ -1,9 +1,9 @@
-#include "robot/comm_interface/serial/serial.h"
+#include "robot/comm/serial/serial.h"
 #include <termios.h>
 #include <cerrno>
 #include <cstring>
 
-namespace robot::comm_interface{
+namespace robot::comm {
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate):
     io_context_(io), uart_port_(uart_port), uart_baudrate_(uart_baudrate)
     {
@@ -30,6 +30,14 @@ Serial::~Serial() {
             throw std::runtime_error("Error closing serial port.");
         }
     }
+}
+
+absl::Status Serial::Open(){
+    if (!serial_->is_open()) {
+        LOG(ERROR) << "Error: Serial port not open.";
+        return absl::Status(absl::StatusCode::kInternal, "Serial port not open.");
+    }
+    return absl::OkStatus();
 }
 
 absl::Status Serial::Write(const std::vector<uint8_t>& data){

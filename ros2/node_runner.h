@@ -25,7 +25,7 @@ inline void sigterm_handler(int) noexcept {
  int RunNode(int argc, char* argv[], const char* logger_name) {
    rclcpp::init(argc, argv);
 
-   // Ensure external termination results in graceful shutdown
+   // Ensure external termination results in teardown
    std::signal(SIGTERM, detail::sigterm_handler);
 
    if (argc < 4) {

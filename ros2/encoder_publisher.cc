@@ -33,7 +33,7 @@ public:
         
         // First, create the interface and check if it's valid.
         auto interface = perception_factory.CreatePerception(single_perception);
-        if (!interface) {
+        if (!interface.ok()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to create perception interface for encoder '%s'. Check hardware connection or permissions.", 
                          encoder_proto.encoder_name().c_str());
             continue; // Skip this encoder if initialization failed.
@@ -41,7 +41,7 @@ public:
 
         encoders_.emplace_back(Encoder{
           .topic = single_perception.publish_topic(),
-          .interface = std::move(interface),
+          .interface = std::move(interface.value()),
           .limits = {encoder_proto.operational_lower_limit(), encoder_proto.operational_upper_limit()},
           .publisher = this->create_publisher<std_msgs::msg::Float32>(single_perception.publish_topic(), 10),
           .encoder_data_mode = encoder_proto.encoder_data_mode(),

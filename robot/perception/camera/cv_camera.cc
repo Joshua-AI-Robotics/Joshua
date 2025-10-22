@@ -8,18 +8,23 @@
 namespace robot::perception {
 
 CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
-    auto opencv_config = camera_config.opencv_config();
-    camera_id_ = opencv_config.id();
+    opencv_config_ = camera_config.opencv_config();
+    camera_id_ = opencv_config_.id();
     id_ = GetId();
+}
+
+absl::Status CvCamera::Init() {
     cap_.open(camera_id_, cv::CAP_V4L2);
     if (!cap_.isOpened()) {
         LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_;
-        throw std::runtime_error("Could not open camera with id " + std::to_string(camera_id_));
+        return absl::Status(absl::StatusCode::kInternal, "Could not open camera with id " + std::to_string(camera_id_));
     }
+
+    // TODO: Remove this hardcoded values.
     bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config.width());
-    bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config.height());
-    bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config.fps());
+    bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
+    bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
+    bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
 
     // Some drivers return false even on success.
     if (!set_fourcc || !set_width || !set_height || !set_fps) {
@@ -28,18 +33,30 @@ CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
                      << "set_width=" << std::boolalpha << set_width << ", "
                      << "set_height=" << std::boolalpha << set_height << ", "
                      << "set_fps=" << std::boolalpha << set_fps;
-        throw std::runtime_error("Failed to set camera resolution.");
+        return absl::Status(absl::StatusCode::kInternal, "Failed to set camera resolution.");
     }
 
+    LOG(INFO) << "Camera initialized successfully.";
     LOG(INFO) << "ID: " << id_;
     LOG(INFO) << "Camera resolution: " << cap_.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
     LOG(INFO) << "Camera FPS: " << cap_.get(cv::CAP_PROP_FPS);
+
+    return absl::OkStatus();
 }
 
-CvCamera::~CvCamera() {
-    if (cap_.isOpened()) {
-        cap_.release();
+absl::Status CvCamera::Teardown() {
+    try {
+        if (cap_.isOpened()) {
+            cap_.release();
+        }
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Error: " << e.what();
+        return absl::Status(absl::StatusCode::kInternal, "Failed to teardown camera.");
+    } catch (...) {
+        LOG(ERROR) << "Unknown exception in camera " << id_;
+        return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
     }
+    return absl::OkStatus();
 }
 
 absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
