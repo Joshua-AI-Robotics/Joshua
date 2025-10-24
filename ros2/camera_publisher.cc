@@ -20,14 +20,12 @@ private:
 public:
   CameraPublisher(const std::string& node_name, const int node_id, const config::Config& config)
   : Node(node_name) {
-    robot::perception::PerceptionFactory perception_factory;
-
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA && 
           static_cast<int>(single_perception.node_id()) == node_id) {
         const auto& camera_proto = single_perception.camera();
 
-        auto interface = perception_factory.CreatePerception(single_perception);  
+        auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);  
         if (!interface.ok()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to create perception interface for camera '%s'. Check hardware connection or permissions.", 
                          camera_proto.camera_name().c_str());
