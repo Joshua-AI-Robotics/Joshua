@@ -7,6 +7,7 @@ cc_library(
     deps = [
         "//robot/perception/camera:cv_camera",
         "//robot/perception/encoder:sts3215_encoder",
+        "//robot/perception/lidar:lds01_driver",
         "//robot/perception/interfaces:perception_interface",
         "//config/proto:robot_cc_proto",
         "//robot/comm/factory:comm_factory",

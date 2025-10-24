@@ -78,6 +78,24 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
+    name = "lidar_publisher",
+    srcs = ["lidar_publisher.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        "@ros2_rclcpp//:rclcpp",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "//robot/perception/factory:perception_factory",
+        "//config/proto:config_cc_proto",
+        "//robot/perception/proto:perception_packet_cc_proto",
+        "//robot/perception/proto:perception_cc_proto",
+        "//ros2:node_runner",
+    ],
+    set_up_ament = True,
+)
+
+ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
     data = [

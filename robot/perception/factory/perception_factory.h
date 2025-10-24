@@ -8,6 +8,7 @@
 #include <string>
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/encoder/sts3215_encoder.h"
+#include "robot/perception/lidar/lds01_driver.h"
 #include "robot/comm/factory/comm_factory.h"
 
 namespace robot::perception{
@@ -39,6 +40,27 @@ public:
                     }
                     default:
                         return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid encoder type.");
+                }
+            }
+
+            case PerceptionType::LIDAR:
+            {
+                const auto& lidar_config = single_perception.lidar();
+                switch (lidar_config.lidar_type()){
+                    case LidarType::LDS01:
+                    {
+                        auto serial = robot::comm::CommFactory::CreateSerial(lidar_config.comm());
+                        if(!serial.ok()) {
+                            return serial.status();
+                        }
+                        auto lidar = std::make_unique<Lds01Driver>(serial.value(), lidar_config);
+                        if(!lidar->Init().ok()){
+                            return absl::Status(absl::StatusCode::kInternal, "Failed to init lidar.");
+                        }
+                        return lidar;
+                    }
+                    default:
+                        return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid lidar type.");
                 }
             }
             default:

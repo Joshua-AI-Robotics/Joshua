@@ -94,6 +94,7 @@ message SinglePerception {
     oneof perception_data {
         Camera camera = 5;
         Encoder encoder = 6;
+        Lidar lidar = 7;
     }
 }
 
