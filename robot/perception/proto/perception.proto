@@ -33,6 +33,7 @@ enum EncoderType {
 
 enum LidarType {
     LIDAR_INVLAID = 0;
+    LDS01 = 1;
 }
 
 enum RadarType {
@@ -64,6 +65,14 @@ message Encoder {
     oneof encoder_config {
         Sts3215EncoderConfig sts3215_encoder_config = 9;
     }
+}
+
+message Lidar {
+    string lidar_name = 1;
+    uint64 id = 2;
+    LidarType lidar_type = 3;
+    robot.comm.Comm comm = 4;
+    // TODO(hmoon): Add more spec here.
 }
 
 message OpenCvConfig {

@@ -25,10 +25,55 @@ message SensorData {
 }
 
 // Point cloud data (for future LiDAR Radar sensors)
+message PointAttribute {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    X = 1;         // Cartesian X-coordinate (float)
+    Y = 2;         // Cartesian Y-coordinate (float)
+    Z = 3;         // Cartesian Z-coordinate (float)
+    INTENSITY = 4; // Laser return strength (float)
+    RED = 5;       // Color R component (int32, typically 0-255)
+    GREEN = 6;     // Color G component (int32, typically 0-255)
+    BLUE = 7;      // Color B component (int32, typically 0-255)
+    TIME_OFFSET = 8; // Time since the start of the scan (float)
+    // Add more attributes here (e.g., RADAR_VELOCITY, NORMAL_X)
+  }
+}
+
+// Represents a single 3D point with its associated attributes.
+message Point {
+  // Spatial Coordinates (Always present for a point cloud)
+  // Use 'double' for X, Y, Z if you need high precision (e.g., large-scale geo-referenced surveys).
+  float x = 1;
+  float y = 2;
+  float z = 3;
+
+  // Optional Attributes
+  // Use 'oneof' to group mutually exclusive or related attributes,
+  // though for clarity, we often keep them separate as 'optional' fields.
+  optional float intensity = 4;
+
+  // Color (optional)
+  optional int32 r = 5;
+  optional int32 g = 6;
+  optional int32 b = 7;
+
+  // Time-related (optional)
+  optional float time_offset = 8;
+}
+
+// The complete point cloud collection.
 message PointCloudData {
-  repeated float points = 1;
-  int32 point_count = 2;
-  bool has_color = 3;
+  repeated Point points = 1;
+}
+
+message PolarCoordinateData {
+  message Polar {
+    uint32 angle = 1;
+    uint32 distance = 2;
+    uint32 intensity = 3;
+  }
+  repeated Polar polar_coordinates = 1;
 }
 
 // Main perception packet - uses oneof for type safety
@@ -37,9 +82,10 @@ message PerceptionPacket {
   int64 timestamp_ns = 2;
   
   oneof data_type {
-    ImageData image = 10;
-    PositionData position = 11;
-    SensorData sensor = 12;
-    PointCloudData point_cloud = 13;
+    ImageData image = 3;
+    PositionData position = 4;
+    SensorData sensor = 5;
+    PointCloudData point_cloud = 6;
+    PolarCoordinateData polar_coordinate = 7;
   }
 }

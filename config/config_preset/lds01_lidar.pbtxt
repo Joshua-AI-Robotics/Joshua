@@ -1,0 +1,28 @@
+general{
+    operation_mode: MODE_TEST
+  }
+  
+  robot {
+    name: "lds01_lidar_test"
+    id: 1
+  
+    perceptions {
+      single_perceptions {
+        node_id: 1
+        publish_topic: "lds01_lidar_1"
+        perception_type: LIDAR
+        publish_rate_hz: 30
+        lidar {
+          lidar_name: "lds01_lidar_1"
+          id: 1
+          lidar_type: LDS01
+          comm_type: COMM_INVALID
+          serial_config {
+            id: 1
+            port: "/dev/ttyUSB0"
+            baudrate: 230400
+          }
+        }
+      }
+    }
+  }
