@@ -16,15 +16,17 @@ robot {
         encoder_name: "sts3215_encoder_1"
         id: 1
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 1
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 973
         operational_upper_limit: 3034
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 1
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
           servo_id: 1
         }
@@ -39,15 +41,17 @@ robot {
         encoder_name: "sts3215_encoder_2"
         id: 2
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 2
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 858
         operational_upper_limit: 3154
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 2
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
           servo_id: 2
         }
@@ -60,19 +64,21 @@ robot {
       publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_3"
-        id: 2
+        id: 3
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 3
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 798
         operational_upper_limit: 3015
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 3
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
-          servo_id: 3          
+          servo_id: 3
         }
       }
     }
@@ -85,17 +91,19 @@ robot {
         encoder_name: "sts3215_encoder_4"
         id: 4
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 4
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 668
         operational_upper_limit: 3124
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 4
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
-          servo_id: 4          
+          servo_id: 4
         }
       }
     }
@@ -108,17 +116,19 @@ robot {
         encoder_name: "sts3215_encoder_5"
         id: 5
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 5
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 902
         operational_upper_limit: 2955
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 5
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
-          servo_id: 5          
+          servo_id: 5
         }
       }
     }
@@ -131,21 +141,23 @@ robot {
         encoder_name: "sts3215_encoder_6"
         id: 6
         encoder_type: STS3215_ENCODER
-        comm_type: SERIAL
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 6
+            port: "/dev/ttyACM1"
+            baudrate: 1000000
+          }
+        }
         operational_lower_limit: 1795
         operational_upper_limit: 3235
         encoder_data_mode: ENCODER_DATA_MODE_RAW
-        serial_config {
-          id: 6
-          port: "/dev/ttyACM1"
-          baudrate: 1000000
-        }
         sts3215_encoder_config {
-          servo_id: 6          
+          servo_id: 6
         }
       }
     }
-    
+
   }
 }
 

@@ -8,8 +8,8 @@ ros2_cpp_binary(
     name = "simple_publisher",
     srcs = ["simple_publisher.cc"],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )
 
@@ -17,9 +17,9 @@ ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_std_msgs",
         "//utils:xbox_controller",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )
 
@@ -27,9 +27,9 @@ ros2_cpp_binary(
     name = "camera_subscriber",
     srcs = ["camera_subscriber.cc"],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
         "@local_deps//:opencv",
+        "@ros2_common_interfaces//:cpp_sensor_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )
 
@@ -37,21 +37,23 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )
 
 ros2_py_binary(
     name = "example_inference_node",
     srcs = ["example_inference_node.py"],
+    data = [],
     main = "example_inference_node.py",
+    tags = ["manual"],
     deps = [
-        "@ros2_rclpy//:rclpy",
-        "@ros2_common_interfaces//:py_std_msgs",
-        "@ros2_common_interfaces//:py_sensor_msgs",
         "@ros2_common_interfaces//:py_geometry_msgs",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "@ros2_common_interfaces//:py_std_msgs",
         "@ros2_common_interfaces//:py_std_srvs",
+        "@ros2_rclpy//:rclpy",
         requirement("opencv-python"),
         requirement("numpy"),
         requirement("torch"),
@@ -60,15 +62,13 @@ ros2_py_binary(
         requirement("pillow"),
         requirement("protobuf"),
     ],
-    data = [],
-    tags = ["manual"],
 )
 
 ros2_cpp_binary(
     name = "mock_action_publisher",
     srcs = ["mock_action_publisher.cc"],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
         "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )

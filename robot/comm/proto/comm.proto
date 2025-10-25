@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package robot.comm;
+
+// The communication method to control the actions.
+enum CommType {
+  COMM_INVALID = 0;
+  SERIAL = 1;
+}
+
+message Comm {
+  CommType comm_type = 1;
+  oneof comm_config {
+    SerialConfig serial_config = 2;
+  }
+}
+
+message SerialConfig {
+  uint64 id = 1;
+  string port = 2;
+  uint64 baudrate = 3;
+}

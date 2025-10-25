@@ -1,17 +1,16 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
-load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
 cc_library(
     name = "node_generator",
     srcs = ["node_generator.cc"],
     hdrs = ["node_generator.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//config:config_utils",
         "@abseil-cpp//absl/status:status",
-        "@glog//:glog",
+        "@glog",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_binary(
@@ -19,19 +18,19 @@ cc_binary(
     srcs = ["joshua_main.cc"],
     data = [
         "//config/config_preset:config_presets",
+        "//ros2:actuator_subscriber",
         "//ros2:camera_publisher",
         "//ros2:encoder_publisher",
-        "//ros2:actuator_subscriber",
         "//ros2:mock_inference",
         "//ros2:mock_inference_py",
         "//ros2:operational_limit_calibration",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         ":node_generator",
-        "@glog//:glog",
-        "@gflags//:gflags",
+        "@gflags",
+        "@glog",
     ],
-    visibility = ["//visibility:public"],
 )
 
 # Create a script to fix symlinks after extraction
@@ -57,14 +56,14 @@ chmod +x $(location fix_symlinks.sh)
 pkg_tar(
     name = "joshua_main_pkg",
     srcs = [
-        ":joshua_main",
-        "//ros2:ros2_node_wrapper.sh",
         ":fix_symlinks_script",
+        ":joshua_main",
         "//config/config_preset:config_presets",
+        "//ros2:ros2_node_wrapper.sh",
     ],
     extension = "tar.gz",
-    package_dir = "joshua_main",
     include_runfiles = True,
     mode = "0755",
+    package_dir = "joshua_main",
     visibility = ["//visibility:public"],
 )

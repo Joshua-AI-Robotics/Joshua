@@ -86,5 +86,3 @@ gh repo view hsmoon5458/rules_ros2 --json visibility,isPrivate
 ### Do not ignore this directory
 
 Ensure `.gitignore` does NOT ignore `external/` so the submodule pointer is tracked. The repository is configured accordingly.
-
-

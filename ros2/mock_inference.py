@@ -1,9 +1,11 @@
+import random
 import sys
 import random
 from typing import List, Any
 
 import rclpy
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from config.proto import config_pb2
@@ -86,4 +88,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

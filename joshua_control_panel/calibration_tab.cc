@@ -1,18 +1,18 @@
 #include "calibration_tab.h"
-#include "ui_calibration_tab.h"
-#include "operational_limit_tab.h"
 
 #include <QtWidgets/QTabWidget>
 
-CalibrationTab::CalibrationTab(QWidget *parent)
-    : QWidget(parent), ui(new Ui::CalibrationTab) {
-    ui->setupUi(this);
+#include "operational_limit_tab.h"
+#include "ui_calibration_tab.h"
 
-    // Create and add subtabs
-    auto* operationalLimitTab = new OperationalLimitTab(this);
-    ui->modeTabWidget->addTab(operationalLimitTab, "Operational Limit");
+CalibrationTab::CalibrationTab(QWidget* parent) : QWidget(parent), ui(new Ui::CalibrationTab) {
+  ui->setupUi(this);
+
+  // Create and add subtabs
+  auto* operationalLimitTab = new OperationalLimitTab(this);
+  ui->modeTabWidget->addTab(operationalLimitTab, "Operational Limit");
 }
 
-CalibrationTab::~CalibrationTab() { 
-    delete ui; 
+CalibrationTab::~CalibrationTab() {
+  delete ui;
 }

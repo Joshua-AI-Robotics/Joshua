@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-""" Single executable python script to control so100 arm with xbox controller."""
+"""Single executable python script to control so100 arm with xbox controller."""
 
-import serial
-import time
-import termios
-import tty
-import sys
 import os
-from collections import namedtuple
-import evdev
-from evdev import ecodes
 import select
+import time
+from collections import namedtuple
+
+import evdev
+import serial
+from evdev import ecodes
 
 UART_PORT = '/dev/ttyACM0'
 UART_BAUDRATE = 1000000
@@ -20,7 +18,7 @@ START_ID = 1
 POSITION_STEP = 20
 MOVE_SPEED = 1500
 MOVE_TIME = 40  # milliseconds
-SERVO_COMMAND_BUFFER_TIME = 0.01 # seconds
+SERVO_COMMAND_BUFFER_TIME = 0.01  # seconds
 
 XBOX_JOYSTICK_MIN = -32768
 XBOX_JOYSTICK_MAX = 32767
@@ -29,13 +27,13 @@ XBOX_TRIGGER_MAX = 1023
 
 XBOX_SERVO_MAP = {
     ecodes.ABS_HAT0X: 0,
-    ecodes.ABS_Y : 1,
-    ecodes.ABS_RY : 2,
-    ecodes.BTN_WEST : 3,
-    ecodes.BTN_SOUTH : 3,
-    ecodes.BTN_TL : 4,
-    ecodes.BTN_TR : 4,
-    ecodes.ABS_RZ : 5
+    ecodes.ABS_Y: 1,
+    ecodes.ABS_RY: 2,
+    ecodes.BTN_WEST: 3,
+    ecodes.BTN_SOUTH: 3,
+    ecodes.BTN_TL: 4,
+    ecodes.BTN_TR: 4,
+    ecodes.ABS_RZ: 5,
 }
 
 ServoLimit = namedtuple("ServoLimit", ["min", "max"])
@@ -56,6 +54,7 @@ SETUP_TIME = 2
 current_positions = SETUP_POSITIONS[:]
 
 SELECT_TIMEOUT = 0.01
+
 
 def find_controller():
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
@@ -84,41 +83,52 @@ def find_controller():
         print("Invalid input.")
         return None
 
+
 def calculate_checksum(data):
-    return (~sum(data) & 0xFF)
+    return ~sum(data) & 0xFF
+
 
 def create_move_packet(servo_id, position, speed):
     time_ms = MOVE_TIME
 
     if position >= SERVO_LIMITS[servo_id - START_ID].max:
         position = SERVO_LIMITS[servo_id - START_ID].max
-    
+
     elif position <= SERVO_LIMITS[servo_id - START_ID].min:
         position = SERVO_LIMITS[servo_id - START_ID].min
 
     packet = [
-        0xFF, 0xFF, servo_id, 0x09, 0x03, 0x2A,
-        position & 0xFF, (position >> 8) & 0xFF,
-        time_ms & 0xFF, (time_ms >> 8) & 0xFF,
-        speed & 0xFF, (speed >> 8) & 0xFF
+        0xFF,
+        0xFF,
+        servo_id,
+        0x09,
+        0x03,
+        0x2A,
+        position & 0xFF,
+        (position >> 8) & 0xFF,
+        time_ms & 0xFF,
+        (time_ms >> 8) & 0xFF,
+        speed & 0xFF,
+        (speed >> 8) & 0xFF,
     ]
     packet.append(calculate_checksum(packet[2:]))
     return bytearray(packet)
+
 
 def create_torque_packet(servo_id, enable):
     packet = [0xFF, 0xFF, servo_id, 0x04, 0x03, 0x28, 1 if enable else 0]
     packet.append(calculate_checksum(packet[2:]))
     return bytearray(packet)
 
+
 def create_read_position_packet(servo_id):
     """Creates a packet to request the current position of a servo."""
     # The read instruction requires the starting address (0x38 for position)
     # and the number of bytes to read (2 for position).
-    packet = [
-        0xFF, 0xFF, servo_id, 0x04, 0x02, 0x38, 0x02
-    ]
+    packet = [0xFF, 0xFF, servo_id, 0x04, 0x02, 0x38, 0x02]
     packet.append(calculate_checksum(packet[2:]))
     return bytearray(packet)
+
 
 def read_servo_position(serial_obj, servo_id):
     """Sends a read request and returns the servo's current position."""
@@ -144,6 +154,7 @@ def read_servo_position(serial_obj, servo_id):
 
     return 0
 
+
 def print_status():
     os.system('clear')
     print("╔══════════════════════════════════════════════╗")
@@ -163,8 +174,10 @@ def print_status():
 
     print("  [Start] Quit")
 
+
 def map_range(value, in_min, in_max, out_min, out_max):
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
 
 def main():
     controller = find_controller()
@@ -190,7 +203,7 @@ def main():
         for i in range(NUMBER_OF_SERVOS):
             servo_id = START_ID + i
             current_positions[i] = read_servo_position(serial_obj, servo_id)
-            
+
         print("Moving all servos to initial position...")
         for i in range(NUMBER_OF_SERVOS):
             middle_position = (SERVO_LIMITS[i].min + SERVO_LIMITS[i].max) // 2
@@ -205,76 +218,136 @@ def main():
         # Initialize the state for all axes the controller supports.
         for code, abs_info in controller.capabilities().get(ecodes.EV_ABS, []):
             controller_state[code] = abs_info.value
-        
+
         while True:
             # Use select() for a non-blocking read of events.
             r, w, x = select.select([controller.fileno()], [], [], SELECT_TIMEOUT)
-           
+
             # If there are events to read, process them.
             if r:
                 for event in controller.read():
                     # Update our state dictionary with the new event value
                     if event.type == ecodes.EV_KEY or event.type == ecodes.EV_ABS:
                         controller_state[event.code] = event.value
-            
+
             # Move servos here.
             for code, value in sorted(controller_state.items()):
                 if code == ecodes.BTN_START and value == 1:
                     print("Shutting down...")
                     raise
 
-                if code == ecodes.ABS_HAT0X: # arrow keys on the left bottom
+                if code == ecodes.ABS_HAT0X:  # arrow keys on the left bottom
                     servo_index = XBOX_SERVO_MAP[code]
-                    step = int(POSITION_STEP/2) # slow down for servo 1
+                    step = int(POSITION_STEP / 2)  # slow down for servo 1
                     if value == 1:
                         current_positions[servo_index] += step
-                        serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))
+                        serial_obj.write(
+                            create_move_packet(
+                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            )
+                        )
 
                     elif value == -1:
                         current_positions[servo_index] -= step
-                        serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))          
+                        serial_obj.write(
+                            create_move_packet(
+                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            )
+                        )
 
-                if code == ecodes.ABS_Y: # left joystick y axis
+                if code == ecodes.ABS_Y:  # left joystick y axis
                     servo_index = XBOX_SERVO_MAP[code]
-                    mapped_value = int(map_range(value, XBOX_JOYSTICK_MIN, XBOX_JOYSTICK_MAX, -POSITION_STEP, POSITION_STEP))
+                    mapped_value = int(
+                        map_range(
+                            value,
+                            XBOX_JOYSTICK_MIN,
+                            XBOX_JOYSTICK_MAX,
+                            -POSITION_STEP,
+                            POSITION_STEP,
+                        )
+                    )
 
                     if mapped_value != 0:
                         current_positions[servo_index] += mapped_value
-                        serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED)) 
+                        serial_obj.write(
+                            create_move_packet(
+                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            )
+                        )
 
-                if code == ecodes.ABS_RY: # right joystick y axis
+                if code == ecodes.ABS_RY:  # right joystick y axis
                     servo_index = XBOX_SERVO_MAP[code]
-                    mapped_value = int(map_range(value, XBOX_JOYSTICK_MIN, XBOX_JOYSTICK_MAX, -POSITION_STEP, POSITION_STEP))
+                    mapped_value = int(
+                        map_range(
+                            value,
+                            XBOX_JOYSTICK_MIN,
+                            XBOX_JOYSTICK_MAX,
+                            -POSITION_STEP,
+                            POSITION_STEP,
+                        )
+                    )
 
                     if mapped_value != 0:
                         current_positions[servo_index] += mapped_value
-                        serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED)) 
+                        serial_obj.write(
+                            create_move_packet(
+                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            )
+                        )
 
-                if code == ecodes.BTN_WEST and value == 1: # Y key
+                if code == ecodes.BTN_WEST and value == 1:  # Y key
                     servo_index = XBOX_SERVO_MAP[code]
                     current_positions[servo_index] -= POSITION_STEP
-                    serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))
+                    serial_obj.write(
+                        create_move_packet(
+                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                        )
+                    )
 
-                if code == ecodes.BTN_SOUTH and value == 1: # A key
+                if code == ecodes.BTN_SOUTH and value == 1:  # A key
                     servo_index = XBOX_SERVO_MAP[code]
                     current_positions[servo_index] += POSITION_STEP
-                    serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))
+                    serial_obj.write(
+                        create_move_packet(
+                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                        )
+                    )
 
-                if code == ecodes.BTN_TL and value == 1: # LB
+                if code == ecodes.BTN_TL and value == 1:  # LB
                     servo_index = XBOX_SERVO_MAP[code]
                     current_positions[servo_index] += POSITION_STEP
-                    serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))
+                    serial_obj.write(
+                        create_move_packet(
+                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                        )
+                    )
 
-                if code == ecodes.BTN_TR and value == 1: # RB
+                if code == ecodes.BTN_TR and value == 1:  # RB
                     servo_index = XBOX_SERVO_MAP[code]
                     current_positions[servo_index] -= POSITION_STEP
-                    serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED))
+                    serial_obj.write(
+                        create_move_packet(
+                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                        )
+                    )
 
-                if code == ecodes.ABS_RZ: # RT
+                if code == ecodes.ABS_RZ:  # RT
                     servo_index = XBOX_SERVO_MAP[code]
-                    current_positions[servo_index] = int(map_range(value, XBOX_TRIGGER_MIN, XBOX_TRIGGER_MAX, SERVO_LIMITS[servo_index].max, SERVO_LIMITS[servo_index].min))
-                    serial_obj.write(create_move_packet(START_ID + servo_index, current_positions[servo_index], MOVE_SPEED*2)) 
-            
+                    current_positions[servo_index] = int(
+                        map_range(
+                            value,
+                            XBOX_TRIGGER_MIN,
+                            XBOX_TRIGGER_MAX,
+                            SERVO_LIMITS[servo_index].max,
+                            SERVO_LIMITS[servo_index].min,
+                        )
+                    )
+                    serial_obj.write(
+                        create_move_packet(
+                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED * 2
+                        )
+                    )
+
             # Read the servo encoder value update to print and mitigate the offset.
             for servo_index in range(NUMBER_OF_SERVOS):
                 # current_positions[i] = read_servo_position(serial_obj, START_ID + servo_id)
@@ -285,7 +358,7 @@ def main():
                     current_positions[servo_index] = SERVO_LIMITS[servo_index].min
 
             print_status()
-            
+
     except serial.SerialException as e:
         print(f"Error: Could not open serial port {port}: {e}")
     except Exception as e:
@@ -293,7 +366,7 @@ def main():
     finally:
         for i in range(NUMBER_OF_SERVOS):
             serial_obj.write(create_move_packet(START_ID + i, SETUP_POSITIONS[i], SETUP_MOVE_SPEED))
-                
+
         time.sleep(SETUP_TIME)
 
         if 'serial_obj' in locals() and serial_obj.is_open:
@@ -306,6 +379,7 @@ def main():
                 print("Serial connection closed.")
             except Exception as e:
                 print(f"Error while closing connection: {e}")
+
 
 if __name__ == "__main__":
     main()

@@ -6,9 +6,9 @@ package robot.perception;
 message ImageData {
   int32 width = 1;
   int32 height = 2;
-  int32 channels = 3;           // 1=grayscale, 3=RGB, 4=RGBA
-  string encoding = 4;          // "bgr8", "rgb8", "mono8", etc.
-  bytes data = 5;               // Raw image bytes
+  int32 channels = 3;   // 1=grayscale, 3=RGB, 4=RGBA
+  string encoding = 4;  // "bgr8", "rgb8", "mono8", etc.
+  bytes data = 5;       // Raw image bytes
 }
 
 // Position data for encoders
@@ -35,7 +35,7 @@ message PointCloudData {
 message PerceptionPacket {
   string perception_id = 1;
   int64 timestamp_ns = 2;
-  
+
   oneof data_type {
     ImageData image = 10;
     PositionData position = 11;

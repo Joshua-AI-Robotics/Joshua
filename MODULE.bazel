@@ -17,6 +17,7 @@ bazel_dep(name = "platforms", version = "0.0.8")
 
 # Hermetic LLVM toolchain for Linux AArch64 (Jetson Orin Nano)
 bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.2.4")
+
 register_toolchains(
     "@toolchains_llvm_bootstrapped//toolchain:linux_aarch64",
 )
@@ -33,11 +34,11 @@ bazel_dep(name = "com_github_mvukov_rules_ros2")
 rules_ros2_non_module_deps = use_extension("@com_github_mvukov_rules_ros2//ros2:extensions.bzl", "non_module_deps")
 use_repo(
     rules_ros2_non_module_deps,
-    "ros2_rclcpp",
     "ros2_common_interfaces",
-    "ros2_rclpy",
     "ros2_launch",
     "ros2_launch_ros",
+    "ros2_rclcpp",
+    "ros2_rclpy",
 )
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
@@ -56,4 +57,5 @@ use_repo(pip, "project_joshua_pip_deps")
 
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
+
 system_libs(name = "local_deps")
