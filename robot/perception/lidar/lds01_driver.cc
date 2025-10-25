@@ -1,6 +1,7 @@
 #include "robot/perception/lidar/lds01_driver.h"
 #include <glog/logging.h>
 #include <chrono>
+#include <cmath>
 
 namespace robot::perception{
 
@@ -105,6 +106,17 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
 
                 const size_t total_len = 2 + remaining_data.size();
 
+                // Prepare SoA vectors
+                auto* cloud = reusable_packet_.mutable_point_cloud();
+                cloud->clear_x();
+                cloud->clear_y();
+                cloud->clear_z();
+                cloud->clear_intensity();
+                cloud->clear_time_offset();
+                cloud->set_height(1);
+                cloud->set_is_dense(false);
+                cloud->set_frame_id("lidar");
+
                 for (uint16_t i = 0; i + 41 < total_len; i = i + 42) {
                   if (raw_bytes[i] == 0xFA && raw_bytes[i + 1] == (0xA0 + i / 42)) {
                     good_sets++;
@@ -112,7 +124,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
                     rpms = (raw_bytes[i + 3] << 8 | raw_bytes[i + 2]) / 10;
         
                     for (uint16_t j = i + 4; j + 5 < total_len && j < i + 40; j = j + 6) {
-                      auto polar = reusable_packet_.mutable_polar_coordinate()->add_polar_coordinates();
 
                       index = 6 * (i / 42) + (j - 4 - i) / 6;
         
@@ -124,13 +135,21 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
                       uint16_t intensity = (byte1 << 8) + byte0;
         
                       uint16_t range = (byte3 << 8) + byte2;
-                        
-                      polar->set_angle(index);
-                      polar->set_distance(range);
-                      polar->set_intensity(intensity);
+                      
+                      // Convert to Cartesian assuming index is degrees
+                      const float r_m = static_cast<float>(range) * 0.001f; // mm -> m
+                      const float theta_rad = static_cast<float>(index) * static_cast<float>(M_PI) / 180.0f;
+                      cloud->add_x(r_m * std::cos(theta_rad));
+                      cloud->add_y(r_m * std::sin(theta_rad));
+                      cloud->add_z(0.0f);
+                      cloud->add_intensity(static_cast<float>(intensity));
+                      // Optional time per point could be added here if known
                     }
                   }
                 }
+
+                // Set width to number of points
+                cloud->set_width(static_cast<uint32_t>(cloud->x_size()));
 
                 // Mark scan as complete only after successful accumulation and parsing
                 got_scan = true;
@@ -141,7 +160,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
             }
           }
   
-  LOG(INFO) << "Returning LiDAR packet with " << reusable_packet_.polar_coordinate().polar_coordinates_size() << " points";
+  LOG(INFO) << "Returning LiDAR packet with " << reusable_packet_.point_cloud().x_size() << " points";
   return reusable_packet_;
 }
 }

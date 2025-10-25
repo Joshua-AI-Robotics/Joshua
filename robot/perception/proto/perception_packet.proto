@@ -24,56 +24,20 @@ message SensorData {
   string unit = 3;
 }
 
-// Point cloud data (for future LiDAR Radar sensors)
-message PointAttribute {
-  enum Type {
-    TYPE_UNSPECIFIED = 0;
-    X = 1;         // Cartesian X-coordinate (float)
-    Y = 2;         // Cartesian Y-coordinate (float)
-    Z = 3;         // Cartesian Z-coordinate (float)
-    INTENSITY = 4; // Laser return strength (float)
-    RED = 5;       // Color R component (int32, typically 0-255)
-    GREEN = 6;     // Color G component (int32, typically 0-255)
-    BLUE = 7;      // Color B component (int32, typically 0-255)
-    TIME_OFFSET = 8; // Time since the start of the scan (float)
-    // Add more attributes here (e.g., RADAR_VELOCITY, NORMAL_X)
-  }
-}
-
-// Represents a single 3D point with its associated attributes.
-message Point {
-  // Spatial Coordinates (Always present for a point cloud)
-  // Use 'double' for X, Y, Z if you need high precision (e.g., large-scale geo-referenced surveys).
-  float x = 1;
-  float y = 2;
-  float z = 3;
-
-  // Optional Attributes
-  // Use 'oneof' to group mutually exclusive or related attributes,
-  // though for clarity, we often keep them separate as 'optional' fields.
-  optional float intensity = 4;
-
-  // Color (optional)
-  optional int32 r = 5;
-  optional int32 g = 6;
-  optional int32 b = 7;
-
-  // Time-related (optional)
-  optional float time_offset = 8;
-}
-
-// The complete point cloud collection.
+// Point cloud data (SoA layout, units in meters/seconds)
 message PointCloudData {
-  repeated Point points = 1;
-}
+  // Structure-of-Arrays for efficiency. All arrays should be the same length.
+  repeated float x = 1;              // meters
+  repeated float y = 2;              // meters
+  repeated float z = 3;              // meters
+  repeated float intensity = 4;      // unitless or sensor-specific; normalized if applicable
+  repeated float time_offset = 5;    // seconds since start of scan (optional)
 
-message PolarCoordinateData {
-  message Polar {
-    uint32 angle = 1;
-    uint32 distance = 2;
-    uint32 intensity = 3;
-  }
-  repeated Polar polar_coordinates = 1;
+  // Cloud-level metadata
+  uint32 width = 6;                  // 1 for unorganized cloud
+  uint32 height = 7;                 // 1 for unorganized cloud
+  bool is_dense = 8;                 // true if no invalid/NaN points
+  string frame_id = 9;               // optional frame name for this cloud
 }
 
 // Main perception packet - uses oneof for type safety
@@ -86,6 +50,5 @@ message PerceptionPacket {
     PositionData position = 4;
     SensorData sensor = 5;
     PointCloudData point_cloud = 6;
-    PolarCoordinateData polar_coordinate = 7;
   }
 }
