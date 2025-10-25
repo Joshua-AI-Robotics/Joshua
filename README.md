@@ -181,10 +181,23 @@ pre-commit install --hook-type pre-push
 chmod +x scripts/lint.sh
 ```
 
-Run all linters locally:
+Run lint checks locally (no changes):
 
 ```bash
 ./scripts/lint.sh
+```
+
+Auto-fix then validate:
+
+```bash
+./scripts/lint.sh --fix
+git add -A
+```
+
+On push, pre-push hooks will block if issues remain and print guidance such as:
+
+```
+clang-format issues in <file> (run ./scripts/lint.sh --fix to update)
 ```
 
 CI will re-run the linters on pull requests targeting `develop`.

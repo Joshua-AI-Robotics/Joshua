@@ -10,17 +10,13 @@ repos:
         args: ["--allow-multiple-documents"]
         stages: [manual, pre-push]
 
-  - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v17.0.6
+  - repo: local
     hooks:
-      # Auto-fix formatting when run manually (used by scripts/lint.sh)
-      - id: clang-format
-        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
-        stages: [manual]
-      - id: clang-format
+      - id: clang-format-check
         name: clang-format (check)
+        entry: hooks/clang_format_check.sh
+        language: system
         files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
-        args: ["--dry-run", "--Werror"]
         stages: [pre-push]
         pass_filenames: true
 
