@@ -14,7 +14,7 @@ class LidarPublisher : public rclcpp::Node {
 private:
   struct Lidar {
     std::string topic;
-    std::unique_ptr<robot::perception::LidarInterface> interface;
+    std::unique_ptr<robot::perception::PerceptionInterface> interface;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
     rclcpp::TimerBase::SharedPtr timer;
   };
@@ -80,8 +80,24 @@ private:
             continue;
         }
 
-        // TODO(hmoon): fix this
-        auto polar_coordinate_data = packet.value().polar_coordinate(0).distance();
+        // Get the first polar coordinate point's distance
+        const auto& polar_data = packet.value().polar_coordinate();
+        if (polar_data.polar_coordinates_size() == 0) {
+            RCLCPP_WARN(this->get_logger(), "No polar coordinates in lidar data from '%s'!", lidar.topic.c_str());
+            continue;
+        }
+
+        // Print all angle and distance values
+        RCLCPP_INFO(this->get_logger(), "LiDAR '%s' scan with %d points:", lidar.topic.c_str(), polar_data.polar_coordinates_size());
+        
+        for (int i = 0; i < polar_data.polar_coordinates_size(); i++) {
+            const auto& point = polar_data.polar_coordinates(i);
+            RCLCPP_INFO(this->get_logger(), "  Point %d: angle=%u, distance=%u, intensity=%u", 
+                       i, point.angle(), point.distance(), point.intensity());
+        }
+        
+        // Still publish the first point's distance for compatibility
+        auto polar_coordinate_data = polar_data.polar_coordinates(0).distance();
         auto message = std_msgs::msg::Float32();
         message.data = polar_coordinate_data;
         lidar.publisher->publish(message);

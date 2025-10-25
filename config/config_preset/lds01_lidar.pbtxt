@@ -16,12 +16,14 @@ general{
           lidar_name: "lds01_lidar_1"
           id: 1
           lidar_type: LDS01
-          comm_type: COMM_INVALID
-          serial_config {
-            id: 1
-            port: "/dev/ttyUSB0"
-            baudrate: 230400
-          }
+          comm {
+            comm_type: SERIAL
+            serial_config {
+              id: 1
+              port: "/dev/ttyUSB1"
+              baudrate: 230400
+            }
+          }          
         }
       }
     }

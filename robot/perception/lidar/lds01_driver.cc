@@ -1,5 +1,6 @@
 #include "robot/perception/lidar/lds01_driver.h"
 #include <glog/logging.h>
+#include <chrono>
 
 namespace robot::perception{
 
@@ -13,12 +14,32 @@ absl::Status Lds01Driver::Init() {
         LOG(ERROR) << "Failed to open serial port.";
         return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
     }
+    
+    // Send start motor command (required for LDS-01)
+    std::vector<uint8_t> start_cmd = {'b'};
+    auto write_result = serial_->Write(start_cmd);
+    if (!write_result.ok()) {
+        LOG(WARNING) << "Failed to send start motor command: " << write_result.message();
+    } else {
+        LOG(INFO) << "Sent start motor command to LiDAR";
+    }
+    
     stop_receiving_.store(false);
     return absl::OkStatus();
 }
 
 absl::Status Lds01Driver::Teardown() {
     stop_receiving_.store(true);
+    
+    // Send stop motor command
+    std::vector<uint8_t> stop_cmd = {'e'};
+    auto write_result = serial_->Write(stop_cmd);
+    if (!write_result.ok()) {
+        LOG(WARNING) << "Failed to send stop motor command: " << write_result.message();
+    } else {
+        LOG(INFO) << "Sent stop motor command to LiDAR";
+    }
+    
     return absl::OkStatus();
 }
 
@@ -36,42 +57,61 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
     uint32_t motor_speed = 0;
     uint32_t rpms = 0;
     uint16_t index;
+    
+    LOG(INFO) << "Starting LiDAR data collection...";
+    
     // Main loop for thread.
-    while(stop_receiving_){
-        while (!got_scan) {
-            // Wait until first data sync of frame: 0xFA, 0xA0
-            auto result = serial_->Read(1);
+    while(!stop_receiving_.load(std::memory_order_acquire) && !got_scan) {
+        // Wait until first data sync of frame: 0xFA, 0xA0
+        auto result = serial_->Read(1);
 
-            if (!result.ok()) {
-                LOG(ERROR) << "Failed to read from serial port.";
-                continue;
-            }
-            raw_bytes = result.value();
-            if (start_count == 0) {
-              if (raw_bytes[start_count] == 0xFA) {
+        if (!result.ok()) {
+            LOG(WARNING) << "Failed to read from serial port: " << result.status();
+            continue;
+        }
+        
+        uint8_t byte = result.value()[0];
+        
+        if (start_count == 0) {
+            if (byte == 0xFA) {
                 start_count = 1;
-              }
-            } else if (start_count == 1) {
-              if (raw_bytes[start_count] == 0xA0) {
+            }
+        } else if (start_count == 1) {
+            if (byte == 0xA0) {
                 start_count = 0;
-        
-                // Start sequence found, read in the rest of the message
-                got_scan = true;
-        
-                auto result = serial_->Read(2518);
-                if (!result.ok()) {
-                    LOG(ERROR) << "Failed to read from serial port.";
+                // Start sequence found, read in the rest of the message via a single blocking read
+                LOG(INFO) << "Found start sequence, reading full scan...";
+
+                auto remain_result = serial_->Read(2518);
+                if (!remain_result.ok()) {
+                    LOG(WARNING) << "Serial read error while reading frame payload: " << remain_result.status();
                     continue;
                 }
-                raw_bytes = result.value();
-                for (uint16_t i = 0; i < raw_bytes.size(); i = i + 42) {
+                const auto &remaining_data = remain_result.value();
+                if (remaining_data.size() != 2518) {
+                    LOG(WARNING) << "Partial frame payload received: " << remaining_data.size() << " bytes (expected 2518). Parsing available data for minimal latency.";
+                }
+
+                // Reconstruct the full packet: 0xFA, 0xA0 + remaining data
+                raw_bytes[0] = 0xFA;
+                raw_bytes[1] = 0xA0;
+                std::copy(remaining_data.begin(), remaining_data.end(), raw_bytes.begin() + 2);
+
+                // Clear packet then set metadata before adding points
+                reusable_packet_.Clear();
+                reusable_packet_.set_perception_id(GetId());
+                reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::high_resolution_clock::now().time_since_epoch()).count());
+
+                const size_t total_len = 2 + remaining_data.size();
+
+                for (uint16_t i = 0; i + 41 < total_len; i = i + 42) {
                   if (raw_bytes[i] == 0xFA && raw_bytes[i + 1] == (0xA0 + i / 42)) {
                     good_sets++;
                     motor_speed += (raw_bytes[i + 3] << 8) + raw_bytes[i + 2];
                     rpms = (raw_bytes[i + 3] << 8 | raw_bytes[i + 2]) / 10;
         
-                    reusable_packet_.Clear();
-                    for (uint16_t j = i + 4; j < i + 40; j = j + 6) {
+                    for (uint16_t j = i + 4; j + 5 < total_len && j < i + 40; j = j + 6) {
                       auto polar = reusable_packet_.mutable_polar_coordinate()->add_polar_coordinates();
 
                       index = 6 * (i / 42) + (j - 4 - i) / 6;
@@ -88,19 +128,20 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
                       polar->set_angle(index);
                       polar->set_distance(range);
                       polar->set_intensity(intensity);
-                      
-                      LOG(INFO) << "r[" << 359 - index << "]=" << range / 1000.0;
                     }
                   }
                 }
-        
+
+                // Mark scan as complete only after successful accumulation and parsing
+                got_scan = true;
+
               } else {
                 start_count = 0;
               }
             }
           }
-    }
   
+  LOG(INFO) << "Returning LiDAR packet with " << reusable_packet_.polar_coordinate().polar_coordinates_size() << " points";
   return reusable_packet_;
 }
 }
