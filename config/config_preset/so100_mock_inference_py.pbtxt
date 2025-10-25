@@ -5,7 +5,7 @@ general{
     name: "so100"
     id: 1
     robot_type: MANIPULATOR_ARM
-  
+
     actions {
       single_actions {
         node_id: 1
@@ -182,7 +182,7 @@ general{
         }
       }
     }
-  
+
     perceptions {
       single_perceptions {
         node_id: 2
@@ -204,7 +204,7 @@ general{
       }
     }
   }
-  
+
   ai {
     policy_name: "example_policy"
     node_id: 3
@@ -226,4 +226,3 @@ general{
       vision_embedding_dim: 128
     }
   }
-  

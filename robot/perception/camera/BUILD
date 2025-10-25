@@ -8,9 +8,9 @@ cc_library(
     deps = [
         "//robot/perception/interfaces:camera_interface",
         "//robot/perception/proto:perception_packet_cc_proto",
-        "@glog//:glog",
-        "@local_deps//:videoio",
+        "@glog",
         "@local_deps//:core",
         "@local_deps//:imgcodecs",
+        "@local_deps//:videoio",
     ],
 )

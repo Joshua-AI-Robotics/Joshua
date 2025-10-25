@@ -80,6 +80,12 @@ install_git() {
     else
         echo -e "${GREEN}Git is already installed${NC}"
     fi
+
+    # Ensure Git LFS is installed
+    if ! command -v git-lfs &> /dev/null; then
+        echo -e "${BLUE}Installing Git LFS...${NC}"
+        sudo apt-get install -y git-lfs
+    fi
 }
 
 # Function to sync and update submodules to pinned commits
@@ -161,6 +167,80 @@ setup_ros2_environment() {
     fi
 }
 
+# Install linting tools
+install_linting_tools() {
+    echo -e "${BLUE}Installing linting tools...${NC}"
+    sudo apt-get install -y clang-format
+
+    # Determine buildifier URL based on architecture
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)
+            BUILDIFIER_URL="https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-amd64"
+            ;;
+        aarch64|arm64)
+            BUILDIFIER_URL="https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-arm64"
+            ;;
+        *)
+            echo -e "${YELLOW}Unknown architecture ($ARCH). Skipping buildifier install.${NC}"
+            BUILDIFIER_URL=""
+            ;;
+    esac
+
+    if [ -n "$BUILDIFIER_URL" ]; then
+        # If a directory was mistakenly created at the target path, remove it
+        if [ -d "/usr/local/bin/buildifier" ]; then
+            echo -e "${YELLOW}/usr/local/bin/buildifier exists as a directory; removing it...${NC}"
+            sudo rm -rf /usr/local/bin/buildifier
+        fi
+
+        # Download and install directly to avoid temp dir permission issues
+        curl -L "$BUILDIFIER_URL" | sudo tee /usr/local/bin/buildifier >/dev/null
+        sudo chmod 0755 /usr/local/bin/buildifier
+        buildifier --version || true
+    fi
+}
+
+# Ensure Python pip is available (needed for installing pre-commit for the user)
+ensure_python_tooling() {
+    echo -e "${BLUE}Ensuring Python pip is installed...${NC}"
+    if ! python3 -m pip --version >/dev/null 2>&1; then
+        sudo apt-get update || true
+        sudo apt-get install -y python3-pip python3-venv || true
+        python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+        python3 -m pip install --upgrade pip || true
+    fi
+}
+
+# Install pre-commit for the original user and enable hooks
+install_precommit_and_hooks() {
+    echo -e "${BLUE}Configuring pre-commit hooks...${NC}"
+
+    # Original invoking user (not root)
+    NONROOT_USER=${SUDO_USER:-$USER}
+    if [ -z "$NONROOT_USER" ] || [ "$NONROOT_USER" = "root" ]; then
+        echo -e "${YELLOW}Could not determine non-root user. Skipping pre-commit hook installation.${NC}"
+        return 0
+    fi
+
+    # Ensure pre-commit is installed for the non-root user
+    sudo -u "$NONROOT_USER" -H bash -lc 'python3 -m pip install --user --upgrade pre-commit'
+
+    # Install Git LFS for the repository (skip if not available)
+    REPO_DIR="$(pwd)"
+    if command -v git-lfs >/dev/null 2>&1; then
+        sudo -u "$NONROOT_USER" -H bash -lc "cd \"$REPO_DIR\" && git lfs install"
+    else
+        echo -e "${YELLOW}git-lfs not found; skipping 'git lfs install'.${NC}"
+    fi
+
+    # Install/refresh only pre-push hook (commit is free; checks happen on push)
+    sudo -u "$NONROOT_USER" -H bash -lc "cd \"$REPO_DIR\" && pre-commit install -f --hook-type pre-push"
+
+    # Ensure lint script is executable
+    chmod +x scripts/lint.sh || true
+}
+
 # Main execution
 main() {
     echo -e "${GREEN}========================================${NC}"
@@ -169,18 +249,21 @@ main() {
     echo -e "${GREEN}========================================${NC}"
     echo
 
-    check_ubuntu_version
+    # check_ubuntu_version
     update_packages
-    install_ros2
-    install_qt6
-    install_opencv
-    install_arm64_tools
-    install_bazel
+    # install_ros2
+    # install_qt6
+    # install_opencv
+    # install_arm64_tools
+    # install_bazel
     install_git
-    update_submodules
-    setup_user_permissions
-    setup_ros2_environment
-    
+    # update_submodules
+    # setup_user_permissions
+    # setup_ros2_environment
+    # install_linting_tools
+    ensure_python_tooling
+    install_precommit_and_hooks
+
     echo
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}  Setup Complete!${NC}"

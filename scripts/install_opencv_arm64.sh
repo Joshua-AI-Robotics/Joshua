@@ -19,7 +19,7 @@ echo "Version: ${OPENCV_VERSION}"
 echo
 
 # Check if running with sudo
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: This script must be run with sudo${NC}"
     echo "Usage: sudo ./scripts/install_opencv_arm64.sh"
     exit 1
@@ -108,4 +108,3 @@ echo "  # Examples:"
 echo "  #   --config=jetson-orin-nano    (for Jetson Orin Nano)"
 echo "  #   --config=raspberry-pi        (for Raspberry Pi)"
 echo "  #   --config=jetson-xavier        (for Jetson Xavier)"
-

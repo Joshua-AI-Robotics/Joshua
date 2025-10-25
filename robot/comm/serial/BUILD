@@ -4,11 +4,11 @@ cc_library(
     name = "serial",
     srcs = ["serial.cc"],
     hdrs = ["serial.h"],
+    visibility = ["//visibility:public"],
     deps = [
-        "@boost.asio",
-        "@glog//:glog",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@boost.asio",
+        "@glog",
     ],
-    visibility = ["//visibility:public"],
 )

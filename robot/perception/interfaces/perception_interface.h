@@ -2,21 +2,22 @@
 
 #include <memory>
 #include <string>
-#include "robot/perception/proto/perception_packet.pb.h"
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
 
 class PerceptionInterface {
-public:
-    PerceptionInterface() = default;
-    virtual ~PerceptionInterface() = default;
+ public:
+  PerceptionInterface() = default;
+  virtual ~PerceptionInterface() = default;
 
-    virtual absl::Status Init() = 0;
-    virtual std::string GetId() = 0;
-    virtual absl::StatusOr<robot::perception::PerceptionPacket> GetData() = 0;
-    virtual absl::Status Teardown() = 0;
+  virtual absl::Status Init() = 0;
+  virtual std::string GetId() = 0;
+  virtual absl::StatusOr<robot::perception::PerceptionPacket> GetData() = 0;
+  virtual absl::Status Teardown() = 0;
 };
 
 }  // namespace robot::perception

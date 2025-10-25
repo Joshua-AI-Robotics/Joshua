@@ -6,14 +6,14 @@ import "robot/perception/proto/perception.proto";
 package config;
 
 enum RobotType {
-    ROBOT_INVALID = 0;
-    MANIPULATOR_ARM = 1;
+  ROBOT_INVALID = 0;
+  MANIPULATOR_ARM = 1;
 }
 
 message Robot {
-    string name = 1;
-    uint64 id = 2;
-    RobotType robot_type = 3;
-    robot.action.Action actions = 4;
-    robot.perception.Perception perceptions = 5;
+  string name = 1;
+  uint64 id = 2;
+  RobotType robot_type = 3;
+  robot.action.Action actions = 4;
+  robot.perception.Perception perceptions = 5;
 }

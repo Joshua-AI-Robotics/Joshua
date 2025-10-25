@@ -20,7 +20,7 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   sudo ./scripts/joshua_setup.sh
   ```
-  
+
   This script automatically installs:
   - ROS2 Humble Desktop
   - Qt6 development packages
@@ -35,16 +35,8 @@ This example demonstrates how to launch the SO100 robot in teleoperation mode, w
 
 *Please make sure to calibrate the operational limits for your servo motors.*
 
-**To start the system with GUI:**
-
 ```bash
-bazel run joshua_control_panel:joshua_control_panel
-```
-
-**To start the system with terminal:**
-
-```bash
-bazel build node_generator:joshua_main
+bazel build node_generator:joshua_main -- --config=<DEFAULT_IS_TELEOP>
 ```
 
 TODO: Add calibration instruction here.

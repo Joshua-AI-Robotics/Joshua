@@ -23,4 +23,3 @@ message ExamplePolicyConfig {
   int32 context_length = 7;
   int32 vision_embedding_dim = 8;
 }
-

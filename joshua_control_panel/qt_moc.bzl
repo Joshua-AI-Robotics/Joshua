@@ -38,4 +38,4 @@ qt_moc = rule(
         ),
     },
     doc = "Generates C++ sources (.moc.cc) via Qt's moc for the given headers.",
-) 
+)

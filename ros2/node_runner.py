@@ -1,9 +1,8 @@
 import sys
-from typing import List, Optional, Tuple, Type
 
 import rclpy
-from rclpy.node import Node
 from google.protobuf import text_format
+from rclpy.node import Node
 
 # Protobuf generated modules
 from config.proto import config_pb2
@@ -12,12 +11,12 @@ from config.proto import config_pb2
 def load_config(config_path: str) -> config_pb2.Config:
     """Load a text-format protobuf Config from file path."""
     cfg = config_pb2.Config()
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         text_format.Parse(f.read(), cfg)
     return cfg
 
 
-def parse_cli(argv: List[str]) -> Tuple[str, int, str]:
+def parse_cli(argv: list[str]) -> tuple[str, int, str]:
     """Parse CLI args: <binary> <node_name> <node_id> <config_path>."""
     if len(argv) < 4:
         raise ValueError("Usage: <binary> <node_name> <node_id> <config_path>")
@@ -30,7 +29,7 @@ def parse_cli(argv: List[str]) -> Tuple[str, int, str]:
     return node_name, node_id, config_path
 
 
-def run_node(node_cls: Type[Node], logger_name: str, argv: Optional[List[str]] = None) -> int:
+def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = None) -> int:
     """Run an rclpy Node class with CLI args, mirroring C++ node_runner.
 
     Args:
@@ -67,4 +66,4 @@ def run_node(node_cls: Type[Node], logger_name: str, argv: Optional[List[str]] =
             pass
         rclpy.shutdown()
 
-    return 0 
+    return 0

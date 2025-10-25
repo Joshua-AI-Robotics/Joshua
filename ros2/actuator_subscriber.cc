@@ -1,55 +1,59 @@
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float32.hpp"
+#include <chrono>
+#include <list>
+#include <thread>
+
 #include "config/proto/config.pb.h"
+#include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
-#include <thread>
-#include <list>
-#include <chrono>
 #include "ros2/node_runner.h"
+#include "std_msgs/msg/float32.hpp"
 
 class ActionSubscriber : public rclcpp::Node {
-private:
+ private:
   struct Actuator {
     std::string topic;
     std::unique_ptr<robot::action::ActionInterface> interface;
     std::pair<float, float> limits;
     robot::perception::EncoderDataMode encoder_data_mode;
     // Precomputed mapping constants to remove switch and expensive math from callback
-    float offset = 0.0f;      // Added to mapped value after scaling
-    float multiplier = 1.0f;  // Scale applied to (input + pre_shift)
-    float pre_shift = 0.0f;   // Added to input before scaling
-    bool mapping_valid = true; // If false, callback will warn and return
+    float offset = 0.0f;        // Added to mapped value after scaling
+    float multiplier = 1.0f;    // Scale applied to (input + pre_shift)
+    float pre_shift = 0.0f;     // Added to input before scaling
+    bool mapping_valid = true;  // If false, callback will warn and return
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription;
     robot::action::ActionPacket reusable_packet;  // Pre-allocated packet for reuse
   };
 
-public:
-  ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config) 
-  : Node(node_name) {      
+ public:
+  ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
+      : Node(node_name) {
     for (const auto& single_action : config.robot().actions().single_actions()) {
-      if (single_action.action_type() == robot::action::ActionType::ACTUATOR && single_action.node_id() == node_id) {
+      if (single_action.action_type() == robot::action::ActionType::ACTUATOR &&
+          single_action.node_id() == node_id) {
         const auto& action_proto = single_action.actuator();
-        
+
         auto interface = robot::action::ActionFactory::CreateAction(single_action);
         if (!interface.ok()) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to create action interface for actuator '%s'. Check hardware connection or permissions.", 
-                         action_proto.actuator_name().c_str());
-            continue;
+          RCLCPP_ERROR(this->get_logger(),
+                       "Failed to create action interface for actuator '%s'. Check hardware "
+                       "connection or permissions.",
+                       action_proto.actuator_name().c_str());
+          continue;
         }
 
         // Add a new actuator to the list and get a stable reference to it.
-        Actuator& actuator = actuators_.emplace_back(Actuator{
-          .topic = single_action.subscribe_topic(),
-          .interface = std::move(interface.value()),
-          .limits = {action_proto.operational_lower_limit(), action_proto.operational_upper_limit()},
-          .encoder_data_mode = action_proto.encoder_data_mode()
-        });
+        Actuator& actuator = actuators_.emplace_back(
+            Actuator{.topic = single_action.subscribe_topic(),
+                     .interface = std::move(interface.value()),
+                     .limits = {action_proto.operational_lower_limit(),
+                                action_proto.operational_upper_limit()},
+                     .encoder_data_mode = action_proto.encoder_data_mode()});
 
         actuator.reusable_packet.Clear();
         actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
         actuator.interface->SetAction(actuator.reusable_packet);
-        
+
         // Precompute mapping parameters per actuator.
         ComputeMapping(actuator);
 
@@ -57,38 +61,47 @@ public:
         // invalidated by adding more elements to the list. The callback only
         // needs to set the position.
         auto callback = [this, &actuator](const std_msgs::msg::Float32::SharedPtr msg) {
-            if (!actuator.mapping_valid) {
-              RCLCPP_WARN(this->get_logger(), "Invalid encoder data mode for actuator '%s'!", actuator.topic.c_str());
-              return;
-            }
-            const float action_value = msg->data;
-            const float mapped_position = actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
-            
-            // Reuse pre-allocated packet for optimal performance
-            actuator.reusable_packet.Clear();
-            actuator.reusable_packet.set_position(mapped_position);
-            
-            if(!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
-              RCLCPP_ERROR(this->get_logger(), "Failed to set action for actuator '%s'!", actuator.topic.c_str());
-            }
+          if (!actuator.mapping_valid) {
+            RCLCPP_WARN(this->get_logger(),
+                        "Invalid encoder data mode for actuator '%s'!",
+                        actuator.topic.c_str());
+            return;
+          }
+          const float action_value = msg->data;
+          const float mapped_position =
+              actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
+
+          // Reuse pre-allocated packet for optimal performance
+          actuator.reusable_packet.Clear();
+          actuator.reusable_packet.set_position(mapped_position);
+
+          if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Failed to set action for actuator '%s'!",
+                         actuator.topic.c_str());
+          }
         };
-        
-        actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
-            actuator.topic, 10, callback);
+
+        actuator.subscription =
+            this->create_subscription<std_msgs::msg::Float32>(actuator.topic, 10, callback);
       }
     }
 
     if (actuators_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
+      RCLCPP_ERROR(
+          this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "Actuator subscriber node started with %zu actuators for node_id %d!", actuators_.size(), node_id);
+    RCLCPP_INFO(this->get_logger(),
+                "Actuator subscriber node started with %zu actuators for node_id %d!",
+                actuators_.size(),
+                node_id);
   }
 
   ~ActionSubscriber() {
     std::vector<std::thread> threads;
-    
+
     // Start all shutdown threads in parallel for teardown.
     for (auto& actuator : actuators_) {
       threads.emplace_back([&actuator]() {
@@ -97,15 +110,15 @@ public:
         actuator.interface->SetAction(actuator.reusable_packet);
       });
     }
-    
+
     for (auto& thread : threads) {
       thread.join();
     }
   }
 
-private:
+ private:
   std::list<Actuator> actuators_;
-  
+
   // Compute mapping constants for the given actuator, called during setup
   void ComputeMapping(Actuator& actuator) {
     const float range = actuator.limits.second - actuator.limits.first;
@@ -130,18 +143,20 @@ private:
         return;
       case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
         actuator.offset = actuator.limits.first;
-        actuator.pre_shift = static_cast<float>(M_PI) / 2.0f;  // + pi/2
-        actuator.multiplier = range / static_cast<float>(M_PI); // ... / pi
+        actuator.pre_shift = static_cast<float>(M_PI) / 2.0f;    // + pi/2
+        actuator.multiplier = range / static_cast<float>(M_PI);  // ... / pi
         actuator.mapping_valid = true;
         return;
       default:
         actuator.mapping_valid = false;
-        RCLCPP_WARN(this->get_logger(), "Invalid encoder data mode for actuator '%s'!", actuator.topic.c_str());
+        RCLCPP_WARN(this->get_logger(),
+                    "Invalid encoder data mode for actuator '%s'!",
+                    actuator.topic.c_str());
         return;
     }
   }
 };
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
   return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber");
-} 
+}
