@@ -19,18 +19,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Cache clang-format
-        uses: actions/cache@v4
-        with:
-          path: /usr/bin/clang-format-14
-          key: clang-format-14-${{ runner.os }}
-
       - name: Install clang-format
-        run: |
-          if ! command -v clang-format-14 &> /dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y clang-format-14
-          fi
+        uses: jidicula/clang-format-action@v3
+        with:
+          clang-format-version: '14'
 
       - name: Run pre-commit (all files, pre-push stage)
         uses: pre-commit/action@v3.0.1
