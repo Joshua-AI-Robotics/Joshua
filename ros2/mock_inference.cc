@@ -1,22 +1,23 @@
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float32.hpp"
-#include "config/proto/config.pb.h"
-#include "sensor_msgs/msg/image.hpp"
- 
 #include <algorithm>
 #include <mutex>
+#include <numeric>
 #include <random>
 #include <string>
 #include <vector>
-#include <numeric>
+
+#include "config/proto/config.pb.h"
+#include "rclcpp/rclcpp.hpp"
 #include "ros2/node_runner.h"
+#include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/float32.hpp"
 
 class MockInference : public rclcpp::Node {
-public:
+ public:
   MockInference(const std::string& node_name, const int node_id, const config::Config& config)
-  : Node(node_name) {
+      : Node(node_name) {
     if (config.general().operation_mode() != config::General::MODE_MOCK_INFERENCE) {
-      RCLCPP_ERROR(this->get_logger(), "Mock inference node is only supported in mock inference mode.");
+      RCLCPP_ERROR(this->get_logger(),
+                   "Mock inference node is only supported in mock inference mode.");
       return;
     }
 
@@ -48,17 +49,19 @@ public:
       auto topic = config.ai().subscribe_topics(i);
       // TODO: Message type should not be hardcoded.
       subscriptions_.push_back(this->create_subscription<sensor_msgs::msg::Image>(
-        topic, 10,
-        [this, i](const sensor_msgs::msg::Image::SharedPtr msg) { on_image_data(i, msg); }
-      ));
+          topic, 10, [this, i](const sensor_msgs::msg::Image::SharedPtr msg) {
+            on_image_data(i, msg);
+          }));
       RCLCPP_INFO(this->get_logger(), "Subscribed to image state topic: %s", topic.c_str());
     }
 
-    RCLCPP_INFO(this->get_logger(), "Mock inference node started (%zu actions, %zu states).",
-                config.ai().publish_topics_size(), config.ai().subscribe_topics_size());
+    RCLCPP_INFO(this->get_logger(),
+                "Mock inference node started (%zu actions, %zu states).",
+                config.ai().publish_topics_size(),
+                config.ai().subscribe_topics_size());
   }
 
-private:
+ private:
   void on_image_data(size_t state_index, const sensor_msgs::msg::Image::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (state_index >= latest_states_.size()) {
@@ -80,8 +83,8 @@ private:
   void publish_actions_locked() {
     // Example: produce one action per publisher using simple transformation + small noise
     const float aggregated_state =
-      std::accumulate(latest_states_.begin(), latest_states_.end(), 0.0f) /
-      std::max<size_t>(1, latest_states_.size());
+        std::accumulate(latest_states_.begin(), latest_states_.end(), 0.0f) /
+        std::max<size_t>(1, latest_states_.size());
 
     for (auto& publisher : publishers_) {
       std_msgs::msg::Float32 msg;
@@ -101,6 +104,6 @@ private:
   std::uniform_real_distribution<float> distribution_;
 };
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
   return ros2_utils::RunNode<MockInference>(argc, argv, "mock_inference");
 }

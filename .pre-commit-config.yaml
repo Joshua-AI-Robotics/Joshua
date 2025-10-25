@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        stages: [pre-push]
+      - id: end-of-file-fixer
+        stages: [pre-push]
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+        stages: [pre-push]
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v17.0.6
+    hooks:
+      - id: clang-format
+        name: clang-format (check)
+        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
+        args: ["--dry-run", "--Werror"]
+        stages: [pre-push]
+        pass_filenames: true
+
+# removed ruff and buildifier to keep only requested hooks

@@ -1,16 +1,16 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load(":qt_moc.bzl", "qt_moc")
 
-package(default_visibility = ["//visibility:public"]) 
+package(default_visibility = ["//visibility:public"])
 
 qt_moc(
     name = "moc_sources",
     hdrs = [
-        "main_window.h",
-        "general_tab.h",
-        "config_tab.h",
-        "monitor_tab.h",
         "calibration_tab.h",
+        "config_tab.h",
+        "general_tab.h",
+        "main_window.h",
+        "monitor_tab.h",
         "operational_limit_tab.h",
     ],
 )
@@ -57,8 +57,11 @@ cc_library(
     name = "gui_utils",
     srcs = ["gui_utils.cc"],
     hdrs = ["gui_utils.h"],
+    copts = [
+        "-std=c++17",
+        "-fPIC",
+    ],
     includes = ["."],
-    copts = ["-std=c++17", "-fPIC"],
     deps = ["@local_deps//:qt6_widgets"],
 )
 
@@ -88,23 +91,30 @@ cc_library(
         ":uic_calibration_tab",
         ":uic_operational_limit_tab",
     ],
+    copts = [
+        "-std=c++17",
+        "-fPIC",
+    ],
     includes = ["."],
-    copts = ["-std=c++17", "-fPIC"],
     linkopts = ["-pthread"],
     deps = [
-        "@local_deps//:qt6_widgets",
-        "//config/proto:config_cc_proto",
-        "//node_generator:node_generator",
         ":gui_utils",
-        "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_std_msgs",
+        "//config/proto:config_cc_proto",
+        "//node_generator",
         "@abseil-cpp//absl/status:status",
+        "@local_deps//:qt6_widgets",
+        "@ros2_common_interfaces//:cpp_std_msgs",
+        "@ros2_rclcpp//:rclcpp",
     ],
 )
 
 cc_binary(
     name = "joshua_control_panel",
     srcs = ["main.cc"],
+    copts = [
+        "-std=c++17",
+        "-fPIC",
+    ],
     data = [
         "//config/config_preset:config_presets",
         # Ensure ROS2 node runfiles (including *_impl) are available when launching from the panel
@@ -116,7 +126,6 @@ cc_binary(
         "//ros2:operational_limit_calibration",
         "//ros2:ros2_node_wrapper.sh",
     ],
-    copts = ["-std=c++17", "-fPIC"],
     linkopts = ["-pthread"],
     deps = [":gui_lib"],
 )

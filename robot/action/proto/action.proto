@@ -6,47 +6,48 @@ import "robot/perception/proto/perception.proto";
 package robot.action;
 
 enum ActionType {
-    ACTION_INVALID = 0;
-    ACTUATOR = 1;
+  ACTION_INVALID = 0;
+  ACTUATOR = 1;
 }
 
 enum ActuatorType {
-    ACTUATOR_INVALID = 0;
-    STS3215_SERVO = 1;
+  ACTUATOR_INVALID = 0;
+  STS3215_SERVO = 1;
 }
 
 message Actuator {
-    string actuator_name = 1;
-    uint64 id = 2;
-    ActuatorType actuator_type = 3;
-    robot.comm.Comm comm = 4;
-    uint32 physical_lower_limit = 5; // TODO: Move this to physical layout.
-    uint32 physical_upper_limit = 6; // TODO: Move this to physical layout.
-    uint32 operational_lower_limit = 7;
-    uint32 operational_upper_limit = 8;
-    robot.perception.EncoderDataMode encoder_data_mode = 9; // How the actuator data is processed for action.
-    oneof action_config {
-        Sts3215Config sts3215_config = 11;
-        // Add other motor type here.
-    }    
+  string actuator_name = 1;
+  uint64 id = 2;
+  ActuatorType actuator_type = 3;
+  robot.comm.Comm comm = 4;
+  uint32 physical_lower_limit = 5;  // TODO: Move this to physical layout.
+  uint32 physical_upper_limit = 6;  // TODO: Move this to physical layout.
+  uint32 operational_lower_limit = 7;
+  uint32 operational_upper_limit = 8;
+  robot.perception.EncoderDataMode encoder_data_mode =
+      9;  // How the actuator data is processed for action.
+  oneof action_config {
+    Sts3215Config sts3215_config = 11;
+    // Add other motor type here.
+  }
 }
 
 message Sts3215Config {
-    uint64 servo_id = 1;
-    uint32 move_time_in_ms = 2;
-    uint32 move_speed = 3;
-    uint32 idle_position = 4;
+  uint64 servo_id = 1;
+  uint32 move_time_in_ms = 2;
+  uint32 move_speed = 3;
+  uint32 idle_position = 4;
 }
 
 message SingleAction {
-    uint32 node_id = 1;
-    string subscribe_topic = 2;
-    ActionType action_type = 3;
-    oneof action_data {
-        Actuator actuator = 4;
-    }
+  uint32 node_id = 1;
+  string subscribe_topic = 2;
+  ActionType action_type = 3;
+  oneof action_data {
+    Actuator actuator = 4;
+  }
 }
 
 message Action {
-    repeated SingleAction single_actions = 1;
+  repeated SingleAction single_actions = 1;
 }

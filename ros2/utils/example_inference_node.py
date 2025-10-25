@@ -1,12 +1,9 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from sensor_msgs.msg import Image, CompressedImage
-from std_msgs.msg import String, Float32MultiArray
-from geometry_msgs.msg import Twist
-import cv2
-import numpy as np
-import os
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import Image
+from std_msgs.msg import Float32MultiArray
+
 
 class ExampleInferenceNode(Node):
     def __init__(self):
@@ -15,26 +12,17 @@ class ExampleInferenceNode(Node):
 
         # Setup QoS
         qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
+            reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=10
         )
-        
+
         # Initialize publishers
-        self.action_pub = self.create_publisher(
-            Float32MultiArray, 
-            '/example/actions', 
-            10
-        )
-        
+        self.action_pub = self.create_publisher(Float32MultiArray, '/example/actions', 10)
+
         # Initialize subscribers
         self.image_sub = self.create_subscription(
-            Image,
-            '/camera/image_raw',
-            self.image_callback,
-            qos
+            Image, '/camera/image_raw', self.image_callback, qos
         )
-    
+
     def image_callback(self, msg: Image):
         # TODO: Implement image processing
         pass
@@ -45,19 +33,18 @@ class ExampleInferenceNode(Node):
         pass
 
 
-
 def main(args=None):
     rclpy.init(args=args)
-    
+
     try:
         # Create and spin the node
         node = ExampleInferenceNode()
-        
+
         print("Example Inference Node starting...")
-        
+
         # Spin the node
         rclpy.spin(node)
-        
+
     except KeyboardInterrupt:
         print("Node interrupted by user")
     except Exception as e:
@@ -67,7 +54,7 @@ def main(args=None):
         try:
             node.cleanup()
             node.destroy_node()
-        except:
+        except Exception:
             pass
         rclpy.shutdown()
 

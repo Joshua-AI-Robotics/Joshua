@@ -7,7 +7,7 @@ robot {
   robot_type: MANIPULATOR_ARM
 
   perceptions {
-    
+
     single_perceptions {
       node_id: 1
       publish_topic: "sts3215_encoder_1"
@@ -29,7 +29,7 @@ robot {
         operational_upper_limit: 3154
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 1          
+          servo_id: 1
         }
       }
     }
@@ -54,7 +54,7 @@ robot {
         operational_upper_limit: 3986
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 2          
+          servo_id: 2
         }
       }
     }
@@ -79,7 +79,7 @@ robot {
         operational_upper_limit: 3113
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 3          
+          servo_id: 3
         }
       }
     }
@@ -104,7 +104,7 @@ robot {
         operational_upper_limit: 2407
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 4          
+          servo_id: 4
         }
       }
     }
@@ -129,7 +129,7 @@ robot {
         operational_upper_limit: 3811
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 5          
+          servo_id: 5
         }
       }
     }
@@ -154,7 +154,7 @@ robot {
         operational_upper_limit: 3100
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
-          servo_id: 6          
+          servo_id: 6
         }
       }
     }

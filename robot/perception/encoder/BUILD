@@ -4,12 +4,12 @@ cc_library(
     name = "sts3215_encoder",
     srcs = ["sts3215_encoder.cc"],
     hdrs = ["sts3215_encoder.h"],
+    visibility = ["//visibility:public"],
     deps = [
+        "//robot/comm/serial",
         "//robot/perception/interfaces:encoder_interface",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
-        "//robot/comm/serial:serial",
-        "@glog//:glog",
+        "@glog",
     ],
-    visibility = ["//visibility:public"],
-) 
+)

@@ -101,7 +101,7 @@ libopencv_videoio.so -> libopencv_videoio.so.4.5d
 When cross-compiling for AArch64, we encountered TLS (Thread-Local Storage) relocation errors:
 
 ```
-ld.lld: error: relocation R_AARCH64_TLSLE_ADD_TPREL_HI12 against 
+ld.lld: error: relocation R_AARCH64_TLSLE_ADD_TPREL_HI12 against
 __cxxabiv1::(anonymous namespace)::__globals()::eh_globals cannot be used with -shared
 ```
 

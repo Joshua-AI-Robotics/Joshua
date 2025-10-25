@@ -1,318 +1,347 @@
 #include "operational_limit_tab.h"
-#include "ui_operational_limit_tab.h"
 
+#include <QtCore/QFile>
+#include <QtWidgets/QFileDialog>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QPushButton>
+#include <atomic>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <thread>
-#include <atomic>
-#include <QtCore/QFile>
-#include <QtWidgets/QFileDialog>
-#include <QtWidgets/QMessageBox>
-#include <QtWidgets/QPushButton>
-#include <QtWidgets/QLabel>
 #include <unordered_set>
 
+#include "ui_operational_limit_tab.h"
+
 namespace {
-    constexpr auto kCalibrationSubscriberNodeName = "operational_limit_subscriber";
+constexpr auto kCalibrationSubscriberNodeName = "operational_limit_subscriber";
 }
 
 class OperationalLimitTab::RosSubscriberRunner {
-public:
-    RosSubscriberRunner(QObject* ui_receiver, const std::vector<QString>& topics)
-        : ui_receiver_(ui_receiver), topics_(topics), is_running_(false) {}
+ public:
+  RosSubscriberRunner(QObject* ui_receiver, const std::vector<QString>& topics)
+      : ui_receiver_(ui_receiver), topics_(topics), is_running_(false) {}
 
-    ~RosSubscriberRunner() { stop(); }
+  ~RosSubscriberRunner() {
+    stop();
+  }
 
-    bool start() {
-        if (is_running_.load()) return true;
-        try {
-            if (!rclcpp::ok()) {
-                int argc = 0; char** argv = nullptr;
-                rclcpp::init(argc, argv);
-            }
+  bool start() {
+    if (is_running_.load()) return true;
+    try {
+      if (!rclcpp::ok()) {
+        int argc = 0;
+        char** argv = nullptr;
+        rclcpp::init(argc, argv);
+      }
 
-            node_ = std::make_shared<rclcpp::Node>(kCalibrationSubscriberNodeName);
-            for (const auto& topic : topics_) {
-                subscriptions_.push_back(node_->create_subscription<std_msgs::msg::Float32MultiArray>(
-                    topic.toStdString(), 10,
-                    [this, topic](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
-                        // Back-compat signal
-                        QMetaObject::invokeMethod(
-                            ui_receiver_, "readingUpdated",
-                            Qt::QueuedConnection,
-                            Q_ARG(float, msg->data[0]),
-                            Q_ARG(float, msg->data[1]));
-                        // Topic-aware signal
-                        QMetaObject::invokeMethod(
-                            ui_receiver_, "readingUpdatedForTopic",
-                            Qt::QueuedConnection,
-                            Q_ARG(QString, topic),
-                            Q_ARG(float, msg->data[0]),
-                            Q_ARG(float, msg->data[1]));
-                    }
-                ));
-            }
+      node_ = std::make_shared<rclcpp::Node>(kCalibrationSubscriberNodeName);
+      for (const auto& topic : topics_) {
+        subscriptions_.push_back(node_->create_subscription<std_msgs::msg::Float32MultiArray>(
+            topic.toStdString(),
+            10,
+            [this, topic](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+              // Back-compat signal
+              QMetaObject::invokeMethod(ui_receiver_,
+                                        "readingUpdated",
+                                        Qt::QueuedConnection,
+                                        Q_ARG(float, msg->data[0]),
+                                        Q_ARG(float, msg->data[1]));
+              // Topic-aware signal
+              QMetaObject::invokeMethod(ui_receiver_,
+                                        "readingUpdatedForTopic",
+                                        Qt::QueuedConnection,
+                                        Q_ARG(QString, topic),
+                                        Q_ARG(float, msg->data[0]),
+                                        Q_ARG(float, msg->data[1]));
+            }));
+      }
 
-            is_running_.store(true);
-            executor_ = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
-            executor_->add_node(node_);
-            spin_thread_ = std::thread([this]() {
-                while (is_running_.load() && rclcpp::ok()) {
-                    executor_->spin_some();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                }
-            });
-            return true;
-        } catch (const std::exception& e) {
-            std::cerr << "ROS2 subscriber start error: " << e.what() << std::endl;
-            for (auto& subscription : subscriptions_) {
-                subscription.reset();
-            }
-            node_.reset();
-            executor_.reset();
-            is_running_.store(false);
-            return false;
+      is_running_.store(true);
+      executor_ = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
+      executor_->add_node(node_);
+      spin_thread_ = std::thread([this]() {
+        while (is_running_.load() && rclcpp::ok()) {
+          executor_->spin_some();
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+      });
+      return true;
+    } catch (const std::exception& e) {
+      std::cerr << "ROS2 subscriber start error: " << e.what() << std::endl;
+      for (auto& subscription : subscriptions_) {
+        subscription.reset();
+      }
+      node_.reset();
+      executor_.reset();
+      is_running_.store(false);
+      return false;
     }
+  }
 
-    void stop() {
-        if (!is_running_.exchange(false)) return;
-        if (executor_) {
-            try { executor_->cancel(); } catch (...) {}
-        }
-        if (spin_thread_.joinable()) spin_thread_.join();
-        if (executor_) {
-            if (node_) executor_->remove_node(node_);
-            executor_.reset();
-        }
-        for (auto& subscription : subscriptions_) {
-            subscription.reset();
-        }
-        node_.reset();
-        is_running_.store(false);
+  void stop() {
+    if (!is_running_.exchange(false)) return;
+    if (executor_) {
+      try {
+        executor_->cancel();
+      } catch (...) {
+      }
     }
+    if (spin_thread_.joinable()) spin_thread_.join();
+    if (executor_) {
+      if (node_) executor_->remove_node(node_);
+      executor_.reset();
+    }
+    for (auto& subscription : subscriptions_) {
+      subscription.reset();
+    }
+    node_.reset();
+    is_running_.store(false);
+  }
 
-    bool isRunning() const { return is_running_.load(); }
-    const std::vector<QString>& topics() const { return topics_; }
+  bool isRunning() const {
+    return is_running_.load();
+  }
+  const std::vector<QString>& topics() const {
+    return topics_;
+  }
 
-private:
-    QObject* ui_receiver_;
-    std::vector<QString> topics_;
-    std::atomic<bool> is_running_;
+ private:
+  QObject* ui_receiver_;
+  std::vector<QString> topics_;
+  std::atomic<bool> is_running_;
 
-    std::shared_ptr<rclcpp::Node> node_;
-    std::vector<rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr> subscriptions_;
-    std::unique_ptr<rclcpp::Executor> executor_;
-    std::thread spin_thread_;
+  std::shared_ptr<rclcpp::Node> node_;
+  std::vector<rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr> subscriptions_;
+  std::unique_ptr<rclcpp::Executor> executor_;
+  std::thread spin_thread_;
 };
 
 namespace {
-// Returns all topics published by any node whose name contains the given substring, filtered to std_msgs/msg/Float32MultiArray
-static std::vector<QString> findFloat32MultiArrayTopicsByNode(const std::string& target_node_substring) {
-    try {
-        if (!rclcpp::ok()) {
-            int argc = 0; char** argv = nullptr;
-            rclcpp::init(argc, argv);
-        }
-        auto graph_node = std::make_shared<rclcpp::Node>("operational_limit_topic_discovery");
-
-        const bool no_demangle = false;
-        std::vector<QString> topics;
-        std::unordered_set<std::string> seen;
-
-        // Enumerate all topics and their types
-        auto topics_and_types = graph_node->get_node_graph_interface()->get_topic_names_and_types(no_demangle);
-        for (const auto& name_and_types : topics_and_types) {
-            const auto& topic_name = name_and_types.first;
-            const auto& types = name_and_types.second;
-            bool is_float32_multi_array = false;
-            for (const auto& type : types) {
-                if (type == std::string("std_msgs/msg/Float32MultiArray")) {
-                    is_float32_multi_array = true;
-                    break;
-                }
-            }
-            if (!is_float32_multi_array) continue;
-
-            // For each topic, check publishers and match node names by substring
-            auto publishers_info = graph_node->get_node_graph_interface()->get_publishers_info_by_topic(topic_name, no_demangle);
-            bool match = false;
-            for (const auto& info : publishers_info) {
-                const std::string& node_name = info.node_name();
-                const std::string& node_ns = info.node_namespace();
-                std::string fq_name = node_ns == "/" ? node_name : (node_ns + "/" + node_name);
-                if (node_name.find(target_node_substring) != std::string::npos ||
-                    fq_name.find(target_node_substring) != std::string::npos) {
-                    match = true;
-                    break;
-                }
-            }
-            if (match && seen.insert(topic_name).second) {
-                topics.emplace_back(QString::fromStdString(topic_name));
-            }
-        }
-        return topics;
-    } catch (const std::exception& e) {
-        std::cerr << "Topic discovery error: " << e.what() << std::endl;
-        return {};
+// Returns all topics published by any node whose name contains the given substring, filtered to
+// std_msgs/msg/Float32MultiArray
+static std::vector<QString> findFloat32MultiArrayTopicsByNode(
+    const std::string& target_node_substring) {
+  try {
+    if (!rclcpp::ok()) {
+      int argc = 0;
+      char** argv = nullptr;
+      rclcpp::init(argc, argv);
     }
+    auto graph_node = std::make_shared<rclcpp::Node>("operational_limit_topic_discovery");
+
+    const bool no_demangle = false;
+    std::vector<QString> topics;
+    std::unordered_set<std::string> seen;
+
+    // Enumerate all topics and their types
+    auto topics_and_types =
+        graph_node->get_node_graph_interface()->get_topic_names_and_types(no_demangle);
+    for (const auto& name_and_types : topics_and_types) {
+      const auto& topic_name = name_and_types.first;
+      const auto& types = name_and_types.second;
+      bool is_float32_multi_array = false;
+      for (const auto& type : types) {
+        if (type == std::string("std_msgs/msg/Float32MultiArray")) {
+          is_float32_multi_array = true;
+          break;
+        }
+      }
+      if (!is_float32_multi_array) continue;
+
+      // For each topic, check publishers and match node names by substring
+      auto publishers_info = graph_node->get_node_graph_interface()->get_publishers_info_by_topic(
+          topic_name, no_demangle);
+      bool match = false;
+      for (const auto& info : publishers_info) {
+        const std::string& node_name = info.node_name();
+        const std::string& node_ns = info.node_namespace();
+        std::string fq_name = node_ns == "/" ? node_name : (node_ns + "/" + node_name);
+        if (node_name.find(target_node_substring) != std::string::npos ||
+            fq_name.find(target_node_substring) != std::string::npos) {
+          match = true;
+          break;
+        }
+      }
+      if (match && seen.insert(topic_name).second) {
+        topics.emplace_back(QString::fromStdString(topic_name));
+      }
+    }
+    return topics;
+  } catch (const std::exception& e) {
+    std::cerr << "Topic discovery error: " << e.what() << std::endl;
+    return {};
+  }
 }
-}
+}  // namespace
 
 OperationalLimitTab::OperationalLimitTab(QWidget* parent)
     : QWidget(parent), ui(new Ui::OperationalLimitTab) {
-    ui->setupUi(this);
+  ui->setupUi(this);
 
-    connect(this, &OperationalLimitTab::logMessage,
-            this, &OperationalLimitTab::onLogMessage,
-            Qt::QueuedConnection);
+  connect(this,
+          &OperationalLimitTab::logMessage,
+          this,
+          &OperationalLimitTab::onLogMessage,
+          Qt::QueuedConnection);
 
-    connect(this, &OperationalLimitTab::readingUpdated,
-            this, &OperationalLimitTab::onReadingUpdated,
-            Qt::QueuedConnection);
-    connect(this, &OperationalLimitTab::readingUpdatedForTopic,
-            this, &OperationalLimitTab::onReadingUpdatedForTopic,
-            Qt::QueuedConnection);
-    connect(ui->start_subscribe_Button, &QPushButton::clicked,
-            this, &OperationalLimitTab::on_start_subscribe_Button_clicked);    
-    connect(ui->stop_subscribe_Button, &QPushButton::clicked,
-                this, &OperationalLimitTab::on_stop_subscribe_Button_clicked);
+  connect(this,
+          &OperationalLimitTab::readingUpdated,
+          this,
+          &OperationalLimitTab::onReadingUpdated,
+          Qt::QueuedConnection);
+  connect(this,
+          &OperationalLimitTab::readingUpdatedForTopic,
+          this,
+          &OperationalLimitTab::onReadingUpdatedForTopic,
+          Qt::QueuedConnection);
+  connect(ui->start_subscribe_Button,
+          &QPushButton::clicked,
+          this,
+          &OperationalLimitTab::on_start_subscribe_Button_clicked);
+  connect(ui->stop_subscribe_Button,
+          &QPushButton::clicked,
+          this,
+          &OperationalLimitTab::on_stop_subscribe_Button_clicked);
 
-    emit logMessage("[INFO] Operational Limit Tab ready.");
-    
+  emit logMessage("[INFO] Operational Limit Tab ready.");
 }
 
 OperationalLimitTab::~OperationalLimitTab() {
-    subscriberRunner_.reset();
-    delete ui;
+  subscriberRunner_.reset();
+  delete ui;
 }
 
 void OperationalLimitTab::onLogMessage(const QString& message) {
-    ui->logTextEdit->append(message);
+  ui->logTextEdit->append(message);
 }
 
 void OperationalLimitTab::on_start_subscribe_Button_clicked() {
-    if (!subscriberRunner_) {
-        // Automatically discover topics published by the ROS 2 node "operational_limit_calibration"
-        const auto topics = findFloat32MultiArrayTopicsByNode("operational_limit_calibration");
-        emit logMessage("[INFO] Found " + QString::number(topics.size()) + " topics.");
+  if (!subscriberRunner_) {
+    // Automatically discover topics published by the ROS 2 node "operational_limit_calibration"
+    const auto topics = findFloat32MultiArrayTopicsByNode("operational_limit_calibration");
+    emit logMessage("[INFO] Found " + QString::number(topics.size()) + " topics.");
 
-        if (topics.empty()) {
-            emit logMessage("[WARN] No topics found to subscribe.");
-            return;
-        }
-
-        // Dyamically generate labes based on topics. Each topic has min and max values.
-        for (const auto& topic : topics) {
-            if (!ui->limit_values_gridLayout) continue;
-            const int next_row = ui->limit_values_gridLayout->rowCount();
-
-            auto* topicLabel = new QLabel(topic, this);
-            auto* minLabel = new QLabel("-", this);
-            auto* maxLabel = new QLabel("-", this);
-
-            ui->limit_values_gridLayout->addWidget(topicLabel, next_row, 0);
-            ui->limit_values_gridLayout->addWidget(minLabel, next_row, 1);
-            ui->limit_values_gridLayout->addWidget(maxLabel, next_row, 2);
-
-            topicToMinMaxLabels_.insert(topic, qMakePair(minLabel, maxLabel));
-            topicToTopicLabel_.insert(topic, topicLabel);
-        }
-        subscriberRunner_ = std::make_unique<RosSubscriberRunner>(this, topics);
+    if (topics.empty()) {
+      emit logMessage("[WARN] No topics found to subscribe.");
+      return;
     }
 
-    if (subscriberRunner_ && !subscriberRunner_->isRunning()) {
-        if (subscriberRunner_->start()) {
-            emit logMessage("[INFO] Topic subscriber started.");
-        } else {
-            emit logMessage("[ERROR] Failed to start topic subscriber.");
-        }
-    } else if (subscriberRunner_ && subscriberRunner_->isRunning()) {
-        emit logMessage("[INFO] Topic subscriber already running.");
+    // Dyamically generate labes based on topics. Each topic has min and max values.
+    for (const auto& topic : topics) {
+      if (!ui->limit_values_gridLayout) continue;
+      const int next_row = ui->limit_values_gridLayout->rowCount();
+
+      auto* topicLabel = new QLabel(topic, this);
+      auto* minLabel = new QLabel("-", this);
+      auto* maxLabel = new QLabel("-", this);
+
+      ui->limit_values_gridLayout->addWidget(topicLabel, next_row, 0);
+      ui->limit_values_gridLayout->addWidget(minLabel, next_row, 1);
+      ui->limit_values_gridLayout->addWidget(maxLabel, next_row, 2);
+
+      topicToMinMaxLabels_.insert(topic, qMakePair(minLabel, maxLabel));
+      topicToTopicLabel_.insert(topic, topicLabel);
     }
+    subscriberRunner_ = std::make_unique<RosSubscriberRunner>(this, topics);
+  }
+
+  if (subscriberRunner_ && !subscriberRunner_->isRunning()) {
+    if (subscriberRunner_->start()) {
+      emit logMessage("[INFO] Topic subscriber started.");
+    } else {
+      emit logMessage("[ERROR] Failed to start topic subscriber.");
+    }
+  } else if (subscriberRunner_ && subscriberRunner_->isRunning()) {
+    emit logMessage("[INFO] Topic subscriber already running.");
+  }
 }
 
 void OperationalLimitTab::on_stop_subscribe_Button_clicked() {
-    if (subscriberRunner_) {
-        subscriberRunner_->stop();
-    }
+  if (subscriberRunner_) {
+    subscriberRunner_->stop();
+  }
 
-    QString message;
-    for(const auto& topic : topicToMinMaxLabels_.keys()) {
-        const auto& minLabel = topicToMinMaxLabels_[topic].first;
-        const auto& maxLabel = topicToMinMaxLabels_[topic].second;
-        message += topic + " " + minLabel->text() + " " + maxLabel->text() + "\n";
-    }
-    emit logMessage("[INFO] Topic subscriber stopped.");
-    emit logMessage(message);
-    
-    // Remove and delete dynamic labels from the layout
-    if (ui->limit_values_gridLayout) {
-        const auto topics = topicToMinMaxLabels_.keys();
-        for (const auto& topic : topics) {
-            QLabel* topicLabel = topicToTopicLabel_.value(topic, nullptr);
-            if (topicLabel) {
-                ui->limit_values_gridLayout->removeWidget(topicLabel);
-                delete topicLabel;
-            }
-            QLabel* minLabel = topicToMinMaxLabels_[topic].first;
-            if (minLabel) {
-                ui->limit_values_gridLayout->removeWidget(minLabel);
-                delete minLabel;
-            }
-            QLabel* maxLabel = topicToMinMaxLabels_[topic].second;
-            if (maxLabel) {
-                ui->limit_values_gridLayout->removeWidget(maxLabel);
-                delete maxLabel;
-            }
-        }
-    }
+  QString message;
+  for (const auto& topic : topicToMinMaxLabels_.keys()) {
+    const auto& minLabel = topicToMinMaxLabels_[topic].first;
+    const auto& maxLabel = topicToMinMaxLabels_[topic].second;
+    message += topic + " " + minLabel->text() + " " + maxLabel->text() + "\n";
+  }
+  emit logMessage("[INFO] Topic subscriber stopped.");
+  emit logMessage(message);
 
-    topicToTopicLabel_.clear();
-    topicToMinMaxLabels_.clear();
+  // Remove and delete dynamic labels from the layout
+  if (ui->limit_values_gridLayout) {
+    const auto topics = topicToMinMaxLabels_.keys();
+    for (const auto& topic : topics) {
+      QLabel* topicLabel = topicToTopicLabel_.value(topic, nullptr);
+      if (topicLabel) {
+        ui->limit_values_gridLayout->removeWidget(topicLabel);
+        delete topicLabel;
+      }
+      QLabel* minLabel = topicToMinMaxLabels_[topic].first;
+      if (minLabel) {
+        ui->limit_values_gridLayout->removeWidget(minLabel);
+        delete minLabel;
+      }
+      QLabel* maxLabel = topicToMinMaxLabels_[topic].second;
+      if (maxLabel) {
+        ui->limit_values_gridLayout->removeWidget(maxLabel);
+        delete maxLabel;
+      }
+    }
+  }
 
-    // Reset subscriber so that starting again rebuilds labels from discovered topics
-    subscriberRunner_.reset();
+  topicToTopicLabel_.clear();
+  topicToMinMaxLabels_.clear();
+
+  // Reset subscriber so that starting again rebuilds labels from discovered topics
+  subscriberRunner_.reset();
 }
 
 void OperationalLimitTab::on_update_to_existing_preset_Button_clicked() {
-    // TODO: Implement.
-    emit logMessage("[INFO] Update to existing preset not implemented.");
+  // TODO: Implement.
+  emit logMessage("[INFO] Update to existing preset not implemented.");
 }
 
 void OperationalLimitTab::on_save_as_raw_text_Button_clicked() {
-    QString filename = QFileDialog::getSaveFileName(this, "Save calibration data", QString(), "Prototxt (*.pbtxt)");
-    if (filename.isEmpty()) return;
+  QString filename =
+      QFileDialog::getSaveFileName(this, "Save calibration data", QString(), "Prototxt (*.pbtxt)");
+  if (filename.isEmpty()) return;
 
-    QFile file(filename);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Failed to open file for writing.");
-        return;
-    }
+  QFile file(filename);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+    QMessageBox::critical(this, "Error", "Failed to open file for writing.");
+    return;
+  }
 
-    // Do not use message format, because the message format is not suitable for the proto.
-    std::string out;
-    for(const auto& topic : topicToMinMaxLabels_.keys()) {
-        const auto& minLabel = topicToMinMaxLabels_[topic].first;
-        const auto& maxLabel = topicToMinMaxLabels_[topic].second;
-        out += topic.toStdString() + " " + minLabel->text().toStdString() + " " + maxLabel->text().toStdString() + "\n";
-    }
-    file.write(QByteArray::fromStdString(out));
-    file.close();
+  // Do not use message format, because the message format is not suitable for the proto.
+  std::string out;
+  for (const auto& topic : topicToMinMaxLabels_.keys()) {
+    const auto& minLabel = topicToMinMaxLabels_[topic].first;
+    const auto& maxLabel = topicToMinMaxLabels_[topic].second;
+    out += topic.toStdString() + " " + minLabel->text().toStdString() + " " +
+           maxLabel->text().toStdString() + "\n";
+  }
+  file.write(QByteArray::fromStdString(out));
+  file.close();
 
-    QMessageBox::information(this, "Saved", "Configuration saved to " + filename);
-    emit logMessage("[INFO] Configuration saved to " + filename);
+  QMessageBox::information(this, "Saved", "Configuration saved to " + filename);
+  emit logMessage("[INFO] Configuration saved to " + filename);
 }
 
 void OperationalLimitTab::onReadingUpdated(float /*min_value*/, float /*max_value*/) {
-    // legacy no-op
+  // legacy no-op
 }
 
-void OperationalLimitTab::onReadingUpdatedForTopic(QString topic, float min_value, float max_value) {
-    auto it = topicToMinMaxLabels_.find(topic);
-    if (it == topicToMinMaxLabels_.end()) return;
-    auto* minLabel = it.value().first;
-    auto* maxLabel = it.value().second;
-    if (minLabel) minLabel->setText(QString::number(min_value));
-    if (maxLabel) maxLabel->setText(QString::number(max_value));
+void OperationalLimitTab::onReadingUpdatedForTopic(QString topic,
+                                                   float min_value,
+                                                   float max_value) {
+  auto it = topicToMinMaxLabels_.find(topic);
+  if (it == topicToMinMaxLabels_.end()) return;
+  auto* minLabel = it.value().first;
+  auto* maxLabel = it.value().second;
+  if (minLabel) minLabel->setText(QString::number(min_value));
+  if (maxLabel) maxLabel->setText(QString::number(max_value));
 }

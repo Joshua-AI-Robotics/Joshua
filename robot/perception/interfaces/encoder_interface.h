@@ -6,9 +6,9 @@
 namespace robot::perception {
 
 class EncoderInterface : public PerceptionInterface {
-public:
-    ~EncoderInterface() override = default;
-    virtual absl::StatusOr<float> GetPosition() = 0;
+ public:
+  ~EncoderInterface() override = default;
+  virtual absl::StatusOr<float> GetPosition() = 0;
 };
 
-} // namespace robot::perception 
+}  // namespace robot::perception

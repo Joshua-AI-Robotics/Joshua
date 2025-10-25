@@ -1,24 +1,26 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <vector>
-#include "robot/comm/serial/serial.h"
-#include "robot/action/interfaces/actuator_interface.h"
-#include "config/proto/robot.pb.h"
 #include <memory>
+#include <vector>
 
-namespace robot::action{
+#include "config/proto/robot.pb.h"
+#include "robot/action/interfaces/actuator_interface.h"
+#include "robot/comm/serial/serial.h"
+
+namespace robot::action {
 class Sts3215Driver : public robot::action::ActuatorInterface {
-  public:
-  Sts3215Driver(const std::shared_ptr<robot::comm::Serial>& serial, const robot::action::Actuator& action_config);
+ public:
+  Sts3215Driver(const std::shared_ptr<robot::comm::Serial>& serial,
+                const robot::action::Actuator& action_config);
   ~Sts3215Driver();
-  
+
   // ActionInterface methods
   absl::Status Init() override;
   std::string GetId() override;
   absl::Status SetAction(const robot::action::ActionPacket& action_packet) override;
   absl::Status Teardown() override;
-  
+
   // ActuatorInterface methods
   absl::Status SetSpeed(float value) override;
   absl::Status SetPosition(float angle) override;
@@ -26,8 +28,9 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   absl::Status SetMiddlePosition() override;
   absl::Status SetIdlePosition() override;
 
-  private: 
-  uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin, std::vector<uint8_t>::const_iterator end);
+ private:
+  uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin,
+                             std::vector<uint8_t>::const_iterator end);
   std::vector<uint8_t> create_move_packet(uint16_t position);
   std::vector<uint8_t> create_torque_packet(uint8_t enable);
 
@@ -44,4 +47,4 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   uint16_t idle_position_;
   uint16_t current_position_;
 };
-}
+}  // namespace robot::action

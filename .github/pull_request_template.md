@@ -37,5 +37,3 @@ Does this introduce breaking changes or require consumer action? If yes, explain
 ## Release Note
 
 One line, user-facing summary for release notes (if applicable).
-
-

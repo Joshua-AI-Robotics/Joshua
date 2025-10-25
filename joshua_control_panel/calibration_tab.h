@@ -3,17 +3,19 @@
 
 #include <QWidget>
 
-namespace Ui { class CalibrationTab; }
+namespace Ui {
+class CalibrationTab;
+}
 
 class CalibrationTab : public QWidget {
-    Q_OBJECT
+  Q_OBJECT
 
-public:
-    explicit CalibrationTab(QWidget *parent = nullptr);
-    ~CalibrationTab();
+ public:
+  explicit CalibrationTab(QWidget* parent = nullptr);
+  ~CalibrationTab();
 
-private:
-    Ui::CalibrationTab *ui;
+ private:
+  Ui::CalibrationTab* ui;
 };
 
 #endif

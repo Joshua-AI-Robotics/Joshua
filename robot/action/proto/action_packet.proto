@@ -13,23 +13,23 @@ enum PresetCommand {
 }
 
 message ComplexAction {
-  optional float position = 1;    // Target position
-  optional float speed = 2;       // Movement speed
-  optional float torque = 3;      // Torque setting
-  optional uint32 duration_ms = 4; // Duration in milliseconds
+  optional float position = 1;      // Target position
+  optional float speed = 2;         // Movement speed
+  optional float torque = 3;        // Torque setting
+  optional uint32 duration_ms = 4;  // Duration in milliseconds
 }
 
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-  
+
   int64 timestamp_ms = 2;
-  
+
   oneof action_type {
-    float position = 10;           // Simple position command
-    float torque = 11;             // Simple torque command  
-    float speed = 12;              // Simple speed command
-    PresetCommand preset = 13;     // Preset command
-    ComplexAction complex = 14;    // Complex multi-parameter action
+    float position = 10;         // Simple position command
+    float torque = 11;           // Simple torque command
+    float speed = 12;            // Simple speed command
+    PresetCommand preset = 13;   // Preset command
+    ComplexAction complex = 14;  // Complex multi-parameter action
   }
 }

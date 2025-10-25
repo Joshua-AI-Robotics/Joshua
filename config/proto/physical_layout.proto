@@ -8,7 +8,7 @@ message Vector3 {
   double y = 2;
   double z = 3;
 }
-  
+
 // Describes a single joint and the link attached to it.
 message KinematicLink {
   string name = 1;
@@ -25,9 +25,9 @@ message KinematicLink {
   // The type of joint. Most manipulator arms use REVOLUTE joints.
   enum JointType {
     JOINT_INVALID = 0;
-    REVOLUTE = 1;  // Rotational joint (like a motor).
-    PRISMATIC = 2; // Sliding or linear joint.
-    FIXED = 3;     // A non-moving, rigid connection.
+    REVOLUTE = 1;   // Rotational joint (like a motor).
+    PRISMATIC = 2;  // Sliding or linear joint.
+    FIXED = 3;      // A non-moving, rigid connection.
   }
 
   JointType joint_type = 4;
@@ -38,7 +38,7 @@ message KinematicLink {
   double lower_limit = 5;
   double upper_limit = 6;
 }
-  
+
 // The complete physical layout and kinematic structure of the manipulator arm.
 message PhysicalLayout {
   // The sequence of links that make up the arm, starting from the base.

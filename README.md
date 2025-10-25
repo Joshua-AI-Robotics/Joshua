@@ -20,7 +20,7 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   sudo ./scripts/joshua_setup.sh
   ```
-  
+
   This script automatically installs:
   - ROS2 Humble Desktop
   - Qt6 development packages
@@ -163,4 +163,28 @@ This architecture provides:
 - **Extensibility**: Easy addition of new sensor types and action commands
 - **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
 
- 
+
+## Linting & Formatting
+
+This repo uses automated linters and formatters:
+
+- C/C++ and `.proto`: `clang-format` (config in `.clang-format`)
+- Python: `ruff` (config in `ruff.toml`)
+- Bazel/Starlark: `buildifier`
+
+Local setup (one-time):
+
+```bash
+python3 -m pip install --user pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+chmod +x scripts/lint.sh
+```
+
+Run all linters locally:
+
+```bash
+./scripts/lint.sh
+```
+
+CI will re-run the linters on pull requests targeting `develop`.

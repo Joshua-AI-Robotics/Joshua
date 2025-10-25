@@ -1,17 +1,14 @@
+import random
 import sys
 import threading
-import random
-from typing import List
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from config.proto import config_pb2
-from config.proto import ai_pb2
-
 from ros2 import node_runner as node_runner_py
 
 
@@ -24,14 +21,14 @@ class MockInferencePy(Node):
             return
 
         # Initialize publishers
-        self.action_publishers: List[rclpy.publisher.Publisher] = []
+        self.action_publishers: list[rclpy.publisher.Publisher] = []
         for i in range(len(config.ai.publish_topics)):
             topic = config.ai.publish_topics[i]
             self.action_publishers.append(self.create_publisher(Float32, topic, 10))
 
         # Initialize state tracking
-        self.latest_states: List[float] = [0.0 for _ in range(len(config.ai.subscribe_topics))]
-        self.received: List[bool] = [False for _ in range(len(config.ai.subscribe_topics))]
+        self.latest_states: list[float] = [0.0 for _ in range(len(config.ai.subscribe_topics))]
+        self.received: list[bool] = [False for _ in range(len(config.ai.subscribe_topics))]
 
         # Random noise generator bounds
         self.noise_low: float = -0.02
@@ -49,7 +46,9 @@ class MockInferencePy(Node):
 
         self._mutex = threading.Lock()
         self.get_logger().info(
-            f"Mock inference node started ({len(config.ai.publish_topics)} actions, {len(config.ai.subscribe_topics)} states)."
+            "Mock inference node started ("
+            f"{len(config.ai.publish_topics)} actions, "
+            f"{len(config.ai.subscribe_topics)} states)."
         )
 
     def _make_image_cb(self, state_index: int):
@@ -67,6 +66,7 @@ class MockInferencePy(Node):
                 if all(self.received):
                     self._publish_actions_locked()
                     self.received = [False for _ in self.received]
+
         return _cb
 
     def _publish_actions_locked(self) -> None:
@@ -84,4 +84,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

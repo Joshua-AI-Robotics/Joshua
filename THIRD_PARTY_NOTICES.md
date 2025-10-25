@@ -26,5 +26,3 @@ This project includes third-party software. Each component is licensed under its
 - Some licenses require attribution or inclusion of their license text in distributions.
 - LGPL components (e.g., Qt6) have additional obligations for dynamic vs. static linking.
 - Always verify current license terms in upstream repositories.
-
-

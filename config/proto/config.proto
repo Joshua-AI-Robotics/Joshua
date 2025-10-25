@@ -7,22 +7,22 @@ import "config/proto/calibration.proto";
 package config;
 
 message General {
-    enum OperationMode {
+  enum OperationMode {
     MODE_INVALID = 0;
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
     MODE_TRAINING = 3;
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
-    MODE_MOCK_INFERENCE = 6; // TODO: Remove this.
-    MODE_MOCK_INFERENCE_PY = 7; // TODO: Remove this.
-    }
-    OperationMode operation_mode = 1;
+    MODE_MOCK_INFERENCE = 6;     // TODO: Remove this.
+    MODE_MOCK_INFERENCE_PY = 7;  // TODO: Remove this.
+  }
+  OperationMode operation_mode = 1;
 }
 
 message Config {
-    General general = 1;
-    config.Robot robot = 2;
-    config.Ai ai = 3;
-    config.Calibration calibration = 4;
+  General general = 1;
+  config.Robot robot = 2;
+  config.Ai ai = 3;
+  config.Calibration calibration = 4;
 }
