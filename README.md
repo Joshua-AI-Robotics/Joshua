@@ -35,16 +35,8 @@ This example demonstrates how to launch the SO100 robot in teleoperation mode, w
 
 *Please make sure to calibrate the operational limits for your servo motors.*
 
-**To start the system with GUI:**
-
 ```bash
-bazel run joshua_control_panel:joshua_control_panel
-```
-
-**To start the system with terminal:**
-
-```bash
-bazel build node_generator:joshua_main
+bazel build node_generator:joshua_main -- --config=<DEFAULT_IS_TELEOP>
 ```
 
 TODO: Add calibration instruction here.
@@ -170,3 +162,5 @@ This architecture provides:
 - **Compatibility**: Standard ROS2 messages enable integration with existing ROS2 ecosystem
 - **Extensibility**: Easy addition of new sensor types and action commands
 - **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
+
+ 
