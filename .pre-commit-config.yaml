@@ -3,16 +3,20 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
-        stages: [pre-push]
+        stages: [manual, pre-push]
       - id: end-of-file-fixer
-        stages: [pre-push]
+        stages: [manual, pre-push]
       - id: check-yaml
         args: ["--allow-multiple-documents"]
-        stages: [pre-push]
+        stages: [manual, pre-push]
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v17.0.6
     hooks:
+      # Auto-fix formatting when run manually (used by scripts/lint.sh)
+      - id: clang-format
+        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
+        stages: [manual]
       - id: clang-format
         name: clang-format (check)
         files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
@@ -20,4 +24,12 @@ repos:
         stages: [pre-push]
         pass_filenames: true
 
-# removed ruff and buildifier to keep only requested hooks
+
+  - repo: local
+    hooks:
+      - id: run-local-hooks
+        name: run local custom pre-push hooks
+        entry: hooks/run_local_hooks.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

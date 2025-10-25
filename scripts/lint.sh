@@ -26,10 +26,10 @@ run_hook() {
 }
 
 # Auto-fix selected hooks only (on demand when you run this script)
-run_hook trailing-whitespace
-run_hook end-of-file-fixer
-run_hook check-yaml --allow-multiple-documents
-run_hook clang-format
+run_hook trailing-whitespace --hook-stage manual
+run_hook end-of-file-fixer --hook-stage manual
+run_hook check-yaml --hook-stage manual --allow-multiple-documents
+run_hook clang-format --hook-stage manual
 
 # Check-only for pre-push: validate formatting when pushing (no auto-fix here)
 run_hook clang-format --hook-stage pre-push

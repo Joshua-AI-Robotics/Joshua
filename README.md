@@ -188,3 +188,29 @@ Run all linters locally:
 ```
 
 CI will re-run the linters on pull requests targeting `develop`.
+
+### Add your own pre-push checks (scalable local hooks)
+
+You can add custom scripts that run on pre-push without editing the shared config:
+
+1. Put your scripts in `hooks/` (bash `.sh` or Python `.py`). The runner will skip itself and `sample_check.py`.
+2. Ensure they are executable (`chmod +x`).
+3. On push, pre-commit will run `hooks/run_local_hooks.sh`, which executes all scripts in `hooks/custom/`.
+
+Example template:
+
+```python
+# hooks/sample_check.py
+# Make a copy into hooks/custom/your_check.py
+def main():
+    # Return non-zero to block push
+    return 0
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
+```
+
+Notes:
+- This mechanism is optional and local to your clone. It does not affect CI.
+- Shared, team-wide hooks should be added to `.pre-commit-config.yaml`.
