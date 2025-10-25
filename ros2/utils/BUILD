@@ -72,3 +72,16 @@ ros2_cpp_binary(
         "@ros2_common_interfaces//:cpp_std_msgs",
     ],
 )
+
+ros2_py_binary(
+    name = "pointcloud2_visualizer",
+    srcs = ["pointcloud2_visualizer.py"],
+    main = "pointcloud2_visualizer.py",
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        requirement("opencv-python"),
+        requirement("numpy"),
+    ],
+    tags = ["manual"],
+)
