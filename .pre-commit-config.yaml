@@ -1,25 +1,15 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: trailing-whitespace
-        stages: [manual]
-      - id: end-of-file-fixer
-        stages: [manual]
-      - id: check-yaml
-        args: ["--allow-multiple-documents"]
-        stages: [manual, pre-push]
-
   - repo: local
     hooks:
-      - id: clang-format-check
-        name: clang-format (check)
-        entry: hooks/clang_format_check.sh
+      - id: lint-check
+        name: comprehensive lint check
+        entry: hooks/lint_check.sh
         language: system
-        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
+        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto|yaml|yml)$"
         stages: [pre-push]
         pass_filenames: true
 
+  # Custom hooks (run after linting)
   - repo: local
     hooks:
       - id: run-local-hooks
