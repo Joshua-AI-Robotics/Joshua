@@ -31,17 +31,11 @@ enum EncoderType {
   STS3215_ENCODER = 1;
 }
 
-enum LidarType {
-  LIDAR_INVLAID = 0;
-}
+enum LidarType { LIDAR_INVLAID = 0; }
 
-enum RadarType {
-  RADAR_INVLAID = 0;
-}
+enum RadarType { RADAR_INVLAID = 0; }
 
-enum HidType {
-  HID_INVLAID = 0;
-}
+enum HidType { HID_INVLAID = 0; }
 
 message Camera {
   string camera_name = 1;

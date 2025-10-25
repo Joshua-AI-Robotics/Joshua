@@ -17,4 +17,3 @@ for f in "${FILES[@]}"; do
 done
 
 exit $fail
-

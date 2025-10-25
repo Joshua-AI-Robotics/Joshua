@@ -34,11 +34,24 @@ if [ "$mode" = "fix" ]; then
   # Auto-fix using manual-stage hooks
   run_hook trailing-whitespace --hook-stage manual
   run_hook end-of-file-fixer --hook-stage manual
-  run_hook check-yaml --hook-stage manual --allow-multiple-documents
-  run_hook clang-format --hook-stage manual
+
+  # clang-format in-place on tracked + untracked (non-ignored) C/C++/Proto files
+  if ! command -v clang-format >/dev/null 2>&1; then
+    echo "clang-format not found. Install it and retry (e.g., sudo apt install clang-format)." >&2
+    exit 1
+  fi
+
+  mapfile -d '' CF_FILES < <( (
+    git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto'; \
+    git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' \
+  ) | sort -zu )
+
+  if [ ${#CF_FILES[@]} -gt 0 ]; then
+    clang-format -i "${CF_FILES[@]}" || fail=1
+  fi
 
   # Validate formatting after fixes (check-only)
-  run_hook clang-format --hook-stage pre-push
+  "$PRECOMMIT" run clang-format-check --all-files --hook-stage pre-push || fail=1
 
   if [ "$fail" -ne 0 ]; then
     echo "Fixes applied or checks failed. Stage changes and rerun if needed."
@@ -51,10 +64,12 @@ fi
 # -------- check-only path (no file modifications) --------
 
 # 1) YAML validation (does not modify files)
-run_hook check-yaml --hook-stage pre-push --allow-multiple-documents
+echo "Checking YAML files..."
+"$PRECOMMIT" run check-yaml --all-files --hook-stage pre-push || fail=1
 
 # 2) clang-format check-only
-run_hook clang-format --hook-stage pre-push
+echo "Checking C/C++/Proto formatting..."
+"$PRECOMMIT" run clang-format-check --all-files --hook-stage pre-push || fail=1
 
 # 3) trailing whitespace and EOF newline checks (custom check-only, no modifications)
 

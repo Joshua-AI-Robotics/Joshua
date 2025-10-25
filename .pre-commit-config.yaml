@@ -3,9 +3,9 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
-        stages: [manual, pre-push]
+        stages: [manual]
       - id: end-of-file-fixer
-        stages: [manual, pre-push]
+        stages: [manual]
       - id: check-yaml
         args: ["--allow-multiple-documents"]
         stages: [manual, pre-push]
@@ -19,7 +19,6 @@ repos:
         files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$"
         stages: [pre-push]
         pass_filenames: true
-
 
   - repo: local
     hooks:
