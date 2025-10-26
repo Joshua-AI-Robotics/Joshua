@@ -6,39 +6,214 @@
 # Usage:
 #   bazel run //ros2:smolvla_inference -- --config config/config_preset/so100_smolvla_inference.pbtxt
 
-general {
-  operation_mode: MODE_MOCK_INFERENCE_PY  # TODO: Add MODE_SMOLVLA_INFERENCE to config.proto
-  node_name: "smolvla_inference_node"
-  node_id: 1
-}
-
-ai {
-  # Camera input topics (adjust based on your camera setup)
-  subscribe_topics: "/camera/image_0"
-  subscribe_topics: "/camera/image_1"
+general{
+    operation_mode: MODE_MOCK_INFERENCE_PY
+  }
+  robot {
+    name: "so100"
+    id: 1
+    robot_type: MANIPULATOR_ARM
   
-  # Action output topics (adjust based on your robot's DOF)
-  publish_topics: "/action/joint_0"
-  publish_topics: "/action/joint_1"
-  publish_topics: "/action/joint_2"
-  publish_topics: "/action/joint_3"
-  publish_topics: "/action/joint_4"
-  publish_topics: "/action/joint_5"
+    actions {
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_1"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_1"
+          id: 1
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 973
+          operational_upper_limit: 3034
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 1
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 1
+            move_time_in_ms: 40
+            move_speed: 1500
+            idle_position: 2070
+          }
+        }
+      }
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_2"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_2"
+          id: 2
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 858
+          operational_upper_limit: 3154
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 2
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 2
+            move_time_in_ms: 40
+            move_speed: 1500
+            idle_position: 847
+          }
+        }
+      }
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_3"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_3"
+          id: 3
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+           physical_upper_limit: 4095
+          operational_lower_limit: 798
+          operational_upper_limit: 3015
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 3
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 3
+            move_time_in_ms: 40
+            move_speed: 1500
+            idle_position: 3011
+          }
+        }
+      }
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_4"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_4"
+          id: 4
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 668
+          operational_upper_limit: 3124
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 4
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 4
+            move_time_in_ms: 40
+            move_speed: 1500
+            idle_position: 655
+          }
+        }
+      }
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_5"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_5"
+          id: 5
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 902
+          operational_upper_limit: 2955
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 5
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 5
+            move_time_in_ms: 40
+            move_speed: 1500
+            idle_position: 1838
+          }
+        }
+      }
+      single_actions {
+        node_id: 1
+        subscribe_topic: "smolvla_action_6"
+        action_type: ACTUATOR
+        actuator {
+          actuator_name: "sts_motor_6"
+          id: 6
+          actuator_type: STS3215_SERVO
+          comm_type: SERIAL
+          physical_lower_limit: 0
+          physical_upper_limit: 4095
+          operational_lower_limit: 1795
+          operational_upper_limit: 3235
+          encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+          serial_config {
+            id: 6
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+          sts3215_config {
+            servo_id: 6
+            move_time_in_ms: 40
+            move_speed: 2200
+            idle_position: 1806
+          }
+        }
+      }
+    }
   
-  # Model configuration
-  # Option 1: Use HuggingFace model (requires internet on first run)
-  # model_checkpoint_path: "HuggingFaceH4/SmolVLA-1.7B"
+    perceptions {
+      single_perceptions {
+        node_id: 2
+        publish_topic: "camera_1"
+        perception_type: CAMERA
+        publish_rate_hz: 30
+        camera {
+          camera_name: "webcam"
+          id: 1
+          camera_type: OPENCV
+          comm_type: COMM_INVALID
+          opencv_config {
+            id: 0
+            width: 640
+            height: 480
+            fps: 30
+          }
+        }
+      }
+    }
+  }
   
-  # Option 2: Use local checkpoint (after downloading or fine-tuning)
-  # model_checkpoint_path: "/path/to/local/checkpoint"
+  ai {
+    policy_name: "smolvla_policy"
+    node_id: 3
+    publish_topics: "smolvla_action_1" # For STS3215_SERVO_1
+    publish_topics: "smolvla_action_2" # For STS3215_SERVO_2
+    publish_topics: "smolvla_action_3" # For STS3215_SERVO_3
+    publish_topics: "smolvla_action_4" # For STS3215_SERVO_4
+    publish_topics: "smolvla_action_5" # For STS3215_SERVO_5
+    publish_topics: "smolvla_action_6" # For STS3215_SERVO_6
+    subscribe_topics: "camera_1"
+    
+    # SmolVLA specific configuration (optional fields)
+    # model_checkpoint_path: "HuggingFaceH4/SmolVLA-1.7B"
+    # task_instruction: "Pick up the object and place it in the target location"
+  }
   
-  # Task instruction (optional, can be empty for default behavior)
-  # task_instruction: "Pick up the red cube and place it in the box"
-}
-
-# Physical layout configuration (if needed)
-physical_layout {
-  # Add your robot's physical layout here
-  # This depends on your robot configuration
-}
-

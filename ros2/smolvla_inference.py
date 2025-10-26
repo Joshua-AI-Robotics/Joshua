@@ -9,8 +9,13 @@ optional text instructions to generate robot action commands.
 """
 
 import sys
+import os
 from typing import List, Any, Optional
 import numpy as np
+
+# Force CPU mode if CUDA libraries are not available
+# This prevents PyTorch from trying to load CUDA libraries that may not be in the system path
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '')
 
 try:
     import torch

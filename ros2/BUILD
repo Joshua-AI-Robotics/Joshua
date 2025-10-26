@@ -62,8 +62,12 @@ py_binary(
     srcs = ["verify_smolvla_setup.py"],
     main = "verify_smolvla_setup.py",
     deps = [
-        # Optional dependencies - script handles missing imports gracefully
+        requirement("torch"),
+        requirement("transformers"),
+        requirement("pillow"),
+        requirement("numpy"),
     ],
+    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary(
