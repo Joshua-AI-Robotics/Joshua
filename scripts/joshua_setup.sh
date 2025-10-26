@@ -251,16 +251,16 @@ main() {
 
     # check_ubuntu_version
     update_packages
-    # install_ros2
-    # install_qt6
-    # install_opencv
-    # install_arm64_tools
-    # install_bazel
+    install_ros2
+    install_qt6
+    install_opencv
+    install_arm64_tools
+    install_bazel
     install_git
-    # update_submodules
-    # setup_user_permissions
-    # setup_ros2_environment
-    # install_linting_tools
+    update_submodules
+    setup_user_permissions
+    setup_ros2_environment
+    install_linting_tools
     ensure_python_tooling
     install_precommit_and_hooks
 
