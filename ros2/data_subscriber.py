@@ -1,10 +1,6 @@
-import random
 import sys
-import threading
 
-import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 
 # Protobuf generated modules
