@@ -9,6 +9,7 @@ cc_library(
         "//robot/comm/factory:comm_factory",
         "//robot/perception/camera:cv_camera",
         "//robot/perception/encoder:sts3215_encoder",
+        "//robot/perception/lidar:lds01_driver",
         "//robot/perception/interfaces:perception_interface",
         "@abseil-cpp//absl/status:status",
     ],
