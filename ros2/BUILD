@@ -153,6 +153,25 @@ ros2_py_binary(
     ],
 )
 
+ros2_py_binary(
+    name = "data_subscriber",
+    srcs = [
+        "data_subscriber.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "data_subscriber.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "@ros2_common_interfaces//:py_std_msgs",
+        "@ros2_rclpy//:rclpy",
+    ],
+)
+
 ros2_cpp_binary(
     name = "operational_limit_calibration",
     srcs = ["operational_limit_calibration.cc"],
