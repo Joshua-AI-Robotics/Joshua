@@ -11,7 +11,6 @@ ROS2_NODE_TARGETS = [
     ":encoder_publisher",
     ":actuator_subscriber",
     ":mock_inference",
-    ":mock_inference_py",
     ":operational_limit_calibration",
 ]
 
@@ -49,6 +48,7 @@ py_library(
     ],
     deps = [
         "//ai/proto:ai_model_py_proto",
+        # "@ros2_rosidl_runtime_py//:rosidl_runtime_py",
     ],
     visibility = ["//visibility:public"],
 )
@@ -153,6 +153,9 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
+        "//ros2:inference_base",
+        "@ros2_common_interfaces//:py_sensor_msgs",
+        "@ros2_common_interfaces//:py_std_msgs",
     ],
 )
 

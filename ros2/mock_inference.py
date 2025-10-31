@@ -4,8 +4,6 @@ import random
 from typing import List, Any
 
 import rclpy
-from sensor_msgs.msg import Image
-from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from config.proto import config_pb2
@@ -35,9 +33,9 @@ class MockInferencePy(InferenceBase):
         """
         Validate that the operation mode is set correctly for mock inference.
         """
-        if self.config.general.operation_mode != config_pb2.General.OperationMode.MODE_MOCK_INFERENCE_PY:
+        if self.config.general.operation_mode != config_pb2.General.OperationMode.MODE_MOCK_INFERENCE:
             self.get_logger().error(
-                "Mock inference node requires MODE_MOCK_INFERENCE_PY operation mode."
+                "Mock inference node requires MODE_MOCK_INFERENCE operation mode."
             )
             return False
         return True
