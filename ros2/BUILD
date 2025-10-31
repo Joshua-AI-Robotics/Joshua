@@ -140,26 +140,8 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_cpp_binary(
-    name = "mock_inference",
-    srcs = ["mock_inference.cc"],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
-    deps = [
-        "//config/proto:ai_cc_proto",
-        "//config/proto:config_cc_proto",
-        "//config/proto:robot_cc_proto",
-        "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
-    ],
-)
-
 ros2_py_binary(
-    name = "mock_inference_py",
+    name = "mock_inference",
     srcs = [
         "mock_inference.py",
     ],
