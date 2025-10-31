@@ -35,29 +35,31 @@ class InferenceBase(Node, ABC):
             self.get_logger().error("Configuration validation failed.")
             return
         
-        self.action_publishers: List[rclpy.publisher.Publisher] = []
-        self._publisher_msg_types: List[Any] = []
+        # Setup publishers
+        self.publishers_list: List[rclpy.publisher.Publisher] = []
+        self.publishers_msg_types: List[Any] = []
         self._setup_publishers()
-        
-        # Initialize state tracking
-        # Store raw input data for inference
-        num_subs = len(self._single_model.subscriptions)
-        self.latest_sensor_data: List[Any] = [None for _ in range(num_subs)]
-        self.received_flags: List[bool] = [False for _ in range(num_subs)]
-        
-        # Thread safety for state updates
-        self._mutex = threading.Lock()
-        
-        # Initialize subscriptions to state topics
+
+        # Setup subscriptions
+        self.subscriptions_list: List[rclpy.subscription.Subscription] = []
         self._setup_subscriptions()
+        
+        # Initialize input tracking
+        # Store raw input data for inference
+        num_inputs = len(self._single_model.subscriptions)
+        self.latest_input_data: List[Any] = [None for _ in range(num_inputs)]
+        self.received_flags: List[bool] = [False for _ in range(num_inputs)]
+        
+        # Thread safety for input updates
+        self._mutex = threading.Lock()
         
         # Call subclass-specific initialization
         self._initialize_inference()
         
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{len(self._single_model.pubishers)} action outputs, "
-            f"{len(self._single_model.subscriptions)} sensor inputs."
+            f"{len(self._single_model.pubishers)} publish topics, "
+            f"{len(self._single_model.subscriptions)} subscribe topics."
         )
 
     def _select_single_model(self):
@@ -85,46 +87,45 @@ class InferenceBase(Node, ABC):
     
     def _setup_publishers(self) -> None:
         """
-        Set up ROS2 publishers for action outputs.
+        Set up ROS2 publishers for inference outputs.
         Derived classes can customize topics, QoS, etc.
         """
         for publisher_info in self._single_model.pubishers:
             message_type = resolve_message_class_from_enum(publisher_info.ros2_data_type)
             topic = publisher_info.topic
-            self.action_publishers.append(self.create_publisher(message_type, topic, 10))
-            self._publisher_msg_types.append(message_type)
+            self.publishers_list.append(self.create_publisher(message_type, topic, 10))
+            self.publishers_msg_types.append(message_type)
             self.get_logger().info(
-                f"Created publisher for action topic: {topic} (type={message_type.__name__})")
+                f"Created publisher: {topic} (type={message_type.__name__})")
     
     def _setup_subscriptions(self) -> None:
         """
-        Set up ROS2 subscriptions for inference input.
+        Set up ROS2 subscriptions for inference inputs.
         Derived classes can customize topics, QoS, etc.
         """
-        self.state_subscriptions = []
-        for i, subscription_info in enumerate(self._single_model.subscriptions):
+        for input_index, subscription_info in enumerate(self._single_model.subscriptions):
             message_type = resolve_message_class_from_enum(subscription_info.ros2_data_type)
             topic = subscription_info.topic
-            self.state_subscriptions.append(
-                self.create_subscription(message_type, topic, self._make_sensor_callback(i), 10)
-            )
-            self.get_logger().info(f"Subscribed to sensor topic: {topic} (type={message_type.__name__})")
+            subscription = self.create_subscription(message_type, topic, self._make_sensor_callback(input_index), 10)
+            self.subscriptions_list.append(subscription)
+            self.get_logger().info(f"Created subscriber: {topic} (type={message_type.__name__})")
+
     
-    def _make_sensor_callback(self, sensor_index: int):
+    def _make_sensor_callback(self, input_index: int):
         """
-        Create a callback function for a specific sensor topic.
+        Create a callback function for a specific input topic.
         """
         def _callback(msg: Any):
             with self._mutex:
-                if sensor_index >= len(self.latest_sensor_data):
-                    self.get_logger().warn(f"Received sensor index out of range: {sensor_index}")
+                if input_index >= len(self.latest_input_data):
+                    self.get_logger().warn(f"Received input index out of range: {input_index}")
                     return
                 
-                # Store the raw sensor data
-                self.latest_sensor_data[sensor_index] = msg
-                self.received_flags[sensor_index] = True
+                # Store the raw input data
+                self.latest_input_data[input_index] = msg
+                self.received_flags[input_index] = True
                 
-                # If we have fresh data from all sensors, run inference and publish
+                # If we have fresh data from all inputs, run inference and publish
                 if all(self.received_flags):
                     self._run_inference_and_publish_locked()
                     # Reset flags for next round
@@ -135,41 +136,41 @@ class InferenceBase(Node, ABC):
     
     def _run_inference_and_publish_locked(self) -> None:
         """
-        Run inference on collected sensor data and publish actions.
+        Run inference on collected input data and publish outputs.
         This method assumes the mutex is already held.
         """
-        if not all(data is not None for data in self.latest_sensor_data):
-            self.get_logger().warn("Not all sensor data available for inference")
+        if not all(data is not None for data in self.latest_input_data):
+            self.get_logger().warn("Not all input data available for inference")
             return
         
         try:
             # Call subclass-specific inference
-            actions = self.infer(self.latest_sensor_data)
+            outputs = self.infer(self.latest_input_data)
             
-            # Validate action outputs
-            if len(actions) != len(self.action_publishers):
+            # Validate outputs
+            if len(outputs) != len(self.publishers_list):
                 self.get_logger().error(
-                    f"Inference returned {len(actions)} actions, "
-                    f"but expected {len(self.action_publishers)}"
+                    f"Inference returned {len(outputs)} outputs, "
+                    f"but expected {len(self.publishers_list)}"
                 )
                 return
             
-            # Publish actions
-            for i, (publisher, action_value) in enumerate(zip(self.action_publishers, actions)):
-                msg_cls = self._publisher_msg_types[i]
+            # Publish outputs
+            for i, (publisher, output_value) in enumerate(zip(self.publishers_list, outputs)):
+                msg_cls = self.publishers_msg_types[i]
                 msg = msg_cls()
                 if hasattr(msg, "data"):
-                    msg.data = action_value
+                    msg.data = output_value
                 else:
-                    if isinstance(action_value, msg_cls):
-                        msg = action_value
+                    if isinstance(output_value, msg_cls):
+                        msg = output_value
                     else:
                         raise ValueError(
-                            f"Action at index {i} must be instance of {msg_cls.__name__} or a value for .data")
+                            f"Output at index {i} must be instance of {msg_cls.__name__} or a value for .data")
                 publisher.publish(msg)
             
         except Exception as e:
-            self.get_logger().error(f"Inference failed: {str(e)}")
+            self.get_logger().error(f"Inference error: {str(e)}")
     
     @abstractmethod
     def _initialize_inference(self) -> None:
@@ -185,7 +186,7 @@ class InferenceBase(Node, ABC):
         Run inference on input data and return output data.
         
         Args:
-            input_data: List of input messages (e.g., Image messages from cameras)
+            input_data: List of input messages (e.g., Image messages from sensors)
         
         Returns:
             List of output messages (one per publisher)
