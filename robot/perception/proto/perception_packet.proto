@@ -24,11 +24,20 @@ message SensorData {
   string unit = 3;
 }
 
-// Point cloud data (for future LiDAR Radar sensors)
+// Point cloud data (SoA layout, units in meters/seconds)
 message PointCloudData {
-  repeated float points = 1;
-  int32 point_count = 2;
-  bool has_color = 3;
+  // Structure-of-Arrays for efficiency. All arrays should be the same length.
+  repeated float x = 1;            // meters
+  repeated float y = 2;            // meters
+  repeated float z = 3;            // meters
+  repeated float intensity = 4;    // unitless or sensor-specific; normalized if applicable
+  repeated float time_offset = 5;  // seconds since start of scan (optional)
+
+  // Cloud-level metadata
+  uint32 width = 6;     // 1 for unorganized cloud
+  uint32 height = 7;    // 1 for unorganized cloud
+  bool is_dense = 8;    // true if no invalid/NaN points
+  string frame_id = 9;  // optional frame name for this cloud
 }
 
 // Main perception packet - uses oneof for type safety
@@ -37,9 +46,9 @@ message PerceptionPacket {
   int64 timestamp_ns = 2;
 
   oneof data_type {
-    ImageData image = 10;
-    PositionData position = 11;
-    SensorData sensor = 12;
-    PointCloudData point_cloud = 13;
+    ImageData image = 3;
+    PositionData position = 4;
+    SensorData sensor = 5;
+    PointCloudData point_cloud = 6;
   }
 }

@@ -31,7 +31,10 @@ enum EncoderType {
   STS3215_ENCODER = 1;
 }
 
-enum LidarType { LIDAR_INVLAID = 0; }
+enum LidarType {
+  LIDAR_INVLAID = 0;
+  LDS01 = 1;
+}
 
 enum RadarType { RADAR_INVLAID = 0; }
 
@@ -60,6 +63,14 @@ message Encoder {
   }
 }
 
+message Lidar {
+  string lidar_name = 1;
+  uint64 id = 2;
+  LidarType lidar_type = 3;
+  robot.comm.Comm comm = 4;
+  // TODO(hmoon): Add more spec here.
+}
+
 message OpenCvConfig {
   uint64 id = 1;
   uint32 width = 2;
@@ -79,6 +90,7 @@ message SinglePerception {
   oneof perception_data {
     Camera camera = 5;
     Encoder encoder = 6;
+    Lidar lidar = 7;
   }
 }
 
