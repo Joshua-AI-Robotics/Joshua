@@ -34,11 +34,21 @@ py_library(
     srcs = [
         "node_runner.py",
     ],
-    visibility = ["//visibility:public"],
     deps = [
         "//config/proto:config_py_proto",
         "@ros2_rclpy//:rclpy",
         requirement("protobuf"),
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "ros2_type_resolver",
+    srcs = [
+        "ros2_type_resolver.py",
+    ],
+    deps = [
+        "//ai/proto:ai_model_py_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -50,9 +60,8 @@ py_library(
     ],
     deps = [
         "@ros2_rclpy//:rclpy",
-        "@ros2_common_interfaces//:py_std_msgs",
-        "@ros2_common_interfaces//:py_sensor_msgs",
         "//config/proto:config_py_proto",
+        "//ros2:ros2_type_resolver",
     ],
     visibility = ["//visibility:public"],
 )
@@ -163,10 +172,6 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
     ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
 )
 
 ros2_cpp_binary(

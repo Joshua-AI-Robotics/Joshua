@@ -2,24 +2,8 @@ syntax = "proto3";
 
 package config;
 
-message Ai {
-  string policy_name = 1;
-  string pretrained_model_path = 2;
-  uint32 node_id = 3;
-  repeated string subscribe_topics = 4;
-  repeated string publish_topics = 5;
-  oneof policy_config {
-    ExamplePolicyConfig example_policy_config = 6;
-  }
-}
+import "ai/proto/ai_model.proto";
 
-message ExamplePolicyConfig {
-  int32 hidden_size = 1;
-  int32 n_layer = 2;
-  int32 n_head = 3;
-  string activation_function = 4;
-  double dropout = 5;
-  int32 n_inner = 6;
-  int32 context_length = 7;
-  int32 vision_embedding_dim = 8;
+message Ai {
+  ai.model.Model models = 1;
 }

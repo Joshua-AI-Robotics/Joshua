@@ -4,12 +4,11 @@ from abc import ABC, abstractmethod
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32
-from sensor_msgs.msg import Image
+from ros2.ros2_type_resolver import resolve_message_class_from_enum
 
 # Protobuf generated modules
 from config.proto import config_pb2
-
+ 
 
 class InferenceBase(Node, ABC):
     """
@@ -29,21 +28,22 @@ class InferenceBase(Node, ABC):
         
         self.node_id = node_id
         self.config = config
+        self._single_model = self._select_single_model()
         
         # Validate configuration
         if not self._validate_config():
             self.get_logger().error("Configuration validation failed.")
             return
         
-        # Initialize publishers for action outputs
         self.action_publishers: List[rclpy.publisher.Publisher] = []
-        for topic in config.ai.publish_topics:
-            self.action_publishers.append(self.create_publisher(Float32, topic, 10))
+        self._publisher_msg_types: List[Any] = []
+        self._setup_publishers()
         
         # Initialize state tracking
-        # Store raw sensor data (e.g., Image messages) for inference
-        self.latest_sensor_data: List[Any] = [None for _ in range(len(config.ai.subscribe_topics))]
-        self.received_flags: List[bool] = [False for _ in range(len(config.ai.subscribe_topics))]
+        # Store raw input data for inference
+        num_subs = len(self._single_model.subscriptions)
+        self.latest_sensor_data: List[Any] = [None for _ in range(num_subs)]
+        self.received_flags: List[bool] = [False for _ in range(num_subs)]
         
         # Thread safety for state updates
         self._mutex = threading.Lock()
@@ -56,9 +56,26 @@ class InferenceBase(Node, ABC):
         
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{len(config.ai.publish_topics)} action outputs, "
-            f"{len(config.ai.subscribe_topics)} sensor inputs."
+            f"{len(self._single_model.pubishers)} action outputs, "
+            f"{len(self._single_model.subscriptions)} sensor inputs."
         )
+
+    def _select_single_model(self):
+        """
+        Select the SingleModel config for this node by matching node_id.
+        If multiple models exist and none match, this returns the first model.
+        """
+        models = self.config.ai.models.single_model
+        if len(models) == 0:
+            raise ValueError("No SingleModel entries found in config.ai.models")
+        for m in models:
+            if m.node_id == self.node_id:
+                return m
+        if len(models) == 1:
+            return models[0]
+        self.get_logger().warn(
+            f"No SingleModel with node_id={self.node_id}; defaulting to first model")
+        return models[0]
     
     def _validate_config(self) -> bool:
         """
@@ -66,25 +83,38 @@ class InferenceBase(Node, ABC):
         """
         return True
     
+    def _setup_publishers(self) -> None:
+        """
+        Set up ROS2 publishers for action outputs.
+        Derived classes can customize topics, QoS, etc.
+        """
+        for publisher_info in self._single_model.pubishers:
+            message_type = resolve_message_class_from_enum(publisher_info.ros2_data_type)
+            topic = publisher_info.topic
+            self.action_publishers.append(self.create_publisher(message_type, topic, 10))
+            self._publisher_msg_types.append(message_type)
+            self.get_logger().info(
+                f"Created publisher for action topic: {topic} (type={message_type.__name__})")
+    
     def _setup_subscriptions(self) -> None:
         """
-        Set up ROS2 subscriptions to sensor topics.
-        Currently supports Image topics. Override for different message types.
+        Set up ROS2 subscriptions for inference input.
+        Derived classes can customize topics, QoS, etc.
         """
         self.state_subscriptions = []
-        for i, topic in enumerate(self.config.ai.subscribe_topics):
-            # TODO: Support multiple message types based on config
-            # For now, hardcoded to Image (camera sensors)
+        for i, subscription_info in enumerate(self._single_model.subscriptions):
+            message_type = resolve_message_class_from_enum(subscription_info.ros2_data_type)
+            topic = subscription_info.topic
             self.state_subscriptions.append(
-                self.create_subscription(Image, topic, self._make_sensor_callback(i), 10)
+                self.create_subscription(message_type, topic, self._make_sensor_callback(i), 10)
             )
-            self.get_logger().info(f"Subscribed to sensor topic: {topic}")
+            self.get_logger().info(f"Subscribed to sensor topic: {topic} (type={message_type.__name__})")
     
     def _make_sensor_callback(self, sensor_index: int):
         """
         Create a callback function for a specific sensor topic.
         """
-        def _callback(msg: Image):
+        def _callback(msg: Any):
             with self._mutex:
                 if sensor_index >= len(self.latest_sensor_data):
                     self.get_logger().warn(f"Received sensor index out of range: {sensor_index}")
@@ -101,6 +131,7 @@ class InferenceBase(Node, ABC):
                     self.received_flags = [False for _ in self.received_flags]
         
         return _callback
+    
     
     def _run_inference_and_publish_locked(self) -> None:
         """
@@ -124,9 +155,17 @@ class InferenceBase(Node, ABC):
                 return
             
             # Publish actions
-            for publisher, action_value in zip(self.action_publishers, actions):
-                msg = Float32()
-                msg.data = float(action_value)
+            for i, (publisher, action_value) in enumerate(zip(self.action_publishers, actions)):
+                msg_cls = self._publisher_msg_types[i]
+                msg = msg_cls()
+                if hasattr(msg, "data"):
+                    msg.data = action_value
+                else:
+                    if isinstance(action_value, msg_cls):
+                        msg = action_value
+                    else:
+                        raise ValueError(
+                            f"Action at index {i} must be instance of {msg_cls.__name__} or a value for .data")
                 publisher.publish(msg)
             
         except Exception as e:
@@ -141,15 +180,15 @@ class InferenceBase(Node, ABC):
         pass
     
     @abstractmethod
-    def infer(self, sensor_data: List[Any]) -> List[float]:
+    def infer(self, input_data: List[Any]) -> List[Any]:
         """
-        Run inference on sensor data and return action values.
+        Run inference on input data and return output data.
         
         Args:
-            sensor_data: List of sensor messages (e.g., Image messages from cameras)
+            input_data: List of input messages (e.g., Image messages from cameras)
         
         Returns:
-            List of action values (one per action publisher)
+            List of output messages (one per publisher)
         """
         pass
 
