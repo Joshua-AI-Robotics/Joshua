@@ -48,7 +48,6 @@ py_library(
     ],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        # "@ros2_rosidl_runtime_py//:rosidl_runtime_py",
     ],
     visibility = ["//visibility:public"],
 )
