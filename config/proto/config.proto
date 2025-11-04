@@ -14,8 +14,7 @@ message General {
     MODE_TRAINING = 3;
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
-    MODE_MOCK_INFERENCE = 6;     // TODO: Remove this.
-    MODE_MOCK_INFERENCE_PY = 7;  // TODO: Remove this.
+    MODE_MOCK_INFERENCE = 6;
   }
   OperationMode operation_mode = 1;
 }

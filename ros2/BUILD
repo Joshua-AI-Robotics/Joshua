@@ -11,7 +11,6 @@ ROS2_NODE_TARGETS = [
     ":encoder_publisher",
     ":actuator_subscriber",
     ":mock_inference",
-    ":mock_inference_py",
     ":operational_limit_calibration",
 ]
 
@@ -34,13 +33,37 @@ py_library(
     srcs = [
         "node_runner.py",
     ],
-    visibility = ["//visibility:public"],
     deps = [
         "//config/proto:config_py_proto",
         # Note: rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
         requirement("protobuf"),
     ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "ros2_type_resolver",
+    srcs = [
+        "ros2_type_resolver.py",
+    ],
+    deps = [
+        "//ai/proto:ai_model_py_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "inference_base",
+    srcs = [
+        "inference_base.py",
+    ],
+    deps = [
+        "@ros2_rclpy//:rclpy",
+        "//config/proto:config_py_proto",
+        "//ros2:ros2_type_resolver",
+    ],
+    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary(
@@ -117,26 +140,8 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_cpp_binary(
-    name = "mock_inference",
-    srcs = ["mock_inference.cc"],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
-    deps = [
-        "//config/proto:ai_cc_proto",
-        "//config/proto:config_cc_proto",
-        "//config/proto:robot_cc_proto",
-        "//ros2:node_runner",
-        "@local_deps//:cpp_sensor_msgs",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
-    ],
-)
-
 ros2_py_binary(
-    name = "mock_inference_py",
+    name = "mock_inference",
     srcs = [
         "mock_inference.py",
     ],
@@ -148,8 +153,7 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
-        # Note: Python ROS2 messages and rclpy are available via system Python installation
-        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
+        "//ros2:inference_base",
     ],
 )
 
