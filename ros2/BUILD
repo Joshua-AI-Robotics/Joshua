@@ -59,11 +59,12 @@ py_library(
         "inference_base.py",
     ],
     deps = [
-        "@ros2_rclpy//:rclpy",
         "//config/proto:config_py_proto",
         "//ros2:ros2_type_resolver",
     ],
     visibility = ["//visibility:public"],
+    # Note: rclpy is provided by system Python when ROS2 is sourced
+    # Ensure: source /opt/ros/humble/setup.bash before running
 )
 
 ros2_cpp_binary(
