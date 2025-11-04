@@ -1,5 +1,8 @@
-load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
-load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
+# System ROS2 rules (using system-installed ROS2 libraries)
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+# Old rules_ros2 (commented out - use system ROS2 instead)
+# load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
+# load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -8,8 +11,8 @@ ros2_cpp_binary(
     name = "simple_publisher",
     srcs = ["simple_publisher.cc"],
     deps = [
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -18,8 +21,8 @@ ros2_cpp_binary(
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
         "//utils:xbox_controller",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -28,8 +31,8 @@ ros2_cpp_binary(
     srcs = ["camera_subscriber.cc"],
     deps = [
         "@local_deps//:opencv",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_sensor_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -37,8 +40,8 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -49,11 +52,8 @@ ros2_py_binary(
     main = "example_inference_node.py",
     tags = ["manual"],
     deps = [
-        "@ros2_common_interfaces//:py_geometry_msgs",
-        "@ros2_common_interfaces//:py_sensor_msgs",
-        "@ros2_common_interfaces//:py_std_msgs",
-        "@ros2_common_interfaces//:py_std_srvs",
-        "@ros2_rclpy//:rclpy",
+        # Note: Python ROS2 messages and rclpy are available via system Python installation
+        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
         requirement("opencv-python"),
         requirement("numpy"),
         requirement("torch"),
@@ -68,8 +68,8 @@ ros2_cpp_binary(
     name = "mock_action_publisher",
     srcs = ["mock_action_publisher.cc"],
     deps = [
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -78,8 +78,8 @@ ros2_py_binary(
     srcs = ["pointcloud2_visualizer.py"],
     main = "pointcloud2_visualizer.py",
     deps = [
-        "@ros2_rclpy//:rclpy",
-        "@ros2_common_interfaces//:py_sensor_msgs",
+        # Note: Python ROS2 messages and rclpy are available via system Python installation
+        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
         requirement("opencv-python"),
         requirement("numpy"),
     ],

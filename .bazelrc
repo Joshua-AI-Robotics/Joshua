@@ -1,4 +1,10 @@
 build --cxxopt='-std=c++17'
+build --linkopt=-lstdc++
+build --repo_env=CC=g++
+build --repo_env=CXX=g++
+build --action_env=CC=g++
+build --action_env=CXX=g++
+build --action_env=BAZEL_COMPILER=gcc
 
 # =============================================================================
 # Base Platform Configurations
@@ -24,6 +30,14 @@ build:x86-base --copt='-fPIC'
 # NVIDIA Jetson Orin Nano (ARM64)
 build:jetson-orin-nano --config=arm64-base
 build:jetson-orin-nano --platforms=//:jetson_orin_nano
+
+# ARM64 Cross-compilation with System ROS2
+# Use this when building with system ROS2 libraries for ARM64
+build:arm64-ros2 --config=arm64-base
+build:arm64-ros2 --linkopt='-L/opt/ros/humble/lib/aarch64-linux-gnu'
+build:arm64-ros2 --linkopt='-L/usr/lib/aarch64-linux-gnu'
+build:arm64-ros2 --linkopt='-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu'
+build:arm64-ros2 --linkopt='-Wl,-rpath,/usr/lib/aarch64-linux-gnu'
 
 # Add more platforms here as needed:
 # build:raspberry-pi --config=arm64-base
