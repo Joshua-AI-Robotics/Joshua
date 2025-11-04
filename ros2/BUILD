@@ -155,6 +155,8 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
         "//ros2:inference_base",
+        requirement("numpy"),  # Required by ROS2 sensor_msgs
+        requirement("protobuf"),
     ],
 )
 

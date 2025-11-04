@@ -6,6 +6,21 @@ build --action_env=CC=g++
 build --action_env=CXX=g++
 build --action_env=BAZEL_COMPILER=gcc
 
+# Enable legacy runfiles for Python binaries (needed for node_generator)
+build --legacy_external_runfiles
+build --enable_runfiles
+
+# Use system Python entirely for ROS2 compatibility
+# System Python already has rclpy, numpy, and all ROS2 dependencies
+build --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
+run --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
+test --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
+
+# Add system ROS2 packages to Python path
+build --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+run --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+test --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+
 # =============================================================================
 # Base Platform Configurations
 # =============================================================================

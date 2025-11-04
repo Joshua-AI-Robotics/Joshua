@@ -1,3 +1,7 @@
+# Note: rclpy is NOT on PyPI - it comes from system ROS2 installation
+# It will be available via PYTHONPATH in .bazelrc
+
+# Project dependencies
 protobuf==5.29.5
 numpy==1.26.4
 torch==2.3.0

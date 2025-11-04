@@ -1,6 +1,5 @@
 import random
 import sys
-import random
 from typing import List, Any
 
 import rclpy
@@ -12,7 +11,7 @@ from ros2 import node_runner as node_runner_py
 from ros2.inference_base import InferenceBase
 
 
-class MockInferencePy(InferenceBase):
+class MockInference(InferenceBase):
     """
     Mock inference node that generates random actions.
     
@@ -75,14 +74,14 @@ class MockInferencePy(InferenceBase):
         # Generate one action per publisher
         actions = [
             aggregated + random.uniform(self.noise_low, self.noise_high)
-            for _ in self.action_publishers
+            for _ in self.publishers_list
         ]
         
         return actions
 
 
 def main(argv=None):
-    return node_runner_py.run_node(MockInferencePy, logger_name="mock_inference_py", argv=argv)
+    return node_runner_py.run_node(MockInference, logger_name="mock_inference", argv=argv)
 
 
 if __name__ == "__main__":

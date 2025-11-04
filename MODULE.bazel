@@ -37,15 +37,19 @@ register_toolchains(
 # See system_deps.bzl for library definitions
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+
+# Use system Python for ROS2 compatibility
+# System Python has rclpy, numpy, and all ROS2 dependencies pre-installed
 python.toolchain(
     is_default = True,
-    python_version = "3.11",
+    python_version = "3.10",
+    ignore_root_user_error = True,
 )
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
     hub_name = "project_joshua_pip_deps",
-    python_version = "3.11",
+    python_version = "3.10",
     requirements_lock = "//:requirements.lock",
 )
 use_repo(pip, "project_joshua_pip_deps")
