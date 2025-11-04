@@ -26,3 +26,4 @@ MODULE.bazel.lock
 
 # Python virtual environment
 /venv/
+/ros2/__pycache__/

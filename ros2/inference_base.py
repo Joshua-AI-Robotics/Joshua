@@ -1,5 +1,5 @@
 import threading
-from typing import List, Any
+from typing import List, Any, Callable
 from abc import ABC, abstractmethod
 
 import rclpy
@@ -54,7 +54,7 @@ class InferenceBase(Node, ABC):
         self._mutex = threading.Lock()
         
         # Call subclass-specific initialization
-        self._initialize_inference()
+        self._validate_config()
         
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
@@ -79,7 +79,7 @@ class InferenceBase(Node, ABC):
             f"No SingleModel with node_id={self.node_id}; defaulting to first model")
         return models[0]
     
-    def _validate_config(self) -> bool:
+    def _validate_config(self) -> None:
         """
         Validate configuration. Override in subclass for specific checks.
         """
@@ -110,86 +110,94 @@ class InferenceBase(Node, ABC):
             self.subscriptions_list.append(subscription)
             self.get_logger().info(f"Created subscriber: {topic} (type={message_type.__name__})")
 
-    
-    def _make_sensor_callback(self, input_index: int):
+    def _make_sensor_callback(self, input_index: int) -> Callable[[Any], None]:
         """
-        Create a callback function for a specific input topic.
+        Make a callback function for the sensor data.
         """
-        def _callback(msg: Any):
+        def callback(msg: Any) -> None:
             with self._mutex:
                 if input_index >= len(self.latest_input_data):
-                    self.get_logger().warn(f"Received input index out of range: {input_index}")
+                    self.get_logger().error(f"Input index {input_index} out of range")
                     return
-                
-                # Store the raw input data
+
+                # Store the sensor data
                 self.latest_input_data[input_index] = msg
                 self.received_flags[input_index] = True
-                
-                # If we have fresh data from all inputs, run inference and publish
+
+                # if we have a fresh message from all topics, run the inference and publish the outputs
                 if all(self.received_flags):
-                    self._run_inference_and_publish_locked()
-                    # Reset flags for next round
-                    self.received_flags = [False for _ in self.received_flags]
-        
-        return _callback
+                    self._run_inference_and_publish()
+                    # reset the received flags
+                    self.received_flags = [False for _ in range(len(self.received_flags))]
+        return callback
     
-    
-    def _run_inference_and_publish_locked(self) -> None:
+    def _run_inference_and_publish(self) -> None:
         """
-        Run inference on collected input data and publish outputs.
-        This method assumes the mutex is already held.
+        Run inference pipeline on collected input data and publish outputs.
+
+        Pipeline:
+        1. Process raw sensor data (preprocessing, normalization, etc.)
+        2. Run model inference
+        3. Process model outputs into ROS messages
+        4. Publish to action topics
         """
-        if not all(data is not None for data in self.latest_input_data):
-            self.get_logger().warn("Not all input data available for inference")
-            return
         
         try:
-            # Call subclass-specific inference
-            outputs = self.infer(self.latest_input_data)
-            
-            # Validate outputs
-            if len(outputs) != len(self.publishers_list):
-                self.get_logger().error(
-                    f"Inference returned {len(outputs)} outputs, "
-                    f"but expected {len(self.publishers_list)}"
-                )
-                return
-            
-            # Publish outputs
-            for i, (publisher, output_value) in enumerate(zip(self.publishers_list, outputs)):
-                msg_cls = self.publishers_msg_types[i]
-                msg = msg_cls()
-                if hasattr(msg, "data"):
-                    msg.data = output_value
-                else:
-                    if isinstance(output_value, msg_cls):
-                        msg = output_value
-                    else:
-                        raise ValueError(
-                            f"Output at index {i} must be instance of {msg_cls.__name__} or a value for .data")
-                publisher.publish(msg)
-            
+
+            processed_inputs = self._process_sensor_data(self.latest_input_data)
+            model_outputs = self._run_model_inference(processed_inputs)
+            ros_messages =self._process_model_outputs_to_ros_messages(model_outputs)
+            self._publish_outputs(ros_messages)
+
         except Exception as e:
-            self.get_logger().error(f"Inference error: {str(e)}")
-    
-    @abstractmethod
-    def _initialize_inference(self) -> None:
+            self.get_logger().error(f"Error in inference pipeline: {e}")
+            return
+
+    def _publish_outputs(self, ros_messages: List[Any]) -> None:
         """
-        Initialize inference-specific components (e.g., load model, set parameters).
-        Called during __init__ after ROS2 setup is complete.
+        Publish ROS messages to the appropriate topics.
         """
-        pass
-    
-    @abstractmethod
-    def infer(self, input_data: List[Any]) -> List[Any]:
+        if len(ros_messages) != len(self.publishers_list):
+            raise ValueError(f"Number of ROS messages ({len(ros_messages)}) does not match number of publishers ({len(self.publishers_list)})")
+        for publisher, message in zip(self.publishers_list, ros_messages):
+            publisher.publish(message)
+
+    def _process_model_outputs_to_ros_messages(self, model_outputs: Any) -> List[Any]:
         """
-        Run inference on input data and return output data.
+        Process model outputs into ROS messages.
+        """
         
+        ros_messages = []
+        for i , action_value in enumerate(model_outputs):
+            message_type = self.publishers_msg_types[i]
+            message = message_type()
+            message.data = action_value
+            ros_messages.append(message)
+        return ros_messages
+
+    @abstractmethod
+    def _process_sensor_data(self, sensor_data: List[Any]) -> Any:
+        """
+        Process raw sensor data into a format suitable for model inference.
+
         Args:
-            input_data: List of input messages (e.g., Image messages from sensors)
+            sensor_data: List of Ros messages of sensor data (e.g. Image, PointCloud, etc.)
         
         Returns:
-            List of output messages (one per publisher)
+            Processed sensor data suitable for model inference
+        """
+        pass
+
+    @abstractmethod
+    def _run_model_inference(self, processed_inputs: Any) -> Any:
+        """
+        Run model inference on the processed inputs.
+
+        Args:
+            processed_inputs: Processed input data suitable for model inference
+        
+        Returns:
+            Model outputs
         """
         pass
 
