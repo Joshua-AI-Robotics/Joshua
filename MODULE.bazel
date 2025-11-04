@@ -33,26 +33,8 @@ register_toolchains(
 # In BUILD files, use: load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 # Dependencies: @local_deps//:rclcpp, @local_deps//:cpp_std_msgs, etc.
 
-# OPTION 2: Use Source-Built ROS2 (rules_ros2)
-# This builds ROS2 from source using rules_ros2
-# Comment out this section if using OPTION 1.
-# local_path_override(
-#     module_name = "com_github_mvukov_rules_ros2",
-#     path = "external/rules_ros2",
-# )
-# 
-# bazel_dep(name = "com_github_mvukov_rules_ros2")
-# 
-# # Use the rules_ros2 extension to load ROS2 repositories
-# rules_ros2_non_module_deps = use_extension("@com_github_mvukov_rules_ros2//ros2:extensions.bzl", "non_module_deps")
-# use_repo(
-#     rules_ros2_non_module_deps,
-#     "ros2_common_interfaces",
-#     "ros2_launch",
-#     "ros2_launch_ros",
-#     "ros2_rclcpp",
-#     "ros2_rclpy",
-# )
+# ROS2 is configured via system_ros2_rules.bzl using system-installed libraries
+# See system_deps.bzl for library definitions
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(

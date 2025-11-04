@@ -88,40 +88,6 @@ install_git() {
     fi
 }
 
-# Function to sync and update submodules to pinned commits
-update_submodules() {
-    echo -e "${BLUE}Syncing and updating Git submodules...${NC}"
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo -e "${YELLOW}Warning: Not inside a git repository; skipping submodule update${NC}"
-        return 0
-    fi
-
-    # Sync URLs from .gitmodules
-    git submodule sync --recursive || true
-
-    # Try updating; if SSH fails for rules_ros2, fall back to HTTPS
-    if ! git submodule update --init --recursive --jobs 4; then
-        echo -e "${YELLOW}Submodule update failed. Attempting SSH->HTTPS fallback for rules_ros2...${NC}"
-        RULES_URL=$(git config -f .gitmodules --get submodule.external/rules_ros2.url || true)
-        if echo "$RULES_URL" | grep -q "^git@github.com:"; then
-            RULES_PATH=${RULES_URL#git@github.com:}
-            RULES_PATH=${RULES_PATH%.git}
-            HTTPS_URL="https://github.com/${RULES_PATH}.git"
-            git config -f .gitmodules submodule.external/rules_ros2.url "$HTTPS_URL"
-            git submodule sync --recursive || true
-            git submodule update --init --recursive --jobs 4
-        else
-            echo -e "${RED}Submodule update failed, and no SSH URL to convert. Please check network/credentials.${NC}"
-            exit 1
-        fi
-    fi
-
-    # Show pinned commit for rules_ros2 (if present)
-    if [ -d "external/rules_ros2" ]; then
-        echo -e "${GREEN}rules_ros2 pinned at commit:${NC} $(git -C external/rules_ros2 rev-parse --short HEAD)"
-    fi
-}
-
 # Function to install ARM64 cross-compilation tools
 install_arm64_tools() {
     echo -e "${BLUE}Installing ARM64 cross-compilation tools (minimal - LLVM toolchain handles most compilation)...${NC}"
@@ -251,16 +217,15 @@ main() {
 
     # check_ubuntu_version
     update_packages
-    # install_ros2
-    # install_qt6
-    # install_opencv
-    # install_arm64_tools
-    # install_bazel
+    install_ros2
+    install_qt6
+    install_opencv
+    install_arm64_tools
+    install_bazel
     install_git
-    # update_submodules
-    # setup_user_permissions
-    # setup_ros2_environment
-    # install_linting_tools
+    setup_user_permissions
+    setup_ros2_environment
+    install_linting_tools
     ensure_python_tooling
     install_precommit_and_hooks
 

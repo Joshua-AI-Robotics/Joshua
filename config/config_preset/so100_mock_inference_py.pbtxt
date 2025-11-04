@@ -193,7 +193,7 @@ general{
           camera_name: "webcam"
           id: 1
           camera_type: OPENCV
-          comm_type: COMM_INVALID
+          comm{}
           opencv_config {
             id: 0
             width: 640

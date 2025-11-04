@@ -1,8 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
-# Old rules_ros2 (commented out - use system ROS2 instead)
-# load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
-# load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
