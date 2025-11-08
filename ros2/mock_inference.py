@@ -47,7 +47,7 @@ class MockInference(InferenceBase):
             f"Mock inference initialized with noise range: [{self.noise_low}, {self.noise_high}]"
         )
     
-    def infer(self, sensor_data: List[Any]) -> List[float]:
+    def _run_model_inference(self, sensor_data: List[Any]) -> List[float]:
         """
         Generate random actions based on sensor inputs.
         

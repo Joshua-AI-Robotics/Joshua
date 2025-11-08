@@ -19,7 +19,7 @@ class InferenceBase(Node, ABC):
     - State tracking from multiple sensor topics
     - Synchronized action publishing
     
-    Subclasses should implement the `infer()` method to provide
+    Subclasses should implement the `_run_model_inference()` method to provide
     specific inference logic (mock, smolVLA, pi0, etc.)
     """
     
@@ -106,12 +106,11 @@ class InferenceBase(Node, ABC):
         for input_index, subscription_info in enumerate(self._single_model.subscriptions):
             message_type = resolve_message_class_from_enum(subscription_info.ros2_data_type)
             topic = subscription_info.topic
-            subscription = self.create_subscription(message_type, topic, self._make_sensor_callback(input_index), 10)
+            subscription = self.create_subscription(message_type, topic, self._make_subscription_callback(input_index), 10)
             self.subscriptions_list.append(subscription)
             self.get_logger().info(f"Created subscriber: {topic} (type={message_type.__name__})")
-
     
-    def _make_sensor_callback(self, input_index: int):
+    def _make_subscription_callback(self, input_index: int):
         """
         Create a callback function for a specific input topic.
         """
@@ -127,14 +126,13 @@ class InferenceBase(Node, ABC):
                 
                 # If we have fresh data from all inputs, run inference and publish
                 if all(self.received_flags):
-                    self._run_inference_and_publish_locked()
+                    self._run_inference_and_publish()
                     # Reset flags for next round
                     self.received_flags = [False for _ in self.received_flags]
         
         return _callback
     
-    
-    def _run_inference_and_publish_locked(self) -> None:
+    def _run_inference_and_publish(self) -> None:
         """
         Run inference on collected input data and publish outputs.
         This method assumes the mutex is already held.
@@ -145,7 +143,7 @@ class InferenceBase(Node, ABC):
         
         try:
             # Call subclass-specific inference
-            outputs = self.infer(self.latest_input_data)
+            outputs = self._run_model_inference(self.latest_input_data)
             
             # Validate outputs
             if len(outputs) != len(self.publishers_list):
@@ -181,7 +179,7 @@ class InferenceBase(Node, ABC):
         pass
     
     @abstractmethod
-    def infer(self, input_data: List[Any]) -> List[Any]:
+    def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
         """
         Run inference on input data and return output data.
         
