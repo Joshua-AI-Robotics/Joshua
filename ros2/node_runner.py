@@ -1,5 +1,12 @@
 import sys
 
+# Add system site-packages for ROS2 compatibility
+# This allows Bazel's hermetic Python to find system-installed packages
+# like numpy, which is required by ROS2 sensor_msgs
+sys.path.insert(0, '/opt/ros/humble/lib/python3.10/site-packages')
+sys.path.insert(0, '/opt/ros/humble/local/lib/python3.10/dist-packages')
+sys.path.insert(0, '/usr/lib/python3/dist-packages')
+
 import rclpy
 from google.protobuf import text_format
 from rclpy.node import Node

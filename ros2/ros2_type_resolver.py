@@ -1,6 +1,6 @@
 from typing import Any
+import importlib
 
-from rosidl_runtime_py.utilities import get_message
 from ai.proto import ai_model_pb2
 
 
@@ -21,7 +21,7 @@ def resolve_message_class_from_enum(enum_value: int) -> Any:
 
 def _resolve_from_string(ros2_type: str) -> Any:
     try:
-        return get_message(ros2_type)
+        return _import_message_class(ros2_type)
     except Exception as exc:
         raise ValueError(f"Failed to resolve ROS 2 type '{ros2_type}': {exc}")
 
@@ -139,6 +139,39 @@ def _resolve_from_enum(enum_value: int) -> Any:
 
     if normalized not in mapping:
         raise ValueError(f"Unsupported Ros2DataType: {name}")
-    return get_message(mapping[normalized])
+    return _import_message_class(mapping[normalized])
+
+
+def _import_message_class(ros2_type: str) -> Any:
+    """
+    Import a ROS 2 interface class using Python import mechanics.
+    Accepts strings like "package/msg/Type", "package/srv/Type", or "package/action/Type".
+    """
+    parts = ros2_type.split("/")
+    if len(parts) != 3:
+        raise ValueError(
+            f"Invalid ROS 2 type format '{ros2_type}'. Expected 'package/(msg|srv|action)/Type'."
+        )
+
+    package, interface_kind, type_name = parts
+    if interface_kind not in ("msg", "srv", "action"):
+        raise ValueError(
+            f"Invalid interface kind '{interface_kind}' in '{ros2_type}'. Expected 'msg', 'srv', or 'action'."
+        )
+
+    module_name = f"{package}.{interface_kind}"
+    try:
+        module = importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        raise ImportError(
+            f"Could not import module '{module_name}' for '{ros2_type}': {exc}"
+        ) from exc
+
+    try:
+        return getattr(module, type_name)
+    except AttributeError as exc:
+        raise ImportError(
+            f"Type '{type_name}' not found in module '{module_name}' for '{ros2_type}'."
+        ) from exc
 
 
