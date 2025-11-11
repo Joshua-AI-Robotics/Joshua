@@ -22,8 +22,8 @@ class MockInference(InferenceBase):
     
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         # Random noise generator bounds
-        self.noise_low: float = -0.02
-        self.noise_high: float = 0.02
+        self.noise_low: float
+        self.noise_high: float
         
         # Call parent constructor (sets up publishers, subscribers, etc.)
         super().__init__(node_name, node_id, config)
@@ -43,11 +43,13 @@ class MockInference(InferenceBase):
         """
         Initialize mock inference (no model to load).
         """
+        self.noise_low = -0.02
+        self.noise_high = 0.02
         self.get_logger().info(
             f"Mock inference initialized with noise range: [{self.noise_low}, {self.noise_high}]"
         )
     
-    def _run_model_inference(self, sensor_data: List[Any]) -> List[float]:
+    def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
         """
         Generate random actions based on sensor inputs.
         
@@ -57,7 +59,7 @@ class MockInference(InferenceBase):
         3. Add noise to create one action per output
         
         Args:
-            sensor_data: List of sensor messages (currently Image messages)
+            input_data: List of sensor messages (currently Image messages)
         
         Returns:
             List of random action values
@@ -65,7 +67,7 @@ class MockInference(InferenceBase):
         # Generate random values for each sensor
         sensor_values = [
             random.uniform(self.noise_low, self.noise_high) 
-            for _ in sensor_data
+            for _ in input_data
         ]
         
         # Aggregate sensor values (simple average)

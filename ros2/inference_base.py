@@ -110,6 +110,10 @@ class InferenceBase(Node, ABC):
             self.subscriptions_list.append(subscription)
             self.get_logger().info(f"Created subscriber: {topic} (type={message_type.__name__})")
     
+    # TODO: We need to make multiple callback option.
+    # 1) All inputs are ready, run inference and publish (current).
+    # 2) Timing-based inference (e.g., every 100ms, run inference and publish).
+    # 3) Other options? Consider padding to 0 for missing inputs.
     def _make_subscription_callback(self, input_index: int):
         """
         Create a callback function for a specific input topic.
@@ -124,44 +128,40 @@ class InferenceBase(Node, ABC):
                 self.latest_input_data[input_index] = msg
                 self.received_flags[input_index] = True
                 
-                # If we have fresh data from all inputs, run inference and publish
+                # If we have fresh data from all inputs, take a snapshot and reset flags
+                should_run_inference = False
+                input_snapshot = None
                 if all(self.received_flags):
-                    self._run_inference_and_publish()
+                    input_snapshot = list(self.latest_input_data)
                     # Reset flags for next round
                     self.received_flags = [False for _ in self.received_flags]
+                    should_run_inference = True
+            
+            # Run inference and publish outside the lock to avoid blocking other callbacks
+            if should_run_inference and input_snapshot is not None:
+                outputs = self._run_model_inference(input_snapshot)
+                self._publish_output(outputs)
         
         return _callback
     
-    def _run_inference_and_publish(self) -> None:
-        """
-        Run inference on collected input data and publish outputs.
-        This method assumes the mutex is already held.
-        """
-        if not all(data is not None for data in self.latest_input_data):
-            self.get_logger().warn("Not all input data available for inference")
-            return
-        
-        try:
-            # Call subclass-specific inference
-            outputs = self._run_model_inference(self.latest_input_data)
-            
-            # Validate outputs
-            if len(outputs) != len(self.publishers_list):
-                self.get_logger().error(
-                    f"Inference returned {len(outputs)} outputs, "
+    def _publish_output(self, output_values: List[Any]) -> None:
+        """Publish the messages from publishers."""
+        if len(output_values) != len(self.publishers_list):
+            self.get_logger().error(
+                    f"Inference returned {len(output_values)} outputs, "
                     f"but expected {len(self.publishers_list)}"
-                )
-                return
-            
-            # Publish outputs
-            for i, (publisher, output_value) in enumerate(zip(self.publishers_list, outputs)):
+            )
+            return
+
+        try:
+            for i, (publisher, value) in enumerate(zip(self.publishers_list, output_values)):
                 msg_cls = self.publishers_msg_types[i]
                 msg = msg_cls()
                 if hasattr(msg, "data"):
-                    msg.data = output_value
+                    msg.data = value
                 else:
-                    if isinstance(output_value, msg_cls):
-                        msg = output_value
+                    if isinstance(value, msg_cls):
+                        msg = value
                     else:
                         raise ValueError(
                             f"Output at index {i} must be instance of {msg_cls.__name__} or a value for .data")
@@ -169,6 +169,7 @@ class InferenceBase(Node, ABC):
             
         except Exception as e:
             self.get_logger().error(f"Inference error: {str(e)}")
+
     
     @abstractmethod
     def _initialize_inference(self) -> None:
