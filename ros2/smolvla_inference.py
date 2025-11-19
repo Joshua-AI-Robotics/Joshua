@@ -3,7 +3,6 @@ from typing import List, Any, Optional
 import numpy as np
 import torch
 from PIL import Image
-from cv_bridge import CvBridge
 
 import rclpy
 from sensor_msgs.msg import Image as ImageMsg
@@ -13,6 +12,7 @@ from config.proto import config_pb2
 
 from ros2 import node_runner as node_runner_py
 from ros2.inference_base import InferenceBase
+from ros2.image_converter import ImageConverter
 
 
 class SmolVLAInference(InferenceBase):
@@ -32,14 +32,16 @@ class SmolVLAInference(InferenceBase):
     TASK_DESCRIPTION = "Pick up the object and place it in the container."
 
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
-        super().__init__(node_name, node_id, config)
-
+        # Initialize attributes BEFORE calling super().__init__() because the parent
+        # will call _initialize_inference() which needs these attributes
         self.model = None
         self.preprocessor = None
         self.postprocessor = None
         self.device = None
-        self.bridge = CvBridge() # For converting ROS images to OpenCV/PIL format
+        self.bridge = ImageConverter() # For converting ROS images to OpenCV/PIL format
         self.task_description = self.TASK_DESCRIPTION
+        
+        super().__init__(node_name, node_id, config)
     
 
     def _validate_config(self) -> bool:
@@ -70,23 +72,27 @@ class SmolVLAInference(InferenceBase):
         3. Configuring the device (CPU/CUDA)
         """
         try:
-            from lerobot.policies.smolvla import SmolVLAPolicy
+            from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
             from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
             from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
 
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device("cpu")
             self.get_logger().info(f"Using device: {self.device}")
 
             model_name = getattr(self._single_model, 'model_name', 'HuggingFaceM4/SmolVLM-Instruct')
-            pretrained_model_path = getattr(self._single_model, 'pretrained_path', None)
+            pretrained_model_path = getattr(self._single_model, 'pretrained_model_path', None)
 
             self.get_logger().info(f"Loading SmolVLA from: {pretrained_model_path}")
-            smolvla_config = SmolVLAConfig.from_pretrained(pretrained_model_path)
-            smolvla_config.device = str(self.device)
-
-            self.preprocessor, self.postprocessor = make_smolvla_pre_post_processors(config=smolvla_config)
-
-            self.model = SmolVLAPolicy.from_pretrained(pretrained_model_path, config=smolvla_config)
+            
+            # Load model directly - it will load its config internally and handle the 'type' field correctly
+            self.model = SmolVLAPolicy.from_pretrained(pretrained_model_path)
+            
+            # Update device in the loaded config
+            self.model.config.device = str(self.device)
+            
+            # Create preprocessors/postprocessors from the model's config
+            self.preprocessor, self.postprocessor = make_smolvla_pre_post_processors(config=self.model.config)
 
             self.model.to(self.device)
             self.model.eval()
@@ -119,22 +125,23 @@ class SmolVLAInference(InferenceBase):
                 self.get_logger().warn(f"Input {i} is not an Image message, skipping")
                 continue
             
-            # Convert ROS Image to OpenCV format (BGR)
+            # Convert ROS Image to OpenCV format (RGB)
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
-
-            # Convert to PIL Image
-            pil_image = Image.fromarray(cv_image)
-            images.append(pil_image)
+            cv_image_chw = np.transpose(cv_image, (2, 0, 1))
+            cv_image_batch = np.expand_dims(cv_image_chw, axis=0)
+            
+            # SmolVLA preprocessor expects numpy arrays (H, W, C) in RGB format
+            images.append(cv_image_batch)
 
         if len(images) == 0:
             self.get_logger().error("No valid images received for inference")
             return [0.0] * len(self.publishers_list)
 
         # Prepare input dictionary for SmolVLA
-        # Use observation.image_0, observation.image_1, etc.
+        # SmolVLA expects keys like: observation.images.camera1, observation.images.camera2, etc. (1-indexed)
         observation = {}
         for i, img in enumerate(images):
-            camera_key = f"observation.image_{i}"
+            camera_key = f"observation.images.camera{i+1}"
             observation[camera_key] = img
 
         task = self.task_description
@@ -146,7 +153,15 @@ class SmolVLAInference(InferenceBase):
             "task": task,
         }
 
-        processed_batch = self.preprocessor(batch)
+        self.get_logger().info(f"Batch keys before preprocessing: {list(batch.keys())}")
+        
+        try:
+            processed_batch = self.preprocessor(batch)
+        except Exception as e:
+            self.get_logger().error(f"Preprocessing failed: {e}")
+            self.get_logger().error(f"Batch keys: {list(batch.keys())}")
+            self.get_logger().error(f"Image keys in batch: {[k for k in batch.keys() if 'image' in k.lower()]}")
+            raise
         
         with torch.no_grad():
             output = self.model(processed_batch)

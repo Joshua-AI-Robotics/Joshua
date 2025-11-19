@@ -1,0 +1,15 @@
+# Development and Testing Dependencies
+
+# Testing frameworks
+pytest==8.3.4
+pytest-mock==3.14.0
+pytest-cov==6.0.0
+
+# Code quality
+black==24.10.0
+flake8==7.1.1
+mypy==1.13.0
+
+# Documentation
+sphinx==8.1.3
+

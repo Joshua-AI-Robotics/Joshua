@@ -16,12 +16,70 @@
 
 namespace config::config_util {
 
-/// @brief Loads a config::Config from a text-format protobuf file.
+/// @brief Extracts the base config path from config content.
+/// @param config_content The config file content.
+/// @param config_dir The directory of the current config file.
+/// @return Path to base config if found, empty string otherwise.
+inline std::string ExtractBaseConfig(const std::string& config_content, 
+                                     const std::string& config_dir) {
+  // Look for pattern: base: "filename.pbtxt"
+  size_t base_pos = config_content.find("base:");
+  if (base_pos == std::string::npos) {
+    return "";
+  }
+  
+  // Find the opening quote
+  size_t quote_start = config_content.find("\"", base_pos);
+  if (quote_start == std::string::npos) {
+    return "";
+  }
+  
+  // Find the closing quote
+  size_t quote_end = config_content.find("\"", quote_start + 1);
+  if (quote_end == std::string::npos) {
+    return "";
+  }
+  
+  std::string base_filename = config_content.substr(quote_start + 1, 
+                                                     quote_end - quote_start - 1);
+  
+  // Construct full path relative to config directory
+  return config_dir + "/" + base_filename;
+}
+
+/// @brief Removes the base: line from config content.
+/// @param config_content The config file content.
+/// @return Config content with base: line removed.
+inline std::string RemoveBaseLine(const std::string& config_content) {
+  size_t base_pos = config_content.find("base:");
+  if (base_pos == std::string::npos) {
+    return config_content;
+  }
+  
+  // Find the end of the line
+  size_t line_end = config_content.find("\n", base_pos);
+  if (line_end == std::string::npos) {
+    // No newline found, remove from base_pos to end
+    return config_content.substr(0, base_pos);
+  }
+  
+  // Remove the line including the newline
+  std::string result = config_content.substr(0, base_pos);
+  if (line_end + 1 < config_content.length()) {
+    result += config_content.substr(line_end + 1);
+  }
+  
+  return result;
+}
+
+/// @brief Loads a config::Config from a text-format protobuf file with base config support.
 /// @param config_path Path to the config file.
 /// @return Parsed config::Config object.
 /// @throws std::runtime_error if file cannot be opened or parsed.
 inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path) {
   config::Config config;
+  
+  // Read the config file
   std::ifstream input(config_path);
   if (!input) {
     LOG(ERROR) << "Failed to open config file: " << config_path;
@@ -30,11 +88,42 @@ inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path)
   }
   std::string config_content((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-  if (!google::protobuf::TextFormat::ParseFromString(config_content, &config)) {
+  input.close();
+  
+  // Extract config directory for relative base path resolution
+  size_t last_slash = config_path.find_last_of("/\\");
+  std::string config_dir = (last_slash != std::string::npos) 
+                           ? config_path.substr(0, last_slash) 
+                           : ".";
+  
+  // Check for base config
+  std::string base_config_path = ExtractBaseConfig(config_content, config_dir);
+  if (!base_config_path.empty()) {
+    LOG(INFO) << "Loading base config: " << base_config_path;
+    
+    // Load base config recursively (supports nested base configs)
+    auto base_result = LoadConfig(base_config_path);
+    if (!base_result.ok()) {
+      LOG(ERROR) << "Failed to load base config: " << base_config_path;
+      return base_result;
+    }
+    config = *base_result;
+    
+    // Remove base: line from current config content
+    config_content = RemoveBaseLine(config_content);
+  }
+  
+  // Parse current config and merge with base
+  config::Config override_config;
+  if (!google::protobuf::TextFormat::ParseFromString(config_content, &override_config)) {
     LOG(ERROR) << "Failed to parse config from file: " << config_path;
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Failed to parse config from file: " + config_path);
   }
+  
+  // Merge override config into base config
+  config.MergeFrom(override_config);
+  
   return config;
 }
 

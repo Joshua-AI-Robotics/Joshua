@@ -1,0 +1,71 @@
+general{
+  operation_mode: MODE_INFERENCE
+}
+
+robot {
+  name: "so100"
+  id: 1
+  robot_type: MANIPULATOR_ARM
+
+  perceptions {
+    single_perceptions {
+      node_id: 2
+      publish_topic: "camera_1"
+      perception_type: CAMERA
+      publish_rate_hz: 30
+      camera {
+        camera_name: "webcam"
+        id: 1
+        camera_type: OPENCV
+        comm{}
+        opencv_config {
+          id: 1  # Changed from 0 to 1 (video1 exists, video0 doesn't)
+          width: 640
+          height: 480
+          fps: 30
+        }
+      }
+    }
+  }
+}
+
+ai {
+  models {
+    single_model {
+      policy_name: "smolvla_policy"
+      pretrained_model_path: "lerobot/smolvla_base"
+      node_id: 3
+
+      subscriptions {
+        ros2_data_type: IMAGE
+        topic: "camera_1"
+      }
+
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_1"
+      }
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_2"
+      }
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_3"
+      }
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_4"
+      }
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_5"
+      }
+      pubishers {
+        ros2_data_type: FLOAT32
+        topic: "smolvla_action_6"
+      }
+    }
+  }
+}
+

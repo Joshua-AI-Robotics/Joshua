@@ -195,7 +195,7 @@ robot {
         camera_type: OPENCV
         comm{}
         opencv_config {
-          id: 0
+          id: 1  # Changed from 0 to 1 (video1 exists, video0 doesn't)
           width: 640
           height: 480
           fps: 30

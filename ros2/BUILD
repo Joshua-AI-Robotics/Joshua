@@ -11,6 +11,7 @@ ROS2_NODE_TARGETS = [
     ":encoder_publisher",
     ":actuator_subscriber",
     ":mock_inference",
+    ":inference",
     ":operational_limit_calibration",
 ]
 
@@ -65,6 +66,18 @@ py_library(
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced
     # Ensure: source /opt/ros/humble/setup.bash before running
+)
+
+py_library(
+    name = "image_converter",
+    srcs = [
+        "image_converter.py",
+    ],
+    deps = [
+        requirement("numpy"),
+    ],
+    visibility = ["//visibility:public"],
+    # Note: sensor_msgs is provided by system Python when ROS2 is sourced
 )
 
 ros2_cpp_binary(
@@ -160,6 +173,35 @@ ros2_py_binary(
     ],
 )
 
+ros2_py_binary(
+    name = "inference",
+    srcs = [
+        "smolvla_inference.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "smolvla_inference.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2:inference_base",
+        ":image_converter",
+        requirement("numpy"),
+        requirement("scipy"),
+        requirement("protobuf"),
+        requirement("torch"),
+        requirement("transformers"),
+        requirement("lerobot"),
+        requirement("draccus"),
+        requirement("num2words"),
+        requirement("pillow"),
+        requirement("opencv-python"),
+        requirement("sympy"),
+    ],
+)
+
 ros2_cpp_binary(
     name = "operational_limit_calibration",
     srcs = ["operational_limit_calibration.cc"],
@@ -173,6 +215,20 @@ ros2_cpp_binary(
         "@local_deps//:cpp_std_msgs",
         "@local_deps//:rclcpp",
     ],
+)
+
+# Unit tests
+py_test(
+    name = "test_smolvla_inference",
+    srcs = ["test_smolvla_inference.py"],
+    deps = [
+        "//config/proto:config_py_proto",
+        "//ai/proto:ai_model_py_proto",
+        requirement("protobuf"),
+        requirement("numpy"),
+    ],
+    size = "small",
+    python_version = "PY3",
 )
 
 genrule(
