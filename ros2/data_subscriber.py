@@ -9,7 +9,6 @@ from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
 from ai.train.data_store import DataStore
 
-
 class DataSubscriber(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
@@ -18,6 +17,7 @@ class DataSubscriber(Node):
         self.data_store = DataStore(data_store_config=config.ai.data_store)
 
         # Subscribers
+        # TODO: Parse with proto config.
         self.subscribers = []
         self.topics = ['sample_topic']
 
@@ -27,7 +27,7 @@ class DataSubscriber(Node):
                 topic,
                 self.subscribe_callback,
                 10))
-            self.get_logger().info(f'Subscribing topic: {topic}')
+            self.get_logger().info(f'Subscribing to topics: {self.topics}')
         
         self.message_count = 0
 
@@ -46,16 +46,14 @@ class DataSubscriber(Node):
         # Add to data store (real-time storage)
         self.data_store.add_data(msg_data)
         
-        self.get_logger().info(
-            f'Received: {msg.data:.4f} | Total stored: {len(self.data_store)}'
-        )
+        self.get_logger().info(f'Received: {msg.data:.4f} | Total stored: {len(self.data_store)}')
     
     def shutdown(self):
         """Save data on shutdown."""
         if len(self.data_store) > 0:
             self.get_logger().info('Saving final dataset...')
-            self.data_store.save_to_disk(self.save_path)
-            self.get_logger().info(f'Saved {len(self.data_store)} messages to {self.save_path}')
+            self.data_store.save_to_disk(self.data_store.save_path)
+            self.get_logger().info(f'Saved {len(self.data_store)} messages to {self.data_store.save_path}')
 
 
 

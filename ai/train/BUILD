@@ -7,7 +7,8 @@ py_library(
     name = "data_store",
     srcs = ["data_store.py"],
     deps = [
-        requirement("datasets"),
         "//ai/proto:data_store_py_proto",
+        requirement("datasets"),
+        requirement("glog"),
     ],
 )

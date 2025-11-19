@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List
 from datasets import Dataset
 from datetime import datetime
+import glog
 
 from ai.proto import data_store_pb2
 
@@ -19,7 +20,20 @@ class DataStore:
         """
         self.data = []
         self.auto_save_interval = data_store_config.auto_save_interval
-        self.save_path = data_store_config.store_path
+
+        if data_store_config.data_store_mode == data_store_pb2.DataStoreMode.LOCAL_FILE:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            path = os.path.join(data_store_config.store_path, f"dataset_{timestamp}")
+            os.makedirs(path, exist_ok=True)
+            self.save_path = path
+            glog.info(f"DataStore initialized with LOCAL_FILE mode\nlocal path: {self.save_path}")
+            
+        elif data_store_config.data_store_mode == data_store_pb2.DataStoreMode.CLOUD_STORAGE:
+            self.save_path = data_store_config.store_path
+            glog.info(f"DataStore initialized with CLOUD_STORAGE mode\ncloud path: {self.save_path}")
+        else:
+            glog.error(f"Invalid data store mode: {data_store_config.data_store_mode}")
+            raise ValueError(f"Invalid data store mode: {data_store_config.data_store_mode}")
     
     def add_data(self, msg_data: Dict[str, Any], timestamp: float = None):
         """Add a ROS2 message to the store in real-time.
@@ -63,7 +77,7 @@ class DataStore:
             path: Directory path where to save the dataset.
         """
         if not self.data:
-            print("No data to save.")
+            glog.warning("No data to save.")
             return
         
         # Create directory if it doesn't exist
@@ -76,7 +90,7 @@ class DataStore:
         # Store save path for auto-save
         self.save_path = path
         
-        print(f"Saved {len(self.data)} entries to {path}")
+        glog.info(f"Saved {len(self.data)} entries to {path}")
     
     def clear(self):
         """Clear all stored data."""

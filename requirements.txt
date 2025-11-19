@@ -13,3 +13,4 @@ Pillow==11.3.0
 pandas<2.0.0
 pyarrow
 datasets>=2.14.0
+glog
