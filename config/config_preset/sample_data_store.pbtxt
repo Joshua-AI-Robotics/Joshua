@@ -1,0 +1,12 @@
+general{
+  operation_mode: MODE_DATA_STORE
+}
+
+ai {
+  data_store {
+    store_path: "/tmp/Joshua/data/sample_recordings"
+    data_store_mode: LOCAL_FILE
+    auto_save_interval: 10
+  }
+}
+

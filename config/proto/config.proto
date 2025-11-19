@@ -15,6 +15,7 @@ message General {
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
     MODE_MOCK_INFERENCE = 6;
+    MODE_DATA_STORE = 7;
   }
   OperationMode operation_mode = 1;
 }

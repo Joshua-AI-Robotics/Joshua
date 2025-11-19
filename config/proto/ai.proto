@@ -3,7 +3,9 @@ syntax = "proto3";
 package config;
 
 import "ai/proto/ai_model.proto";
+import "ai/proto/data_store.proto";
 
 message Ai {
   ai.model.Model models = 1;
+  ai.data_store.DataStore data_store = 2;
 }

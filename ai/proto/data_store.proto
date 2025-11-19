@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package ai.data_store;
+
+enum DataType {
+  DATA_TYPE_INVALID = 0;
+  HUGGING_FACE_DATASET = 1;
+}
+
+enum DataStoreMode {
+  DATA_STORE_MODE_INVALID = 0;
+  LOCAL_FILE = 1;
+  CLOUD_STORAGE = 2;
+}
+
+message DataStore {
+  string store_path = 1;
+  DataStoreMode data_store_mode = 2;
+  int32 auto_save_interval = 3;
+
+  // TODO: Add topics and data types to store.
+}

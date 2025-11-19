@@ -5,11 +5,8 @@ import time
 from rclpy.node import Node
 from std_msgs.msg import Float32
 
-# Protobuf generated modules
 from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
-
-# Import DataStore
 from ai.train.data_store import DataStore
 
 
@@ -18,16 +15,7 @@ class DataSubscriber(Node):
         super().__init__(node_name)
 
         # Initialize DataStore with auto-save every 10 messages
-        self.data_store = DataStore(auto_save_interval=10)
-        
-        # Set save path from config or use default
-        save_dir = os.path.expanduser("/tmp/Joshua/data/sample_recordings")
-        os.makedirs(save_dir, exist_ok=True)
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        self.save_path = os.path.join(save_dir, f"dataset_{timestamp}")
-        self.data_store.save_path = self.save_path
-        
-        self.get_logger().info(f'Data will be saved to: {self.save_path}')
+        self.data_store = DataStore(data_store_config=config.ai.data_store)
 
         # Subscribers
         self.subscribers = []
@@ -47,6 +35,7 @@ class DataSubscriber(Node):
         """Callback to handle incoming ROS2 messages and store them."""
         self.message_count += 1
         
+        # TODO: Parse with proto config.
         # Convert ROS2 message to dictionary
         msg_data = {
             "topic": "sample_topic",
@@ -73,6 +62,10 @@ class DataSubscriber(Node):
 def main(argv=None):
     return node_runner_py.run_node(DataSubscriber, logger_name="data_subscriber", argv=argv)
 
-
+# How to test:
+# On terminal, run:
+# ros2 topic pub -r 1 /sample_topic std_msgs/msg/Float32 "{data: 3.14}"
+# On separate terminal, run:
+# bazel run ros2:data_subscriber -- test 1 config/config_preset/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())

@@ -8,8 +8,19 @@ proto_library(
     srcs = ["ai_model.proto"],
 )
 
+proto_library(
+    name = "data_store_proto",
+    srcs = ["data_store.proto"],
+)
+
 py_proto_library(
     name = "ai_model_py_proto",
     visibility = ["//visibility:public"],
     deps = [":ai_model_proto"],
+)
+
+py_proto_library(
+    name = "data_store_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":data_store_proto"],
 )

@@ -6,19 +6,20 @@ from typing import Any, Dict, List
 from datasets import Dataset
 from datetime import datetime
 
+from ai.proto import data_store_pb2
 
 class DataStore:
     """Real-time data store for ROS2 messages with HuggingFace dataset format."""
     
-    def __init__(self, auto_save_interval: int = 100):
+    def __init__(self, data_store_config: data_store_pb2.DataStore):
         """Initialize the data store.
         
         Args:
-            auto_save_interval: Number of messages to collect before auto-saving (0 to disable).
+            data_store_config: data_store.proto.
         """
         self.data = []
-        self.auto_save_interval = auto_save_interval
-        self.save_path = None
+        self.auto_save_interval = data_store_config.auto_save_interval
+        self.save_path = data_store_config.store_path
     
     def add_data(self, msg_data: Dict[str, Any], timestamp: float = None):
         """Add a ROS2 message to the store in real-time.

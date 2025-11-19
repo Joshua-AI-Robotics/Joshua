@@ -8,5 +8,6 @@ py_library(
     srcs = ["data_store.py"],
     deps = [
         requirement("datasets"),
+        "//ai/proto:data_store_py_proto",
     ],
 )
