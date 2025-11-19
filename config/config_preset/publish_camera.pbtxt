@@ -17,7 +17,7 @@ robot {
         camera_name: "webcam"
         id: 1
         camera_type: OPENCV
-        comm {}
+        comm{}
         opencv_config {
           id: 0
           width: 640

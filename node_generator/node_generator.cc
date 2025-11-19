@@ -33,14 +33,13 @@ constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 
 // Operation modes.
-// Last Added: mock_inference_py.
+// Last Added: mock_inference.
 constexpr auto kTeleoperate = "teleoperate";
 constexpr auto kInference = "inference";
 constexpr auto kTraining = "training";
 constexpr auto kCalibration = "calibration";
 constexpr auto kTest = "test";
-constexpr auto kMockInference = "mock_inference";  // TODO: Remove this.
-constexpr auto kMockInferencePy = "mock_inference_py";
+constexpr auto kMockInference = "mock_inference";
 
 // Centralized mappings for easy future extension.
 
@@ -58,15 +57,14 @@ const std::unordered_map<robot::action::ActionType, const char*> kActionToNodeTy
 };
 
 // <operation_mode, node_type>
-// Last Added: kMockInferencePy.
+// Last Added: kMockInference.
 const std::unordered_map<config::General::OperationMode, const char*> kOperationModeToNodeType = {
     {config::General::MODE_TELEOPERATE, kTeleoperate},
     {config::General::MODE_INFERENCE, kInference},  // Not yet implemented.
     {config::General::MODE_TRAINING, kTraining},    // Not yet implemented.
     {config::General::MODE_CALIBRATION, kCalibration},
     {config::General::MODE_TEST, kTest},
-    {config::General::MODE_MOCK_INFERENCE, kMockInference},       // TODO: Remove this.
-    {config::General::MODE_MOCK_INFERENCE_PY, kMockInferencePy},  // TODO: Remove this.
+    {config::General::MODE_MOCK_INFERENCE, kMockInference},
 };
 
 // <calibration_mode, node_type>
@@ -254,7 +252,9 @@ absl::Status NodeGenerator::Initialize() {
 
   auto robot_config = config_.robot();
   LOG(INFO) << "Robot Name: " << robot_config.name();
-  LOG(INFO) << "AI Policy Name: " << config_.ai().policy_name();
+  if (config_.has_ai() && config_.ai().models().single_model_size() > 0) {
+    LOG(INFO) << "AI Policy Name: " << config_.ai().models().single_model(0).policy_name();
+  }
   LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
 
   if (!identify_node_types().ok()) {
@@ -289,11 +289,15 @@ absl::Status NodeGenerator::identify_node_types() {
     }
   }
 
-  // AI -> add node type
+  // AI -> add node type(s) per SingleModel
   if (config_.has_ai()) {
     auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
     if (it != kOperationModeToNodeType.end()) {
-      identified_nodes_[config_.ai().node_id()] = it->second;
+      const char* node_type = it->second;
+      const auto& models = config_.ai().models();
+      for (const auto& single_model : models.single_model()) {
+        identified_nodes_[single_model.node_id()] = node_type;
+      }
     }
   }
 
@@ -619,13 +623,18 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     }
   }
 
-  // Get publish and subscribe topics for AI node.
-  if (config_.ai().node_id() == node_id) {
-    for (const auto& pub_topic : config_.ai().publish_topics()) {
-      publish_topics.push_back(pub_topic);
-    }
-    for (const auto& sub_topic : config_.ai().subscribe_topics()) {
-      subscribe_topics.push_back(sub_topic);
+  // Get publish and subscribe topics for AI node (match SingleModel by node_id).
+  if (config_.has_ai()) {
+    const auto& models = config_.ai().models();
+    for (const auto& single_model : models.single_model()) {
+      if (single_model.node_id() == node_id) {
+        for (const auto& pub : single_model.pubishers()) {
+          publish_topics.push_back(pub.topic());
+        }
+        for (const auto& sub : single_model.subscriptions()) {
+          subscribe_topics.push_back(sub.topic());
+        }
+      }
     }
   }
 

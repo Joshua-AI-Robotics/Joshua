@@ -1,86 +1,89 @@
 import random
 import sys
-import threading
+from typing import List, Any
 
 import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Image
-from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from config.proto import config_pb2
+
 from ros2 import node_runner as node_runner_py
+from ros2.inference_base import InferenceBase
 
 
-class MockInferencePy(Node):
+class MockInference(InferenceBase):
+    """
+    Mock inference node that generates random actions.
+    
+    This is a simple implementation for testing the inference pipeline
+    without requiring a trained model. It generates random noise-based
+    actions in response to sensor inputs.
+    """
+    
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
-        super().__init__(node_name)
-
-        if config.general.operation_mode != config_pb2.General.OperationMode.MODE_MOCK_INFERENCE_PY:
-            self.get_logger().error("Mock inference node is only supported in mock inference mode.")
-            return
-
-        # Initialize publishers
-        self.action_publishers: list[rclpy.publisher.Publisher] = []
-        for i in range(len(config.ai.publish_topics)):
-            topic = config.ai.publish_topics[i]
-            self.action_publishers.append(self.create_publisher(Float32, topic, 10))
-
-        # Initialize state tracking
-        self.latest_states: list[float] = [0.0 for _ in range(len(config.ai.subscribe_topics))]
-        self.received: list[bool] = [False for _ in range(len(config.ai.subscribe_topics))]
-
         # Random noise generator bounds
-        self.noise_low: float = -0.02
-        self.noise_high: float = 0.02
-
-        # Subscriptions
-        self.state_subscriptions = []
-        for i in range(len(config.ai.subscribe_topics)):
-            topic = config.ai.subscribe_topics[i]
-            # Note: message type is currently hardcoded to Image
-            self.state_subscriptions.append(
-                self.create_subscription(Image, topic, self._make_image_cb(i), 10)
+        self.noise_low: float
+        self.noise_high: float
+        
+        # Call parent constructor (sets up publishers, subscribers, etc.)
+        super().__init__(node_name, node_id, config)
+    
+    def _validate_config(self) -> bool:
+        """
+        Validate that the operation mode is set correctly for mock inference.
+        """
+        if self.config.general.operation_mode != config_pb2.General.OperationMode.MODE_MOCK_INFERENCE:
+            self.get_logger().error(
+                "Mock inference node requires MODE_MOCK_INFERENCE operation mode."
             )
-            self.get_logger().info(f"Subscribed to image state topic: {topic}")
-
-        self._mutex = threading.Lock()
+            return False
+        return True
+    
+    def _initialize_inference(self) -> None:
+        """
+        Initialize mock inference (no model to load).
+        """
+        self.noise_low = -0.02
+        self.noise_high = 0.02
         self.get_logger().info(
-            "Mock inference node started ("
-            f"{len(config.ai.publish_topics)} actions, "
-            f"{len(config.ai.subscribe_topics)} states)."
+            f"Mock inference initialized with noise range: [{self.noise_low}, {self.noise_high}]"
         )
-
-    def _make_image_cb(self, state_index: int):
-        def _cb(msg: Image):
-            del msg  # unused
-            with self._mutex:
-                if state_index >= len(self.latest_states):
-                    self.get_logger().warn(f"Received state index out of range: {state_index}")
-                    return
-                # Generate a random state value
-                self.latest_states[state_index] = random.uniform(self.noise_low, self.noise_high)
-                self.received[state_index] = True
-
-                # If we have a fresh message from all topics, publish once
-                if all(self.received):
-                    self._publish_actions_locked()
-                    self.received = [False for _ in self.received]
-
-        return _cb
-
-    def _publish_actions_locked(self) -> None:
-        if not self.latest_states:
-            return
-        aggregated_state = sum(self.latest_states) / max(1, len(self.latest_states))
-        for publisher in self.action_publishers:
-            msg = Float32()
-            msg.data = aggregated_state + random.uniform(self.noise_low, self.noise_high)
-            publisher.publish(msg)
+    
+    def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
+        """
+        Generate random actions based on sensor inputs.
+        
+        For mock inference, we:
+        1. Generate a random value for each sensor input
+        2. Aggregate them (simple average)
+        3. Add noise to create one action per output
+        
+        Args:
+            input_data: List of sensor messages (currently Image messages)
+        
+        Returns:
+            List of random action values
+        """
+        # Generate random values for each sensor
+        sensor_values = [
+            random.uniform(self.noise_low, self.noise_high) 
+            for _ in input_data
+        ]
+        
+        # Aggregate sensor values (simple average)
+        aggregated = sum(sensor_values) / max(1, len(sensor_values))
+        
+        # Generate one action per publisher
+        actions = [
+            aggregated + random.uniform(self.noise_low, self.noise_high)
+            for _ in self.publishers_list
+        ]
+        
+        return actions
 
 
 def main(argv=None):
-    return node_runner_py.run_node(MockInferencePy, logger_name="mock_inference_py", argv=argv)
+    return node_runner_py.run_node(MockInference, logger_name="mock_inference", argv=argv)
 
 
 if __name__ == "__main__":

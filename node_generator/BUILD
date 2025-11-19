@@ -22,7 +22,6 @@ cc_binary(
         "//ros2:camera_publisher",
         "//ros2:encoder_publisher",
         "//ros2:mock_inference",
-        "//ros2:mock_inference_py",
         "//ros2:operational_limit_calibration",
     ],
     visibility = ["//visibility:public"],
@@ -40,13 +39,9 @@ genrule(
     cmd = """
 cat > $(location fix_symlinks.sh) << 'EOF'
 #!/bin/bash
-# Fix symlinks for ROS 2 middleware libraries for any present runfiles
-shopt -s nullglob
-for rf in *.runfiles; do
-  if [ -d "$$rf/_main" ]; then
-    ln -sf "../com_github_mvukov_rules_ros2++non_module_deps+ros2_rmw_cyclonedds" "$$rf/_main/com_github_mvukov_rules_ros2++non_module_deps+ros2_rmw_cyclonedds" 2>/dev/null || true
-  fi
-done
+# Placeholder script - no symlink fixes needed for system ROS2
+# (Previously used for rules_ros2 middleware symlinks)
+exit 0
 EOF
 chmod +x $(location fix_symlinks.sh)
 """,

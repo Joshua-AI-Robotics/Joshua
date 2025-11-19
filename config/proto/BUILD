@@ -27,6 +27,9 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    deps = [
+        "//ai/proto:ai_model_proto",
+    ],
     visibility = ["//visibility:public"],
 )
 

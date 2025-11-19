@@ -1,5 +1,5 @@
-load("@com_github_mvukov_rules_ros2//ros2:cc_defs.bzl", "ros2_cpp_binary")
-load("@com_github_mvukov_rules_ros2//ros2:py_defs.bzl", "ros2_py_binary")
+# System ROS2 rules (using system-installed ROS2 libraries)
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
@@ -11,7 +11,6 @@ ROS2_NODE_TARGETS = [
     ":encoder_publisher",
     ":actuator_subscriber",
     ":mock_inference",
-    ":mock_inference_py",
     ":operational_limit_calibration",
 ]
 
@@ -24,8 +23,8 @@ cc_library(
     deps = [
         "//config:config_utils",
         "//config/proto:config_cc_proto",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -34,12 +33,38 @@ py_library(
     srcs = [
         "node_runner.py",
     ],
-    visibility = ["//visibility:public"],
     deps = [
         "//config/proto:config_py_proto",
-        "@ros2_rclpy//:rclpy",
+        # Note: rclpy is available via system Python installation
+        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
         requirement("protobuf"),
     ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "ros2_type_resolver",
+    srcs = [
+        "ros2_type_resolver.py",
+    ],
+    deps = [
+        "//ai/proto:ai_model_py_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "inference_base",
+    srcs = [
+        "inference_base.py",
+    ],
+    deps = [
+        "//config/proto:config_py_proto",
+        "//ros2:ros2_type_resolver",
+    ],
+    visibility = ["//visibility:public"],
+    # Note: rclpy is provided by system Python when ROS2 is sourced
+    # Ensure: source /opt/ros/humble/setup.bash before running
 )
 
 ros2_cpp_binary(
@@ -54,9 +79,9 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_sensor_msgs",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -73,8 +98,8 @@ ros2_cpp_binary(
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
@@ -85,9 +110,9 @@ ros2_cpp_binary(
         "//config/config_preset:config_presets",
     ],
     deps = [
-        "@ros2_rclcpp//:rclcpp",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
+        "@local_deps//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:cpp_sensor_msgs",
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
@@ -110,32 +135,14 @@ ros2_cpp_binary(
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_common_interfaces//:cpp_std_srvs",
-        "@ros2_rclcpp//:rclcpp",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "mock_inference",
-    srcs = ["mock_inference.cc"],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
-    deps = [
-        "//config/proto:ai_cc_proto",
-        "//config/proto:config_cc_proto",
-        "//config/proto:robot_cc_proto",
-        "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_sensor_msgs",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:cpp_std_srvs",
+        "@local_deps//:rclcpp",
     ],
 )
 
 ros2_py_binary(
-    name = "mock_inference_py",
+    name = "mock_inference",
     srcs = [
         "mock_inference.py",
     ],
@@ -147,9 +154,9 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
-        "@ros2_common_interfaces//:py_sensor_msgs",
-        "@ros2_common_interfaces//:py_std_msgs",
-        "@ros2_rclpy//:rclpy",
+        "//ros2:inference_base",
+        requirement("numpy"),  # Required by ROS2 sensor_msgs
+        requirement("protobuf"),
     ],
 )
 
@@ -182,8 +189,8 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//ros2:node_runner",
-        "@ros2_common_interfaces//:cpp_std_msgs",
-        "@ros2_rclcpp//:rclcpp",
+        "@local_deps//:cpp_std_msgs",
+        "@local_deps//:rclcpp",
     ],
 )
 
