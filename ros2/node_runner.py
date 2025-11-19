@@ -68,6 +68,9 @@ def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = No
         pass
     finally:
         try:
+            # Call shutdown method if it exists
+            if hasattr(node, 'shutdown'):  # type: ignore[name-defined]
+                node.shutdown()  # type: ignore[name-defined]
             node.destroy_node()  # type: ignore[name-defined]
         except Exception:
             pass

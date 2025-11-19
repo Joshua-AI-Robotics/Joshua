@@ -171,11 +171,11 @@ ros2_py_binary(
     main = "data_subscriber.py",
     set_up_ament = True,
     deps = [
+        "//ai/train:data_store",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
-        "@ros2_common_interfaces//:py_sensor_msgs",
-        "@ros2_common_interfaces//:py_std_msgs",
-        "@ros2_rclpy//:rclpy",
+        requirement("protobuf"),
+        # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
     ],
 )
 
