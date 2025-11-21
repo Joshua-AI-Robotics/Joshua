@@ -5,6 +5,9 @@ package ai.data_store;
 enum DataType {
   DATA_TYPE_INVALID = 0;
   HUGGING_FACE_DATASET = 1;
+  CSV = 2;
+  JSONL = 3;
+  PARQUET = 4;
 }
 
 enum DataStoreMode {
@@ -17,6 +20,7 @@ message DataStore {
   string store_path = 1;
   DataStoreMode data_store_mode = 2;
   int32 auto_save_interval = 3;
+  DataType data_store_type = 4;
 
   // TODO: Add topics and data types to store.
 }

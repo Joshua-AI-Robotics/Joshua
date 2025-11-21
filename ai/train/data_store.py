@@ -2,6 +2,7 @@
 
 import os
 import time
+import json
 from typing import Any, Dict, List
 from datasets import Dataset
 from datetime import datetime
@@ -20,6 +21,7 @@ class DataStore:
         """
         self.data = []
         self.auto_save_interval = data_store_config.auto_save_interval
+        self.data_store_type = data_store_config.data_store_type
 
         if data_store_config.data_store_mode == data_store_pb2.DataStoreMode.LOCAL_FILE:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -71,7 +73,9 @@ class DataStore:
         return Dataset.from_dict(dataset_dict)
     
     def save_to_disk(self, path: str):
-        """Save the dataset to disk in HuggingFace format.
+        """Save the dataset to disk in configured format.
+
+        Always saves as JSONL first for performance, then converts to target format.
         
         Args:
             path: Directory path where to save the dataset.
@@ -83,9 +87,36 @@ class DataStore:
         # Create directory if it doesn't exist
         os.makedirs(path, exist_ok=True)
         
-        # Convert to dataset and save
+        # Always save as JSONL first (fastest, bypasses HF conversion)
+        jsonl_path = os.path.join(path, "data.jsonl")
+        with open(jsonl_path, 'w') as f:
+            for entry in self.data:
+                f.write(json.dumps(entry) + '\n')
+        glog.info(f"Saved JSONL to {jsonl_path}")
+        
+        # If target is JSONL, we are done
+        if self.data_store_type == data_store_pb2.DataType.JSONL:
+            self.save_path = path
+            glog.info(f"Saved {len(self.data)} entries to {path}")
+            return
+
+        # Convert to dataset for other formats
         dataset = self.to_dataset()
-        dataset.save_to_disk(path)
+
+        # Convert to target data type if different
+        if self.data_store_type == data_store_pb2.DataType.CSV:
+            csv_path = os.path.join(path, "data.csv")
+            dataset.to_csv(csv_path)
+            glog.info(f"Converted to CSV at {csv_path}")
+            
+        elif self.data_store_type == data_store_pb2.DataType.PARQUET:
+            parquet_path = os.path.join(path, "data.parquet")
+            dataset.to_parquet(parquet_path)
+            glog.info(f"Converted to Parquet at {parquet_path}")
+            
+        elif self.data_store_type == data_store_pb2.DataType.HUGGING_FACE_DATASET:
+            dataset.save_to_disk(path)
+            glog.info(f"Saved HF Dataset to {path}")
         
         # Store save path for auto-save
         self.save_path = path
