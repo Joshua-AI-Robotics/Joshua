@@ -14,6 +14,7 @@ from rosidl_runtime_py.utilities import get_message
 import rosbag2_py
 
 from ai.proto import data_store_pb2
+from ros2.ros2_type_resolver import get_ros2_type_name
 
 class DataStore:
     """Real-time data store for ROS2 messages using rosbag2 and HuggingFace format."""
@@ -68,20 +69,18 @@ class DataStore:
 
         # Register topic if new
         if topic not in self.registered_topics:
-            msg_type = type(msg)
-            topic_type_name = msg_type.__module__.replace('.', '/') + '/' + msg_type.__name__
-            # Fix type name format: e.g. std_msgs.msg._float32.Float32 -> std_msgs/msg/Float32
-            # A more robust way is usually: msg.__class__.__module__.split('.')[0] + '/msg/' + msg.__class__.__name__
-            # But let's try to be generic.
-            # Actually, rclpy messages have a specific internal structure.
-            # Using standard convention: pkg/msg/Type
-            
-            # Robust way to get full type name string:
-            full_type_name = f"{msg.__class__.__module__.split('.')[0]}/msg/{msg.__class__.__name__}"
-            
+            try:
+                topic_type_name = get_ros2_type_name(msg)
+            except ValueError as e:
+                # Fallback or error
+                glog.error(f"Failed to resolve type name for topic {topic}: {e}")
+                # Attempt fallback?
+                msg_type = type(msg)
+                topic_type_name = msg_type.__module__.replace('.', '/') + '/' + msg_type.__name__
+
             topic_metadata = rosbag2_py.TopicMetadata(
                 name=topic,
-                type=full_type_name,
+                type=topic_type_name,
                 serialization_format='cdr')
             
             self.writer.create_topic(topic_metadata)
@@ -101,7 +100,7 @@ class DataStore:
         Args:
             path: Output directory for the processed dataset. If None, uses bag_path parent.
         """
-        print(f"Starting save_to_disk. Message count: {self.message_count}")
+        glog.info(f"Starting save_to_disk. Message count: {self.message_count}")
         
         # Ensure writer is flushed/closed
         # There is no explicit close() in python api for SequentialWriter in older rosbag2 versions, 
@@ -116,8 +115,7 @@ class DataStore:
             gc.collect()
         
         if not self.message_count:
-             glog.warning("No data to save.")
-             print("No data to save (message_count is 0).")
+             glog.warning("No data to save (message_count is 0).")
              return
 
         if path is None:
@@ -126,41 +124,35 @@ class DataStore:
         os.makedirs(path, exist_ok=True)
         
         try:
-            print(f"Converting bag at {self.bag_path} to dataset...")
+            glog.info(f"Converting bag at {self.bag_path} to dataset...")
             # Convert bag to Dataset
             dataset = self._convert_bag_to_dataset(self.bag_path)
-            print(f"Conversion successful. Dataset size: {len(dataset)}")
+            glog.info(f"Conversion successful. Dataset size: {len(dataset)}")
 
             # Convert to target data type
             if self.data_store_type == data_store_pb2.DataType.JSONL:
                 jsonl_path = os.path.join(path, "data.jsonl")
                 dataset.to_json(jsonl_path)
                 glog.info(f"Saved JSONL to {jsonl_path}")
-                print(f"Saved JSONL to {jsonl_path}")
 
             elif self.data_store_type == data_store_pb2.DataType.CSV:
                 csv_path = os.path.join(path, "data.csv")
                 dataset.to_csv(csv_path)
                 glog.info(f"Converted to CSV at {csv_path}")
-                print(f"Converted to CSV at {csv_path}")
                 
             elif self.data_store_type == data_store_pb2.DataType.PARQUET:
                 parquet_path = os.path.join(path, "data.parquet")
                 dataset.to_parquet(parquet_path)
                 glog.info(f"Converted to Parquet at {parquet_path}")
-                print(f"Converted to Parquet at {parquet_path}")
                 
             elif self.data_store_type == data_store_pb2.DataType.HUGGING_FACE_DATASET:
                 dataset.save_to_disk(path)
                 glog.info(f"Saved HF Dataset to {path}")
-                print(f"Saved HF Dataset to {path}")
             
             glog.info(f"Post-processing complete. Data saved to {path}")
-            print(f"Post-processing complete. Data saved to {path}")
             
         except Exception as e:
             glog.error(f"Failed to post-process dataset: {e}")
-            print(f"Failed to post-process dataset: {e}")
             import traceback
             traceback.print_exc()
 

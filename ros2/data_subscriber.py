@@ -53,8 +53,10 @@ class DataSubscriber(Node):
             # Use print since current scope is out of ros2 context.
             print('Saving final dataset...')
             sys.stdout.flush()
-            self.data_store.save_to_disk(self.data_store.save_path)
-            print(f'Saved {len(self.data_store)} messages to {self.data_store.save_path}')
+            # Fallback to bag_path parent + _processed if save_path doesn't exist
+            save_path = getattr(self.data_store, 'save_path', self.data_store.bag_path + "_processed")
+            self.data_store.save_to_disk(save_path)
+            print(f'Saved {len(self.data_store)} messages to {save_path}')
             sys.stdout.flush()
 
 

@@ -175,3 +175,21 @@ def _import_message_class(ros2_type: str) -> Any:
         ) from exc
 
 
+def get_ros2_type_name(msg: Any) -> str:
+    """
+    Get the ROS 2 type name string (e.g., 'std_msgs/msg/Float32') from a message instance or class.
+    """
+    cls = msg if isinstance(msg, type) else msg.__class__
+    module = cls.__module__
+    name = cls.__name__
+
+    parts = module.split('.')
+    if len(parts) >= 2:
+        # Handle standard pattern: package.interface_kind.module
+        package = parts[0]
+        interface_kind = parts[1]
+        return f"{package}/{interface_kind}/{name}"
+
+    raise ValueError(f"Could not determine ROS 2 type name from class '{module}.{name}'")
+
+
