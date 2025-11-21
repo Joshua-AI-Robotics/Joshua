@@ -48,7 +48,7 @@ py_library(
         "ros2_type_resolver.py",
     ],
     deps = [
-        "//ai/proto:ai_model_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -174,6 +174,7 @@ ros2_py_binary(
         "//ai/train:data_store",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
+        "//ros2:ros2_type_resolver",
         requirement("protobuf"),
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
     ],

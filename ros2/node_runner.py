@@ -74,6 +74,8 @@ def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = No
             node.destroy_node()  # type: ignore[name-defined]
         except Exception:
             pass
-        rclpy.shutdown()
+        
+        if rclpy.ok():
+            rclpy.shutdown()
 
     return 0

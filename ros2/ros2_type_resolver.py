@@ -1,7 +1,7 @@
 from typing import Any
 import importlib
 
-from ai.proto import ai_model_pb2
+from ros2.proto import ros2_data_type_pb2
 
 
 def resolve_message_class(ros2_type: str, enum_value: int) -> Any:
@@ -28,7 +28,7 @@ def _resolve_from_string(ros2_type: str) -> Any:
 
 def _resolve_from_enum(enum_value: int) -> Any:
     try:
-        name = ai_model_pb2.Ros2DataType.Name(enum_value)
+        name = ros2_data_type_pb2.Ros2DataType.Name(enum_value)
     except Exception:
         raise ValueError(f"Unknown Ros2DataType value: {enum_value}")
 

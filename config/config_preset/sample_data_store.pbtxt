@@ -6,7 +6,11 @@ ai {
   data_store {
     store_path: "/tmp/Joshua/data/sample_recordings"
     data_store_mode: LOCAL_FILE
-    auto_save_interval: 10
+    data_store_type: HUGGING_FACE_DATASET
+    data_infos {
+      ros2_data_type: IMAGE
+      topic: "camera_1"
+    }
   }
 }
 

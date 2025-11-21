@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "ros2/proto/ros2_data_type.proto";
+
 package ai.data_store;
 
 enum DataType {
@@ -16,11 +18,14 @@ enum DataStoreMode {
   CLOUD_STORAGE = 2;
 }
 
+message DataInfo {
+  ros2.data_type.Ros2DataType ros2_data_type = 1;
+  string topic = 2;
+}
+
 message DataStore {
   string store_path = 1;
   DataStoreMode data_store_mode = 2;
-  int32 auto_save_interval = 3;
-  DataType data_store_type = 4;
-
-  // TODO: Add topics and data types to store.
+  DataType data_store_type = 3;
+  repeated DataInfo data_infos = 4;
 }
