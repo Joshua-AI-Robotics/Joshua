@@ -267,6 +267,9 @@ def build_entry_for_message(base_entry: dict, ros2_type: str, msg, bridge=None) 
             cv_image = _get_cv_bridge().compressed_imgmsg_to_cv2(msg, desired_encoding="rgb8")
             add_post_process_feature(base_entry, ros2_type, cv_image)
             return base_entry
+        
+        # TODO: Add support for other types
+        
         # Generic path for all other types
         return {**base_entry, **message_to_ordereddict(msg)}
     except Exception:
