@@ -11,5 +11,29 @@ ai {
       ros2_data_type: IMAGE
       topic: "camera_1"
     }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_1"
+    }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_2"
+    }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_3"
+    }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_4"
+    }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_5"
+    }
+    data_infos {
+      ros2_data_type: FLOAT32
+      topic: "sts3215_encoder_6"
+    }
   }
 }
