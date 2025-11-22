@@ -1,10 +1,10 @@
-"""Real-time data store for ROS2 messages in HuggingFace format."""
+"""Real-time data store for ROS2 messages and post-processing to various formats."""
 
 import os
 import time
 import json
 from typing import Any, Dict, List
-from datasets import Dataset
+from datasets import Dataset, Features, Value, Sequence
 from datetime import datetime
 import glog
 
@@ -14,10 +14,10 @@ from rosidl_runtime_py.utilities import get_message
 import rosbag2_py
 
 from ai.proto import data_store_pb2
-from ros2.ros2_type_resolver import get_ros2_type_name
+from ros2.ros2_type_resolver import get_ros2_type_name, get_ros2_type_string_from_enum
 
 class DataStore:
-    """Real-time data store for ROS2 messages using rosbag2 and HuggingFace format."""
+    """Real-time data store for ROS2 messages using rosbag2 and post-processing to various formats."""
     
     def __init__(self, data_store_config: data_store_pb2.DataStore):
         """Initialize the data store.
@@ -27,8 +27,10 @@ class DataStore:
         """
         self.data_store_type = data_store_config.data_store_type
         self.registered_topics = set()
-        self.message_count = 0
+        self.total_message_count = 0
+        self.topic_message_counts = {}
 
+        # Setup data store configuration.
         if data_store_config.data_store_mode == data_store_pb2.DataStoreMode.LOCAL_FILE:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             path = os.path.join(data_store_config.store_path, f"dataset_{timestamp}")
@@ -53,6 +55,19 @@ class DataStore:
         converter_options = rosbag2_py.ConverterOptions('', '')
         self.writer.open(storage_options, converter_options)
 
+        # Register topics.
+        for data_info in data_store_config.data_infos:
+            topic = data_info.topic
+            topic_type_name = get_ros2_type_string_from_enum(data_info.ros2_data_type)
+            topic_metadata = rosbag2_py.TopicMetadata(
+                name=topic,
+                type=topic_type_name,
+                serialization_format='cdr')
+            self.writer.create_topic(topic_metadata)
+            self.registered_topics.add(topic)
+            self.topic_message_counts[topic] = 0
+
+
     def add_data(self, msg: Any, topic: str, timestamp: float = None):
         """Add a ROS2 message to the store in real-time.
         
@@ -67,40 +82,21 @@ class DataStore:
         # Convert timestamp to nanoseconds (int) for rosbag2
         timestamp_ns = int(timestamp * 1e9)
 
-        # Register topic if new
-        if topic not in self.registered_topics:
-            try:
-                topic_type_name = get_ros2_type_name(msg)
-            except ValueError as e:
-                # Fallback or error
-                glog.error(f"Failed to resolve type name for topic {topic}: {e}")
-                # Attempt fallback?
-                msg_type = type(msg)
-                topic_type_name = msg_type.__module__.replace('.', '/') + '/' + msg_type.__name__
-
-            topic_metadata = rosbag2_py.TopicMetadata(
-                name=topic,
-                type=topic_type_name,
-                serialization_format='cdr')
-            
-            self.writer.create_topic(topic_metadata)
-            self.registered_topics.add(topic)
-
         # Serialize and write
         serialized_msg = serialize_message(msg)
         self.writer.write(topic, serialized_msg, timestamp_ns)
-        self.message_count += 1
-        
-        # Auto-save (For bag, we rely on built-in flush, but we can trigger post-process check here if needed)
-        # For now, we only rely on explicit shutdown save for post-processing.
+        self.total_message_count += 1
+        self.topic_message_counts[topic] += 1
+        # Post-processing on shutdown().
 
-    def save_to_disk(self, path: str = None):
+    def post_process(self, path: str = None):
         """Post-process the recorded bag file into the target dataset format.
         
         Args:
             path: Output directory for the processed dataset. If None, uses bag_path parent.
         """
-        glog.info(f"Starting save_to_disk. Message count: {self.message_count}")
+        glog.info(f"Starting Post-Processing. Total message count: {self.total_message_count}")
+        glog.info(f"Topic message counts: {self.topic_message_counts}")
         
         # Ensure writer is flushed/closed
         # There is no explicit close() in python api for SequentialWriter in older rosbag2 versions, 
@@ -114,8 +110,8 @@ class DataStore:
             import gc
             gc.collect()
         
-        if not self.message_count:
-             glog.warning("No data to save (message_count is 0).")
+        if not self.total_message_count:
+             glog.warning("No data to save (total_message_count is 0).")
              return
 
         if path is None:
@@ -157,52 +153,79 @@ class DataStore:
             traceback.print_exc()
 
     def _convert_bag_to_dataset(self, bag_path: str) -> Dataset:
-        """Read rosbag and convert to HuggingFace Dataset."""
-        from rosidl_runtime_py.convert import message_to_ordereddict
-        from rclpy.serialization import deserialize_message
+        """Convert the ros2 bag file to Dataset with High Performance."""
+        from datasets import Dataset, Features, Value, Image
         
-        reader = rosbag2_py.SequentialReader()
-        storage_options = rosbag2_py.StorageOptions(uri=bag_path, storage_id='sqlite3')
-        converter_options = rosbag2_py.ConverterOptions('', '')
-        reader.open(storage_options, converter_options)
+        # 1. Define the Schema strictly. 
+        features = Features({
+            "topic": Value("string"),
+            "timestamp": Value("double"),
+            "image": Image(decode=True), # This handles the image bytes automatically
+        })
 
-        topics_and_types = reader.get_all_topics_and_types()
-        type_map = {t.name: t.type for t in topics_and_types}
+        # 2. Define the Generator (Self-contained to fix Pickling error)
+        def gen():
+            # Imports MUST be inside to ensure the function is "clean" for pickling
+            import rosbag2_py
+            from rclpy.serialization import deserialize_message
+            from rosidl_runtime_py.utilities import get_message
+            from cv_bridge import CvBridge 
+            import cv2
+            
+            # Re-create reader inside the generator process
+            reader = rosbag2_py.SequentialReader()
+            storage_options = rosbag2_py.StorageOptions(uri=bag_path, storage_id='sqlite3')
+            converter_options = rosbag2_py.ConverterOptions('', '')
+            reader.open(storage_options, converter_options)
 
-        data_list = []
-        
-        while reader.has_next():
-            (topic, data, t) = reader.read_next()
-            msg_type_name = type_map[topic]
-            msg_class = get_message(msg_type_name)
-            msg = deserialize_message(data, msg_class)
+            topic_types = reader.get_all_topics_and_types()
+            type_map = {t.name: t.type for t in topic_types}
             
-            msg_dict = message_to_ordereddict(msg)
-            # Add metadata
-            entry = {
-                "topic": topic,
-                "timestamp": t / 1e9, # Convert ns back to seconds
-                **msg_dict
-            }
-            data_list.append(entry)
+            bridge = CvBridge()
 
-        # Convert list of dicts to dict of lists for efficient Dataset creation
-        if not data_list:
-            return Dataset.from_dict({})
-            
-        dataset_dict = {}
-        # Collect all keys
-        all_keys = set().union(*(d.keys() for d in data_list))
-        
-        for key in all_keys:
-            dataset_dict[key] = [item.get(key) for item in data_list]
-            
-        return Dataset.from_dict(dataset_dict)
+            while reader.has_next():
+                (topic, data, t) = reader.read_next()
+                msg_type = type_map[topic]
+                msg_class = get_message(msg_type)
+                msg = deserialize_message(data, msg_class)
+
+                # FAST PATH: Handle images efficiently
+                if 'sensor_msgs/msg/Image' in msg_type:
+                    try:
+                        # Convert ROS -> OpenCV -> RGB
+                        # We force "rgb8" so the colors are correct for ML models
+                        cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
+                        
+                        yield {
+                            "topic": topic,
+                            "timestamp": t / 1e9,
+                            "image": cv_image,
+                        }
+                    except Exception as e:
+                        # Skip bad frames without crashing
+                        continue
+                
+                # SLOW PATH: Other small messages (add logic here if needed)
+                # else:
+                #    ...
+
+        # 3. Create Dataset
+        # REMOVED: cache_dir=... (This caused the LocalFileSystem error)
+        # ADDED: keep_in_memory=True (Optional safety: builds in RAM to avoid file permission issues completely)
+        try:
+            return Dataset.from_generator(gen, features=features, keep_in_memory=True)
+        except Exception:
+            # Fallback: if RAM is too full, let it use default system cache
+            return Dataset.from_generator(gen, features=features)
 
     def clear(self):
         """Clear all stored data (not really applicable for bag, but reset counter)."""
-        self.message_count = 0
-    
-    def __len__(self) -> int:
-        """Return the number of stored messages."""
-        return self.message_count
+        self.total_message_count = 0
+
+    def get_total_message_count(self) -> int:
+        """Return the total number of messages stored."""
+        return self.total_message_count
+
+    def get_topic_message_count(self, topic: str) -> int:
+        """Return the number of messages stored for each topic."""
+        return self.topic_message_counts.get(topic, 0)

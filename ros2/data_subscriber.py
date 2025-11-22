@@ -44,14 +44,14 @@ class DataSubscriber(Node):
     def shutdown(self):
         """Save data on shutdown."""
         # Use print since current scope is out of ros2 context.
-        print(f'Shutdown initiated. DataStore items: {len(self.data_store)}')
-        if len(self.data_store) > 0:
+        print(f'Shutdown initiated. DataStore items: {self.data_store.get_total_message_count()}')
+        if self.data_store.get_total_message_count() > 0:
             print('Saving final dataset...')
             sys.stdout.flush()
             # Fallback to bag_path parent + _processed if save_path doesn't exist
             save_path = getattr(self.data_store, 'save_path', self.data_store.bag_path + "_processed")
-            self.data_store.save_to_disk(save_path)
-            print(f'Saved {len(self.data_store)} messages to {save_path}')
+            self.data_store.post_process(save_path)
+            print(f'Saved {self.data_store.get_total_message_count()} messages to {save_path}')
             sys.stdout.flush()
 
 
