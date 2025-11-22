@@ -12,3 +12,11 @@ py_library(
         requirement("glog"),
     ],
 )
+
+py_binary(
+    name = "data_load",
+    srcs = ["data_load.py"],
+    deps = [
+        requirement("datasets"),
+    ],
+)
