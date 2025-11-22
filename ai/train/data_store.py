@@ -153,14 +153,9 @@ class DataStore:
             traceback.print_exc()
 
     def _convert_bag_to_dataset(self, bag_path: str) -> Dataset:
-        """
-        Generic converter for ANY ROS 2 bag to HuggingFace Dataset.
-        - Images: Optimized using CvBridge (saved as Numpy/Array3D).
-        - Others: Converted to standard Python Dicts (IMU, Odom, Strings, etc.).
-        """
+        """Generic converter for ANY ROS 2 bag to HuggingFace Dataset. """
         from datasets import Dataset
         
-        # 1. Define the Generator
         def gen():
             import rosbag2_py
             from rclpy.serialization import deserialize_message
@@ -188,16 +183,12 @@ class DataStore:
                     "timestamp": t / 1e9,
                 }
 
-                # Build entry via centralized handler (CvBridge managed in resolver)
                 yield build_entry_for_message(base_entry, msg_type, msg)
 
-        # 2. Create Dataset
-        # We REMOVE 'features=...' to let HF infer the schema automatically.
-        # We keep 'keep_in_memory=True' to prevent filesystem/locking errors.
         try:
-            return Dataset.from_generator(gen, keep_in_memory=True)
-        except Exception:
             return Dataset.from_generator(gen)
+        except Exception:
+            return Dataset.from_generator(gen, keep_in_memory=True)
 
     def clear(self):
         """Clear all stored data (not really applicable for bag, but reset counter)."""
