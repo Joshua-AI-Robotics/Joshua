@@ -209,3 +209,67 @@ def get_ros2_type_name(msg: Any) -> str:
     raise ValueError(f"Could not determine ROS 2 type name from class '{module}.{name}'")
 
 
+# --- Utilities for post-processing decisions based on ROS2_TYPE_MAPPING ---
+
+# Reverse map: "package/msg/Type" -> "KEY"
+_REVERSE_ROS2_TYPE_MAPPING = {v: k for k, v in ROS2_TYPE_MAPPING.items()}
+
+
+def get_ros2_mapping_key(ros2_type: str) -> str:
+    """
+    Return the canonical mapping key (e.g., 'IMAGE', 'IMU', 'STRING') for a fully-qualified ROS 2 type string.
+    Returns '' if not found.
+    """
+    if not isinstance(ros2_type, str):
+        return ""
+    return _REVERSE_ROS2_TYPE_MAPPING.get(ros2_type.strip(), "")
+
+
+def add_post_process_feature(base_entry: dict, ros2_type: str, value) -> dict:
+    """
+    Mutate base_entry by adding an appropriate feature field for the given ros2_type.
+    Currently collapses IMAGE and COMPRESSED_IMAGE to 'image'.
+    Returns the mutated base_entry.
+    """
+    key = get_ros2_mapping_key(ros2_type)
+    if key in ("IMAGE", "COMPRESSED_IMAGE"):
+        base_entry["image"] = value
+    # Extend here for other types if you want canonical feature names
+    return base_entry
+
+
+def build_entry_for_message(base_entry: dict, ros2_type: str, msg, bridge=None) -> dict:
+    """
+    Build a single dataset entry for a ROS 2 message.
+    - Uses ROS2_TYPE_MAPPING to pick specialized handling (e.g., images)
+    - Falls back to message_to_ordereddict for generic types
+    """
+    from rosidl_runtime_py.convert import message_to_ordereddict
+    key = get_ros2_mapping_key(ros2_type)
+    # Local lazy singleton for CvBridge to avoid repeated construction
+    def _get_cv_bridge():
+        nonlocal bridge
+        if bridge is not None:
+            return bridge
+        try:
+            # lazily create and cache in the outer closure if provided None
+            from cv_bridge import CvBridge
+            bridge = CvBridge()
+            return bridge
+        except Exception:
+            raise
+    try:
+        if key == "IMAGE":
+            cv_image = _get_cv_bridge().imgmsg_to_cv2(msg, desired_encoding="rgb8")
+            add_post_process_feature(base_entry, ros2_type, cv_image)
+            return base_entry
+        if key == "COMPRESSED_IMAGE":
+            cv_image = _get_cv_bridge().compressed_imgmsg_to_cv2(msg, desired_encoding="rgb8")
+            add_post_process_feature(base_entry, ros2_type, cv_image)
+            return base_entry
+        # Generic path for all other types
+        return {**base_entry, **message_to_ordereddict(msg)}
+    except Exception:
+        # Robust fallback
+        return {**base_entry, **message_to_ordereddict(msg)}
+

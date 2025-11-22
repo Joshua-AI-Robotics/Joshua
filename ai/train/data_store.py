@@ -153,70 +153,51 @@ class DataStore:
             traceback.print_exc()
 
     def _convert_bag_to_dataset(self, bag_path: str) -> Dataset:
-        """Convert the ros2 bag file to Dataset with High Performance."""
-        from datasets import Dataset, Features, Value, Image
+        """
+        Generic converter for ANY ROS 2 bag to HuggingFace Dataset.
+        - Images: Optimized using CvBridge (saved as Numpy/Array3D).
+        - Others: Converted to standard Python Dicts (IMU, Odom, Strings, etc.).
+        """
+        from datasets import Dataset
         
-        # 1. Define the Schema strictly. 
-        features = Features({
-            "topic": Value("string"),
-            "timestamp": Value("double"),
-            "image": Image(decode=True), # This handles the image bytes automatically
-        })
-
-        # 2. Define the Generator (Self-contained to fix Pickling error)
+        # 1. Define the Generator
         def gen():
-            # Imports MUST be inside to ensure the function is "clean" for pickling
             import rosbag2_py
             from rclpy.serialization import deserialize_message
             from rosidl_runtime_py.utilities import get_message
-            from cv_bridge import CvBridge 
-            import cv2
-            
-            # Re-create reader inside the generator process
+            from ros2.ros2_type_resolver import build_entry_for_message
+
+            # Setup Reader
             reader = rosbag2_py.SequentialReader()
             storage_options = rosbag2_py.StorageOptions(uri=bag_path, storage_id='sqlite3')
             converter_options = rosbag2_py.ConverterOptions('', '')
             reader.open(storage_options, converter_options)
 
+            # Cache type maps
             topic_types = reader.get_all_topics_and_types()
             type_map = {t.name: t.type for t in topic_types}
             
-            bridge = CvBridge()
-
             while reader.has_next():
                 (topic, data, t) = reader.read_next()
                 msg_type = type_map[topic]
                 msg_class = get_message(msg_type)
                 msg = deserialize_message(data, msg_class)
-
-                # FAST PATH: Handle images efficiently
-                if 'sensor_msgs/msg/Image' in msg_type:
-                    try:
-                        # Convert ROS -> OpenCV -> RGB
-                        # We force "rgb8" so the colors are correct for ML models
-                        cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
-                        
-                        yield {
-                            "topic": topic,
-                            "timestamp": t / 1e9,
-                            "image": cv_image,
-                        }
-                    except Exception as e:
-                        # Skip bad frames without crashing
-                        continue
                 
-                # SLOW PATH: Other small messages (add logic here if needed)
-                # else:
-                #    ...
+                base_entry = {
+                    "topic": topic,
+                    "timestamp": t / 1e9,
+                }
 
-        # 3. Create Dataset
-        # REMOVED: cache_dir=... (This caused the LocalFileSystem error)
-        # ADDED: keep_in_memory=True (Optional safety: builds in RAM to avoid file permission issues completely)
+                # Build entry via centralized handler (CvBridge managed in resolver)
+                yield build_entry_for_message(base_entry, msg_type, msg)
+
+        # 2. Create Dataset
+        # We REMOVE 'features=...' to let HF infer the schema automatically.
+        # We keep 'keep_in_memory=True' to prevent filesystem/locking errors.
         try:
-            return Dataset.from_generator(gen, features=features, keep_in_memory=True)
+            return Dataset.from_generator(gen, keep_in_memory=True)
         except Exception:
-            # Fallback: if RAM is too full, let it use default system cache
-            return Dataset.from_generator(gen, features=features)
+            return Dataset.from_generator(gen)
 
     def clear(self):
         """Clear all stored data (not really applicable for bag, but reset counter)."""
