@@ -5,7 +5,6 @@ import functools
 
 from rclpy.node import Node
 from std_msgs.msg import Float32
-from rosidl_runtime_py.convert import message_to_ordereddict
 
 from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
