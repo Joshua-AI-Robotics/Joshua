@@ -6,6 +6,7 @@ from PIL import Image
 
 import rclpy
 from sensor_msgs.msg import Image as ImageMsg
+from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from config.proto import config_pb2
@@ -76,7 +77,7 @@ class SmolVLAInference(InferenceBase):
             from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
             from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
 
-            # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # Force CPU usage to avoid CUDA out of memory
             self.device = torch.device("cpu")
             self.get_logger().info(f"Using device: {self.device}")
 
@@ -85,8 +86,12 @@ class SmolVLAInference(InferenceBase):
 
             self.get_logger().info(f"Loading SmolVLA from: {pretrained_model_path}")
             
-            # Load model directly - it will load its config internally and handle the 'type' field correctly
+            # Load model
             self.model = SmolVLAPolicy.from_pretrained(pretrained_model_path)
+            
+            # CRITICAL: Move ALL model components to CPU explicitly
+            # This ensures no tensors remain on CUDA
+            self.model = self.model.to(self.device)
             
             # Update device in the loaded config
             self.model.config.device = str(self.device)
@@ -94,10 +99,10 @@ class SmolVLAInference(InferenceBase):
             # Create preprocessors/postprocessors from the model's config
             self.preprocessor, self.postprocessor = make_smolvla_pre_post_processors(config=self.model.config)
 
-            self.model.to(self.device)
+            # Set to eval mode for inference
             self.model.eval()
 
-            self.get_logger().info(f"SmolVLA inference initialized successfully. Task: '{self.task_description}'")
+            self.get_logger().info(f"SmolVLA inference initialized successfully on CPU. Task: '{self.task_description}'")
 
         except Exception as e:
             self.get_logger().error(f"Failed to initialize SmolVLA: {e}")
@@ -108,34 +113,46 @@ class SmolVLAInference(InferenceBase):
 
     def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
         """
-        Run SmolVLA inference on input camera images and language task.
+        Run SmolVLA inference on input camera images, joint states, and language task.
         
         Args:
-            input_data: List of ROS Image messages from camera subscriptions
+            input_data: List of ROS messages ordered as:
+                - First: Image messages (cameras)
+                - Rest: Float32 messages (joint encoders)
         
         Returns:
             List of action values (one per publisher)
         """
 
-        # Convert ROS Image messages to PIL Images
+        # Separate images and encoder values
         images = []
+        joint_positions = []
 
         for i, msg in enumerate(input_data):
-            if not isinstance(msg, ImageMsg):
-                self.get_logger().warn(f"Input {i} is not an Image message, skipping")
-                continue
-            
-            # Convert ROS Image to OpenCV format (RGB)
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
-            cv_image_chw = np.transpose(cv_image, (2, 0, 1))
-            cv_image_batch = np.expand_dims(cv_image_chw, axis=0)
-            
-            # SmolVLA preprocessor expects numpy arrays (H, W, C) in RGB format
-            images.append(cv_image_batch)
+            if isinstance(msg, ImageMsg):
+                # Convert ROS Image to OpenCV format (RGB)
+                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+                cv_image_chw = np.transpose(cv_image, (2, 0, 1))
+                cv_image_batch = np.expand_dims(cv_image_chw, axis=0)
+                images.append(cv_image_batch)
+            elif isinstance(msg, Float32):
+                # Extract encoder value (normalized to [-1, 1] by encoder publisher)
+                joint_positions.append(msg.data)
+            else:
+                self.get_logger().warn(f"Input {i} is unexpected type {type(msg)}, skipping")
 
         if len(images) == 0:
             self.get_logger().error("No valid images received for inference")
             return [0.0] * len(self.publishers_list)
+
+        # Assemble joint state vector
+        if len(joint_positions) > 0:
+            state = np.array(joint_positions, dtype=np.float32).reshape(1, -1)
+            self.get_logger().info(f"Using real joint state: {state.tolist()}")
+        else:
+            # Fallback to dummy state if no encoders available
+            state = np.zeros((1, 6), dtype=np.float32)
+            self.get_logger().warn("No encoder data available, using dummy state")
 
         # Prepare input dictionary for SmolVLA
         # SmolVLA expects keys like: observation.images.camera1, observation.images.camera2, etc. (1-indexed)
@@ -143,6 +160,9 @@ class SmolVLAInference(InferenceBase):
         for i, img in enumerate(images):
             camera_key = f"observation.images.camera{i+1}"
             observation[camera_key] = img
+
+        # Add joint state
+        observation["observation.state"] = state
 
         task = self.task_description
         if not task.endswith("\n"):
@@ -164,16 +184,19 @@ class SmolVLAInference(InferenceBase):
             raise
         
         with torch.no_grad():
-            output = self.model(processed_batch)
+            # For inference, we use the select_action method which doesn't require action labels
+            output = self.model.select_action(processed_batch)
         
-        actions = self.postprocessor(output)
-        action_tensor = actions['action']
+        # select_action returns the action tensor directly, no need for postprocessing
+        action_tensor = output
 
         # Shape is typically (batch_size, action_dim) or (batch_size, chunk_size, action_dim)
         # Take the first timestep if chunk_size > 1
-
-        action_tensor = action_tensor[0] # Remove batch dimension
-        action_tensor = action_tensor[0] # take first timestamp if chunked
+        if action_tensor.dim() == 3:
+            action_tensor = action_tensor[0, 0]  # Remove batch and take first timestep
+        elif action_tensor.dim() == 2:
+            action_tensor = action_tensor[0]  # Just remove batch dimension
+        
         action_values = action_tensor.cpu().numpy().tolist()
 
         num_publishers = len(self.publishers_list)
