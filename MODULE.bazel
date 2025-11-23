@@ -77,5 +77,7 @@ use_repo(pip, "project_joshua_pip_deps")
 
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
+ros2_libs = use_repo_rule("//:ros2_deps_from_system.bzl", "ros2_libs_repo")
 
 system_libs(name = "local_deps")
+ros2_libs(name = "ros2_deps")

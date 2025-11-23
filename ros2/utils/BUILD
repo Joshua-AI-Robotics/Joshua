@@ -8,8 +8,8 @@ ros2_cpp_binary(
     name = "simple_publisher",
     srcs = ["simple_publisher.cc"],
     deps = [
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -18,8 +18,8 @@ ros2_cpp_binary(
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
         "//utils:xbox_controller",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -28,8 +28,8 @@ ros2_cpp_binary(
     srcs = ["camera_subscriber.cc"],
     deps = [
         "@local_deps//:opencv",
-        "@local_deps//:cpp_sensor_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -37,8 +37,8 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -65,8 +65,8 @@ ros2_cpp_binary(
     name = "mock_action_publisher",
     srcs = ["mock_action_publisher.cc"],
     deps = [
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 

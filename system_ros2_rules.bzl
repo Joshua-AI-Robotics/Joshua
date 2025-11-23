@@ -4,17 +4,17 @@ This module provides ROS2 rules compatible with rules_ros2 but using
 system-installed libraries from apt packages. Supports cross-compilation
 for aarch64 targets.
 
-Usage in BUILD files:
-    load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
-    
-    ros2_cpp_binary(
-        name = "my_node",
-        srcs = ["my_node.cc"],
-        deps = [
-            "@local_deps//:rclcpp",
-            "@local_deps//:cpp_std_msgs",
-        ],
-    )
+    Usage in BUILD files:
+        load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+        
+        ros2_cpp_binary(
+            name = "my_node",
+            srcs = ["my_node.cc"],
+            deps = [
+                "@ros2_deps//:rclcpp",
+                "@ros2_deps//:cpp_std_msgs",
+            ],
+        )
 """
 
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
@@ -47,8 +47,8 @@ def ros2_cpp_library(name, ros2_package_name = None, **kwargs):
     """
     # Add system ROS2 dependencies if not already specified
     deps = kwargs.pop("deps", [])
-    if "@local_deps//:rclcpp" not in [str(d) for d in deps]:
-        deps = deps + ["@local_deps//:rclcpp"]
+    if "@ros2_deps//:rclcpp" not in [str(d) for d in deps]:
+        deps = deps + ["@ros2_deps//:rclcpp"]
     
     _ros2_cc_target(cc_library, "cpp", name, ros2_package_name, deps = deps, **kwargs)
 
@@ -67,12 +67,12 @@ def ros2_cpp_binary(name, ros2_package_name = None, set_up_ament = False, idl_de
     """
     # Add system ROS2 dependencies if not already specified
     deps = kwargs.pop("deps", [])
-    if "@local_deps//:rclcpp" not in [str(d) for d in deps]:
-        deps = deps + ["@local_deps//:rclcpp"]
+    if "@ros2_deps//:rclcpp" not in [str(d) for d in deps]:
+        deps = deps + ["@ros2_deps//:rclcpp"]
     
     # For system libraries, we create a simple binary
     # The ament setup would need to be handled separately if needed
-    # Note: Headers should be accessible via includes from @local_deps//:rclcpp
+    # Note: Headers should be accessible via includes from @ros2_deps//:rclcpp
     # If headers aren't found, ensure ROS2 is properly installed at /opt/ros/humble
     _ros2_cc_target(cc_binary, "cpp", name, ros2_package_name, deps = deps, **kwargs)
 
@@ -89,8 +89,8 @@ def ros2_cpp_test(name, ros2_package_name = None, set_up_ament = True, idl_deps 
     """
     # Add system ROS2 dependencies if not already specified
     deps = kwargs.pop("deps", [])
-    if "@local_deps//:rclcpp" not in [str(d) for d in deps]:
-        deps = deps + ["@local_deps//:rclcpp"]
+    if "@ros2_deps//:rclcpp" not in [str(d) for d in deps]:
+        deps = deps + ["@ros2_deps//:rclcpp"]
     
     _ros2_cc_target(cc_test, "cpp", name, ros2_package_name, deps = deps, **kwargs)
 
