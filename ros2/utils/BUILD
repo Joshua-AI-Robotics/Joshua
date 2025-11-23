@@ -5,15 +5,6 @@ load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 package(default_visibility = ["//visibility:public"])
 
 ros2_cpp_binary(
-    name = "simple_publisher",
-    srcs = ["simple_publisher.cc"],
-    deps = [
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
