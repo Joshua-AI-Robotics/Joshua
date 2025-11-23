@@ -28,17 +28,6 @@ config_setting(
     constraint_values = ["@platforms//cpu:aarch64"],
 )
 
-# =============================================================================
-# ROS2 System Libraries with Cross-Compilation Support
-# =============================================================================
-# These libraries support both native (x86_64) and cross-compilation (aarch64)
-# For cross-compilation, set ROS2_SYSROOT environment variable to point to 
-# arm64 sysroot (e.g., /path/to/sysroot or use multiarch paths)
-
-# Note: These helper functions are commented out as they use Python imports
-# which are not supported in Starlark. The library paths are handled directly
-# in the select() statements below.
-
 # opencv
 cc_library(
     name = "opencv",
