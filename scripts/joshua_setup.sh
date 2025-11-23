@@ -97,9 +97,28 @@ install_arm64_tools() {
 # Function to install Bazel
 install_bazel() {
     echo -e "${BLUE}Checking for Bazel...${NC}"
+    
+    # Check for .bazelversion file to determine required version
+    local required_version=""
+    if [ -f ".bazelversion" ]; then
+        required_version=$(cat .bazelversion | tr -d '[:space:]')
+    fi
+
     if command -v bazel &> /dev/null; then
-        echo -e "${GREEN}Bazel is already installed${NC}"
-        return 0
+        if [ -n "$required_version" ]; then
+            # Check if installed version matches required version
+            local current_version=$(bazel --version 2>/dev/null | head -n 1 | awk '{print $2}' | tr -d '[:space:]')
+            
+            if [[ "$current_version" == "$required_version" ]]; then
+                echo -e "${GREEN}Bazel $required_version is already installed${NC}"
+                return 0
+            else
+                echo -e "${YELLOW}Version mismatch: Found '$current_version', expected '$required_version'. Reinstalling Bazelisk...${NC}"
+            fi
+        else
+            echo -e "${GREEN}Bazel is already installed${NC}"
+            return 0
+        fi
     fi
 
     # Detect architecture
