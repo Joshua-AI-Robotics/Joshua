@@ -125,11 +125,19 @@ setup_user_permissions() {
 # Function to setup ROS2 environment
 setup_ros2_environment() {
     echo -e "${BLUE}Setting up ROS2 environment...${NC}"
-    if ! grep -q "source /opt/ros/humble/setup.bash" ~/.bashrc; then
-        echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-        echo -e "${GREEN}Added ROS2 setup to ~/.bashrc${NC}"
+    
+    # Determine the user's home directory
+    if [ -n "$SUDO_USER" ]; then
+        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
     else
-        echo -e "${GREEN}ROS2 setup already in ~/.bashrc${NC}"
+        USER_HOME=$HOME
+    fi
+    
+    if ! grep -q "source /opt/ros/humble/setup.bash" "$USER_HOME/.bashrc"; then
+        echo "source /opt/ros/humble/setup.bash" >> "$USER_HOME/.bashrc"
+        echo -e "${GREEN}Added ROS2 setup to $USER_HOME/.bashrc${NC}"
+    else
+        echo -e "${GREEN}ROS2 setup already in $USER_HOME/.bashrc${NC}"
     fi
 }
 
