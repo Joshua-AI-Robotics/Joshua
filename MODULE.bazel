@@ -13,6 +13,7 @@ bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "boost.asio", version = "1.83.0.bcr.1")
 bazel_dep(name = "gflags", version = "2.2.2")
 bazel_dep(name = "glog", version = "0.7.1")
+bazel_dep(name = "googletest", version = "1.15.2")
 bazel_dep(name = "platforms", version = "0.0.8")
 
 # ROS2 is configured via system_ros2_rules.bzl using system-installed libraries

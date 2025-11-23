@@ -10,7 +10,7 @@ import evdev
 import serial
 from evdev import ecodes
 
-UART_PORT = '/dev/ttyACM0'
+UART_PORT = "/dev/ttyACM0"
 UART_BAUDRATE = 1000000
 
 NUMBER_OF_SERVOS = 6
@@ -156,7 +156,7 @@ def read_servo_position(serial_obj, servo_id):
 
 
 def print_status():
-    os.system('clear')
+    os.system("clear")
     print("╔══════════════════════════════════════════════╗")
     print("║     Feetech STS3215 Multiple Servo Control   ║")
     print("╚══════════════════════════════════════════════╝\n")
@@ -208,7 +208,9 @@ def main():
         for i in range(NUMBER_OF_SERVOS):
             middle_position = (SERVO_LIMITS[i].min + SERVO_LIMITS[i].max) // 2
             current_positions[i] = middle_position
-            serial_obj.write(create_move_packet(START_ID + i, middle_position, SETUP_MOVE_SPEED))
+            serial_obj.write(
+                create_move_packet(START_ID + i, middle_position, SETUP_MOVE_SPEED)
+            )
             time.sleep(SERVO_COMMAND_BUFFER_TIME)
 
         time.sleep(SETUP_TIME)
@@ -243,7 +245,9 @@ def main():
                         current_positions[servo_index] += step
                         serial_obj.write(
                             create_move_packet(
-                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                                START_ID + servo_index,
+                                current_positions[servo_index],
+                                MOVE_SPEED,
                             )
                         )
 
@@ -251,7 +255,9 @@ def main():
                         current_positions[servo_index] -= step
                         serial_obj.write(
                             create_move_packet(
-                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                                START_ID + servo_index,
+                                current_positions[servo_index],
+                                MOVE_SPEED,
                             )
                         )
 
@@ -271,7 +277,9 @@ def main():
                         current_positions[servo_index] += mapped_value
                         serial_obj.write(
                             create_move_packet(
-                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                                START_ID + servo_index,
+                                current_positions[servo_index],
+                                MOVE_SPEED,
                             )
                         )
 
@@ -291,7 +299,9 @@ def main():
                         current_positions[servo_index] += mapped_value
                         serial_obj.write(
                             create_move_packet(
-                                START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                                START_ID + servo_index,
+                                current_positions[servo_index],
+                                MOVE_SPEED,
                             )
                         )
 
@@ -300,7 +310,9 @@ def main():
                     current_positions[servo_index] -= POSITION_STEP
                     serial_obj.write(
                         create_move_packet(
-                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            START_ID + servo_index,
+                            current_positions[servo_index],
+                            MOVE_SPEED,
                         )
                     )
 
@@ -309,7 +321,9 @@ def main():
                     current_positions[servo_index] += POSITION_STEP
                     serial_obj.write(
                         create_move_packet(
-                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            START_ID + servo_index,
+                            current_positions[servo_index],
+                            MOVE_SPEED,
                         )
                     )
 
@@ -318,7 +332,9 @@ def main():
                     current_positions[servo_index] += POSITION_STEP
                     serial_obj.write(
                         create_move_packet(
-                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            START_ID + servo_index,
+                            current_positions[servo_index],
+                            MOVE_SPEED,
                         )
                     )
 
@@ -327,7 +343,9 @@ def main():
                     current_positions[servo_index] -= POSITION_STEP
                     serial_obj.write(
                         create_move_packet(
-                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED
+                            START_ID + servo_index,
+                            current_positions[servo_index],
+                            MOVE_SPEED,
                         )
                     )
 
@@ -344,7 +362,9 @@ def main():
                     )
                     serial_obj.write(
                         create_move_packet(
-                            START_ID + servo_index, current_positions[servo_index], MOVE_SPEED * 2
+                            START_ID + servo_index,
+                            current_positions[servo_index],
+                            MOVE_SPEED * 2,
                         )
                     )
 
@@ -365,11 +385,13 @@ def main():
         print(f"Error: {e}")
     finally:
         for i in range(NUMBER_OF_SERVOS):
-            serial_obj.write(create_move_packet(START_ID + i, SETUP_POSITIONS[i], SETUP_MOVE_SPEED))
+            serial_obj.write(
+                create_move_packet(START_ID + i, SETUP_POSITIONS[i], SETUP_MOVE_SPEED)
+            )
 
         time.sleep(SETUP_TIME)
 
-        if 'serial_obj' in locals() and serial_obj.is_open:
+        if "serial_obj" in locals() and serial_obj.is_open:
             try:
                 print("Disabling torque on all servos...")
                 for i in range(NUMBER_OF_SERVOS):
