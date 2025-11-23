@@ -5,6 +5,7 @@ on:
     branches: [ develop ]
   workflow_dispatch: {}
 
+# TODO: Move this test to run in a docker image.
 jobs:
   test:
     runs-on: ubuntu-22.04
