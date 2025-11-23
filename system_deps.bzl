@@ -55,9 +55,9 @@ cc_library(
             "-lrclcpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrclcpp",
         ],
         "//conditions:default": [
@@ -77,7 +77,36 @@ cc_library(
         ":rcl_interfaces",
         ":tracetools",
         ":libstatistics_collector",
+        ":rosgraph_msgs",
+        ":ament_index_cpp",
     ],
+)
+
+cc_library(
+    name = "ament_index_cpp",
+    hdrs = glob([
+        "opt/ros/humble/include/ament_index_cpp/**/*.hpp",
+        "opt/ros/humble/include/ament_index_cpp/**/*.h",
+    ], allow_empty = True),
+    strip_include_prefix = "opt/ros/humble/include/ament_index_cpp",
+    linkopts = select({
+        ":cpu_x86_64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lament_index_cpp",
+        ],
+        ":cpu_aarch64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lament_index_cpp",
+        ],
+        "//conditions:default": [
+            "-L/opt/ros/humble/lib",
+            "-lament_index_cpp",
+        ],
+    }),
 )
 
 cc_library(
@@ -94,9 +123,9 @@ cc_library(
             "-lrcl",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcl",
         ],
         "//conditions:default": [
@@ -109,6 +138,104 @@ cc_library(
         ":rmw",
         ":rosidl_runtime_c",
         ":rcl_yaml_param_parser",
+        ":rmw_implementation",
+        ":rcl_logging_interface",
+    ],
+)
+
+cc_library(
+    name = "rcl_logging_interface",
+    hdrs = glob([
+        "opt/ros/humble/include/rcl_logging_interface/**/*.h",
+    ], allow_empty = True),
+    strip_include_prefix = "opt/ros/humble/include/rcl_logging_interface",
+    linkopts = select({
+        ":cpu_x86_64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrcl_logging_interface",
+        ],
+        ":cpu_aarch64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrcl_logging_interface",
+        ],
+        "//conditions:default": [
+            "-L/opt/ros/humble/lib",
+            "-lrcl_logging_interface",
+        ],
+    }),
+    deps = [
+        ":rcutils",
+        ":rcl_logging_spdlog",
+    ],
+)
+
+cc_library(
+    name = "rcl_logging_spdlog",
+    hdrs = glob([
+        "opt/ros/humble/include/rcl_logging_spdlog/**/*.h",
+    ], allow_empty = True),
+    strip_include_prefix = "opt/ros/humble/include/rcl_logging_spdlog",
+    linkopts = select({
+        ":cpu_x86_64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrcl_logging_spdlog",
+            "-lspdlog",
+        ],
+        ":cpu_aarch64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrcl_logging_spdlog",
+            "-lspdlog",
+        ],
+        "//conditions:default": [
+            "-L/opt/ros/humble/lib",
+            "-lrcl_logging_spdlog",
+            "-lspdlog",
+        ],
+    }),
+    deps = [":rcutils", ":spdlog_vendor"],
+)
+
+cc_library(
+    name = "spdlog_vendor",
+    linkopts = ["-lspdlog"],
+)
+
+cc_library(
+    name = "rmw_implementation",
+    hdrs = glob([
+        "opt/ros/humble/include/rmw_implementation/**/*.h",
+    ], allow_empty = True),
+    strip_include_prefix = "opt/ros/humble/include/rmw_implementation",
+    linkopts = select({
+        ":cpu_x86_64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrmw_implementation",
+        ],
+        ":cpu_aarch64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrmw_implementation",
+        ],
+        "//conditions:default": [
+            "-L/opt/ros/humble/lib",
+            "-lrmw_implementation",
+        ],
+    }),
+    deps = [
+        ":rmw",
+        ":rcutils",
+        ":rosidl_runtime_c",
     ],
 )
 
@@ -126,9 +253,9 @@ cc_library(
             "-lrcl_yaml_param_parser",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcl_yaml_param_parser",
         ],
         "//conditions:default": [
@@ -153,9 +280,9 @@ cc_library(
             "-lrcpputils",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcpputils",
         ],
         "//conditions:default": [
@@ -179,9 +306,9 @@ cc_library(
             "-lrcutils",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcutils",
         ],
         "//conditions:default": [
@@ -206,9 +333,9 @@ cc_library(
             "-lrmw",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrmw",
         ],
         "//conditions:default": [
@@ -233,9 +360,9 @@ cc_library(
             "-ltracetools",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-ltracetools",
         ],
         "//conditions:default": [
@@ -260,9 +387,9 @@ cc_library(
             "-llibstatistics_collector",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-llibstatistics_collector",
         ],
         "//conditions:default": [
@@ -288,14 +415,46 @@ cc_library(
             "-lstatistics_msgs__rosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lstatistics_msgs__rosidl_typesupport_cpp",
         ],
         "//conditions:default": [
             "-L/opt/ros/humble/lib",
             "-lstatistics_msgs__rosidl_typesupport_cpp",
+        ],
+    }),
+    deps = [
+        ":std_msgs",
+        ":rosidl_runtime_cpp",
+        ":rosidl_typesupport_cpp",
+    ],
+)
+
+cc_library(
+    name = "rosgraph_msgs",
+    hdrs = glob([
+        "opt/ros/humble/include/rosgraph_msgs/**/*.hpp",
+        "opt/ros/humble/include/rosgraph_msgs/**/*.h",
+    ], allow_empty = True),
+    strip_include_prefix = "opt/ros/humble/include/rosgraph_msgs",
+    linkopts = select({
+        ":cpu_x86_64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/x86_64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrosgraph_msgs__rosidl_typesupport_cpp",
+        ],
+        ":cpu_aarch64": [
+            "-L/opt/ros/humble/lib",
+            "-L/usr/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
+            "-lrosgraph_msgs__rosidl_typesupport_cpp",
+        ],
+        "//conditions:default": [
+            "-L/opt/ros/humble/lib",
+            "-lrosgraph_msgs__rosidl_typesupport_cpp",
         ],
     }),
     deps = [
@@ -319,9 +478,9 @@ cc_library(
             "-lrosidl_runtime_c",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrosidl_runtime_c",
         ],
         "//conditions:default": [
@@ -363,9 +522,9 @@ cc_library(
             "-lrosidl_typesupport_c",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrosidl_typesupport_c",
         ],
         "//conditions:default": [
@@ -390,9 +549,9 @@ cc_library(
             "-lrosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrosidl_typesupport_cpp",
         ],
         "//conditions:default": [
@@ -417,9 +576,9 @@ cc_library(
             "-lrcl_action",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcl_action",
         ],
         "//conditions:default": [
@@ -444,9 +603,9 @@ cc_library(
             "-lrclcpp_action",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrclcpp_action",
         ],
         "//conditions:default": [
@@ -476,16 +635,22 @@ cc_library(
             "-L/usr/lib/x86_64-linux-gnu",
             "-Wl,-rpath,/opt/ros/humble/lib",
             "-lbuiltin_interfaces__rosidl_typesupport_cpp",
+            "-lbuiltin_interfaces__rosidl_typesupport_c",
+            "-lbuiltin_interfaces__rosidl_generator_c",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lbuiltin_interfaces__rosidl_typesupport_cpp",
+            "-lbuiltin_interfaces__rosidl_typesupport_c",
+            "-lbuiltin_interfaces__rosidl_generator_c",
         ],
         "//conditions:default": [
             "-L/opt/ros/humble/lib",
             "-lbuiltin_interfaces__rosidl_typesupport_cpp",
+            "-lbuiltin_interfaces__rosidl_typesupport_c",
+            "-lbuiltin_interfaces__rosidl_generator_c",
         ],
     }),
     deps = [
@@ -514,16 +679,22 @@ cc_library(
             "-L/usr/lib/x86_64-linux-gnu",
             "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcl_interfaces__rosidl_typesupport_cpp",
+            "-lrcl_interfaces__rosidl_typesupport_c",
+            "-lrcl_interfaces__rosidl_generator_c",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lrcl_interfaces__rosidl_typesupport_cpp",
+            "-lrcl_interfaces__rosidl_typesupport_c",
+            "-lrcl_interfaces__rosidl_generator_c",
         ],
         "//conditions:default": [
             "-L/opt/ros/humble/lib",
             "-lrcl_interfaces__rosidl_typesupport_cpp",
+            "-lrcl_interfaces__rosidl_typesupport_c",
+            "-lrcl_interfaces__rosidl_generator_c",
         ],
     }),
     deps = [
@@ -555,9 +726,9 @@ cc_library(
             "-lstd_msgs__rosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lstd_msgs__rosidl_typesupport_cpp",
         ],
         "//conditions:default": [
@@ -587,9 +758,9 @@ cc_library(
             "-lsensor_msgs__rosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lsensor_msgs__rosidl_typesupport_cpp",
         ],
         "//conditions:default": [
@@ -621,9 +792,9 @@ cc_library(
             "-lgeometry_msgs__rosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lgeometry_msgs__rosidl_typesupport_cpp",
         ],
         "//conditions:default": [
@@ -654,9 +825,9 @@ cc_library(
             "-lstd_srvs__rosidl_typesupport_cpp",
         ],
         ":cpu_aarch64": [
-            "-L/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-L/opt/ros/humble/lib",
             "-L/usr/lib/aarch64-linux-gnu",
-            "-Wl,-rpath,/opt/ros/humble/lib/aarch64-linux-gnu",
+            "-Wl,-rpath,/opt/ros/humble/lib",
             "-lstd_srvs__rosidl_typesupport_cpp",
         ],
         "//conditions:default": [
