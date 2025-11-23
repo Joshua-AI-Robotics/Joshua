@@ -43,34 +43,6 @@ ros2_cpp_binary(
 )
 
 ros2_py_binary(
-    name = "example_inference_node",
-    srcs = ["example_inference_node.py"],
-    data = [],
-    main = "example_inference_node.py",
-    tags = ["manual"],
-    deps = [
-        # Note: Python ROS2 messages and rclpy are available via system Python installation
-        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
-        requirement("opencv-python"),
-        requirement("numpy"),
-        requirement("torch"),
-        requirement("transformers"),
-        requirement("huggingface-hub"),
-        requirement("pillow"),
-        requirement("protobuf"),
-    ],
-)
-
-ros2_cpp_binary(
-    name = "mock_action_publisher",
-    srcs = ["mock_action_publisher.cc"],
-    deps = [
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_py_binary(
     name = "pointcloud2_visualizer",
     srcs = ["pointcloud2_visualizer.py"],
     main = "pointcloud2_visualizer.py",
