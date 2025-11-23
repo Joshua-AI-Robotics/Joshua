@@ -197,8 +197,8 @@ install_precommit_and_hooks() {
         return 0
     fi
 
-    # Ensure pre-commit is installed for the non-root user
-    sudo -u "$NONROOT_USER" -H bash -lc 'python3 -m pip install --user --upgrade pre-commit'
+    # Ensure pre-commit and python linters are installed for the non-root user
+    sudo -u "$NONROOT_USER" -H bash -lc 'python3 -m pip install --user --upgrade pre-commit black flake8 isort'
 
     # Install Git LFS for the repository (skip if not available)
     REPO_DIR="$(pwd)"
