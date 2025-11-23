@@ -24,7 +24,7 @@ jobs:
             bazel-${{ runner.os }}-
 
       - name: Install Bazelisk
-        run: npm install -g @bazel/bazelisk
+        run: sudo npm install -g @bazel/bazelisk
 
       - name: Run Tests
         run: bazel test //...
