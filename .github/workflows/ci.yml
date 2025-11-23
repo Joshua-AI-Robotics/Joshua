@@ -26,6 +26,11 @@ jobs:
       - name: Install Bazelisk
         run: sudo npm install -g @bazel/bazelisk
 
+      - name: Setup ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
