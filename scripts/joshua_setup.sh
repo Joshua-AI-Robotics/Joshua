@@ -96,16 +96,54 @@ install_arm64_tools() {
 
 # Function to install Bazel
 install_bazel() {
-    echo -e "${BLUE}Installing Bazel...${NC}"
-    if ! command -v bazel &> /dev/null; then
-        # Install Bazel using the official installer
-        curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel-archive-keyring.gpg
-        sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
-        sudo apt-get update
-        sudo apt-get install -y bazel
-    else
+    echo -e "${BLUE}Checking for Bazel...${NC}"
+    if command -v bazel &> /dev/null; then
         echo -e "${GREEN}Bazel is already installed${NC}"
+        return 0
+    fi
+
+    # Detect architecture
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)
+            BAZEL_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            BAZEL_ARCH="arm64"
+            ;;
+        *)
+            echo -e "${RED}Unsupported architecture: $ARCH${NC}"
+            return 1
+            ;;
+    esac
+
+    echo -e "${BLUE}Detected $ARCH. Installing Bazelisk for linux-$BAZEL_ARCH...${NC}"
+    
+    local url="https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-$BAZEL_ARCH"
+    
+    # Download directly to destination using curl or wget
+    if command -v curl &> /dev/null; then
+        if ! curl -L "$url" | sudo tee /usr/local/bin/bazel > /dev/null; then
+             echo -e "${RED}Failed to download Bazel using curl${NC}"
+             return 1
+        fi
+    elif command -v wget &> /dev/null; then
+        if ! wget -qO- "$url" | sudo tee /usr/local/bin/bazel > /dev/null; then
+             echo -e "${RED}Failed to download Bazel using wget${NC}"
+             return 1
+        fi
+    else
+        echo -e "${RED}Error: Neither curl nor wget found. Please install one of them.${NC}"
+        return 1
+    fi
+
+    sudo chmod +x /usr/local/bin/bazel
+    
+    if command -v bazel &> /dev/null; then
+        echo -e "${GREEN}Bazel installed successfully!${NC}"
+    else
+        echo -e "${RED}Bazel installation failed.${NC}"
+        return 1
     fi
 }
 
@@ -215,10 +253,10 @@ main() {
     echo -e "${GREEN}========================================${NC}"
     echo
 
-    # check_ubuntu_version
+    check_ubuntu_version
     update_packages
     install_ros2
-    install_qt6
+    # install_qt6 TODO: Remove this once web UI is ready.
     install_opencv
     install_arm64_tools
     install_bazel
