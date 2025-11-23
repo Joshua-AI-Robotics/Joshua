@@ -16,11 +16,11 @@ bazel_dep(name = "glog", version = "0.7.1")
 bazel_dep(name = "platforms", version = "0.0.8")
 
 # Hermetic LLVM toolchain for Linux AArch64 (Jetson Orin Nano)
-bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.2.4")
+# bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.2.4")
 
-register_toolchains(
-    "@toolchains_llvm_bootstrapped//toolchain:linux_aarch64",
-)
+# register_toolchains(
+#     "@toolchains_llvm_bootstrapped//toolchain:linux_aarch64",
+# )
 
 # ROS2 is configured via system_ros2_rules.bzl using system-installed libraries
 # See system_ros2_rules.bzl for library definitions
