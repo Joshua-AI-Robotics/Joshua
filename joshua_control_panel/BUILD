@@ -103,8 +103,8 @@ cc_library(
         "//node_generator",
         "@abseil-cpp//absl/status:status",
         "@local_deps//:qt6_widgets",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 

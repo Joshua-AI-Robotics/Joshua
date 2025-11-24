@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ develop ]
+  workflow_dispatch: {}
+
+# TODO: Move this test to run in a docker image.
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Mount Bazel Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-
+
+      - name: Install Bazelisk
+        run: sudo npm install -g @bazel/bazelisk
+
+      - name: Setup ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools \
+            libopencv-dev \
+            libevdev-dev
+
+      - name: Run Tests
+        run: bazel test //...

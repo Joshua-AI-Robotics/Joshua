@@ -118,6 +118,8 @@ class CameraSubscriber : public rclcpp::Node {
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
 };
 
+// To run:
+// bazel run ros2/utils:camera_subscriber <topic_name>
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
 

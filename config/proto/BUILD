@@ -38,6 +38,9 @@ proto_library(
     name = "calibration_proto",
     srcs = ["calibration.proto"],
     visibility = ["//visibility:public"],
+    deps = [
+        "//ros2/proto:node_proto",
+    ],
 )
 
 proto_library(

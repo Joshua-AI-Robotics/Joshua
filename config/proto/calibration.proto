@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "ros2/proto/node.proto";
+
 package config;
 
 enum CalibrationMode {
@@ -8,7 +10,7 @@ enum CalibrationMode {
 }
 
 message Calibration {
-  uint64 node_id = 1;
+  ros2.node.Node node = 1;
   CalibrationMode calibration_mode = 2;
   repeated string subscribe_topics = 3;
   // Publish topics will be automatically generated as "subscribe_topics_operational_limit".

@@ -17,6 +17,31 @@ else
   exit 1
 fi
 
+# Discover Python tooling if available
+if command -v black >/dev/null 2>&1; then
+  PY_BLACK="black"
+elif python3 -c "import black" >/dev/null 2>&1; then
+  PY_BLACK="python3 -m black"
+else
+  PY_BLACK=""
+fi
+
+if command -v flake8 >/dev/null 2>&1; then
+  PY_FLAKE8="flake8"
+elif python3 -c "import flake8" >/dev/null 2>&1; then
+  PY_FLAKE8="python3 -m flake8"
+else
+  PY_FLAKE8=""
+fi
+
+if command -v isort >/dev/null 2>&1; then
+  PY_ISORT="isort"
+elif python3 -c "import isort" >/dev/null 2>&1; then
+  PY_ISORT="python3 -m isort"
+else
+  PY_ISORT=""
+fi
+
 # Check if we're in fix mode (when called with --fix)
 FIX_MODE=false
 if [ "${1:-}" = "--fix" ]; then
@@ -24,13 +49,30 @@ if [ "${1:-}" = "--fix" ]; then
   shift  # Remove --fix from arguments
 fi
 
-# If no files provided, get all relevant files
+# If no files provided, get relevant files
 if [ $# -eq 0 ]; then
-  # Build candidate file list: tracked + untracked (excluding ignored)
-  mapfile -d '' FILES < <( (
-    git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml'; \
-    git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' \
-  ) | sort -zu )
+  if [ "$FIX_MODE" = true ]; then
+    # In fix mode, target changes from the merge base with develop (commits, staged, unstaged) and untracked files
+    TARGET_BRANCH="origin/develop"
+    # Fallback to local develop if origin/develop is missing
+    if ! git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1; then
+      TARGET_BRANCH="develop"
+    fi
+    
+    # Find the common ancestor (merge base) between HEAD and the target branch
+    MERGE_BASE=$(git merge-base HEAD "$TARGET_BRANCH")
+
+    mapfile -d '' FILES < <( (
+      git diff --name-only -z "$MERGE_BASE" -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
+      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
+    ) | sort -zu )
+  else
+    # In check mode, check all files
+    mapfile -d '' FILES < <( (
+      git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'; \
+      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py' \
+    ) | sort -zu )
+  fi
 else
   FILES=("$@")
 fi
@@ -83,6 +125,53 @@ for f in "${FILES[@]}"; do
       if ! clang-format --dry-run --Werror "$f" >/dev/null 2>&1; then
         echo "clang-format issues in $f (run hooks/lint_check.sh --fix to update)" >&2
         fail=1
+      fi
+    fi
+  fi
+  
+  # Python lint/format
+  if [[ "$f" =~ \.py$ ]]; then
+    if [ "$FIX_MODE" = true ]; then
+      # Apply import sorting first
+      if [ -n "$PY_ISORT" ]; then
+        $PY_ISORT --profile black "$f" >/dev/null 2>&1 || true
+        echo "Sorted imports with isort in $f"
+      fi
+      # Format with black
+      if [ -n "$PY_BLACK" ]; then
+        $PY_BLACK -q "$f" >/dev/null 2>&1 || true
+        echo "Formatted with black in $f"
+      else
+        echo "black not found; skipping auto-format for $f" >&2
+      fi
+      # Lint with flake8
+      if [ -n "$PY_FLAKE8" ]; then
+        # Black compatibility: max-line-length 88, ignore E203 (whitespace before :)
+        if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
+          echo "flake8 issues in $f" >&2
+          fail=1
+        fi
+      else
+        echo "flake8 not found; skipping lint for $f" >&2
+      fi
+    else
+      # Check formatting with black
+      if [ -n "$PY_BLACK" ]; then
+        if ! $PY_BLACK --check --diff "$f" >/dev/null 2>&1; then
+          echo "black formatting issues in $f (run hooks/lint_check.sh --fix to update)" >&2
+          fail=1
+        fi
+      else
+        echo "black not found; skipping format check for $f" >&2
+      fi
+      # Lint with flake8
+      if [ -n "$PY_FLAKE8" ]; then
+        if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
+          echo "flake8 issues in $f" >&2
+          fail=1
+        fi
+      else
+        echo "flake8 not found; skipping lint for $f" >&2
       fi
     fi
   fi

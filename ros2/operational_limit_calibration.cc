@@ -5,6 +5,7 @@
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
 #include "ros2/node_runner.h"
+#include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 
@@ -28,6 +29,7 @@ class OperationalLimitCalibration : public rclcpp::Node {
     for (const auto& subscribe_topic : config.calibration().subscribe_topics()) {
       operational_limits_.emplace_back();
       OperationalLimit& operational_limit = operational_limits_.back();
+      const auto& qos_setting = config.calibration().node().qos_setting();
       operational_limit.subscribe_topic = subscribe_topic;
       operational_limit.publish_topic = subscribe_topic + "_operational_limit";
 
@@ -42,9 +44,9 @@ class OperationalLimitCalibration : public rclcpp::Node {
       };
 
       operational_limit.subscription = this->create_subscription<std_msgs::msg::Float32>(
-          operational_limit.subscribe_topic, 10, callback);
+          operational_limit.subscribe_topic, ros2_utils::CreateQosSetting(qos_setting), callback);
       operational_limit.publisher = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-          operational_limit.publish_topic, 10);
+          operational_limit.publish_topic, ros2_utils::CreateQosSetting(qos_setting));
     }
 
     if (operational_limits_.empty()) {

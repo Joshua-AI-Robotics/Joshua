@@ -8,7 +8,11 @@ robot {
 
   actions {
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_1"
       action_type: ACTUATOR
       actuator {
@@ -37,7 +41,11 @@ robot {
       }
     }
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_2"
       action_type: ACTUATOR
       actuator {
@@ -66,7 +74,11 @@ robot {
       }
     }
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_3"
       action_type: ACTUATOR
       actuator {
@@ -95,7 +107,11 @@ robot {
       }
     }
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_4"
       action_type: ACTUATOR
       actuator {
@@ -124,7 +140,11 @@ robot {
       }
     }
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_5"
       action_type: ACTUATOR
       actuator {
@@ -153,7 +173,11 @@ robot {
       }
     }
     single_actions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+      }
       subscribe_topic: "mock_action_6"
       action_type: ACTUATOR
       actuator {
@@ -185,7 +209,11 @@ robot {
 
   perceptions {
     single_perceptions {
-      node_id: 2
+      node {
+        id: 2
+        node_type: CAMERA_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "camera_1"
       perception_type: CAMERA
       publish_rate_hz: 30
@@ -209,7 +237,11 @@ ai {
   models {
     single_model {
       policy_name: "example_policy"
-      node_id: 3
+      node {
+        id: 3
+        node_type: INFERENCE
+        qos_setting {}
+      }
 
       subscriptions {
         ros2_data_type: IMAGE

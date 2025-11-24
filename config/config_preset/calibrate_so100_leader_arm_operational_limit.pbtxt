@@ -8,7 +8,11 @@ robot {
 
   perceptions {
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_1"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -33,7 +37,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_2"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -58,7 +66,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_3"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -83,7 +95,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_4"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -108,7 +124,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_5"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -133,7 +153,11 @@ robot {
       }
     }
     single_perceptions {
-      node_id: 1
+      node {
+        id: 1
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+      }
       publish_topic: "sts3215_encoder_6"
       perception_type: ENCODER
       publish_rate_hz: 100
@@ -162,7 +186,11 @@ robot {
 }
 
 calibration {
-  node_id: 2
+  node {
+    id: 2
+    node_type: OPERATIONAL_LIMIT_CALIBRATION
+    qos_setting {}
+  }
   calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
   subscribe_topics: "sts3215_encoder_1"
   subscribe_topics: "sts3215_encoder_2"

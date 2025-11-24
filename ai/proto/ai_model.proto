@@ -2,12 +2,13 @@ syntax = "proto3";
 
 package ai.model;
 
+import "ros2/proto/node.proto";
 import "ros2/proto/ros2_data_type.proto";
 
 message SingleModel {
   string policy_name = 1;
   string pretrained_model_path = 2;
-  uint32 node_id = 3;
+  ros2.node.Node node = 3;
   repeated Subscription subscriptions = 4;
   repeated Publisher pubishers = 5;
   oneof policy_config {
