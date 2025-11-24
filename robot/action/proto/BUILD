@@ -9,6 +9,7 @@ proto_library(
     deps = [
         "//robot/comm/proto:comm_proto",
         "//robot/perception/proto:perception_proto",
+        "//ros2/proto:node_proto",
     ],
 )
 

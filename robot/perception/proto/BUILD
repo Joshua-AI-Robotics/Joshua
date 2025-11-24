@@ -8,6 +8,7 @@ proto_library(
     srcs = ["perception.proto"],
     deps = [
         "//robot/comm/proto:comm_proto",
+        "//ros2/proto:node_proto",
     ],
 )
 

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "robot/comm/proto/comm.proto";
 import "robot/perception/proto/perception.proto";
+import "ros2/proto/node.proto";
 
 package robot.action;
 
@@ -40,7 +41,7 @@ message Sts3215Config {
 }
 
 message SingleAction {
-  uint32 node_id = 1;
+  ros2.node.Node node = 1;
   string subscribe_topic = 2;
   ActionType action_type = 3;
   oneof action_data {

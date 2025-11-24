@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package ros2.node;
+
+enum NodeType {
+  NODE_INVALID = 0;
+  CAMERA_PUBLISHER = 1;
+  ENCODER_PUBLISHER = 2;
+  ACTUATOR_SUBSCRIBER = 3;
+  OPERATIONAL_LIMIT_CALIBRATION = 4;
+  INFERENCE = 5;
+  LIDAR_PUBLISHER = 6;
+}
+
+enum QosReliabilityPolicy {
+  QOS_RELIABILITY_POLICY_RELIABLE = 0;  // Default if not specified.
+  QOS_RELIABILITY_POLICY_BEST_EFFORT = 1;
+}
+
+enum QosDurabilityPolicy {
+  QOS_DURABILITY_POLICY_VOLATILE = 0;  // Default if not specified.
+  QOS_DURABILITY_POLICY_TRANSIENT_LOCAL = 1;
+}
+
+enum QosHistoryPolicy {
+  QOS_HISTORY_POLICY_KEEP_LAST = 0;  // Default if not specified.
+  QOS_HISTORY_POLICY_KEEP_ALL = 1;
+}
+
+enum QosLivelinessPolicy {
+  QOS_LIVELINESS_POLICY_AUTOMATIC = 0;  // Default if not specified.
+  QOS_LIVELINESS_POLICY_MANUAL_BY_TOPIC =
+      1;  // Liveliness must be explicitly asserted via an API call.
+}
+
+message QosSetting {
+  QosReliabilityPolicy reliability_policy = 1;
+  QosDurabilityPolicy durability_policy = 2;
+  QosHistoryPolicy history_policy = 3;
+  uint32 depth = 4;
+  QosLivelinessPolicy liveliness_policy = 5;
+  uint64 liveliness_lease_duration_nanoseconds = 6;
+  uint64 deadline_nanoseconds = 7;
+  uint64 lifespan_nanoseconds = 8;
+}
+
+message Node {
+  uint32 id = 1;
+  NodeType node_type = 2;
+  QosSetting qos_setting = 3;
+}

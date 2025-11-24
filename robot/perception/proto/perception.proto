@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "robot/comm/proto/comm.proto";
+import "ros2/proto/node.proto";
 
 package robot.perception;
 
@@ -83,7 +84,7 @@ message Sts3215EncoderConfig {
 }
 
 message SinglePerception {
-  uint32 node_id = 1;
+  ros2.node.Node node = 1;
   string publish_topic = 2;
   uint32 publish_rate_hz = 3;
   PerceptionType perception_type = 4;
