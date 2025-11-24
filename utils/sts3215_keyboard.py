@@ -11,7 +11,7 @@ from collections import namedtuple
 
 import serial
 
-UART_PORT = '/dev/ttyACM0'
+UART_PORT = "/dev/ttyACM0"
 UART_BAUDRATE = 1000000
 
 NUMBER_OF_SERVOS = 6
@@ -117,7 +117,7 @@ def getch():
     try:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
-        if ch == '\x1b':
+        if ch == "\x1b":
             ch += sys.stdin.read(2)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -125,7 +125,7 @@ def getch():
 
 
 def print_status():
-    os.system('clear')
+    os.system("clear")
     print("╔══════════════════════════════════════════════╗")
     print("║     Feetech STS3215 Multiple Servo Control   ║")
     print("╚══════════════════════════════════════════════╝\n")
@@ -139,7 +139,9 @@ def print_status():
         min_pos = SERVO_LIMITS[i].min
         max_pos = SERVO_LIMITS[i].max
         note = "<- ACTIVE" if i == active_servo else ""
-        print(f"│ {servo_id:2d} │  {position:7d}  │ {min_pos:6d} │ {max_pos:6d} │" + note)
+        print(
+            f"│ {servo_id:2d} │  {position:7d}  │ {min_pos:6d} │ {max_pos:6d} │" + note
+        )
     print("└────┴───────────┴────────┴────────┘\n")
 
     print("\nControls:")
@@ -153,7 +155,7 @@ def print_status():
 
 def save_positions():
     try:
-        with open(SAVE_FILE, 'w') as f:
+        with open(SAVE_FILE, "w") as f:
             json.dump(current_positions, f)
         return True
     except Exception as e:
@@ -198,7 +200,9 @@ def main():
         for i in range(NUMBER_OF_SERVOS):
             middle_position = (SERVO_LIMITS[i].min + SERVO_LIMITS[i].max) // 2
             current_positions[i] = middle_position
-            serial_obj.write(create_move_packet(START_ID + i, middle_position, SETUP_MOVE_SPEED))
+            serial_obj.write(
+                create_move_packet(START_ID + i, middle_position, SETUP_MOVE_SPEED)
+            )
             time.sleep(SERVO_COMMAND_BUFFER_TIME)
 
         time.sleep(SETUP_TIME)
@@ -207,13 +211,13 @@ def main():
 
         while True:
             key = getch()
-            if key.lower() == 'q':
+            if key.lower() == "q":
                 print("Shutting Down...")
                 break
-            elif key in '123456':
+            elif key in "123456":
                 active_servo = int(key) - 1
                 print_status()
-            elif key.lower() == 's':
+            elif key.lower() == "s":
                 print(
                     "Positions saved successfully"
                     if save_positions()
@@ -221,12 +225,14 @@ def main():
                 )
                 time.sleep(1)
                 print_status()
-            elif key.lower() == 'l':
+            elif key.lower() == "l":
                 if load_positions():
                     print("Positions loaded successfully")
                     for i in range(NUMBER_OF_SERVOS):
                         serial_obj.write(
-                            create_move_packet(START_ID + i, current_positions[i], MOVE_SPEED)
+                            create_move_packet(
+                                START_ID + i, current_positions[i], MOVE_SPEED
+                            )
                         )
                         time.sleep(0.2)
                     time.sleep(1)
@@ -234,20 +240,22 @@ def main():
                     print("Failed to load positions or no saved positions found")
                 time.sleep(1)
                 print_status()
-            elif key.startswith('\x1b['):
+            elif key.startswith("\x1b["):
                 arrow = key[2]
                 limits = SERVO_LIMITS[active_servo]
-                if arrow == 'C':
+                if arrow == "C":
                     current_positions[active_servo] = min(
                         current_positions[active_servo] + POSITION_STEP, limits.max
                     )
-                elif arrow == 'D':
+                elif arrow == "D":
                     current_positions[active_servo] = max(
                         current_positions[active_servo] - POSITION_STEP, limits.min
                     )
                 serial_obj.write(
                     create_move_packet(
-                        START_ID + active_servo, current_positions[active_servo], MOVE_SPEED
+                        START_ID + active_servo,
+                        current_positions[active_servo],
+                        MOVE_SPEED,
                     )
                 )
 
@@ -259,11 +267,13 @@ def main():
         print(f"Error: {e}")
     finally:
         for i in range(NUMBER_OF_SERVOS):
-            serial_obj.write(create_move_packet(START_ID + i, SETUP_POSITIONS[i], SETUP_MOVE_SPEED))
+            serial_obj.write(
+                create_move_packet(START_ID + i, SETUP_POSITIONS[i], SETUP_MOVE_SPEED)
+            )
 
         time.sleep(SETUP_TIME)
 
-        if 'serial_obj' in locals() and serial_obj.is_open:
+        if "serial_obj" in locals() and serial_obj.is_open:
             try:
                 print("Disabling torque on all servos...")
                 for i in range(NUMBER_OF_SERVOS):

@@ -147,6 +147,8 @@ class KeyboardPublisher : public rclcpp::Node {
   struct termios old_tio_, new_tio_;
 };
 
+// To run:
+// bazel run ros2/utils:keyboard_publisher
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<KeyboardPublisher>();
