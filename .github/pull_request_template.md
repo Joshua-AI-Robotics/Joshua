@@ -2,6 +2,6 @@
 
 Describe what this PR changes and why.
 
-## Test Result
+## Tested
 
 Add screenshot or test results.

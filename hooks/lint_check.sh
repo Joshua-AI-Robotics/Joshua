@@ -115,19 +115,19 @@ for f in "${FILES[@]}"; do
   # Python lint/format
   if [[ "$f" =~ \.py$ ]]; then
     if [ "$FIX_MODE" = true ]; then
-      # Apply import sorting first if available
+      # Apply import sorting first
       if [ -n "$PY_ISORT" ]; then
         $PY_ISORT --profile black "$f" >/dev/null 2>&1 || true
         echo "Sorted imports with isort in $f"
       fi
-      # Format with black if available
+      # Format with black
       if [ -n "$PY_BLACK" ]; then
         $PY_BLACK -q "$f" >/dev/null 2>&1 || true
         echo "Formatted with black in $f"
       else
         echo "black not found; skipping auto-format for $f" >&2
       fi
-      # Lint with flake8 if available
+      # Lint with flake8
       if [ -n "$PY_FLAKE8" ]; then
         # Black compatibility: max-line-length 88, ignore E203 (whitespace before :)
         if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
@@ -138,7 +138,7 @@ for f in "${FILES[@]}"; do
         echo "flake8 not found; skipping lint for $f" >&2
       fi
     else
-      # Check formatting with black if available
+      # Check formatting with black
       if [ -n "$PY_BLACK" ]; then
         if ! $PY_BLACK --check --diff "$f" >/dev/null 2>&1; then
           echo "black formatting issues in $f (run hooks/lint_check.sh --fix to update)" >&2
@@ -147,7 +147,7 @@ for f in "${FILES[@]}"; do
       else
         echo "black not found; skipping format check for $f" >&2
       fi
-      # Lint with flake8 if available
+      # Lint with flake8
       if [ -n "$PY_FLAKE8" ]; then
         if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
           echo "flake8 issues in $f" >&2
