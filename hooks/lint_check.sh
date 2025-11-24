@@ -49,13 +49,30 @@ if [ "${1:-}" = "--fix" ]; then
   shift  # Remove --fix from arguments
 fi
 
-# If no files provided, get all relevant files
+# If no files provided, get relevant files
 if [ $# -eq 0 ]; then
-  # Build candidate file list: tracked + untracked (excluding ignored)
-  mapfile -d '' FILES < <( (
-    git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'; \
-    git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py' \
-  ) | sort -zu )
+  if [ "$FIX_MODE" = true ]; then
+    # In fix mode, target changes from the merge base with develop (commits, staged, unstaged) and untracked files
+    TARGET_BRANCH="origin/develop"
+    # Fallback to local develop if origin/develop is missing
+    if ! git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1; then
+      TARGET_BRANCH="develop"
+    fi
+    
+    # Find the common ancestor (merge base) between HEAD and the target branch
+    MERGE_BASE=$(git merge-base HEAD "$TARGET_BRANCH")
+
+    mapfile -d '' FILES < <( (
+      git diff --name-only -z "$MERGE_BASE" -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
+      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
+    ) | sort -zu )
+  else
+    # In check mode, check all files
+    mapfile -d '' FILES < <( (
+      git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'; \
+      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py' \
+    ) | sort -zu )
+  fi
 else
   FILES=("$@")
 fi
