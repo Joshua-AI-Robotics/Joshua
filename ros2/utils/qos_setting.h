@@ -43,28 +43,27 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
       break;
   }
 
-  // 3. History
+  // 3. History & 4. Depth
+  size_t depth = 10;
+  if (qos_setting.depth() > 0) {
+    depth = static_cast<size_t>(qos_setting.depth());
+  } else {
+    LOG(WARNING) << "Depth is not set. Using default depth 10.";
+  }
+
   switch (qos_setting.history_policy()) {
     case ros2::node::QosHistoryPolicy::QOS_HISTORY_POLICY_KEEP_LAST:
-      qos_profile.history(RMW_QOS_POLICY_HISTORY_KEEP_LAST);
+      qos_profile.keep_last(depth);
       break;
     case ros2::node::QosHistoryPolicy::QOS_HISTORY_POLICY_KEEP_ALL:
-      qos_profile.history(RMW_QOS_POLICY_HISTORY_KEEP_ALL);
+      qos_profile.keep_all();
       break;
     default:
       LOG(WARNING) << "Invalid history policy: "
                    << ros2::node::QosHistoryPolicy_Name(qos_setting.history_policy())
                    << ". Using default keep last policy.";
-      qos_profile.history(RMW_QOS_POLICY_HISTORY_KEEP_LAST);
+      qos_profile.keep_last(depth);
       break;
-  }
-
-  // 4. Depth
-  if (qos_setting.depth() > 0) {
-    qos_profile.depth(qos_setting.depth());
-  } else {
-    LOG(WARNING) << "Depth is not set. Using default depth 10.";
-    qos_profile.depth(10);
   }
 
   // 5. Liveliness
@@ -85,7 +84,7 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
 
   // 6. Liveliness Lease Duration.
   if (qos_setting.liveliness_lease_duration_nanoseconds() > 0) {
-    qos_profile.lease_duration(
+    qos_profile.liveliness_lease_duration(
         std::chrono::nanoseconds(qos_setting.liveliness_lease_duration_nanoseconds()));
   }
 

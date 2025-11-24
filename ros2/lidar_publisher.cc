@@ -10,6 +10,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/utils/qos_setting.h"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 
@@ -29,9 +30,9 @@ class LidarPublisher : public rclcpp::Node {
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::LIDAR &&
-          static_cast<int>(single_perception.node_id()) == node_id) {
+          static_cast<int>(single_perception.node().id()) == node_id) {
         const auto& lidar_proto = single_perception.lidar();
-
+        const auto& qos_setting = single_perception.node().qos_setting();
         // First, create the interface and check if it's valid.
         auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
         if (!interface.ok()) {
@@ -46,7 +47,7 @@ class LidarPublisher : public rclcpp::Node {
             Lidar{.topic = single_perception.publish_topic(),
                   .interface = std::move(interface.value()),
                   .publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-                      single_perception.publish_topic(), 10),
+                      single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
                   .timer = this->create_wall_timer(
                       std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
                       std::bind(&LidarPublisher::publish_lidar_data, this)),

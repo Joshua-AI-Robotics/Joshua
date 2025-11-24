@@ -7,6 +7,7 @@
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/float32.hpp"
 
 class ActionSubscriber : public rclcpp::Node {
@@ -30,8 +31,9 @@ class ActionSubscriber : public rclcpp::Node {
       : Node(node_name) {
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() == robot::action::ActionType::ACTUATOR &&
-          single_action.node_id() == node_id) {
+          static_cast<int>(single_action.node().id()) == node_id) {
         const auto& action_proto = single_action.actuator();
+        const auto& qos_setting = single_action.node().qos_setting();
 
         auto interface = robot::action::ActionFactory::CreateAction(single_action);
         if (!interface.ok()) {
@@ -82,8 +84,8 @@ class ActionSubscriber : public rclcpp::Node {
           }
         };
 
-        actuator.subscription =
-            this->create_subscription<std_msgs::msg::Float32>(actuator.topic, 10, callback);
+        actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
+            actuator.topic, ros2_utils::CreateQosSetting(qos_setting), callback);
       }
     }
 

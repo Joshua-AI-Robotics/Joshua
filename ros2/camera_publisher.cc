@@ -7,6 +7,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/utils/qos_setting.h"
 #include "sensor_msgs/msg/image.hpp"
 
 class CameraPublisher : public rclcpp::Node {
@@ -23,8 +24,9 @@ class CameraPublisher : public rclcpp::Node {
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::CAMERA &&
-          static_cast<int>(single_perception.node_id()) == node_id) {
+          static_cast<int>(single_perception.node().id()) == node_id) {
         const auto& camera_proto = single_perception.camera();
+        const auto& qos_setting = single_perception.node().qos_setting();
 
         auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
         if (!interface.ok()) {
@@ -35,14 +37,14 @@ class CameraPublisher : public rclcpp::Node {
           continue;  // Skip this camera if initialization failed.
         }
 
-        cameras_.emplace_back(
-            Camera{.topic = single_perception.publish_topic(),
-                   .interface = std::move(interface.value()),
-                   .publisher = this->create_publisher<sensor_msgs::msg::Image>(
-                       single_perception.publish_topic(), 10),
-                   .timer = this->create_wall_timer(
-                       std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
-                       std::bind(&CameraPublisher::publish_camera_data, this))});
+        cameras_.emplace_back(Camera{
+            .topic = single_perception.publish_topic(),
+            .interface = std::move(interface.value()),
+            .publisher = this->create_publisher<sensor_msgs::msg::Image>(
+                single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
+            .timer = this->create_wall_timer(
+                std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
+                std::bind(&CameraPublisher::publish_camera_data, this))});
 
         RCLCPP_INFO(this->get_logger(),
                     "Found camera '%s' in configuration for node_id %d. Publishing on topic: %s",

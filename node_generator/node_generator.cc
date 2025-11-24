@@ -273,7 +273,7 @@ absl::Status NodeGenerator::Initialize() {
 absl::Status NodeGenerator::identify_node_types() {
   // Actions -> add node type(s)
   for (const auto& single_action : config_.robot().actions().single_actions()) {
-    const uint32_t node_id = single_action.node_id();
+    const uint32_t node_id = single_action.node().id();
     auto it = kActionToNodeType.find(single_action.action_type());
     if (it != kActionToNodeType.end()) {
       identified_nodes_[node_id] = it->second;
@@ -282,7 +282,7 @@ absl::Status NodeGenerator::identify_node_types() {
 
   // Perceptions -> add node type(s)
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
-    const uint32_t node_id = single_perception.node_id();
+    const uint32_t node_id = single_perception.node().id();
     auto it = kPerceptionToNodeType.find(single_perception.perception_type());
     if (it != kPerceptionToNodeType.end()) {
       identified_nodes_[node_id] = it->second;
@@ -296,7 +296,7 @@ absl::Status NodeGenerator::identify_node_types() {
       const char* node_type = it->second;
       const auto& models = config_.ai().models();
       for (const auto& single_model : models.single_model()) {
-        identified_nodes_[single_model.node_id()] = node_type;
+        identified_nodes_[single_model.node().id()] = node_type;
       }
     }
   }
@@ -305,7 +305,7 @@ absl::Status NodeGenerator::identify_node_types() {
   if (config_.has_calibration()) {
     auto it = kCalibrationModeToNodeType.find(config_.calibration().calibration_mode());
     if (it != kCalibrationModeToNodeType.end()) {
-      identified_nodes_[config_.calibration().node_id()] = it->second;
+      identified_nodes_[config_.calibration().node().id()] = it->second;
     }
   }
 
@@ -327,7 +327,7 @@ absl::Status NodeGenerator::check_config_integrity() {
   // Check for serial port conflicts among all perception devices.
   // This ensures a single physical port is not managed by multiple node processes.
   for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
-    uint32_t node_id = single_perception.node_id();
+    uint32_t node_id = single_perception.node().id();
     std::string port_name;
 
     if (single_perception.has_camera()) {
@@ -611,14 +611,14 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   // Get publish topics from perceptions.
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
-    if (single_perception.node_id() == node_id) {
+    if (single_perception.node().id() == node_id) {
       publish_topics.push_back(single_perception.publish_topic());
     }
   }
 
   // Get subscribe topics from actions.
   for (const auto& single_action : config_.robot().actions().single_actions()) {
-    if (single_action.node_id() == node_id) {
+    if (single_action.node().id() == node_id) {
       subscribe_topics.push_back(single_action.subscribe_topic());
     }
   }
@@ -627,7 +627,7 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
   if (config_.has_ai()) {
     const auto& models = config_.ai().models();
     for (const auto& single_model : models.single_model()) {
-      if (single_model.node_id() == node_id) {
+      if (single_model.node().id() == node_id) {
         for (const auto& pub : single_model.pubishers()) {
           publish_topics.push_back(pub.topic());
         }
@@ -639,7 +639,7 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
   }
 
   // Get publish and subscribe topics for calibration node.
-  if (config_.calibration().node_id() == node_id) {
+  if (config_.calibration().node().id() == node_id) {
     for (const auto& sub_topic : config_.calibration().subscribe_topics()) {
       subscribe_topics.push_back(sub_topic);
       publish_topics.push_back(sub_topic + "_operational_limit");

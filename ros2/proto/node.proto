@@ -9,6 +9,7 @@ enum NodeType {
   ACTUATOR_SUBSCRIBER = 3;
   OPERATIONAL_LIMIT_CALIBRATION = 4;
   INFERENCE = 5;
+  LIDAR_PUBLISHER = 6;
 }
 
 enum QosReliabilityPolicy {

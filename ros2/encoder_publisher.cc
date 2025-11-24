@@ -9,6 +9,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/float32.hpp"
 
 class EncoderPublisher : public rclcpp::Node {
@@ -27,8 +28,9 @@ class EncoderPublisher : public rclcpp::Node {
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.perception_type() == robot::perception::PerceptionType::ENCODER &&
-          static_cast<int>(single_perception.node_id()) == node_id) {
+          static_cast<int>(single_perception.node().id()) == node_id) {
         const auto& encoder_proto = single_perception.encoder();
+        const auto& qos_setting = single_perception.node().qos_setting();
 
         // First, create the interface and check if it's valid.
         auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
@@ -40,17 +42,17 @@ class EncoderPublisher : public rclcpp::Node {
           continue;  // Skip this encoder if initialization failed.
         }
 
-        encoders_.emplace_back(
-            Encoder{.topic = single_perception.publish_topic(),
-                    .interface = std::move(interface.value()),
-                    .limits = {encoder_proto.operational_lower_limit(),
-                               encoder_proto.operational_upper_limit()},
-                    .publisher = this->create_publisher<std_msgs::msg::Float32>(
-                        single_perception.publish_topic(), 10),
-                    .encoder_data_mode = encoder_proto.encoder_data_mode(),
-                    .timer = this->create_wall_timer(
-                        std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
-                        std::bind(&EncoderPublisher::publish_encoder_data, this))});
+        encoders_.emplace_back(Encoder{
+            .topic = single_perception.publish_topic(),
+            .interface = std::move(interface.value()),
+            .limits = {encoder_proto.operational_lower_limit(),
+                       encoder_proto.operational_upper_limit()},
+            .publisher = this->create_publisher<std_msgs::msg::Float32>(
+                single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
+            .encoder_data_mode = encoder_proto.encoder_data_mode(),
+            .timer = this->create_wall_timer(
+                std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
+                std::bind(&EncoderPublisher::publish_encoder_data, this))});
 
         RCLCPP_INFO(this->get_logger(),
                     "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s "
