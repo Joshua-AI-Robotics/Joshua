@@ -68,9 +68,17 @@ def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = No
         pass
     finally:
         try:
-            node.destroy_node()  # type: ignore[name-defined]
-        except Exception:
-            pass
-        rclpy.shutdown()
+            # Call shutdown method if it exists
+            # Since node_runner is designed to run a single node, we can check the local 'node' variable.
+            node_instance = locals().get('node')
+            if node_instance:
+                if hasattr(node_instance, 'shutdown'):
+                    node_instance.shutdown()
+                node_instance.destroy_node()
+        except Exception as e:
+            print(f"Error during node shutdown: {e}")
+        
+        if rclpy.ok():
+            rclpy.shutdown()
 
     return 0

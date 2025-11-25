@@ -23,6 +23,7 @@ namespace {
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
 
+// TODO: Move to a separate file, and add data_store node type.
 // Node types.
 // Last Added: kLidarPublisher.
 constexpr auto kCameraPublisher = "camera_publisher";

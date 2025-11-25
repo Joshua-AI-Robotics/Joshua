@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+import "ros2/proto/ros2_data_type.proto";
+import "ros2/proto/node.proto";
+
+package ai.data_store;
+
+enum DataType {
+  DATA_TYPE_INVALID = 0;
+  HUGGING_FACE_DATASET = 1;
+  CSV = 2;
+  JSONL = 3;
+  PARQUET = 4;
+}
+
+enum DataStoreMode {
+  DATA_STORE_MODE_INVALID = 0;
+  LOCAL_FILE = 1;
+  CLOUD_STORAGE = 2;
+}
+
+message DataInfo {
+  ros2.data_type.Ros2DataType ros2_data_type = 1;
+  string topic = 2;
+}
+
+message SingleDataStore {
+  ros2.node.Node node = 1;
+  string store_path = 2;
+  DataStoreMode data_store_mode = 3;
+  DataType data_store_type = 4;
+  repeated DataInfo data_infos = 5;
+}
+
+message DataStore {
+  repeated SingleDataStore single_data_stores = 1;
+}

@@ -29,6 +29,7 @@ proto_library(
     srcs = ["ai.proto"],
     deps = [
         "//ai/proto:ai_model_proto",
+        "//ai/proto:data_store_proto",
     ],
     visibility = ["//visibility:public"],
 )

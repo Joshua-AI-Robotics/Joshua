@@ -20,3 +20,14 @@ cc_proto_library(
     visibility = ["//visibility:public"],
     deps = [":node_proto"],
 )
+
+proto_library(
+    name = "ros2_data_type_proto",
+    srcs = ["ros2_data_type.proto"],
+)
+
+py_proto_library(
+    name = "ros2_data_type_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":ros2_data_type_proto"],
+)
