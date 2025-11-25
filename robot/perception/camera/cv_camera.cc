@@ -15,11 +15,26 @@ CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
 }
 
 absl::Status CvCamera::Init() {
+  // Try to open the camera with the configured ID first
   cap_.open(camera_id_, cv::CAP_V4L2);
+  
+  // If failed, try alternate device (video devices can alternate between 0 and 1)
   if (!cap_.isOpened()) {
-    LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_;
-    return absl::Status(absl::StatusCode::kInternal,
-                        "Could not open camera with id " + std::to_string(camera_id_));
+    LOG(WARNING) << "Could not open camera with id " << camera_id_ 
+                 << ", trying alternate device...";
+    uint64_t alternate_id = (camera_id_ == 0) ? 1 : 0;
+    cap_.open(alternate_id, cv::CAP_V4L2);
+    
+    if (!cap_.isOpened()) {
+      LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_ 
+                 << " or alternate id " << alternate_id;
+      return absl::Status(absl::StatusCode::kInternal,
+                          "Could not open camera with id " + std::to_string(camera_id_) +
+                          " or alternate id " + std::to_string(alternate_id));
+    }
+    
+    LOG(INFO) << "Successfully opened camera with alternate id " << alternate_id;
+    camera_id_ = alternate_id;  // Update to the working ID
   }
 
   // TODO: Remove this hardcoded values.
@@ -68,12 +83,26 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     if (!cap_.isOpened()) {
       LOG(ERROR) << "Camera " << id_ << " is not open. Attempting to reopen...";
       cap_.open(camera_id_, cv::CAP_V4L2);
+      
+      // If failed, try alternate device (handle runtime device switching)
       if (!cap_.isOpened()) {
-        LOG(ERROR) << "Failed to reopen camera " << id_ << " with id " << camera_id_;
-        reusable_packet_.Clear();
-        return absl::Status(absl::StatusCode::kInternal, "Failed to reopen camera");
+        LOG(WARNING) << "Failed to reopen camera " << id_ << " with id " << camera_id_
+                     << ", trying alternate device...";
+        uint64_t alternate_id = (camera_id_ == 0) ? 1 : 0;
+        cap_.open(alternate_id, cv::CAP_V4L2);
+        
+        if (!cap_.isOpened()) {
+          LOG(ERROR) << "Failed to reopen camera " << id_ << " with id " << camera_id_
+                     << " or alternate id " << alternate_id;
+          reusable_packet_.Clear();
+          return absl::Status(absl::StatusCode::kInternal, "Failed to reopen camera");
+        }
+        
+        LOG(INFO) << "Successfully reopened camera " << id_ << " with alternate id " << alternate_id;
+        camera_id_ = alternate_id;  // Update to the working ID
+      } else {
+        LOG(INFO) << "Successfully reopened camera " << id_;
       }
-      LOG(INFO) << "Successfully reopened camera " << id_;
     }
 
     cv::Mat frame;
