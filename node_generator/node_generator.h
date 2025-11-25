@@ -13,6 +13,7 @@
 
 #include "absl/status/status.h"
 #include "config/proto/config.pb.h"
+#include "ros2/proto/node.pb.h"
 
 namespace node_generator {
 
@@ -47,7 +48,9 @@ class NodeGenerator {
   absl::Status identify_node_types();
   absl::Status check_config_integrity();
 
-  pid_t LaunchNode(const std::string& node_type, uint32_t node_id, const std::string& node_name);
+  pid_t LaunchNode(const ros2::node::NodeType& node_type,
+                   uint32_t node_id,
+                   const std::string& node_name);
 
   // Process management
   void SetupSignalHandlers();
@@ -59,7 +62,7 @@ class NodeGenerator {
                                 std::vector<std::string>& subscribe_topics);
 
   // Map from node_id to node type.
-  std::map<uint32_t, std::string> identified_nodes_;
+  std::map<uint32_t, ros2::node::NodeType> identified_nodes_;
 
   std::string config_path_;
   config::Config config_;

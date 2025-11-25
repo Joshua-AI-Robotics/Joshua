@@ -8,6 +8,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//config:config_utils",
+        "//ros2/proto:node_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@glog",
     ],

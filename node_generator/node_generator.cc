@@ -31,6 +31,7 @@ constexpr auto kCameraPublisher = "camera_publisher";
 constexpr auto kEncoderPublisher = "encoder_publisher";
 constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
+constexpr auto kLidarPublisher = "lidar_publisher";
 
 // Operation modes.
 // Last Added: mock_inference.
@@ -39,39 +40,26 @@ constexpr auto kInference = "inference";
 constexpr auto kTraining = "training";
 constexpr auto kCalibration = "calibration";
 constexpr auto kTest = "test";
-constexpr auto kMockInference = "mock_inference";
 
-// Centralized mappings for easy future extension.
-
-// <perception_type, node_type>
-// Last Added: kEncoderPublisher.
-const std::unordered_map<robot::perception::PerceptionType, const char*> kPerceptionToNodeType = {
-    {robot::perception::PerceptionType::CAMERA, kCameraPublisher},
-    {robot::perception::PerceptionType::ENCODER, kEncoderPublisher},
-};
-
-// <action_type, node_type>
-// Last Added: kActuatorSubscriber.
-const std::unordered_map<robot::action::ActionType, const char*> kActionToNodeType = {
-    {robot::action::ActionType::ACTUATOR, kActuatorSubscriber},
-};
-
-// <operation_mode, node_type>
-// Last Added: kMockInference.
-const std::unordered_map<config::General::OperationMode, const char*> kOperationModeToNodeType = {
-    {config::General::MODE_TELEOPERATE, kTeleoperate},
-    {config::General::MODE_INFERENCE, kInference},  // Not yet implemented.
-    {config::General::MODE_TRAINING, kTraining},    // Not yet implemented.
-    {config::General::MODE_CALIBRATION, kCalibration},
-    {config::General::MODE_TEST, kTest},
-    {config::General::MODE_MOCK_INFERENCE, kMockInference},
-};
-
-// <calibration_mode, node_type>
-// Last Added: kOperationalLimitCalibration.
-const std::unordered_map<config::CalibrationMode, const char*> kCalibrationModeToNodeType = {
-    {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibration},
-};
+std::string NodeTypeToString(const ros2::node::NodeType& type) {
+  switch (type) {
+    case ros2::node::CAMERA_PUBLISHER:
+      return kCameraPublisher;
+    case ros2::node::ENCODER_PUBLISHER:
+      return kEncoderPublisher;
+    case ros2::node::ACTUATOR_SUBSCRIBER:
+      return kActuatorSubscriber;
+    case ros2::node::LIDAR_PUBLISHER:
+      return kLidarPublisher;
+    case ros2::node::INFERENCE:
+      return kInference;
+    case ros2::node::OPERATIONAL_LIMIT_CALIBRATION:
+      return kOperationalLimitCalibration;
+    // Add other mappings as needed
+    default:
+      return "";
+  }
+}
 
 // Resolve current executable absolute path via /proc/self/exe
 std::string GetSelfExecutablePath() {
@@ -271,42 +259,32 @@ absl::Status NodeGenerator::Initialize() {
 }
 
 absl::Status NodeGenerator::identify_node_types() {
-  // Actions -> add node type(s)
+  // Actions
   for (const auto& single_action : config_.robot().actions().single_actions()) {
     const uint32_t node_id = single_action.node().id();
-    auto it = kActionToNodeType.find(single_action.action_type());
-    if (it != kActionToNodeType.end()) {
-      identified_nodes_[node_id] = it->second;
-    }
+    identified_nodes_[node_id] = single_action.node().node_type();
   }
 
-  // Perceptions -> add node type(s)
+  // Perceptions
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
     const uint32_t node_id = single_perception.node().id();
-    auto it = kPerceptionToNodeType.find(single_perception.perception_type());
-    if (it != kPerceptionToNodeType.end()) {
-      identified_nodes_[node_id] = it->second;
-    }
+    identified_nodes_[node_id] = single_perception.node().node_type();
   }
 
-  // AI -> add node type(s) per SingleModel
-  if (config_.has_ai()) {
-    auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
-    if (it != kOperationModeToNodeType.end()) {
-      const char* node_type = it->second;
-      const auto& models = config_.ai().models();
-      for (const auto& single_model : models.single_model()) {
-        identified_nodes_[single_model.node().id()] = node_type;
-      }
-    }
+  // Inference
+  for (const auto& single_model :
+       config_.ai().models().single_model()) {  // TODO: Update single_model() to plural.
+    const uint32_t node_id = single_model.node().id();
+    identified_nodes_[node_id] = single_model.node().node_type();
   }
 
-  // Calibration -> add node type
-  if (config_.has_calibration()) {
-    auto it = kCalibrationModeToNodeType.find(config_.calibration().calibration_mode());
-    if (it != kCalibrationModeToNodeType.end()) {
-      identified_nodes_[config_.calibration().node().id()] = it->second;
-    }
+  // Data store.
+  // TODO: Add here.
+
+  // Calibration
+  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
+    const uint32_t node_id = single_calibration.node().id();
+    identified_nodes_[node_id] = single_calibration.node().node_type();
   }
 
   return absl::OkStatus();
@@ -358,7 +336,8 @@ absl::Status NodeGenerator::check_config_integrity() {
 
 absl::Status NodeGenerator::LaunchAllNodes() {
   for (const auto& [node_id, node_type] : identified_nodes_) {
-    const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
+    const std::string node_name =
+        NodeTypeToString(node_type) + std::string("_node_") + std::to_string(node_id);
     pid_t pid = LaunchNode(node_type, node_id, node_name);
     if (pid > 0) {
       std::vector<std::string> publish_topics;
@@ -368,7 +347,7 @@ absl::Status NodeGenerator::LaunchAllNodes() {
         return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to get topics for node");
       }
       launched_nodes_.push_back(
-          {node_type, node_name, node_id, pid, publish_topics, subscribe_topics});
+          {NodeTypeToString(node_type), node_name, node_id, pid, publish_topics, subscribe_topics});
     }
   }
 
@@ -378,7 +357,7 @@ absl::Status NodeGenerator::LaunchAllNodes() {
              : absl::Status(absl::StatusCode::kInvalidArgument, "No nodes launched");
 }
 
-pid_t NodeGenerator::LaunchNode(const std::string& node_type,
+pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
                                 uint32_t node_id,
                                 const std::string& node_name) {
   pid_t pid = fork();
@@ -388,12 +367,13 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type,
     TryRunFixSymlinksOnce();
     std::string exec_path;
     std::vector<const char*> argv_vec;
+    const std::string node_type_str = NodeTypeToString(node_type);
 
     // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
-    if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type)) {
+    if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
       exec_path = native_bin->string();
       if (!std::filesystem::exists(exec_path)) {
-        LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type
+        LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type_str
                    << "'";
         _exit(1);
       }
@@ -433,14 +413,14 @@ pid_t NodeGenerator::LaunchNode(const std::string& node_type,
         _exit(1);
       }
       argv_vec = {exec_path.c_str(),
-                  node_type.c_str(),
+                  node_type_str.c_str(),
                   node_name.c_str(),
                   node_id_str.c_str(),
                   config_path_.c_str(),
                   nullptr};
     } else {
       LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
-                 << node_type;
+                 << node_type_str;
       _exit(1);
     }
 
@@ -639,10 +619,12 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
   }
 
   // Get publish and subscribe topics for calibration node.
-  if (config_.calibration().node().id() == node_id) {
-    for (const auto& sub_topic : config_.calibration().subscribe_topics()) {
-      subscribe_topics.push_back(sub_topic);
-      publish_topics.push_back(sub_topic + "_operational_limit");
+  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
+    if (single_calibration.node().id() == node_id) {
+      for (const auto& sub_topic : single_calibration.subscribe_topics()) {
+        subscribe_topics.push_back(sub_topic);
+        publish_topics.push_back(sub_topic + "_operational_limit");
+      }
     }
   }
   return absl::OkStatus();

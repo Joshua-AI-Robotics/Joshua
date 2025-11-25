@@ -9,7 +9,7 @@ enum CalibrationMode {
   CALIBRATION_MODE_OPERATIONAL_LIMIT = 1;
 }
 
-message Calibration {
+message SingleCalibration {
   ros2.node.Node node = 1;
   CalibrationMode calibration_mode = 2;
   repeated string subscribe_topics = 3;
@@ -18,4 +18,8 @@ message Calibration {
   // TODO: Maybe there's a better way to generically represent this.
 
   // TODO: Add calibration config.
+}
+
+message Calibration {
+  repeated SingleCalibration single_calibrations = 1;
 }
