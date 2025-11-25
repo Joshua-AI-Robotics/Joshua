@@ -24,13 +24,14 @@ constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
 
 // TODO: Move to a separate file, and add data_store node type.
-// Node types.
-// Last Added: kLidarPublisher.
+// Node types. Fix Inference node to receive any model, (replace mock_inference to inference)
+// Last Added: kMockInference.
 constexpr auto kCameraPublisher = "camera_publisher";
 constexpr auto kEncoderPublisher = "encoder_publisher";
 constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 constexpr auto kLidarPublisher = "lidar_publisher";
+constexpr auto kMockInference = "mock_inference";  // TODO: Remove this.
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -376,7 +377,21 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
         work_dir = wd.string();
       }
     } else {
-      env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+      // If the child binary does not have its own runfiles (e.g. data dependency),
+      // try to inherit the parent's runfiles.
+      if (auto parent_runfiles = GetRunfilesRoot()) {
+        env_to_set.push_back({"RUNFILES_DIR", parent_runfiles->string()});
+        env_to_set.push_back({"TEST_SRCDIR", parent_runfiles->string()});
+        env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+
+        // Try to set work_dir relative to parent runfiles
+        std::filesystem::path wd = *parent_runfiles / "_main";
+        if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
+          work_dir = wd.string();
+        }
+      } else {
+        env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+      }
     }
 
     argv_strings = {exec_path, node_name, std::to_string(node_id), config_path_};
@@ -646,20 +661,19 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     }
   }
 
-  // Get publish and subscribe topics for AI node (match SingleModel by node_id).
-  if (config_.has_ai()) {
-    const auto& models = config_.ai().models();
-    for (const auto& single_model : models.single_model()) {
-      if (single_model.node().id() == node_id) {
-        for (const auto& pub : single_model.pubishers()) {
-          publish_topics.push_back(pub.topic());
-        }
-        for (const auto& sub : single_model.subscriptions()) {
-          subscribe_topics.push_back(sub.topic());
-        }
+  // Get publish and subscribe topics for models.
+
+  for (const auto& single_model : config_.ai().models().single_model()) {
+    if (single_model.node().id() == node_id) {
+      for (const auto& pub : single_model.pubishers()) {
+        publish_topics.push_back(pub.topic());
+      }
+      for (const auto& sub : single_model.subscriptions()) {
+        subscribe_topics.push_back(sub.topic());
       }
     }
   }
+  // TODO: Add data store node.
 
   // Get publish and subscribe topics for calibration node.
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
