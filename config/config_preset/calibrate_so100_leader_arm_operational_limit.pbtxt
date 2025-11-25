@@ -186,16 +186,18 @@ robot {
 }
 
 calibration {
-  node {
-    id: 2
-    node_type: OPERATIONAL_LIMIT_CALIBRATION
-    qos_setting {}
+  single_calibrations {
+    node {
+      id: 2
+      node_type: OPERATIONAL_LIMIT_CALIBRATION
+      qos_setting {}
+    }
+    calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
+    subscribe_topics: "sts3215_encoder_1"
+    subscribe_topics: "sts3215_encoder_2"
+    subscribe_topics: "sts3215_encoder_3"
+    subscribe_topics: "sts3215_encoder_4"
+    subscribe_topics: "sts3215_encoder_5"
+    subscribe_topics: "sts3215_encoder_6"
   }
-  calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
-  subscribe_topics: "sts3215_encoder_1"
-  subscribe_topics: "sts3215_encoder_2"
-  subscribe_topics: "sts3215_encoder_3"
-  subscribe_topics: "sts3215_encoder_4"
-  subscribe_topics: "sts3215_encoder_5"
-  subscribe_topics: "sts3215_encoder_6"
 }
