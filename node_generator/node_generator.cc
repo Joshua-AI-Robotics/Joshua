@@ -223,7 +223,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
   for (const auto& single_action : config_.robot().actions().single_actions()) {
     const uint32_t node_id = single_action.node().id();
     auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_action.node().node_type());
-    if (!inserted) {
+    if (!inserted && it->second != single_action.node().node_type()) {
       LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
                  << NodeTypeToString(it->second);
       return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
@@ -235,7 +235,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     const uint32_t node_id = single_perception.node().id();
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_perception.node().node_type());
-    if (!inserted) {
+    if (!inserted && it->second != single_perception.node().node_type()) {
       LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
                  << NodeTypeToString(it->second);
       return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
@@ -247,7 +247,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
        config_.ai().models().single_model()) {  // TODO: Update single_model() to plural.
     const uint32_t node_id = single_model.node().id();
     auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_model.node().node_type());
-    if (!inserted) {
+    if (!inserted && it->second != single_model.node().node_type()) {
       LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
                  << NodeTypeToString(it->second);
       return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
@@ -262,7 +262,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     const uint32_t node_id = single_calibration.node().id();
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_calibration.node().node_type());
-    if (!inserted) {
+    if (!inserted && it->second != single_calibration.node().node_type()) {
       LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
                  << NodeTypeToString(it->second);
       return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
@@ -342,82 +342,97 @@ absl::Status NodeGenerator::LaunchAllNodes() {
 pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
                                 uint32_t node_id,
                                 const std::string& node_name) {
-  pid_t pid = fork();
+  const std::string node_type_str = NodeTypeToString(node_type);
+  if (node_type_str.empty()) {
+    LOG(ERROR) << "Invalid node type for node " << node_id;
+    return -1;
+  }
 
-  if (pid == 0) {
-    std::string node_id_str = std::to_string(node_id);
-    std::string exec_path;
-    std::vector<const char*> argv_vec;
-    const std::string node_type_str = NodeTypeToString(node_type);
-    if (node_type_str.empty()) {
-      LOG(ERROR) << "Invalid node type for node " << node_id;
+  std::string exec_path;
+  std::vector<std::string> argv_strings;
+  std::vector<std::pair<std::string, std::string>> env_to_set;
+  std::vector<std::string> env_to_unset;
+  std::string work_dir;
+
+  // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
+  if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
+    exec_path = native_bin->string();
+    if (!std::filesystem::exists(exec_path)) {
+      LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type_str
+                 << "'";
       return -1;
     }
 
-    // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
-    if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
-      exec_path = native_bin->string();
-      if (!std::filesystem::exists(exec_path)) {
-        LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type_str
-                   << "'";
-        _exit(1);
+    std::filesystem::path bin_path(exec_path);
+    std::filesystem::path runfiles_dir =
+        bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
+
+    if (std::filesystem::exists(runfiles_dir)) {
+      env_to_set.push_back({"RUNFILES_DIR", runfiles_dir.string()});
+      env_to_set.push_back({"TEST_SRCDIR", runfiles_dir.string()});
+      env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+
+      std::filesystem::path wd = runfiles_dir / "_main";
+      if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
+        work_dir = wd.string();
       }
-      std::filesystem::path bin_path(exec_path);
-      std::filesystem::path runfiles_dir =
-          bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
-      if (std::filesystem::exists(runfiles_dir)) {
-        setenv("RUNFILES_DIR", runfiles_dir.c_str(), 1);
-        setenv("TEST_SRCDIR", runfiles_dir.c_str(), 1);
-        unsetenv("RUNFILES_MANIFEST_FILE");
-        unsetenv("JAVA_RUNFILES");
-        std::filesystem::path workdir = runfiles_dir / "_main";
-        if (std::filesystem::exists(workdir) && std::filesystem::is_directory(workdir)) {
-          if (chdir(workdir.c_str()) != 0) {
-            LOG(WARNING) << "Failed to chdir to child runfiles workdir '" << workdir
-                         << "': " << strerror(errno);
-          }
-        }
-      } else {
-        unsetenv("RUNFILES_DIR");
-        unsetenv("TEST_SRCDIR");
-        unsetenv("RUNFILES_MANIFEST_FILE");
-        unsetenv("JAVA_RUNFILES");
-      }
-      argv_vec = {
-          exec_path.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
-    }
-    // 2) Try to execute the generic wrapper from packaged tar layout.
-    else if (auto wrapper = ResolveRos2WrapperPath()) {
-      exec_path = wrapper->string();
-      if (!std::filesystem::exists(exec_path)) {
-        LOG(ERROR) << "Wrapper script not found at '" << exec_path << "'";
-        _exit(1);
-      }
-      if (access(exec_path.c_str(), X_OK) != 0) {
-        LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
-        _exit(1);
-      }
-      argv_vec = {exec_path.c_str(),
-                  node_type_str.c_str(),
-                  node_name.c_str(),
-                  node_id_str.c_str(),
-                  config_path_.c_str(),
-                  nullptr};
     } else {
-      LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
-                 << node_type_str;
-      _exit(1);
+      env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
     }
 
+    argv_strings = {exec_path, node_name, std::to_string(node_id), config_path_};
+  }
+  // 2) Try to execute the generic wrapper from packaged tar layout.
+  else if (auto wrapper = ResolveRos2WrapperPath()) {
+    exec_path = wrapper->string();
+    if (!std::filesystem::exists(exec_path)) {
+      LOG(ERROR) << "Wrapper script not found at '" << exec_path << "'";
+      return -1;
+    }
+    if (access(exec_path.c_str(), X_OK) != 0) {
+      LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
+      return -1;
+    }
+    argv_strings = {exec_path, node_type_str, node_name, std::to_string(node_id), config_path_};
+  } else {
+    LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
+               << node_type_str;
+    return -1;
+  }
+
+  // Prepare argv pointers
+  std::vector<char*> argv_ptrs;
+  argv_ptrs.reserve(argv_strings.size() + 1);
+  for (const auto& s : argv_strings) {
+    argv_ptrs.push_back(const_cast<char*>(s.c_str()));
+  }
+  argv_ptrs.push_back(nullptr);
+
+  pid_t pid = fork();
+
+  if (pid == 0) {
     // Put child in its own process group so we can signal the whole group (including grandchildren)
     if (setpgid(0, 0) != 0) {
-      LOG(WARNING) << "Failed to set process group for " << node_name << ": " << strerror(errno)
-                   << ". This is not critical.";
+      // Failed to set process group. This is not critical.
     }
 
-    execv(exec_path.c_str(), const_cast<char* const*>(argv_vec.data()));
+    for (const auto& [k, v] : env_to_set) {
+      setenv(k.c_str(), v.c_str(), 1);
+    }
+    for (const auto& k : env_to_unset) {
+      unsetenv(k.c_str());
+    }
 
-    LOG(ERROR) << "Failed to execute " << exec_path << ": " << strerror(errno);
+    if (!work_dir.empty()) {
+      if (chdir(work_dir.c_str()) != 0) {
+        // Failed to chdir. Proceeding anyway as it might still work.
+      }
+    }
+
+    execv(exec_path.c_str(), argv_ptrs.data());
+
+    const char* msg = "Failed to execute node process\n";
+    write(STDERR_FILENO, msg, strlen(msg));
     _exit(1);
   } else if (pid > 0) {
     LOG(INFO) << "Launched " << node_name << " with PID: " << pid;
