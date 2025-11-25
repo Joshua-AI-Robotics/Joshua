@@ -37,6 +37,8 @@ class NodeGenerator {
   absl::Status LaunchAllNodes();
   absl::Status MonitorNodes();
   absl::Status Shutdown(const int max_wait_ms = 5000);
+
+  // Used for Joshua Control Panel to get the launched nodes.
   absl::Status GetLaunchedNodes(std::vector<NodeInfo>& nodes);
 
   size_t get_launched_node_count() const {

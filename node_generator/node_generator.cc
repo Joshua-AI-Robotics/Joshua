@@ -320,8 +320,7 @@ absl::Status NodeGenerator::LaunchAllNodes() {
       std::vector<std::string> publish_topics;
       std::vector<std::string> subscribe_topics;
       if (!GetTopicsForNode(node_id, publish_topics, subscribe_topics).ok()) {
-        LOG(ERROR) << "Failed to get topics for node " << node_id;
-        return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to get topics for node");
+        LOG(WARNING) << "Failed to get topics for node " << node_id;
       }
       launched_nodes_.try_emplace(pid,
                                   NodeInfo{NodeTypeToString(node_type),
@@ -591,8 +590,18 @@ absl::Status NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
 }
 
 void NodeGenerator::SetupSignalHandlers() {
-  signal(SIGINT, SignalHandler);
-  signal(SIGTERM, SignalHandler);
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = SignalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+
+  if (sigaction(SIGINT, &sa, nullptr) == -1) {
+    LOG(ERROR) << "Failed to set SIGINT handler: " << strerror(errno);
+  }
+  if (sigaction(SIGTERM, &sa, nullptr) == -1) {
+    LOG(ERROR) << "Failed to set SIGTERM handler: " << strerror(errno);
+  }
 }
 
 void NodeGenerator::CleanupAndExit(int exit_code) {
@@ -604,6 +613,12 @@ void NodeGenerator::CleanupAndExit(int exit_code) {
 }
 
 void NodeGenerator::SignalHandler(int sig) {
+  // Use write() instead of LOG() because it is async-signal-safe.
+  // LOG() uses mutexes and malloc, which can deadlock if the signal interrupted LOG().
+  const char* msg = (sig == SIGINT) ? "\nReceived SIGINT, shutting down...\n"
+                                    : "\nReceived SIGTERM, shutting down...\n";
+  write(STDERR_FILENO, msg, strlen(msg));
+
   if (instance_) {
     instance_->shutdown_requested_ = true;
   }
