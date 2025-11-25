@@ -25,6 +25,7 @@ constexpr auto kROS2 = "ros2";
 // Common file names.
 constexpr auto kFixSymlinksScript = "fix_symlinks.sh";
 
+// TODO: Move to a separate file, and add data_store node type.
 // Node types.
 // Last Added: kOperationalLimitCalibration.
 constexpr auto kCameraPublisher = "camera_publisher";

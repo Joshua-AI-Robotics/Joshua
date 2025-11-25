@@ -8,6 +8,16 @@ proto_library(
     srcs = ["ai_model.proto"],
     deps = [
         "//ros2/proto:node_proto",
+        "//ros2/proto:ros2_data_type_proto",
+    ],
+)
+
+proto_library(
+    name = "data_store_proto",
+    srcs = ["data_store.proto"],
+    deps = [
+        "//ros2/proto:ros2_data_type_proto",
+        "//ros2/proto:node_proto",
     ],
 )
 
@@ -15,4 +25,10 @@ py_proto_library(
     name = "ai_model_py_proto",
     visibility = ["//visibility:public"],
     deps = [":ai_model_proto"],
+)
+
+py_proto_library(
+    name = "data_store_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":data_store_proto"],
 )
