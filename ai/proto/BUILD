@@ -17,6 +17,7 @@ proto_library(
     srcs = ["data_store.proto"],
     deps = [
         "//ros2/proto:ros2_data_type_proto",
+        "//ros2/proto:node_proto",
     ],
 )
 

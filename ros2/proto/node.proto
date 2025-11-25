@@ -10,6 +10,7 @@ enum NodeType {
   OPERATIONAL_LIMIT_CALIBRATION = 4;
   INFERENCE = 5;
   LIDAR_PUBLISHER = 6;
+  DATA_STORE = 7;
 }
 
 enum QosReliabilityPolicy {

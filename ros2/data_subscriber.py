@@ -17,11 +17,19 @@ class DataSubscriber(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
 
-        self.data_store = DataStore(data_store_config=config.ai.data_store)
+        for single_data_store in config.ai.data_stores.single_data_stores:
+            if single_data_store.node.id == node_id:
+                self.data_store = DataStore(data_store_config=single_data_store)
+                self.data_infos = single_data_store.data_infos
+                break
+
+        if self.data_store is None:
+            raise ValueError(f'Data store with node.id {node_id} not found in config')
+
         self.subscribers = []
         self.topic_message_counts = {}
 
-        for data_info in config.ai.data_store.data_infos:
+        for data_info in self.data_infos:
             message_type = resolve_message_class_from_enum(data_info.ros2_data_type)
             topic = data_info.topic
             self.topic_message_counts[topic] = 0
@@ -61,7 +69,7 @@ def main(argv=None):
 
 # How to test:
 # On terminal, run:
-# ros2 topic pub -r 1 /sample_topic std_msgs/msg/Float32 "{data: 3.14}"
+# bazel run node_generator:joshua_main -- --config=config/config_preset/so100_leader_arm_encoder_publish.pbtxt
 # On separate terminal, run:
 # bazel run ros2:data_subscriber -- test 1 config/config_preset/sample_data_store.pbtxt
 if __name__ == "__main__":

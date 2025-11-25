@@ -7,5 +7,5 @@ import "ai/proto/data_store.proto";
 
 message Ai {
   ai.model.Model models = 1;
-  ai.data_store.DataStore data_store = 2;
+  ai.data_store.DataStore data_stores = 2;
 }
