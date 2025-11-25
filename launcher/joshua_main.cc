@@ -1,7 +1,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "node_generator.h"
+#include "node_generator/node_generator.h"
 
 DEFINE_string(config,
               "config/config_preset/so100_teleoperate.pbtxt",

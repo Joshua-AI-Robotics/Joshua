@@ -239,7 +239,7 @@ ai {
       policy_name: "example_policy"
       node {
         id: 3
-        node_type: INFERENCE
+        node_type: MOCK_INFERENCE # TODO: Replace with INFERENCE.
         qos_setting {}
       }
 

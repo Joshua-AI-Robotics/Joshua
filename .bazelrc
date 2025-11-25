@@ -21,6 +21,8 @@ build --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/
 run --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
 test --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
 
+test --test_output=all
+
 # =============================================================================
 # Base Platform Configurations
 # =============================================================================

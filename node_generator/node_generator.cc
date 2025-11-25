@@ -6,12 +6,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 
 #include "config/config_utils.h"
 
@@ -22,57 +23,25 @@ namespace {
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
 
-// Common file names.
-constexpr auto kFixSymlinksScript = "fix_symlinks.sh";
-
 // TODO: Move to a separate file, and add data_store node type.
-// Node types.
-// Last Added: kOperationalLimitCalibration.
+// Node types. Fix Inference node to receive any model, (replace mock_inference to inference)
+// Last Added: kMockInference.
 constexpr auto kCameraPublisher = "camera_publisher";
 constexpr auto kEncoderPublisher = "encoder_publisher";
 constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
+constexpr auto kLidarPublisher = "lidar_publisher";
+constexpr auto kMockInference = "mock_inference";  // TODO: Remove this.
 
-// Operation modes.
-// Last Added: mock_inference.
-constexpr auto kTeleoperate = "teleoperate";
-constexpr auto kInference = "inference";
-constexpr auto kTraining = "training";
-constexpr auto kCalibration = "calibration";
-constexpr auto kTest = "test";
-constexpr auto kMockInference = "mock_inference";
-
-// Centralized mappings for easy future extension.
-
-// <perception_type, node_type>
-// Last Added: kEncoderPublisher.
-const std::unordered_map<robot::perception::PerceptionType, const char*> kPerceptionToNodeType = {
-    {robot::perception::PerceptionType::CAMERA, kCameraPublisher},
-    {robot::perception::PerceptionType::ENCODER, kEncoderPublisher},
-};
-
-// <action_type, node_type>
-// Last Added: kActuatorSubscriber.
-const std::unordered_map<robot::action::ActionType, const char*> kActionToNodeType = {
-    {robot::action::ActionType::ACTUATOR, kActuatorSubscriber},
-};
-
-// <operation_mode, node_type>
-// Last Added: kMockInference.
-const std::unordered_map<config::General::OperationMode, const char*> kOperationModeToNodeType = {
-    {config::General::MODE_TELEOPERATE, kTeleoperate},
-    {config::General::MODE_INFERENCE, kInference},  // Not yet implemented.
-    {config::General::MODE_TRAINING, kTraining},    // Not yet implemented.
-    {config::General::MODE_CALIBRATION, kCalibration},
-    {config::General::MODE_TEST, kTest},
-    {config::General::MODE_MOCK_INFERENCE, kMockInference},
-};
-
-// <calibration_mode, node_type>
-// Last Added: kOperationalLimitCalibration.
-const std::unordered_map<config::CalibrationMode, const char*> kCalibrationModeToNodeType = {
-    {config::CalibrationMode::CALIBRATION_MODE_OPERATIONAL_LIMIT, kOperationalLimitCalibration},
-};
+std::string NodeTypeToString(const ros2::node::NodeType& type) {
+  if (type == ros2::node::NODE_INVALID) {
+    return "";
+  }
+  std::string name = ros2::node::NodeType_Name(type);
+  std::transform(
+      name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+  return name;
+}
 
 // Resolve current executable absolute path via /proc/self/exe
 std::string GetSelfExecutablePath() {
@@ -161,29 +130,6 @@ std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
   return std::nullopt;
 }
 
-void TryRunFixSymlinksOnce() {
-  static std::once_flag run_once_flag;
-  std::call_once(run_once_flag, []() {
-    std::string self_exe = GetSelfExecutablePath();
-    if (self_exe.empty()) return;
-    std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
-    std::filesystem::path fixer = self_dir / kFixSymlinksScript;
-    if (!std::filesystem::exists(fixer)) return;
-
-    pid_t pid = fork();
-    if (pid == 0) {
-      // Ensure the script runs from the directory that contains the *.runfiles folders
-      if (chdir(self_dir.c_str()) != 0) {
-        _exit(127);
-      }
-      execl("/bin/bash", "/bin/bash", fixer.c_str(), nullptr);
-      _exit(127);
-    } else if (pid > 0) {
-      int status;
-      (void)waitpid(pid, &status, 0);
-    }
-  });
-}
 }  // namespace
 
 // Static member initialization
@@ -251,69 +197,76 @@ absl::Status NodeGenerator::Initialize() {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
   }
 
-  auto robot_config = config_.robot();
-  LOG(INFO) << "Robot Name: " << robot_config.name();
-  if (config_.has_ai() && config_.ai().models().single_model_size() > 0) {
-    LOG(INFO) << "AI Policy Name: " << config_.ai().models().single_model(0).policy_name();
-  }
-  LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
-
-  if (!identify_node_types().ok()) {
+  if (!IdentifyNodeTypes().ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node types identification failed");
   }
 
-  if (!check_config_integrity().ok()) {
+  if (!CheckConfigIntegrity().ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Config integrity check failed");
   }
 
   SetupSignalHandlers();
 
+  LOG(INFO) << "NodeGenerator initialized successfully";
+
   return absl::OkStatus();
 }
 
-absl::Status NodeGenerator::identify_node_types() {
-  // Actions -> add node type(s)
+absl::Status NodeGenerator::IdentifyNodeTypes() {
+  // Actions
   for (const auto& single_action : config_.robot().actions().single_actions()) {
     const uint32_t node_id = single_action.node().id();
-    auto it = kActionToNodeType.find(single_action.action_type());
-    if (it != kActionToNodeType.end()) {
-      identified_nodes_[node_id] = it->second;
+    auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_action.node().node_type());
+    if (!inserted && it->second != single_action.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
     }
   }
 
-  // Perceptions -> add node type(s)
+  // Perceptions
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
     const uint32_t node_id = single_perception.node().id();
-    auto it = kPerceptionToNodeType.find(single_perception.perception_type());
-    if (it != kPerceptionToNodeType.end()) {
-      identified_nodes_[node_id] = it->second;
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_perception.node().node_type());
+    if (!inserted && it->second != single_perception.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
     }
   }
 
-  // AI -> add node type(s) per SingleModel
-  if (config_.has_ai()) {
-    auto it = kOperationModeToNodeType.find(config_.general().operation_mode());
-    if (it != kOperationModeToNodeType.end()) {
-      const char* node_type = it->second;
-      const auto& models = config_.ai().models();
-      for (const auto& single_model : models.single_model()) {
-        identified_nodes_[single_model.node().id()] = node_type;
-      }
+  // Inference
+  for (const auto& single_model :
+       config_.ai().models().single_model()) {  // TODO: Update single_model() to plural.
+    const uint32_t node_id = single_model.node().id();
+    auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_model.node().node_type());
+    if (!inserted && it->second != single_model.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
     }
   }
 
-  // Calibration -> add node type
-  if (config_.has_calibration()) {
-    auto it = kCalibrationModeToNodeType.find(config_.calibration().calibration_mode());
-    if (it != kCalibrationModeToNodeType.end()) {
-      identified_nodes_[config_.calibration().node().id()] = it->second;
+  // Data store.
+  // TODO: Add here.
+
+  // Calibration
+  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
+    const uint32_t node_id = single_calibration.node().id();
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_calibration.node().node_type());
+    if (!inserted && it->second != single_calibration.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
     }
   }
 
   return absl::OkStatus();
 }
 
-absl::Status NodeGenerator::check_config_integrity() {
+absl::Status NodeGenerator::CheckConfigIntegrity() {
   auto robot_config = config_.robot();
   std::map<std::string, uint32_t> port_to_node_id;
 
@@ -358,18 +311,25 @@ absl::Status NodeGenerator::check_config_integrity() {
 }
 
 absl::Status NodeGenerator::LaunchAllNodes() {
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
+
   for (const auto& [node_id, node_type] : identified_nodes_) {
-    const std::string node_name = node_type + std::string("_node_") + std::to_string(node_id);
+    const std::string node_name =
+        NodeTypeToString(node_type) + std::string("_node_") + std::to_string(node_id);
     pid_t pid = LaunchNode(node_type, node_id, node_name);
     if (pid > 0) {
       std::vector<std::string> publish_topics;
       std::vector<std::string> subscribe_topics;
       if (!GetTopicsForNode(node_id, publish_topics, subscribe_topics).ok()) {
-        LOG(ERROR) << "Failed to get topics for node " << node_id;
-        return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to get topics for node");
+        LOG(WARNING) << "Failed to get topics for node " << node_id;
       }
-      launched_nodes_.push_back(
-          {node_type, node_name, node_id, pid, publish_topics, subscribe_topics});
+      launched_nodes_.try_emplace(pid,
+                                  NodeInfo{NodeTypeToString(node_type),
+                                           node_name,
+                                           node_id,
+                                           pid,
+                                           publish_topics,
+                                           subscribe_topics});
     }
   }
 
@@ -379,81 +339,114 @@ absl::Status NodeGenerator::LaunchAllNodes() {
              : absl::Status(absl::StatusCode::kInvalidArgument, "No nodes launched");
 }
 
-pid_t NodeGenerator::LaunchNode(const std::string& node_type,
+pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
                                 uint32_t node_id,
                                 const std::string& node_name) {
+  const std::string node_type_str = NodeTypeToString(node_type);
+  if (node_type_str.empty()) {
+    LOG(ERROR) << "Invalid node type for node " << node_id;
+    return -1;
+  }
+
+  std::string exec_path;
+  std::vector<std::string> argv_strings;
+  std::vector<std::pair<std::string, std::string>> env_to_set;
+  std::vector<std::string> env_to_unset;
+  std::string work_dir;
+
+  // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
+  if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
+    exec_path = native_bin->string();
+    if (!std::filesystem::exists(exec_path)) {
+      LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type_str
+                 << "'";
+      return -1;
+    }
+
+    std::filesystem::path bin_path(exec_path);
+    std::filesystem::path runfiles_dir =
+        bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
+
+    if (std::filesystem::exists(runfiles_dir)) {
+      env_to_set.push_back({"RUNFILES_DIR", runfiles_dir.string()});
+      env_to_set.push_back({"TEST_SRCDIR", runfiles_dir.string()});
+      env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+
+      std::filesystem::path wd = runfiles_dir / "_main";
+      if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
+        work_dir = wd.string();
+      }
+    } else {
+      // If the child binary does not have its own runfiles (e.g. data dependency),
+      // try to inherit the parent's runfiles.
+      if (auto parent_runfiles = GetRunfilesRoot()) {
+        env_to_set.push_back({"RUNFILES_DIR", parent_runfiles->string()});
+        env_to_set.push_back({"TEST_SRCDIR", parent_runfiles->string()});
+        env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+
+        // Try to set work_dir relative to parent runfiles
+        std::filesystem::path wd = *parent_runfiles / "_main";
+        if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
+          work_dir = wd.string();
+        }
+      } else {
+        env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
+      }
+    }
+
+    argv_strings = {exec_path, node_name, std::to_string(node_id), config_path_};
+  }
+  // 2) Try to execute the generic wrapper from packaged tar layout.
+  else if (auto wrapper = ResolveRos2WrapperPath()) {
+    exec_path = wrapper->string();
+    if (!std::filesystem::exists(exec_path)) {
+      LOG(ERROR) << "Wrapper script not found at '" << exec_path << "'";
+      return -1;
+    }
+    if (access(exec_path.c_str(), X_OK) != 0) {
+      LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
+      return -1;
+    }
+    argv_strings = {exec_path, node_type_str, node_name, std::to_string(node_id), config_path_};
+  } else {
+    LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
+               << node_type_str;
+    return -1;
+  }
+
+  // Prepare argv pointers
+  std::vector<char*> argv_ptrs;
+  argv_ptrs.reserve(argv_strings.size() + 1);
+  for (const auto& s : argv_strings) {
+    argv_ptrs.push_back(const_cast<char*>(s.c_str()));
+  }
+  argv_ptrs.push_back(nullptr);
+
   pid_t pid = fork();
 
   if (pid == 0) {
-    std::string node_id_str = std::to_string(node_id);
-    TryRunFixSymlinksOnce();
-    std::string exec_path;
-    std::vector<const char*> argv_vec;
-
-    // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
-    if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type)) {
-      exec_path = native_bin->string();
-      if (!std::filesystem::exists(exec_path)) {
-        LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type
-                   << "'";
-        _exit(1);
-      }
-      std::filesystem::path bin_path(exec_path);
-      std::filesystem::path runfiles_dir =
-          bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
-      if (std::filesystem::exists(runfiles_dir)) {
-        setenv("RUNFILES_DIR", runfiles_dir.c_str(), 1);
-        setenv("TEST_SRCDIR", runfiles_dir.c_str(), 1);
-        unsetenv("RUNFILES_MANIFEST_FILE");
-        unsetenv("JAVA_RUNFILES");
-        std::filesystem::path workdir = runfiles_dir / "_main";
-        if (std::filesystem::exists(workdir) && std::filesystem::is_directory(workdir)) {
-          if (chdir(workdir.c_str()) != 0) {
-            LOG(WARNING) << "Failed to chdir to child runfiles workdir '" << workdir
-                         << "': " << strerror(errno);
-          }
-        }
-      } else {
-        unsetenv("RUNFILES_DIR");
-        unsetenv("TEST_SRCDIR");
-        unsetenv("RUNFILES_MANIFEST_FILE");
-        unsetenv("JAVA_RUNFILES");
-      }
-      argv_vec = {
-          exec_path.c_str(), node_name.c_str(), node_id_str.c_str(), config_path_.c_str(), nullptr};
-    }
-    // 2) Try to execute the generic wrapper from packaged tar layout.
-    else if (auto wrapper = ResolveRos2WrapperPath()) {
-      exec_path = wrapper->string();
-      if (!std::filesystem::exists(exec_path)) {
-        LOG(ERROR) << "Wrapper script not found at '" << exec_path << "'";
-        _exit(1);
-      }
-      if (access(exec_path.c_str(), X_OK) != 0) {
-        LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
-        _exit(1);
-      }
-      argv_vec = {exec_path.c_str(),
-                  node_type.c_str(),
-                  node_name.c_str(),
-                  node_id_str.c_str(),
-                  config_path_.c_str(),
-                  nullptr};
-    } else {
-      LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
-                 << node_type;
-      _exit(1);
-    }
-
     // Put child in its own process group so we can signal the whole group (including grandchildren)
     if (setpgid(0, 0) != 0) {
-      LOG(WARNING) << "Failed to set process group for " << node_name << ": " << strerror(errno)
-                   << ". This is not critical.";
+      // Failed to set process group. This is not critical.
     }
 
-    execv(exec_path.c_str(), const_cast<char* const*>(argv_vec.data()));
+    for (const auto& [k, v] : env_to_set) {
+      setenv(k.c_str(), v.c_str(), 1);
+    }
+    for (const auto& k : env_to_unset) {
+      unsetenv(k.c_str());
+    }
 
-    LOG(ERROR) << "Failed to execute " << exec_path << ": " << strerror(errno);
+    if (!work_dir.empty()) {
+      if (chdir(work_dir.c_str()) != 0) {
+        // Failed to chdir. Proceeding anyway as it might still work.
+      }
+    }
+
+    execv(exec_path.c_str(), argv_ptrs.data());
+
+    const char* msg = "Failed to execute node process\n";
+    write(STDERR_FILENO, msg, strlen(msg));
     _exit(1);
   } else if (pid > 0) {
     LOG(INFO) << "Launched " << node_name << " with PID: " << pid;
@@ -470,12 +463,19 @@ absl::Status NodeGenerator::MonitorNodes() {
   while (!shutdown_requested_) {
     MonitorChildProcesses();
 
-    if (launched_nodes_.empty()) {
+    bool empty;
+    {
+      std::lock_guard<std::mutex> lock(nodes_mutex_);
+      empty = launched_nodes_.empty();
+    }
+
+    if (empty) {
       LOG(WARNING) << "All nodes have terminated. Exiting...";
       CleanupAndExit(1);
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Avoid busy-waiting.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
   LOG(INFO) << "Shutdown requested, cleaning up...";
@@ -484,108 +484,139 @@ absl::Status NodeGenerator::MonitorNodes() {
 }
 
 void NodeGenerator::MonitorChildProcesses() {
-  for (auto it = launched_nodes_.begin(); it != launched_nodes_.end();) {
-    int status;
-    pid_t result = waitpid(it->pid, &status, WNOHANG);
+  int status;
+  while (true) {
+    // waitpid(-1) with WNOHANG checks for ANY child process that has exited.
+    // It returns 0 if there are children but none have exited.
+    // It returns -1 if there are no children (errno=ECHILD) or on error.
+    // It returns > 0 (the PID) if a child exited.
+    pid_t pid = waitpid(-1, &status, WNOHANG);
 
-    if (result > 0) {
-      // Child process has terminated
+    if (pid == 0) {
+      // No children have exited this tick.
+      break;
+    }
+
+    if (pid == -1) {
+      if (errno != ECHILD) {
+        LOG(ERROR) << "Error waiting for child processes: " << strerror(errno);
+      }
+      break;
+    }
+
+    // A child (pid) has exited.
+    std::lock_guard<std::mutex> lock(nodes_mutex_);
+    auto it = launched_nodes_.find(pid);
+    if (it != launched_nodes_.end()) {
       if (WIFEXITED(status)) {
-        LOG(ERROR) << "Node " << it->node_name << " (PID " << it->pid
+        LOG(ERROR) << "Node " << it->second.node_name << " (PID " << pid
                    << ") exited with status: " << WEXITSTATUS(status);
       } else if (WIFSIGNALED(status)) {
-        LOG(ERROR) << "Node " << it->node_name << " (PID " << it->pid
+        LOG(ERROR) << "Node " << it->second.node_name << " (PID " << pid
                    << ") terminated by signal: " << WTERMSIG(status);
       }
-      it = launched_nodes_.erase(it);
-    } else if (result < 0 && errno != ECHILD) {
-      LOG(ERROR) << "Error waiting for child process " << it->pid << ": " << strerror(errno);
-      it = launched_nodes_.erase(it);
+      launched_nodes_.erase(it);
     } else {
-      ++it;
+      // This might happen if a child double-forked or is not tracked.
+      // Just log it.
+      LOG(WARNING) << "Reaped unknown child process PID: " << pid;
     }
   }
+}
+
+void NodeGenerator::KillAllNodes(int signal) {
+  for (const auto& [pid, node] : launched_nodes_) {
+    if (pid > 0) {
+      kill(-pid, signal);
+    }
+  }
+}
+
+bool NodeGenerator::WaitForNodesToExit(int timeout_ms) {
+  int waited = 0;
+  const int poll_ms = 100;
+  while (waited < timeout_ms) {
+    // Reap any zombies
+    while (true) {
+      int status;
+      pid_t pid = waitpid(-1, &status, WNOHANG);
+      if (pid <= 0) break;  // 0=running, -1=error/none
+
+      auto it = launched_nodes_.find(pid);
+      if (it != launched_nodes_.end()) {
+        launched_nodes_.erase(it);
+      }
+    }
+
+    if (launched_nodes_.empty()) return true;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(poll_ms));
+    waited += poll_ms;
+  }
+  return launched_nodes_.empty();
 }
 
 absl::Status NodeGenerator::Shutdown(const int max_wait_ms) {
   LOG(INFO) << "Shutting down all nodes...";
 
-  // Ask all child processes to shutdown gracefully (SIGINT preferred by ROS2)
-  for (const auto& node : launched_nodes_) {
-    if (node.pid <= 0) continue;
-    LOG(INFO) << "Requesting shutdown (SIGINT) for " << node.node_name << " PID: " << node.pid;
-    // Signal the entire process group (negative PID)
-    kill(-node.pid, SIGINT);
-  }
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
 
-  // Split the total wait across SIGINT and SIGTERM phases
-  const int poll_interval_ms = 100;
-  const int int_wait_ms = static_cast<int>(max_wait_ms * 0.6);
+  const int int_wait_ms = static_cast<int>(max_wait_ms);
   const int term_wait_ms = max_wait_ms - int_wait_ms;
 
-  auto wait_until = [&](int timeout_ms) {
-    int waited_ms = 0;
-    while (waited_ms < timeout_ms) {
-      bool any_running = false;
-      for (const auto& node : launched_nodes_) {
-        if (node.pid <= 0) continue;
-        int status;
-        pid_t res = waitpid(node.pid, &status, WNOHANG);
-        if (res == 0) {
-          any_running = true;
-        }
-      }
-      if (!any_running) return true;
-      std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
-      waited_ms += poll_interval_ms;
-    }
-    return false;
-  };
-
-  // Wait for SIGINT grace
-  (void)wait_until(int_wait_ms);
-
-  // Send SIGTERM to any remaining
-  for (const auto& node : launched_nodes_) {
-    int status;
-    pid_t res = waitpid(node.pid, &status, WNOHANG);
-    if (res == 0) {
-      if (node.pid > 0) {
-        LOG(WARNING) << node.node_name << " still running. Sending SIGTERM to group.";
-        kill(-node.pid, SIGTERM);
-      }
-    }
+  // 1. SIGINT (Graceful shutdown)
+  KillAllNodes(SIGINT);
+  if (WaitForNodesToExit(int_wait_ms)) {
+    LOG(INFO) << "All processes terminated successfully (SIGINT).";
+    return absl::OkStatus();
   }
 
-  // Wait for SIGTERM grace
-  (void)wait_until(term_wait_ms);
-
-  // Force kill any remaining
-  for (const auto& node : launched_nodes_) {
-    int status;
-    pid_t res = waitpid(node.pid, &status, WNOHANG);
-    if (res == 0) {
-      if (node.pid > 0) {
-        LOG(WARNING) << node.node_name << " did not exit in time. Sending SIGKILL to group.";
-        kill(-node.pid, SIGKILL);
-        waitpid(node.pid, &status, 0);
-      }
-    }
+  // 2. SIGTERM (Forceful request)
+  LOG(WARNING) << "Nodes still running. Sending SIGTERM...";
+  KillAllNodes(SIGTERM);
+  if (WaitForNodesToExit(term_wait_ms)) {
+    LOG(INFO) << "All processes terminated successfully (SIGTERM).";
+    return absl::OkStatus();
   }
 
-  launched_nodes_.clear();
-  LOG(INFO) << "All processes terminated successfully.";
+  // 3. SIGKILL (Last resort)
+  LOG(ERROR) << "Nodes did not exit. Sending SIGKILL...";
+  KillAllNodes(SIGKILL);
+  WaitForNodesToExit(1000);  // Give kernel a moment to clean up
+
+  if (!launched_nodes_.empty()) {
+    LOG(ERROR) << "Failed to kill " << launched_nodes_.size() << " nodes (Zombies?)";
+    launched_nodes_.clear();  // Clear map anyway since we can't do anything else
+  } else {
+    LOG(INFO) << "All processes terminated (SIGKILL).";
+  }
+
   return absl::OkStatus();
 }
 
 absl::Status NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
-  nodes = launched_nodes_;
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
+  nodes.clear();
+  nodes.reserve(launched_nodes_.size());
+  for (const auto& [pid, info] : launched_nodes_) {
+    nodes.push_back(info);
+  }
   return absl::OkStatus();
 }
 
 void NodeGenerator::SetupSignalHandlers() {
-  signal(SIGINT, SignalHandler);
-  signal(SIGTERM, SignalHandler);
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = SignalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+
+  if (sigaction(SIGINT, &sa, nullptr) == -1) {
+    LOG(ERROR) << "Failed to set SIGINT handler: " << strerror(errno);
+  }
+  if (sigaction(SIGTERM, &sa, nullptr) == -1) {
+    LOG(ERROR) << "Failed to set SIGTERM handler: " << strerror(errno);
+  }
 }
 
 void NodeGenerator::CleanupAndExit(int exit_code) {
@@ -597,6 +628,12 @@ void NodeGenerator::CleanupAndExit(int exit_code) {
 }
 
 void NodeGenerator::SignalHandler(int sig) {
+  // Use write() instead of LOG() because it is async-signal-safe.
+  // LOG() uses mutexes and malloc, which can deadlock if the signal interrupted LOG().
+  const char* msg = (sig == SIGINT) ? "\nReceived SIGINT, shutting down...\n"
+                                    : "\nReceived SIGTERM, shutting down...\n";
+  write(STDERR_FILENO, msg, strlen(msg));
+
   if (instance_) {
     instance_->shutdown_requested_ = true;
   }
@@ -624,26 +661,27 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     }
   }
 
-  // Get publish and subscribe topics for AI node (match SingleModel by node_id).
-  if (config_.has_ai()) {
-    const auto& models = config_.ai().models();
-    for (const auto& single_model : models.single_model()) {
-      if (single_model.node().id() == node_id) {
-        for (const auto& pub : single_model.pubishers()) {
-          publish_topics.push_back(pub.topic());
-        }
-        for (const auto& sub : single_model.subscriptions()) {
-          subscribe_topics.push_back(sub.topic());
-        }
+  // Get publish and subscribe topics for models.
+
+  for (const auto& single_model : config_.ai().models().single_model()) {
+    if (single_model.node().id() == node_id) {
+      for (const auto& pub : single_model.pubishers()) {
+        publish_topics.push_back(pub.topic());
+      }
+      for (const auto& sub : single_model.subscriptions()) {
+        subscribe_topics.push_back(sub.topic());
       }
     }
   }
+  // TODO: Add data store node.
 
   // Get publish and subscribe topics for calibration node.
-  if (config_.calibration().node().id() == node_id) {
-    for (const auto& sub_topic : config_.calibration().subscribe_topics()) {
-      subscribe_topics.push_back(sub_topic);
-      publish_topics.push_back(sub_topic + "_operational_limit");
+  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
+    if (single_calibration.node().id() == node_id) {
+      for (const auto& sub_topic : single_calibration.subscribe_topics()) {
+        subscribe_topics.push_back(sub_topic);
+        publish_topics.push_back(sub_topic + "_operational_limit");
+      }
     }
   }
   return absl::OkStatus();

@@ -36,42 +36,8 @@ This example demonstrates how to launch the SO100 robot in teleoperation mode, w
 *Please make sure to calibrate the operational limits for your servo motors.*
 
 ```bash
-bazel build node_generator:joshua_main -- --config=<DEFAULT_IS_TELEOP>
+bazel run launcher:joshua_main
 ```
-
-TODO: Add calibration instruction here.
-
-## Troubleshooting
-
-### USB Camera Not Detected
-
-If your USB camera (especially HHWei cameras) is not showing up as `/dev/video*` devices:
-
-1. **Check if camera is detected by USB:**
-   ```bash
-   lsusb | grep -i camera
-   ```
-
-2. **Ensure you're in the video group:**
-   ```bash
-   sudo usermod -aG video $USER
-   newgrp video
-   ```
-
-3. **Check if UVC drivers are loaded:**
-   ```bash
-   lsmod | grep uvc
-   ```
-
-4. **If no video devices appear, try unplugging and reconnecting the camera** - this often resolves initialization issues.
-
-5. **Verify camera is working:**
-   ```bash
-   ls -l /dev/video*
-   v4l2-ctl --list-devices
-   ```
-
-**Solution Summary:** The most common fix is adding your user to the `video` group and unplugging/reconnecting the camera to trigger proper device node creation.
 
 ## Key Features & Benefits:
 

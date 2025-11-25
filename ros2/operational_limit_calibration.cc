@@ -26,29 +26,31 @@ class OperationalLimitCalibration : public rclcpp::Node {
                               const int node_id,
                               const config::Config& config)
       : Node(node_name) {
-    for (const auto& subscribe_topic : config.calibration().subscribe_topics()) {
-      operational_limits_.emplace_back();
-      OperationalLimit& operational_limit = operational_limits_.back();
-      const auto& qos_setting = config.calibration().node().qos_setting();
-      operational_limit.subscribe_topic = subscribe_topic;
-      operational_limit.publish_topic = subscribe_topic + "_operational_limit";
+    for (const auto& single_calibration : config.calibration().single_calibrations()) {
+      if (single_calibration.node().id() != node_id) continue;
+      for (const auto& subscribe_topic : single_calibration.subscribe_topics()) {
+        operational_limits_.emplace_back();
+        OperationalLimit& operational_limit = operational_limits_.back();
+        const auto& qos_setting = single_calibration.node().qos_setting();
+        operational_limit.subscribe_topic = subscribe_topic;
+        operational_limit.publish_topic = subscribe_topic + "_operational_limit";
 
-      auto callback = [this, &operational_limit](const std_msgs::msg::Float32::SharedPtr msg) {
-        operational_limit.max_value = std::max(operational_limit.max_value, msg->data);
-        operational_limit.min_value = std::min(operational_limit.min_value, msg->data);
+        auto callback = [this, &operational_limit](const std_msgs::msg::Float32::SharedPtr msg) {
+          operational_limit.max_value = std::max(operational_limit.max_value, msg->data);
+          operational_limit.min_value = std::min(operational_limit.min_value, msg->data);
 
-        std_msgs::msg::Float32MultiArray msg_array;
-        msg_array.data.push_back(operational_limit.min_value);
-        msg_array.data.push_back(operational_limit.max_value);
-        operational_limit.publisher->publish(msg_array);
-      };
+          std_msgs::msg::Float32MultiArray msg_array;
+          msg_array.data.push_back(operational_limit.min_value);
+          msg_array.data.push_back(operational_limit.max_value);
+          operational_limit.publisher->publish(msg_array);
+        };
 
-      operational_limit.subscription = this->create_subscription<std_msgs::msg::Float32>(
-          operational_limit.subscribe_topic, ros2_utils::CreateQosSetting(qos_setting), callback);
-      operational_limit.publisher = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-          operational_limit.publish_topic, ros2_utils::CreateQosSetting(qos_setting));
+        operational_limit.subscription = this->create_subscription<std_msgs::msg::Float32>(
+            operational_limit.subscribe_topic, ros2_utils::CreateQosSetting(qos_setting), callback);
+        operational_limit.publisher = this->create_publisher<std_msgs::msg::Float32MultiArray>(
+            operational_limit.publish_topic, ros2_utils::CreateQosSetting(qos_setting));
+      }
     }
-
     if (operational_limits_.empty()) {
       RCLCPP_ERROR(this->get_logger(),
                    "No encoder perceptions found in configuration for node_id %d!",
