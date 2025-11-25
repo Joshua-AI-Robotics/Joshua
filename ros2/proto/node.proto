@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package ros2.node;
 
+// Enum values here must match with the file name under ros2/
+// (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
+// This is used to resolve the native binary path.
+// Last Added: LIDAR_PUBLISHER.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;

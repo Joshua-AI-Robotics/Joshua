@@ -6,6 +6,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -42,23 +44,13 @@ constexpr auto kCalibration = "calibration";
 constexpr auto kTest = "test";
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
-  switch (type) {
-    case ros2::node::CAMERA_PUBLISHER:
-      return kCameraPublisher;
-    case ros2::node::ENCODER_PUBLISHER:
-      return kEncoderPublisher;
-    case ros2::node::ACTUATOR_SUBSCRIBER:
-      return kActuatorSubscriber;
-    case ros2::node::LIDAR_PUBLISHER:
-      return kLidarPublisher;
-    case ros2::node::INFERENCE:
-      return kInference;
-    case ros2::node::OPERATIONAL_LIMIT_CALIBRATION:
-      return kOperationalLimitCalibration;
-    // Add other mappings as needed
-    default:
-      return "";
+  if (type == ros2::node::NODE_INVALID) {
+    return "";
   }
+  std::string name = ros2::node::NodeType_Name(type);
+  std::transform(name.begin(), name.end(), name.begin(),
+                 [](unsigned char c){ return std::tolower(c); });
+  return name;
 }
 
 // Resolve current executable absolute path via /proc/self/exe
