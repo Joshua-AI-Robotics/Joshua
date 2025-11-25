@@ -13,7 +13,6 @@
 #include <filesystem>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 
 #include "config/config_utils.h"
 
@@ -23,9 +22,6 @@ namespace {
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
-
-// Common file names.
-constexpr auto kFixSymlinksScript = "fix_symlinks.sh";
 
 // Node types.
 // Last Added: kOperationalLimitCalibration.
@@ -140,29 +136,6 @@ std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
   return std::nullopt;
 }
 
-void TryRunFixSymlinksOnce() {
-  static std::once_flag run_once_flag;
-  std::call_once(run_once_flag, []() {
-    std::string self_exe = GetSelfExecutablePath();
-    if (self_exe.empty()) return;
-    std::filesystem::path self_dir = std::filesystem::path(self_exe).parent_path();
-    std::filesystem::path fixer = self_dir / kFixSymlinksScript;
-    if (!std::filesystem::exists(fixer)) return;
-
-    pid_t pid = fork();
-    if (pid == 0) {
-      // Ensure the script runs from the directory that contains the *.runfiles folders
-      if (chdir(self_dir.c_str()) != 0) {
-        _exit(127);
-      }
-      execl("/bin/bash", "/bin/bash", fixer.c_str(), nullptr);
-      _exit(127);
-    } else if (pid > 0) {
-      int status;
-      (void)waitpid(pid, &status, 0);
-    }
-  });
-}
 }  // namespace
 
 // Static member initialization
@@ -356,10 +329,13 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
 
   if (pid == 0) {
     std::string node_id_str = std::to_string(node_id);
-    TryRunFixSymlinksOnce();
     std::string exec_path;
     std::vector<const char*> argv_vec;
     const std::string node_type_str = NodeTypeToString(node_type);
+    if (node_type_str.empty()) {
+      LOG(ERROR) << "Invalid node type for node " << node_id;
+      return -1;
+    }
 
     // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
     if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
