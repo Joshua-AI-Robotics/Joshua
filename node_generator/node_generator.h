@@ -69,7 +69,7 @@ class NodeGenerator {
   config::Config config_;
 
   std::vector<NodeInfo> launched_nodes_;
-  volatile bool shutdown_requested_;
+  std::atomic<bool> shutdown_requested_;
 
   static NodeGenerator* instance_;
   static void SignalHandler(int sig);

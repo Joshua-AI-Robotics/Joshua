@@ -31,14 +31,6 @@ constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 constexpr auto kLidarPublisher = "lidar_publisher";
 
-// Operation modes.
-// Last Added: inference.
-constexpr auto kTeleoperate = "teleoperate";
-constexpr auto kInference = "inference";
-constexpr auto kTraining = "training";
-constexpr auto kCalibration = "calibration";
-constexpr auto kTest = "test";
-
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
     return "";
@@ -454,7 +446,8 @@ absl::Status NodeGenerator::MonitorNodes() {
       CleanupAndExit(1);
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Avoid busy-waiting.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
   LOG(INFO) << "Shutdown requested, cleaning up...";
