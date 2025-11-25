@@ -6,6 +6,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -58,6 +59,10 @@ class NodeGenerator {
   void CleanupAndExit(int exit_code);
   void MonitorChildProcesses();
 
+  // Shutdown helpers
+  void KillAllNodes(int signal);
+  bool WaitForNodesToExit(int timeout_ms);
+
   absl::Status GetTopicsForNode(const uint32_t node_id,
                                 std::vector<std::string>& publish_topics,
                                 std::vector<std::string>& subscribe_topics);
@@ -68,7 +73,9 @@ class NodeGenerator {
   std::string config_path_;
   config::Config config_;
 
-  std::vector<NodeInfo> launched_nodes_;
+  // Map from PID to NodeInfo for O(1) lookup and monitoring.
+  absl::flat_hash_map<pid_t, NodeInfo> launched_nodes_;
+  mutable std::mutex nodes_mutex_;
   std::atomic<bool> shutdown_requested_;
 
   static NodeGenerator* instance_;

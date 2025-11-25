@@ -310,6 +310,8 @@ absl::Status NodeGenerator::CheckConfigIntegrity() {
 }
 
 absl::Status NodeGenerator::LaunchAllNodes() {
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
+
   for (const auto& [node_id, node_type] : identified_nodes_) {
     const std::string node_name =
         NodeTypeToString(node_type) + std::string("_node_") + std::to_string(node_id);
@@ -321,8 +323,13 @@ absl::Status NodeGenerator::LaunchAllNodes() {
         LOG(ERROR) << "Failed to get topics for node " << node_id;
         return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to get topics for node");
       }
-      launched_nodes_.push_back(
-          {NodeTypeToString(node_type), node_name, node_id, pid, publish_topics, subscribe_topics});
+      launched_nodes_.try_emplace(pid,
+                                  NodeInfo{NodeTypeToString(node_type),
+                                           node_name,
+                                           node_id,
+                                           pid,
+                                           publish_topics,
+                                           subscribe_topics});
     }
   }
 
@@ -442,7 +449,13 @@ absl::Status NodeGenerator::MonitorNodes() {
   while (!shutdown_requested_) {
     MonitorChildProcesses();
 
-    if (launched_nodes_.empty()) {
+    bool empty;
+    {
+      std::lock_guard<std::mutex> lock(nodes_mutex_);
+      empty = launched_nodes_.empty();
+    }
+
+    if (empty) {
       LOG(WARNING) << "All nodes have terminated. Exiting...";
       CleanupAndExit(1);
     }
@@ -457,102 +470,123 @@ absl::Status NodeGenerator::MonitorNodes() {
 }
 
 void NodeGenerator::MonitorChildProcesses() {
-  for (auto it = launched_nodes_.begin(); it != launched_nodes_.end();) {
-    int status;
-    pid_t result = waitpid(it->pid, &status, WNOHANG);
+  int status;
+  while (true) {
+    // waitpid(-1) with WNOHANG checks for ANY child process that has exited.
+    // It returns 0 if there are children but none have exited.
+    // It returns -1 if there are no children (errno=ECHILD) or on error.
+    // It returns > 0 (the PID) if a child exited.
+    pid_t pid = waitpid(-1, &status, WNOHANG);
 
-    if (result > 0) {
-      // Child process has terminated
+    if (pid == 0) {
+      // No children have exited this tick.
+      break;
+    }
+
+    if (pid == -1) {
+      if (errno != ECHILD) {
+        LOG(ERROR) << "Error waiting for child processes: " << strerror(errno);
+      }
+      break;
+    }
+
+    // A child (pid) has exited.
+    std::lock_guard<std::mutex> lock(nodes_mutex_);
+    auto it = launched_nodes_.find(pid);
+    if (it != launched_nodes_.end()) {
       if (WIFEXITED(status)) {
-        LOG(ERROR) << "Node " << it->node_name << " (PID " << it->pid
+        LOG(ERROR) << "Node " << it->second.node_name << " (PID " << pid
                    << ") exited with status: " << WEXITSTATUS(status);
       } else if (WIFSIGNALED(status)) {
-        LOG(ERROR) << "Node " << it->node_name << " (PID " << it->pid
+        LOG(ERROR) << "Node " << it->second.node_name << " (PID " << pid
                    << ") terminated by signal: " << WTERMSIG(status);
       }
-      it = launched_nodes_.erase(it);
-    } else if (result < 0 && errno != ECHILD) {
-      LOG(ERROR) << "Error waiting for child process " << it->pid << ": " << strerror(errno);
-      it = launched_nodes_.erase(it);
+      launched_nodes_.erase(it);
     } else {
-      ++it;
+      // This might happen if a child double-forked or is not tracked.
+      // Just log it.
+      LOG(WARNING) << "Reaped unknown child process PID: " << pid;
     }
   }
+}
+
+void NodeGenerator::KillAllNodes(int signal) {
+  for (const auto& [pid, node] : launched_nodes_) {
+    if (pid > 0) {
+      kill(-pid, signal);
+    }
+  }
+}
+
+bool NodeGenerator::WaitForNodesToExit(int timeout_ms) {
+  int waited = 0;
+  const int poll_ms = 100;
+  while (waited < timeout_ms) {
+    // Reap any zombies
+    while (true) {
+      int status;
+      pid_t pid = waitpid(-1, &status, WNOHANG);
+      if (pid <= 0) break;  // 0=running, -1=error/none
+
+      auto it = launched_nodes_.find(pid);
+      if (it != launched_nodes_.end()) {
+        launched_nodes_.erase(it);
+      }
+    }
+
+    if (launched_nodes_.empty()) return true;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(poll_ms));
+    waited += poll_ms;
+  }
+  return launched_nodes_.empty();
 }
 
 absl::Status NodeGenerator::Shutdown(const int max_wait_ms) {
   LOG(INFO) << "Shutting down all nodes...";
 
-  // Ask all child processes to shutdown gracefully (SIGINT preferred by ROS2)
-  for (const auto& node : launched_nodes_) {
-    if (node.pid <= 0) continue;
-    LOG(INFO) << "Requesting shutdown (SIGINT) for " << node.node_name << " PID: " << node.pid;
-    // Signal the entire process group (negative PID)
-    kill(-node.pid, SIGINT);
-  }
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
 
-  // Split the total wait across SIGINT and SIGTERM phases
-  const int poll_interval_ms = 100;
-  const int int_wait_ms = static_cast<int>(max_wait_ms * 0.6);
+  const int int_wait_ms = static_cast<int>(max_wait_ms);
   const int term_wait_ms = max_wait_ms - int_wait_ms;
 
-  auto wait_until = [&](int timeout_ms) {
-    int waited_ms = 0;
-    while (waited_ms < timeout_ms) {
-      bool any_running = false;
-      for (const auto& node : launched_nodes_) {
-        if (node.pid <= 0) continue;
-        int status;
-        pid_t res = waitpid(node.pid, &status, WNOHANG);
-        if (res == 0) {
-          any_running = true;
-        }
-      }
-      if (!any_running) return true;
-      std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
-      waited_ms += poll_interval_ms;
-    }
-    return false;
-  };
-
-  // Wait for SIGINT grace
-  (void)wait_until(int_wait_ms);
-
-  // Send SIGTERM to any remaining
-  for (const auto& node : launched_nodes_) {
-    int status;
-    pid_t res = waitpid(node.pid, &status, WNOHANG);
-    if (res == 0) {
-      if (node.pid > 0) {
-        LOG(WARNING) << node.node_name << " still running. Sending SIGTERM to group.";
-        kill(-node.pid, SIGTERM);
-      }
-    }
+  // 1. SIGINT (Graceful shutdown)
+  KillAllNodes(SIGINT);
+  if (WaitForNodesToExit(int_wait_ms)) {
+    LOG(INFO) << "All processes terminated successfully (SIGINT).";
+    return absl::OkStatus();
   }
 
-  // Wait for SIGTERM grace
-  (void)wait_until(term_wait_ms);
-
-  // Force kill any remaining
-  for (const auto& node : launched_nodes_) {
-    int status;
-    pid_t res = waitpid(node.pid, &status, WNOHANG);
-    if (res == 0) {
-      if (node.pid > 0) {
-        LOG(WARNING) << node.node_name << " did not exit in time. Sending SIGKILL to group.";
-        kill(-node.pid, SIGKILL);
-        waitpid(node.pid, &status, 0);
-      }
-    }
+  // 2. SIGTERM (Forceful request)
+  LOG(WARNING) << "Nodes still running. Sending SIGTERM...";
+  KillAllNodes(SIGTERM);
+  if (WaitForNodesToExit(term_wait_ms)) {
+    LOG(INFO) << "All processes terminated successfully (SIGTERM).";
+    return absl::OkStatus();
   }
 
-  launched_nodes_.clear();
-  LOG(INFO) << "All processes terminated successfully.";
+  // 3. SIGKILL (Last resort)
+  LOG(ERROR) << "Nodes did not exit. Sending SIGKILL...";
+  KillAllNodes(SIGKILL);
+  WaitForNodesToExit(1000);  // Give kernel a moment to clean up
+
+  if (!launched_nodes_.empty()) {
+    LOG(ERROR) << "Failed to kill " << launched_nodes_.size() << " nodes (Zombies?)";
+    launched_nodes_.clear();  // Clear map anyway since we can't do anything else
+  } else {
+    LOG(INFO) << "All processes terminated (SIGKILL).";
+  }
+
   return absl::OkStatus();
 }
 
 absl::Status NodeGenerator::GetLaunchedNodes(std::vector<NodeInfo>& nodes) {
-  nodes = launched_nodes_;
+  std::lock_guard<std::mutex> lock(nodes_mutex_);
+  nodes.clear();
+  nodes.reserve(launched_nodes_.size());
+  for (const auto& [pid, info] : launched_nodes_) {
+    nodes.push_back(info);
+  }
   return absl::OkStatus();
 }
 
