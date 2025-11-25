@@ -48,8 +48,8 @@ std::string NodeTypeToString(const ros2::node::NodeType& type) {
     return "";
   }
   std::string name = ros2::node::NodeType_Name(type);
-  std::transform(name.begin(), name.end(), name.begin(),
-                 [](unsigned char c){ return std::tolower(c); });
+  std::transform(
+      name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
   return name;
 }
 

@@ -201,7 +201,7 @@ NODE="$$1"; shift || true
 SCRIPT_DIR="$$(cd "$$(dirname "$$0")" && pwd)"
 
 # Case 1a: Impl sits next to this script
-if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
+if [ -x "$$SCRIPT_DIR/$${NODE}" ]; then
   cd "$$SCRIPT_DIR"
   # Export runfiles env vars to help ROS 2 locate resources
   WS_DIR="$$(dirname "$$SCRIPT_DIR")"
@@ -209,18 +209,18 @@ if [ -x "$$SCRIPT_DIR/$${NODE}_impl" ]; then
   export TEST_SRCDIR="$$WS_DIR"
   unset RUNFILES_MANIFEST_FILE || true
   unset JAVA_RUNFILES || true
-  exec "./$${NODE}_impl" "$$@"
+  exec "./$${NODE}" "$$@"
 fi
 
 # Case 1b: Impl sits under ros2/ while this script is at top-level
-if [ -x "$$SCRIPT_DIR/ros2/$${NODE}_impl" ]; then
+if [ -x "$$SCRIPT_DIR/ros2/$${NODE}" ]; then
   cd "$$SCRIPT_DIR/ros2"
   WS_DIR="$$(dirname "$$SCRIPT_DIR")"
   export RUNFILES_DIR="$$WS_DIR"
   export TEST_SRCDIR="$$WS_DIR"
   unset RUNFILES_MANIFEST_FILE || true
   unset JAVA_RUNFILES || true
-  exec "./$${NODE}_impl" "$$@"
+  exec "./$${NODE}" "$$@"
 fi
 
 # Case 2: Runfiles layout. Search any *.runfiles under top-level and ros2/ subdir.
@@ -233,7 +233,7 @@ for CAND in "$$SCRIPT_DIR" "$$SCRIPT_DIR/ros2"; do
       export TEST_SRCDIR="$$WS_DIR"
       unset RUNFILES_MANIFEST_FILE || true
       unset JAVA_RUNFILES || true
-      exec "./$${NODE}_impl" "$$@"
+      exec "./$${NODE}" "$$@"
     fi
     if [ -d "$$RUNFILES_DIR/__main__/ros2" ]; then
       cd "$$RUNFILES_DIR/__main__/ros2"
@@ -242,12 +242,12 @@ for CAND in "$$SCRIPT_DIR" "$$SCRIPT_DIR/ros2"; do
       export TEST_SRCDIR="$$WS_DIR"
       unset RUNFILES_MANIFEST_FILE || true
       unset JAVA_RUNFILES || true
-      exec "./$${NODE}_impl" "$$@"
+      exec "./$${NODE}" "$$@"
     fi
   done
 done
 
-echo "Could not locate '$${NODE}_impl' relative to '$$SCRIPT_DIR'." >&2
+echo "Could not locate '$${NODE}' relative to '$$SCRIPT_DIR'." >&2
 exit 1
 EOF
 chmod +x $(location ros2_node_wrapper.sh)
