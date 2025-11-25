@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "config/proto/config.pb.h"
 #include "ros2/proto/node.pb.h"
@@ -45,8 +46,8 @@ class NodeGenerator {
   }
 
  private:
-  absl::Status identify_node_types();
-  absl::Status check_config_integrity();
+  absl::Status IdentifyNodeTypes();
+  absl::Status CheckConfigIntegrity();
 
   pid_t LaunchNode(const ros2::node::NodeType& node_type,
                    uint32_t node_id,
@@ -62,12 +63,10 @@ class NodeGenerator {
                                 std::vector<std::string>& subscribe_topics);
 
   // Map from node_id to node type.
-  std::map<uint32_t, ros2::node::NodeType> identified_nodes_;
+  absl::flat_hash_map<uint32_t, ros2::node::NodeType> identified_nodes_;
 
   std::string config_path_;
   config::Config config_;
-
-  std::set<std::string> required_builds_;
 
   std::vector<NodeInfo> launched_nodes_;
   volatile bool shutdown_requested_;

@@ -24,7 +24,7 @@ constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
 
 // Node types.
-// Last Added: kOperationalLimitCalibration.
+// Last Added: kLidarPublisher.
 constexpr auto kCameraPublisher = "camera_publisher";
 constexpr auto kEncoderPublisher = "encoder_publisher";
 constexpr auto kActuatorSubscriber = "actuator_subscriber";
@@ -32,7 +32,7 @@ constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 constexpr auto kLidarPublisher = "lidar_publisher";
 
 // Operation modes.
-// Last Added: mock_inference.
+// Last Added: inference.
 constexpr auto kTeleoperate = "teleoperate";
 constexpr auto kInference = "inference";
 constexpr auto kTraining = "training";
@@ -203,44 +203,55 @@ absl::Status NodeGenerator::Initialize() {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
   }
 
-  auto robot_config = config_.robot();
-  LOG(INFO) << "Robot Name: " << robot_config.name();
-  if (config_.has_ai() && config_.ai().models().single_model_size() > 0) {
-    LOG(INFO) << "AI Policy Name: " << config_.ai().models().single_model(0).policy_name();
-  }
-  LOG(INFO) << "Operation Mode: " << config_.general().operation_mode();
-
-  if (!identify_node_types().ok()) {
+  if (!IdentifyNodeTypes().ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node types identification failed");
   }
 
-  if (!check_config_integrity().ok()) {
+  if (!CheckConfigIntegrity().ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Config integrity check failed");
   }
 
   SetupSignalHandlers();
 
+  LOG(INFO) << "NodeGenerator initialized successfully";
+
   return absl::OkStatus();
 }
 
-absl::Status NodeGenerator::identify_node_types() {
+absl::Status NodeGenerator::IdentifyNodeTypes() {
   // Actions
   for (const auto& single_action : config_.robot().actions().single_actions()) {
     const uint32_t node_id = single_action.node().id();
-    identified_nodes_[node_id] = single_action.node().node_type();
+    auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_action.node().node_type());
+    if (!inserted) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
   }
 
   // Perceptions
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
     const uint32_t node_id = single_perception.node().id();
-    identified_nodes_[node_id] = single_perception.node().node_type();
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_perception.node().node_type());
+    if (!inserted) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
   }
 
   // Inference
   for (const auto& single_model :
        config_.ai().models().single_model()) {  // TODO: Update single_model() to plural.
     const uint32_t node_id = single_model.node().id();
-    identified_nodes_[node_id] = single_model.node().node_type();
+    auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_model.node().node_type());
+    if (!inserted) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
   }
 
   // Data store.
@@ -249,13 +260,19 @@ absl::Status NodeGenerator::identify_node_types() {
   // Calibration
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
     const uint32_t node_id = single_calibration.node().id();
-    identified_nodes_[node_id] = single_calibration.node().node_type();
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_calibration.node().node_type());
+    if (!inserted) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
   }
 
   return absl::OkStatus();
 }
 
-absl::Status NodeGenerator::check_config_integrity() {
+absl::Status NodeGenerator::CheckConfigIntegrity() {
   auto robot_config = config_.robot();
   std::map<std::string, uint32_t> port_to_node_id;
 
