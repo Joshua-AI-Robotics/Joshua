@@ -53,7 +53,7 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
-py_library(
+ros2_py_binary(
     name = "inference",
     srcs = [
         "inference.py",
@@ -70,6 +70,8 @@ py_library(
         "//ros2/utils:qos_setting_py",
         requirement("numpy"),  # Required by ROS2 sensor_msgs
         requirement("protobuf"),
+        # Models
+        "//ai/models/random_noise:random_noise",
     ],
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced

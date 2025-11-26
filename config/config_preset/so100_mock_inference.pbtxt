@@ -235,8 +235,8 @@ robot {
 
 ai {
   models {
-    single_model {
-      policy_name: "random_noise"
+    single_models {
+      policy_name: RANDOM_NOISE
       node {
         id: 3
         node_type: INFERENCE
@@ -274,6 +274,8 @@ ai {
       }
 
       random_noise_config {
+        input_size: 1 # TODO: Try with camera image size.
+        output_size: 6
         noise_low: -0.02
         noise_high: 0.02
       }

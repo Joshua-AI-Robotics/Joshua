@@ -6,14 +6,23 @@ import "ai/models/random_noise/random_noise_config.proto";
 import "ros2/proto/node.proto";
 import "ros2/proto/ros2_data_type.proto";
 
+// This must exact match with the file name under ai/models/
+enum PolicyName {
+  POLICY_NAME_INVALID = 0;
+  RANDOM_NOISE = 1;
+  // Add other policy names here.
+}
+
 message SingleModel {
-  string policy_name = 1;
+  PolicyName policy_name = 1;
   string pretrained_model_path = 2;
   ros2.node.Node node = 3;
   repeated Subscription subscriptions = 4;
   repeated Publisher pubishers = 5;
+
   oneof policy_config {
     RandomNoiseConfig random_noise_config = 6;
+    // Add other policy configs here.
   }
 }
 

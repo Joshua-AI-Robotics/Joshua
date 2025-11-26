@@ -1,4 +1,5 @@
 import threading
+import importlib
 from typing import Any, List
 
 import rclpy
@@ -28,7 +29,7 @@ class Inference(Node):
 
         self.node_id = node_id
         self.config = config
-        self._single_model = self._select_single_model()
+        self.model = self.initialize_model()
 
         # Validate configuration
         if not self._validate_config():
@@ -46,39 +47,76 @@ class Inference(Node):
 
         # Initialize input tracking
         # Store raw input data for inference
-        num_inputs = len(self._single_model.subscriptions)
+        num_inputs = len(self.model.subscriptions)
         self.latest_input_data: List[Any] = [None for _ in range(num_inputs)]
         self.received_flags: List[bool] = [False for _ in range(num_inputs)]
 
         # Thread safety for input updates
         self._mutex = threading.Lock()
 
-        # Call subclass-specific initialization
-        self._initialize_inference()
-
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{len(self._single_model.pubishers)} publish topics, "
-            f"{len(self._single_model.subscriptions)} subscribe topics."
+            f"{len(self.model.pubishers)} publish topics, "
+            f"{len(self.model.subscriptions)} subscribe topics."
         )
 
-    def _select_single_model(self):
+    def initialize_model(self):
         """
-        Select the SingleModel config for this node by matching node_id.
-        If multiple models exist and none match, this returns the first model.
+        Select the SingleModel config for this node by matching node_id and matching model config.
+        Also initializes the model based on node_id and policy_config.
         """
         models = self.config.ai.models.single_models
         if len(models) == 0:
             raise ValueError("No SingleModel entries found in config.ai.models")
+        
+        selected_model = None
+
+        # First check the node_id matches with config.
         for m in models:
             if m.node.id == self.node_id:
-                return m
-        if len(models) == 1:
-            return models[0]
-        self.get_logger().warn(
-            f"No SingleModel with node_id={self.node_id}; defaulting to first model"
-        )
-        return models[0]
+                selected_model = m
+                break
+        
+        if selected_model is None:
+            self.get_logger().error(f"No SingleModel found with node_id={self.node_id}")
+            raise ValueError(f"No SingleModel found with node_id={self.node_id} in config.")
+
+        # Initialize the model based on policy_name.
+        # Convention: policy_name="random_noise" -> module="ai.models.random_noise.random_noise", class="RandomNoise"
+        policy_name = selected_model.policy_name
+        module_path = f"ai.models.{policy_name}.{policy_name}"
+        class_name = "".join(word.capitalize() for word in policy_name.split("_"))
+
+        try:
+            module = importlib.import_module(module_path)
+            model_class = getattr(module, class_name)
+        except (ImportError, AttributeError) as e:
+            self.get_logger().error(
+                f"Failed to import model class '{class_name}' from '{module_path}': {e}"
+            )
+            return selected_model
+
+        # Get the specific config from the oneof field
+        config_field = selected_model.WhichOneof("policy_config")
+        if not config_field:
+            self.get_logger().error(
+                f"No policy config field set in SingleModel for policy '{ai_model_pb2.PolicyName.Name(policy_name)}'"
+            )
+            return selected_model
+
+        model_config = getattr(selected_model, config_field)
+
+        try:
+            self.model = model_class(model_config)
+            self.get_logger().info(
+                f"Initialized model '{class_name}' with config field '{config_field}'"
+            )
+        except Exception as e:
+            self.get_logger().error(
+                f"Failed to instantiate model '{class_name}': {e}"
+            )
+
+        return selected_model
 
     def _validate_config(self) -> bool:
         """
@@ -91,8 +129,8 @@ class Inference(Node):
         Set up ROS2 publishers for inference outputs.
         Derived classes can customize topics, QoS, etc.
         """
-        qos_setting = create_qos_setting(self._single_model.node.qos_setting)
-        for publisher_info in self._single_model.pubishers:
+        qos_setting = create_qos_setting(self.model.node.qos_setting)
+        for publisher_info in self.model.pubishers:
             message_type = resolve_message_class_from_enum(
                 publisher_info.ros2_data_type
             )
@@ -110,9 +148,9 @@ class Inference(Node):
         Set up ROS2 subscriptions for inference inputs.
         Derived classes can customize topics, QoS, etc.
         """
-        qos_setting = create_qos_setting(self._single_model.node.qos_setting)
+        qos_setting = create_qos_setting(self.model.node.qos_setting)
         for input_index, subscription_info in enumerate(
-            self._single_model.subscriptions
+            self.model.subscriptions
         ):
             message_type = resolve_message_class_from_enum(
                 subscription_info.ros2_data_type
@@ -195,8 +233,9 @@ class Inference(Node):
         except Exception as e:
             self.get_logger().error(f"Inference error: {str(e)}")
 
-    def _initialize_inference(self) -> None:
-        pass
-
     def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
-        pass
+        if self.model is None:
+            self.get_logger().error("Model is not initialized.")
+            return []
+        
+        return self.model.inference(input_data)
