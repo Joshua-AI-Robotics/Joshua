@@ -97,18 +97,12 @@ class Inference(Node):
             module = importlib.import_module(module_path)
             model_class = getattr(module, class_name)
         except (ImportError, AttributeError) as e:
-            self.get_logger().error(
-                f"Failed to import model class '{class_name}' from '{module_path}': {e}"
-            )
-            return selected_model, None
+            raise ValueError(f"Failed to import model class '{class_name}' from '{module_path}': {e}")
 
         # Get the specific config from the oneof field
         config_field = selected_model.WhichOneof("policy_config")
         if not config_field:
-            self.get_logger().error(
-                f"No policy config field set in SingleModel for policy '{policy_name}'"
-            )
-            return selected_model, None
+            raise ValueError(f"No policy config field set in SingleModel for policy '{policy_name}'")
 
         model_config = getattr(selected_model, config_field)
         model_instance = None
@@ -119,9 +113,7 @@ class Inference(Node):
                 f"Initialized model '{class_name}' with config field '{config_field}'"
             )
         except Exception as e:
-            self.get_logger().error(
-                f"Failed to instantiate model '{class_name}': {e}"
-            )
+            raise ValueError(f"Failed to instantiate model '{class_name}': {e}")
 
         return selected_model, model_instance
 
@@ -129,7 +121,6 @@ class Inference(Node):
         """
         Validate configuration. Override in subclass for specific checks.
         """
-        return True
 
     def _setup_publishers(self) -> None:
         """
