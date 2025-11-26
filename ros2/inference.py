@@ -1,14 +1,15 @@
-import threading
 import importlib
 import sys
+import threading
 from typing import Any, List
 
 import rclpy
 from rclpy.node import Node
 
+from ai.proto import ai_model_pb2
+
 # Protobuf generated modules
 from config.proto import config_pb2
-from ai.proto import ai_model_pb2
 from ros2 import node_runner as node_runner_py
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
@@ -71,7 +72,7 @@ class Inference(Node):
         models = self.config.ai.models.single_models
         if len(models) == 0:
             raise ValueError("No SingleModel entries found in config.ai.models")
-        
+
         selected_model = None
 
         # First check the node_id matches with config.
@@ -79,17 +80,19 @@ class Inference(Node):
             if m.node.id == self.node_id:
                 selected_model = m
                 break
-        
+
         if selected_model is None:
             self.get_logger().error(f"No SingleModel found with node_id={self.node_id}")
-            raise ValueError(f"No SingleModel found with node_id={self.node_id} in config.")
+            raise ValueError(
+                f"No SingleModel found with node_id={self.node_id} in config."
+            )
 
         # Initialize the model based on policy_name.
         # Convention: policy_name="random_noise" -> module="ai.models.random_noise.random_noise", class="RandomNoise"
         policy_enum = selected_model.policy_name
         policy_name = ai_model_pb2.PolicyName.Name(policy_enum)
         policy_name_lower = policy_name.lower()
-        
+
         module_path = f"ai.models.{policy_name_lower}.{policy_name_lower}"
         class_name = "".join(word.capitalize() for word in policy_name.split("_"))
 
@@ -97,12 +100,16 @@ class Inference(Node):
             module = importlib.import_module(module_path)
             model_class = getattr(module, class_name)
         except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to import model class '{class_name}' from '{module_path}': {e}")
+            raise ValueError(
+                f"Failed to import model class '{class_name}' from '{module_path}': {e}"
+            )
 
         # Get the specific config from the oneof field
         config_field = selected_model.WhichOneof("policy_config")
         if not config_field:
-            raise ValueError(f"No policy config field set in SingleModel for policy '{policy_name}'")
+            raise ValueError(
+                f"No policy config field set in SingleModel for policy '{policy_name}'"
+            )
 
         model_config = getattr(selected_model, config_field)
         model_instance = None
@@ -235,8 +242,9 @@ class Inference(Node):
         if self.inference_model is None:
             self.get_logger().error("Model is not initialized.")
             return []
-        
+
         return self.inference_model.inference(input_data)
+
 
 def main(argv=None):
     return node_runner_py.run_node(Inference, logger_name="inference", argv=argv)
