@@ -40,6 +40,10 @@ class Inference(Node):
             self.get_logger().error("Configuration validation failed.")
             return
 
+        # TODO: In here, let the model decide how to manage publish and subcribe mechanism.
+        # Model should manage how to handle the input and output data by itself.
+        # Inference node should only proivde the ros2 publisher and subscriber mechanism.
+
         # Setup publishers
         self.publishers_list: List[rclpy.publisher.Publisher] = []
         self.publishers_msg_types: List[Any] = []
