@@ -1,5 +1,6 @@
 import threading
 import importlib
+import sys
 from typing import Any, List
 
 import rclpy
@@ -7,6 +8,8 @@ from rclpy.node import Node
 
 # Protobuf generated modules
 from config.proto import config_pb2
+from ai.proto import ai_model_pb2
+from ros2 import node_runner as node_runner_py
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
 
@@ -29,7 +32,7 @@ class Inference(Node):
 
         self.node_id = node_id
         self.config = config
-        self.model = self.initialize_model()
+        self.single_model_config, self.inference_model = self.initialize_model()
 
         # Validate configuration
         if not self._validate_config():
@@ -47,7 +50,7 @@ class Inference(Node):
 
         # Initialize input tracking
         # Store raw input data for inference
-        num_inputs = len(self.model.subscriptions)
+        num_inputs = len(self.single_model_config.subscriptions)
         self.latest_input_data: List[Any] = [None for _ in range(num_inputs)]
         self.received_flags: List[bool] = [False for _ in range(num_inputs)]
 
@@ -56,8 +59,8 @@ class Inference(Node):
 
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{len(self.model.pubishers)} publish topics, "
-            f"{len(self.model.subscriptions)} subscribe topics."
+            f"{len(self.single_model_config.pubishers)} publish topics, "
+            f"{len(self.single_model_config.subscriptions)} subscribe topics."
         )
 
     def initialize_model(self):
@@ -83,8 +86,11 @@ class Inference(Node):
 
         # Initialize the model based on policy_name.
         # Convention: policy_name="random_noise" -> module="ai.models.random_noise.random_noise", class="RandomNoise"
-        policy_name = selected_model.policy_name
-        module_path = f"ai.models.{policy_name}.{policy_name}"
+        policy_enum = selected_model.policy_name
+        policy_name = ai_model_pb2.PolicyName.Name(policy_enum)
+        policy_name_lower = policy_name.lower()
+        
+        module_path = f"ai.models.{policy_name_lower}.{policy_name_lower}"
         class_name = "".join(word.capitalize() for word in policy_name.split("_"))
 
         try:
@@ -94,20 +100,21 @@ class Inference(Node):
             self.get_logger().error(
                 f"Failed to import model class '{class_name}' from '{module_path}': {e}"
             )
-            return selected_model
+            return selected_model, None
 
         # Get the specific config from the oneof field
         config_field = selected_model.WhichOneof("policy_config")
         if not config_field:
             self.get_logger().error(
-                f"No policy config field set in SingleModel for policy '{ai_model_pb2.PolicyName.Name(policy_name)}'"
+                f"No policy config field set in SingleModel for policy '{policy_name}'"
             )
-            return selected_model
+            return selected_model, None
 
         model_config = getattr(selected_model, config_field)
+        model_instance = None
 
         try:
-            self.model = model_class(model_config)
+            model_instance = model_class(model_config)
             self.get_logger().info(
                 f"Initialized model '{class_name}' with config field '{config_field}'"
             )
@@ -116,7 +123,7 @@ class Inference(Node):
                 f"Failed to instantiate model '{class_name}': {e}"
             )
 
-        return selected_model
+        return selected_model, model_instance
 
     def _validate_config(self) -> bool:
         """
@@ -129,8 +136,8 @@ class Inference(Node):
         Set up ROS2 publishers for inference outputs.
         Derived classes can customize topics, QoS, etc.
         """
-        qos_setting = create_qos_setting(self.model.node.qos_setting)
-        for publisher_info in self.model.pubishers:
+        qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
+        for publisher_info in self.single_model_config.pubishers:
             message_type = resolve_message_class_from_enum(
                 publisher_info.ros2_data_type
             )
@@ -148,9 +155,9 @@ class Inference(Node):
         Set up ROS2 subscriptions for inference inputs.
         Derived classes can customize topics, QoS, etc.
         """
-        qos_setting = create_qos_setting(self.model.node.qos_setting)
+        qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
         for input_index, subscription_info in enumerate(
-            self.model.subscriptions
+            self.single_model_config.subscriptions
         ):
             message_type = resolve_message_class_from_enum(
                 subscription_info.ros2_data_type
@@ -234,8 +241,15 @@ class Inference(Node):
             self.get_logger().error(f"Inference error: {str(e)}")
 
     def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
-        if self.model is None:
+        if self.inference_model is None:
             self.get_logger().error("Model is not initialized.")
             return []
         
-        return self.model.inference(input_data)
+        return self.inference_model.inference(input_data)
+
+def main(argv=None):
+    return node_runner_py.run_node(Inference, logger_name="inference", argv=argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
