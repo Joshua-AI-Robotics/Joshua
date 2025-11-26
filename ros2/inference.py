@@ -1,6 +1,5 @@
 import importlib
 import sys
-import threading
 from typing import Any, List
 
 import rclpy
@@ -40,10 +39,6 @@ class Inference(Node):
             self.get_logger().error("Configuration validation failed.")
             return
 
-        # TODO: In here, let the model decide how to manage publish and subcribe mechanism.
-        # Model should manage how to handle the input and output data by itself.
-        # Inference node should only proivde the ros2 publisher and subscriber mechanism.
-
         # Setup publishers
         self.publishers_list: List[rclpy.publisher.Publisher] = []
         self.publishers_msg_types: List[Any] = []
@@ -53,14 +48,9 @@ class Inference(Node):
         self.subscriptions_list: List[rclpy.subscription.Subscription] = []
         self._setup_subscriptions()
 
-        # Initialize input tracking
-        # Store raw input data for inference
+        # Initialize input tracking in the model
         num_inputs = len(self.single_model_config.subscriptions)
-        self.latest_input_data: List[Any] = [None for _ in range(num_inputs)]
-        self.received_flags: List[bool] = [False for _ in range(num_inputs)]
-
-        # Thread safety for input updates
-        self._mutex = threading.Lock()
+        self.inference_model.setup_inputs(num_inputs)
 
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
@@ -132,6 +122,8 @@ class Inference(Node):
         """
         Validate configuration. Override in subclass for specific checks.
         """
+        # Default implementation assumes true
+        return True
 
     def _setup_publishers(self) -> None:
         """
@@ -176,40 +168,17 @@ class Inference(Node):
                 f"Created subscriber: {topic} (type={message_type.__name__})"
             )
 
-    # TODO: We need to make multiple callback option.
-    # 1) All inputs are ready, run inference and publish (current).
-    # 2) Timing-based inference (e.g., every 100ms, run inference and publish).
-    # 3) Other options? Consider padding to 0 for missing inputs.
     def _make_subscription_callback(self, input_index: int):
         """
         Create a callback function for a specific input topic.
+        Delegates processing to the model.
         """
 
         def _callback(msg: Any):
-            with self._mutex:
-                if input_index >= len(self.latest_input_data):
-                    self.get_logger().warn(
-                        f"Received input index out of range: {input_index}"
-                    )
-                    return
-
-                # Store the raw input data
-                self.latest_input_data[input_index] = msg
-                self.received_flags[input_index] = True
-
-                # If we have fresh data from all inputs, take a snapshot and reset flags
-                should_run_inference = False
-                input_snapshot = None
-                if all(self.received_flags):
-                    input_snapshot = list(self.latest_input_data)
-                    # Reset flags for next round
-                    self.received_flags = [False for _ in self.received_flags]
-                    should_run_inference = True
-
-            # Run inference and publish outside the lock to avoid blocking other callbacks
-            if should_run_inference and input_snapshot is not None:
-                outputs = self._run_model_inference(input_snapshot)
-                self._publish_output(outputs)
+            # Delegate to the model to decide how to process input and when to publish
+            self.inference_model.handle_input(
+                input_index, msg, self._publish_output
+            )
 
         return _callback
 
@@ -241,13 +210,6 @@ class Inference(Node):
 
         except Exception as e:
             self.get_logger().error(f"Inference error: {str(e)}")
-
-    def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
-        if self.inference_model is None:
-            self.get_logger().error("Model is not initialized.")
-            return []
-
-        return self.inference_model.inference(input_data)
 
 
 def main(argv=None):
