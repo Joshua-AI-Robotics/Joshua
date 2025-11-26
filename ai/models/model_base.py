@@ -10,18 +10,18 @@ class ModelBase(ABC):
     """
 
     @abstractmethod
-    def setup_inputs(self, num_inputs: int) -> None:
+    def setup_inputs(self, num_subscriptions: int) -> None:
         """
         Initialize input tracking state.
         Args:
-            num_inputs: Number of input subscriptions.
+            num_subscriptions: Number of ROS2 subscriptions.
         """
         pass
 
     @abstractmethod
     def handle_input(
         self,
-        input_index: int,
+        subscription_index: int,
         data: Any,
         publish_callback: Callable[[List[Any]], None],
     ) -> None:
@@ -36,14 +36,14 @@ class ModelBase(ABC):
         5. Publishing (publish_callback)
 
         Args:
-            input_index: Index of the input ros2 subscriber.
+            subscription_index: Index of the input ros2 subscription.
             data: The received data (ROS message or value).
             publish_callback: Callback to publish results to ros2 publisher. Expects List[Any].
         """
         pass
 
     @abstractmethod
-    def preprocess_input(self, input_index: int, data: Any) -> Any:
+    def preprocess_input(self, subscription_index: int, data: Any) -> Any:
         """
         Preprocess a single input item.
         """

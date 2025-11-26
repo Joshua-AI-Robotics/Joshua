@@ -81,6 +81,8 @@ class Inference(Node):
                 f"No SingleModel found with node_id={self.node_id} in config."
             )
 
+        # TODO: Setup num_subscribers in the model constructor.
+
         # Initialize the model based on policy_name.
         # Convention: policy_name="random_noise" -> module="ai.models.random_noise.random_noise", class="RandomNoise"
         policy_enum = selected_model.policy_name
@@ -150,7 +152,7 @@ class Inference(Node):
         Derived classes can customize topics, QoS, etc.
         """
         qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
-        for input_index, subscription_info in enumerate(
+        for subscriber_index, subscription_info in enumerate(
             self.single_model_config.subscriptions
         ):
             message_type = resolve_message_class_from_enum(
@@ -160,7 +162,7 @@ class Inference(Node):
             subscription = self.create_subscription(
                 message_type,
                 topic,
-                self._make_subscription_callback(input_index),
+                self._make_subscription_callback(subscriber_index),
                 qos_setting,
             )
             self.subscriptions_list.append(subscription)
@@ -168,7 +170,7 @@ class Inference(Node):
                 f"Created subscriber: {topic} (type={message_type.__name__})"
             )
 
-    def _make_subscription_callback(self, input_index: int):
+    def _make_subscription_callback(self, subscriber_index: int):
         """
         Create a callback function for a specific input topic.
         Delegates processing to the model.
@@ -177,7 +179,7 @@ class Inference(Node):
         def _callback(msg: Any):
             # Delegate to the model to decide how to process input and when to publish
             self.inference_model.handle_input(
-                input_index, msg, self._publish_output
+                subscriber_index, msg, self._publish_output
             )
 
         return _callback

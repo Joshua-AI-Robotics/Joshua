@@ -276,8 +276,8 @@ ai {
       random_noise_config {
         input_size: 1 # TODO: Try with camera image size.
         output_size: 6
-        noise_low: -0.02
-        noise_high: 0.02
+        noise_low: -0.05
+        noise_high: 0.05
       }
     }
   }

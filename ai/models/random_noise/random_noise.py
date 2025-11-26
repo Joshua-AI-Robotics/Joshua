@@ -13,18 +13,21 @@ class RandomNoise(ModelBase):
         # State for input tracking
         self._input_buffer: List[Any] = []
         self._mutex = threading.Lock()
-        self._num_inputs = 0
+        self._num_subscriptions = 1 # TODO: Remove this hardcoded value and use with setup_inputs.
 
-    def setup_inputs(self, num_inputs: int) -> None:
+    # TODO: Rename this method to something else. This is not being called now.
+    # TODO: Need numb_of_subscriptions * each input buffer.
+    # TODO: num_subscriptions is not being passed in the constructor.
+    def setup_inputs(self, num_subscriptions: int) -> None:
         """
         Initialize input buffers based on the number of subscriptions.
         """
-        self._num_inputs = num_inputs
-        self._input_buffer = [None] * num_inputs
+        self._num_subscriptions = num_subscriptions
+        self._input_buffer = [None] * num_subscriptions
 
     def handle_input(
         self,
-        input_index: int,
+        subscription_index: int,
         data: Any,
         publish_callback: Callable[[List[Any]], None],
     ) -> None:
@@ -36,10 +39,10 @@ class RandomNoise(ModelBase):
         4. Publish
         """
         # 1. Preprocess
-        processed_data = self.preprocess_input(input_index, data)
+        processed_data = self.preprocess_input(subscription_index, data)
 
         with self._mutex:
-            if input_index >= self._num_inputs:
+            if subscription_index >= self._num_subscriptions:
                 return
 
             # Store the processed input data
@@ -62,7 +65,7 @@ class RandomNoise(ModelBase):
             # 4. Publish
             publish_callback(final_outputs)
 
-    def preprocess_input(self, input_index: int, data: Any) -> Any:
+    def preprocess_input(self, subscription_index: int, data: Any) -> Any:
         """
         Preprocess a single input. For RandomNoise, we just pass it through.
         """
