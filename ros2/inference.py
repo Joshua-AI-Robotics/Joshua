@@ -1,5 +1,4 @@
 import threading
-from abc import ABC, abstractmethod
 from typing import Any, List
 
 import rclpy
@@ -11,7 +10,7 @@ from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
 
 
-class InferenceBase(Node, ABC):
+class Inference(Node):
     """
     Base class for inference nodes in the Joshua robotics system.
 
@@ -68,7 +67,7 @@ class InferenceBase(Node, ABC):
         Select the SingleModel config for this node by matching node_id.
         If multiple models exist and none match, this returns the first model.
         """
-        models = self.config.ai.models.single_model
+        models = self.config.ai.models.single_models
         if len(models) == 0:
             raise ValueError("No SingleModel entries found in config.ai.models")
         for m in models:
@@ -196,23 +195,8 @@ class InferenceBase(Node, ABC):
         except Exception as e:
             self.get_logger().error(f"Inference error: {str(e)}")
 
-    @abstractmethod
     def _initialize_inference(self) -> None:
-        """
-        Initialize inference-specific components (e.g., load model, set parameters).
-        Called during __init__ after ROS2 setup is complete.
-        """
         pass
 
-    @abstractmethod
     def _run_model_inference(self, input_data: List[Any]) -> List[Any]:
-        """
-        Run inference on input data and return output data.
-
-        Args:
-            input_data: List of input messages (e.g., Image messages from sensors)
-
-        Returns:
-            List of output messages (one per publisher)
-        """
         pass

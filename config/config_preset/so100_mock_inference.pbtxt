@@ -236,10 +236,10 @@ robot {
 ai {
   models {
     single_model {
-      policy_name: "example_policy"
+      policy_name: "random_noise"
       node {
         id: 3
-        node_type: MOCK_INFERENCE # TODO: Replace with INFERENCE.
+        node_type: INFERENCE
         qos_setting {}
       }
 
@@ -273,15 +273,9 @@ ai {
         topic: "mock_action_6"
       }
 
-      example_policy_config {
-        hidden_size: 256
-        n_layer: 4
-        n_head: 4
-        activation_function: "relu"
-        dropout: 0.1
-        n_inner: 1024
-        context_length: 20
-        vision_embedding_dim: 128
+      random_noise_config {
+        noise_low: -0.02
+        noise_high: 0.02
       }
     }
   }

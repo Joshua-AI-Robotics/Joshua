@@ -9,6 +9,7 @@ proto_library(
     deps = [
         "//ros2/proto:node_proto",
         "//ros2/proto:ros2_data_type_proto",
+        "//ai/models/random_noise:random_noise_config_proto",
     ],
 )
 

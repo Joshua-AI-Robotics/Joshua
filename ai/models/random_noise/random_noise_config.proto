@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package ai.models;
+
+message RandomNoiseConfig {
+  double noise_low = 1;
+  double noise_high = 2;
+}
