@@ -23,8 +23,8 @@ cc_library(
     deps = [
         "//config:config_utils",
         "//config/proto:config_cc_proto",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -61,12 +61,13 @@ py_library(
     deps = [
         "//config/proto:config_py_proto",
         "//ros2:ros2_type_resolver",
+        "//ros2/utils:qos_setting_py",
+        requirement("protobuf"),
     ],
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced
     # Ensure: source /opt/ros/humble/setup.bash before running
 )
-
 
 py_library(
     name = "image_converter",
@@ -91,9 +92,10 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "@local_deps//:cpp_sensor_msgs",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -110,8 +112,9 @@ ros2_cpp_binary(
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -122,13 +125,14 @@ ros2_cpp_binary(
         "//config/config_preset:config_presets",
     ],
     deps = [
-        "@local_deps//:rclcpp",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_sensor_msgs",
         "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
+        "//ros2/utils:qos_setting",
         "//ros2:node_runner",
     ],
     set_up_ament = True,
@@ -147,9 +151,10 @@ ros2_cpp_binary(
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:cpp_std_srvs",
-        "@local_deps//:rclcpp",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -182,8 +187,9 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//ros2:node_runner",
-        "@local_deps//:cpp_std_msgs",
-        "@local_deps//:rclcpp",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
