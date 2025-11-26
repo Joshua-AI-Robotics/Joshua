@@ -9,6 +9,19 @@ import numpy as np
 from sensor_msgs.msg import Image
 
 
+_ENCODING_MAP = {
+    # Encoding: (channels, dtype, bytes_per_channel)
+    'rgb8': (3, np.uint8),
+    'bgr8': (3, np.uint8),
+    'rgba8': (4, np.uint8),
+    'bgra8': (4, np.uint8),
+    'mono8': (1, np.uint8),
+    'mono16': (1, np.uint16),
+    '16UC1': (1, np.uint16),
+    '32FC1': (1, np.float32),
+}
+
+
 def imgmsg_to_numpy(msg: Image, desired_encoding: str = 'passthrough') -> np.ndarray:
     """
     Convert a ROS Image message to a NumPy array.
@@ -20,38 +33,9 @@ def imgmsg_to_numpy(msg: Image, desired_encoding: str = 'passthrough') -> np.nda
     Returns:
         NumPy array containing the image data
     """
-    dtype_map = {
-        'uint8': np.uint8,
-        'int8': np.int8,
-        'uint16': np.uint16,
-        'int16': np.int16,
-        'uint32': np.uint32,
-        'int32': np.int32,
-        'float32': np.float32,
-        'float64': np.float64,
-    }
 
-    # Determine the number of channels
-    channels = 1
-    if msg.encoding in ['rgb8', 'bgr8']:
-        channels = 3
-    elif msg.encoding in ['rgba8', 'bgra8']:
-        channels = 4
-    elif msg.encoding in ['mono8', 'mono16']:
-        channels = 1
-    elif msg.encoding in ['16UC1', '32FC1']:
-        channels = 1
-
-    # Determine dtype
-    if msg.encoding in ['rgb8', 'bgr8', 'rgba8', 'bgra8', 'mono8']:
-        dtype = np.uint8
-    elif msg.encoding in ['mono16', '16UC1']:
-        dtype = np.uint16
-    elif msg.encoding in ['32FC1']:
-        dtype = np.float32
-    else:
-        dtype = np.uint8  # Default
-
+    channels, dtype = _ENCODING_MAP.get(msg.encoding, (1, np.uint8))
+    
     # Convert bytes to numpy array
     img_array = np.frombuffer(msg.data, dtype=dtype)
 
