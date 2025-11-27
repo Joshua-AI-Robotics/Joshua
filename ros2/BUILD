@@ -68,10 +68,9 @@ ros2_py_binary(
         "//ros2:ros2_type_resolver",
         "//ros2:node_runner_py",
         "//ros2/utils:qos_setting_py",
+        "//ai/models:model_registry",
         requirement("numpy"),  # Required by ROS2 sensor_msgs
         requirement("protobuf"),
-        # Models
-        "//ai/models/random_noise:random_noise",
     ],
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced

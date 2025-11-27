@@ -236,7 +236,7 @@ robot {
 ai {
   models {
     single_models {
-      policy_name: RANDOM_NOISE
+      model_type: RANDOM_NOISE
       node {
         id: 3
         node_type: INFERENCE

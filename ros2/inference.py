@@ -1,13 +1,11 @@
-import importlib
 import sys
 from typing import Any, List
 
 import rclpy
 from rclpy.node import Node
 
+from ai.models import model_registry
 from ai.proto import ai_model_pb2
-
-# Protobuf generated modules
 from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
@@ -16,15 +14,12 @@ from ros2.utils.qos_setting import create_qos_setting
 
 class Inference(Node):
     """
-    Base class for inference nodes in the Joshua robotics system.
+    AI inference node for the Joshua robotics system.
 
-    This class handles:
+    This class handles the following:
     - ROS2 publisher/subscriber setup
-    - State tracking from multiple sensor topics
-    - Synchronized action publishing
-
-    Subclasses should implement the `_run_model_inference()` method to provide
-    specific inference logic (mock, smolVLA, pi0, etc.)
+    - Delegate input handling to the model
+    - Delegate output publishing to the model
     """
 
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
@@ -39,79 +34,64 @@ class Inference(Node):
             self.get_logger().error("Configuration validation failed.")
             return
 
-        # Setup publishers
+        # Setup ROS2 publishers
         self.publishers_list: List[rclpy.publisher.Publisher] = []
         self.publishers_msg_types: List[Any] = []
         self._setup_publishers()
 
-        # Setup subscriptions
+        # Setup ROS2 subscriptions
         self.subscriptions_list: List[rclpy.subscription.Subscription] = []
         self._setup_subscriptions()
 
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{len(self.single_model_config.pubishers)} publish topics, "
-            f"{len(self.single_model_config.subscriptions)} subscribe topics."
+            f"{', '.join([publisher.topic for publisher in self.single_model_config.pubishers])} publish topics, "
+            f"{', '.join([subscription.topic for subscription in self.single_model_config.subscriptions])} subscribe topics."
         )
 
     def initialize_model(self):
         """
         Select the SingleModel config for this node by matching node_id and matching model config.
-        Also initializes the model based on node_id and policy_config.
+        Also initializes the model based on the selected SingleModel config.
         """
         models = self.config.ai.models.single_models
         if len(models) == 0:
             raise ValueError("No SingleModel entries found in config.ai.models")
 
-        selected_model = None
-
-        # First check the node_id matches with config.
-        for m in models:
-            if m.node.id == self.node_id:
-                selected_model = m
-                break
-
-        if selected_model is None:
-            self.get_logger().error(f"No SingleModel found with node_id={self.node_id}")
+        selected_model_config = next(
+            (m for m in models if m.node.id == self.node_id), None
+        )
+        if not selected_model_config:
             raise ValueError(
                 f"No SingleModel found with node_id={self.node_id} in config."
             )
 
-        # TODO: Setup num_subscribers in the model constructor.
-
-        # Initialize the model based on policy_name.
-        # Convention: policy_name="random_noise" -> module="ai.models.random_noise.random_noise", class="RandomNoise"
-        policy_enum = selected_model.policy_name
-        policy_name = ai_model_pb2.PolicyName.Name(policy_enum)
-        policy_name_lower = policy_name.lower()
-
-        module_path = f"ai.models.{policy_name_lower}.{policy_name_lower}"
-        class_name = "".join(word.capitalize() for word in policy_name.split("_"))
-
+        # Retrieve the model class from the registry
+        model_type = selected_model_config.model_type
         try:
-            module = importlib.import_module(module_path)
-            model_class = getattr(module, class_name)
-        except (ImportError, AttributeError) as e:
-            raise ValueError(
-                f"Failed to import model class '{class_name}' from '{module_path}': {e}"
-            )
+            model_class = model_registry.get_model_class(model_type)
+        except ValueError as e:
+            raise ValueError(f"Model class lookup failed: {e}")
 
         # Get the specific config from the oneof field
-        config_field = selected_model.WhichOneof("policy_config")
+        config_field = selected_model_config.WhichOneof("model_config")
         if not config_field:
+            model_type_name = ai_model_pb2.ModelType.Name(model_type)
             raise ValueError(
-                f"No policy config field set in SingleModel for policy '{policy_name}'"
+                f"No model config field set in SingleModel for model type '{model_type_name}'"
             )
 
         try:
-            model_instance = model_class(selected_model)
+            model_instance = model_class(selected_model_config)
             self.get_logger().info(
-                f"Initialized model '{class_name}' with config field '{config_field}'"
+                f"Initialized model '{model_class.__name__}' with config field '{config_field}'"
             )
         except Exception as e:
-            raise ValueError(f"Failed to instantiate model '{class_name}': {e}")
+            raise ValueError(
+                f"Failed to instantiate model '{model_class.__name__}': {e}"
+            )
 
-        return selected_model, model_instance
+        return selected_model_config, model_instance
 
     def _validate_config(self) -> bool:
         """

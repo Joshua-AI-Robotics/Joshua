@@ -7,7 +7,20 @@ py_library(
     name = "model_base",
     srcs = ["model_base.py"],
     deps = [
+        "//ai/proto:ai_model_py_proto",
         requirement("numpy"),
         requirement("protobuf"),
+    ],
+)
+
+py_library(
+    name = "model_registry",
+    srcs = ["model_registry.py"],
+    deps = [
+        ":model_base",
+        "//ai/proto:ai_model_py_proto",
+        requirement("protobuf"),
+        # Add all models here
+        "//ai/models/random_noise:random_noise",
     ],
 )
