@@ -1,29 +1,25 @@
 import random
 import threading
-from typing import Any, List, Callable
+from typing import Any, Callable, List
+
+from ai.proto.ai_model_pb2 import SingleModel
 
 from ai.models.model_base import ModelBase
-from ai.models.random_noise.random_noise_config_pb2 import RandomNoiseConfig
 
 
 class RandomNoise(ModelBase):
-    def __init__(self, config: RandomNoiseConfig):
-        self.config = config
-        
-        # State for input tracking
-        self._input_buffer: List[Any] = []
-        self._mutex = threading.Lock()
-        self._num_subscriptions = 1 # TODO: Remove this hardcoded value and use with setup_inputs.
+    def __init__(self, config: SingleModel):
+        super().__init__(config)
 
-    # TODO: Rename this method to something else. This is not being called now.
-    # TODO: Need numb_of_subscriptions * each input buffer.
-    # TODO: num_subscriptions is not being passed in the constructor.
-    def setup_inputs(self, num_subscriptions: int) -> None:
-        """
-        Initialize input buffers based on the number of subscriptions.
-        """
-        self._num_subscriptions = num_subscriptions
-        self._input_buffer = [None] * num_subscriptions
+        # Parse the specific random noise config
+        self.config = config.random_noise_config
+
+        # State for input tracking
+        # Initialize buffer to hold a list of values per subscription
+        self._input_buffer: List[List[Any]] = [
+            [] for _ in range(self._num_subscriptions)
+        ]
+        self._mutex = threading.Lock()
 
     def handle_input(
         self,
@@ -46,24 +42,21 @@ class RandomNoise(ModelBase):
                 return
 
             # Store the processed input data
-            self._input_buffer.append(processed_data)
+            self._input_buffer[subscription_index].append(processed_data)
 
-            input_snapshot = None
-            
-            if len(self._input_buffer) == 30:
-                input_snapshot = list(self._input_buffer)
-                self._input_buffer = []
-            else:
-                return
+            # Only run inference if the input buffer has size of 30. (This is ramdon behavior for now.)
+            if len(self._input_buffer[subscription_index]) == 30:
+                # 2. Inference
+                outputs = self.inference(self._input_buffer[subscription_index])
 
-            # 2. Inference
-            outputs = self.inference(input_snapshot)
-            
-            # 3. Postprocess
-            final_outputs = self.postprocess_output(outputs)
-            
-            # 4. Publish
-            publish_callback(final_outputs)
+                # 3. Postprocess
+                final_outputs = self.postprocess_output(outputs)
+
+                # 4. Publish
+                publish_callback(final_outputs)
+
+                # Reset the input buffer
+                self._input_buffer[subscription_index] = []
 
     def preprocess_input(self, subscription_index: int, data: Any) -> Any:
         """

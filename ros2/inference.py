@@ -48,10 +48,6 @@ class Inference(Node):
         self.subscriptions_list: List[rclpy.subscription.Subscription] = []
         self._setup_subscriptions()
 
-        # Initialize input tracking in the model
-        num_inputs = len(self.single_model_config.subscriptions)
-        self.inference_model.setup_inputs(num_inputs)
-
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
             f"{len(self.single_model_config.pubishers)} publish topics, "
@@ -107,11 +103,8 @@ class Inference(Node):
                 f"No policy config field set in SingleModel for policy '{policy_name}'"
             )
 
-        model_config = getattr(selected_model, config_field)
-        model_instance = None
-
         try:
-            model_instance = model_class(model_config)
+            model_instance = model_class(selected_model)
             self.get_logger().info(
                 f"Initialized model '{class_name}' with config field '{config_field}'"
             )

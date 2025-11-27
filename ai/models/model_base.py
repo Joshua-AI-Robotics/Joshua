@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Callable
+from typing import Any, Callable, List
+
+from ai.proto.ai_model_pb2 import SingleModel
 
 
 # TODO: Add more features on base.
@@ -9,14 +11,21 @@ class ModelBase(ABC):
     Defines the interface for inference, training (forward), and input handling.
     """
 
-    @abstractmethod
-    def setup_inputs(self, num_subscriptions: int) -> None:
+    def __init__(self, config: SingleModel):
+        """
+        Initialize the model base.
+
+        Args:
+            config: The full SingleModel configuration.
+        """
+        self._config = config
+        self._setup_inputs()
+
+    def _setup_inputs(self) -> None:
         """
         Initialize input tracking state.
-        Args:
-            num_subscriptions: Number of ROS2 subscriptions.
         """
-        pass
+        self._num_subscriptions = len(self._config.subscriptions)
 
     @abstractmethod
     def handle_input(
@@ -27,7 +36,7 @@ class ModelBase(ABC):
     ) -> None:
         """
         Main entry point for handling incoming data from a ros2 subscriber.
-        
+
         This method should orchestrate:
         1. Preprocessing (preprocess_input)
         2. Synchronization/Buffering
