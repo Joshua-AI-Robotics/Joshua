@@ -29,10 +29,8 @@ class Inference(Node):
         self.config = config
         self.single_model_config, self.inference_model = self.initialize_model()
 
-        # Validate configuration
-        if not self._validate_config():
-            self.get_logger().error("Configuration validation failed.")
-            return
+        # Validate configuration.
+        self._validate_config()
 
         # Setup ROS2 publishers
         self.publishers_list: List[rclpy.publisher.Publisher] = []
@@ -93,12 +91,21 @@ class Inference(Node):
 
         return selected_model_config, model_instance
 
-    def _validate_config(self) -> bool:
+    def _validate_config(self) -> None:
         """
-        Validate configuration. Override in subclass for specific checks.
+        Validate configuration. Model spcific validation should be done in the model class.
         """
-        # Default implementation assumes true
-        return True
+        if not self.single_model_config.model_type:
+            raise ValueError("Model type is required in SingleModel config")
+
+        if not self.single_model_config.node.id:
+            raise ValueError("Node ID is required in SingleModel config")
+
+        if len(self.single_model_config.pubishers) == 0:
+            raise ValueError("At least one publisher is required in SingleModel config")
+
+        if len(self.single_model_config.subscriptions) == 0:
+            raise ValueError("At least one subscription is required in SingleModel config")
 
     def _setup_publishers(self) -> None:
         """
