@@ -33,6 +33,7 @@ class Inference(Node):
         self._validate_config()
 
         # Setup ROS2 publishers
+        # TODO: Can integrate two lists into one dictionary.
         self.publishers_list: List[rclpy.publisher.Publisher] = []
         self.publishers_msg_types: List[Any] = []
         self._setup_publishers()
@@ -170,34 +171,30 @@ class Inference(Node):
 
         return _callback
 
-    def _publish_output(self, output_values: List[Any]) -> None:
+    def _publish_output(self, publisher_index: int, output_value: Any) -> None:
         """Publish the messages from publishers."""
-        if len(output_values) != len(self.publishers_list):
-            self.get_logger().error(
-                f"Inference returned {len(output_values)} outputs, "
-                f"but expected {len(self.publishers_list)}"
-            )
-            return
-
         try:
-            for i, (publisher, value) in enumerate(
-                zip(self.publishers_list, output_values)
-            ):
-                msg_cls = self.publishers_msg_types[i]
-                msg = msg_cls()
-                if hasattr(msg, "data"):
-                    msg.data = value
-                else:
-                    if isinstance(value, msg_cls):
-                        msg = value
-                    else:
-                        raise ValueError(
-                            f"Output at index {i} must be instance of {msg_cls.__name__} or a value for .data"
-                        )
-                publisher.publish(msg)
+            publisher = self.publishers_list[publisher_index]
+            msg_type = self.publishers_msg_types[publisher_index]
+
+            if not isinstance(output_value, msg_type):
+                try:
+                    msg = msg_type()
+                    if hasattr(msg, "data"):
+                        msg.data = output_value
+                        output_value = msg
+                except Exception:
+                    pass
+
+            publisher.publish(output_value)
+            self.get_logger().info(
+                f"Published output to publisher {publisher_index}: {output_value}"
+            )
 
         except Exception as e:
-            self.get_logger().error(f"Inference error: {str(e)}")
+            self.get_logger().error(
+                f"Error publishing output to publisher {publisher_index}: {str(e)}"
+            )
 
 
 def main(argv=None):

@@ -59,7 +59,8 @@ class RandomNoise(ModelBase):
                 final_outputs = self.postprocess_output(outputs)
 
                 # 4. Publish
-                publish_callback(final_outputs)
+                for publisher_index in range(self._num_publishers):
+                    publish_callback(publisher_index, final_outputs[publisher_index])
 
                 # Reset the input buffer
                 self._input_buffer[subscription_index] = []

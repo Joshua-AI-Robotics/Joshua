@@ -32,11 +32,13 @@ class ModelBase(ABC):
         self._validate_config()
         self._setup_inputs()
 
+    # TODO: Rename this function (something like setup input.output).
     def _setup_inputs(self) -> None:
         """
         Initialize input tracking state.
         """
         self._num_subscriptions = len(self._single_model_config.subscriptions)
+        self._num_publishers = len(self._single_model_config.pubishers)
 
     @abstractmethod
     def _validate_config(self) -> None:
@@ -50,7 +52,7 @@ class ModelBase(ABC):
         self,
         subscription_index: int,
         data: Any,
-        publish_callback: Callable[[List[Any]], None],
+        publish_callback: Callable[[int, Any], None],
     ) -> None:
         """
         Main entry point for handling incoming data from a ros2 subscriber.
@@ -63,8 +65,8 @@ class ModelBase(ABC):
         5. Publishing (publish_callback)
 
         Args:
-            subscription_index: Index of the input ros2 subscription.
-            data: The received data (ROS message or value).
+            subscription_index: Index of the ros2 subscriptions list.
+            data: The received data (ROS message or value) from the subscription.
             publish_callback: Callback to publish results to ros2 publisher. Expects List[Any].
         """
         pass
