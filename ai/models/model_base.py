@@ -16,16 +16,34 @@ class ModelBase(ABC):
         Initialize the model base.
 
         Args:
-            config: The full SingleModel configuration.
+            config: The full SingleModel configuration which incldues node info,
+            publishers, subscriptions, and model specific config.
         """
-        self._config = config
+        self._single_model_config = config
+
+        # Automatically parse the specific model config
+        config_field = config.WhichOneof("model_config")
+        if not config_field:
+            raise ValueError("No model_config field set in SingleModel")
+
+        # Parse the model specific config.
+        self._model_config = getattr(config, config_field)
+
+        self._validate_config()
         self._setup_inputs()
 
     def _setup_inputs(self) -> None:
         """
         Initialize input tracking state.
         """
-        self._num_subscriptions = len(self._config.subscriptions)
+        self._num_subscriptions = len(self._single_model_config.subscriptions)
+
+    @abstractmethod
+    def _validate_config(self) -> None:
+        """
+        Model specific validation should be done in the subclass.
+        """
+        pass
 
     @abstractmethod
     def handle_input(

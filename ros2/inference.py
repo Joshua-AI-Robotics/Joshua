@@ -95,17 +95,23 @@ class Inference(Node):
         """
         Validate configuration. Model spcific validation should be done in the model class.
         """
-        if not self.single_model_config.model_type:
-            raise ValueError("Model type is required in SingleModel config")
+        if (
+            self.single_model_config.model_type
+            == ai_model_pb2.ModelType.MODEL_TYPE_INVALID
+            or not self.single_model_config.model_type
+        ):
+            raise ValueError("Model type must be set in SingleModel config")
 
-        if not self.single_model_config.node.id:
-            raise ValueError("Node ID is required in SingleModel config")
+        if self.single_model_config.node.id == 0:
+            raise ValueError("Node ID must be set in SingleModel config")
 
         if len(self.single_model_config.pubishers) == 0:
             raise ValueError("At least one publisher is required in SingleModel config")
 
         if len(self.single_model_config.subscriptions) == 0:
-            raise ValueError("At least one subscription is required in SingleModel config")
+            raise ValueError(
+                "At least one subscription is required in SingleModel config"
+            )
 
     def _setup_publishers(self) -> None:
         """

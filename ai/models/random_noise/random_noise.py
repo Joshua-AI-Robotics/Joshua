@@ -11,15 +11,21 @@ class RandomNoise(ModelBase):
     def __init__(self, config: SingleModel):
         super().__init__(config)
 
-        # Parse the specific random noise config
-        self.config = config.random_noise_config
-
         # State for input tracking
         # Initialize buffer to hold a list of values per subscription
         self._input_buffer: List[List[Any]] = [
             [] for _ in range(self._num_subscriptions)
         ]
         self._mutex = threading.Lock()
+
+    def _validate_config(self) -> None:
+        """
+        Validate the model specific configuration.
+        """
+        if self._model_config.noise_low >= self._model_config.noise_high:
+            raise ValueError(
+                f"Noise low ({self._model_config.noise_low}) must be less than noise high ({self._model_config.noise_high})"
+            )
 
     def handle_input(
         self,
@@ -77,8 +83,8 @@ class RandomNoise(ModelBase):
 
         # Return random action values.
         output_data = [
-            random.uniform(self.config.noise_low, self.config.noise_high)
-            for _ in range(self.config.output_size)
+            random.uniform(self._model_config.noise_low, self._model_config.noise_high)
+            for _ in range(self._model_config.output_size)
         ]
 
         return output_data
