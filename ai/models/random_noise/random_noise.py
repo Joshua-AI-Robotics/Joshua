@@ -27,6 +27,10 @@ class RandomNoise(ModelBase):
                 f"Noise low ({self._model_config.noise_low}) must be less than noise high ({self._model_config.noise_high})"
             )
 
+    # TODO: Here handles the mapping of input and output.
+    # This might not be the model specific but config & robot specific.
+    # We should add mapping or move this logics to somewhere else
+    # for the model to be more generic in nature.
     def handle_input(
         self,
         subscription_index: int,
