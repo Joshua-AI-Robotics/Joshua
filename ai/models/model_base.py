@@ -10,6 +10,7 @@ class ModelBase(ABC):
     Abstract base class for AI models.
     Defines the interface for inference, training (forward), and input handling.
     """
+
     # Type hints for the model base.
     _single_model_config: SingleModel
     _model_config: Any  # The model specific config.

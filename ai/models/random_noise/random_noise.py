@@ -86,7 +86,7 @@ class RandomNoise(ModelBase):
         """
 
         # Return random action values.
-        # In this example, return random action with different range of noise 
+        # In this example, return random action with different range of noise
         # per publisher.
         # TODO: This is non-model specific but config & robot specific.
         # We should add mapping or move this logics to somewhere else
@@ -95,23 +95,37 @@ class RandomNoise(ModelBase):
         for publisher_index in range(self._num_publishers):
             if publisher_index == 2:
                 output_data.append(
-                    random.uniform(self._model_config.noise_low * 2, self._model_config.noise_high * 2)
+                    random.uniform(
+                        self._model_config.noise_low * 2,
+                        self._model_config.noise_high * 2,
+                    )
                 )
             elif publisher_index == 3:
                 output_data.append(
-                    random.uniform(self._model_config.noise_low * 2, self._model_config.noise_high * 2)
+                    random.uniform(
+                        self._model_config.noise_low * 2,
+                        self._model_config.noise_high * 2,
+                    )
                 )
             elif publisher_index == 4:
                 output_data.append(
-                    random.uniform(self._model_config.noise_low * 10, self._model_config.noise_high * 10)
+                    random.uniform(
+                        self._model_config.noise_low * 10,
+                        self._model_config.noise_high * 10,
+                    )
                 )
             elif publisher_index == 5:
                 output_data.append(
-                    random.uniform(self._model_config.noise_low * 10, self._model_config.noise_high * 10)
+                    random.uniform(
+                        self._model_config.noise_low * 10,
+                        self._model_config.noise_high * 10,
+                    )
                 )
             else:
                 output_data.append(
-                    random.uniform(self._model_config.noise_low, self._model_config.noise_high)
+                    random.uniform(
+                        self._model_config.noise_low, self._model_config.noise_high
+                    )
                 )
 
         return output_data
