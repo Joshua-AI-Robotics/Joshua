@@ -1,5 +1,5 @@
 import sys
-from typing import Any, List
+from typing import Any, List, NamedTuple, Union
 
 import rclpy
 from rclpy.node import Node
@@ -10,6 +10,19 @@ from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
+
+
+class PubSubInstance(NamedTuple):
+    """
+    Holds the ROS2 publisher or subscription instance and its associated message type.
+
+    Attributes:
+        instance: The rclpy Publisher or Subscription object.
+        msg_type: The ROS2 message class (e.g., std_msgs.msg.String).
+    """
+
+    instance: Union[rclpy.publisher.Publisher, rclpy.subscription.Subscription]
+    msg_type: Any
 
 
 class Inference(Node):
@@ -27,19 +40,14 @@ class Inference(Node):
 
         self.node_id = node_id
         self.config = config
-        self.single_model_config, self.inference_model = self.initialize_model()
+        self.single_model_config, self.inference_model = self._initialize_model()
 
-        # Validate configuration.
         self._validate_config()
 
-        # Setup ROS2 publishers
-        # TODO: Can integrate two lists into one dictionary.
-        self.publishers_list: List[rclpy.publisher.Publisher] = []
-        self.publishers_msg_types: List[Any] = []
+        self.publisher_list: List[PubSubInstance] = []
         self._setup_publishers()
 
-        # Setup ROS2 subscriptions
-        self.subscriptions_list: List[rclpy.subscription.Subscription] = []
+        self.subscription_list: List[PubSubInstance] = []
         self._setup_subscriptions()
 
         self.get_logger().info(
@@ -48,7 +56,7 @@ class Inference(Node):
             f"{', '.join([subscription.topic for subscription in self.single_model_config.subscriptions])} subscribe topics."
         )
 
-    def initialize_model(self):
+    def _initialize_model(self):
         """
         Select the SingleModel config for this node by matching node_id and matching model config.
         Also initializes the model based on the selected SingleModel config.
@@ -117,7 +125,6 @@ class Inference(Node):
     def _setup_publishers(self) -> None:
         """
         Set up ROS2 publishers for inference outputs.
-        Derived classes can customize topics, QoS, etc.
         """
         qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
         for publisher_info in self.single_model_config.publishers:
@@ -125,10 +132,12 @@ class Inference(Node):
                 publisher_info.ros2_data_type
             )
             topic = publisher_info.topic
-            self.publishers_list.append(
-                self.create_publisher(message_type, topic, qos_setting)
+            self.publisher_list.append(
+                PubSubInstance(
+                    instance=self.create_publisher(message_type, topic, qos_setting),
+                    msg_type=message_type,
+                )
             )
-            self.publishers_msg_types.append(message_type)
             self.get_logger().info(
                 f"Created publisher: {topic} (type={message_type.__name__})"
             )
@@ -152,7 +161,9 @@ class Inference(Node):
                 self._make_subscription_callback(subscriber_index),
                 qos_setting,
             )
-            self.subscriptions_list.append(subscription)
+            self.subscription_list.append(
+                PubSubInstance(instance=subscription, msg_type=message_type)
+            )
             self.get_logger().info(
                 f"Created subscriber: {topic} (type={message_type.__name__})"
             )
@@ -174,8 +185,9 @@ class Inference(Node):
     def _publish_output(self, publisher_index: int, output_value: Any) -> None:
         """Publish the messages from publishers."""
         try:
-            publisher = self.publishers_list[publisher_index]
-            msg_type = self.publishers_msg_types[publisher_index]
+            publisher_instance = self.publisher_list[publisher_index]
+            publisher = publisher_instance.instance
+            msg_type = publisher_instance.msg_type
 
             if not isinstance(output_value, msg_type):
                 try:
