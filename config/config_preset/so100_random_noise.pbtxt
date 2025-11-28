@@ -248,27 +248,27 @@ ai {
         topic: "camera_1"
       }
 
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_1"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_2"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_3"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_4"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_5"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_6"
       }

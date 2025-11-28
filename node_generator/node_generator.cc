@@ -664,7 +664,7 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_model : config_.ai().models().single_models()) {
     if (single_model.node().id() == node_id) {
-      for (const auto& pub : single_model.pubishers()) {
+      for (const auto& pub : single_model.publishers()) {
         publish_topics.push_back(pub.topic());
       }
       for (const auto& sub : single_model.subscriptions()) {

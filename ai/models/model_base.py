@@ -10,6 +10,14 @@ class ModelBase(ABC):
     Abstract base class for AI models.
     Defines the interface for inference, training (forward), and input handling.
     """
+    # Type hints for the model base.
+    _single_model_config: SingleModel
+    _model_config: Any  # The model specific config.
+    _num_subscriptions: int  # The number of ROS2 subscriptions.
+    _num_publishers: int  # The number of ROS2 publishers.
+    # TODO: Add these two lists.
+    # _subscriptions_list: List[]  # Contain each subscription info.
+    # _publishers_list: List[]  # Contain each publisher info.
 
     def __init__(self, config: SingleModel):
         """
@@ -30,15 +38,14 @@ class ModelBase(ABC):
         self._model_config = getattr(config, config_field)
 
         self._validate_config()
-        self._setup_inputs()
+        self._setup_ros2_pub_sub()
 
-    # TODO: Rename this function (something like setup input.output).
-    def _setup_inputs(self) -> None:
+    def _setup_ros2_pub_sub(self) -> None:
         """
-        Initialize input tracking state.
+        Initialize ROS2 publisher and subscriber setup.
         """
         self._num_subscriptions = len(self._single_model_config.subscriptions)
-        self._num_publishers = len(self._single_model_config.pubishers)
+        self._num_publishers = len(self._single_model_config.publishers)
 
     @abstractmethod
     def _validate_config(self) -> None:

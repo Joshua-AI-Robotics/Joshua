@@ -17,7 +17,7 @@ message SingleModel {
   string pretrained_model_path = 2;
   ros2.node.Node node = 3;
   repeated Subscription subscriptions = 4;
-  repeated Publisher pubishers = 5;
+  repeated Publisher publishers = 5;
 
   oneof model_config {
     RandomNoiseConfig random_noise_config = 6;

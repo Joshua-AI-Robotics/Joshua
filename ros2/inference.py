@@ -44,7 +44,7 @@ class Inference(Node):
 
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{', '.join([publisher.topic for publisher in self.single_model_config.pubishers])} publish topics, "
+            f"{', '.join([publisher.topic for publisher in self.single_model_config.publishers])} publish topics, "
             f"{', '.join([subscription.topic for subscription in self.single_model_config.subscriptions])} subscribe topics."
         )
 
@@ -106,7 +106,7 @@ class Inference(Node):
         if self.single_model_config.node.id == 0:
             raise ValueError("Node ID must be set in SingleModel config")
 
-        if len(self.single_model_config.pubishers) == 0:
+        if len(self.single_model_config.publishers) == 0:
             raise ValueError("At least one publisher is required in SingleModel config")
 
         if len(self.single_model_config.subscriptions) == 0:
@@ -120,7 +120,7 @@ class Inference(Node):
         Derived classes can customize topics, QoS, etc.
         """
         qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
-        for publisher_info in self.single_model_config.pubishers:
+        for publisher_info in self.single_model_config.publishers:
             message_type = resolve_message_class_from_enum(
                 publisher_info.ros2_data_type
             )

@@ -11,7 +11,6 @@ class RandomNoise(ModelBase):
     def __init__(self, config: SingleModel):
         super().__init__(config)
 
-        # State for input tracking
         # Initialize buffer to hold a list of values per subscription
         self._input_buffer: List[List[Any]] = [
             [] for _ in range(self._num_subscriptions)
@@ -87,10 +86,33 @@ class RandomNoise(ModelBase):
         """
 
         # Return random action values.
-        output_data = [
-            random.uniform(self._model_config.noise_low, self._model_config.noise_high)
-            for _ in range(self._model_config.output_size)
-        ]
+        # In this example, return random action with different range of noise 
+        # per publisher.
+        # TODO: This is non-model specific but config & robot specific.
+        # We should add mapping or move this logics to somewhere else
+        # for the model to be more generic in nature.
+        output_data = []
+        for publisher_index in range(self._num_publishers):
+            if publisher_index == 2:
+                output_data.append(
+                    random.uniform(self._model_config.noise_low * 2, self._model_config.noise_high * 2)
+                )
+            elif publisher_index == 3:
+                output_data.append(
+                    random.uniform(self._model_config.noise_low * 2, self._model_config.noise_high * 2)
+                )
+            elif publisher_index == 4:
+                output_data.append(
+                    random.uniform(self._model_config.noise_low * 10, self._model_config.noise_high * 10)
+                )
+            elif publisher_index == 5:
+                output_data.append(
+                    random.uniform(self._model_config.noise_low * 10, self._model_config.noise_high * 10)
+                )
+            else:
+                output_data.append(
+                    random.uniform(self._model_config.noise_low, self._model_config.noise_high)
+                )
 
         return output_data
 
