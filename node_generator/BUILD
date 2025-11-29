@@ -8,6 +8,7 @@ cc_library(
     deps = [
         "//config:config_utils",
         "//ros2/proto:node_cc_proto",
+        "//utils:status_macros",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/status:status",
         "@glog",

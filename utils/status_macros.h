@@ -19,4 +19,3 @@
 
 #define ABSL_ASSIGN_OR_RETURN(lhs, rexpr) \
   ABSL_ASSIGN_OR_RETURN_IMPL(ABSL_ASSIGN_OR_RETURN_NAME(_status_or_, __LINE__), lhs, rexpr)
-

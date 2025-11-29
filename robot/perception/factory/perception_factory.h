@@ -28,7 +28,8 @@ class PerceptionFactory {
         const auto& encoder_config = single_perception.encoder();
         switch (encoder_config.encoder_type()) {
           case EncoderType::STS3215_ENCODER: {
-            ABSL_ASSIGN_OR_RETURN(auto serial, robot::comm::CommFactory::CreateSerial(encoder_config.comm()));
+            ABSL_ASSIGN_OR_RETURN(auto serial,
+                                  robot::comm::CommFactory::CreateSerial(encoder_config.comm()));
             auto encoder = std::make_unique<Sts3215Encoder>(serial, encoder_config);
             ABSL_RETURN_IF_ERROR(encoder->Init());
             return encoder;
@@ -42,7 +43,8 @@ class PerceptionFactory {
         const auto& lidar_config = single_perception.lidar();
         switch (lidar_config.lidar_type()) {
           case LidarType::LDS01: {
-            ABSL_ASSIGN_OR_RETURN(auto serial, robot::comm::CommFactory::CreateSerial(lidar_config.comm()));
+            ABSL_ASSIGN_OR_RETURN(auto serial,
+                                  robot::comm::CommFactory::CreateSerial(lidar_config.comm()));
             auto lidar = std::make_unique<Lds01Driver>(serial, lidar_config);
             ABSL_RETURN_IF_ERROR(lidar->Init());
             return lidar;

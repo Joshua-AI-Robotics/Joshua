@@ -21,7 +21,8 @@ class ActionFactory {
         const auto& actuator = single_action.actuator();
         switch (actuator.actuator_type()) {
           case robot::action::ActuatorType::STS3215_SERVO: {
-            ABSL_ASSIGN_OR_RETURN(auto serial, robot::comm::CommFactory::CreateSerial(actuator.comm()));
+            ABSL_ASSIGN_OR_RETURN(auto serial,
+                                  robot::comm::CommFactory::CreateSerial(actuator.comm()));
             auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
             ABSL_RETURN_IF_ERROR(driver->Init());
             return driver;

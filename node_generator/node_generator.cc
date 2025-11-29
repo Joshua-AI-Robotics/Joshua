@@ -15,6 +15,7 @@
 #include <thread>
 
 #include "config/config_utils.h"
+#include "utils/status_macros.h"
 
 namespace node_generator {
 
@@ -187,26 +188,10 @@ NodeGenerator::~NodeGenerator() {
 absl::Status NodeGenerator::Initialize() {
   LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
 
-  try {
-    auto result = config::config_util::LoadConfig(config_path_);
+  ABSL_ASSIGN_OR_RETURN(config_, config::config_util::LoadConfig(config_path_));
 
-    if (!result.ok()) {
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
-    }
-
-    config_ = result.value();
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to load config: " << e.what();
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
-  }
-
-  if (!IdentifyNodeTypes().ok()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Node types identification failed");
-  }
-
-  if (!CheckConfigIntegrity().ok()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Config integrity check failed");
-  }
+  ABSL_RETURN_IF_ERROR(IdentifyNodeTypes());
+  ABSL_RETURN_IF_ERROR(CheckConfigIntegrity());
 
   SetupSignalHandlers();
 
@@ -331,9 +316,7 @@ absl::Status NodeGenerator::LaunchAllNodes() {
     if (pid > 0) {
       std::vector<std::string> publish_topics;
       std::vector<std::string> subscribe_topics;
-      if (!GetTopicsForNode(node_id, publish_topics, subscribe_topics).ok()) {
-        LOG(WARNING) << "Failed to get topics for node " << node_id;
-      }
+      ABSL_RETURN_IF_ERROR(GetTopicsForNode(node_id, publish_topics, subscribe_topics));
       launched_nodes_.try_emplace(pid,
                                   NodeInfo{NodeTypeToString(node_type),
                                            node_name,
