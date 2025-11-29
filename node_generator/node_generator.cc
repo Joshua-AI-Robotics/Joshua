@@ -23,16 +23,6 @@ namespace {
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
 
-// TODO: Move to a separate file, and add data_store node type.
-// Node types. Fix Inference node to receive any model, (replace mock_inference to inference)
-// Last Added: kInference.
-constexpr auto kCameraPublisher = "camera_publisher";
-constexpr auto kEncoderPublisher = "encoder_publisher";
-constexpr auto kActuatorSubscriber = "actuator_subscriber";
-constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
-constexpr auto kLidarPublisher = "lidar_publisher";
-constexpr auto kInference = "inference";
-
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
     return "";
@@ -248,7 +238,16 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
   }
 
   // Data store.
-  // TODO: Add here.
+  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
+    const uint32_t node_id = single_data_store.node().id();
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_data_store.node().node_type());
+    if (!inserted && it->second != single_data_store.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
+  }
 
   // Calibration
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
@@ -672,7 +671,10 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     extract_topics_from_node(single_model.node());
   }
 
-  // TODO: Add data store node.
+  // Get publish and subscribe topics from data store nodes.
+  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
+    extract_topics_from_node(single_data_store.node());
+  }
 
   // Get publish and subscribe topics from calibration node.
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {

@@ -5,15 +5,6 @@ load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Central list of ROS2 node binary targets
-ROS2_NODE_TARGETS = [
-    ":camera_publisher",
-    ":encoder_publisher",
-    ":actuator_subscriber",
-    ":inference",
-    ":operational_limit_calibration",
-]
-
 cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
@@ -170,6 +161,8 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
         "//ros2:ros2_type_resolver",
+        "//ros2/proto:node_py_proto",
+        "//ros2/utils:qos_setting_py",
         requirement("protobuf"),
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
     ],

@@ -12,6 +12,7 @@ cc_binary(
         "//ros2:lidar_publisher",
         "//ros2:inference",
         "//ros2:operational_limit_calibration",
+        "//ros2:data_subscriber",
     ],
     visibility = ["//visibility:public"],
     deps = [

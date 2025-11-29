@@ -4,12 +4,13 @@ import sys
 import time
 
 from rclpy.node import Node
-from std_msgs.msg import Float32
 
 from ai.train.data_store import DataStore
 from config.proto import config_pb2
 from ros2 import node_runner as node_runner_py
+from ros2.proto import node_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
+from ros2.utils.qos_setting import create_qos_setting
 
 DATA_STORE_DEBUG_LOG_INTERVAL = 10
 
@@ -18,33 +19,37 @@ class DataSubscriber(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
 
-        for single_data_store in config.ai.data_stores.single_data_stores:
-            if single_data_store.node.id == node_id:
-                self.data_store = DataStore(data_store_config=single_data_store)
-                self.subscriptions = single_data_store.node.subscriptions
-                break
-
-        if self.data_store is None:
-            raise ValueError(f"Data store with node.id {node_id} not found in config")
-
-        self.subscribers = []
+        self.data_store = None
+        self.subscription_list = []
         self.topic_message_counts = {}
 
-        for subscription in self.subscriptions:
+        # Currently, only one data store is supported since one node can subscribe all topics.
+        if len(config.ai.data_stores.single_data_stores) > 1:
+            raise ValueError("Only one data store is supported")
+
+        if len(config.ai.data_stores.single_data_stores) == 0:
+            raise ValueError("No data stores found in config")
+
+        self.data_store = DataStore(
+            data_store_config=config.ai.data_stores.single_data_stores[0]
+        )
+        self._setup_subscriptions(config.ai.data_stores.single_data_stores[0].node)
+
+    def _setup_subscriptions(self, node: node_pb2.Node) -> None:
+        """
+        Set up ROS2 subscriptions for data storage.
+        """
+        qos_setting = create_qos_setting(node.qos_setting)
+        for subscription in node.subscriptions:
             message_type = resolve_message_class_from_enum(subscription.ros2_data_type)
-            topic = subscription.topic
-            self.topic_message_counts[topic] = 0
-            self.subscribers.append(
-                self.create_subscription(
-                    message_type,
-                    topic,
-                    functools.partial(self.subscribe_callback, topic=topic),
-                    10,
-                )
+            self.topic_message_counts[subscription.topic] = 0
+            subscription = self.create_subscription(
+                message_type,
+                subscription.topic,
+                functools.partial(self.subscribe_callback, topic=subscription.topic),
+                qos_setting,
             )
-            self.get_logger().info(
-                f"Subscribing to topic: {topic} (type: {message_type.__name__})"
-            )
+            self.subscription_list.append(subscription)
 
     def subscribe_callback(self, msg, topic):
         """Callback to handle incoming ROS2 messages and store them."""

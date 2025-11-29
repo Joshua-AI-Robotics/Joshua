@@ -2,42 +2,75 @@ general{
   operation_mode: MODE_DATA_STORE
 }
 
+robot {
+  name: "sample_data_store"
+  id: 1
+  robot_type: MANIPULATOR_ARM
+
+  perceptions {
+    single_perceptions {
+      node {
+        id: 1
+        node_type: CAMERA_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: CAMERA
+      camera {
+        camera_name: "webcam"
+        id: 1
+        camera_type: OPENCV
+        comm{}
+        opencv_config {
+          id: 0
+          width: 640
+          height: 480
+          fps: 30
+        }
+      }
+    }
+  }
+}
+
 ai {
   data_stores {
     single_data_stores {
       node {
-        id: 1
-        node_type: DATA_STORE
+        id: 2
+        node_type: DATA_SUBSCRIBER
         qos_setting {}
-
         subscriptions {
-        ros2_data_type: IMAGE
-        topic: "camera_1"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_1"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_2"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_3"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_4"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_5"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_6"
-      }
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_1"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_2"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_3"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_4"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_5"
+        }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_6"
+        }
       }
       store_path: "/tmp/Joshua/data/sample_recordings"
       data_store_mode: LOCAL_FILE
