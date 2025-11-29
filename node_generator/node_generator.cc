@@ -25,13 +25,13 @@ constexpr auto kROS2 = "ros2";
 
 // TODO: Move to a separate file, and add data_store node type.
 // Node types. Fix Inference node to receive any model, (replace mock_inference to inference)
-// Last Added: kMockInference.
+// Last Added: kInference.
 constexpr auto kCameraPublisher = "camera_publisher";
 constexpr auto kEncoderPublisher = "encoder_publisher";
 constexpr auto kActuatorSubscriber = "actuator_subscriber";
 constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
 constexpr auto kLidarPublisher = "lidar_publisher";
-constexpr auto kMockInference = "mock_inference";  // TODO: Remove this.
+constexpr auto kInference = "inference";
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -237,8 +237,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
   }
 
   // Inference
-  for (const auto& single_model :
-       config_.ai().models().single_model()) {  // TODO: Update single_model() to plural.
+  for (const auto& single_model : config_.ai().models().single_models()) {
     const uint32_t node_id = single_model.node().id();
     auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_model.node().node_type());
     if (!inserted && it->second != single_model.node().node_type()) {
@@ -663,9 +662,9 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   // Get publish and subscribe topics for models.
 
-  for (const auto& single_model : config_.ai().models().single_model()) {
+  for (const auto& single_model : config_.ai().models().single_models()) {
     if (single_model.node().id() == node_id) {
-      for (const auto& pub : single_model.pubishers()) {
+      for (const auto& pub : single_model.publishers()) {
         publish_topics.push_back(pub.topic());
       }
       for (const auto& sub : single_model.subscriptions()) {

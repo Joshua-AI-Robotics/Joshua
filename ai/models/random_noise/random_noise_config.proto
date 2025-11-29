@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package ai.models;
+
+message RandomNoiseConfig {
+  uint32 input_size = 1;
+  uint32 output_size = 2;
+  double noise_low = 3;
+  double noise_high = 4;
+}

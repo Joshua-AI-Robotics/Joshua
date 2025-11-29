@@ -1,18 +1,27 @@
 syntax = "proto3";
 
-package ai.model;
+package ai.models;
 
+import "ai/models/random_noise/random_noise_config.proto";
 import "ros2/proto/node.proto";
 import "ros2/proto/ros2_data_type.proto";
 
+enum ModelType {
+  MODEL_TYPE_INVALID = 0;
+  RANDOM_NOISE = 1;
+  // Add other model types here.
+}
+
 message SingleModel {
-  string policy_name = 1;
+  ModelType model_type = 1;
   string pretrained_model_path = 2;
   ros2.node.Node node = 3;
   repeated Subscription subscriptions = 4;
-  repeated Publisher pubishers = 5;
-  oneof policy_config {
-    ExamplePolicyConfig example_policy_config = 6;
+  repeated Publisher publishers = 5;
+
+  oneof model_config {
+    RandomNoiseConfig random_noise_config = 6;
+    // Add other model configs here.
   }
 }
 
@@ -26,17 +35,6 @@ message Subscription {
   string topic = 2;
 }
 
-message ExamplePolicyConfig {
-  int32 hidden_size = 1;
-  int32 n_layer = 2;
-  int32 n_head = 3;
-  string activation_function = 4;
-  double dropout = 5;
-  int32 n_inner = 6;
-  int32 context_length = 7;
-  int32 vision_embedding_dim = 8;
-}
-
 message Model {
-  repeated SingleModel single_model = 1;
+  repeated SingleModel single_models = 1;
 }

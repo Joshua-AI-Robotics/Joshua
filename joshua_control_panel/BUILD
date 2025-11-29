@@ -121,7 +121,7 @@ cc_binary(
         "//ros2:camera_publisher",
         "//ros2:encoder_publisher",
         "//ros2:actuator_subscriber",
-        "//ros2:mock_inference",
+        "//ros2:inference",
         "//ros2:operational_limit_calibration",
         "//ros2:ros2_node_wrapper.sh",
     ],

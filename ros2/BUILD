@@ -10,7 +10,7 @@ ROS2_NODE_TARGETS = [
     ":camera_publisher",
     ":encoder_publisher",
     ":actuator_subscriber",
-    ":mock_inference",
+    ":inference",
     ":operational_limit_calibration",
 ]
 
@@ -53,15 +53,23 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
-py_library(
-    name = "inference_base",
+ros2_py_binary(
+    name = "inference",
     srcs = [
-        "inference_base.py",
+        "inference.py",
     ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "inference.py",
+    set_up_ament = True,
     deps = [
         "//config/proto:config_py_proto",
         "//ros2:ros2_type_resolver",
+        "//ros2:node_runner_py",
         "//ros2/utils:qos_setting_py",
+        "//ai/models:model_registry",
+        requirement("numpy"),  # Required by ROS2 sensor_msgs
         requirement("protobuf"),
     ],
     visibility = ["//visibility:public"],
@@ -155,25 +163,6 @@ ros2_cpp_binary(
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_py_binary(
-    name = "mock_inference",
-    srcs = [
-        "mock_inference.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "mock_inference.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2:inference_base",
-        requirement("numpy"),  # Required by ROS2 sensor_msgs
-        requirement("protobuf"),
     ],
 )
 

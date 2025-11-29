@@ -235,11 +235,11 @@ robot {
 
 ai {
   models {
-    single_model {
-      policy_name: "example_policy"
+    single_models {
+      model_type: RANDOM_NOISE
       node {
         id: 3
-        node_type: MOCK_INFERENCE # TODO: Replace with INFERENCE.
+        node_type: INFERENCE
         qos_setting {}
       }
 
@@ -248,40 +248,36 @@ ai {
         topic: "camera_1"
       }
 
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_1"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_2"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_3"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_4"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_5"
       }
-      pubishers {
+      publishers {
         ros2_data_type: FLOAT32
         topic: "mock_action_6"
       }
 
-      example_policy_config {
-        hidden_size: 256
-        n_layer: 4
-        n_head: 4
-        activation_function: "relu"
-        dropout: 0.1
-        n_inner: 1024
-        context_length: 20
-        vision_embedding_dim: 128
+      random_noise_config {
+        input_size: 1 # TODO: Try with camera image size.
+        output_size: 6
+        noise_low: -0.05
+        noise_high: 0.05
       }
     }
   }
