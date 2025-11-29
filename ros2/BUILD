@@ -68,6 +68,17 @@ ros2_py_binary(
     # Ensure: source /opt/ros/humble/setup.bash before running
 )
 
+py_library(
+    name = "image_converter",
+    srcs = [
+        "image_converter.py",
+    ],
+    deps = [
+        requirement("numpy"),
+    ],
+    visibility = ["//visibility:public"],
+)
+
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
