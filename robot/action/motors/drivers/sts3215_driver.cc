@@ -92,36 +92,29 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
 
 absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
   try {
-    LOG(INFO) << "Executing action [ID: " << action_packet.action_id()
-              << ", Timestamp: " << action_packet.timestamp_ms() << "]";
-
     switch (action_packet.action_type_case()) {
       case robot::action::ActionPacket::kPreset:
         switch (action_packet.preset()) {
           case robot::action::PresetCommand::PRESET_MIDDLE_POSITION:
-            LOG(INFO) << "Executing preset: MIDDLE_POSITION";
             ABSL_RETURN_IF_ERROR(SetMiddlePosition());
             break;
           case robot::action::PresetCommand::PRESET_IDLE_POSITION:
-            LOG(INFO) << "Executing preset: IDLE_POSITION";
             ABSL_RETURN_IF_ERROR(SetIdlePosition());
             break;
           case robot::action::PresetCommand::PRESET_TEARDOWN:
-            LOG(INFO) << "Executing preset: TEARDOWN";
             ABSL_RETURN_IF_ERROR(Teardown());
             break;
           case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
-            LOG(INFO) << "Executing preset: ENABLE_TORQUE";
             ABSL_RETURN_IF_ERROR(SetTorque(1.0f));
             break;
           case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
-            LOG(INFO) << "Executing preset: DISABLE_TORQUE";
             ABSL_RETURN_IF_ERROR(SetTorque(0.0f));
             break;
           default:
             LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
             break;
         }
+        LOG(INFO) << GetId() << " executed preset: " << action_packet.preset();
         break;
 
       case robot::action::ActionPacket::kComplex: {
@@ -134,7 +127,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           break;
         }
 
-        LOG(INFO) << "Executing complex action";
+        LOG(INFO) << GetId() << " executing complex action";
 
         // Apply changes in order: speed first, then torque, then position
         if (complex_action.has_speed()) {
@@ -178,7 +171,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float pos = action_packet.position();
         if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
           ABSL_RETURN_IF_ERROR(SetPosition(pos));
-          LOG(INFO) << "Set position: " << pos;
+          LOG(INFO) << GetId() << " set position: " << pos;
         } else {
           LOG(WARNING) << "Position " << pos << " outside operational limits ["
                        << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
@@ -190,7 +183,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float torque = action_packet.torque();
         if (torque >= 0.0f) {
           ABSL_RETURN_IF_ERROR(SetTorque(torque));
-          LOG(INFO) << "Set torque: " << torque;
+          LOG(INFO) << GetId() << " set torque: " << torque;
         } else {
           LOG(WARNING) << "Invalid torque value: " << torque;
         }
@@ -201,7 +194,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float speed = action_packet.speed();
         if (speed >= 0) {
           ABSL_RETURN_IF_ERROR(SetSpeed(speed));
-          LOG(INFO) << "Set speed: " << speed;
+          LOG(INFO) << GetId() << " set speed: " << speed;
         } else {
           LOG(WARNING) << "Invalid speed value: " << speed;
         }
@@ -214,8 +207,6 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
                      << "]";
         break;
     }
-
-    LOG(INFO) << "Action completed successfully [ID: " << action_packet.action_id() << "]";
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to execute action [ID: " << action_packet.action_id()
@@ -281,7 +272,7 @@ absl::Status Sts3215Driver::Teardown() {
     move_speed_ = 1000;
     ABSL_RETURN_IF_ERROR(SetIdlePosition());
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    LOG(INFO) << "Setting torque to 0 (servo " << static_cast<int>(servo_id_) << ")";
+    LOG(INFO) << GetId() << " setting torque to 0";
     ABSL_RETURN_IF_ERROR(SetTorque(0));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();

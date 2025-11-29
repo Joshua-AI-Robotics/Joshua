@@ -22,8 +22,7 @@ message ComplexAction {
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-
-  int64 timestamp_ms = 2;
+  int64 timestamp_ns = 2;
 
   oneof action_type {
     float position = 10;         // Simple position command
