@@ -11,6 +11,7 @@ cc_library(
         "//robot/perception/encoder:sts3215_encoder",
         "//robot/perception/lidar:lds01_driver",
         "//robot/perception/interfaces:perception_interface",
+        "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
     ],
 )

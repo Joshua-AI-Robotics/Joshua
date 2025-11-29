@@ -10,3 +10,13 @@ cc_library(
         "@local_deps//:libevdev",
     ],
 )
+
+cc_library(
+    name = "status_macros",
+    hdrs = ["status_macros.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
