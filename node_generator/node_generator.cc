@@ -120,6 +120,19 @@ std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
   return std::nullopt;
 }
 
+void ExtractTopicsFromNode(const ros2::node::Node& node,
+                           const uint32_t node_id,
+                           std::vector<std::string>& publish_topics,
+                           std::vector<std::string>& subscribe_topics) {
+  if (node.id() == node_id) {
+    for (const auto& pub : node.publishers()) {
+      publish_topics.push_back(pub.topic());
+    }
+    for (const auto& sub : node.subscriptions()) {
+      subscribe_topics.push_back(sub.topic());
+    }
+  }
+}
 }  // namespace
 
 // Static member initialization
@@ -645,40 +658,24 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");
   }
 
-  auto extract_topics_from_node = [&](const ros2::node::Node& node) {
-    if (node.id() == node_id) {
-      for (const auto& pub : node.publishers()) {
-        publish_topics.push_back(pub.topic());
-      }
-      for (const auto& sub : node.subscriptions()) {
-        subscribe_topics.push_back(sub.topic());
-      }
-    }
-  };
-
-  // Get publish and subscribe topics from perceptions.
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
-    extract_topics_from_node(single_perception.node());
+    ExtractTopicsFromNode(single_perception.node(), node_id, publish_topics, subscribe_topics);
   }
 
-  // Get publish and subscribe topics from actions.
   for (const auto& single_action : config_.robot().actions().single_actions()) {
-    extract_topics_from_node(single_action.node());
+    ExtractTopicsFromNode(single_action.node(), node_id, publish_topics, subscribe_topics);
   }
 
-  // Get publish and subscribe topics from models.
   for (const auto& single_model : config_.ai().models().single_models()) {
-    extract_topics_from_node(single_model.node());
+    ExtractTopicsFromNode(single_model.node(), node_id, publish_topics, subscribe_topics);
   }
 
-  // Get publish and subscribe topics from data store nodes.
   for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
-    extract_topics_from_node(single_data_store.node());
+    ExtractTopicsFromNode(single_data_store.node(), node_id, publish_topics, subscribe_topics);
   }
 
-  // Get publish and subscribe topics from calibration node.
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    extract_topics_from_node(single_calibration.node());
+    ExtractTopicsFromNode(single_calibration.node(), node_id, publish_topics, subscribe_topics);
   }
 
   return absl::OkStatus();

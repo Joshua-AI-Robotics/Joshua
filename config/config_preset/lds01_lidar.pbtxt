@@ -1,11 +1,11 @@
 general{
     operation_mode: MODE_TEST
+    robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+    name: "lds01_lidar_test"
+    id: 1
   }
   
   robot {
-    name: "lds01_lidar_test"
-    id: 1
-  
     perceptions {
       single_perceptions {
         node {

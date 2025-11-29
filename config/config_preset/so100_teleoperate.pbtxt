@@ -1,11 +1,10 @@
 general{
   operation_mode: MODE_TELEOPERATE
-}
-robot {
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
   name: "so100"
   id: 1
-  robot_type: MANIPULATOR_ARM
-
+}
+robot {
   actions {
     single_actions {
       node {

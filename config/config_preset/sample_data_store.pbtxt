@@ -1,12 +1,11 @@
 general{
   operation_mode: MODE_DATA_STORE
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "sample_data_store"
+  id: 1
 }
 
 robot {
-  name: "sample_data_store"
-  id: 1
-  robot_type: MANIPULATOR_ARM
-
   perceptions {
     single_perceptions {
       node {
