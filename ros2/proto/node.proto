@@ -2,10 +2,12 @@ syntax = "proto3";
 
 package ros2.node;
 
+import "ros2/proto/ros2_data_type.proto";
+
 // Enum values here must match with the file name under ros2/
 // (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
 // This is used to resolve the native binary path.
-// Last Added: LIDAR_PUBLISHER.
+// Last Added: DATA_SUBSCRIBER.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -14,7 +16,7 @@ enum NodeType {
   OPERATIONAL_LIMIT_CALIBRATION = 4;
   INFERENCE = 5;
   LIDAR_PUBLISHER = 6;
-  DATA_STORE = 7;
+  DATA_SUBSCRIBER = 7;
 }
 
 enum QosReliabilityPolicy {
@@ -49,8 +51,21 @@ message QosSetting {
   uint64 lifespan_nanoseconds = 8;
 }
 
+message Publisher {
+  ros2.data_type.Ros2DataType ros2_data_type = 1;
+  string topic = 2;
+  uint32 publish_rate_hz = 3;
+}
+
+message Subscription {
+  ros2.data_type.Ros2DataType ros2_data_type = 1;
+  string topic = 2;
+}
+
 message Node {
   uint32 id = 1;
   NodeType node_type = 2;
   QosSetting qos_setting = 3;
+  repeated Publisher publishers = 4;
+  repeated Subscription subscriptions = 5;
 }

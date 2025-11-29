@@ -16,23 +16,11 @@ message SingleModel {
   ModelType model_type = 1;
   string pretrained_model_path = 2;
   ros2.node.Node node = 3;
-  repeated Subscription subscriptions = 4;
-  repeated Publisher publishers = 5;
 
   oneof model_config {
-    RandomNoiseConfig random_noise_config = 6;
+    RandomNoiseConfig random_noise_config = 4;
     // Add other model configs here.
   }
-}
-
-message Publisher {
-  ros2.data_type.Ros2DataType ros2_data_type = 1;
-  string topic = 2;
-}
-
-message Subscription {
-  ros2.data_type.Ros2DataType ros2_data_type = 1;
-  string topic = 2;
 }
 
 message Model {

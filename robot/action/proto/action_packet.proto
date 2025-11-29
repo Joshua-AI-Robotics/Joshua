@@ -22,14 +22,13 @@ message ComplexAction {
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-
-  int64 timestamp_ms = 2;
+  int64 timestamp_ns = 2;
 
   oneof action_type {
-    float position = 10;         // Simple position command
-    float torque = 11;           // Simple torque command
-    float speed = 12;            // Simple speed command
-    PresetCommand preset = 13;   // Preset command
-    ComplexAction complex = 14;  // Complex multi-parameter action
+    float position = 3;         // Simple position command
+    float torque = 4;           // Simple torque command
+    float speed = 5;            // Simple speed command
+    PresetCommand preset = 6;   // Preset command
+    ComplexAction complex = 7;  // Complex multi-parameter action
   }
 }

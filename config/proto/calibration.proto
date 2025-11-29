@@ -12,7 +12,6 @@ enum CalibrationMode {
 message SingleCalibration {
   ros2.node.Node node = 1;
   CalibrationMode calibration_mode = 2;
-  repeated string subscribe_topics = 3;
   // Publish topics will be automatically generated as "subscribe_topics_operational_limit".
   // And publish topic data type will be std_msgs::msg::Float32MultiArray.
   // TODO: Maybe there's a better way to generically represent this.

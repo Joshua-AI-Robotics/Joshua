@@ -15,6 +15,7 @@
 #include <thread>
 
 #include "config/config_utils.h"
+#include "utils/status_macros.h"
 
 namespace node_generator {
 
@@ -22,16 +23,6 @@ namespace {
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
-
-// TODO: Move to a separate file, and add data_store node type.
-// Node types. Fix Inference node to receive any model, (replace mock_inference to inference)
-// Last Added: kInference.
-constexpr auto kCameraPublisher = "camera_publisher";
-constexpr auto kEncoderPublisher = "encoder_publisher";
-constexpr auto kActuatorSubscriber = "actuator_subscriber";
-constexpr auto kOperationalLimitCalibration = "operational_limit_calibration";
-constexpr auto kLidarPublisher = "lidar_publisher";
-constexpr auto kInference = "inference";
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -130,6 +121,19 @@ std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
   return std::nullopt;
 }
 
+void ExtractTopicsFromNode(const ros2::node::Node& node,
+                           const uint32_t node_id,
+                           std::vector<std::string>& publish_topics,
+                           std::vector<std::string>& subscribe_topics) {
+  if (node.id() == node_id) {
+    for (const auto& pub : node.publishers()) {
+      publish_topics.push_back(pub.topic());
+    }
+    for (const auto& sub : node.subscriptions()) {
+      subscribe_topics.push_back(sub.topic());
+    }
+  }
+}
 }  // namespace
 
 // Static member initialization
@@ -184,26 +188,10 @@ NodeGenerator::~NodeGenerator() {
 absl::Status NodeGenerator::Initialize() {
   LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
 
-  try {
-    auto result = config::config_util::LoadConfig(config_path_);
+  ABSL_ASSIGN_OR_RETURN(config_, config::config_util::LoadConfig(config_path_));
 
-    if (!result.ok()) {
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
-    }
-
-    config_ = result.value();
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to load config: " << e.what();
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Failed to load config");
-  }
-
-  if (!IdentifyNodeTypes().ok()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Node types identification failed");
-  }
-
-  if (!CheckConfigIntegrity().ok()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Config integrity check failed");
-  }
+  ABSL_RETURN_IF_ERROR(IdentifyNodeTypes());
+  ABSL_RETURN_IF_ERROR(CheckConfigIntegrity());
 
   SetupSignalHandlers();
 
@@ -248,7 +236,16 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
   }
 
   // Data store.
-  // TODO: Add here.
+  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
+    const uint32_t node_id = single_data_store.node().id();
+    auto [it, inserted] =
+        identified_nodes_.try_emplace(node_id, single_data_store.node().node_type());
+    if (!inserted && it->second != single_data_store.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
+  }
 
   // Calibration
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
@@ -319,9 +316,7 @@ absl::Status NodeGenerator::LaunchAllNodes() {
     if (pid > 0) {
       std::vector<std::string> publish_topics;
       std::vector<std::string> subscribe_topics;
-      if (!GetTopicsForNode(node_id, publish_topics, subscribe_topics).ok()) {
-        LOG(WARNING) << "Failed to get topics for node " << node_id;
-      }
+      ABSL_RETURN_IF_ERROR(GetTopicsForNode(node_id, publish_topics, subscribe_topics));
       launched_nodes_.try_emplace(pid,
                                   NodeInfo{NodeTypeToString(node_type),
                                            node_name,
@@ -646,43 +641,26 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");
   }
 
-  // Get publish topics from perceptions.
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
-    if (single_perception.node().id() == node_id) {
-      publish_topics.push_back(single_perception.publish_topic());
-    }
+    ExtractTopicsFromNode(single_perception.node(), node_id, publish_topics, subscribe_topics);
   }
 
-  // Get subscribe topics from actions.
   for (const auto& single_action : config_.robot().actions().single_actions()) {
-    if (single_action.node().id() == node_id) {
-      subscribe_topics.push_back(single_action.subscribe_topic());
-    }
+    ExtractTopicsFromNode(single_action.node(), node_id, publish_topics, subscribe_topics);
   }
-
-  // Get publish and subscribe topics for models.
 
   for (const auto& single_model : config_.ai().models().single_models()) {
-    if (single_model.node().id() == node_id) {
-      for (const auto& pub : single_model.publishers()) {
-        publish_topics.push_back(pub.topic());
-      }
-      for (const auto& sub : single_model.subscriptions()) {
-        subscribe_topics.push_back(sub.topic());
-      }
-    }
+    ExtractTopicsFromNode(single_model.node(), node_id, publish_topics, subscribe_topics);
   }
-  // TODO: Add data store node.
 
-  // Get publish and subscribe topics for calibration node.
-  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    if (single_calibration.node().id() == node_id) {
-      for (const auto& sub_topic : single_calibration.subscribe_topics()) {
-        subscribe_topics.push_back(sub_topic);
-        publish_topics.push_back(sub_topic + "_operational_limit");
-      }
-    }
+  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
+    ExtractTopicsFromNode(single_data_store.node(), node_id, publish_topics, subscribe_topics);
   }
+
+  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
+    ExtractTopicsFromNode(single_calibration.node(), node_id, publish_topics, subscribe_topics);
+  }
+
   return absl::OkStatus();
 }
 }  // namespace node_generator

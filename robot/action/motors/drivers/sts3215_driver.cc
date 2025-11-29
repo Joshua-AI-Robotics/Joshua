@@ -1,5 +1,7 @@
 #include "robot/action/motors/drivers/sts3215_driver.h"
 
+#include "utils/status_macros.h"
+
 namespace robot::action {
 
 namespace {
@@ -24,10 +26,7 @@ Sts3215Driver::Sts3215Driver(const std::shared_ptr<robot::comm::Serial>& serial,
 
 absl::Status Sts3215Driver::Init() {
   try {
-    if (!serial_->Open().ok()) {
-      LOG(ERROR) << "Failed to open serial port.";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
-    }
+    ABSL_RETURN_IF_ERROR(serial_->Open());
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to init.");
@@ -93,51 +92,29 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
 
 absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
   try {
-    LOG(INFO) << "Executing action [ID: " << action_packet.action_id()
-              << ", Timestamp: " << action_packet.timestamp_ms() << "]";
-
     switch (action_packet.action_type_case()) {
       case robot::action::ActionPacket::kPreset:
         switch (action_packet.preset()) {
           case robot::action::PresetCommand::PRESET_MIDDLE_POSITION:
-            LOG(INFO) << "Executing preset: MIDDLE_POSITION";
-            if (!SetMiddlePosition().ok()) {
-              LOG(ERROR) << "Failed to set middle position";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position");
-            }
+            ABSL_RETURN_IF_ERROR(SetMiddlePosition());
             break;
           case robot::action::PresetCommand::PRESET_IDLE_POSITION:
-            LOG(INFO) << "Executing preset: IDLE_POSITION";
-            if (!SetIdlePosition().ok()) {
-              LOG(ERROR) << "Failed to set idle position";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position");
-            }
+            ABSL_RETURN_IF_ERROR(SetIdlePosition());
             break;
           case robot::action::PresetCommand::PRESET_TEARDOWN:
-            LOG(INFO) << "Executing preset: TEARDOWN";
-            if (!Teardown().ok()) {
-              LOG(ERROR) << "Failed to teardown";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to teardown");
-            }
+            ABSL_RETURN_IF_ERROR(Teardown());
             break;
           case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
-            LOG(INFO) << "Executing preset: ENABLE_TORQUE";
-            if (!SetTorque(1.0f).ok()) {
-              LOG(ERROR) << "Failed to set torque";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
-            }
+            ABSL_RETURN_IF_ERROR(SetTorque(1.0f));
             break;
           case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
-            LOG(INFO) << "Executing preset: DISABLE_TORQUE";
-            if (!SetTorque(0.0f).ok()) {
-              LOG(ERROR) << "Failed to set torque";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
-            }
+            ABSL_RETURN_IF_ERROR(SetTorque(0.0f));
             break;
           default:
             LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
             break;
         }
+        LOG(INFO) << GetId() << " executed preset: " << action_packet.preset();
         break;
 
       case robot::action::ActionPacket::kComplex: {
@@ -150,15 +127,12 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           break;
         }
 
-        LOG(INFO) << "Executing complex action";
+        LOG(INFO) << GetId() << " executing complex action";
 
         // Apply changes in order: speed first, then torque, then position
         if (complex_action.has_speed()) {
           if (complex_action.speed() >= 0) {
-            if (!SetSpeed(complex_action.speed()).ok()) {
-              LOG(ERROR) << "Failed to set speed";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set speed");
-            }
+            ABSL_RETURN_IF_ERROR(SetSpeed(complex_action.speed()));
             LOG(INFO) << "Set speed: " << complex_action.speed();
           } else {
             LOG(WARNING) << "Invalid speed value: " << complex_action.speed();
@@ -167,10 +141,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
 
         if (complex_action.has_torque()) {
           if (complex_action.torque() >= 0.0f) {
-            if (!SetTorque(complex_action.torque()).ok()) {
-              LOG(ERROR) << "Failed to set torque";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
-            }
+            ABSL_RETURN_IF_ERROR(SetTorque(complex_action.torque()));
             LOG(INFO) << "Set torque: " << complex_action.torque();
           } else {
             LOG(WARNING) << "Invalid torque value: " << complex_action.torque();
@@ -180,10 +151,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         if (complex_action.has_position()) {
           float pos = complex_action.position();
           if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
-            if (!SetPosition(pos).ok()) {
-              LOG(ERROR) << "Failed to set position";
-              return absl::Status(absl::StatusCode::kInternal, "Failed to set position");
-            }
+            ABSL_RETURN_IF_ERROR(SetPosition(pos));
             LOG(INFO) << "Set position: " << pos;
           } else {
             LOG(WARNING) << "Position " << pos << " outside operational limits ["
@@ -202,11 +170,8 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
       case robot::action::ActionPacket::kPosition: {
         float pos = action_packet.position();
         if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
-          if (!SetPosition(pos).ok()) {
-            LOG(ERROR) << "Failed to set position";
-            return absl::Status(absl::StatusCode::kInternal, "Failed to set position");
-          }
-          LOG(INFO) << "Set position: " << pos;
+          ABSL_RETURN_IF_ERROR(SetPosition(pos));
+          LOG(INFO) << GetId() << " set position: " << pos;
         } else {
           LOG(WARNING) << "Position " << pos << " outside operational limits ["
                        << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
@@ -217,11 +182,8 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
       case robot::action::ActionPacket::kTorque: {
         float torque = action_packet.torque();
         if (torque >= 0.0f) {
-          if (!SetTorque(torque).ok()) {
-            LOG(ERROR) << "Failed to set torque";
-            return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
-          }
-          LOG(INFO) << "Set torque: " << torque;
+          ABSL_RETURN_IF_ERROR(SetTorque(torque));
+          LOG(INFO) << GetId() << " set torque: " << torque;
         } else {
           LOG(WARNING) << "Invalid torque value: " << torque;
         }
@@ -231,11 +193,8 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
       case robot::action::ActionPacket::kSpeed: {
         float speed = action_packet.speed();
         if (speed >= 0) {
-          if (!SetSpeed(speed).ok()) {
-            LOG(ERROR) << "Failed to set speed";
-            return absl::Status(absl::StatusCode::kInternal, "Failed to set speed");
-          }
-          LOG(INFO) << "Set speed: " << speed;
+          ABSL_RETURN_IF_ERROR(SetSpeed(speed));
+          LOG(INFO) << GetId() << " set speed: " << speed;
         } else {
           LOG(WARNING) << "Invalid speed value: " << speed;
         }
@@ -248,8 +207,6 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
                      << "]";
         break;
     }
-
-    LOG(INFO) << "Action completed successfully [ID: " << action_packet.action_id() << "]";
 
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to execute action [ID: " << action_packet.action_id()
@@ -266,10 +223,7 @@ absl::Status Sts3215Driver::SetSpeed(float value) {
 
 absl::Status Sts3215Driver::SetPosition(float angle) {
   try {
-    if (!serial_->Write(create_move_packet(static_cast<uint16_t>(angle))).ok()) {
-      LOG(ERROR) << "Failed to set position.";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
-    }
+    ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(static_cast<uint16_t>(angle))));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to set position.");
@@ -279,10 +233,7 @@ absl::Status Sts3215Driver::SetPosition(float angle) {
 
 absl::Status Sts3215Driver::SetTorque(float torque) {
   try {
-    if (!serial_->Write(create_torque_packet(static_cast<uint16_t>(torque))).ok()) {
-      LOG(ERROR) << "Failed to set torque.";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
-    }
+    ABSL_RETURN_IF_ERROR(serial_->Write(create_torque_packet(static_cast<uint16_t>(torque))));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to set torque.");
@@ -298,10 +249,7 @@ std::string Sts3215Driver::GetId() {
 absl::Status Sts3215Driver::SetMiddlePosition() {
   try {
     auto middle_position = (operational_lower_limit_ + operational_upper_limit_) / 2;
-    if (!serial_->Write(create_move_packet(middle_position)).ok()) {
-      LOG(ERROR) << "Failed to set middle position.";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
-    }
+    ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(middle_position)));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to set middle position.");
@@ -311,10 +259,7 @@ absl::Status Sts3215Driver::SetMiddlePosition() {
 
 absl::Status Sts3215Driver::SetIdlePosition() {
   try {
-    if (!serial_->Write(create_move_packet(idle_position_)).ok()) {
-      LOG(ERROR) << "Failed to set idle position.";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
-    }
+    ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(idle_position_)));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");
@@ -325,16 +270,10 @@ absl::Status Sts3215Driver::SetIdlePosition() {
 absl::Status Sts3215Driver::Teardown() {
   try {
     move_speed_ = 1000;
-    if (!SetIdlePosition().ok()) {
-      LOG(ERROR) << "Failed to set idle position";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position");
-    }
+    ABSL_RETURN_IF_ERROR(SetIdlePosition());
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    LOG(INFO) << "Setting torque to 0 (servo " << static_cast<int>(servo_id_) << ")";
-    if (!SetTorque(0).ok()) {
-      LOG(ERROR) << "Failed to set torque";
-      return absl::Status(absl::StatusCode::kInternal, "Failed to set torque");
-    }
+    LOG(INFO) << GetId() << " setting torque to 0";
+    ABSL_RETURN_IF_ERROR(SetTorque(0));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to teardown.");

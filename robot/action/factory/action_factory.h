@@ -9,6 +9,7 @@
 #include "robot/action/interfaces/action_interface.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "utils/status_macros.h"
 
 namespace robot::action {
 class ActionFactory {
@@ -20,15 +21,10 @@ class ActionFactory {
         const auto& actuator = single_action.actuator();
         switch (actuator.actuator_type()) {
           case robot::action::ActuatorType::STS3215_SERVO: {
-            auto serial = robot::comm::CommFactory::CreateSerial(actuator.comm());
-            if (!serial.ok()) {
-              return serial.status();
-            }
-
-            auto driver = std::make_unique<robot::action::Sts3215Driver>(serial.value(), actuator);
-            if (!driver->Init().ok()) {
-              return absl::Status(absl::StatusCode::kInternal, "Failed to init driver.");
-            }
+            ABSL_ASSIGN_OR_RETURN(auto serial,
+                                  robot::comm::CommFactory::CreateSerial(actuator.comm()));
+            auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+            ABSL_RETURN_IF_ERROR(driver->Init());
             return driver;
           }
           default:

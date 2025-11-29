@@ -1,5 +1,4 @@
-#ifndef ROS2_NODE_RUNNER_H_
-#define ROS2_NODE_RUNNER_H_
+#pragma once
 
 #include <csignal>
 #include <memory>
@@ -54,5 +53,3 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
 }
 
 }  // namespace ros2_utils
-
-#endif  // ROS2_NODE_RUNNER_H_

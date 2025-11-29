@@ -4,6 +4,8 @@
 
 #include <chrono>
 
+#include "utils/status_macros.h"
+
 namespace robot::perception {
 
 namespace {
@@ -18,10 +20,7 @@ Sts3215Encoder::Sts3215Encoder(const std::shared_ptr<robot::comm::Serial>& seria
 }
 
 absl::Status Sts3215Encoder::Init() {
-  if (!serial_->Open().ok()) {
-    LOG(ERROR) << "Failed to open serial port.";
-    return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Open());
   return absl::OkStatus();
 }
 
@@ -35,28 +34,20 @@ std::string Sts3215Encoder::GetId() {
 }
 
 absl::StatusOr<robot::perception::PerceptionPacket> Sts3215Encoder::GetData() {
-  auto position_opt = read_servo_position();
-  if (position_opt) {
-    reusable_packet_.Clear();
-    reusable_packet_.set_perception_id(id_);
-    reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                          std::chrono::steady_clock::now().time_since_epoch())
-                                          .count());
-    reusable_packet_.mutable_position()->set_position(static_cast<float>(*position_opt));
-    return reusable_packet_;
-  }
-
-  // Return empty packet on failure
+  ABSL_ASSIGN_OR_RETURN(auto position, read_servo_position());
   reusable_packet_.Clear();
-  return absl::Status(absl::StatusCode::kInternal, "Failed to read servo position");
+  reusable_packet_.set_perception_id(id_);
+  reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now().time_since_epoch())
+                                        .count());
+  reusable_packet_.mutable_position()->set_position(static_cast<float>(position));
+
+  return reusable_packet_;
 }
 
 absl::StatusOr<float> Sts3215Encoder::GetPosition() {
-  auto position_opt = read_servo_position();
-  if (position_opt) {
-    return static_cast<float>(*position_opt);
-  }
-  return absl::Status(absl::StatusCode::kInternal, "Failed to read servo position");
+  ABSL_ASSIGN_OR_RETURN(auto position, read_servo_position());
+  return static_cast<float>(position);
 }
 
 uint8_t Sts3215Encoder::calculate_checksum(std::vector<uint8_t>::const_iterator begin,
@@ -82,23 +73,13 @@ std::vector<uint8_t> Sts3215Encoder::create_read_position_packet() {
   return packet;
 }
 
-std::optional<uint16_t> Sts3215Encoder::read_servo_position() {
+absl::StatusOr<uint16_t> Sts3215Encoder::read_servo_position() {
   // 0. Flush the serial port to clear any stale data from previous reads
-  if (!serial_->Flush().ok()) {
-    LOG(ERROR) << "Failed to flush serial port.";
-    return std::nullopt;
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Flush());
 
   // 1. Create and send the read position packet
   std::vector<uint8_t> packet = create_read_position_packet();
-  if (!serial_) {
-    LOG(ERROR) << "Serial port interface not initialized.";
-    return std::nullopt;  // Indicate error
-  }
-  if (!serial_->Write(packet).ok()) {
-    LOG(ERROR) << "Failed to write to serial port.";
-    return std::nullopt;
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Write(packet));
 
   std::vector<uint8_t> response;
   response.reserve(8);  // Pre-allocate space
@@ -106,22 +87,12 @@ std::optional<uint16_t> Sts3215Encoder::read_servo_position() {
   // Synchronize to 0xFF 0xFF header
   bool header_found = false;
   for (int attempts = 0; attempts < kReadAttempt; ++attempts) {
-    absl::StatusOr<std::vector<uint8_t>> first_byte_vec = serial_->Read(1);
-    if (!first_byte_vec.ok() || first_byte_vec.value().empty()) {
-      LOG(WARNING) << "Serial read timeout during header search (first byte) for servo "
-                   << static_cast<int>(servo_id_);
-      return std::nullopt;
-    }
-    uint8_t first_byte = first_byte_vec.value()[0];
+    ABSL_ASSIGN_OR_RETURN(auto first_byte_vec, serial_->Read(1));
+    uint8_t first_byte = first_byte_vec[0];
 
     if (first_byte == 0xFF) {
-      absl::StatusOr<std::vector<uint8_t>> second_byte_vec = serial_->Read(1);
-      if (!second_byte_vec.ok() || second_byte_vec.value().empty()) {
-        LOG(WARNING) << "Serial read timeout during header search (second byte) for servo "
-                     << static_cast<int>(servo_id_);
-        return std::nullopt;
-      }
-      uint8_t second_byte = second_byte_vec.value()[0];
+      ABSL_ASSIGN_OR_RETURN(auto second_byte_vec, serial_->Read(1));
+      uint8_t second_byte = second_byte_vec[0];
 
       if (second_byte == 0xFF) {
         // Header found!
@@ -135,46 +106,34 @@ std::optional<uint16_t> Sts3215Encoder::read_servo_position() {
   }
 
   if (!header_found) {
-    LOG(ERROR) << "Failed to find 0xFF 0xFF header after multiple attempts for servo "
-               << static_cast<int>(servo_id_);
-    return std::nullopt;
+    std::string error_msg = "Failed to find 0xFF 0xFF header after multiple attempts for servo " +
+                            std::to_string(static_cast<int>(servo_id_));
+    LOG(ERROR) << error_msg;
+    return absl::Status(absl::StatusCode::kUnavailable, error_msg);
   }
 
   // Now read the remaining 6 bytes of the packet
-  absl::StatusOr<std::vector<uint8_t>> remaining_bytes = serial_->Read(6);
-  if (!remaining_bytes.ok() || remaining_bytes.value().size() != 6) {
-    LOG(ERROR) << "Failed to read remaining 6 bytes after header sync for servo "
-               << static_cast<int>(servo_id_);
-    return std::nullopt;
-  }
-  response.insert(response.end(), remaining_bytes.value().begin(), remaining_bytes.value().end());
+  ABSL_ASSIGN_OR_RETURN(auto remaining_bytes, serial_->Read(6));
+  response.insert(response.end(), remaining_bytes.begin(), remaining_bytes.end());
 
   // 3. Validate response size, start bytes, and error byte
   // The start bytes and total size are now guaranteed by the sync loop.
   if (response[4] != 0) {  // Error byte check
-    LOG(ERROR) << "Servo " << static_cast<int>(servo_id_)
-               << " returned an error: " << static_cast<int>(response[4]) << ". Raw response: ";
-    std::string response_str = "";
-    for (size_t i = 0; i < response.size(); ++i) {
-      response_str += std::to_string(static_cast<int>(response[i])) + " ";
-    }
-    LOG(ERROR) << response_str;
-    return std::nullopt;
+    std::string error_msg = "Servo " + std::to_string(static_cast<int>(servo_id_)) +
+                            " returned an error: " + std::to_string(static_cast<int>(response[4]));
+    LOG(ERROR) << error_msg;
+    return absl::Status(absl::StatusCode::kInternal, error_msg);
   }
 
   // Validate checksum
   uint8_t calculated_checksum = calculate_checksum(response.begin() + 2, response.begin() + 7);
   uint8_t received_checksum = response[7];
   if (calculated_checksum != received_checksum) {
-    LOG(ERROR) << "Checksum mismatch for servo " << static_cast<int>(servo_id_)
-               << ". Calculated: " << static_cast<int>(calculated_checksum)
-               << ", Received: " << static_cast<int>(received_checksum) << ". Raw response: ";
-    std::string response_str = "";
-    for (size_t i = 0; i < response.size(); ++i) {
-      response_str += std::to_string(static_cast<int>(response[i])) + " ";
-    }
-    LOG(ERROR) << response_str;
-    return std::nullopt;
+    std::string error_msg =
+        "Checksum mismatch for servo " + std::to_string(static_cast<int>(servo_id_));
+    LOG(ERROR) << error_msg;
+    reusable_packet_.Clear();
+    return absl::Status(absl::StatusCode::kInternal, error_msg);
   }
 
   // 4. Extract position bytes safely

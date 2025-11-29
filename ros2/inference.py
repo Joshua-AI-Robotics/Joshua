@@ -52,8 +52,8 @@ class Inference(Node):
 
         self.get_logger().info(
             f"Inference node '{node_name}' started: "
-            f"{', '.join([publisher.topic for publisher in self.single_model_config.publishers])} publish topics, "
-            f"{', '.join([subscription.topic for subscription in self.single_model_config.subscriptions])} subscribe topics."
+            f"{', '.join([publisher.topic for publisher in self.single_model_config.node.publishers])} publish topics, "
+            f"{', '.join([subscription.topic for subscription in self.single_model_config.node.subscriptions])} subscribe topics."
         )
 
     def _initialize_model(self):
@@ -114,10 +114,10 @@ class Inference(Node):
         if self.single_model_config.node.id == 0:
             raise ValueError("Node ID must be set in SingleModel config")
 
-        if len(self.single_model_config.publishers) == 0:
+        if len(self.single_model_config.node.publishers) == 0:
             raise ValueError("At least one publisher is required in SingleModel config")
 
-        if len(self.single_model_config.subscriptions) == 0:
+        if len(self.single_model_config.node.subscriptions) == 0:
             raise ValueError(
                 "At least one subscription is required in SingleModel config"
             )
@@ -127,11 +127,9 @@ class Inference(Node):
         Set up ROS2 publishers for inference outputs.
         """
         qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
-        for publisher_info in self.single_model_config.publishers:
-            message_type = resolve_message_class_from_enum(
-                publisher_info.ros2_data_type
-            )
-            topic = publisher_info.topic
+        for publisher in self.single_model_config.node.publishers:
+            message_type = resolve_message_class_from_enum(publisher.ros2_data_type)
+            topic = publisher.topic
             self.publisher_list.append(
                 PubSubInstance(
                     instance=self.create_publisher(message_type, topic, qos_setting),
@@ -148,17 +146,15 @@ class Inference(Node):
         Derived classes can customize topics, QoS, etc.
         """
         qos_setting = create_qos_setting(self.single_model_config.node.qos_setting)
-        for subscriber_index, subscription_info in enumerate(
-            self.single_model_config.subscriptions
+        for subscription_index, subscription in enumerate(
+            self.single_model_config.node.subscriptions
         ):
-            message_type = resolve_message_class_from_enum(
-                subscription_info.ros2_data_type
-            )
-            topic = subscription_info.topic
+            message_type = resolve_message_class_from_enum(subscription.ros2_data_type)
+            topic = subscription.topic
             subscription = self.create_subscription(
                 message_type,
                 topic,
-                self._make_subscription_callback(subscriber_index),
+                self._make_subscription_callback(subscription_index),
                 qos_setting,
             )
             self.subscription_list.append(
@@ -168,7 +164,7 @@ class Inference(Node):
                 f"Created subscriber: {topic} (type={message_type.__name__})"
             )
 
-    def _make_subscription_callback(self, subscriber_index: int):
+    def _make_subscription_callback(self, subscription_index: int):
         """
         Create a callback function for a specific input topic.
         Delegates processing to the model.
@@ -177,7 +173,7 @@ class Inference(Node):
         def _callback(msg: Any):
             # Delegate to the model to decide how to process input and when to publish
             self.inference_model.handle_input(
-                subscriber_index, msg, self._publish_output
+                subscription_index, msg, self._publish_output
             )
 
         return _callback

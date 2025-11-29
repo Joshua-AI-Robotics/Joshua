@@ -14,10 +14,18 @@ message General {
     MODE_TRAINING = 3;
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
-    MODE_MOCK_INFERENCE = 6;
-    MODE_DATA_STORE = 7;
+    MODE_DATA_STORE = 6;
   }
+
+  enum RobotType {
+    ROBOT_TYPE_INVALID = 0;
+    ROBOT_TYPE_MANIPULATOR_ARM = 1;
+  }
+
   OperationMode operation_mode = 1;
+  RobotType robot_type = 2;
+  string name = 3;
+  uint64 id = 4;
 }
 
 message Config {

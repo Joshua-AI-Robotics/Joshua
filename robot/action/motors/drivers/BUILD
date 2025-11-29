@@ -9,5 +9,6 @@ cc_library(
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:actuator_interface",
         "//robot/comm/serial",
+        "//utils:status_macros",
     ],
 )

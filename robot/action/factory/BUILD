@@ -9,6 +9,7 @@ cc_library(
         "//robot/action/interfaces:action_interface",
         "//robot/action/motors/drivers:sts3215_driver",
         "//robot/comm/factory:comm_factory",
+        "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@glog",
     ],
