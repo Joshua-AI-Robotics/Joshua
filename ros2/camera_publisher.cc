@@ -37,20 +37,22 @@ class CameraPublisher : public rclcpp::Node {
           continue;  // Skip this camera if initialization failed.
         }
 
-        cameras_.emplace_back(Camera{
-            .topic = single_perception.publish_topic(),
-            .interface = std::move(interface.value()),
-            .publisher = this->create_publisher<sensor_msgs::msg::Image>(
-                single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
-            .timer = this->create_wall_timer(
-                std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
-                std::bind(&CameraPublisher::publish_camera_data, this))});
+        for (const auto& publisher : single_perception.node().publishers()) {
+          cameras_.emplace_back(
+              Camera{.topic = publisher.topic(),
+                     .interface = std::move(interface.value()),
+                     .publisher = this->create_publisher<sensor_msgs::msg::Image>(
+                         publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
+                     .timer = this->create_wall_timer(
+                         std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
+                         std::bind(&CameraPublisher::publish_camera_data, this))});
+        }
 
         RCLCPP_INFO(this->get_logger(),
-                    "Found camera '%s' in configuration for node_id %d. Publishing on topic: %s",
+                    "Found camera '%s' in configuration for node_id %d. Publishing on %zu topics",
                     camera_proto.camera_name().c_str(),
                     node_id,
-                    single_perception.publish_topic().c_str());
+                    single_perception.node().publishers().size());
       }
     }
 

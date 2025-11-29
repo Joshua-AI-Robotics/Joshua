@@ -12,10 +12,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_1"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_1"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_1"
         id: 1
@@ -41,10 +44,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_2"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_2"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_2"
         id: 2
@@ -70,10 +76,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_3"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_3"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_3"
         id: 3
@@ -99,10 +108,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_4"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_4"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_4"
         id: 4
@@ -128,10 +140,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_5"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_5"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_5"
         id: 5
@@ -157,10 +172,13 @@ robot {
         id: 1
         node_type: ENCODER_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_6"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "sts3215_encoder_6"
       perception_type: ENCODER
-      publish_rate_hz: 100
       encoder {
         encoder_name: "sts3215_encoder_6"
         id: 6
@@ -191,13 +209,31 @@ calibration {
       id: 2
       node_type: OPERATIONAL_LIMIT_CALIBRATION
       qos_setting {}
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_1"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_2"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_3"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_4"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_5"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_6"
+      }
     }
     calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
-    subscribe_topics: "sts3215_encoder_1"
-    subscribe_topics: "sts3215_encoder_2"
-    subscribe_topics: "sts3215_encoder_3"
-    subscribe_topics: "sts3215_encoder_4"
-    subscribe_topics: "sts3215_encoder_5"
-    subscribe_topics: "sts3215_encoder_6"
   }
 }

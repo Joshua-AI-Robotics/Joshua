@@ -27,13 +27,15 @@ class OperationalLimitCalibration : public rclcpp::Node {
                               const config::Config& config)
       : Node(node_name) {
     for (const auto& single_calibration : config.calibration().single_calibrations()) {
-      if (single_calibration.node().id() != node_id) continue;
-      for (const auto& subscribe_topic : single_calibration.subscribe_topics()) {
+      const auto& node = single_calibration.node();
+      if (node.id() != node_id) continue;
+
+      for (int i = 0; i < node.subscriptions_size(); ++i) {
         operational_limits_.emplace_back();
         OperationalLimit& operational_limit = operational_limits_.back();
-        const auto& qos_setting = single_calibration.node().qos_setting();
-        operational_limit.subscribe_topic = subscribe_topic;
-        operational_limit.publish_topic = subscribe_topic + "_operational_limit";
+        const auto& qos_setting = node.qos_setting();
+        operational_limit.subscribe_topic = node.subscriptions(i).topic();
+        operational_limit.publish_topic = node.publishers(i).topic();
 
         auto callback = [this, &operational_limit](const std_msgs::msg::Float32::SharedPtr msg) {
           operational_limit.max_value = std::max(operational_limit.max_value, msg->data);

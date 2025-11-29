@@ -13,10 +13,13 @@ robot {
         id: 1
         node_type: CAMERA_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "camera_1"
       perception_type: CAMERA
-      publish_rate_hz: 30
       camera {
         camera_name: "webcam"
         id: 1

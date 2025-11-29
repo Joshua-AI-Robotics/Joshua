@@ -43,22 +43,22 @@ class LidarPublisher : public rclcpp::Node {
           continue;  // Skip this lidar if initialization failed.
         }
 
-        lidars_.emplace_back(
-            Lidar{.topic = single_perception.publish_topic(),
-                  .interface = std::move(interface.value()),
-                  .publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-                      single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
-                  .timer = this->create_wall_timer(
-                      std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
-                      std::bind(&LidarPublisher::publish_lidar_data, this)),
-                  .frame_id = lidar_proto.lidar_name(),
-                  .publish_rate_hz = static_cast<float>(single_perception.publish_rate_hz())});
-
+        for (const auto& publisher : single_perception.node().publishers()) {
+          lidars_.emplace_back(Lidar{
+              .topic = publisher.topic(),
+              .interface = std::move(interface.value()),
+              .publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+                  publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
+              .timer = this->create_wall_timer(
+                  std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
+                  std::bind(&LidarPublisher::publish_lidar_data, this)),
+          });
+        }
         RCLCPP_INFO(this->get_logger(),
-                    "Found lidar '%s' in configuration for node_id %d. Publishing on topic: %s",
+                    "Found lidar '%s' in configuration for node_id %d. Publishing on %zu topics",
                     lidar_proto.lidar_name().c_str(),
                     node_id,
-                    single_perception.publish_topic().c_str());
+                    single_perception.node().publishers().size());
       }
     }
 

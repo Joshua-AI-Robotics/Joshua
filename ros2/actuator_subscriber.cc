@@ -44,48 +44,56 @@ class ActionSubscriber : public rclcpp::Node {
           continue;
         }
 
-        // Add a new actuator to the list and get a stable reference to it.
-        Actuator& actuator = actuators_.emplace_back(
-            Actuator{.topic = single_action.subscribe_topic(),
-                     .interface = std::move(interface.value()),
-                     .limits = {action_proto.operational_lower_limit(),
-                                action_proto.operational_upper_limit()},
-                     .encoder_data_mode = action_proto.encoder_data_mode()});
+        for (const auto& subscription : single_action.node().subscriptions()) {
+          Actuator& actuator = actuators_.emplace_back(
+              Actuator{.topic = subscription.topic(),
+                       .interface = std::move(interface.value()),
+                       .limits = {action_proto.operational_lower_limit(),
+                                  action_proto.operational_upper_limit()},
+                       .encoder_data_mode = action_proto.encoder_data_mode()});
 
-        actuator.reusable_packet.Clear();
-        actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
-        actuator.interface->SetAction(actuator.reusable_packet);
-
-        // Precompute mapping parameters per actuator.
-        ComputeMapping(actuator);
-
-        // With std::list, the reference captured here is stable and will not be
-        // invalidated by adding more elements to the list. The callback only
-        // needs to set the position.
-        auto callback = [this, &actuator](const std_msgs::msg::Float32::SharedPtr msg) {
-          if (!actuator.mapping_valid) {
-            RCLCPP_WARN(this->get_logger(),
-                        "Invalid encoder data mode for actuator '%s'!",
-                        actuator.topic.c_str());
-            return;
-          }
-          const float action_value = msg->data;
-          const float mapped_position =
-              actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
-
-          // Reuse pre-allocated packet for optimal performance
           actuator.reusable_packet.Clear();
-          actuator.reusable_packet.set_position(mapped_position);
-
-          if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
+          actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
+          auto status = actuator.interface->SetAction(actuator.reusable_packet);
+          if (!status.ok()) {
             RCLCPP_ERROR(this->get_logger(),
-                         "Failed to set action for actuator '%s'!",
+                         "Failed to enable torque for actuator '%s'!",
                          actuator.topic.c_str());
+            continue;
           }
-        };
 
-        actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
-            actuator.topic, ros2_utils::CreateQosSetting(qos_setting), callback);
+          // Precompute mapping parameters per actuator.
+          ComputeMapping(actuator);
+
+          // With std::list, the reference captured here is stable and will not be
+          // invalidated by adding more elements to the list. The callback only
+          // needs to set the position.
+          auto callback = [this, &actuator](const std_msgs::msg::Float32::ConstSharedPtr msg) {
+            if (!actuator.mapping_valid) {
+              RCLCPP_WARN(this->get_logger(),
+                          "Invalid encoder data mode for actuator '%s'!",
+                          actuator.topic.c_str());
+              return;
+            }
+
+            const float action_value = msg->data;
+            const float mapped_position =
+                actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
+
+            // Reuse pre-allocated packet for optimal performance
+            actuator.reusable_packet.Clear();
+            actuator.reusable_packet.set_position(mapped_position);
+
+            if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
+              RCLCPP_ERROR(this->get_logger(),
+                           "Failed to set action for actuator '%s'!",
+                           actuator.topic.c_str());
+            }
+          };
+
+          actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
+              actuator.topic, ros2_utils::CreateQosSetting(qos_setting), callback);
+        }
       }
     }
 
@@ -109,7 +117,10 @@ class ActionSubscriber : public rclcpp::Node {
       threads.emplace_back([&actuator]() {
         actuator.reusable_packet.Clear();
         actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
-        actuator.interface->SetAction(actuator.reusable_packet);
+        auto status = actuator.interface->SetAction(actuator.reusable_packet);
+        if (!status.ok()) {
+          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
+        }
       });
     }
 

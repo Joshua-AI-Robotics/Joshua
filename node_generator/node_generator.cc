@@ -646,43 +646,39 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");
   }
 
-  // Get publish topics from perceptions.
-  for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
-    if (single_perception.node().id() == node_id) {
-      publish_topics.push_back(single_perception.publish_topic());
-    }
-  }
-
-  // Get subscribe topics from actions.
-  for (const auto& single_action : config_.robot().actions().single_actions()) {
-    if (single_action.node().id() == node_id) {
-      subscribe_topics.push_back(single_action.subscribe_topic());
-    }
-  }
-
-  // Get publish and subscribe topics for models.
-
-  for (const auto& single_model : config_.ai().models().single_models()) {
-    if (single_model.node().id() == node_id) {
-      for (const auto& pub : single_model.publishers()) {
+  auto extract_topics_from_node = [&](const ros2::node::Node& node) {
+    if (node.id() == node_id) {
+      for (const auto& pub : node.publishers()) {
         publish_topics.push_back(pub.topic());
       }
-      for (const auto& sub : single_model.subscriptions()) {
+      for (const auto& sub : node.subscriptions()) {
         subscribe_topics.push_back(sub.topic());
       }
     }
+  };
+
+  // Get publish and subscribe topics from perceptions.
+  for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {
+    extract_topics_from_node(single_perception.node());
   }
+
+  // Get publish and subscribe topics from actions.
+  for (const auto& single_action : config_.robot().actions().single_actions()) {
+    extract_topics_from_node(single_action.node());
+  }
+
+  // Get publish and subscribe topics from models.
+  for (const auto& single_model : config_.ai().models().single_models()) {
+    extract_topics_from_node(single_model.node());
+  }
+
   // TODO: Add data store node.
 
-  // Get publish and subscribe topics for calibration node.
+  // Get publish and subscribe topics from calibration node.
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    if (single_calibration.node().id() == node_id) {
-      for (const auto& sub_topic : single_calibration.subscribe_topics()) {
-        subscribe_topics.push_back(sub_topic);
-        publish_topics.push_back(sub_topic + "_operational_limit");
-      }
-    }
+    extract_topics_from_node(single_calibration.node());
   }
+
   return absl::OkStatus();
 }
 }  // namespace node_generator

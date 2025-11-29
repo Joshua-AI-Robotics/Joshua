@@ -7,6 +7,9 @@ package(default_visibility = ["//visibility:public"])
 proto_library(
     name = "node_proto",
     srcs = ["node.proto"],
+    deps = [
+        ":ros2_data_type_proto",
+    ],
 )
 
 py_proto_library(

@@ -12,8 +12,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_1"
+        }
       }
-      subscribe_topic: "mock_action_1"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_1"
@@ -45,8 +48,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_2"
+        }
       }
-      subscribe_topic: "mock_action_2"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_2"
@@ -78,8 +84,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_3"
+        }
       }
-      subscribe_topic: "mock_action_3"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_3"
@@ -111,8 +120,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_4"
+        }
       }
-      subscribe_topic: "mock_action_4"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_4"
@@ -144,8 +156,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_5"
+        }
       }
-      subscribe_topic: "mock_action_5"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_5"
@@ -177,8 +192,11 @@ robot {
         id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_6"
+        }
       }
-      subscribe_topic: "mock_action_6"
       action_type: ACTUATOR
       actuator {
         actuator_name: "sts_motor_6"
@@ -213,10 +231,13 @@ robot {
         id: 2
         node_type: CAMERA_PUBLISHER
         qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+          publish_rate_hz: 30
+        }
       }
-      publish_topic: "camera_1"
       perception_type: CAMERA
-      publish_rate_hz: 30
       camera {
         camera_name: "webcam"
         id: 1
@@ -241,36 +262,40 @@ ai {
         id: 3
         node_type: INFERENCE
         qos_setting {}
-      }
-
-      subscriptions {
-        ros2_data_type: IMAGE
-        topic: "camera_1"
-      }
-
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_1"
-      }
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_2"
-      }
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_3"
-      }
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_4"
-      }
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_5"
-      }
-      publishers {
-        ros2_data_type: FLOAT32
-        topic: "mock_action_6"
+        subscriptions {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_1"
+          # Publish rate is determined by the model.
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_2"
+          # Publish rate is determined by the model.
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_3"
+          # Publish rate is determined by the model.
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_4"
+          # Publish rate is determined by the model.
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_5"
+          # Publish rate is determined by the model.
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_6"
+          # Publish rate is determined by the model.
+        }
       }
 
       random_noise_config {

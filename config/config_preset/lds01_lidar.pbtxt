@@ -12,10 +12,13 @@ general{
           id: 1
           node_type: LIDAR_PUBLISHER
           qos_setting {}
+          publishers {
+            ros2_data_type: POINTCLOUD2
+            topic: "lds01_lidar_1"
+            publish_rate_hz: 3
+          }
         }
-        publish_topic: "lds01_lidar_1"
         perception_type: LIDAR
-        publish_rate_hz: 3
         lidar {
           lidar_name: "lds01_lidar_1"
           id: 1

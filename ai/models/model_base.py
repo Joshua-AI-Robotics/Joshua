@@ -45,8 +45,8 @@ class ModelBase(ABC):
         """
         Initialize ROS2 publisher and subscriber setup.
         """
-        self._num_subscriptions = len(self._single_model_config.subscriptions)
-        self._num_publishers = len(self._single_model_config.publishers)
+        self._num_subscriptions = len(self._single_model_config.node.subscriptions)
+        self._num_publishers = len(self._single_model_config.node.publishers)
 
     @abstractmethod
     def _validate_config(self) -> None:

@@ -85,13 +85,11 @@ message Sts3215EncoderConfig {
 
 message SinglePerception {
   ros2.node.Node node = 1;
-  string publish_topic = 2;
-  uint32 publish_rate_hz = 3;
-  PerceptionType perception_type = 4;
+  PerceptionType perception_type = 2;
   oneof perception_data {
-    Camera camera = 5;
-    Encoder encoder = 6;
-    Lidar lidar = 7;
+    Camera camera = 3;
+    Encoder encoder = 4;
+    Lidar lidar = 5;
   }
 }
 

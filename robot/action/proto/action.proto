@@ -42,10 +42,9 @@ message Sts3215Config {
 
 message SingleAction {
   ros2.node.Node node = 1;
-  string subscribe_topic = 2;
-  ActionType action_type = 3;
+  ActionType action_type = 2;
   oneof action_data {
-    Actuator actuator = 4;
+    Actuator actuator = 3;
   }
 }
 

@@ -42,25 +42,26 @@ class EncoderPublisher : public rclcpp::Node {
           continue;  // Skip this encoder if initialization failed.
         }
 
-        encoders_.emplace_back(Encoder{
-            .topic = single_perception.publish_topic(),
-            .interface = std::move(interface.value()),
-            .limits = {encoder_proto.operational_lower_limit(),
-                       encoder_proto.operational_upper_limit()},
-            .publisher = this->create_publisher<std_msgs::msg::Float32>(
-                single_perception.publish_topic(), ros2_utils::CreateQosSetting(qos_setting)),
-            .encoder_data_mode = encoder_proto.encoder_data_mode(),
-            .timer = this->create_wall_timer(
-                std::chrono::milliseconds(1000 / single_perception.publish_rate_hz()),
-                std::bind(&EncoderPublisher::publish_encoder_data, this))});
+        for (const auto& publisher : single_perception.node().publishers()) {
+          encoders_.emplace_back(
+              Encoder{.topic = publisher.topic(),
+                      .interface = std::move(interface.value()),
+                      .limits = {encoder_proto.operational_lower_limit(),
+                                 encoder_proto.operational_upper_limit()},
+                      .publisher = this->create_publisher<std_msgs::msg::Float32>(
+                          publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
+                      .encoder_data_mode = encoder_proto.encoder_data_mode(),
+                      .timer = this->create_wall_timer(
+                          std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
+                          std::bind(&EncoderPublisher::publish_encoder_data, this))});
+        }
 
         RCLCPP_INFO(this->get_logger(),
-                    "Found encoder '%s' in configuration for node_id %d. Publishing on topic: %s "
+                    "Found encoder '%s' in configuration for node_id %d. Publishing on %zu topics "
                     "with data mode: %d",
                     encoder_proto.encoder_name().c_str(),
                     node_id,
-                    single_perception.publish_topic().c_str(),
-                    encoder_proto.encoder_data_mode());
+                    single_perception.node().publishers().size());
       }
     }
 
