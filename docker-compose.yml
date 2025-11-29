@@ -1,0 +1,10 @@
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: joshua-ui
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+

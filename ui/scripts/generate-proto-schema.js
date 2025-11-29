@@ -151,25 +151,67 @@ function extractEnumSchema(enumType) {
 
 // Recursively find all .proto files in a directory
 function findProtoFiles(dir, fileList = []) {
-  const files = fs.readdirSync(dir);
-  
-  files.forEach(file => {
-    const filePath = path.join(dir, file);
-    const stat = fs.statSync(filePath);
-    
-    if (stat.isDirectory()) {
-      // Skip node_modules, bazel-*, and other build directories
-      if (!file.startsWith('.') && 
-          !file.startsWith('bazel') && 
-          file !== 'node_modules' &&
-          file !== 'dist' &&
-          file !== 'build') {
-        findProtoFiles(filePath, fileList);
-      }
-    } else if (file.endsWith('.proto')) {
-      fileList.push(filePath);
+  try {
+    // Skip special filesystems entirely
+    const dirPath = path.resolve(dir);
+    if (dirPath.startsWith('/proc/') || 
+        dirPath.startsWith('/sys/') || 
+        dirPath.startsWith('/dev/') ||
+        dirPath === '/proc' ||
+        dirPath === '/sys' ||
+        dirPath === '/dev') {
+      return fileList;
     }
-  });
+    
+    const files = fs.readdirSync(dir);
+    
+    files.forEach(file => {
+      try {
+        const filePath = path.join(dir, file);
+        const resolvedPath = path.resolve(filePath);
+        
+        // Skip special filesystems
+        if (resolvedPath.startsWith('/proc/') || 
+            resolvedPath.startsWith('/sys/') || 
+            resolvedPath.startsWith('/dev/')) {
+          return;
+        }
+        
+        const stat = fs.statSync(filePath);
+        
+        if (stat.isDirectory()) {
+          // Skip node_modules, bazel-*, and other build directories
+          if (!file.startsWith('.') && 
+              !file.startsWith('bazel') && 
+              file !== 'node_modules' &&
+              file !== 'dist' &&
+              file !== 'build') {
+            findProtoFiles(filePath, fileList);
+          }
+        } else if (file.endsWith('.proto')) {
+          fileList.push(filePath);
+        }
+      } catch (err) {
+        // Silently skip expected errors (file descriptors, symlinks, permissions, etc.)
+        // Only log unexpected errors
+        if (err.code !== 'ENOENT' && 
+            err.code !== 'EACCES' && 
+            err.code !== 'ELOOP' &&
+            err.code !== 'ENOTDIR') {
+          // Only warn for truly unexpected errors
+          console.warn(`Warning: Could not access ${path.join(dir, file)}: ${err.message}`);
+        }
+      }
+    });
+  } catch (err) {
+    // Silently skip expected errors
+    if (err.code !== 'ENOENT' && 
+        err.code !== 'EACCES' && 
+        err.code !== 'ELOOP' &&
+        err.code !== 'ENOTDIR') {
+      console.warn(`Warning: Could not read directory ${dir}: ${err.message}`);
+    }
+  }
   
   return fileList;
 }
@@ -310,11 +352,22 @@ async function generateSchema() {
   };
 
   // Write schema to file in public directory so it's served as a static asset
+  // Append timestamp to filename for history, and also write non-timestamped version for app use
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: 2024-01-15T10-30-45
+  const timestampedPath = path.join(__dirname, `../public/proto-schema-${timestamp}.json`);
   const outputPath = path.join(__dirname, '../public/proto-schema.json');
+  const schemaJson = JSON.stringify(schema, null, 2);
+  
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(schema, null, 2));
+  
+  // Write timestamped version for history
+  fs.writeFileSync(timestampedPath, schemaJson);
+  
+  // Write non-timestamped version for app to use
+  fs.writeFileSync(outputPath, schemaJson);
 
   console.log(`✓ Generated proto schema: ${outputPath}`);
+  console.log(`  (Also saved as: proto-schema-${timestamp}.json)`);
   console.log(`  - ${Object.keys(messages).length} message types`);
   console.log(`  - ${Object.keys(enums).length} enum types`);
   console.log(`  - Root message: ${configKey}`);

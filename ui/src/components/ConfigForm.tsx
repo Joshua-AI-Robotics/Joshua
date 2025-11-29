@@ -1,4 +1,3 @@
-import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -142,9 +141,6 @@ function ScalarFieldEditor({
   const fieldType = typeof field.type === 'string' ? field.type : field.type.type
 
   if (fieldType === 'enum' || enumValues) {
-    const enumType = typeof field.type === 'object' && 'enumType' in field.type
-      ? field.type.enumType
-      : null
     const options = enumValues || []
     const UNSET_VALUE = '__unset__'
 
@@ -273,10 +269,6 @@ function MessageForm({ messageSchema, value, onChange, title }: MessageFormProps
       )}
       <CardContent className="space-y-4 pt-6">
         {messageSchema.fields.map((field) => {
-          const fieldType = typeof field.type === 'string' ? field.type : field.type.type
-          const isMessage = fieldType === 'message' || field.messageSchema
-          const isEnum = fieldType === 'enum' || field.enumValues
-
           return (
             <FieldEditor
               key={field.name}

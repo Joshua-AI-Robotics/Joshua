@@ -6,7 +6,6 @@ export interface PbtxtValue {
 }
 
 export function parsePbtxt(content: string): PbtxtValue {
-  const result: PbtxtValue = {};
   const lines = content.split('\n');
   let i = 0;
 

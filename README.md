@@ -128,3 +128,79 @@ This architecture provides:
 - **Compatibility**: Standard ROS2 messages enable integration with existing ROS2 ecosystem
 - **Extensibility**: Easy addition of new sensor types and action commands
 - **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
+
+## Running the Web UI with Docker
+
+The Joshua Control Panel includes a modern web-based UI that can be run using Docker Compose.
+
+### Prerequisites
+
+- **Docker** and **Docker Compose** installed
+  ```bash
+  sudo apt install docker.io docker-compose
+  # Or add your user to the docker group to avoid sudo:
+  sudo usermod -aG docker $USER
+  newgrp docker
+  ```
+
+### Building and Running
+
+From the project root directory:
+
+```bash
+# Build and start the UI container
+docker-compose up --build
+
+# Or run in detached mode (background)
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
+```
+
+The UI will be available at `http://localhost:3000`
+
+### What It Does
+
+The Docker build process:
+1. Builds the React UI application
+2. Generates the protobuf schema from your proto files
+3. Serves the application using nginx
+
+The build context is set to the project root, so the schema generator can access proto files in `config/`, `robot/`, and `ai/` directories.
+
+## Troubleshooting
+
+### USB Camera Not Detected
+
+If your USB camera (especially HHWei cameras) is not showing up as `/dev/video*` devices:
+
+1. **Check if camera is detected by USB:**
+   ```bash
+   lsusb | grep -i camera
+   ```
+
+2. **Ensure you're in the video group:**
+   ```bash
+   sudo usermod -aG video $USER
+   newgrp video
+   ```
+
+3. **Check if UVC drivers are loaded:**
+   ```bash
+   lsmod | grep uvc
+   ```
+
+4. **If no video devices appear, try unplugging and reconnecting the camera** - this often resolves initialization issues.
+
+5. **Verify camera is working:**
+   ```bash
+   ls -l /dev/video*
+   v4l2-ctl --list-devices
+   ```
+
+**Solution Summary:** The most common fix is adding your user to the `video` group and unplugging/reconnecting the camera to trigger proper device node creation.
+
