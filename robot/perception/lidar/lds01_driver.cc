@@ -5,6 +5,8 @@
 #include <chrono>
 #include <cmath>
 
+#include "utils/status_macros.h"
+
 namespace robot::perception {
 
 Lds01Driver::Lds01Driver(const std::shared_ptr<robot::comm::Serial>& serial,
@@ -14,19 +16,11 @@ Lds01Driver::Lds01Driver(const std::shared_ptr<robot::comm::Serial>& serial,
 }
 
 absl::Status Lds01Driver::Init() {
-  if (!serial_->Open().ok()) {
-    LOG(ERROR) << "Failed to open serial port.";
-    return absl::Status(absl::StatusCode::kInternal, "Failed to open serial port.");
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Open());
 
   // Send start motor command (required for LDS-01)
   std::vector<uint8_t> start_cmd = {'b'};
-  auto write_result = serial_->Write(start_cmd);
-  if (!write_result.ok()) {
-    LOG(WARNING) << "Failed to send start motor command: " << write_result.message();
-  } else {
-    LOG(INFO) << "Sent start motor command to LiDAR";
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Write(start_cmd));
 
   stop_receiving_.store(false);
   return absl::OkStatus();
@@ -37,12 +31,7 @@ absl::Status Lds01Driver::Teardown() {
 
   // Send stop motor command
   std::vector<uint8_t> stop_cmd = {'e'};
-  auto write_result = serial_->Write(stop_cmd);
-  if (!write_result.ok()) {
-    LOG(WARNING) << "Failed to send stop motor command: " << write_result.message();
-  } else {
-    LOG(INFO) << "Sent stop motor command to LiDAR";
-  }
+  ABSL_RETURN_IF_ERROR(serial_->Write(stop_cmd));
 
   return absl::OkStatus();
 }
@@ -66,14 +55,9 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
   // Main loop for thread.
   while (!stop_receiving_.load(std::memory_order_acquire) && !got_scan) {
     // Wait until first data sync of frame: 0xFA, 0xA0
-    auto result = serial_->Read(1);
+    ABSL_ASSIGN_OR_RETURN(auto result, serial_->Read(1));
 
-    if (!result.ok()) {
-      LOG(WARNING) << "Failed to read from serial port: " << result.status();
-      continue;
-    }
-
-    uint8_t byte = result.value()[0];
+    uint8_t byte = result[0];
 
     if (start_count == 0) {
       if (byte == 0xFA) {
@@ -85,22 +69,12 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         // Start sequence found, read in the rest of the message via a single blocking read
         LOG(INFO) << "Found start sequence, reading full scan...";
 
-        auto remain_result = serial_->Read(2518);
-        if (!remain_result.ok()) {
-          LOG(WARNING) << "Serial read error while reading frame payload: "
-                       << remain_result.status();
-          continue;
-        }
-        const auto& remaining_data = remain_result.value();
-        if (remaining_data.size() != 2518) {
-          LOG(WARNING) << "Partial frame payload received: " << remaining_data.size()
-                       << " bytes (expected 2518). Parsing available data for minimal latency.";
-        }
+        ABSL_ASSIGN_OR_RETURN(auto remain_result, serial_->Read(2518));
 
         // Reconstruct the full packet: 0xFA, 0xA0 + remaining data
         raw_bytes[0] = 0xFA;
         raw_bytes[1] = 0xA0;
-        std::copy(remaining_data.begin(), remaining_data.end(), raw_bytes.begin() + 2);
+        std::copy(remain_result.begin(), remain_result.end(), raw_bytes.begin() + 2);
 
         // Clear packet then set metadata before adding points
         reusable_packet_.Clear();
@@ -110,7 +84,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
                 std::chrono::high_resolution_clock::now().time_since_epoch())
                 .count());
 
-        const size_t total_len = 2 + remaining_data.size();
+        const size_t total_len = 2 + remain_result.size();
 
         // Prepare SoA vectors
         auto* cloud = reusable_packet_.mutable_point_cloud();

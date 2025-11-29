@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["lds01_driver.h"],
     srcs = ["lds01_driver.cc"],
     deps = [
+        "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "//robot/comm/serial:serial",
         "//config/proto:robot_cc_proto",

@@ -37,7 +37,7 @@ class Sts3215Encoder : public EncoderInterface {
   uint8_t calculate_checksum(std::vector<uint8_t>::const_iterator begin,
                              std::vector<uint8_t>::const_iterator end);
   std::vector<uint8_t> create_read_position_packet();
-  std::optional<uint16_t> read_servo_position();
+  absl::StatusOr<uint16_t> read_servo_position();
 };
 
 }  // namespace robot::perception
