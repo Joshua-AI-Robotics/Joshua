@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package ai.models;
+
+message SmolVLAConfig {
+  string model_name = 1;
+}
