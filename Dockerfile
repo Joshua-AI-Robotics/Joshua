@@ -26,13 +26,30 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Install ROS2 Humble
+# Install Python 3.10 (explicitly)
 # ============================================
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-dev \
+    python3.10-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+
+# Set Python environment variables
+ENV PYTHON_VERSION=3.10
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# ============================================
+# Install ROS2 Humble (explicitly pinned)
+# ============================================
+ENV ROS_DISTRO=humble
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 RUN apt-get update && apt-get install -y \
-    ros-humble-desktop \
+    ros-${ROS_DISTRO}-desktop \
     python3-rosdep \
     python3-rosinstall \
     python3-rosinstall-generator \
@@ -42,7 +59,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep
-RUN rosdep init || true && rosdep update --rosdistro=humble
+RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
 
 # ============================================
 # Install OpenCV (x86_64)
@@ -110,9 +127,11 @@ RUN apt-get update && apt-get install -y \
 # ============================================
 # Set up ROS2 environment
 # ============================================
-ENV ROS_DISTRO=humble
 SHELL ["/bin/bash", "-c"]
-RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
+
+# Verify versions
+RUN python3 --version && echo "ROS2 Distribution: ${ROS_DISTRO}"
 
 # ============================================
 # Set working directory
