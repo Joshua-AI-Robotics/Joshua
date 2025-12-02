@@ -3,6 +3,7 @@ syntax = "proto3";
 package ai.models;
 
 import "ai/models/random_noise/random_noise_config.proto";
+import "ai/models/smolvla/smolvla_config.proto";
 import "ros2/proto/node.proto";
 import "ros2/proto/ros2_data_type.proto";
 

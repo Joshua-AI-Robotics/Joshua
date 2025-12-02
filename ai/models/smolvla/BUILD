@@ -22,7 +22,17 @@ py_library(
     deps = [
         "//ai/models:model_base",
         ":smolvla_config_py_proto",
+        "//ros2:image_converter",
         requirement("numpy"),
+        requirement("scipy"),
+        requirement("protobuf"),
+        requirement("torch"),
+        requirement("transformers"),
         requirement("lerobot"),
+        requirement("draccus"),
+        requirement("num2words"),
+        requirement("pillow"),
+        requirement("opencv-python"),
+        requirement("sympy"),
     ],
 )
