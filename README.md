@@ -15,6 +15,32 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 
 ### Prerequisites
 
+### Option A: Build docker image and run
+
+- **Operating System:** Ubuntu 22.04 LTS
+- **Install Docker:** Install docker with the following command
+  ```bash
+  sudo apt install docker.io
+  ```
+- **Build Docker Image:** Run the docker command to build the image
+  ```bash
+  docker build -t joshua .
+  ```
+- **Run Docker Container:** Create and run a docker container named joshua-dev using the command below. 
+  ```bash
+  docker run -it --name joshua-dev \
+    --privileged \
+    --net=host \
+    -v $(pwd):/workspace \
+    joshua
+  ```
+  To exit, type exit.
+  After exiting, restart the docker container with:
+  ```bash
+  docker start -i joshua-dev
+  ```
+
+### Option B: Direct Installation
 - **Operating System:** Ubuntu 22.04 LTS
 - **Setup Script:** Run the automated setup script to install all dependencies:
   ```bash
