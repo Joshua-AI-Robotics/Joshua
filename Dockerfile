@@ -52,26 +52,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Install OpenCV ARM64 libraries for cross-compilation
-# ============================================
-ENV OPENCV_VERSION="4.5.4+dfsg-9ubuntu4"
-RUN mkdir -p /tmp/opencv-arm64-install && \
-    cd /tmp/opencv-arm64-install && \
-    wget -q "http://ports.ubuntu.com/pool/universe/o/opencv/libopencv-core4.5d_${OPENCV_VERSION}_arm64.deb" && \
-    wget -q "http://ports.ubuntu.com/pool/universe/o/opencv/libopencv-imgproc4.5d_${OPENCV_VERSION}_arm64.deb" && \
-    wget -q "http://ports.ubuntu.com/pool/universe/o/opencv/libopencv-imgcodecs4.5d_${OPENCV_VERSION}_arm64.deb" && \
-    wget -q "http://ports.ubuntu.com/pool/universe/o/opencv/libopencv-highgui4.5d_${OPENCV_VERSION}_arm64.deb" && \
-    wget -q "http://ports.ubuntu.com/pool/universe/o/opencv/libopencv-videoio4.5d_${OPENCV_VERSION}_arm64.deb" && \
-    for pkg in *.deb; do dpkg-deb -x "$pkg" extracted/; done && \
-    mkdir -p /usr/lib/aarch64-linux-gnu && \
-    cp extracted/usr/lib/aarch64-linux-gnu/libopencv*.so* /usr/lib/aarch64-linux-gnu/ && \
-    cd /usr/lib/aarch64-linux-gnu && \
-    for lib in libopencv_core libopencv_imgproc libopencv_imgcodecs libopencv_highgui libopencv_videoio; do \
-        if [ -f "${lib}.so.4.5d" ]; then ln -sf "${lib}.so.4.5d" "${lib}.so"; fi; \
-    done && \
-    rm -rf /tmp/opencv-arm64-install
-
-# ============================================
 # Install Qt6 development packages
 # ============================================
 RUN apt-get update && apt-get install -y \
@@ -86,13 +66,6 @@ RUN apt-get update && apt-get install -y \
 # ============================================
 RUN apt-get update && apt-get install -y \
     libevdev-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# ============================================
-# Install ARM64 cross-compilation tools
-# ============================================
-RUN apt-get update && apt-get install -y \
-    g++-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
