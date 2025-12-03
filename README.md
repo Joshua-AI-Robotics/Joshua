@@ -128,3 +128,46 @@ This architecture provides:
 - **Compatibility**: Standard ROS2 messages enable integration with existing ROS2 ecosystem
 - **Extensibility**: Easy addition of new sensor types and action commands
 - **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
+
+## Running the Web UI with Docker
+
+The Joshua Control Panel includes a modern web-based UI that can be run using Docker Compose.
+
+### Prerequisites
+
+- **Docker** and **Docker Compose** installed
+  ```bash
+  sudo apt install docker.io docker-compose
+  # Or add your user to the docker group to avoid sudo:
+  sudo usermod -aG docker $USER
+  newgrp docker
+  ```
+
+### Building and Running
+
+From the project root directory:
+
+```bash
+# Build and start the UI container
+docker-compose up --build
+
+# Or run in detached mode (background)
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
+```
+
+The UI will be available at `http://localhost:3000`
+
+### What It Does
+
+The Docker build process:
+1. Builds the React UI application
+2. Generates the protobuf schema from your proto files
+3. Serves the application using nginx
+
+The build context is set to the project root, so the schema generator can access proto files in `config/`, `robot/`, and `ai/` directories.
