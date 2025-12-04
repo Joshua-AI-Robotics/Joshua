@@ -79,6 +79,11 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
+py_library(
+    name = "python_bridge_backend_lib",
+    srcs = ["python_bridge_backend.py"],
+)
+
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
@@ -176,6 +181,34 @@ ros2_py_binary(
         "//ros2/utils:qos_setting_py",
         requirement("protobuf"),
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
+    ],
+)
+
+ros2_py_binary(
+    name = "python_bridge",
+    srcs = [
+        "python_bridge.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "python_bridge.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2:ros2_type_resolver",
+        "//ros2/utils:qos_setting_py",
+        ":python_bridge_backend_lib",
+        requirement("protobuf"),
+    ],
+)
+
+py_test(
+    name = "python_bridge_backend_test",
+    srcs = ["python_bridge_backend_test.py"],
+    deps = [
+        ":python_bridge_backend_lib",
     ],
 )
 

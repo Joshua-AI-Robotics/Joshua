@@ -1,0 +1,38 @@
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "python_bridge_loopback"
+  id: 100
+}
+
+robot {
+  actions {}
+  perceptions {}
+}
+
+ai {
+  models {}
+  data_stores {
+    single_data_stores {
+      node {
+        id: 99
+        node_type: PYTHON_BRIDGE
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: STRING
+          topic: "pybricks/commands"
+        }
+        publishers {
+          ros2_data_type: STRING
+          topic: "pybricks/events"
+        }
+      }
+      store_path: "/tmp/python_bridge_store"
+      data_store_mode: LOCAL_FILE
+      data_store_type: JSONL
+    }
+  }
+}
+
+calibration {}
+

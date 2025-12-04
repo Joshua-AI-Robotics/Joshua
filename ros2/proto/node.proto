@@ -7,7 +7,7 @@ import "ros2/proto/ros2_data_type.proto";
 // Enum values here must match with the file name under ros2/
 // (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
 // This is used to resolve the native binary path.
-// Last Added: DATA_SUBSCRIBER.
+// Last Added: PYTHON_BRIDGE.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -17,6 +17,7 @@ enum NodeType {
   INFERENCE = 5;
   LIDAR_PUBLISHER = 6;
   DATA_SUBSCRIBER = 7;
+  PYTHON_BRIDGE = 8;
 }
 
 enum QosReliabilityPolicy {
