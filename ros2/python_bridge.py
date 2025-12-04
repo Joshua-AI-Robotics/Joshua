@@ -1,3 +1,29 @@
+"""Python Bridge Node for ROS2 communication.
+
+Manual Testing Instructions:
+-----------------------------
+This node can be tested manually using the loopback configuration:
+
+Prerequisites:
+    source /opt/ros/humble/setup.bash
+
+Terminal 1 - Start the bridge node:
+    bazel run ros2:python_bridge -- python_bridge_node 99 config/config_preset/python_bridge_loopback.pbtxt
+
+Terminal 2 - Publish a test command:
+    ros2 topic pub pybricks/commands std_msgs/msg/String "{data: 'ping'}"
+
+Terminal 3 - Observe acknowledgements:
+    ros2 topic echo pybricks/events
+
+Optional Terminal 4 - Monitor heartbeat:
+    ros2 topic echo <python_bridge_node>/status
+
+Expected Behavior:
+- Commands published to pybricks/commands should echo back as events on pybricks/events
+- Status topic should show periodic heartbeat updates
+- This verifies the bridge node is correctly processing and responding to messages
+"""
 from __future__ import annotations
 
 import functools
