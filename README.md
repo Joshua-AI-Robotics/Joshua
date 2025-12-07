@@ -22,22 +22,32 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   sudo apt install docker.io
   ```
-- **Build Docker Image:** Run the docker command to build the image
+- **Build Docker Image:** Run the docker command to build the image in need. 
+  [ubuntu 22.04 base with ROS2 humble]
   ```bash
-  sudo docker build -t joshua .
+  docker compose build joshua-u22
   ```
-- **Run Docker Container:** Create and run a docker container named joshua-dev using the command below. 
+  [ubuntu 24.04 base with ROS2 jazzy]
   ```bash
-  sudo docker run -it --name joshua-dev \
-    --privileged \
-    --net=host \
-    -v $(pwd):/workspace \
-    joshua
+  docker compose build joshua-u24
+  ```
+- **Run interactive shell:**
+  [ubuntu 22.04 base with ROS2 humble]
+  ```bash
+  docker compose run joshua-u22
+  ```
+  [ubuntu 24.04 base with ROS2 jazzy]
+  ```bash
+  docker compose run joshua-u24
   ```
   To exit, type exit.
-  After exiting, restart the docker container with:
+  After exiting, resume the docker container with:
   ```bash
-  sudo docker start -i joshua-dev
+  docker start -i joshua-u22
+  ```
+  or 
+  ```bash
+  docker start -i jushua-u24
   ```
 
 ### Option B: Native Installation

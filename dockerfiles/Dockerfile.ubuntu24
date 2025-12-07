@@ -1,9 +1,8 @@
-# Joshua Project Dockerfile
-# Replicates the joshua_setup.sh process for reproducible builds
-# Build: docker build -t joshua .
-# Run:   docker run -it --rm -v $(pwd):/workspace joshua bazel run launcher:joshua_main
+# Joshua Project Dockerfile - Ubuntu 24.04 + ROS2 Jazzy
+# Build: docker build -f dockerfiles/Dockerfile.ubuntu24 -t joshua:u24-jazzy .
+# Run:   docker run -it --rm --privileged -v $(pwd):/workspace joshua:u24-jazzy
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -26,34 +25,31 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Install Python 3.10 (explicitly)
+# Install Python 3.12 (default on Ubuntu 24.04)
 # ============================================
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
 
 # Set Python environment variables
-ENV PYTHON_VERSION=3.10
+ENV PYTHON_VERSION=3.12
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # ============================================
-# Install ROS2 Humble (explicitly pinned)
+# Install ROS2 Jazzy (for Ubuntu 24.04)
 # ============================================
-ENV ROS_DISTRO=humble
+ENV ROS_DISTRO=jazzy
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 RUN apt-get update && apt-get install -y \
     ros-${ROS_DISTRO}-desktop \
     python3-rosdep \
-    python3-rosinstall \
-    python3-rosinstall-generator \
-    python3-wstool \
     python3-colcon-common-extensions \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -121,8 +117,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m pip install --upgrade pip \
-    && python3 -m pip install pre-commit black flake8 isort
+    && python3 -m pip install pre-commit black flake8 isort --break-system-packages
 
 # ============================================
 # Set up ROS2 environment

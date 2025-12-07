@@ -1,0 +1,53 @@
+# Joshua Project Docker Compose
+# 
+# Build images:
+#   docker compose build                    # Build all images
+#   docker compose build joshua-u22         # Build Ubuntu 22.04 only
+#   docker compose build joshua-u24         # Build Ubuntu 24.04 only
+#
+# Run containers:
+#   docker compose run --rm joshua-u22      # Interactive shell (Ubuntu 22.04 + Humble)
+#   docker compose run --rm joshua-u24      # Interactive shell (Ubuntu 24.04 + Jazzy)
+#
+# Run with Bazel target:
+#   docker compose run --rm joshua-u22 bazel run launcher:joshua_main
+
+services:
+  # Ubuntu 22.04 + ROS2 Humble + Python 3.10 (Production ready)
+  joshua-u22:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu22
+    image: joshua:u22-humble
+    container_name: joshua-u22-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    network_mode: host
+    volumes:
+      - .:/workspace
+      - /dev:/dev
+    environment:
+      - ROS_DISTRO=humble
+      - DISPLAY=${DISPLAY:-}
+    working_dir: /workspace
+
+  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
+  joshua-u24:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu24
+    image: joshua:u24-jazzy
+    container_name: joshua-u24-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    network_mode: host
+    volumes:
+      - .:/workspace
+      - /dev:/dev
+    environment:
+      - ROS_DISTRO=jazzy
+      - DISPLAY=${DISPLAY:-}
+    working_dir: /workspace
+
