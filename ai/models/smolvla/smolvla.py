@@ -37,7 +37,7 @@ class SmolVla(ModelBase):
     - Pretrained model: lerobot/smolvla_base (18k+ downloads)
     """
 
-    # SmolVLA Configuration (hardcoded for now)
+    # TODO(ulee): make this configurable.
     TASK_DESCRIPTION = "Pick up the black object and place it in the container."
 
     def __init__(self, config: SingleModel):
