@@ -1,0 +1,160 @@
+# Joshua Project Dockerfile - Ubuntu 24.04 + ROS2 Jazzy
+# Supports: linux/amd64, linux/arm64
+#
+# Build (native):
+#   docker build -f dockerfiles/Dockerfile.ubuntu24 -t joshua:u24-jazzy .
+#
+# Build (cross-platform):
+#   docker buildx build --platform linux/arm64 -f dockerfiles/Dockerfile.ubuntu24 -t joshua:u24-jazzy-arm64 .
+#   docker buildx build --platform linux/amd64 -f dockerfiles/Dockerfile.ubuntu24 -t joshua:u24-jazzy-amd64 .
+#
+# Run:
+#   docker run -it --rm --privileged -v $(pwd):/workspace joshua:u24-jazzy
+
+FROM ubuntu:24.04
+
+# Target architecture (set automatically by docker buildx)
+ARG TARGETARCH
+ARG TARGETPLATFORM
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Set up locale
+RUN apt-get update && apt-get install -y locales && \
+    locale-gen en_US en_US.UTF-8 && \
+    update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+# Install basic utilities
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    gnupg \
+    lsb-release \
+    software-properties-common \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Install Python 3.12 (default on Ubuntu 24.04)
+# ============================================
+RUN apt-get update && apt-get install -y \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+
+# Set Python environment variables
+ENV PYTHON_VERSION=3.12
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# ============================================
+# Install ROS2 Jazzy (for Ubuntu 24.04)
+# ============================================
+ENV ROS_DISTRO=jazzy
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-desktop \
+    python3-rosdep \
+    python3-colcon-common-extensions \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Initialize rosdep
+RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
+
+# ============================================
+# Install OpenCV (native architecture)
+# ============================================
+RUN apt-get update && apt-get install -y \
+    libopencv-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Install Qt6 development packages
+# ============================================
+RUN apt-get update && apt-get install -y \
+    qt6-base-dev \
+    qt6-base-dev-tools \
+    qt6-tools-dev \
+    qt6-tools-dev-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Install libevdev for input device support (Xbox controller)
+# ============================================
+RUN apt-get update && apt-get install -y \
+    libevdev-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Install Git and Git LFS
+# ============================================
+RUN apt-get update && apt-get install -y \
+    git \
+    git-lfs \
+    && rm -rf /var/lib/apt/lists/* \
+    && git lfs install
+
+# ============================================
+# Install Bazelisk (manages Bazel versions via .bazelversion)
+# ============================================
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -L "https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}" -o /usr/local/bin/bazel && \
+    chmod +x /usr/local/bin/bazel
+
+# ============================================
+# Install linting tools
+# ============================================
+RUN apt-get update && apt-get install -y \
+    clang-format \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install buildifier
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -L "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${ARCH}" -o /usr/local/bin/buildifier && \
+    chmod +x /usr/local/bin/buildifier
+
+# ============================================
+# Install Python tooling
+# ============================================
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m pip install pre-commit black flake8 isort --break-system-packages
+
+# ============================================
+# Set up ROS2 environment
+# ============================================
+SHELL ["/bin/bash", "-c"]
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
+
+# Verify versions and architecture
+RUN echo "Target Architecture: ${TARGETARCH:-$(uname -m)}" && \
+    python3 --version && \
+    echo "ROS2 Distribution: ${ROS_DISTRO}"
+
+# ============================================
+# Set working directory
+# ============================================
+WORKDIR /workspace
+
+# Copy project files (when building with project context)
+# For development, you can mount the project directory instead
+COPY . /workspace/
+
+# Pre-fetch Bazel dependencies (optional, speeds up subsequent builds)
+# Uncomment the next line to cache Bazel deps in the image
+# RUN bazel fetch //...
+
+# Default command
+CMD ["/bin/bash"]
+
