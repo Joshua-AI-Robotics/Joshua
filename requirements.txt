@@ -7,7 +7,6 @@ numpy>=2.0.0
 scipy==1.15.3
 torch==2.7.0
 transformers==4.53.2
-# huggingface-hub==0.26.5
 accelerate==1.11.0
 opencv-python==4.11.0.86
 Pillow==11.3.0

@@ -126,7 +126,8 @@ class SmolVla(ModelBase):
 
             self._input_buffer[subscription_index].append(processed_data)
 
-            if len(self._input_buffer[subscription_index]) == 30:
+            # TODO(ulee): revisit this once we want to use time-based or frame-skip based.
+            if len(self._input_buffer[subscription_index]) == 1:
                 outputs = self.inference(self._input_buffer[subscription_index])
                 final_outputs = self.postprocess_output(outputs)
                 for publisher_index in range(self._num_publishers):
