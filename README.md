@@ -27,10 +27,15 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   docker compose build joshua-u22
   ```
+  If building for ARM 64, build docker image targeted for arm64. 
+  ```bash
+  docker compose build joshua-u22-arm64
+  ```
   [ubuntu 24.04 base with ROS2 jazzy]
   ```bash
   docker compose build joshua-u24
   ```
+  arm64 image for joshua-u24 is available as well. 
 - **Run interactive shell:**
   [ubuntu 22.04 base with ROS2 humble]
   ```bash

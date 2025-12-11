@@ -1,8 +1,21 @@
 # Joshua Project Dockerfile - Ubuntu 22.04 + ROS2 Humble
-# Build: docker build -f dockerfiles/Dockerfile.ubuntu22 -t joshua:u22-humble .
-# Run:   docker run -it --rm --privileged -v $(pwd):/workspace joshua:u22-humble
+# Supports: linux/amd64, linux/arm64
+#
+# Build (native):
+#   docker build -f dockerfiles/Dockerfile.ubuntu22 -t joshua:u22-humble .
+#
+# Build (cross-platform):
+#   docker buildx build --platform linux/arm64 -f dockerfiles/Dockerfile.ubuntu22 -t joshua:u22-humble-arm64 .
+#   docker buildx build --platform linux/amd64 -f dockerfiles/Dockerfile.ubuntu22 -t joshua:u22-humble-amd64 .
+#
+# Run:
+#   docker run -it --rm --privileged -v $(pwd):/workspace joshua:u22-humble
 
 FROM ubuntu:22.04
+
+# Target architecture (set automatically by docker buildx)
+ARG TARGETARCH
+ARG TARGETPLATFORM
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -61,7 +74,7 @@ RUN apt-get update && apt-get install -y \
 RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
 
 # ============================================
-# Install OpenCV (x86_64)
+# Install OpenCV (native architecture)
 # ============================================
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
@@ -96,9 +109,8 @@ RUN apt-get update && apt-get install -y \
 # ============================================
 # Install Bazelisk (manages Bazel versions via .bazelversion)
 # ============================================
-ARG TARGETARCH
-RUN BAZEL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -L "https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${BAZEL_ARCH}" -o /usr/local/bin/bazel && \
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -L "https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}" -o /usr/local/bin/bazel && \
     chmod +x /usr/local/bin/bazel
 
 # ============================================
@@ -109,8 +121,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install buildifier
-RUN BUILDIFIER_ARCH=$([ "$(uname -m)" = "aarch64" ] && echo "arm64" || echo "amd64") && \
-    curl -L "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${BUILDIFIER_ARCH}" -o /usr/local/bin/buildifier && \
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -L "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${ARCH}" -o /usr/local/bin/buildifier && \
     chmod +x /usr/local/bin/buildifier
 
 # ============================================
@@ -129,8 +141,10 @@ RUN apt-get update && apt-get install -y \
 SHELL ["/bin/bash", "-c"]
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
 
-# Verify versions
-RUN python3 --version && echo "ROS2 Distribution: ${ROS_DISTRO}"
+# Verify versions and architecture
+RUN echo "Target Architecture: ${TARGETARCH:-$(uname -m)}" && \
+    python3 --version && \
+    echo "ROS2 Distribution: ${ROS_DISTRO}"
 
 # ============================================
 # Set working directory
