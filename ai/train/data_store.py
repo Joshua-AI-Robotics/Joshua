@@ -89,7 +89,7 @@ class DataStore:
         episode_topic_metadata = rosbag2_py.TopicMetadata(
             name="/dataset/episode_index",
             type="std_msgs/msg/Int32",
-            serialization_format="cdr"
+            serialization_format="cdr",
         )
         self.writer.create_topic(episode_topic_metadata)
 
@@ -103,14 +103,14 @@ class DataStore:
                     current_index = int(f.read().strip()) + 1
             except Exception as e:
                 glog.warning(f"Failed to read episode index file: {e}")
-        
+
         # Save new index immediately to reserve it
         try:
             with open(index_file, "w") as f:
                 f.write(str(current_index))
         except Exception as e:
             glog.warning(f"Failed to write episode index file: {e}")
-            
+
         return current_index
 
     def start_recording(self):
@@ -122,15 +122,13 @@ class DataStore:
         self.current_episode_index = self._get_next_episode_index()
         self.is_recording = True
         glog.info(f"Started recording episode {self.current_episode_index}")
-        
+
         # Write episode index to bag
         msg = Int32()
         msg.data = self.current_episode_index
         timestamp_ns = int(time.time() * 1e9)
         self.writer.write(
-            "/dataset/episode_index",
-            serialize_message(msg),
-            timestamp_ns
+            "/dataset/episode_index", serialize_message(msg), timestamp_ns
         )
 
     def stop_recording(self):

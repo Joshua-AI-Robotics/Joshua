@@ -1,10 +1,10 @@
 import functools
-import sys
-import select
-import termios
-import tty
-import threading
 import os
+import select
+import sys
+import termios
+import threading
+import tty
 
 from rclpy.node import Node
 
@@ -42,7 +42,7 @@ class DataSubscriber(Node):
         self.keyboard_thread = threading.Thread(target=self._keyboard_listener)
         self.keyboard_thread.daemon = True
         self.keyboard_thread.start()
-        
+
         self.next_episode_index = 0
         index_file = os.path.join(self.data_store.store_root, ".last_episode_index")
         if os.path.exists(index_file):
@@ -51,8 +51,10 @@ class DataSubscriber(Node):
                     self.next_episode_index = int(f.read().strip()) + 1
             except:
                 pass
-                
-        print(f"[IDLE] Waiting for data from subcribing topics... (Next Episode Index: {self.next_episode_index})")
+
+        print(
+            f"[IDLE] Waiting for data from subcribing topics... (Next Episode Index: {self.next_episode_index})"
+        )
 
     def _setup_subscriptions(self, node: node_pb2.Node) -> None:
         """
@@ -78,9 +80,9 @@ class DataSubscriber(Node):
             while self.running:
                 if select.select([sys.stdin], [], [], 0.1)[0]:
                     key = sys.stdin.read(1)
-                    if key.lower() == 'r':
+                    if key.lower() == "r":
                         self.data_store.start_recording()
-                    elif key.lower() == 's':
+                    elif key.lower() == "s":
                         self.data_store.stop_recording()
         except Exception:
             pass
@@ -92,8 +94,12 @@ class DataSubscriber(Node):
         self.topic_message_counts[topic] += 1
         self.data_store.add_data(msg, topic=topic)
 
-        state = "RECORDING" if getattr(self.data_store, "is_recording", False) else "DATA AVAILABLE"
-        
+        state = (
+            "RECORDING"
+            if getattr(self.data_store, "is_recording", False)
+            else "DATA AVAILABLE"
+        )
+
         # Build status string
         if state == "RECORDING":
             counts_str = " | ".join(
@@ -102,7 +108,7 @@ class DataSubscriber(Node):
             display_str = f"[{state}] {counts_str}"
         else:
             display_str = f"[{state}] Press 'r' to record, 's' to stop. (Next Episode Index: {self.next_episode_index})"
-            
+
         # Update terminal line
         sys.stdout.write(f"\r{display_str}\033[K")
         sys.stdout.flush()
@@ -114,8 +120,8 @@ class DataSubscriber(Node):
         try:
             # Ensure settings are restored even if thread doesn't exit cleanly immediately
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.original_settings)
-            
-            if hasattr(self, 'keyboard_thread') and self.keyboard_thread.is_alive():
+
+            if hasattr(self, "keyboard_thread") and self.keyboard_thread.is_alive():
                 self.keyboard_thread.join(timeout=0.5)
         except Exception:
             pass

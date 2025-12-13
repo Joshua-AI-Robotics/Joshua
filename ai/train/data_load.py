@@ -1,7 +1,9 @@
 # This is util script to inspect the dataset after it has been saved.
 from datasets import load_from_disk
 
-dataset = load_from_disk('/tmp/Joshua/data/sample_recordings/dataset_20251213_114911_processed')
+dataset = load_from_disk(
+    "/tmp/Joshua/data/sample_recordings/dataset_20251213_114911_processed"
+)
 
 print("Dataset loaded successfully!")
 print(dataset)
@@ -11,7 +13,7 @@ print(dataset)
 
 print("\n--- 2. DETAILED FEATURES (SCHEMA) ---")
 # If you have splits (like 'train'), access one to see the schema
-if hasattr(dataset, 'keys'):
+if hasattr(dataset, "keys"):
     first_split = list(dataset.keys())[0]
     print(f"Features for split '{first_split}':")
     print(dataset[first_split].features)
@@ -22,14 +24,14 @@ else:
 print("\n--- 3. DATASET METADATA ---")
 # This often contains the description, citation, and homepage
 # (Note: might be empty if the dataset was saved locally without this info)
-if hasattr(dataset, 'keys'):
+if hasattr(dataset, "keys"):
     print(dataset[list(dataset.keys())[0]].info.description)
 else:
     print(dataset.info.description)
 
 print("\n--- 4. SAMPLE DATA (first 3 examples) ---")
 # Determine which dataset to sample from (split vs single dataset)
-if hasattr(dataset, 'keys'):
+if hasattr(dataset, "keys"):
     ds_to_sample = dataset[first_split]
 else:
     ds_to_sample = dataset
