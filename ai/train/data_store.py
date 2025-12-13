@@ -12,6 +12,7 @@ import rosbag2_py
 from datasets import Dataset, Features, Sequence, Value
 from rclpy.serialization import serialize_message
 from rosidl_runtime_py.utilities import get_message
+from std_msgs.msg import Int32
 
 from ai.proto import data_store_pb2
 from ros2.ros2_type_resolver import get_ros2_type_name, get_ros2_type_string_from_enum
@@ -30,6 +31,10 @@ class DataStore:
         self.registered_topics = set()
         self.total_message_count = 0
         self.topic_message_counts = {}
+        self.is_recording = False
+        self.current_episode_index = -1
+        # Root path for storing persistent data like episode index
+        self.store_root = data_store_config.store_path
 
         # Setup data store configuration.
         if data_store_config.data_store_mode == data_store_pb2.DataStoreMode.LOCAL_FILE:
@@ -80,6 +85,63 @@ class DataStore:
             self.registered_topics.add(topic)
             self.topic_message_counts[topic] = 0
 
+        # Register episode index topic
+        episode_topic_metadata = rosbag2_py.TopicMetadata(
+            name="/dataset/episode_index",
+            type="std_msgs/msg/Int32",
+            serialization_format="cdr"
+        )
+        self.writer.create_topic(episode_topic_metadata)
+
+    def _get_next_episode_index(self) -> int:
+        """Get the next episode index from the persistent counter file."""
+        index_file = os.path.join(self.store_root, ".last_episode_index")
+        current_index = 0
+        if os.path.exists(index_file):
+            try:
+                with open(index_file, "r") as f:
+                    current_index = int(f.read().strip()) + 1
+            except Exception as e:
+                glog.warning(f"Failed to read episode index file: {e}")
+        
+        # Save new index immediately to reserve it
+        try:
+            with open(index_file, "w") as f:
+                f.write(str(current_index))
+        except Exception as e:
+            glog.warning(f"Failed to write episode index file: {e}")
+            
+        return current_index
+
+    def start_recording(self):
+        """Start recording a new episode."""
+        if self.is_recording:
+            glog.warning("Already recording.")
+            return
+
+        self.current_episode_index = self._get_next_episode_index()
+        self.is_recording = True
+        glog.info(f"Started recording episode {self.current_episode_index}")
+        
+        # Write episode index to bag
+        msg = Int32()
+        msg.data = self.current_episode_index
+        timestamp_ns = int(time.time() * 1e9)
+        self.writer.write(
+            "/dataset/episode_index",
+            serialize_message(msg),
+            timestamp_ns
+        )
+
+    def stop_recording(self):
+        """Stop recording the current episode."""
+        if not self.is_recording:
+            glog.warning("Not recording.")
+            return
+
+        self.is_recording = False
+        glog.info(f"Stopped recording episode {self.current_episode_index}")
+
     def add_data(self, msg: Any, topic: str, timestamp: float = None):
         """Add a ROS2 message to the store in real-time.
 
@@ -88,6 +150,9 @@ class DataStore:
             topic: Topic name of the message.
             timestamp: Optional timestamp in seconds (uses current time if not provided).
         """
+        if not self.is_recording:
+            return
+
         if timestamp is None:
             timestamp = time.time()
 
@@ -191,8 +256,22 @@ class DataStore:
             topic_types = reader.get_all_topics_and_types()
             type_map = {t.name: t.type for t in topic_types}
 
+            current_episode_index = -1
+
             while reader.has_next():
                 (topic, data, t) = reader.read_next()
+
+                # Handle episode index updates
+                if topic == "/dataset/episode_index":
+                    msg_type = "std_msgs/msg/Int32"
+                    msg_class = get_message(msg_type)
+                    msg = deserialize_message(data, msg_class)
+                    current_episode_index = msg.data
+                    continue
+
+                if topic not in type_map:
+                    continue
+
                 msg_type = type_map[topic]
                 msg_class = get_message(msg_type)
                 msg = deserialize_message(data, msg_class)
@@ -200,6 +279,7 @@ class DataStore:
                 base_entry = {
                     "topic": topic,
                     "timestamp": t / 1e9,
+                    "episode_index": current_episode_index,
                 }
 
                 yield build_entry_for_message(base_entry, msg_type, msg)

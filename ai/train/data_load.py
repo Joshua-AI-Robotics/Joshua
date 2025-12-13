@@ -1,7 +1,7 @@
 # This is util script to inspect the dataset after it has been saved.
 from datasets import load_from_disk
 
-dataset = load_from_disk('/tmp/Joshua/data/sample_recordings/dataset_20251121_182433_processed')
+dataset = load_from_disk('/tmp/Joshua/data/sample_recordings/dataset_20251213_114911_processed')
 
 print("Dataset loaded successfully!")
 print(dataset)

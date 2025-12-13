@@ -1,5 +1,10 @@
 import functools
 import sys
+import select
+import termios
+import tty
+import threading
+import os
 
 from rclpy.node import Node
 
@@ -9,8 +14,6 @@ from ros2 import node_runner as node_runner_py
 from ros2.proto import node_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
-
-DATA_STORE_DEBUG_LOG_INTERVAL = 10
 
 
 class DataSubscriber(Node):
@@ -33,6 +36,24 @@ class DataSubscriber(Node):
         )
         self._setup_subscriptions(config.ai.data_stores.single_data_stores[0].node)
 
+        # Start keyboard listener in a separate thread
+        self.running = True
+        self.original_settings = termios.tcgetattr(sys.stdin)
+        self.keyboard_thread = threading.Thread(target=self._keyboard_listener)
+        self.keyboard_thread.daemon = True
+        self.keyboard_thread.start()
+        
+        self.next_episode_index = 0
+        index_file = os.path.join(self.data_store.store_root, ".last_episode_index")
+        if os.path.exists(index_file):
+            try:
+                with open(index_file, "r") as f:
+                    self.next_episode_index = int(f.read().strip()) + 1
+            except:
+                pass
+                
+        print(f"[IDLE] Waiting for data from subcribing topics... (Next Episode Index: {self.next_episode_index})")
+
     def _setup_subscriptions(self, node: node_pb2.Node) -> None:
         """
         Set up ROS2 subscriptions for data storage.
@@ -49,18 +70,56 @@ class DataSubscriber(Node):
             )
             self.subscription_list.append(subscription)
 
+    def _keyboard_listener(self):
+        """Listen for keyboard input directly from stdin."""
+        print("Keyboard listener started.")
+        try:
+            tty.setcbreak(sys.stdin.fileno())
+            while self.running:
+                if select.select([sys.stdin], [], [], 0.1)[0]:
+                    key = sys.stdin.read(1)
+                    if key.lower() == 'r':
+                        self.data_store.start_recording()
+                    elif key.lower() == 's':
+                        self.data_store.stop_recording()
+        except Exception:
+            pass
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.original_settings)
+
     def subscribe_callback(self, msg, topic):
         """Callback to handle incoming ROS2 messages and store them."""
         self.topic_message_counts[topic] += 1
         self.data_store.add_data(msg, topic=topic)
 
-        if self.topic_message_counts[topic] % DATA_STORE_DEBUG_LOG_INTERVAL == 0:
-            self.get_logger().info(
-                f"{topic} stored messages: {self.topic_message_counts[topic]}"
+        state = "RECORDING" if getattr(self.data_store, "is_recording", False) else "DATA AVAILABLE"
+        
+        # Build status string
+        if state == "RECORDING":
+            counts_str = " | ".join(
+                [f"{k}: {v}" for k, v in self.topic_message_counts.items()]
             )
+            display_str = f"[{state}] {counts_str}"
+        else:
+            display_str = f"[{state}] Press 'r' to record, 's' to stop. (Next Episode Index: {self.next_episode_index})"
+            
+        # Update terminal line
+        sys.stdout.write(f"\r{display_str}\033[K")
+        sys.stdout.flush()
 
     def shutdown(self):
         """Save data on shutdown."""
+        self.running = False
+        # Restore terminal settings immediately on shutdown if thread is stuck
+        try:
+            # Ensure settings are restored even if thread doesn't exit cleanly immediately
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.original_settings)
+            
+            if hasattr(self, 'keyboard_thread') and self.keyboard_thread.is_alive():
+                self.keyboard_thread.join(timeout=0.5)
+        except Exception:
+            pass
+
         # Use print since current scope is out of ros2 context.
         print(
             f"Shutdown initiated. DataStore items: {self.data_store.get_total_message_count()}"
