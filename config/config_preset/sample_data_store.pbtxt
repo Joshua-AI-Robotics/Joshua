@@ -5,41 +5,11 @@ general{
   id: 1
 }
 
-robot {
-  perceptions {
-    single_perceptions {
-      node {
-        id: 1
-        node_type: CAMERA_PUBLISHER
-        qos_setting {}
-        publishers {
-          ros2_data_type: IMAGE
-          topic: "camera_1"
-          publish_rate_hz: 30
-        }
-      }
-      perception_type: CAMERA
-      camera {
-        camera_name: "webcam"
-        id: 1
-        camera_type: OPENCV
-        comm{}
-        opencv_config {
-          id: 0
-          width: 640
-          height: 480
-          fps: 30
-        }
-      }
-    }
-  }
-}
-
 ai {
   data_stores {
     single_data_stores {
       node {
-        id: 2
+        id: 3
         node_type: DATA_SUBSCRIBER
         qos_setting {}
         subscriptions {

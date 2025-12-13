@@ -130,6 +130,7 @@ class DataStore:
         self.writer.write(
             "/dataset/episode_index", serialize_message(msg), timestamp_ns
         )
+        return self.current_episode_index
 
     def stop_recording(self):
         """Stop recording the current episode."""
@@ -256,6 +257,52 @@ class DataStore:
 
             current_episode_index = -1
 
+            # Pre-scan the bag to discover all possible keys across all topics to ensure a robust schema.
+            # We read the first message of each topic to determine the union of all fields.
+
+            discovered_keys = {"topic", "timestamp", "episode_index"}
+
+            # Helper to inspect keys from a message without fully processing/yielding
+            def get_keys_for_msg(m_type, m):
+                dummy_base = {"topic": "dummy", "timestamp": 0.0}
+                row = build_entry_for_message(dummy_base, m_type, m)
+                return set(row.keys())
+
+            # Pass 1: Scan types for all registered topics.
+            # Re-open reader since SequentialReader doesn't support seek(0).
+
+            scan_reader = rosbag2_py.SequentialReader()
+            scan_reader.open(storage_options, converter_options)
+
+            seen_topics = set()
+            all_topics_in_bag = set(type_map.keys())
+
+            while scan_reader.has_next():
+                if len(seen_topics) == len(all_topics_in_bag):
+                    break
+
+                (topic, data, t) = scan_reader.read_next()
+                if topic in seen_topics or topic not in type_map:
+                    continue
+
+                msg_type = type_map[topic]
+                msg_class = get_message(msg_type)
+                msg = deserialize_message(data, msg_class)
+
+                keys = get_keys_for_msg(msg_type, msg)
+                discovered_keys.update(keys)
+                seen_topics.add(topic)
+
+            del scan_reader
+
+            # Let's define a safe wrapper that yields consistent rows based on discovered keys
+            def safe_build_entry(base, m_type, m):
+                row = build_entry_for_message(base, m_type, m)
+                for key in discovered_keys:
+                    if key not in row:
+                        row[key] = None
+                return row
+
             while reader.has_next():
                 (topic, data, t) = reader.read_next()
 
@@ -280,7 +327,7 @@ class DataStore:
                     "episode_index": current_episode_index,
                 }
 
-                yield build_entry_for_message(base_entry, msg_type, msg)
+                yield safe_build_entry(base_entry, msg_type, msg)
 
         try:
             return Dataset.from_generator(gen)

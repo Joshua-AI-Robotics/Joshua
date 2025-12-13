@@ -81,7 +81,10 @@ class DataSubscriber(Node):
                 if select.select([sys.stdin], [], [], 0.1)[0]:
                     key = sys.stdin.read(1)
                     if key.lower() == "r":
-                        self.data_store.start_recording()
+                        used_index = self.data_store.start_recording()
+                        if used_index is not None:
+                            # Update next predicted index locally for display
+                            self.next_episode_index = used_index + 1
                     elif key.lower() == "s":
                         self.data_store.stop_recording()
         except Exception:
@@ -152,8 +155,8 @@ def main(argv=None):
 
 # How to test:
 # On terminal, run:
-# bazel run node_generator:joshua_main -- --config=config/config_preset/so100_leader_arm_encoder_publish.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_publish.pbtxt
 # On separate terminal, run:
-# bazel run ros2:data_subscriber -- test 1 config/config_preset/sample_data_store.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())
