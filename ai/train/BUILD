@@ -18,5 +18,7 @@ py_binary(
     srcs = ["data_load.py"],
     deps = [
         requirement("datasets"),
+        requirement("glog"),
+        requirement("python-gflags"),
     ],
 )

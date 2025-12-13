@@ -1,83 +1,132 @@
-import argparse
 import sys
+import gflags
+import glog
 from datasets import load_from_disk
+import numpy as np
+
+FLAGS = gflags.FLAGS
+
+gflags.DEFINE_string(
+    "dataset_path",
+    None,
+    "Path to the dataset directory (e.g. /tmp/Joshua/data/..._processed)",
+)
+gflags.DEFINE_integer(
+    "num_samples", 3, "Number of samples to inspect per split."
+)
+gflags.DEFINE_bool(
+    "show_schema", True, "Whether to print the detailed dataset schema."
+)
+gflags.DEFINE_bool(
+    "show_metadata", True, "Whether to print dataset metadata."
+)
 
 
-def main():
-    """
-    Utility script to inspect a saved HuggingFace dataset.
+def inspect_value(value, indent="  "):
+    """Recursively inspect structure of values without printing massive arrays."""
+    if value is None:
+        return "None"
+    
+    if isinstance(value, (str, int, float, bool)):
+        s = str(value)
+        return s[:200] + "..." if len(s) > 200 else s
+        
+    if isinstance(value, bytes):
+        return f"<bytes len={len(value)}>"
+        
+    if isinstance(value, np.ndarray):
+        return f"<np.ndarray shape={value.shape} dtype={value.dtype}>"
 
-    Usage:
-        bazel run ai/train:data_load -- /path/to/dataset_processed
-    """
-    parser = argparse.ArgumentParser(description="Inspect a saved HuggingFace dataset.")
-    parser.add_argument(
-        "dataset_path",
-        type=str,
-        help="Path to the dataset directory (e.g. /tmp/Joshua/data/..._processed)",
-    )
-    args = parser.parse_args()
+    # Handle HuggingFace dataset specific types or lists
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        # Peek at first element type
+        first_elem = inspect_value(value[0], indent + "  ")
+        return f"<list len={len(value)}, type=[{first_elem}, ...]>"
 
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        keys_preview = ", ".join(list(value.keys())[:5])
+        if len(value) > 5:
+            keys_preview += "..."
+        return f"<dict keys={{{keys_preview}}}>"
+
+    return str(type(value))
+
+
+def main(argv):
     try:
-        dataset = load_from_disk(args.dataset_path)
-    except Exception as e:
-        print(f"Error loading dataset from {args.dataset_path}: {e}")
+        argv = FLAGS(argv)
+    except gflags.FlagsError as e:
+        print(f"{e}\nUsage: {sys.argv[0]} ARGS\\n{FLAGS}")
         sys.exit(1)
 
-    print("Dataset loaded successfully!")
+    if not FLAGS.dataset_path:
+        print("Error: --dataset_path is required.")
+        print(f"Usage: {sys.argv[0]} --dataset_path <path>")
+        sys.exit(1)
+
+    glog.info(f"Loading dataset from: {FLAGS.dataset_path}")
+
+    try:
+        dataset = load_from_disk(FLAGS.dataset_path)
+    except Exception as e:
+        glog.error(f"Error loading dataset: {e}")
+        sys.exit(1)
+
+    glog.info("Dataset loaded successfully!")
+
+    print("\n" + "=" * 50)
+    print(" 1. OVERALL DATASET STRUCTURE ")
+    print("=" * 50)
     print(dataset)
 
-    print("--- 1. OVERALL DATASET OBJECT ---")
-    print(dataset)
+    if FLAGS.show_schema:
+        print("\n" + "=" * 50)
+        print(" 2. DETAILED FEATURES (SCHEMA) ")
+        print("=" * 50)
+        if hasattr(dataset, "keys"):
+            for split in dataset.keys():
+                print(f"\n[Split: {split}]")
+                print(dataset[split].features)
+        else:
+            print(dataset.features)
 
-    print("\n--- 2. DETAILED FEATURES (SCHEMA) ---")
-    # If you have splits (like 'train'), access one to see the schema
+    if FLAGS.show_metadata:
+        print("\n" + "=" * 50)
+        print(" 3. DATASET METADATA ")
+        print("=" * 50)
+        info = dataset[list(dataset.keys())[0]].info if hasattr(dataset, "keys") else dataset.info
+        print(f"Description: {info.description}")
+        print(f"Version:     {info.version}")
+        print(f"Homepage:    {info.homepage}")
+        print(f"License:     {info.license}")
+
+    print("\n" + "=" * 50)
+    print(f" 4. SAMPLE DATA ({FLAGS.num_samples} examples)")
+    print("=" * 50)
+
+    # Determine which dataset to sample from
     if hasattr(dataset, "keys"):
         first_split = list(dataset.keys())[0]
-        print(f"Features for split '{first_split}':")
-        print(dataset[first_split].features)
-    else:
-        # If it's just a single dataset without splits
-        print(dataset.features)
-
-    print("\n--- 3. DATASET METADATA ---")
-    # This often contains the description, citation, and homepage
-    # (Note: might be empty if the dataset was saved locally without this info)
-    if hasattr(dataset, "keys"):
-        print(dataset[list(dataset.keys())[0]].info.description)
-    else:
-        print(dataset.info.description)
-
-    print("\n--- 4. SAMPLE DATA (first 3 examples) ---")
-    # Determine which dataset to sample from (split vs single dataset)
-    if hasattr(dataset, "keys"):
         ds_to_sample = dataset[first_split]
     else:
         ds_to_sample = dataset
 
-    # Decide how many samples to show
-    try:
-        num_samples = min(3, len(ds_to_sample))
-    except Exception:
-        num_samples = 3
+    num_samples = min(FLAGS.num_samples, len(ds_to_sample))
 
-    print(f"Showing {num_samples} sample example(s):")
     for i in range(num_samples):
         print(f"\nSample {i}:")
+        print("-" * 20)
         example = ds_to_sample[i]
-        for key, value in example.items():
-            display_value = value
-            if isinstance(value, str) and len(value) > 200:
-                display_value = value[:200] + "..."
-            elif isinstance(value, bytes):
-                display_value = f"<bytes len={len(value)}>"
-            elif isinstance(value, list):
-                display_value = f"<list len={len(value)}>"
-            elif isinstance(value, dict):
-                # Show up to 5 keys to avoid verbose output
-                display_value = f"<dict keys={list(value.keys())[:5]}>"
-            print(f"  {key}: {display_value}")
+        
+        # Sort keys for consistent display
+        for key in sorted(example.keys()):
+            val_str = inspect_value(example[key])
+            print(f"{key:<20}: {val_str}")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
