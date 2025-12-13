@@ -1,12 +1,10 @@
 import functools
 import os
-import select
 import sys
-import termios
 import threading
-import tty
 
 from rclpy.node import Node
+from std_msgs.msg import Bool
 
 from ai.train.data_store import DataStore
 from config.proto import config_pb2
@@ -36,12 +34,13 @@ class DataSubscriber(Node):
         )
         self._setup_subscriptions(config.ai.data_stores.single_data_stores[0].node)
 
-        # Start keyboard listener in a separate thread
-        self.running = True
-        self.original_settings = termios.tcgetattr(sys.stdin)
-        self.keyboard_thread = threading.Thread(target=self._keyboard_listener)
-        self.keyboard_thread.daemon = True
-        self.keyboard_thread.start()
+        # Subscribe to recording control topic
+        self.create_subscription(
+            Bool,
+            "recording_control",
+            self.recording_control_callback,
+            10
+        )
 
         self.next_episode_index = 0
         index_file = os.path.join(self.data_store.store_root, ".last_episode_index")
@@ -53,7 +52,7 @@ class DataSubscriber(Node):
                 pass
 
         print(
-            f"[IDLE] Waiting for data from subcribing topics... (Next Episode Index: {self.next_episode_index})"
+            f"[IDLE] Waiting for data... (Next Episode Index: {self.next_episode_index}) | Send True to 'recording_control' to start, False to stop."
         )
 
     def _setup_subscriptions(self, node: node_pb2.Node) -> None:
@@ -72,25 +71,14 @@ class DataSubscriber(Node):
             )
             self.subscription_list.append(subscription)
 
-    def _keyboard_listener(self):
-        """Listen for keyboard input directly from stdin."""
-        print("Keyboard listener started.")
-        try:
-            tty.setcbreak(sys.stdin.fileno())
-            while self.running:
-                if select.select([sys.stdin], [], [], 0.1)[0]:
-                    key = sys.stdin.read(1)
-                    if key.lower() == "r":
-                        used_index = self.data_store.start_recording()
-                        if used_index is not None:
-                            # Update next predicted index locally for display
-                            self.next_episode_index = used_index + 1
-                    elif key.lower() == "s":
-                        self.data_store.stop_recording()
-        except Exception:
-            pass
-        finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.original_settings)
+    def recording_control_callback(self, msg):
+        """Handle recording control signals."""
+        if msg.data:
+            used_index = self.data_store.start_recording()
+            if used_index is not None:
+                self.next_episode_index = used_index + 1
+        else:
+            self.data_store.stop_recording()
 
     def subscribe_callback(self, msg, topic):
         """Callback to handle incoming ROS2 messages and store them."""
@@ -110,7 +98,7 @@ class DataSubscriber(Node):
             )
             display_str = f"[{state}] {counts_str}"
         else:
-            display_str = f"[{state}] Press 'r' to record, 's' to stop. (Next Episode Index: {self.next_episode_index})"
+            display_str = f"[{state}] Send True to 'recording_control' to start, False to stop. (Next Episode Index: {self.next_episode_index})"
 
         # Update terminal line
         sys.stdout.write(f"\r{display_str}\033[K")
@@ -118,17 +106,6 @@ class DataSubscriber(Node):
 
     def shutdown(self):
         """Save data on shutdown."""
-        self.running = False
-        # Restore terminal settings immediately on shutdown if thread is stuck
-        try:
-            # Ensure settings are restored even if thread doesn't exit cleanly immediately
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.original_settings)
-
-            if hasattr(self, "keyboard_thread") and self.keyboard_thread.is_alive():
-                self.keyboard_thread.join(timeout=0.5)
-        except Exception:
-            pass
-
         # Use print since current scope is out of ros2 context.
         print(
             f"Shutdown initiated. DataStore items: {self.data_store.get_total_message_count()}"
