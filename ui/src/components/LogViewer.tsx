@@ -103,7 +103,7 @@ function MultiSelect({
         <ChevronDown className="h-3 w-3 opacity-50 shrink-0 ml-1" />
       </button>
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
+        <div className="absolute z-[100] mt-1 w-full rounded-md border bg-popover shadow-md max-h-60 overflow-auto">
           <div className="p-1">
             {options.length === 0 ? (
               <div className="px-2 py-1.5 text-xs text-muted-foreground">No options</div>
@@ -328,7 +328,7 @@ export default function LogViewer() {
               <div className="text-muted-foreground">Source</div>
               <div className="text-muted-foreground">Message</div>
             </div>
-            <div className="grid grid-cols-[120px_70px_200px_1fr] gap-3 px-4 pb-2">
+            <div className="grid grid-cols-[120px_70px_200px_1fr] gap-3 px-4 pb-2 relative">
               <div></div>
               <MultiSelect
                 options={uniqueLevels}

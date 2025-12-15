@@ -19,8 +19,9 @@ services:
     image: eclipse/zenoh-bridge-ros2dds:latest
     container_name: zenoh-bridge-ros2dds
     network_mode: host
+    command: --rest-http-port=0.0.0.0:8000
     environment:
-      - ZENOH_REST_HTTP_PORT=8000
+      - ROS_DISTRO=humble
     restart: unless-stopped
 
   # ROS2 demo nodes for testing (talker/listener)

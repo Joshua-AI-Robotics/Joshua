@@ -100,13 +100,19 @@ export default function TopologyGraph() {
     const sortedNodes = Array.from(nodeMap.values()).sort((a, b) => a.label.localeCompare(b.label))
     const sortedTopics = Array.from(topicMap.values()).sort((a, b) => a.label.localeCompare(b.label))
     
-    const centerX = 600
-    const centerY = 400
-    const nodeRadius = 500
-    const topicRadius = 300
+    // Use normalized coordinates (0-1) that will be scaled to fit the viewBox
+    // This allows the graph to adapt to any container size
+    const centerX = 0.5
+    const centerY = 0.5
+    const nodeRadius = 0.35
+    const topicRadius = 0.2
 
     // Create a stable position map based on node/topic names
     const positionMap = new Map<string, { x: number; y: number }>()
+    
+    // Calculate base dimensions for scaling (will be normalized to 0-1, then scaled in viewBox)
+    const baseWidth = 1000
+    const baseHeight = 800
     
     // Position nodes in a circle - use sorted order for stability
     sortedNodes.forEach((node, idx) => {
@@ -114,8 +120,8 @@ export default function TopologyGraph() {
       if (!positionMap.has(nodeId)) {
         const angle = (idx * 2 * Math.PI) / Math.max(sortedNodes.length, 1)
         positionMap.set(nodeId, {
-          x: centerX + nodeRadius * Math.cos(angle),
-          y: centerY + nodeRadius * Math.sin(angle),
+          x: (centerX + nodeRadius * Math.cos(angle)) * baseWidth,
+          y: (centerY + nodeRadius * Math.sin(angle)) * baseHeight,
         })
       }
     })
@@ -126,8 +132,8 @@ export default function TopologyGraph() {
       if (!positionMap.has(topicId)) {
         const angle = (idx * 2 * Math.PI) / Math.max(sortedTopics.length, 1)
         positionMap.set(topicId, {
-          x: centerX + topicRadius * Math.cos(angle),
-          y: centerY + topicRadius * Math.sin(angle),
+          x: (centerX + topicRadius * Math.cos(angle)) * baseWidth,
+          y: (centerY + topicRadius * Math.sin(angle)) * baseHeight,
         })
       }
     })
@@ -139,9 +145,9 @@ export default function TopologyGraph() {
         node.x = pos.x
         node.y = pos.y
       } else {
-        // Fallback positioning (shouldn't happen)
-        node.x = centerX
-        node.y = centerY
+        // Fallback positioning (shouldn't happen) - center of base dimensions
+        node.x = baseWidth * 0.5
+        node.y = baseHeight * 0.5
       }
     })
 
@@ -153,31 +159,30 @@ export default function TopologyGraph() {
 
   if (graphNodes.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[800px] border rounded-lg bg-muted/20">
+      <div className="flex items-center justify-center h-[600px] border rounded-lg bg-muted/20">
         <p className="text-muted-foreground">No topology data available</p>
       </div>
     )
   }
 
-  // Calculate dynamic viewBox based on node positions with padding
+  // Calculate dynamic viewBox based on actual node positions with padding
   const allX = graphNodes.map((n) => n.x)
   const allY = graphNodes.map((n) => n.y)
-  const padding = 150
-  const minX = Math.min(...allX, 0) - padding
-  const maxX = Math.max(...allX, 1200) + padding
-  const minY = Math.min(...allY, 0) - padding
-  const maxY = Math.max(...allY, 800) + padding
-  const viewBoxWidth = Math.max(maxX - minX, 1400)
-  const viewBoxHeight = Math.max(maxY - minY, 1000)
+  const padding = 100
+  const minX = Math.min(...allX) - padding
+  const maxX = Math.max(...allX) + padding
+  const minY = Math.min(...allY) - padding
+  const maxY = Math.max(...allY) + padding
+  const viewBoxWidth = maxX - minX
+  const viewBoxHeight = maxY - minY
 
   return (
-    <div className="w-full h-[800px] border rounded-lg bg-muted/20 overflow-auto">
+    <div className="w-full h-[600px] border rounded-lg bg-muted/20 overflow-hidden">
       <svg
         width="100%"
         height="100%"
         viewBox={`${minX} ${minY} ${viewBoxWidth} ${viewBoxHeight}`}
         className="bg-background"
-        style={{ minWidth: `${viewBoxWidth}px`, minHeight: `${viewBoxHeight}px` }}
         preserveAspectRatio="xMidYMid meet"
       >
         {/* Draw edges */}
