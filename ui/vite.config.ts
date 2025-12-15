@@ -14,6 +14,31 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0', // Allow external connections (needed for Docker)
     open: false, // Don't auto-open in Docker
+    watch: {
+      // Enable polling for better file watching in Docker
+      usePolling: true,
+    },
+    hmr: {
+      // Enable HMR (Hot Module Replacement)
+      clientPort: 3000,
+    },
+    proxy: {
+      // Proxy /api/zenoh requests to Zenoh bridge REST API
+      // Use host.docker.internal when running in Docker to access host network services
+      '/api/zenoh': {
+        target: process.env.ZENOH_BRIDGE_URL || 'http://host.docker.internal:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/zenoh/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Proxying request:', req.method, req.url);
+          });
+        },
+      },
+    },
   },
   build: {
     outDir: 'dist',
