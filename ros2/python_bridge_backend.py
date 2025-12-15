@@ -180,10 +180,8 @@ class PybricksBridgeBackend(BridgeBackend):
             self._worker.start()
             if self._logger:
                 self._logger.info(
-                    "Pybricks bridge backend started (transport=%s) with %d actuators, %d encoders",
-                    self._transport,
-                    len(self._actuators),
-                    len(self._encoders),
+                    f"Pybricks bridge backend started (transport={self._transport}) "
+                    f"with {len(self._actuators)} actuators, {len(self._encoders)} encoders"
                 )
 
     def stop(self) -> None:
@@ -220,7 +218,7 @@ class PybricksBridgeBackend(BridgeBackend):
             loop.run_until_complete(self._run_async(loop))
         except Exception as exc:
             if self._logger:
-                self._logger.error("Pybricks backend worker crashed: %s", exc)
+                self._logger.error(f"Pybricks backend worker crashed: {exc}")
         finally:
             loop.close()
 
@@ -266,7 +264,7 @@ class PybricksBridgeBackend(BridgeBackend):
             raise RuntimeError(msg) from exc
         except Exception as exc:
             if self._logger:
-                self._logger.error("Failed to connect to Spike hub: %s", exc)
+                self._logger.error(f"Failed to connect to Spike hub: {exc}")
             return None
 
     async def _handle_outbound(self, envelope: BridgeEnvelope, hub: "SpikeHubClient") -> None:
@@ -283,14 +281,16 @@ class PybricksBridgeBackend(BridgeBackend):
             ros_msg = deserialize_message(envelope.payload, envelope.msg_type)
         except Exception as exc:
             if self._logger:
-                self._logger.error("Failed to deserialize outbound message for %s: %s", envelope.topic, exc)
+                self._logger.error(
+                    f"Failed to deserialize outbound message for {envelope.topic}: {exc}"
+                )
             return
 
         try:
             value = self._coerce_float(ros_msg)
         except (TypeError, ValueError) as exc:
             if self._logger:
-                self._logger.error("Unsupported message for %s: %s", envelope.topic, exc)
+                self._logger.error(f"Unsupported message for {envelope.topic}: {exc}")
             return
 
         mapped_value = self._map_action_value(value, mapping)
@@ -303,7 +303,7 @@ class PybricksBridgeBackend(BridgeBackend):
                     value = await hub.read_encoder(mapping.port)
                 except Exception as exc:
                     if self._logger:
-                        self._logger.debug("Failed to read encoder on %s: %s", mapping.port, exc)
+                        self._logger.debug(f"Failed to read encoder on {mapping.port}: {exc}")
                     continue
                 if value is None:
                     continue
@@ -339,7 +339,12 @@ class PybricksBridgeBackend(BridgeBackend):
 
 
 class SpikeHubClient:
-    """Thin wrapper around pybricksdev 2.3.0 PybricksHubUSB/BLE."""
+    """Thin wrapper around pybricksdev 2.3.0 PybricksHubUSB/BLE.
+
+    Expectation: a small Pybricks program is already running on the hub that
+    reads lines from USB/BLE in the form `SET <port> <value>` and `GET <port>`
+    and replies with `OK` or the encoder value. This client just forwards lines.
+    """
 
     def __init__(self, identifier: Optional[str], logger=None, transport: str = "usb") -> None:
         self._identifier = identifier
@@ -354,15 +359,27 @@ class SpikeHubClient:
         except ImportError:
             raise
 
-        hub_cls = PybricksHubUSB if self._transport == "usb" else PybricksHubBLE
-        self._hub = hub_cls()
-        await self._hub.connect(self._identifier)
-        if self._logger:
-            self._logger.info(
-                "Connected to Spike hub %s via %s",
-                self._identifier or "(auto)",
-                self._transport,
+        if self._transport == "ble":
+            from pybricksdev import ble
+
+            device = await ble.find_device(self._identifier)
+            if not device:
+                raise RuntimeError("No Pybricks hub found over BLE; ensure it is advertising")
+            self._hub = PybricksHubBLE(device)
+            await self._hub.connect()
+            # Try to start the last user program; some hubs require this before
+            # the command characteristic accepts writes.
+            with contextlib.suppress(Exception):
+                await self._hub.start_user_program()
+            if self._logger:
+                self._logger.info(f"Connected to Spike hub {self._identifier or '(auto)'} via BLE")
+        elif self._transport == "usb":
+            raise RuntimeError(
+                "USB transport is not wired for pybricksdev 2.3.x in this backend. "
+                "Use BLE (PYBRICKS_TRANSPORT=ble) or extend SpikeHubClient to locate a USB device."
             )
+        else:
+            raise RuntimeError(f"Unknown transport '{self._transport}' for Pybricks backend")
 
     async def disconnect(self) -> None:
         if self._hub:
@@ -372,22 +389,39 @@ class SpikeHubClient:
             self._logger.info("Spike hub disconnected")
 
     async def set_motor_target(self, port: str, value: float) -> None:
-        # pybricksdev 2.3.0 does not expose direct motor control; a user program on the hub must
-        # consume commands from stdout/stderr or BLE/USB characteristics. For now, we surface a
-        # clear error so users know to deploy a control script.
-        raise RuntimeError(
-            "set_motor_target not supported directly with pybricksdev 2.3.0. "
-            "Deploy a Pybricks program to handle motor commands and extend SpikeHubClient "
-            "to forward commands to that program."
-        )
+        if not self._hub:
+            raise RuntimeError("Spike hub not connected")
+        line = f"SET {port} {value}\n"
+        await self._hub.write_line(line)
+        with contextlib.suppress(Exception):
+            resp = await self._hub.read_line()
+            if resp is not None and self._logger:
+                text = resp.decode().strip() if isinstance(resp, (bytes, bytearray)) else str(resp).strip()
+                self._logger.debug(f"Hub response to SET {port}: {text}")
+        self._shadow_state[port] = float(value)
 
     async def read_encoder(self, port: str) -> Optional[float]:
-        # Same note as above; encoder reads require a user program on the hub.
-        raise RuntimeError(
-            "read_encoder not supported directly with pybricksdev 2.3.0. "
-            "Deploy a Pybricks program to report encoder values and extend SpikeHubClient "
-            "to retrieve them."
-        )
+        if not self._hub:
+            raise RuntimeError("Spike hub not connected")
+        line = f"GET {port}\n"
+        await self._hub.write_line(line)
+        try:
+            resp = await self._hub.read_line()
+        except Exception as exc:
+            if self._logger:
+                self._logger.debug(f"Failed to read encoder response for {port}: {exc}")
+            return self._shadow_state.get(port)
+
+        if resp is None:
+            return self._shadow_state.get(port)
+
+        try:
+            text = resp.decode().strip() if isinstance(resp, (bytes, bytearray)) else str(resp).strip()
+            return float(text)
+        except Exception:
+            if self._logger:
+                self._logger.debug(f"Unexpected encoder response for {port}: {resp!r}")
+            return self._shadow_state.get(port)
 
 
 __all__ = [

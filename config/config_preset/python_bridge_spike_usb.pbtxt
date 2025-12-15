@@ -1,0 +1,50 @@
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "python_bridge_spike_usb"
+  id: 101
+}
+
+robot {
+  actions {
+    single_actions {
+      node {
+        id: 99
+        node_type: PYTHON_BRIDGE
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_A/command"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "spike_motor_A"
+        id: 1
+        actuator_type: STS3215_SERVO  # Placeholder; using existing enum
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 1
+            port: "A"  # Use Spike port letter, not host device path
+            baudrate: 115200
+          }
+        }
+        physical_lower_limit: 0
+        physical_upper_limit: 1000
+        operational_lower_limit: 0
+        operational_upper_limit: 1000
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+      }
+    }
+  }
+
+  perceptions {}
+}
+
+ai {
+  models {}
+  data_stores {}
+}
+
+calibration {}
