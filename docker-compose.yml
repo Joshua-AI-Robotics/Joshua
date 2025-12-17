@@ -109,7 +109,7 @@ services:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
     working_dir: /workspace
-  
+
   joshua-ui:
     build:
       context: .
