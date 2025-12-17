@@ -369,18 +369,8 @@ export default function LogViewer() {
             ) : (
               <div className="space-y-0.5">
                 {logEntries.map((entry, idx) => {
-                  // Group entries by date for better readability
-                  const showDateSeparator =
-                    idx === 0 ||
-                    logEntries[idx - 1].formattedTime.date !== entry.formattedTime.date
-
                   return (
                     <div key={`${entry.timestamp}-${idx}`}>
-                      {showDateSeparator && (
-                        <div className="sticky top-0 bg-muted/90 backdrop-blur-sm py-2 px-4 text-xs font-semibold text-muted-foreground border-b z-10">
-                          {entry.formattedTime.date}
-                        </div>
-                      )}
                       <div className="grid grid-cols-[120px_70px_200px_1fr] gap-3 px-4 py-2 hover:bg-accent/50 transition-colors group border-l-2 border-transparent hover:border-primary/50 items-center">
                         <span className="text-muted-foreground shrink-0 font-mono text-sm">
                           {entry.formattedTime.time}

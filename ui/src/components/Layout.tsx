@@ -7,10 +7,8 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'General', href: '/', icon: '🏠' },
   { name: 'Monitor', href: '/monitor', icon: '📊' },
   { name: 'Config', href: '/config', icon: '⚙️' },
-  { name: 'Calibration', href: '/calibration', icon: '🔧' },
 ]
 
 export default function Layout({ children }: LayoutProps) {
