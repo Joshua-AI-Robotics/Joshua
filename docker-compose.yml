@@ -120,6 +120,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-host.docker.internal:8000}
+      - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-http://host.docker.internal:8000}
+    restart: unless-stopped
+
+  # ============================================
+  # Zenoh Bridge & ROS2 Integration Services
+  # ============================================
+
+  # Zenoh bridge for ROS2DDS - exposes ROS2 graph over REST + SSE
+  zenoh-bridge-ros2dds:
+    image: eclipse/zenoh-bridge-ros2dds:latest
+    container_name: zenoh-bridge-ros2dds
+    network_mode: host
+    command: --rest-http-port=0.0.0.0:8000
+    environment:
+      - ROS_DISTRO=${ROS_DISTRO:-humble}
     restart: unless-stopped
 
