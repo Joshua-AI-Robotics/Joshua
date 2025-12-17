@@ -13,25 +13,36 @@ COPY ui/package.json ui/package-lock.json* ./
 # Install dependencies
 RUN npm ci
 
-# Copy entire project (needed for proto files)
+# Copy entire project (needed for proto files in config/, robot/, ai/ directories)
 COPY . /app/
 
-# Build the application (this will run generate-schema which needs proto files)
+# Build the application
+# The build script automatically runs generate-schema.js to dynamically generate
+# proto-schema.json from proto files before building the React app
 WORKDIR /app/ui
 RUN npm run build
 
 # Stage 2: Production
 FROM nginx:alpine
 
+# Install gettext for envsubst (environment variable substitution)
+RUN apk add --no-cache gettext
+
 # Copy built files from builder stage
 COPY --from=builder /app/ui/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx configuration template
+COPY ui/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Expose port
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Create startup script that processes nginx.conf template and starts nginx
+RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
+    echo 'envsubst '"'"'$$ZENOH_BRIDGE_URL'"'"' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
+    echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
+    chmod +x /docker-entrypoint.sh
+
+# Start nginx via entrypoint script
+CMD ["/docker-entrypoint.sh"]
 

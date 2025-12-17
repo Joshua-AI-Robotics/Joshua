@@ -24,6 +24,22 @@ services:
       - ROS_DISTRO=humble
     restart: unless-stopped
 
+  # ROS2 demo nodes for testing (talker/listener) - for visual verification
+  ros2-demo-nodes:
+    image: joshua:u22-humble
+    container_name: ros2-demo-nodes
+    network_mode: host
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        ros2 run demo_nodes_cpp talker &
+        ros2 run demo_nodes_cpp listener &
+        wait
+      "
+    restart: unless-stopped
+    depends_on:
+      - joshua-u22  # Ensure joshua-u22 image is built first
+
   # UI Development Server (with hot reload)
   joshua-ui-dev:
     build:
