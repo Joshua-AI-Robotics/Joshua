@@ -27,3 +27,5 @@ MODULE.bazel.lock
 # Python virtual environment
 /venv/
 /ros2/__pycache__/
+
+ui/public/proto-schema*
