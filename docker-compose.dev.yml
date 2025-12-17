@@ -10,6 +10,26 @@
 #   ./scripts/start_ui_dev.sh
 
 services:
+  joshua-u22:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu22
+      platforms:
+        - linux/amd64
+    image: joshua:u22-humble
+    container_name: joshua-u22-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    network_mode: host
+    volumes:
+      - .:/workspace
+      - /dev:/dev
+    environment:
+      - ROS_DISTRO=humble
+      - DISPLAY=${DISPLAY:-}
+    working_dir: /workspace
+
   # ============================================
   # Zenoh Bridge & ROS2 Integration Services
   # ============================================
