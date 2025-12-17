@@ -117,5 +117,9 @@ services:
     container_name: joshua-ui
     ports:
       - "3000:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-host.docker.internal:8000}
     restart: unless-stopped
 

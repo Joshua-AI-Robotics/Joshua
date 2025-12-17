@@ -56,6 +56,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - ZENOH_BRIDGE_URL=http://host.docker.internal:8000
+      - ZENOH_BRIDGE_URL=host.docker.internal:8000
     restart: unless-stopped
 

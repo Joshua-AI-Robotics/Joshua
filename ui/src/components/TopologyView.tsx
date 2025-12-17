@@ -21,7 +21,7 @@ export default function TopologyView() {
   const { nodes } = useROS2Nodes()
   const { events: routeEvents } = useZenohSSE('@/*/ros2/route/**')
 
-  const { topics, nodeConnections } = useMemo(() => {
+  const { topics } = useMemo(() => {
     const topicMap = new Map<string, TopicConnection>()
     const nodeConnMap = new Map<string, NodeConnection>()
 
@@ -84,7 +84,6 @@ export default function TopologyView() {
 
     return {
       topics: Array.from(topicMap.values()),
-      nodeConnections: Array.from(nodeConnMap.values()),
     }
   }, [routeEvents])
 

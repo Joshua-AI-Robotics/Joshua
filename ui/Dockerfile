@@ -25,24 +25,17 @@ RUN npm run build
 # Stage 2: Production
 FROM nginx:alpine
 
-# Install gettext for envsubst (environment variable substitution)
-RUN apk add --no-cache gettext
-
 # Copy built files from builder stage
 COPY --from=builder /app/ui/dist /usr/share/nginx/html
 
 # Copy nginx configuration template
+# nginx:alpine's entrypoint automatically processes .template files in /etc/nginx/templates/
+# using envsubst for environment variable substitution
 COPY ui/nginx.conf /etc/nginx/templates/default.conf.template
 
 # Expose port
 EXPOSE 80
 
-# Create startup script that processes nginx.conf template and starts nginx
-RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
-    echo 'envsubst '"'"'$$ZENOH_BRIDGE_URL'"'"' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
-    echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
-    chmod +x /docker-entrypoint.sh
-
-# Start nginx via entrypoint script
-CMD ["/docker-entrypoint.sh"]
+# Use default nginx entrypoint which processes templates automatically
+# No need to override CMD - default entrypoint handles template processing
 
