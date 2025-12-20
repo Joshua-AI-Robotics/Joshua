@@ -1,66 +1,80 @@
-DataStore (ROS 2 → Datasets)  
-================================
+AI Training Pipeline
+====================
 
-Overview
---------
-`ai/train/data_store.py` records ROS 2 messages to rosbag2 in real-time and post-processes them into ML-friendly datasets (Hugging Face Dataset, JSONL, CSV, Parquet).
+This directory contains the tools and infrastructure for collecting data, managing datasets, and training AI models for the Joshua platform.
 
-Key ideas
----------
-- Real-time recording using rosbag2 SequentialWriter
-- Post-processing reads the bag and streams one row per message
-- Minimal base entry with stable metadata: `{"topic": str, "timestamp": float}`
-- Type-specific enrichment delegated to `ros2/ros2_type_resolver.py`:
-  - Images (sensor_msgs/Image, CompressedImage) → decoded to numpy and added as `image`
-  - Other types → converted via `message_to_ordereddict` and merged into the row
+DataStore (Data Collection)
+---------------------------
 
-Public surface
---------------
-- `DataStore(data_store_config: data_store_pb2.DataStore)`
-  - Initializes bag destination based on config (LOCAL_FILE or CLOUD_STORAGE)
-  - Registers topics with their ROS 2 type (from enum in proto)
-- `add_data(msg: Any, topic: str, timestamp: float | None)`
-  - Serializes message and writes to bag with timestamp (ns)
-- `post_process(path: str | None)`
-  - Converts the bag into a dataset and saves as configured format:
-    - JSONL: `data.jsonl`
-    - CSV: `data.csv`
-    - Parquet: `data.parquet`
-    - Hugging Face Dataset: directory with Arrow storage
-- `get_total_message_count()`, `get_topic_message_count(topic)`
+### Overview
+`ai/train/data_store.py` is the core data logging engine. It subscribes to ROS 2 topics in real-time, records them efficiently to `rosbag2` (SQLite3), and post-processes them into machine-learning-ready formats (Hugging Face Datasets, JSONL, CSV, Parquet).
 
-How post-processing works
--------------------------
-1. Read rosbag with `SequentialReader`.
-2. For each message:
-   - Build `base_entry = {"topic": topic, "timestamp": t_sec}`
-   - Call `build_entry_for_message(base_entry, msg_type, msg)` from resolver.
-   - Yield a final row (generator style) to `Dataset.from_generator`.
-3. Save the dataset in the configured format.
+### Key Features
+-   **Robust Schema Handling**: Automatically discovers all possible fields across heterogeneous topics (e.g., Images + Encoder values) to ensure a consistent, crash-free dataset schema.
+-   **Episode Indexing**: Maintains a persistent, auto-incrementing global episode counter across runs to prevent data overwrites and simplify merging.
+-   **Real-time Control**: Supports dynamic Start/Stop recording via ROS topics or internal logic.
+-   **Optimized Post-Processing**:
+    -   Images are decoded to Numpy once and stored efficiently.
+    -   Generic messages are converted to dictionaries.
+    -   Sparse data handling: Missing fields are automatically filled with `None` to satisfy strict dataset schemas.
 
-Why it’s fast
--------------
-- Image fast-path avoids full dict conversion and raw byte duplication; decodes once to numpy.
-- Small base entry reduces allocations; only minimal fields are added.
-- Generic types use `message_to_ordereddict` once per message.
+### Architecture
+1.  **Recording (Online)**:
+    -   Uses `rosbag2_py.SequentialWriter` for high-throughput, low-latency logging.
+    -   Writes interleaved message streams (preserving exact timing).
+2.  **Post-Processing (Offline/Shutdown)**:
+    -   **Pass 1 (Discovery)**: Scans the bag to identify all unique topics and their field structures.
+    -   **Pass 2 (Conversion)**: Streams the bag, enforces the unified schema, injects `episode_index`, and writes to the target format using `datasets.Dataset.from_generator`.
 
-Extending for new types
------------------------
-Add or adjust handling in `ros2/ros2_type_resolver.py`:
-- Update `ROS2_TYPE_MAPPING` (if needed)
-- Extend `add_post_process_feature` for canonical field names
-- Extend `build_entry_for_message` for specialized fast paths
+### Usage
 
-Usage
------
-- Configure topics/types in `config/config_preset/*.pbtxt`.
-- Run your node that publishes/subscribes and writes via `DataStore.add_data`.
-- On shutdown, call `DataStore.post_process(output_dir)`.
+**1. Configuration**
+Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/sample_data_store.pbtxt`).
 
-Notes and tips
---------------
-- Without an explicit `features` schema, HF infers columns. You can later do `dataset.cast_column("image", Image(decode=True))` if needed.
-- Keep topics stable by type; rosbag expects one type per topic.
-- For resilience, you can wrap deserialization or row building in try/except around your invocation if desired.
+**2. Running the Data Subscriber**
+The `ros2/data_subscriber.py` node wraps the DataStore.
+```bash
+# Launch the subscriber
+bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
+```
+
+**3. Controlling Recording**
+Control the recording state via the `/recording_control` topic:
+```bash
+# Start Recording (Episode N)
+ros2 topic pub --once /recording_control std_msgs/msg/Bool "{data: true}"
+
+# Stop Recording
+ros2 topic pub --once /recording_control std_msgs/msg/Bool "{data: false}"
+```
+
+**4. Data Inspection**
+Use the provided utility to inspect generated datasets:
+```bash
+# View schema, metadata, and samples
+bazel run ai/train:data_load -- --dataset_path=/tmp/Joshua/data/..._processed --num_samples=5
+```
+
+### Dataset Format
+The output is an **Interleaved Message Stream**. Each row corresponds to a single ROS message event.
+-   `topic`: The source topic name (e.g., `camera_1`, `encoder_joint_1`).
+-   `timestamp`: Float (seconds).
+-   `episode_index`: Integer ID for the recording session.
+-   `image`: Numpy array (for camera topics, else None).
+-   `data`: Scalar/Value (for standard messages, else None).
+-   *(Other fields dynamically discovered from message types)*
+
+*Note: For training (e.g., LeRobot, Octo), this interleaved data typically needs to be synchronized/resampled into state-action pairs.*
+
+Extending Types (`ros2/ros2_type_resolver.py`)
+------------------------------------------------
+-   **New Message Types**: Add them to `ROS2_TYPE_MAPPING`.
+-   **Special Handling**: Extend `build_entry_for_message` if you need custom decoding (like we do for Images) instead of generic dictionary conversion.
+
+Training & Fine-Tuning
+----------------------
+*(Section to be expanded)*
+-   **LeRobot Integration**: The dataset format is compatible with Hugging Face Datasets, making it a natural fit for the [LeRobot](https://github.com/huggingface/lerobot) framework.
+-   **Preprocessing**: Use `LeRobotDataset` to synchronize the interleaved `DataStore` output into `(observation, action)` batches for training.
 
 
