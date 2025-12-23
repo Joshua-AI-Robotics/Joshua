@@ -4,12 +4,14 @@ This plan lays out incremental steps to bring LEGO Spike (Pybricks) support into
 
 ## Steps and checks
 
-1) **Add Spike schema fields**  
-   - Extend protos (e.g., CommType SPIKE or Spike-specific fields: port letter, transport usb/ble, hub id).  
+1) **Add Python-friendly schema hooks**  
+   - Keep `comm_type` about transport (e.g., USB/BLE/Serial) with fields like port/hub id/baud.  
+   - Add a separate driver hint (e.g., `driver_binding: PYTHON` or `driver: "spike_py"`) on the actuator/encoder so factories can choose a Python driver.  
+   - Keep it generic so other Python devices can plug in later without schema churn.  
    - **Test:** Build protos (`bazel build //config/proto:...`) and validate a sample pbtxt parses.
 
 2) **Define Python driver interfaces**  
-   - Add Python equivalents of ActionInterface/PerceptionInterface (start/stop/set/get) or a thin binding matching existing semantics.  
+   - Add Python equivalents of ActionInterface/PerceptionInterface (start/stop/set/get) or a thin binding matching existing semantics, designed for reuse across devices.  
    - **Test:** Import the interfaces in a REPL/unit test; run `python -m py_compile` on the new module.
 
 3) **Implement Spike Python drivers**  
@@ -18,7 +20,7 @@ This plan lays out incremental steps to bring LEGO Spike (Pybricks) support into
    - **Test:** Unit tests with stubbed transport asserting commands/reads; similar to `python ros2/python_bridge_backend_test.py`.
 
 4) **Wire factories**  
-   - Update action/perception factories (or add Python factory hooks) to return Spike drivers when CommType/Type is Spike.  
+   - Update action/perception factories (or add Python factory hooks) to return Python drivers when CommType/Type is a Python-backed device (e.g., Spike).  
    - **Test:** Factory unit test that loads a Spike pbtxt snippet and asserts a Spike driver is instantiated.
 
 5) **Lifecycle and transport handling**  
@@ -26,7 +28,7 @@ This plan lays out incremental steps to bring LEGO Spike (Pybricks) support into
    - **Test:** Mock transport to simulate failures/reconnect and verify state/logging.
 
 6) **Integrate with ROS nodes**  
-   - Make actuator_subscriber/encoder_publisher (or a Python node) use the Spike drivers via the factory.  
+   - Make actuator_subscriber/encoder_publisher (or a Python node) use the Python drivers via the factory.  
    - **Test:** Run the nodes with a Spike config in mock/loopback mode; ensure topics are created and no runtime errors.
 
 7) **Hardware smoke test**  
