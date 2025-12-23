@@ -13,9 +13,13 @@ source /opt/ros/humble/setup.bash
 python3 -m pip install "pybricksdev[usb,ble]"
 ```
 If needed, grant BLE permissions to Python (one-time):
+This command will break the ros2.
+ROS2 relies heavily on LD_LIBRARY_PATH to tell Python where to find its C++ libraries (like librcl_action.so in /opt/ros/humble/lib). Since the path is ignored, Python can't find them, even though they are installed.
 ```bash
 sudo setcap 'cap_net_raw,cap_net_admin+eip' /usr/bin/python3
 ```
+
+Make sure to sudo setcap -r /usr/bin/python3.10.
 
 ## 3) Load the hub helper program
 The helper script lives at `scripts/pybricks_spike_bridge.py`. It listens for simple text commands (`SET <PORT> <VALUE>`) and drives the motor; it also turns the hub LED green when running.
