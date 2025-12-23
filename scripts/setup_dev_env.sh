@@ -1,6 +1,6 @@
 #!/bin/bash
 # Joshua Project Setup Script
-# Installs all prerequisites for Project Joshua
+# Installs all prerequisites for Project Joshua development
 
 set -e  # Exit on error
 
@@ -14,26 +14,39 @@ NC='\033[0m' # No Color
 # Check if running with sudo
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error: This script must be run with sudo${NC}"
-    echo "Usage: sudo ./scripts/joshua_setup.sh"
+    echo "Usage: sudo ./scripts/setup_dev_env.sh"
     exit 1
 fi
 
 # Check the script running directory. This script should be run from the root of the repository.
 if [ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]; then
     echo -e "${RED}Error: This script must be run from the root of the repository${NC}"
-    echo "Usage: cd $(git rev-parse --show-toplevel) && sudo ./scripts/joshua_setup.sh"
+    echo "Usage: cd $(git rev-parse --show-toplevel) && sudo ./scripts/setup_dev_env.sh"
     exit 1
 fi
 
 # Function to check Ubuntu version
 check_ubuntu_version() {
     echo -e "${BLUE}Checking Ubuntu version...${NC}"
-    if ! grep -q "22.04" /etc/os-release; then
-        echo -e "${RED}Error: This script is designed for Ubuntu 22.04 LTS${NC}"
-        echo -e "${RED}Please install Ubuntu 22.04 LTS and run this script again${NC}"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        UBUNTU_CODENAME=$UBUNTU_CODENAME
+        VERSION_ID=$VERSION_ID
+    else
+        echo -e "${RED}Error: Cannot detect OS version.${NC}"
         exit 1
     fi
-    echo -e "${GREEN}Ubuntu 22.04 LTS detected${NC}"
+
+    if [ "$VERSION_ID" == "22.04" ]; then
+        echo -e "${GREEN}Ubuntu 22.04 (Humble) detected${NC}"
+        ROS_DISTRO="humble"
+    elif [ "$VERSION_ID" == "24.04" ]; then
+        echo -e "${GREEN}Ubuntu 24.04 (Jazzy) detected${NC}"
+        ROS_DISTRO="jazzy"
+    else
+        echo -e "${YELLOW}Warning: Non-standard Ubuntu version ($VERSION_ID). Defaulting to Humble logic, but things might break.${NC}"
+        ROS_DISTRO="humble"
+    fi
 }
 
 # Function to update package lists
@@ -42,17 +55,58 @@ update_packages() {
     sudo apt-get update
 }
 
+# Function to install Docker (Essential for new build system)
+install_docker() {
+    echo -e "${BLUE}Checking for Docker...${NC}"
+    if ! command -v docker &> /dev/null; then
+        echo -e "${BLUE}Installing Docker...${NC}"
+        sudo apt-get install -y ca-certificates curl gnupg
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        
+        # Add user to docker group
+        NONROOT_USER=${SUDO_USER:-$USER}
+        sudo usermod -aG docker $NONROOT_USER
+        echo -e "${GREEN}Docker installed. You may need to logout and login again.${NC}"
+    else
+        echo -e "${GREEN}Docker is already installed${NC}"
+    fi
+}
+
 # Function to install ROS2
 install_ros2() {
-    echo -e "${BLUE}Installing ROS2...${NC}"
-    sudo apt-get install -y ros-humble-desktop
+    echo -e "${BLUE}Installing ROS2 ($ROS_DISTRO)...${NC}"
+    
+    # Add ROS 2 repo if not present
+    if [ ! -f /etc/apt/sources.list.d/ros2.list ]; then
+        sudo apt-get install -y software-properties-common curl
+        sudo add-apt-repository universe -y
+        sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+        sudo apt-get update
+    fi
+
+    # Install Desktop version for Dev machine (includes RViz, etc.)
+    sudo apt-get install -y ros-$ROS_DISTRO-desktop
     sudo apt-get install -y python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential
     sudo apt-get install -y python3-colcon-common-extensions
 
     # Initialize rosdep
     echo -e "${BLUE}Initializing rosdep...${NC}"
     sudo rosdep init || true  # Ignore error if already initialized
-    rosdep update
+    
+    NONROOT_USER=${SUDO_USER:-$USER}
+    echo -e "${BLUE}Updating rosdep for user $NONROOT_USER...${NC}"
+    sudo -u "$NONROOT_USER" rosdep update
 }
 
 # Function to install Qt6
@@ -65,11 +119,6 @@ install_qt6() {
 install_opencv() {
     echo -e "${BLUE}Installing OpenCV (both x86_64 and ARM64)...${NC}"
     sudo apt-get install -y libopencv-dev
-
-    # Install ARM64 OpenCV libraries
-    echo -e "${BLUE}Installing OpenCV ARM64 libraries...${NC}"
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    sudo "$SCRIPT_DIR/install_opencv_arm64.sh"
 }
 
 # Function to ensure Git is installed
@@ -169,14 +218,16 @@ install_bazel() {
 # Function to setup user permissions
 setup_user_permissions() {
     echo -e "${BLUE}Setting up user permissions...${NC}"
+    
+    NONROOT_USER=${SUDO_USER:-$USER}
 
     # Add user to dialout group for hardware access
     echo -e "${BLUE}Adding user to dialout group for UART and GPIO access...${NC}"
-    sudo usermod -aG dialout $USER
+    sudo usermod -aG dialout $NONROOT_USER
 
     # Add user to video group for camera access
     echo -e "${BLUE}Adding user to video group for camera access...${NC}"
-    sudo usermod -aG video $USER
+    sudo usermod -aG video $NONROOT_USER
 }
 
 # Function to setup ROS2 environment
@@ -190,8 +241,8 @@ setup_ros2_environment() {
         USER_HOME=$HOME
     fi
     
-    if ! grep -q "source /opt/ros/humble/setup.bash" "$USER_HOME/.bashrc"; then
-        echo "source /opt/ros/humble/setup.bash" >> "$USER_HOME/.bashrc"
+    if ! grep -q "source /opt/ros/$ROS_DISTRO/setup.bash" "$USER_HOME/.bashrc"; then
+        echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> "$USER_HOME/.bashrc"
         echo -e "${GREEN}Added ROS2 setup to $USER_HOME/.bashrc${NC}"
     else
         echo -e "${GREEN}ROS2 setup already in $USER_HOME/.bashrc${NC}"
@@ -275,19 +326,19 @@ install_precommit_and_hooks() {
 # Main execution
 main() {
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}  JOSHUA Project Setup Script${NC}"
-    echo -e "${GREEN}  Installing prerequisites...${NC}"
+    echo -e "${GREEN}  JOSHUA Project Dev Setup Script${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo
-
+    
     check_ubuntu_version
     update_packages
+    install_git
+    install_docker
     install_ros2
-    # install_qt6 TODO: Remove this once web UI is ready.
+    install_qt6 # TODO: Remove this once web UI is ready.
     install_opencv
     install_arm64_tools
     install_bazel
-    install_git
     setup_user_permissions
     setup_ros2_environment
     install_linting_tools
@@ -299,7 +350,7 @@ main() {
     echo -e "${GREEN}  Setup Complete!${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo
-    echo -e "${YELLOW}Important: You need to reboot for group changes to take effect${NC}"
+    echo -e "${YELLOW}Important: You need to reboot for group changes (docker, dialout) to take effect${NC}"
 }
 
 # Execute main function
