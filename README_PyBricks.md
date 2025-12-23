@@ -54,6 +54,14 @@ ros2 topic pub spike/motor_A/command std_msgs/msg/Float32 "{data: 0.5}"
 ```
 You should see the motor move (50% duty).
 
+## 7) Drive from the RandomNoise model
+The preset includes a RandomNoise model (node id 200) publishing to `spike/motor_A/command`. It expects a tick input:
+- Start a tick publisher in one shell:  
+  `bazel run ros2:noise_tick_publisher -- noise_tick_publisher 0`
+- Start the inference node in another shell:  
+  `bazel run ros2:inference -- noise_node 200 config/config_preset/python_bridge_spike_usb.pbtxt`
+- Start the bridge as in step 5. The motor will receive random commands.
+
 ## Notes and tips
 - The current config disables encoder polling; focus on outbound commands first. Encoders can be re-enabled later (they require a working stdin/stdout path).
 - If BLE fails to accept writes (ATT errors), power-cycle the hub, re-run the helper upload, then restart the bridge.

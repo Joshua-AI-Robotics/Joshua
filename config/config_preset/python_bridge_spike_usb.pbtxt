@@ -1,5 +1,5 @@
 general {
-  operation_mode: MODE_TEST
+  operation_mode: MODE_INFERENCE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
   name: "python_bridge_spike_usb"
   id: 101
@@ -43,7 +43,31 @@ robot {
 }
 
 ai {
-  models {}
+  models {
+    single_models {
+      model_type: RANDOM_NOISE
+      node {
+        id: 200
+        node_type: INFERENCE
+        qos_setting {}
+        # Tick input to satisfy inference node validation; drive with a periodic publisher.
+        subscriptions {
+          ros2_data_type: EMPTY
+          topic: "spike/noise_tick"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_A/command"
+        }
+      }
+      random_noise_config {
+        input_size: 1
+        output_size: 1
+        noise_low: -1.0
+        noise_high: 1.0
+      }
+    }
+  }
   data_stores {}
 }
 

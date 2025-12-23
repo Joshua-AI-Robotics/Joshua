@@ -204,6 +204,20 @@ ros2_py_binary(
     ],
 )
 
+ros2_py_binary(
+    name = "noise_tick_publisher",
+    srcs = [
+        "noise_tick_publisher.py",
+    ],
+    main = "noise_tick_publisher.py",
+    set_up_ament = True,
+    deps = [
+        ":node_runner_py",
+        requirement("protobuf"),
+    ],
+    visibility = ["//visibility:public"],
+)
+
 py_test(
     name = "python_bridge_backend_test",
     srcs = ["python_bridge_backend_test.py"],
