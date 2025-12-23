@@ -132,6 +132,14 @@ RUN apt-get update && apt-get install -y \
     && python3 -m pip install pre-commit black flake8 isort --break-system-packages
 
 # ============================================
+# Install Python Project Dependencies
+# ============================================
+COPY requirements.txt /tmp/requirements.txt
+RUN python3 -m pip install --upgrade pip --break-system-packages && \
+    python3 -m pip install -r /tmp/requirements.txt --break-system-packages && \
+    rm /tmp/requirements.txt
+
+# ============================================
 # Set up ROS2 environment
 # ============================================
 SHELL ["/bin/bash", "-c"]

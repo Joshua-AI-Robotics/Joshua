@@ -69,14 +69,19 @@ def main():
     echo "📄 Found artifact path: '$OUTPUT_PATH'"
 
     if [ -f "$OUTPUT_PATH" ]; then
-        echo "📦 Copying $OUTPUT_PATH to /workspace/dist/..."
-        mkdir -p /workspace/dist
-        cp -f "$OUTPUT_PATH" /workspace/dist/
+        BASENAME=$(basename "$OUTPUT_PATH")
+        
+        # Directory structure: dist/OS/CPU/filename
+        DEST_DIR="/workspace/dist/{target_os}/{target_cpu}"
+        mkdir -p "$DEST_DIR"
+
+        echo "📦 Copying $OUTPUT_PATH to $DEST_DIR/$BASENAME..."
+        cp -f "$OUTPUT_PATH" "$DEST_DIR/$BASENAME"
 
         # Fix permissions (since we are root in container)
-        chown $(id -u):$(id -g) /workspace/dist/$(basename "$OUTPUT_PATH")
+        chown $(id -u):$(id -g) "$DEST_DIR/$BASENAME"
 
-        echo "✅ Artifact saved to dist/$(basename "$OUTPUT_PATH")"
+        echo "✅ Artifact saved to dist/{target_os}/{target_cpu}/$BASENAME"
     else
         echo "⚠️  Could not locate single output file at '$OUTPUT_PATH'. Check bazel-bin inside container if needed."
         echo "    (Note: If this target produces multiple files, script might need update)"

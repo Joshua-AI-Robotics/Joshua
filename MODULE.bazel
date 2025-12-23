@@ -29,12 +29,6 @@ python.toolchain(
     ignore_root_user_error = True,
 )
 
-# Python 3.11 - For non-ROS2 tools and scripts
-python.toolchain(
-    python_version = "3.11",
-    ignore_root_user_error = True,
-)
-
 # Python 3.12 - For non-ROS2 tools and scripts (optional)
 python.toolchain(
     python_version = "3.12",
@@ -50,14 +44,6 @@ pip.parse(
     requirements_lock = "//:requirements.lock",
 )
 
-# Python 3.11 dependencies (for non-ROS2 tools)
-# You can create requirements_3.11.txt if needed
-# pip.parse(
-#     hub_name = "project_joshua_pip_deps_311",
-#     python_version = "3.11",
-#     requirements_lock = "//:requirements_3.11.lock",
-# )
-
 # Python 3.12 dependencies (for non-ROS2 tools)
 # pip.parse(
 #     hub_name = "project_joshua_pip_deps_312",
@@ -66,7 +52,6 @@ pip.parse(
 # )
 
 use_repo(pip, "project_joshua_pip_deps")
-# use_repo(pip, "project_joshua_pip_deps_311")  # Uncomment if using 3.11
 # use_repo(pip, "project_joshua_pip_deps_312")  # Uncomment if using 3.12
 
 # Custom rule for system dependencies
