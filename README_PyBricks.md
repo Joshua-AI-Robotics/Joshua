@@ -71,3 +71,27 @@ The preset includes a RandomNoise model (node id 200) publishing to `spike/motor
 - If BLE fails to accept writes (ATT errors), power-cycle the hub, re-run the helper upload, then restart the bridge.
 - For visibility, keep the bridge in debug log level to see hub responses.
 - If BLE is unreliable on your setup, switch `PYBRICKS_TRANSPORT=usb` and ensure the hub shows up as `/dev/ttyACM*` before running the bridge. USB has more reliable stdin/stdout.
+
+
+## Troubleshooting
+### BLE connection fail
+Intel Bluetooth adapters (specifically the Intel AX210, AC 9260, and similar chips) are notorious for two specific issues on Linux that would cause your TimeoutError:
+
+Stale GATT Caches: The Intel driver often caches the "services" of a device the first time it sees it. If you saw the Spike Hub before you installed the Pybricks firmware, the Intel driver "remembers" it as a standard LEGO hub. When pybricksdev scans for a "Pybricks" service, the Intel driver says "I know that device; it doesn't have that service," and ignores the hub entirely.
+
+Firmware Lockups: Under heavy scanning (like when 3 Samsung TVs are nearby), the Intel Bluetooth firmware can occasionally enter a state where it reports device addresses but fails to resolve "Advertisement Data" (the metadata like names and UUIDs).
+
+To work around these issues, you can use an external Bluetooth dongle instead of the built-in adapter:
+
+1. Connect an external Bluetooth dongle to your system
+2. Check available Bluetooth interfaces:
+   ```bash
+   hciconfig -a
+   # You will see two interface (e.g. hci0 and hic1)
+   ```
+3. Disable the built-in Bluetooth adapter (typically `hci0`) to force the system to use the dongle:
+   ```bash
+   sudo hciconfig hci0 down
+   ```
+
+This will ensure the system uses only the external dongle for Bluetooth connections.
