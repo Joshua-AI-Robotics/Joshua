@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # This script is used to build the Joshua Project targets in the Docker environment for cross-compilation and multi-arch support.
 # Example usage: ./scripts/build.py //launcher:joshua_main_pkg --os=u22 --cpu=arm64
 
-#!/usr/bin/env python3
 import argparse
 import os
 import subprocess
@@ -47,6 +47,15 @@ def main():
     config_cpu = "arm64-base" if target_cpu == "arm64" else "x86-base"
     
     bazel_configs = [f"--config={target_os}", f"--config={config_cpu}"]
+
+    # Explicitly set Python version for u24 (Jazzy) builds
+    if target_os == "u24":
+        # Force rules_python to select the 3.12 toolchain
+        bazel_configs.append("--@rules_python//python/config_settings:python_version=3.12")
+    else:
+        # Default to 3.10 for u22
+        bazel_configs.append("--@rules_python//python/config_settings:python_version=3.10")
+
     service_name = f"joshua-{target_os}{service_suffix}"
     
     # Construct Bazel flags

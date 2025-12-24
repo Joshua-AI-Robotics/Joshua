@@ -10,6 +10,9 @@ TARGET_LABEL="$3"
 shift 3
 BAZEL_FLAGS="$@"
 
+# Increase Bazel's HTTP timeout for slow connections or QEMU emulation
+export BAZEL_HTTP_TIMEOUT_SCALING=5.0
+
 echo "🔨 Building $TARGET_LABEL for $TARGET_OS/$TARGET_ARCH..."
 echo "   Flags: $BAZEL_FLAGS"
 

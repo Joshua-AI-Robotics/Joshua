@@ -1,5 +1,5 @@
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
-load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
+load("//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -8,9 +8,7 @@ py_library(
     srcs = ["model_base.py"],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        requirement("numpy"),
-        requirement("protobuf"),
-    ],
+    ] + requirement("numpy") + requirement("protobuf"),
 )
 
 py_library(
@@ -19,8 +17,7 @@ py_library(
     deps = [
         ":model_base",
         "//ai/proto:ai_model_py_proto",
-        requirement("protobuf"),
         # Add all models here
         "//ai/models/random_noise:random_noise",
-    ],
+    ] + requirement("protobuf"),
 )

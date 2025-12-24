@@ -138,10 +138,10 @@ RUN apt-get update && apt-get install -y \
 # ============================================
 # Install Python Project Dependencies
 # ============================================
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements.lock /tmp/requirements.lock
 RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
+    python3 -m pip install --no-deps -r /tmp/requirements.lock && \
+    rm /tmp/requirements.lock
 
 # ============================================
 # Set up ROS2 environment
