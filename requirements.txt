@@ -14,4 +14,4 @@ pandas>=2.2.0
 pyarrow
 datasets>=2.14.0
 glog
-tzdata>=2024.1  # Required by pandas 2.2+ in some environments (like Bazel pip_parse)
+tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)
