@@ -18,19 +18,15 @@ build --enable_runfiles
 # =============================================================================
 
 # Ubuntu 22.04 (Humble) + Python 3.10
-build:u22 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
+# Note: PYTHONPATH is set to allow Hermetic Python to find System ROS2 packages (rclpy)
 build:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
-run:u22 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
 run:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
-test:u22 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
 test:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
 
 # Ubuntu 24.04 (Jazzy) + Python 3.12
-build:u24 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.12
+# Note: PYTHONPATH is set to allow Hermetic Python to find System ROS2 packages (rclpy)
 build:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
-run:u24 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.12
 run:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
-test:u24 --action_env=PYTHON_BIN_PATH=/usr/bin/python3.12
 test:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
 
 test --test_output=all

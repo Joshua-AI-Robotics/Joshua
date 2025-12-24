@@ -1,7 +1,9 @@
+# This script is used to build the Joshua Project targets in the Docker environment for cross-compilation and multi-arch support.
+# Example usage: ./scripts/build.py //launcher:joshua_main_pkg --os=u22 --cpu=arm64
+
 #!/usr/bin/env python3
 import argparse
 import os
-import shlex
 import subprocess
 import sys
 
@@ -36,73 +38,51 @@ def main():
     target_cpu = cpu_map[args.cpu.lower()]
     target_os = args.os
 
-    # Determine Docker Service Name
-    # WE ALWAYS BUILD IN THE x86 CONTAINER (Cross-compilation)
-    # This avoids QEMU emulation overhead.
-    # joshua-u22 (x86) can build for u22-arm64
-    # joshua-u24 (x86) can build for u24-arm64
+    # Determine Docker Service and Bazel Configs
+    # On x86 host, building for arm64 will use the arm64 container via QEMU (Emulation).
     service_suffix = "-arm64" if target_cpu == "arm64" else ""
+    
+    # Select Bazel config based on target architecture
+    # Note: We use 'arm64-base' for emulation builds, not 'arm64-ros2' which requires cross-compilation sysroot
+    config_cpu = "arm64-base" if target_cpu == "arm64" else "x86-base"
+    
+    bazel_configs = [f"--config={target_os}", f"--config={config_cpu}"]
     service_name = f"joshua-{target_os}{service_suffix}"
+    
+    # Construct Bazel flags
+    bazel_flags = " ".join(bazel_configs + bazel_args)
 
-    configs = f"--config={target_os} --config={target_cpu}"
-    target_str = " ".join(bazel_args)
+    print(f"🚀 Container Service: {service_name}")
+    print(f"🎯 Target: {bazel_flags}")
+    if target_cpu == "arm64":
+        print("🐢 Using Emulation Strategy (Running on QEMU/ARM64 container)")
 
-    # Ensure dist directory exists
-    os.makedirs("dist", exist_ok=True)
+    # Ensure container_build.sh is executable
+    if os.path.exists("scripts/container_build.sh"):
+         # Make script executable by everyone (755) to ensure container user can run it
+         os.chmod("scripts/container_build.sh", 0o755)
 
-    print(f"🚀 Building in container: {service_name}")
-
-    # We construct a single bash command to run inside the container:
-    # 1. Build the target
-    # 2. Use cquery to find the output file path
-    # 3. Copy that file to /workspace/dist/
-
-    bash_cmd = f"""
-    set -e
-    echo "🔨 Building {target_str}..."
-    bazel build {configs} {target_str}
-
-    echo "🔍 Locating output artifacts..."
-    # Get the output path of the target
-    OUTPUT_PATH=$(bazel cquery {configs} --output=files {target_str} 2>/dev/null | head -n 1)
-
-    echo "📄 Found artifact path: '$OUTPUT_PATH'"
-
-    if [ -f "$OUTPUT_PATH" ]; then
-        BASENAME=$(basename "$OUTPUT_PATH")
-        
-        # Directory structure: dist/OS/CPU/filename
-        DEST_DIR="/workspace/dist/{target_os}/{target_cpu}"
-        mkdir -p "$DEST_DIR"
-
-        echo "📦 Copying $OUTPUT_PATH to $DEST_DIR/$BASENAME..."
-        cp -f "$OUTPUT_PATH" "$DEST_DIR/$BASENAME"
-
-        # Fix permissions (since we are root in container)
-        chown $(id -u):$(id -g) "$DEST_DIR/$BASENAME"
-
-        echo "✅ Artifact saved to dist/{target_os}/{target_cpu}/$BASENAME"
-    else
-        echo "⚠️  Could not locate single output file at '$OUTPUT_PATH'. Check bazel-bin inside container if needed."
-        echo "    (Note: If this target produces multiple files, script might need update)"
-    fi
-    """
-
+    # Docker Command
+    # We mount the script and run it inside the container
     docker_cmd = [
         "docker",
         "compose",
         "run",
         "--rm",
         service_name,
-        "/bin/bash",
-        "-c",
-        bash_cmd,
+        "/workspace/scripts/container_build.sh",
+        target_os,
+        target_cpu,
+        bazel_args[0], # Pass the target label separately for cquery
+        *bazel_configs, # Pass configs
     ]
+    # Add remaining bazel args (like --compilation_mode=dbg)
+    docker_cmd.extend(bazel_args[1:])
 
     try:
         subprocess.check_call(docker_cmd)
         print("-" * 60)
-        print(f"✨ Done! Check 'dist/' folder for your build artifacts.")
+        print(f"✨ Done! Check 'dist/{target_os}/{target_cpu}' for your build artifacts.")
 
     except subprocess.CalledProcessError as e:
         print(f"❌ Build failed with exit code {e.returncode}")
