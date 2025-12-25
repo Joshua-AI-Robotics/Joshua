@@ -140,9 +140,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     std::string image_string(reinterpret_cast<const char*>(frame.data), data_size);
     image_data->set_data(image_string);
 
-    LOG(INFO) << "Successfully captured frame from camera " << id_ << ": " << frame.cols << "x"
-              << frame.rows << " (" << data_size << " bytes)";
-
     return reusable_packet_;
 
   } catch (const cv::Exception& e) {

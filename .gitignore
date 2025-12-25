@@ -29,3 +29,6 @@ MODULE.bazel.lock
 /ros2/__pycache__/
 
 ui/public/proto-schema*
+
+# Build output
+dist/

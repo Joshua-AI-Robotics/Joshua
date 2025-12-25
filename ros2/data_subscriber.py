@@ -1,7 +1,10 @@
 import functools
+import os
 import sys
+import threading
 
 from rclpy.node import Node
+from std_msgs.msg import Bool
 
 from ai.train.data_store import DataStore
 from config.proto import config_pb2
@@ -9,8 +12,6 @@ from ros2 import node_runner as node_runner_py
 from ros2.proto import node_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
-
-DATA_STORE_DEBUG_LOG_INTERVAL = 10
 
 
 class DataSubscriber(Node):
@@ -33,6 +34,27 @@ class DataSubscriber(Node):
         )
         self._setup_subscriptions(config.ai.data_stores.single_data_stores[0].node)
 
+        # Subscribe to recording control topic
+        self.create_subscription(
+            Bool,
+            "recording_control",
+            self.recording_control_callback,
+            10
+        )
+
+        self.next_episode_index = 0
+        index_file = os.path.join(self.data_store.store_root, ".last_episode_index")
+        if os.path.exists(index_file):
+            try:
+                with open(index_file, "r") as f:
+                    self.next_episode_index = int(f.read().strip()) + 1
+            except:
+                pass
+
+        print(
+            f"[IDLE] Waiting for data... (Next Episode Index: {self.next_episode_index}) | Send True to 'recording_control' to start, False to stop."
+        )
+
     def _setup_subscriptions(self, node: node_pb2.Node) -> None:
         """
         Set up ROS2 subscriptions for data storage.
@@ -49,15 +71,38 @@ class DataSubscriber(Node):
             )
             self.subscription_list.append(subscription)
 
+    def recording_control_callback(self, msg):
+        """Handle recording control signals."""
+        if msg.data:
+            used_index = self.data_store.start_recording()
+            if used_index is not None:
+                self.next_episode_index = used_index + 1
+        else:
+            self.data_store.stop_recording()
+
     def subscribe_callback(self, msg, topic):
         """Callback to handle incoming ROS2 messages and store them."""
         self.topic_message_counts[topic] += 1
         self.data_store.add_data(msg, topic=topic)
 
-        if self.topic_message_counts[topic] % DATA_STORE_DEBUG_LOG_INTERVAL == 0:
-            self.get_logger().info(
-                f"{topic} stored messages: {self.topic_message_counts[topic]}"
+        state = (
+            "RECORDING"
+            if getattr(self.data_store, "is_recording", False)
+            else "DATA AVAILABLE"
+        )
+
+        # Build status string
+        if state == "RECORDING":
+            counts_str = " | ".join(
+                [f"{k}: {v}" for k, v in self.topic_message_counts.items()]
             )
+            display_str = f"[{state}] {counts_str}"
+        else:
+            display_str = f"[{state}] Send True to 'recording_control' to start, False to stop. (Next Episode Index: {self.next_episode_index})"
+
+        # Update terminal line
+        sys.stdout.write(f"\r{display_str}\033[K")
+        sys.stdout.flush()
 
     def shutdown(self):
         """Save data on shutdown."""
@@ -87,8 +132,8 @@ def main(argv=None):
 
 # How to test:
 # On terminal, run:
-# bazel run node_generator:joshua_main -- --config=config/config_preset/so100_leader_arm_encoder_publish.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_publish.pbtxt
 # On separate terminal, run:
-# bazel run ros2:data_subscriber -- test 1 config/config_preset/sample_data_store.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())
