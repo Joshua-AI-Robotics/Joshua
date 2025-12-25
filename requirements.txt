@@ -10,7 +10,8 @@ huggingface-hub
 accelerate==1.0.1
 opencv-python==4.11.0.86
 Pillow==11.3.0
-pandas<2.0.0
+pandas>=2.2.0
 pyarrow
 datasets>=2.14.0
 glog
+tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)

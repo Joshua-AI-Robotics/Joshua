@@ -38,6 +38,8 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      # Persist Bazel cache to host machine
+      - bazel-cache-u22:/root/.cache/bazel
     environment:
       - ROS_DISTRO=humble
       - DISPLAY=${DISPLAY:-}
@@ -59,6 +61,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - bazel-cache-u24:/root/.cache/bazel
     environment:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
@@ -84,6 +87,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - bazel-cache-u22-arm64:/root/.cache/bazel
     environment:
       - ROS_DISTRO=humble
       - DISPLAY=${DISPLAY:-}
@@ -105,11 +109,12 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - bazel-cache-u24-arm64:/root/.cache/bazel
     environment:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
     working_dir: /workspace
-  
+
   joshua-ui:
     build:
       context: .
@@ -118,4 +123,11 @@ services:
     ports:
       - "3000:80"
     restart: unless-stopped
+
+
+volumes:
+  bazel-cache-u22:
+  bazel-cache-u24:
+  bazel-cache-u22-arm64:
+  bazel-cache-u24-arm64:
 

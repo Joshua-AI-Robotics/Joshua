@@ -1,7 +1,6 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
-load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_python//python:defs.bzl", "py_library")
+load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -42,9 +41,7 @@ ros2_py_binary(
     deps = [
         # Note: Python ROS2 messages and rclpy are available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
-        requirement("opencv-python"),
-        requirement("numpy"),
-    ],
+    ] + requirement("opencv-python") + requirement("numpy"),
     tags = ["manual"],
 )
 
@@ -64,5 +61,5 @@ py_library(
         "//ros2/proto:node_py_proto",
         # rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
-    ],
+    ] + requirement("PyYAML"),
 )

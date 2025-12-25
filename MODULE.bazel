@@ -21,7 +21,7 @@ bazel_dep(name = "platforms", version = "0.0.8")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 
-# Python 3.10 - Default (for ROS2 compatibility)
+# Python 3.10 - Default (for ROS2 Humble / Ubuntu 22.04)
 # System Python has rclpy, numpy, and all ROS2 dependencies pre-installed
 python.toolchain(
     is_default = True,
@@ -29,13 +29,7 @@ python.toolchain(
     ignore_root_user_error = True,
 )
 
-# Python 3.11 - For non-ROS2 tools and scripts
-python.toolchain(
-    python_version = "3.11",
-    ignore_root_user_error = True,
-)
-
-# Python 3.12 - For non-ROS2 tools and scripts (optional)
+# Python 3.12 - For ROS2 Jazzy / Ubuntu 24.04
 python.toolchain(
     python_version = "3.12",
     ignore_root_user_error = True,
@@ -43,31 +37,24 @@ python.toolchain(
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 
-# Python 3.10 dependencies (includes ROS2-related packages)
+# Python 3.10 dependencies (Default / U22)
 pip.parse(
     hub_name = "project_joshua_pip_deps",
     python_version = "3.10",
     requirements_lock = "//:requirements.lock",
+    timeout = 3600,
 )
 
-# Python 3.11 dependencies (for non-ROS2 tools)
-# You can create requirements_3.11.txt if needed
-# pip.parse(
-#     hub_name = "project_joshua_pip_deps_311",
-#     python_version = "3.11",
-#     requirements_lock = "//:requirements_3.11.lock",
-# )
-
-# Python 3.12 dependencies (for non-ROS2 tools)
-# pip.parse(
-#     hub_name = "project_joshua_pip_deps_312",
-#     python_version = "3.12",
-#     requirements_lock = "//:requirements_3.12.lock",
-# )
+# Python 3.12 dependencies (For U24/Jazzy)
+pip.parse(
+    hub_name = "project_joshua_pip_deps_312",
+    python_version = "3.12",
+    requirements_lock = "//:requirements_3.12.lock",
+    timeout = 3600,
+)
 
 use_repo(pip, "project_joshua_pip_deps")
-# use_repo(pip, "project_joshua_pip_deps_311")  # Uncomment if using 3.11
-# use_repo(pip, "project_joshua_pip_deps_312")  # Uncomment if using 3.12
+use_repo(pip, "project_joshua_pip_deps_312")
 
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
