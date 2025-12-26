@@ -243,7 +243,7 @@ robot {
         camera_type: OPENCV
         comm{}
         opencv_config {
-          id: 1
+          id: 0
           width: 640
           height: 480
           fps: 30
