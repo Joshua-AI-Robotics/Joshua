@@ -326,6 +326,19 @@ typing-extensions==4.15.0
     #   pydantic-core
     #   rerun-sdk
     #   torch
+    #   typing-inspect
+    #   typing-inspection
+    #   wandb
+typing-inspect==0.9.0
+    # via draccus
+typing-inspection==0.4.2
+    # via pydantic
+tzdata==2025.2
+    # via pandas
+tzdata==2025.3
+    # via
+    #   -r requirements.txt
+    #   pandas
 urllib3==2.5.0
     # via
     #   requests
