@@ -12,14 +12,22 @@ build --enable_runfiles
 
 # Use system Python entirely for ROS2 compatibility
 # System Python already has rclpy, numpy, and all ROS2 dependencies
-build --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
-run --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
-test --action_env=PYTHON_BIN_PATH=/usr/bin/python3.10
 
-# Add system ROS2 packages to Python path
-build --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
-run --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
-test --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+# =============================================================================
+# OS / ROS2 Configurations
+# =============================================================================
+
+# Ubuntu 22.04 (Humble) + Python 3.10
+# Note: PYTHONPATH is set to allow Hermetic Python to find System ROS2 packages (rclpy)
+build:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+run:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+test:u22 --action_env=PYTHONPATH=/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages
+
+# Ubuntu 24.04 (Jazzy) + Python 3.12
+# Note: PYTHONPATH is set to allow Hermetic Python to find System ROS2 packages (rclpy)
+build:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
+run:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
+test:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
 
 test --test_output=all
 
@@ -28,15 +36,19 @@ test --test_output=all
 # =============================================================================
 
 # ARM64 Base Configuration
+build:arm64 --config=arm64-base
+
 build:arm64-base --cpu=arm64
 build:arm64-base --experimental_cc_static_library
 build:arm64-base --features=-static_link_cpp_runtimes
 build:arm64-base --dynamic_mode=fully
 build:arm64-base --copt='-fPIC'
 build:arm64-base --copt='-ftls-model=global-dynamic'
-build:arm64-base --@toolchains_llvm_bootstrapped//config:empty_sysroot=False
+# build:arm64-base --@toolchains_llvm_bootstrapped//config:empty_sysroot=False
 
 # x86_64 Base Configuration
+build:x86 --config=x86-base
+
 build:x86-base --cpu=k8
 build:x86-base --copt='-fPIC'
 

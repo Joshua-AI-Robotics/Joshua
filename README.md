@@ -15,19 +15,52 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 
 ### Prerequisites
 
+### Option A: Build docker image and run
+
+- **Operating System:** Ubuntu 22.04 LTS
+- **Install Docker:** Install docker with the following command
+  ```bash
+  sudo apt install docker.io
+  ```
+- **Build Docker Image:** Run the docker command to build the image in need. 
+  [ubuntu 22.04 base with ROS2 humble]
+  ```bash
+  docker compose build joshua-u22
+  ```
+  If building for ARM 64, build docker image targeted for arm64. 
+  ```bash
+  docker compose build joshua-u22-arm64
+  ```
+  [ubuntu 24.04 base with ROS2 jazzy]
+  ```bash
+  docker compose build joshua-u24
+  ```
+  arm64 image for joshua-u24 is available as well. 
+- **Run interactive shell:**
+  [ubuntu 22.04 base with ROS2 humble]
+  ```bash
+  docker compose run joshua-u22
+  ```
+  [ubuntu 24.04 base with ROS2 jazzy]
+  ```bash
+  docker compose run joshua-u24
+  ```
+  To exit, type exit.
+  After exiting, resume the docker container with:
+  ```bash
+  docker start -i joshua-u22
+  ```
+  or 
+  ```bash
+  docker start -i jushua-u24
+  ```
+
+### Option B: Native Installation
 - **Operating System:** Ubuntu 22.04 LTS
 - **Setup Script:** Run the automated setup script to install all dependencies:
   ```bash
-  sudo ./scripts/joshua_setup.sh
+  sudo ./scripts/setup.sh --env=dev
   ```
-
-  This script automatically installs:
-  - ROS2 Humble Desktop
-  - Qt6 development packages
-  - OpenCV (both x86_64 and ARM64)
-  - Bazel build system
-  - ARM64 cross-compilation tools
-  - User permissions for hardware access
 
 ### Example: Running SO100 Teleoperation with Follower and Lead Arm
 
@@ -73,14 +106,6 @@ The streamlined configuration and automated setup capabilities drastically reduc
 
 Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
 
-## Used Open Source
-
-Project Joshua is built on top of several excellent open-source technologies:
-
-- **[ROS2](https://docs.ros.org/en/humble/)** - Robot Operating System 2 for distributed robotics software
-- **[Protobuf](https://developers.google.com/protocol-buffers)** - Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data
-- **[Bazel](https://bazel.build/)** - Fast, scalable, multi-language build system
-- **[PyQt](https://www.riverbankcomputing.com/software/pyqt/)** - Python bindings for the Qt application framework
 
 ## Data Type Architecture
 
@@ -109,13 +134,6 @@ During runtime, the system uses a **hybrid approach** for optimal performance an
   - Sensor data (multi-value arrays with labels)
   - Point cloud data (for future LiDAR/Radar sensors)
 
-#### ROS2 Node Communication (Standard ROS2 Messages)
-Between ROS2 nodes, the system uses **standard ROS2 message types** for maximum compatibility:
-
-- **`std_msgs/msg/Float32`**: For encoder position data and actuator commands
-- **`sensor_msgs/msg/Image`**: For camera image data with proper encoding conversion
-- **Future**: Support for custom ROS2 messages compatible with protobuf definitions
-
 ### Data Flow Architecture
 
 ```
@@ -128,3 +146,46 @@ This architecture provides:
 - **Compatibility**: Standard ROS2 messages enable integration with existing ROS2 ecosystem
 - **Extensibility**: Easy addition of new sensor types and action commands
 - **Modularity**: Clear separation between configuration, runtime data, and ROS2 communication
+
+## Running the Web UI with Docker
+
+The Joshua Control Panel includes a modern web-based UI that can be run using Docker Compose.
+
+### Prerequisites
+
+- **Docker** and **Docker Compose** installed
+  ```bash
+  sudo apt install docker.io docker-compose
+  # Or add your user to the docker group to avoid sudo:
+  sudo usermod -aG docker $USER
+  newgrp docker
+  ```
+
+### Building and Running
+
+From the project root directory:
+
+```bash
+# Build and start the UI container
+docker-compose up --build
+
+# Or run in detached mode (background)
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
+```
+
+The UI will be available at `http://localhost:3000`
+
+### What It Does
+
+The Docker build process:
+1. Builds the React UI application
+2. Generates the protobuf schema from your proto files
+3. Serves the application using nginx
+
+The build context is set to the project root, so the schema generator can access proto files in `config/`, `robot/`, and `ai/` directories.

@@ -6,7 +6,6 @@ general{
 }
 robot {
   perceptions {
-
     single_perceptions {
       node {
         id: 1

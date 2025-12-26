@@ -18,3 +18,4 @@ sympy>=1.13.0
 glog
 datasets>=2.14.0
 setuptools
+tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)

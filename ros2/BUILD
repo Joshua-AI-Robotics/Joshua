@@ -1,6 +1,6 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
-load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
+load("//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -28,8 +28,7 @@ py_library(
         "//config/proto:config_py_proto",
         # Note: rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
-        requirement("protobuf"),
-    ],
+    ] + requirement("protobuf") + requirement("PyYAML"),
     visibility = ["//visibility:public"],
 )
 
@@ -60,9 +59,7 @@ ros2_py_binary(
         "//ros2:node_runner_py",
         "//ros2/utils:qos_setting_py",
         "//ai/models:model_registry",
-        requirement("numpy"),  # Required by ROS2 sensor_msgs
-        requirement("protobuf"),
-    ],
+    ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced
     # Ensure: source /opt/ros/humble/setup.bash before running
@@ -74,8 +71,7 @@ py_library(
         "image_converter.py",
     ],
     deps = [
-        requirement("numpy"),
-    ],
+    ] + requirement("numpy"),
     visibility = ["//visibility:public"],
 )
 
@@ -174,9 +170,8 @@ ros2_py_binary(
         "//ros2:ros2_type_resolver",
         "//ros2/proto:node_py_proto",
         "//ros2/utils:qos_setting_py",
-        requirement("protobuf"),
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
-    ],
+    ] + requirement("protobuf"),
 )
 
 ros2_cpp_binary(
