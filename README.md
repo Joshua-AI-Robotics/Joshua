@@ -39,11 +39,11 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 - **Run interactive shell:**
   [ubuntu 22.04 base with ROS2 humble]
   ```bash
-  docker compose run joshua-u22
+  docker compose run --rm joshua-u22
   ```
   [ubuntu 24.04 base with ROS2 jazzy]
   ```bash
-  docker compose run joshua-u24
+  docker compose run --rm joshua-u24
   ```
   To exit, type exit.
   After exiting, resume the docker container with:
@@ -155,28 +155,36 @@ The Joshua Control Panel includes a modern web-based UI that can be run using Do
 
 - **Docker** and **Docker Compose** installed
   ```bash
-  sudo apt install docker.io docker-compose
+  sudo apt install docker.io docker-compose-plugin
   # Or add your user to the docker group to avoid sudo:
   sudo usermod -aG docker $USER
   newgrp docker
   ```
+  
+  **Note:** Docker Compose v2 uses `docker compose` (without hyphen). If you have the legacy v1 (`docker-compose` with hyphen), consider upgrading to v2 for better compatibility.
 
 ### Building and Running
 
 From the project root directory:
 
 ```bash
-# Build and start the UI container
-docker-compose up --build
+# Build and start the UI container (Docker Compose v2)
+docker compose up --build
 
 # Or run in detached mode (background)
-docker-compose up -d --build
+docker compose up -d --build
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop the container
-docker-compose down
+docker compose down
+```
+
+**For development with Zenoh bridge and demo nodes:**
+```bash
+# Use the development compose file
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 The UI will be available at `http://localhost:3000`

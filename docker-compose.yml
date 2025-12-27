@@ -128,24 +128,8 @@ services:
       - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-http://host.docker.internal:8000}
     restart: unless-stopped
 
-  # ============================================
-  # Zenoh Bridge & ROS2 Integration Services
-  # ============================================
-
-  # Zenoh bridge for ROS2DDS - exposes ROS2 graph over REST + SSE
-  zenoh-bridge-ros2dds:
-    image: eclipse/zenoh-bridge-ros2dds:latest
-    container_name: zenoh-bridge-ros2dds
-    network_mode: host
-    command: --rest-http-port=0.0.0.0:8000
-    environment:
-      - ROS_DISTRO=${ROS_DISTRO:-humble}
-    restart: unless-stopped
-
-
 volumes:
   bazel-cache-u22:
   bazel-cache-u24:
   bazel-cache-u22-arm64:
   bazel-cache-u24-arm64:
-

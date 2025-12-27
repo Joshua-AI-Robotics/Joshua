@@ -33,9 +33,14 @@ COPY --from=builder /app/ui/dist /usr/share/nginx/html
 # using envsubst for environment variable substitution
 COPY ui/nginx.conf /etc/nginx/templates/default.conf.template
 
+# Copy custom entrypoint script that extracts host:port from ZENOH_BRIDGE_URL
+COPY ui/docker-entrypoint.sh /docker-entrypoint-custom.sh
+RUN chmod +x /docker-entrypoint-custom.sh
+
 # Expose port
 EXPOSE 80
 
-# Use default nginx entrypoint which processes templates automatically
-# No need to override CMD - default entrypoint handles template processing
+# Use custom entrypoint which extracts ZENOH_BRIDGE_HOST_PORT before calling nginx entrypoint
+ENTRYPOINT ["/docker-entrypoint-custom.sh"]
+CMD ["nginx", "-g", "daemon off;"]
 
