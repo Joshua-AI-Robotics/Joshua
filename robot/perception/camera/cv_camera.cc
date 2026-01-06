@@ -20,8 +20,16 @@ absl::Status CvCamera::Init() {
     return status;
   }
 
-  // TODO: Remove this hardcoded values.
-  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+  if (opencv_config_.fourcc().size() < 4) {
+    LOG(ERROR) << "FourCC is not specified";
+    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
+  }
+  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc(
+    opencv_config_.fourcc()[0],
+    opencv_config_.fourcc()[1],
+    opencv_config_.fourcc()[2],
+    opencv_config_.fourcc()[3])
+  );
   bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
   bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
   bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
