@@ -171,7 +171,6 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float pos = action_packet.position();
         if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
           ABSL_RETURN_IF_ERROR(SetPosition(pos));
-          LOG(INFO) << GetId() << " set position: " << pos;
         } else {
           LOG(WARNING) << "Position " << pos << " outside operational limits ["
                        << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
@@ -223,6 +222,8 @@ absl::Status Sts3215Driver::SetSpeed(float value) {
 
 absl::Status Sts3215Driver::SetPosition(float angle) {
   try {
+    // Reverting to Write to avoid blocking on response (which might not exist).
+    // The Serial::Write mutex ensures we don't interrupt an Encoder Query.
     ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(static_cast<uint16_t>(angle))));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();

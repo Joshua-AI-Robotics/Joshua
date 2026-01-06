@@ -195,9 +195,6 @@ class Inference(Node):
                     pass
 
             publisher.publish(output_value)
-            self.get_logger().info(
-                f"Published output to publisher {publisher_index}: {output_value}"
-            )
 
         except Exception as e:
             self.get_logger().error(

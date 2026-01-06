@@ -250,6 +250,198 @@ robot {
         }
       }
     }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_1"
+        id: 1
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 1
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 973
+        operational_upper_limit: 3034
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 1
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_2"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_2"
+        id: 3
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 2
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 858
+        operational_upper_limit: 3154
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 2
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_3"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_3"
+        id: 3
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 3
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 798
+        operational_upper_limit: 3015
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 3
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_4"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_4"
+        id: 4
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 4
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 640
+        operational_upper_limit: 3124
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 4
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_5"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_5"
+        id: 5
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 5
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 902
+        operational_upper_limit: 2955
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 5
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_encoder_6"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "sts3215_encoder_6"
+        id: 6
+        encoder_type: STS3215_ENCODER
+        comm {
+          comm_type: SERIAL
+          serial_config {
+            id: 6
+            port: "/dev/ttyACM0"
+            baudrate: 1000000
+          }
+        }
+        operational_lower_limit: 1795
+        operational_upper_limit: 3235
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        sts3215_encoder_config {
+          servo_id: 6
+        }
+      }
+    }
   }
 }
 
@@ -261,7 +453,7 @@ ai {
       # Example: "/home/user/.cache/huggingface/hub/models--lerobot--smolvla_base"
       pretrained_model_path: "lerobot/smolvla_base"
       node {
-        id: 3
+        id: 4
         node_type: INFERENCE
         qos_setting {}
         subscriptions {

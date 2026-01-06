@@ -74,50 +74,37 @@ std::vector<uint8_t> Sts3215Encoder::create_read_position_packet() {
 }
 
 absl::StatusOr<uint16_t> Sts3215Encoder::read_servo_position() {
-  // 0. Flush the serial port to clear any stale data from previous reads
-  ABSL_RETURN_IF_ERROR(serial_->Flush());
-
-  // 1. Create and send the read position packet
+  // Use atomic Query to prevent bus contention with the driver
   std::vector<uint8_t> packet = create_read_position_packet();
-  ABSL_RETURN_IF_ERROR(serial_->Write(packet));
 
-  std::vector<uint8_t> response;
-  response.reserve(8);  // Pre-allocate space
+  // Header (2) + ID (1) + Length (1) + Error (1) + Param1 (1) + Param2 (1) + Checksum (1) = 8 bytes
+  // But wait, the synchronization loop logic in current implementation is complex.
+  // The Query method in Serial does a clean read of N bytes.
+  // However, the original code had a retry loop for synchronization (finding 0xFF 0xFF).
+  // If we trust the Flush() in Query(), we can try a direct read.
+  // If the bus is noisy, we might still need the sync logic, but that logic relies on byte-by-byte
+  // reading which is hard to make atomic without a custom callback or a very specific Serial
+  // method.
 
-  // Synchronize to 0xFF 0xFF header
-  bool header_found = false;
-  for (int attempts = 0; attempts < kReadAttempt; ++attempts) {
-    ABSL_ASSIGN_OR_RETURN(auto first_byte_vec, serial_->Read(1));
-    uint8_t first_byte = first_byte_vec[0];
+  // Compromise: We try to read 8 bytes directly using AtomicRead.
+  // If the servo responds cleanly after the flush/write, it should work.
+  // If it's out of sync, we might fail. But locking the bus prevents the MAIN cause of sync loss
+  // (interleaved writes).
 
-    if (first_byte == 0xFF) {
-      ABSL_ASSIGN_OR_RETURN(auto second_byte_vec, serial_->Read(1));
-      uint8_t second_byte = second_byte_vec[0];
+  ABSL_ASSIGN_OR_RETURN(auto response, serial_->AtomicRead(packet, 8));
 
-      if (second_byte == 0xFF) {
-        // Header found!
-        response.push_back(0xFF);
-        response.push_back(0xFF);
-        header_found = true;
-        break;
-      }
-      // If first_byte was 0xFF but second_byte was not, we continue the loop to find the next 0xFF.
-    }
+  // 3. Validate response
+  if (response.size() != 8) {
+    return absl::Status(absl::StatusCode::kInternal, "Incomplete response");
   }
 
-  if (!header_found) {
-    std::string error_msg = "Failed to find 0xFF 0xFF header after multiple attempts for servo " +
-                            std::to_string(static_cast<int>(servo_id_));
-    LOG(ERROR) << error_msg;
-    return absl::Status(absl::StatusCode::kUnavailable, error_msg);
+  // Verify Header (0xFF 0xFF)
+  if (response[0] != 0xFF || response[1] != 0xFF) {
+    // If we miss the header, it's a sync issue.
+    // With the lock, this should be rarer.
+    return absl::Status(absl::StatusCode::kInternal, "Invalid header in response");
   }
 
-  // Now read the remaining 6 bytes of the packet
-  ABSL_ASSIGN_OR_RETURN(auto remaining_bytes, serial_->Read(6));
-  response.insert(response.end(), remaining_bytes.begin(), remaining_bytes.end());
-
-  // 3. Validate response size, start bytes, and error byte
-  // The start bytes and total size are now guaranteed by the sync loop.
   if (response[4] != 0) {  // Error byte check
     std::string error_msg = "Servo " + std::to_string(static_cast<int>(servo_id_)) +
                             " returned an error: " + std::to_string(static_cast<int>(response[4]));
