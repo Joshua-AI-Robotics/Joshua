@@ -153,15 +153,27 @@ The Joshua Control Panel includes a modern web-based UI that can be run using Do
 
 ### Prerequisites
 
-- **Docker** and **Docker Compose** installed
+- **Docker** and **Docker Compose v2** installed
   ```bash
+  # Install Docker and Docker Compose v2
   sudo apt install docker.io docker-compose-plugin
+  
   # Or add your user to the docker group to avoid sudo:
   sudo usermod -aG docker $USER
   newgrp docker
+  
+  # Verify Docker Compose v2 is installed
+  docker compose version
+  # Should show: Docker Compose version v2.x.x
   ```
   
-  **Note:** Docker Compose v2 uses `docker compose` (without hyphen). If you have the legacy v1 (`docker-compose` with hyphen), consider upgrading to v2 for better compatibility.
+  **Important:** This project requires **Docker Compose v2** (use `docker compose` without hyphen). 
+  - Docker Compose v2 is the modern standard and is included with Docker Desktop and modern Docker installations
+  - The legacy v1 (`docker-compose` with hyphen) is not supported
+  - If you see "command not found" for `docker compose`, install the plugin:
+    ```bash
+    sudo apt install docker-compose-plugin
+    ```
 
 ### Building and Running
 

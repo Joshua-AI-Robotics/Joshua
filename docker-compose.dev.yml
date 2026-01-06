@@ -1,4 +1,5 @@
 # Joshua Project Docker Compose - Development Services
+# Requires: Docker Compose v2 (use 'docker compose', not 'docker-compose')
 # This file contains development-specific services for Zenoh bridge and UI development
 #
 # Usage:

@@ -1,4 +1,5 @@
 # Joshua Project Docker Compose
+# Requires: Docker Compose v2 (use 'docker compose', not 'docker-compose')
 # Supports: linux/amd64, linux/arm64
 #
 # Build images (native architecture):
