@@ -3,15 +3,19 @@
 
 # Project dependencies
 protobuf==5.29.5
-numpy==1.26.4
-torch==2.3.0
+numpy>=2.0.0
+scipy==1.15.3
+torch==2.7.0
 transformers==4.53.2
-huggingface-hub
-accelerate==1.0.1
+accelerate==1.11.0
 opencv-python==4.11.0.86
 Pillow==11.3.0
-pandas>=2.2.0
-pyarrow
-datasets>=2.14.0
+pandas==2.2.3
+pyarrow==19.0.1
+lerobot==0.4.1
+num2words==0.5.13
+sympy>=1.13.0
 glog
+datasets>=2.14.0
+setuptools
 tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)

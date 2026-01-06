@@ -19,5 +19,6 @@ py_library(
         "//ai/proto:ai_model_py_proto",
         # Add all models here
         "//ai/models/random_noise:random_noise",
+        "//ai/models/smolvla:smolvla",
     ] + requirement("protobuf"),
 )

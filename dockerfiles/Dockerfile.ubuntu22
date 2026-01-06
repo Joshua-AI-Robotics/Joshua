@@ -143,6 +143,22 @@ RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install --no-deps -r /tmp/requirements.lock && \
     rm /tmp/requirements.lock
 
+# Fix for missing NVIDIA libraries in torch
+# Torch requires libcusparseLt.so.0 but fails to find it in the runfiles layout
+# because it's not in LD_LIBRARY_PATH. We explicitly symlink it to /usr/lib.
+RUN if [ -d "/usr/local/lib/python3.10/site-packages/cusparselt/lib" ]; then \
+        ln -sf /usr/local/lib/python3.10/site-packages/cusparselt/lib/libcusparseLt.so.0 /usr/lib/libcusparseLt.so.0; \
+    fi && \
+    if [ -d "/usr/local/lib/python3.10/site-packages/nvidia/nccl/lib" ]; then \
+        ln -sf /usr/local/lib/python3.10/site-packages/nvidia/nccl/lib/libnccl.so.2 /usr/lib/libnccl.so.2; \
+    fi && \
+    # Hide system packages that conflict with pip versions but cannot be removed due to ROS deps.
+    # We move them out of the way so Python finds the pip versions first.
+    if [ -d "/usr/lib/python3/dist-packages/sympy" ]; then mv /usr/lib/python3/dist-packages/sympy /usr/lib/python3/dist-packages/sympy.bak; fi && \
+    if [ -d "/usr/lib/python3/dist-packages/scipy" ]; then mv /usr/lib/python3/dist-packages/scipy /usr/lib/python3/dist-packages/scipy.bak; fi
+    # Note: We keep system numpy as removing it breaks apt/ROS completely. 
+    # We rely on PYTHONPATH order or pip installing numpy>=2.0 to shadow it.
+
 # ============================================
 # Set up ROS2 environment
 # ============================================

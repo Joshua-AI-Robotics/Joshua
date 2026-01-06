@@ -3,12 +3,14 @@ syntax = "proto3";
 package ai.models;
 
 import "ai/models/random_noise/random_noise_config.proto";
+import "ai/models/smolvla/smolvla_config.proto";
 import "ros2/proto/node.proto";
 import "ros2/proto/ros2_data_type.proto";
 
 enum ModelType {
   MODEL_TYPE_INVALID = 0;
   RANDOM_NOISE = 1;
+  SMOLVLA = 2;
   // Add other model types here.
 }
 
@@ -19,6 +21,7 @@ message SingleModel {
 
   oneof model_config {
     RandomNoiseConfig random_noise_config = 4;
+    SmolVLAConfig smolvla_config = 5;
     // Add other model configs here.
   }
 }

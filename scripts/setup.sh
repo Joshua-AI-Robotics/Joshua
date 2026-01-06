@@ -202,6 +202,62 @@ install_python_deps() {
     fi
 }
 
+fix_nvidia_libs() {
+    echo -e "${BLUE}Checking for NVIDIA libraries...${NC}"
+    
+    # 1. Fix for libcusparseLt.so.0 (Required by Torch)
+    local LIB_NAME="libcusparseLt.so.0"
+    local LIB_PATH=""
+
+    # Check user then system site-packages
+    if [ -n "$NONROOT_USER" ]; then
+        local USER_SITE=$(sudo -u "$NONROOT_USER" python3 -m site --user-site)
+        [ -d "$USER_SITE" ] && LIB_PATH=$(find "$USER_SITE" -name "$LIB_NAME" -print -quit)
+    fi
+    [ -z "$LIB_PATH" ] && LIB_PATH=$(find /usr/local/lib/python* /usr/lib/python* -name "$LIB_NAME" -print -quit 2>/dev/null)
+
+    if [ -n "$LIB_PATH" ]; then
+        if [ ! -e "/usr/lib/$LIB_NAME" ]; then
+             echo "Symlinking $LIB_NAME to /usr/lib"
+             sudo ln -sf "$LIB_PATH" "/usr/lib/$LIB_NAME"
+             sudo ldconfig
+        fi
+    else
+        echo -e "${YELLOW}Warning: $LIB_NAME not found.${NC}"
+    fi
+
+    # 2. Fix for libnccl.so.2 (Required by Torch, prefer pip version over system)
+    local NCCL_NAME="libnccl.so.2"
+    local NCCL_PATH=""
+    
+    if [ -n "$NONROOT_USER" ]; then
+        local USER_SITE=$(sudo -u "$NONROOT_USER" python3 -m site --user-site)
+        [ -d "$USER_SITE" ] && NCCL_PATH=$(find "$USER_SITE" -name "$NCCL_NAME" -print -quit)
+    fi
+    [ -z "$NCCL_PATH" ] && NCCL_PATH=$(find /usr/local/lib/python* /usr/lib/python* -name "$NCCL_NAME" -print -quit 2>/dev/null)
+
+    if [ -n "$NCCL_PATH" ]; then
+         # Ensure pip version takes precedence by linking to /usr/local/lib
+         if [ ! -L "/usr/local/lib/$NCCL_NAME" ]; then
+             echo "Symlinking pip $NCCL_NAME to /usr/local/lib to take precedence"
+             sudo ln -sf "$NCCL_PATH" "/usr/local/lib/$NCCL_NAME"
+             sudo ldconfig
+         fi
+    fi
+    
+    # 3. Fix for Python Package Conflicts (SymPy, SciPy)
+    # Hide system packages that conflict with pip versions but cannot be removed due to ROS deps.
+    if [ -d "/usr/lib/python3/dist-packages/sympy" ]; then 
+        echo "Hiding system sympy to resolve version conflict"
+        sudo mv /usr/lib/python3/dist-packages/sympy /usr/lib/python3/dist-packages/sympy.bak
+    fi
+    
+    if [ -d "/usr/lib/python3/dist-packages/scipy" ]; then
+         echo "Hiding system scipy to resolve version conflict"
+         sudo mv /usr/lib/python3/dist-packages/scipy /usr/lib/python3/dist-packages/scipy.bak
+    fi
+}
+
 # --- Dev Only Functions ---
 
 install_docker() {
@@ -280,6 +336,7 @@ install_ros2_repos
 install_ros2_packages
 install_opencv
 install_python_deps
+fix_nvidia_libs
 setup_user_permissions
 setup_ros2_environment
 
