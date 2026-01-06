@@ -2,15 +2,19 @@
 # Requires: Docker Compose v2 (use 'docker compose', not 'docker-compose')
 # This file contains development-specific services for Zenoh bridge and UI development
 #
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up joshua-ui-dev
+# Usage (recommended - only start needed services):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev ros2-demo-nodes
 #
-# Or use the convenience scripts:
-#   ./scripts/start_ros2_nodes.sh
-#   ./scripts/start_ui_dev.sh
+# Note: Do NOT start both joshua-ui and joshua-ui-dev at the same time (port conflict on 3000).
+# Use joshua-ui-dev for development (hot reload) or joshua-ui for production (nginx).
+#
+# Note: ARM64 services (joshua-u22-arm64, joshua-u24-arm64) are excluded from dev workflow
+# to avoid cross-platform build issues on x86_64 systems. They can be built separately if needed.
 
 services:
+  # joshua-u22 service (AMD64 only) - needed for ros2-demo-nodes
+  # This overrides the base joshua-u22 to ensure only AMD64 is built
   joshua-u22:
     build:
       context: .
@@ -52,14 +56,17 @@ services:
     network_mode: host
     command: >
       bash -c "
-        source /opt/ros/humble/setup.bash &&
-        ros2 run demo_nodes_cpp talker &
-        ros2 run demo_nodes_cpp listener &
-        wait
+      set -e &&
+      source /opt/ros/humble/setup.bash &&
+      echo 'ROS2 environment loaded. Starting demo nodes...' &&
+      ros2 run demo_nodes_cpp talker &
+      ros2 run demo_nodes_cpp listener &
+      wait
       "
     restart: unless-stopped
     depends_on:
-      - joshua-u22  # Ensure joshua-u22 image is built first
+      joshua-u22:
+        condition: service_started  # Ensure joshua-u22 container is started (image built)
 
   # UI Development Server (with hot reload)
   joshua-ui-dev:

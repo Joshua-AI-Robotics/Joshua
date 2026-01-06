@@ -47,6 +47,7 @@ services:
     working_dir: /workspace
 
   # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
+  # Note: Use profile 'u24' to build this service
   joshua-u24:
     build:
       context: .
@@ -67,12 +68,15 @@ services:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
     working_dir: /workspace
+    profiles:
+      - u24  # Only build when explicitly requested
 
   # ============================================
   # ARM64 (aarch64) Services
   # ============================================
 
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64
+  # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
   joshua-u22-arm64:
     build:
       context: .
@@ -93,8 +97,11 @@ services:
       - ROS_DISTRO=humble
       - DISPLAY=${DISPLAY:-}
     working_dir: /workspace
+    profiles:
+      - arm64  # Only build when explicitly requested
 
   # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64 (Experimental)
+  # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
   joshua-u24-arm64:
     build:
       context: .
@@ -115,6 +122,8 @@ services:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
     working_dir: /workspace
+    profiles:
+      - arm64  # Only build when explicitly requested
 
   joshua-ui:
     build:
@@ -128,6 +137,8 @@ services:
     environment:
       - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-http://host.docker.internal:8000}
     restart: unless-stopped
+    profiles:
+      - production  # Use profile to avoid conflicts with joshua-ui-dev
 
 volumes:
   bazel-cache-u22:
