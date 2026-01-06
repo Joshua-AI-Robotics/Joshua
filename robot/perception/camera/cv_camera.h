@@ -27,12 +27,15 @@ class CvCamera : public CameraInterface {
   absl::Status Teardown() override;
 
  private:
+  constexpr uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
   cv::VideoCapture cap_;
   cv::Mat last_frame_;
   std::string id_;
   uint64_t camera_id_;
   robot::perception::OpenCvConfig opencv_config_;
   mutable robot::perception::PerceptionPacket reusable_packet_;  // Pre-allocated packet for reuse
+
+  absl::Status OpenCamera();
 };
 
 }  // namespace robot::perception
