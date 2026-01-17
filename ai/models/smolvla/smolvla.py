@@ -88,25 +88,26 @@ class SmolVla(ModelBase):
         """
         try:
             # TODO(hmoon): Use the model name from the config.
-            model_name = getattr(
-                self._model_config, "model_name", "HuggingFaceM4/SmolVLM-Instruct"
-            )
-
+            model_name = self._single_model_config.smolvla_config.model_name
+            glog.info(f"Loading SmolVLA model: {model_name}")
+            
             # Load model
-            if os.path.isdir(self._single_model_config.pretrained_model_local_path):
+            local_model_path = os.path.expanduser(
+                self._single_model_config.pretrained_model_local_path
+            )
+            hf_model_path = os.path.expanduser(
+                self._single_model_config.pretrained_model_hf_path
+            )
+            if os.path.isdir(local_model_path):
                 glog.info(
-                    f"Loading SmolVLA from local path: {self._single_model_config.pretrained_model_local_path}"
+                    f"Loading SmolVLA from local path: {local_model_path}"
                 )
-                self.model = SmolVLAPolicy.from_pretrained(
-                    self._single_model_config.pretrained_model_local_path
-                )
+                self.model = SmolVLAPolicy.from_pretrained(local_model_path)
             else:
                 glog.info(
-                    f"Loading SmolVLA from hf path: {self._single_model_config.pretrained_model_hf_path}"
+                    f"Loading SmolVLA from hf path: {hf_model_path}"
                 )
-                self.model = SmolVLAPolicy.from_pretrained(
-                    self._single_model_config.pretrained_model_hf_path
-                )
+                self.model = SmolVLAPolicy.from_pretrained(hf_model_path)
 
             # CRITICAL: Move ALL model components to device
             # This ensures tensors are on the correct device
@@ -226,13 +227,13 @@ class SmolVla(ModelBase):
         action_values = action_tensor.detach().cpu().numpy().tolist()
 
         # Log raw values for debugging
-        glog.info(f"Raw model output: {action_values}")
+        glog.debug(f"Raw model output: {action_values}")
 
         # SmolVLA output is likely already normalized to roughly [-1, 1]
         # Just clamp to ensure values stay in [-1, 1] for actuator driver
         action_values = [max(-1.0, min(1.0, v)) for v in action_values]
 
-        glog.info(f"Clamped output: {action_values}")
+        glog.debug(f"Clamped output: {action_values}")
 
         if len(action_values) != self._num_publishers:
             glog.warning(
@@ -306,7 +307,7 @@ class SmolVla(ModelBase):
                     processed_batch[key] = processed_batch[key].to(self.device)
 
             # Run inference
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = self.model.select_action(processed_batch)
 
             return outputs
