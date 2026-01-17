@@ -1,11 +1,9 @@
-import logging
+import glog
 import os
-import sys
 import threading
 from typing import Any, Callable, List, Optional
 
 import numpy as np
-import rclpy
 import torch
 
 # Protobuf generated modules
@@ -19,8 +17,6 @@ from std_msgs.msg import Float32
 
 from ai.models.model_base import ModelBase
 from ros2.image_converter import ImageConverter
-
-logger = logging.getLogger(__name__)
 
 
 class SmolVla(ModelBase):
@@ -91,20 +87,21 @@ class SmolVla(ModelBase):
         2. Setting up pre/post-processors for data normalization and tokenization
         """
         try:
+            # TODO(hmoon): Use the model name from the config.
             model_name = getattr(
                 self._model_config, "model_name", "HuggingFaceM4/SmolVLM-Instruct"
             )
 
             # Load model
             if os.path.isdir(self._single_model_config.pretrained_model_local_path):
-                logger.info(
+                glog.info(
                     f"Loading SmolVLA from local path: {self._single_model_config.pretrained_model_local_path}"
                 )
                 self.model = SmolVLAPolicy.from_pretrained(
                     self._single_model_config.pretrained_model_local_path
                 )
             else:
-                logger.info(
+                glog.info(
                     f"Loading SmolVLA from hf path: {self._single_model_config.pretrained_model_hf_path}"
                 )
                 self.model = SmolVLAPolicy.from_pretrained(
@@ -126,15 +123,15 @@ class SmolVla(ModelBase):
             # Set to eval mode for inference
             self.model.eval()
 
-            logger.info(
+            glog.info(
                 f"SmolVLA inference initialized successfully on {self.device}. Task: '{self.task_description}'"
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize SmolVLA: {e}")
+            glog.error(f"Failed to initialize SmolVLA: {e}")
             import traceback
 
-            logger.error(traceback.format_exc())
+            glog.error(traceback.format_exc())
             raise
 
     def handle_input(
@@ -197,7 +194,7 @@ class SmolVla(ModelBase):
             # Return the float value for joint state
             return {"type": "state", "data": data.data}
         else:
-            logger.warning(f"Unexpected input type {type(data)}, returning as-is")
+            glog.warning(f"Unexpected input type {type(data)}, returning as-is")
             return {"type": "unknown", "data": data}
 
     def postprocess_output(self, output_data: List[Any]) -> List[Any]:
@@ -210,7 +207,7 @@ class SmolVla(ModelBase):
         """
         # Handle None or failed inference
         if output_data is None:
-            logger.warning("Inference returned None, returning zeros")
+            glog.warning("Inference returned None, returning zeros")
             raise ValueError("Inference returned None")
 
         # select_action returns the action tensor directly
@@ -229,16 +226,16 @@ class SmolVla(ModelBase):
         action_values = action_tensor.detach().cpu().numpy().tolist()
 
         # Log raw values for debugging
-        logger.info(f"Raw model output: {action_values}")
+        glog.info(f"Raw model output: {action_values}")
 
         # SmolVLA output is likely already normalized to roughly [-1, 1]
         # Just clamp to ensure values stay in [-1, 1] for actuator driver
         action_values = [max(-1.0, min(1.0, v)) for v in action_values]
 
-        logger.info(f"Clamped output: {action_values}")
+        glog.info(f"Clamped output: {action_values}")
 
         if len(action_values) != self._num_publishers:
-            logger.warning(
+            glog.warning(
                 f"Model output {len(action_values)} actions, but need {self._num_publishers}. Padding/truncating."
             )
             # Pad with zeros or truncate
@@ -315,10 +312,10 @@ class SmolVla(ModelBase):
             return outputs
 
         except Exception as e:
-            logger.error(f"Inference failed: {e}")
+            glog.error(f"Inference failed: {e}")
             import traceback
 
-            logger.error(traceback.format_exc())
+            glog.error(traceback.format_exc())
             return None
 
     def forward(self, input_data: List[Any]) -> List[Any]:

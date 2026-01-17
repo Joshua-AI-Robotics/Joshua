@@ -34,5 +34,6 @@ py_library(
         requirement("pillow"),
         requirement("opencv-python"),
         requirement("sympy"),
+        requirement("glog"),
     ],
 )
