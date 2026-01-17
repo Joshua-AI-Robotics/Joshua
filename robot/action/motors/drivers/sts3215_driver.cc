@@ -92,29 +92,36 @@ std::vector<uint8_t> Sts3215Driver::create_torque_packet(uint8_t enable) {
 
 absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_packet) {
   try {
+    VLOG(1) << "Executing action [ID: " << action_packet.action_id()
+            << ", Timestamp: " << action_packet.timestamp_ns() << "]";
     switch (action_packet.action_type_case()) {
       case robot::action::ActionPacket::kPreset:
         switch (action_packet.preset()) {
           case robot::action::PresetCommand::PRESET_MIDDLE_POSITION:
+            VLOG(1) << "Executing preset: MIDDLE_POSITION";
             ABSL_RETURN_IF_ERROR(SetMiddlePosition());
             break;
           case robot::action::PresetCommand::PRESET_IDLE_POSITION:
+            VLOG(1) << "Executing preset: IDLE_POSITION";
             ABSL_RETURN_IF_ERROR(SetIdlePosition());
             break;
           case robot::action::PresetCommand::PRESET_TEARDOWN:
+            VLOG(1) << "Executing preset: TEARDOWN";
             ABSL_RETURN_IF_ERROR(Teardown());
             break;
           case robot::action::PresetCommand::PRESET_ENABLE_TORQUE:
+            VLOG(1) << "Executing preset: ENABLE_TORQUE";
             ABSL_RETURN_IF_ERROR(SetTorque(1.0f));
             break;
           case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
+            VLOG(1) << "Executing preset: DISABLE_TORQUE";
             ABSL_RETURN_IF_ERROR(SetTorque(0.0f));
             break;
           default:
             LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
             break;
         }
-        LOG(INFO) << GetId() << " executed preset: " << action_packet.preset();
+        VLOG(1) << GetId() << " executed preset: " << action_packet.preset();
         break;
 
       case robot::action::ActionPacket::kComplex: {
@@ -127,13 +134,13 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           break;
         }
 
-        LOG(INFO) << GetId() << " executing complex action";
+        VLOG(1) << GetId() << " executing complex action";
 
         // Apply changes in order: speed first, then torque, then position
         if (complex_action.has_speed()) {
           if (complex_action.speed() >= 0) {
             ABSL_RETURN_IF_ERROR(SetSpeed(complex_action.speed()));
-            LOG(INFO) << "Set speed: " << complex_action.speed();
+            VLOG(1) << "Set speed: " << complex_action.speed();
           } else {
             LOG(WARNING) << "Invalid speed value: " << complex_action.speed();
           }
@@ -142,7 +149,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         if (complex_action.has_torque()) {
           if (complex_action.torque() >= 0.0f) {
             ABSL_RETURN_IF_ERROR(SetTorque(complex_action.torque()));
-            LOG(INFO) << "Set torque: " << complex_action.torque();
+            VLOG(1) << "Set torque: " << complex_action.torque();
           } else {
             LOG(WARNING) << "Invalid torque value: " << complex_action.torque();
           }
@@ -152,7 +159,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           float pos = complex_action.position();
           if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
             ABSL_RETURN_IF_ERROR(SetPosition(pos));
-            LOG(INFO) << "Set position: " << pos;
+            VLOG(1) << "Set position: " << pos;
           } else {
             LOG(WARNING) << "Position " << pos << " outside operational limits ["
                          << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
@@ -161,7 +168,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
 
         // Handle duration if specified (for future timing control)
         if (complex_action.has_duration_ms()) {
-          LOG(INFO) << "Action duration: " << complex_action.duration_ms() << "ms";
+          VLOG(1) << "Action duration: " << complex_action.duration_ms() << "ms";
           // TODO: Implement duration-based execution
         }
         break;
@@ -171,6 +178,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float pos = action_packet.position();
         if (pos >= operational_lower_limit_ && pos <= operational_upper_limit_) {
           ABSL_RETURN_IF_ERROR(SetPosition(pos));
+          VLOG(1) << GetId() << " set position: " << pos;
         } else {
           LOG(WARNING) << "Position " << pos << " outside operational limits ["
                        << operational_lower_limit_ << ", " << operational_upper_limit_ << "]";
@@ -182,7 +190,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float torque = action_packet.torque();
         if (torque >= 0.0f) {
           ABSL_RETURN_IF_ERROR(SetTorque(torque));
-          LOG(INFO) << GetId() << " set torque: " << torque;
+          VLOG(1) << GetId() << " set torque: " << torque;
         } else {
           LOG(WARNING) << "Invalid torque value: " << torque;
         }
@@ -193,7 +201,7 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         float speed = action_packet.speed();
         if (speed >= 0) {
           ABSL_RETURN_IF_ERROR(SetSpeed(speed));
-          LOG(INFO) << GetId() << " set speed: " << speed;
+          VLOG(1) << GetId() << " set speed: " << speed;
         } else {
           LOG(WARNING) << "Invalid speed value: " << speed;
         }
@@ -273,7 +281,7 @@ absl::Status Sts3215Driver::Teardown() {
     move_speed_ = 1000;
     ABSL_RETURN_IF_ERROR(SetIdlePosition());
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    LOG(INFO) << GetId() << " setting torque to 0";
+    VLOG(1) << GetId() << " setting torque to 0";
     ABSL_RETURN_IF_ERROR(SetTorque(0));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();

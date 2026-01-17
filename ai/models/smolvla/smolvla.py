@@ -1,8 +1,8 @@
-import glog
 import os
 import threading
 from typing import Any, Callable, List, Optional
 
+import glog
 import numpy as np
 import torch
 
@@ -90,7 +90,7 @@ class SmolVla(ModelBase):
             # TODO(hmoon): Use the model name from the config.
             model_name = self._single_model_config.smolvla_config.model_name
             glog.info(f"Loading SmolVLA model: {model_name}")
-            
+
             # Load model
             local_model_path = os.path.expanduser(
                 self._single_model_config.pretrained_model_local_path
@@ -99,14 +99,10 @@ class SmolVla(ModelBase):
                 self._single_model_config.pretrained_model_hf_path
             )
             if os.path.isdir(local_model_path):
-                glog.info(
-                    f"Loading SmolVLA from local path: {local_model_path}"
-                )
+                glog.info(f"Loading SmolVLA from local path: {local_model_path}")
                 self.model = SmolVLAPolicy.from_pretrained(local_model_path)
             else:
-                glog.info(
-                    f"Loading SmolVLA from hf path: {hf_model_path}"
-                )
+                glog.info(f"Loading SmolVLA from hf path: {hf_model_path}")
                 self.model = SmolVLAPolicy.from_pretrained(hf_model_path)
 
             # CRITICAL: Move ALL model components to device
