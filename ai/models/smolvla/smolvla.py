@@ -72,10 +72,8 @@ class SmolVla(ModelBase):
         so we can only access _single_model_config and _model_config here.
         """
         # "SmolVLA inference node requires a model path."
-        if (
-            not self._single_model_config.pretrained_model_hf_path
-            or not self._single_model_config.pretrained_model_local_path
-        ):
+        if not (self._single_model_config.pretrained_model_hf_path
+            or self._single_model_config.pretrained_model_local_path):
             raise ValueError("SmolVLA inference node requires a pretrained model path.")
 
     def _initialize_inference(self) -> None:
