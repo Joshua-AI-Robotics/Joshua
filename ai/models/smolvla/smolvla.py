@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import threading
 from typing import Any, Callable, List, Optional
@@ -75,7 +76,10 @@ class SmolVla(ModelBase):
         so we can only access _single_model_config and _model_config here.
         """
         # "SmolVLA inference node requires a model path."
-        if not self._single_model_config.pretrained_model_path:
+        if (
+            not self._single_model_config.pretrained_model_hf_path
+            or not self._single_model_config.pretrained_model_local_path
+        ):
             raise ValueError("SmolVLA inference node requires a pretrained model path.")
 
     def _initialize_inference(self) -> None:
@@ -90,12 +94,22 @@ class SmolVla(ModelBase):
             model_name = getattr(
                 self._model_config, "model_name", "HuggingFaceM4/SmolVLM-Instruct"
             )
-            pretrained_model_path = self._single_model_config.pretrained_model_path
-
-            logger.info(f"Loading SmolVLA from: {pretrained_model_path}")
 
             # Load model
-            self.model = SmolVLAPolicy.from_pretrained(pretrained_model_path)
+            if os.path.isdir(self._single_model_config.pretrained_model_local_path):
+                logger.info(
+                    f"Loading SmolVLA from local path: {self._single_model_config.pretrained_model_local_path}"
+                )
+                self.model = SmolVLAPolicy.from_pretrained(
+                    self._single_model_config.pretrained_model_local_path
+                )
+            else:
+                logger.info(
+                    f"Loading SmolVLA from hf path: {self._single_model_config.pretrained_model_hf_path}"
+                )
+                self.model = SmolVLAPolicy.from_pretrained(
+                    self._single_model_config.pretrained_model_hf_path
+                )
 
             # CRITICAL: Move ALL model components to device
             # This ensures tensors are on the correct device

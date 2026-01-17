@@ -451,7 +451,8 @@ ai {
       model_type: SMOLVLA
       # Specify the path to your pretrained SmolVLA model checkpoint
       # Example: "/home/user/.cache/huggingface/hub/models--lerobot--smolvla_base"
-      pretrained_model_path: "lerobot/smolvla_base"
+      pretrained_model_hf_path: "lerobot/smolvla_base"
+      pretrained_model_local_path: "/home/hmoon/models--lerobot--smolvla_base/snapshots/4d2f2b37fa245361ef1efe6d91ce96b8bd4af511"
       node {
         id: 4
         node_type: INFERENCE
