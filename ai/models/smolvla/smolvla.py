@@ -1,6 +1,6 @@
 import os
 import threading
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import glog
 import numpy as np
@@ -17,6 +17,7 @@ from std_msgs.msg import Float32
 
 from ai.models.model_base import ModelBase
 from ros2.image_converter import ImageConverter
+from ros2.proto import ros2_data_type_pb2
 
 
 class SmolVla(ModelBase):
@@ -47,9 +48,11 @@ class SmolVla(ModelBase):
             )
 
         # Persistent storage for latest observations
-        self._latest_image = None
+        self._latest_images: Dict[str, Any] = {}
         self._state_history: List[List[float]] = []
         self._mutex = threading.Lock()
+        self._camera_keys_by_subscription: Dict[int, str] = {}
+        self._expected_num_cameras = 0
 
         self.model = None
         self.preprocessor = None
@@ -63,6 +66,25 @@ class SmolVla(ModelBase):
             raise ValueError("SmolVLA inference node requires a task description.")
 
         self._initialize_inference()
+        self._initialize_camera_keys()
+
+    def _initialize_camera_keys(self) -> None:
+        """
+        Build a mapping from subscription index to SmolVLA camera keys.
+
+        We assign camera keys based on the order of IMAGE subscriptions in the config:
+        camera1, camera2, ...
+        """
+        image_subscription_indices = [
+            idx
+            for idx, sub in enumerate(self._single_model_config.node.subscriptions)
+            if sub.ros2_data_type == ros2_data_type_pb2.Ros2DataType.IMAGE
+        ]
+        self._expected_num_cameras = len(image_subscription_indices)
+        self._camera_keys_by_subscription = {
+            sub_idx: f"observation.images.camera{cam_idx}"
+            for cam_idx, sub_idx in enumerate(image_subscription_indices, start=1)
+        }
 
     def _validate_config(self) -> None:
         """
@@ -144,7 +166,11 @@ class SmolVla(ModelBase):
             should_infer = False
 
             if processed_data["type"] == "image":
-                self._latest_image = processed_data["data"]
+                camera_key = self._camera_keys_by_subscription.get(
+                    subscription_index,
+                    f"observation.images.camera{subscription_index + 1}",
+                )
+                self._latest_images[camera_key] = processed_data["data"]
                 should_infer = True
             elif processed_data["type"] == "state":
                 self._state_history.append(processed_data["data"])
@@ -153,9 +179,21 @@ class SmolVla(ModelBase):
                     self._state_history.pop(0)
 
             # Run inference if we have a new image (camera rate)
-            if should_infer and self._latest_image is not None:
+            if should_infer and self._latest_images:
+                if (
+                    self._expected_num_cameras > 0
+                    and len(self._latest_images) < self._expected_num_cameras
+                ):
+                    glog.debug(
+                        "Waiting for all camera images (%d/%d).",
+                        len(self._latest_images),
+                        self._expected_num_cameras,
+                    )
+                    return
                 # We pass the collected state history
-                outputs = self.inference(self._latest_image, list(self._state_history))
+                outputs = self.inference(
+                    dict(self._latest_images), list(self._state_history)
+                )
 
                 if outputs is not None:
                     final_outputs = self.postprocess_output(outputs)
@@ -243,7 +281,7 @@ class SmolVla(ModelBase):
 
         return action_values
 
-    def inference(self, image: Any, state_history: List[Any]) -> List[Any]:
+    def inference(self, images: Dict[str, Any], state_history: List[Any]) -> List[Any]:
         """
         Run inference using the latest image and state history.
 
@@ -275,11 +313,8 @@ class SmolVla(ModelBase):
             state = np.zeros((1, 6), dtype=np.float32)
 
         # Prepare observation dictionary for SmolVLA
-        # Order: Camera, State, Task
-        observation = {
-            "observation.images.camera1": image,
-            "observation.state": state,
-        }
+        # Order: Camera(s), State, Task
+        observation = {**images, "observation.state": state}
 
         # Add task description
         task = self.task_description
