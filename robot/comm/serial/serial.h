@@ -17,6 +17,11 @@ class Serial {
   ~Serial();
   absl::Status Write(const std::vector<uint8_t>& data);
   absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read);
+
+  // Atomic Write-then-Read operation to prevent bus collisions
+  absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
+                                                  size_t expected_response_size);
+
   absl::Status Flush();
   absl::Status Open();
 

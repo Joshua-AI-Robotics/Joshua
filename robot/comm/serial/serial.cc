@@ -91,7 +91,7 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
   timer.cancel();  // Cancel the timer if read completes
 
   if (ec == boost::asio::error::operation_aborted) {
-    LOG(ERROR) << "Serial read operation timed out or was cancelled.";
+    // LOG(ERROR) << "Serial read operation timed out or was cancelled.";
     return absl::Status(absl::StatusCode::kInternal,
                         "Serial read operation timed out or was cancelled.");
   } else if (ec) {
@@ -101,6 +101,54 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
 
   if (bytes_read != bytes_to_read) {
     LOG(WARNING) << "Read " << bytes_read << " bytes, expected " << bytes_to_read;
+  }
+
+  return buffer;
+}
+
+absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_t>& command,
+                                                        size_t expected_response_size) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  if (!serial_->is_open()) {
+    return absl::Status(absl::StatusCode::kInternal, "Serial port not open for query.");
+  }
+
+  // 1. Flush (Clear input buffer before sending command)
+  if (::tcflush(serial_->native_handle(), TCIFLUSH) != 0) {
+    LOG(WARNING) << "tcflush failed during query: " << strerror(errno);
+  }
+
+  // 2. Write Command
+  try {
+    boost::asio::write(*serial_, boost::asio::buffer(command));
+  } catch (const boost::system::system_error& e) {
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Error writing query command: " + std::string(e.what()));
+  }
+
+  // 3. Read Response
+  std::vector<uint8_t> buffer(expected_response_size);
+  boost::system::error_code ec;
+
+  boost::asio::steady_timer timer(*io_context_);
+  timer.expires_after(std::chrono::milliseconds(20));  // Slightly longer timeout for full query
+  timer.async_wait([&](const boost::system::error_code& e) {
+    if (!e) serial_->cancel();
+  });
+
+  try {
+    boost::asio::read(*serial_, boost::asio::buffer(buffer), ec);
+  } catch (const boost::system::system_error& e) {
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Error reading query response: " + std::string(e.what()));
+  }
+
+  timer.cancel();
+
+  if (ec) {
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Query read failed/timed out: " + ec.message());
   }
 
   return buffer;

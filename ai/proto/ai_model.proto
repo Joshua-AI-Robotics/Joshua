@@ -16,12 +16,13 @@ enum ModelType {
 
 message SingleModel {
   ModelType model_type = 1;
-  string pretrained_model_path = 2;
-  ros2.node.Node node = 3;
+  string pretrained_model_hf_path = 2;
+  string pretrained_model_local_path = 3;  // If both are provided, the local path will be used.
+  ros2.node.Node node = 4;
 
   oneof model_config {
-    RandomNoiseConfig random_noise_config = 4;
-    SmolVLAConfig smolvla_config = 5;
+    RandomNoiseConfig random_noise_config = 5;
+    SmolVLAConfig smolvla_config = 6;
     // Add other model configs here.
   }
 }

@@ -1,27 +1,23 @@
-import sys
+import os
 import threading
-from typing import List, Any, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
+
+import glog
 import numpy as np
 import torch
-from PIL import Image
-import logging
-
-import rclpy
-from sensor_msgs.msg import Image as ImageMsg
-from std_msgs.msg import Float32
 
 # Protobuf generated modules
 from ai.proto.ai_model_pb2 import SingleModel
-from ai.models.model_base import ModelBase
-
-from ros2 import node_runner as node_runner_py
-from ros2.image_converter import ImageConverter
-
-from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
+from PIL import Image
+from sensor_msgs.msg import Image as ImageMsg
+from std_msgs.msg import Float32
 
-logger = logging.getLogger(__name__)
+from ai.models.model_base import ModelBase
+from ros2.image_converter import ImageConverter
+from ros2.proto import ros2_data_type_pb2
 
 
 class SmolVla(ModelBase):
@@ -38,20 +34,25 @@ class SmolVla(ModelBase):
     """
 
     # TODO(ulee): make this configurable.
-    TASK_DESCRIPTION = "Pick up the black object and place it in the container."
+    TASK_DESCRIPTION = (
+        "Pick up the white object and place it in the center of the table."
+    )
 
     def __init__(self, config: SingleModel):
         super().__init__(config)
 
         # Additional validation (after _setup_ros2_pub_sub has been called)
         if self._num_subscriptions < 1:
-            raise ValueError("SmolVLA inference node requires at least one subscription.")
+            raise ValueError(
+                "SmolVLA inference node requires at least one subscription."
+            )
 
-        # Initialize buffer to hold a list of values per subscription
-        self._input_buffer: List[List[Any]] = [
-            [] for _ in range(self._num_subscriptions)
-        ]
+        # Persistent storage for latest observations
+        self._latest_images: Dict[str, Any] = {}
+        self._state_history: List[List[float]] = []
         self._mutex = threading.Lock()
+        self._camera_keys_by_subscription: Dict[int, str] = {}
+        self._expected_num_cameras = 0
 
         self.model = None
         self.preprocessor = None
@@ -65,6 +66,25 @@ class SmolVla(ModelBase):
             raise ValueError("SmolVLA inference node requires a task description.")
 
         self._initialize_inference()
+        self._initialize_camera_keys()
+
+    def _initialize_camera_keys(self) -> None:
+        """
+        Build a mapping from subscription index to SmolVLA camera keys.
+
+        We assign camera keys based on the order of IMAGE subscriptions in the config:
+        camera1, camera2, ...
+        """
+        image_subscription_indices = [
+            idx
+            for idx, sub in enumerate(self._single_model_config.node.subscriptions)
+            if sub.ros2_data_type == ros2_data_type_pb2.Ros2DataType.IMAGE
+        ]
+        self._expected_num_cameras = len(image_subscription_indices)
+        self._camera_keys_by_subscription = {
+            sub_idx: f"observation.images.camera{cam_idx}"
+            for cam_idx, sub_idx in enumerate(image_subscription_indices, start=1)
+        }
 
     def _validate_config(self) -> None:
         """
@@ -74,7 +94,8 @@ class SmolVla(ModelBase):
         so we can only access _single_model_config and _model_config here.
         """
         # "SmolVLA inference node requires a model path."
-        if not self._single_model_config.pretrained_model_path:
+        if not (self._single_model_config.pretrained_model_hf_path
+            or self._single_model_config.pretrained_model_local_path):
             raise ValueError("SmolVLA inference node requires a pretrained model path.")
 
     def _initialize_inference(self) -> None:
@@ -86,13 +107,23 @@ class SmolVla(ModelBase):
         2. Setting up pre/post-processors for data normalization and tokenization
         """
         try:
-            model_name = getattr(self._model_config, 'model_name', 'HuggingFaceM4/SmolVLM-Instruct')
-            pretrained_model_path = self._single_model_config.pretrained_model_path
-
-            logger.info(f"Loading SmolVLA from: {pretrained_model_path}")
+            # TODO(hmoon): Use the model name from the config.
+            model_name = self._single_model_config.smolvla_config.model_name
+            glog.info(f"Loading SmolVLA model: {model_name}")
 
             # Load model
-            self.model = SmolVLAPolicy.from_pretrained(pretrained_model_path)
+            local_model_path = os.path.expanduser(
+                self._single_model_config.pretrained_model_local_path
+            )
+            hf_model_path = os.path.expanduser(
+                self._single_model_config.pretrained_model_hf_path
+            )
+            if os.path.isdir(local_model_path):
+                glog.info(f"Loading SmolVLA from local path: {local_model_path}")
+                self.model = SmolVLAPolicy.from_pretrained(local_model_path)
+            else:
+                glog.info(f"Loading SmolVLA from hf path: {hf_model_path}")
+                self.model = SmolVLAPolicy.from_pretrained(hf_model_path)
 
             # CRITICAL: Move ALL model components to device
             # This ensures tensors are on the correct device
@@ -102,38 +133,74 @@ class SmolVla(ModelBase):
             self.model.config.device = str(self.device)
 
             # Create preprocessors/postprocessors from the model's config
-            self.preprocessor, self.postprocessor = make_smolvla_pre_post_processors(config=self.model.config)
+            self.preprocessor, self.postprocessor = make_smolvla_pre_post_processors(
+                config=self.model.config
+            )
 
             # Set to eval mode for inference
             self.model.eval()
 
-            logger.info(f"SmolVLA inference initialized successfully on {self.device}. Task: '{self.task_description}'")
+            glog.info(
+                f"SmolVLA inference initialized successfully on {self.device}. Task: '{self.task_description}'"
+            )
 
         except Exception as e:
-            logger.error(f"Failed to initialize SmolVLA: {e}")
+            glog.error(f"Failed to initialize SmolVLA: {e}")
             import traceback
-            logger.error(traceback.format_exc())
+
+            glog.error(traceback.format_exc())
             raise
 
-    def handle_input(self, subscription_index: int, data: Any, publish_callback: Callable[[int, Any], None]) -> None:
+    def handle_input(
+        self,
+        subscription_index: int,
+        data: Any,
+        publish_callback: Callable[[int, Any], None],
+    ) -> None:
         """
         Handle input data for SmolVLA inference.
         """
         processed_data = self.preprocess_input(subscription_index, data)
+
         with self._mutex:
-            if subscription_index >= self._num_subscriptions:
-                return
+            should_infer = False
 
-            self._input_buffer[subscription_index].append(processed_data)
+            if processed_data["type"] == "image":
+                camera_key = self._camera_keys_by_subscription.get(
+                    subscription_index,
+                    f"observation.images.camera{subscription_index + 1}",
+                )
+                self._latest_images[camera_key] = processed_data["data"]
+                should_infer = True
+            elif processed_data["type"] == "state":
+                self._state_history.append(processed_data["data"])
+                # Keep last 10 states
+                if len(self._state_history) > 10:
+                    self._state_history.pop(0)
 
-            # TODO(ulee): revisit this once we want to use time-based or frame-skip based.
-            if len(self._input_buffer[subscription_index]) == 1:
-                outputs = self.inference(self._input_buffer[subscription_index])
-                final_outputs = self.postprocess_output(outputs)
-                for publisher_index in range(self._num_publishers):
-                    publish_callback(publisher_index, final_outputs[publisher_index])
+            # Run inference if we have a new image (camera rate)
+            if should_infer and self._latest_images:
+                if (
+                    self._expected_num_cameras > 0
+                    and len(self._latest_images) < self._expected_num_cameras
+                ):
+                    glog.debug(
+                        "Waiting for all camera images (%d/%d).",
+                        len(self._latest_images),
+                        self._expected_num_cameras,
+                    )
+                    return
+                # We pass the collected state history
+                outputs = self.inference(
+                    dict(self._latest_images), list(self._state_history)
+                )
 
-                self._input_buffer[subscription_index] = []
+                if outputs is not None:
+                    final_outputs = self.postprocess_output(outputs)
+                    for publisher_index in range(self._num_publishers):
+                        publish_callback(
+                            publisher_index, final_outputs[publisher_index]
+                        )
 
     def preprocess_input(self, subscription_index: int, data: Any) -> Any:
         """
@@ -144,7 +211,7 @@ class SmolVla(ModelBase):
         """
         if isinstance(data, ImageMsg):
             # Convert ROS Image to numpy array (HWC format, RGB)
-            cv_image = self.bridge.imgmsg_to_cv2(data, desired_encoding='rgb8')
+            cv_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="rgb8")
 
             # Normalize the image to [0, 1]
             cv_image = cv_image.astype(np.float32) / 255.0
@@ -160,7 +227,7 @@ class SmolVla(ModelBase):
             # Return the float value for joint state
             return {"type": "state", "data": data.data}
         else:
-            logger.warning(f"Unexpected input type {type(data)}, returning as-is")
+            glog.warning(f"Unexpected input type {type(data)}, returning as-is")
             return {"type": "unknown", "data": data}
 
     def postprocess_output(self, output_data: List[Any]) -> List[Any]:
@@ -173,7 +240,7 @@ class SmolVla(ModelBase):
         """
         # Handle None or failed inference
         if output_data is None:
-            logger.warning("Inference returned None, returning zeros")
+            glog.warning("Inference returned None, returning zeros")
             raise ValueError("Inference returned None")
 
         # select_action returns the action tensor directly
@@ -192,60 +259,62 @@ class SmolVla(ModelBase):
         action_values = action_tensor.detach().cpu().numpy().tolist()
 
         # Log raw values for debugging
-        logger.info(f"Raw model output: {action_values}")
+        glog.debug(f"Raw model output: {action_values}")
 
         # SmolVLA output is likely already normalized to roughly [-1, 1]
         # Just clamp to ensure values stay in [-1, 1] for actuator driver
         action_values = [max(-1.0, min(1.0, v)) for v in action_values]
 
-        logger.info(f"Clamped output: {action_values}")
+        glog.debug(f"Clamped output: {action_values}")
 
         if len(action_values) != self._num_publishers:
-            logger.warning(
-                f"Model output {len(action_values)} actions, but need {self._num_publishers}. Padding/truncating.")
+            glog.warning(
+                f"Model output {len(action_values)} actions, but need {self._num_publishers}. Padding/truncating."
+            )
             # Pad with zeros or truncate
             if len(action_values) < self._num_publishers:
-                action_values.extend([0.0] * (self._num_publishers - len(action_values)))
+                action_values.extend(
+                    [0.0] * (self._num_publishers - len(action_values))
+                )
             else:
-                action_values = action_values[:self._num_publishers]
+                action_values = action_values[: self._num_publishers]
 
         return action_values
 
-    def inference(self, input_data: List[Any]) -> List[Any]:
+    def inference(self, images: Dict[str, Any], state_history: List[Any]) -> List[Any]:
         """
-        Run inference on the buffered input data.
+        Run inference using the latest image and state history.
 
         Args:
-            input_data: List of preprocessed data dicts with 'type' and 'data' keys
+            image: Preprocessed image batch (1, C, H, W)
+            state_history: List of recent state values
 
         Returns:
             Action tensor from the model
         """
-        # Separate images and state data from the preprocessed buffer
-        images = [d["data"] for d in input_data if isinstance(d, dict) and d.get("type") == "image"]
-        states = [d["data"] for d in input_data if isinstance(d, dict) and d.get("type") == "state"]
+        # Build joint state from collected state data
+        if len(state_history) > 0:
+            # Create array from history.
+            # Note: Depending on model expectation, we might need a specific number of states.
+            # Here we take up to last 6.
+            state_vals = state_history[-6:]
+            # Ensure it is a flat list of floats if state_history is simple list
+            # But if state_history contains lists (e.g. from multiple joints), we need to flatten
+            # Here we assume state_history is just simple floats for now based on Float32 input
 
-        if len(images) == 0:
-            logger.error("No valid images in input buffer for inference")
-            return None
+            state = np.array(state_vals, dtype=np.float32).reshape(1, -1)
 
-        # Use the most recent image (already in CHW format with batch dim from preprocess_input)
-        latest_image = images[-1]
-
-        # Build joint state from collected state data, or use dummy
-        if len(states) > 0:
-            state = np.array(states[-6:], dtype=np.float32).reshape(1, -1)  # Use last 6 states
+            # If we have fewer than 6 states, pad with zeros
             if state.shape[1] < 6:
-                # Pad with zeros if we don't have enough states
-                state = np.pad(state, ((0, 0), (0, 6 - state.shape[1])), mode='constant')
+                state = np.pad(
+                    state, ((0, 0), (0, 6 - state.shape[1])), mode="constant"
+                )
         else:
             state = np.zeros((1, 6), dtype=np.float32)
 
         # Prepare observation dictionary for SmolVLA
-        observation = {
-            "observation.images.camera1": latest_image,
-            "observation.state": state,
-        }
+        # Order: Camera(s), State, Task
+        observation = {**images, "observation.state": state}
 
         # Add task description
         task = self.task_description
@@ -267,15 +336,16 @@ class SmolVla(ModelBase):
                     processed_batch[key] = processed_batch[key].to(self.device)
 
             # Run inference
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = self.model.select_action(processed_batch)
 
             return outputs
 
         except Exception as e:
-            logger.error(f"Inference failed: {e}")
+            glog.error(f"Inference failed: {e}")
             import traceback
-            logger.error(traceback.format_exc())
+
+            glog.error(traceback.format_exc())
             return None
 
     def forward(self, input_data: List[Any]) -> List[Any]:
