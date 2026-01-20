@@ -1,0 +1,31 @@
+general{
+  operation_mode: MODE_INFERENCE
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "mock_py_test"
+  id: 1
+}
+robot {
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_1"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "mock_motor_1"
+        id: 1
+        actuator_type: MOCK_MOTOR
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+        mock_motor_config {
+          motor_id: 1
+        }
+      }
+    }
+  }
+}

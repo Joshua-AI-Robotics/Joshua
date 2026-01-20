@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_python//python:defs.bzl", "py_library")
 
 cc_library(
     name = "action_factory",
@@ -12,5 +13,16 @@ cc_library(
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@glog",
+    ],
+)
+
+py_library(
+    name = "action_factory_py",
+    srcs = ["action_factory.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/action/interfaces:action_interface_py",
+        "//robot/action/motors/drivers:mock_driver_py",
+        "//robot/action/proto:action_py_proto",
     ],
 )

@@ -154,6 +154,28 @@ ros2_cpp_binary(
 )
 
 ros2_py_binary(
+    name = "actuator_subscriber_py",
+    srcs = [
+        "actuator_subscriber.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "actuator_subscriber.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/action/factory:action_factory_py",
+        "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+        "//ros2/proto:node_py_proto",
+    ] + requirement("protobuf"),
+    visibility = ["//visibility:public"],
+)
+
+ros2_py_binary(
     name = "data_subscriber",
     srcs = [
         "data_subscriber.py",

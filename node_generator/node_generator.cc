@@ -23,6 +23,12 @@ namespace {
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
+constexpr auto kPythonExecSuffix = "_py";
+
+enum class BackendPreference {
+  kCpp,
+  kPython,
+};
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -32,6 +38,10 @@ std::string NodeTypeToString(const ros2::node::NodeType& type) {
   std::transform(
       name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
   return name;
+}
+
+const char* BackendPreferenceToString(BackendPreference backend) {
+  return backend == BackendPreference::kCpp ? "cpp" : "python";
 }
 
 // Resolve current executable absolute path via /proc/self/exe
@@ -64,13 +74,13 @@ std::optional<std::filesystem::path> GetRunfilesRoot() {
 }
 
 // Try to find the native binary in Bazel's bin tree: <bazel-bin>/ros2/<name>
-std::optional<std::filesystem::path> ResolveNativeBinaryInBazelBin(const std::string& node_type) {
+std::optional<std::filesystem::path> ResolveNativeBinaryInBazelBin(const std::string& exec_name) {
   std::string self_exe = GetSelfExecutablePath();
   if (self_exe.empty()) return std::nullopt;
   std::filesystem::path exe_dir = std::filesystem::path(self_exe).parent_path();
   if (!exe_dir.has_parent_path()) return std::nullopt;
   std::filesystem::path bazel_bin_root = exe_dir.parent_path();
-  std::filesystem::path candidate = bazel_bin_root / kROS2 / node_type;
+  std::filesystem::path candidate = bazel_bin_root / kROS2 / exec_name;
   if (std::filesystem::exists(candidate)) {
     return candidate;
   }
@@ -119,6 +129,123 @@ std::optional<std::filesystem::path> ResolveRos2WrapperPath() {
     }
   }
   return std::nullopt;
+}
+
+bool IsExecutablePathValid(const std::filesystem::path& candidate) {
+  return std::filesystem::exists(candidate) && access(candidate.c_str(), X_OK) == 0;
+}
+
+bool IsExecutableAvailable(const std::string& exec_name) {
+  if (auto native_bin = ResolveNativeBinaryInBazelBin(exec_name)) {
+    if (IsExecutablePathValid(*native_bin)) {
+      return true;
+    }
+  }
+
+  // Packaged layout: check next to wrapper or under ros2/
+  if (auto wrapper = ResolveRos2WrapperPath()) {
+    std::filesystem::path wrapper_dir = wrapper->parent_path();
+    std::filesystem::path candidate = wrapper_dir / exec_name;
+    if (IsExecutablePathValid(candidate)) {
+      return true;
+    }
+    std::filesystem::path candidate_sub = wrapper_dir / kROS2 / exec_name;
+    if (IsExecutablePathValid(candidate_sub)) {
+      return true;
+    }
+  }
+
+  // Runfiles layout
+  if (auto runfiles_root_opt = GetRunfilesRoot()) {
+    const std::filesystem::path runfiles_root = *runfiles_root_opt;
+    const char* workspace_dirs[] = {"_main", "__main__"};
+    for (const char* ws : workspace_dirs) {
+      std::filesystem::path candidate = runfiles_root / ws / kROS2 / exec_name;
+      if (IsExecutablePathValid(candidate)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_action) {
+  if (single_action.action_type() != robot::action::ActionType::ACTUATOR) {
+    return false;
+  }
+  switch (single_action.actuator().actuator_type()) {
+    case robot::action::ActuatorType::STS3215_SERVO:
+      return true;
+    case robot::action::ActuatorType::MOCK_MOTOR:
+      return false;
+    default:
+      return false;
+  }
+}
+
+bool IsCppDriverAvailableForPerception(
+    const robot::perception::SinglePerception& single_perception) {
+  switch (single_perception.perception_type()) {
+    case robot::perception::PerceptionType::CAMERA:
+      return true;
+    case robot::perception::PerceptionType::ENCODER: {
+      switch (single_perception.encoder().encoder_type()) {
+        case robot::perception::EncoderType::STS3215_ENCODER:
+          return true;
+        default:
+          return false;
+      }
+    }
+    case robot::perception::PerceptionType::LIDAR: {
+      switch (single_perception.lidar().lidar_type()) {
+        case robot::perception::LidarType::LDS01:
+          return true;
+        default:
+          return false;
+      }
+    }
+    default:
+      return false;
+  }
+}
+
+BackendPreference DeterminePreferredBackend(const ros2::node::NodeType node_type,
+                                            const uint32_t node_id,
+                                            const config::Config& config) {
+  switch (node_type) {
+    case ros2::node::ACTUATOR_SUBSCRIBER: {
+      for (const auto& single_action : config.robot().actions().single_actions()) {
+        if (single_action.node().id() == node_id) {
+          return IsCppDriverAvailableForAction(single_action) ? BackendPreference::kCpp
+                                                              : BackendPreference::kPython;
+        }
+      }
+      LOG(WARNING) << "No action config found for node_id " << node_id
+                   << "; defaulting to C++ backend.";
+      return BackendPreference::kCpp;
+    }
+    case ros2::node::ENCODER_PUBLISHER:
+    case ros2::node::CAMERA_PUBLISHER:
+    case ros2::node::LIDAR_PUBLISHER: {
+      for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
+        if (single_perception.node().id() == node_id) {
+          return IsCppDriverAvailableForPerception(single_perception) ? BackendPreference::kCpp
+                                                                      : BackendPreference::kPython;
+        }
+      }
+      LOG(WARNING) << "No perception config found for node_id " << node_id
+                   << "; defaulting to C++ backend.";
+      return BackendPreference::kCpp;
+    }
+    case ros2::node::INFERENCE:
+    case ros2::node::DATA_SUBSCRIBER:
+      return BackendPreference::kPython;
+    case ros2::node::OPERATIONAL_LIMIT_CALIBRATION:
+      return BackendPreference::kCpp;
+    default:
+      return BackendPreference::kCpp;
+  }
 }
 
 void ExtractTopicsFromNode(const ros2::node::Node& node,
@@ -342,6 +469,36 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
     return -1;
   }
 
+  BackendPreference preferred_backend = DeterminePreferredBackend(node_type, node_id, config_);
+  std::string exec_name = preferred_backend == BackendPreference::kCpp
+                              ? node_type_str
+                              : node_type_str + std::string(kPythonExecSuffix);
+
+  if (!IsExecutableAvailable(exec_name)) {
+    if (preferred_backend == BackendPreference::kCpp) {
+      const std::string fallback_exec = node_type_str + std::string(kPythonExecSuffix);
+      if (IsExecutableAvailable(fallback_exec)) {
+        LOG(WARNING) << "Preferred backend '" << BackendPreferenceToString(preferred_backend)
+                     << "' not available for node '" << node_name << "'. Falling back to '"
+                     << BackendPreferenceToString(BackendPreference::kPython) << "'.";
+        preferred_backend = BackendPreference::kPython;
+        exec_name = fallback_exec;
+      } else {
+        LOG(ERROR) << "No executable available for node '" << node_name << "' (type '"
+                   << node_type_str << "'). Checked backends: cpp and python.";
+        return -1;
+      }
+    } else {
+      LOG(ERROR) << "Preferred backend 'python' not available for node '" << node_name
+                 << "' (type '" << node_type_str
+                 << "'). C++ driver not available; not falling back.";
+      return -1;
+    }
+  }
+
+  LOG(INFO) << "Launching node '" << node_name << "' with backend '"
+            << BackendPreferenceToString(preferred_backend) << "' (exec '" << exec_name << "').";
+
   std::string exec_path;
   std::vector<std::string> argv_strings;
   std::vector<std::pair<std::string, std::string>> env_to_set;
@@ -349,10 +506,10 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   std::string work_dir;
 
   // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
-  if (auto native_bin = ResolveNativeBinaryInBazelBin(node_type_str)) {
+  if (auto native_bin = ResolveNativeBinaryInBazelBin(exec_name)) {
     exec_path = native_bin->string();
     if (!std::filesystem::exists(exec_path)) {
-      LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << node_type_str
+      LOG(ERROR) << "Native binary not found at '" << exec_path << "' for node '" << exec_name
                  << "'";
       return -1;
     }
@@ -401,10 +558,10 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
       LOG(ERROR) << "Wrapper script not executable: '" << exec_path << "' (chmod +x)";
       return -1;
     }
-    argv_strings = {exec_path, node_type_str, node_name, std::to_string(node_id), config_path_};
+    argv_strings = {exec_path, exec_name, node_name, std::to_string(node_id), config_path_};
   } else {
     LOG(ERROR) << "Could not locate ROS2 wrapper, native binary, or launch for node type '"
-               << node_type_str;
+               << exec_name << "'";
     return -1;
   }
 
