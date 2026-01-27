@@ -1,0 +1,27 @@
+# Development Dockerfile for React UI with hot reload
+# Build context should be the project root (not just ui/)
+# This allows access to proto files in config/, robot/, ai/ directories
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies first (for better caching)
+COPY ui/package.json ui/package-lock.json* ./
+RUN npm ci
+
+# Copy entire project (needed for proto files and source code)
+# Note: Source files will be mounted as volumes in docker-compose for hot reload
+COPY . /app/
+
+WORKDIR /app/ui
+
+# Generate schema on startup (will regenerate when proto files change via volume mount)
+RUN npm run generate-schema || true
+
+# Expose Vite dev server port
+EXPOSE 3000
+
+# Start Vite dev server with hot reload
+CMD ["npm", "run", "dev"]
+

@@ -13,10 +13,12 @@ COPY ui/package.json ui/package-lock.json* ./
 # Install dependencies
 RUN npm ci
 
-# Copy entire project (needed for proto files)
+# Copy entire project (needed for proto files in config/, robot/, ai/ directories)
 COPY . /app/
 
-# Build the application (this will run generate-schema which needs proto files)
+# Build the application
+# The build script automatically runs generate-schema.js to dynamically generate
+# proto-schema.json from proto files before building the React app
 WORKDIR /app/ui
 RUN npm run build
 
@@ -26,12 +28,19 @@ FROM nginx:alpine
 # Copy built files from builder stage
 COPY --from=builder /app/ui/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx configuration template
+# nginx:alpine's entrypoint automatically processes .template files in /etc/nginx/templates/
+# using envsubst for environment variable substitution
+COPY ui/nginx.conf /etc/nginx/templates/default.conf.template
+
+# Copy custom entrypoint script that extracts host:port from ZENOH_BRIDGE_URL
+COPY ui/docker-entrypoint.sh /docker-entrypoint-custom.sh
+RUN chmod +x /docker-entrypoint-custom.sh
 
 # Expose port
 EXPOSE 80
 
-# Start nginx
+# Use custom entrypoint which extracts ZENOH_BRIDGE_HOST_PORT before calling nginx entrypoint
+ENTRYPOINT ["/docker-entrypoint-custom.sh"]
 CMD ["nginx", "-g", "daemon off;"]
 

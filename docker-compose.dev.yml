@@ -1,0 +1,89 @@
+# Joshua Project Docker Compose - Development Services
+# Requires: Docker Compose v2 (use 'docker compose', not 'docker-compose')
+# This file contains development-specific services for Zenoh bridge and UI development
+#
+# Usage (recommended - only start needed services):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev ros2-demo-nodes
+#
+# Note: Do NOT start both joshua-ui and joshua-ui-dev at the same time (port conflict on 3000).
+# Use joshua-ui-dev for development (hot reload) or joshua-ui for production (nginx).
+#
+# Note: ARM64 services (joshua-u22-arm64, joshua-u24-arm64) are excluded from dev workflow
+# to avoid cross-platform build issues on x86_64 systems. They can be built separately if needed.
+
+services:
+  # joshua-u22 service (AMD64 only) - needed for ros2-demo-nodes
+  # This overrides the base joshua-u22 to ensure only AMD64 is built
+  joshua-u22:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu22
+      platforms:
+        - linux/amd64
+    image: joshua:u22-humble
+    container_name: joshua-u22-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    network_mode: host
+    volumes:
+      - .:/workspace
+      - /dev:/dev
+    environment:
+      - ROS_DISTRO=humble
+      - DISPLAY=${DISPLAY:-}
+    working_dir: /workspace
+
+  # ============================================
+  # Zenoh Bridge & ROS2 Integration Services
+  # ============================================
+
+  # Zenoh bridge for ROS2DDS - exposes ROS2 graph over REST + SSE
+  zenoh-bridge-ros2dds:
+    image: eclipse/zenoh-bridge-ros2dds:latest
+    container_name: zenoh-bridge-ros2dds
+    network_mode: host
+    command: --rest-http-port=0.0.0.0:8000
+    environment:
+      - ROS_DISTRO=humble
+    restart: unless-stopped
+
+  # ROS2 demo nodes for testing (talker/listener) - for visual verification
+  ros2-demo-nodes:
+    image: joshua:u22-humble
+    container_name: ros2-demo-nodes
+    network_mode: host
+    command: >
+      bash -c "
+      set -e &&
+      source /opt/ros/humble/setup.bash &&
+      echo 'ROS2 environment loaded. Starting demo nodes...' &&
+      ros2 run demo_nodes_cpp talker &
+      ros2 run demo_nodes_cpp listener &
+      wait
+      "
+    restart: unless-stopped
+    depends_on:
+      joshua-u22:
+        condition: service_started  # Ensure joshua-u22 container is started (image built)
+
+  # UI Development Server (with hot reload)
+  joshua-ui-dev:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile.dev
+    container_name: joshua-ui-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./ui:/app/ui
+      - ./config:/app/config
+      - ./robot:/app/robot
+      - ./ai:/app/ai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ZENOH_BRIDGE_URL=http://host.docker.internal:8000
+    restart: unless-stopped
+
