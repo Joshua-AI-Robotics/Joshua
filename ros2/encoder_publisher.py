@@ -118,9 +118,7 @@ class EncoderPublisher(Node):
                 message = Float32()
                 message.data = float(position_data)
                 encoder.publisher.publish(message)
-                self.get_logger().info(
-                    f"Published encoder data to topic '{encoder.topic}'"
-                )
+
         except Exception as exc:
             self.get_logger().error(f"Error publishing encoder data: {exc}")
 

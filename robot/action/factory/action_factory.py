@@ -6,12 +6,12 @@ from robot.action.proto import action_pb2
 
 
 def create_action(single_action: action_pb2.SingleAction) -> ActionInterface:
-    if single_action.action_type != action_pb2.ActionType.ACTUATOR:
-        raise ValueError("Invalid action type")
+    if single_action.action_type == action_pb2.ActionType.ACTUATOR:
+        actuator = single_action.actuator
+        if actuator.actuator_type == action_pb2.ActuatorType.MOCK_MOTOR:
+            driver = MockDriver(actuator)
+            driver.init()
+            return driver
+        raise ValueError("Invalid actuator type")
 
-    actuator = single_action.actuator
-    driver = MockDriver(actuator)
-    driver.init()
-    return driver
-
-    raise ValueError("Invalid actuator type")
+    raise ValueError("Invalid action type")
