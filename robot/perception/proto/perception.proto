@@ -31,6 +31,7 @@ enum CameraType {
 enum EncoderType {
   ENCODER_INVLAID = 0;
   STS3215_ENCODER = 1;
+  MOCK_ENCODER = 2;
 }
 
 enum LidarType {

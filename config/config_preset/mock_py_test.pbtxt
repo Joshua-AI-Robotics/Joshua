@@ -48,5 +48,25 @@ robot {
         comm{}
       }
     }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_encoder_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "mock_encoder_1"
+        id: 1
+        encoder_type: MOCK_ENCODER
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        comm{}
+      }
+    }
   }
 }

@@ -11,6 +11,7 @@ cc_binary(
         "//ros2:camera_publisher",
         "//ros2:camera_publisher_py",
         "//ros2:encoder_publisher",
+        "//ros2:encoder_publisher_py",
         "//ros2:lidar_publisher",
         "//ros2:inference",
         "//ros2:operational_limit_calibration",
