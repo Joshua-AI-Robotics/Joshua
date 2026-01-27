@@ -24,6 +24,7 @@ py_library(
     deps = [
         "//robot/perception/camera:mock_camera_py",
         "//robot/perception/encoder:mock_encoder_py",
+        "//robot/perception/lidar:mock_lidar_py",
         "//robot/perception/interfaces:perception_interface_py",
         "//robot/perception/proto:perception_py_proto",
     ],

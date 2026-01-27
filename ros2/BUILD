@@ -2,8 +2,6 @@
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
-load("//:requirements.bzl", "requirement")
-load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -169,6 +167,24 @@ ros2_cpp_binary(
         "//ros2:node_runner",
     ],
     set_up_ament = True,
+)
+
+ros2_py_binary(
+    name = "lidar_publisher_py",
+    srcs = [
+        "lidar_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "lidar_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/perception/factory:perception_factory_py",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
 )
 
 ros2_cpp_binary(

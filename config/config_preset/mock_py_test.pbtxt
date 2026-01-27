@@ -68,5 +68,24 @@ robot {
         comm{}
       }
     }
+    single_perceptions {
+      node {
+        id: 4
+        node_type: LIDAR_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: POINTCLOUD2
+          topic: "mock_lidar_1"
+          publish_rate_hz: 10
+        }
+      }
+      perception_type: LIDAR
+      lidar {
+        lidar_name: "mock_lidar_1"
+        id: 1
+        lidar_type: MOCK_LIDAR
+        comm{}
+      }
+    }
   }
 }
