@@ -44,6 +44,21 @@ const char* BackendPreferenceToString(BackendPreference backend) {
   return backend == BackendPreference::kCpp ? "cpp" : "python";
 }
 
+std::string ExecNameForBackend(const ros2::node::NodeType node_type,
+                               const BackendPreference backend) {
+  const std::string node_type_str = NodeTypeToString(node_type);
+  if (backend == BackendPreference::kCpp) {
+    return node_type_str;
+  }
+  switch (node_type) {
+    case ros2::node::INFERENCE:
+    case ros2::node::DATA_SUBSCRIBER:
+      return node_type_str;  // python target already uses canonical name
+    default:
+      return node_type_str + std::string(kPythonExecSuffix);
+  }
+}
+
 // Resolve current executable absolute path via /proc/self/exe
 std::string GetSelfExecutablePath() {
   char buffer[PATH_MAX];
@@ -470,13 +485,11 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   }
 
   BackendPreference preferred_backend = DeterminePreferredBackend(node_type, node_id, config_);
-  std::string exec_name = preferred_backend == BackendPreference::kCpp
-                              ? node_type_str
-                              : node_type_str + std::string(kPythonExecSuffix);
+  std::string exec_name = ExecNameForBackend(node_type, preferred_backend);
 
   if (!IsExecutableAvailable(exec_name)) {
     if (preferred_backend == BackendPreference::kCpp) {
-      const std::string fallback_exec = node_type_str + std::string(kPythonExecSuffix);
+      const std::string fallback_exec = ExecNameForBackend(node_type, BackendPreference::kPython);
       if (IsExecutableAvailable(fallback_exec)) {
         LOG(WARNING) << "Preferred backend '" << BackendPreferenceToString(preferred_backend)
                      << "' not available for node '" << node_name << "'. Falling back to '"
