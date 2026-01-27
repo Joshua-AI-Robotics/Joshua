@@ -25,6 +25,7 @@ enum EncoderDataMode {
 enum CameraType {
   CAMERA_INVLAID = 0;
   OPENCV = 1;
+  MOCK_CAMERA = 2;
 }
 
 enum EncoderType {

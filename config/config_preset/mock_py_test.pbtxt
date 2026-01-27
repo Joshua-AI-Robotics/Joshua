@@ -28,4 +28,25 @@ robot {
       }
     }
   }
+  perceptions {
+    single_perceptions {
+      node {
+        id: 2
+        node_type: CAMERA_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "mock_camera_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: CAMERA
+      camera {
+        camera_name: "mock_camera_1"
+        id: 1
+        camera_type: MOCK_CAMERA
+        comm{}
+      }
+    }
+  }
 }

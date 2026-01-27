@@ -22,6 +22,7 @@ py_library(
     srcs = ["perception_factory.py"],
     visibility = ["//visibility:public"],
     deps = [
+        "//robot/perception/camera:mock_camera_py",
         "//robot/perception/interfaces:perception_interface_py",
         "//robot/perception/proto:perception_py_proto",
     ],

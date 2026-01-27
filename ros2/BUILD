@@ -94,6 +94,24 @@ ros2_cpp_binary(
     ],
 )
 
+ros2_py_binary(
+    name = "camera_publisher_py",
+    srcs = [
+        "camera_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "camera_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/perception/factory:perception_factory_py",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
+)
+
 ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
@@ -172,7 +190,6 @@ ros2_py_binary(
         "//ros2/utils:qos_setting_py",
         "//ros2/proto:node_py_proto",
     ] + requirement("protobuf"),
-    visibility = ["//visibility:public"],
 )
 
 ros2_py_binary(

@@ -188,7 +188,7 @@ bool IsCppDriverAvailableForPerception(
     const robot::perception::SinglePerception& single_perception) {
   switch (single_perception.perception_type()) {
     case robot::perception::PerceptionType::CAMERA:
-      return true;
+      return single_perception.camera().camera_type() == robot::perception::CameraType::OPENCV;
     case robot::perception::PerceptionType::ENCODER: {
       switch (single_perception.encoder().encoder_type()) {
         case robot::perception::EncoderType::STS3215_ENCODER:
