@@ -14,6 +14,7 @@ enum ActionType {
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
+  MOCK_MOTOR = 2;
 }
 
 message Actuator {
@@ -29,6 +30,7 @@ message Actuator {
       9;  // How the actuator data is processed for action.
   oneof action_config {
     Sts3215Config sts3215_config = 11;
+    MockMotorConfig mock_motor_config = 12;
     // Add other motor type here.
   }
 }
@@ -38,6 +40,10 @@ message Sts3215Config {
   uint32 move_time_in_ms = 2;
   uint32 move_speed = 3;
   uint32 idle_position = 4;
+}
+
+message MockMotorConfig {
+  uint64 motor_id = 1;
 }
 
 message SingleAction {

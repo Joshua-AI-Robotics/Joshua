@@ -1,7 +1,7 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
-load("//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
+load("//:requirements.bzl", "requirement")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -94,6 +94,24 @@ ros2_cpp_binary(
     ],
 )
 
+ros2_py_binary(
+    name = "camera_publisher_py",
+    srcs = [
+        "camera_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "camera_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/perception/factory:perception_factory_py",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
+)
+
 ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
@@ -111,6 +129,24 @@ ros2_cpp_binary(
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+ros2_py_binary(
+    name = "encoder_publisher_py",
+    srcs = [
+        "encoder_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "encoder_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/perception/factory:perception_factory_py",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
 )
 
 ros2_cpp_binary(
@@ -133,6 +169,24 @@ ros2_cpp_binary(
     set_up_ament = True,
 )
 
+ros2_py_binary(
+    name = "lidar_publisher_py",
+    srcs = [
+        "lidar_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "lidar_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/perception/factory:perception_factory_py",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
+)
+
 ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
@@ -151,6 +205,27 @@ ros2_cpp_binary(
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+ros2_py_binary(
+    name = "actuator_subscriber_py",
+    srcs = [
+        "actuator_subscriber.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "actuator_subscriber.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/action/factory:action_factory_py",
+        "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+        "//ros2/proto:node_py_proto",
+    ] + requirement("protobuf"),
 )
 
 ros2_py_binary(

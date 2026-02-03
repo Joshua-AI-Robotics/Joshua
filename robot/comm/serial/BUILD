@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_python//python:defs.bzl", "py_library")
 
 cc_library(
     name = "serial",
@@ -11,4 +12,10 @@ cc_library(
         "@boost.asio",
         "@glog",
     ],
+)
+
+py_library(
+    name = "serial_py",
+    srcs = ["serial.py"],
+    visibility = ["//visibility:public"],
 )

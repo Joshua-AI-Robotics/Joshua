@@ -1,0 +1,91 @@
+general{
+  operation_mode: MODE_INFERENCE
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "mock_py_test"
+  id: 1
+}
+robot {
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting {}
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "mock_action_1"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "mock_motor_1"
+        id: 1
+        actuator_type: MOCK_MOTOR
+        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
+        mock_motor_config {
+          motor_id: 1
+        }
+      }
+    }
+  }
+  perceptions {
+    single_perceptions {
+      node {
+        id: 2
+        node_type: CAMERA_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "mock_camera_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: CAMERA
+      camera {
+        camera_name: "mock_camera_1"
+        id: 1
+        camera_type: MOCK_CAMERA
+        comm{}
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
+        node_type: ENCODER_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "mock_encoder_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: ENCODER
+      encoder {
+        encoder_name: "mock_encoder_1"
+        id: 1
+        encoder_type: MOCK_ENCODER
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        comm{}
+      }
+    }
+    single_perceptions {
+      node {
+        id: 4
+        node_type: LIDAR_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: POINTCLOUD2
+          topic: "mock_lidar_1"
+          publish_rate_hz: 10
+        }
+      }
+      perception_type: LIDAR
+      lidar {
+        lidar_name: "mock_lidar_1"
+        id: 1
+        lidar_type: MOCK_LIDAR
+        comm{}
+      }
+    }
+  }
+}
