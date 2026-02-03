@@ -6,6 +6,7 @@ package robot.comm;
 enum CommType {
   COMM_INVALID = 0;
   SERIAL = 1;
+  BLE = 2;
 }
 
 message Comm {

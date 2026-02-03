@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 cc_library(
     name = "action_factory",
@@ -23,6 +23,18 @@ py_library(
     deps = [
         "//robot/action/interfaces:action_interface_py",
         "//robot/action/motors/drivers:mock_driver_py",
+        "//robot/action/motors/drivers:pybricks_driver_py",
         "//robot/action/proto:action_py_proto",
+    ],
+)
+
+py_test(
+    name = "action_factory_test",
+    srcs = ["action_factory_test.py"],
+    deps = [
+        ":action_factory_py",
+        "//robot/action/motors/drivers:mock_driver_py",
+        "//robot/action/proto:action_py_proto",
+        "//robot/comm/proto:comm_py_proto",
     ],
 )
