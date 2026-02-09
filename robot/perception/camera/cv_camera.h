@@ -27,7 +27,7 @@ class CvCamera : public CameraInterface {
   absl::Status Teardown() override;
 
  private:
-  constexpr uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
+  const uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
   cv::VideoCapture cap_;
   cv::Mat last_frame_;
   std::string id_;
