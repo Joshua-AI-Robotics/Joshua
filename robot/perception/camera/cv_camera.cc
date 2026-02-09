@@ -15,15 +15,21 @@ CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
 }
 
 absl::Status CvCamera::Init() {
-  cap_.open(camera_id_, cv::CAP_V4L2);
-  if (!cap_.isOpened()) {
-    LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_;
-    return absl::Status(absl::StatusCode::kInternal,
-                        "Could not open camera with id " + std::to_string(camera_id_));
+  absl::Status status = OpenCamera();
+  if (!status.ok()) {
+    return status;
   }
 
-  // TODO: Remove this hardcoded values.
-  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+  if (opencv_config_.fourcc().size() < 4) {
+    LOG(ERROR) << "FourCC is not specified";
+    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
+  }
+  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc(
+    opencv_config_.fourcc()[0],
+    opencv_config_.fourcc()[1],
+    opencv_config_.fourcc()[2],
+    opencv_config_.fourcc()[3])
+  );
   bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
   bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
   bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
@@ -65,15 +71,9 @@ absl::Status CvCamera::Teardown() {
 absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
   try {
     // Check if camera is still open
-    if (!cap_.isOpened()) {
-      LOG(ERROR) << "Camera " << id_ << " is not open. Attempting to reopen...";
-      cap_.open(camera_id_, cv::CAP_V4L2);
-      if (!cap_.isOpened()) {
-        LOG(ERROR) << "Failed to reopen camera " << id_ << " with id " << camera_id_;
-        reusable_packet_.Clear();
-        return absl::Status(absl::StatusCode::kInternal, "Failed to reopen camera");
-      }
-      LOG(INFO) << "Successfully reopened camera " << id_;
+    absl::Status status = OpenCamera();
+    if (!status.ok()) {
+      return status;
     }
 
     cv::Mat frame;
@@ -163,6 +163,31 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
 std::string CvCamera::GetId() {
   auto id = "cv_camera_" + std::to_string(camera_id_);
   return id;
+}
+
+absl::Status CvCamera::OpenCamera() {
+  absl::Status status;
+  
+  for (uint8_t i = 0; i < MAX_CAMERA_OPEN_TRIES_; i++) {
+    if (cap_.isOpened()) {
+      status = absl::OkStatus();
+      break;
+    }
+    else {
+      LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
+      cap_.open(camera_id_, cv::CAP_V4L2);   
+    } 
+  }
+  if (cap_.isOpened()) {
+    status = absl::OkStatus();
+  }
+  else {
+    LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_;
+    status = absl::Status(absl::StatusCode::kInternal,
+      "Could not open camera with id " + std::to_string(camera_id_));
+  }
+
+  return status;
 }
 
 }  // namespace robot::perception

@@ -80,6 +80,7 @@ message OpenCvConfig {
   uint32 width = 2;
   uint32 height = 3;
   uint32 fps = 4;
+  string fourcc = 5;
 }
 
 message Sts3215EncoderConfig {
