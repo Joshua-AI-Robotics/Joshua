@@ -18,10 +18,10 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 ### Option A: Build docker image and run
 
 - **Operating System:** Ubuntu 22.04 LTS
-- **Install Docker:** Install docker with the following command
-  ```bash
-  sudo apt install docker.io
-  ```
+- **Install Docker:** Install docker desktop for your host machine and run. 
+- **(Linux Only) Login with gpg key** Docker desktop requires gpg key credentials for linux users.
+  Follow the link below to complete gpg key setup. 
+  [gpg key link setup](https://docs.docker.com/desktop/setup/sign-in/#credentials-management-for-linux-users)
 - **Build Docker Image:** Run the docker command to build the image in need. 
   [ubuntu 22.04 base with ROS2 humble]
   ```bash
@@ -46,13 +46,18 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   docker compose run --rm joshua-u24
   ```
   To exit, type exit.
-  After exiting, resume the docker container with:
+  After exiting, resume the docker container with the container name. 
+  To query stopped docker container list, type
   ```bash
-  docker start -i joshua-u22
+  docker container list -a
   ```
-  or 
+  To resume stopped docker, do
   ```bash
-  docker start -i jushua-u24
+  docker start -ai [container_name]
+  ```
+  For example, the resume command would look like
+  ```bash
+  docker start -ai joshua-joshua-u22-run-a199afce4b8a
   ```
 
 ### Option B: Native Installation
