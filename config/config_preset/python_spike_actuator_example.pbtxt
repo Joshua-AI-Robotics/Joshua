@@ -65,6 +65,35 @@ robot {
         encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
+    single_actions {
+      node {
+        id: 901
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_C/command"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "spike_motor_C"
+        id: 3
+        actuator_type: SPIKE_MOTOR
+        comm {
+          comm_type: BLE
+        }
+        spike_motor_config {
+          hub_id: "Pybricks Hub"
+          port: "C"
+        }
+        physical_lower_limit: 0
+        physical_upper_limit: 1000
+        operational_lower_limit: 0
+        operational_upper_limit: 1000
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+      }
+    }
   }
   perceptions {}
 }
