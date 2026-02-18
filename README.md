@@ -44,11 +44,15 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 - **Run interactive shell:**
   [ubuntu 22.04 base with ROS2 humble]
   ```bash
-  docker compose run --rm joshua-u22
+  docker compose run joshua-u22
   ```
   [ubuntu 24.04 base with ROS2 jazzy]
   ```bash
-  docker compose run --rm joshua-u24
+  docker compose run joshua-u24
+  ```
+  [Mac Host ubuntu 22.04 base with ROS2 humble arm64 target]
+  ```bash
+  docker compose run joshua-mac-u22-arm64
   ```
   To exit, type exit.
   After exiting, resume the docker container with the container name. 
