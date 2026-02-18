@@ -23,7 +23,7 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   Follow the link below to complete gpg key setup. 
   [gpg key link setup](https://docs.docker.com/desktop/setup/sign-in/#credentials-management-for-linux-users)
 - **Build Docker Image:** Run the docker command to build the image in need. 
-  [ubuntu 22.04 base with ROS2 humble]
+  [Linux Host: ubuntu 22.04 base with ROS2 humble]
   ```bash
   docker compose build joshua-u22
   ```
@@ -31,11 +31,16 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
   ```bash
   docker compose build joshua-u22-arm64
   ```
-  [ubuntu 24.04 base with ROS2 jazzy]
+  [Linux Host: ubuntu 24.04 base with ROS2 jazzy]
   ```bash
   docker compose build joshua-u24
   ```
   arm64 image for joshua-u24 is available as well. 
+  [Mac Apple Silicon Host: ubuntu 22.04 base with ROS2 humble]
+  ```bash
+  docker compose build joshua-mac-u22-arm64
+  ```
+  Note: Docker image for MAC supports arm64 target build only. Also serial ports are mocked by default. If real serial ports are needed, refer to the comments in docker-compose.yml file for details. 
 - **Run interactive shell:**
   [ubuntu 22.04 base with ROS2 humble]
   ```bash

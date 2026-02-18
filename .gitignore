@@ -32,3 +32,6 @@ ui/public/proto-schema*
 
 # Build output
 dist/
+
+# Ignore MAC OS files
+.DS_Store

@@ -95,6 +95,7 @@ RUN apt-get update && apt-get install -y \
 # ============================================
 RUN apt-get update && apt-get install -y \
     libevdev-dev \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
@@ -139,8 +140,22 @@ RUN apt-get update && apt-get install -y \
 # Install Python Project Dependencies
 # ============================================
 COPY requirements.lock /tmp/requirements.lock
-RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install --no-deps -r /tmp/requirements.lock && \
+# Filter out packages not available for ARM64 builds
+# - torchcodec: not available for ARM64 (only 0.0.0.dev0 exists)
+# - triton: GPU kernel compiler, not needed for ARM64 Mac builds (CUDA not available)
+# For ARM64, allow pip to resolve dependencies (don't use --no-deps) to handle missing packages gracefully
+# Also deduplicate packages (keep first occurrence) to handle duplicate entries like tzdata
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        grep -v "^torchcodec==" /tmp/requirements.lock | \
+        grep -v "^triton==" | \
+        awk -F'==' '!seen[$1]++' > /tmp/requirements_filtered.lock && \
+        mv /tmp/requirements_filtered.lock /tmp/requirements.lock && \
+        python3 -m pip install --upgrade pip && \
+        python3 -m pip install -r /tmp/requirements.lock; \
+    else \
+        python3 -m pip install --upgrade pip && \
+        python3 -m pip install --no-deps -r /tmp/requirements.lock; \
+    fi && \
     rm /tmp/requirements.lock
 
 # Fix for missing NVIDIA libraries in torch
