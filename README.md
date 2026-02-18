@@ -17,7 +17,7 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 
 ### Option A: Build docker image and run
 
-- **Operating System:** Ubuntu 22.04 LTS
+- **Operating System:** Ubuntu or MAC Apple Silicon
 - **Install Docker:** Install docker desktop for your host machine and run. 
 - **(Linux Only) Login with gpg key** Docker desktop requires gpg key credentials for linux users.
   Follow the link below to complete gpg key setup. 
