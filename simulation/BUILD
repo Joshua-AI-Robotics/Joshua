@@ -42,6 +42,7 @@ py_binary(
         "//simulation/modes:mirror",
         "//simulation/modes:offscreen",
         "//simulation/modes:passive",
+        "//simulation/modes:gym",
         "//simulation/proto:simulation_py_proto",
     ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),
 )

@@ -16,10 +16,7 @@ import gflags
 import glog
 from google.protobuf import text_format
 
-from simulation.modes.interactive import InteractiveMode
-from simulation.modes.mirror import MirrorMode
-from simulation.modes.offscreen import OffscreenMode
-from simulation.modes.passive import PassiveMode
+from simulation.modes import gym, interactive, mirror, offscreen, passive
 from simulation.proto import simulation_pb2
 from simulation.sim_engine import SimEngine
 
@@ -27,9 +24,10 @@ FLAGS = gflags.FLAGS
 
 gflags.DEFINE_string("config", None, "Path to a SimulationConfig .pbtxt file.")
 gflags.DEFINE_string(
-    "mode", None,
+    "mode",
+    None,
     "Override the mode in the config. "
-    "One of: interactive, passive, mirror, offscreen.",
+    "One of: interactive, passive, mirror, offscreen, gym.",
 )
 
 _MODE_ENUM = {
@@ -37,6 +35,7 @@ _MODE_ENUM = {
     "passive": simulation_pb2.MODE_PASSIVE,
     "mirror": simulation_pb2.MODE_MIRROR,
     "offscreen": simulation_pb2.MODE_OFFSCREEN,
+    "gym": simulation_pb2.MODE_GYM,
 }
 
 
@@ -47,17 +46,20 @@ def _load_config(path: str) -> simulation_pb2.SimulationConfig:
     return config
 
 
-def _create_mode(config: simulation_pb2.SimulationConfig):
+def _run_mode(config: simulation_pb2.SimulationConfig, engine: SimEngine) -> None:
     mode = config.mode
     if mode == simulation_pb2.MODE_INTERACTIVE:
-        return InteractiveMode()
-    if mode == simulation_pb2.MODE_PASSIVE:
-        return PassiveMode(config.passive)
-    if mode == simulation_pb2.MODE_MIRROR:
-        return MirrorMode(config.mirror)
-    if mode == simulation_pb2.MODE_OFFSCREEN:
-        return OffscreenMode(config.offscreen)
-    raise ValueError(f"Unknown or unset simulation mode: {mode}")
+        interactive.run(engine)
+    elif mode == simulation_pb2.MODE_PASSIVE:
+        passive.run(engine, config.passive)
+    elif mode == simulation_pb2.MODE_MIRROR:
+        mirror.run(engine, config.mirror)
+    elif mode == simulation_pb2.MODE_OFFSCREEN:
+        offscreen.run(engine, config.offscreen)
+    elif mode == simulation_pb2.MODE_GYM:
+        gym.run(engine, config.gym)
+    else:
+        raise ValueError(f"Unknown or unset simulation mode: {mode}")
 
 
 def main(argv):
@@ -76,8 +78,11 @@ def main(argv):
     if FLAGS.mode:
         override = FLAGS.mode.lower()
         if override not in _MODE_ENUM:
-            print(f"Error: unknown mode '{override}'. "
-                  f"Choose from: {', '.join(_MODE_ENUM)}", file=sys.stderr)
+            print(
+                f"Error: unknown mode '{override}'. "
+                f"Choose from: {', '.join(_MODE_ENUM)}",
+                file=sys.stderr,
+            )
             sys.exit(1)
         config.mode = _MODE_ENUM[override]
 
@@ -86,9 +91,8 @@ def main(argv):
     glog.info(f"  mode:  {simulation_pb2.SimulationMode.Name(config.mode)}")
 
     engine = SimEngine(config)
-    mode = _create_mode(config)
     try:
-        mode.run(engine)
+        _run_mode(config, engine)
     finally:
         engine.close()
 

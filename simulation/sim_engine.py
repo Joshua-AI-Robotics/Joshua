@@ -27,8 +27,10 @@ class SimEngine:
         mujoco.mj_forward(self._model, self._data)
 
         glog.info(f"SimEngine loaded: {config.model_path}")
-        glog.info(f"  bodies={self._model.nbody}  joints={self._model.njnt}  "
-                  f"actuators={self._model.nu}  sensors={self._model.nsensor}")
+        glog.info(
+            f"  bodies={self._model.nbody}  joints={self._model.njnt}  "
+            f"actuators={self._model.nu}  sensors={self._model.nsensor}"
+        )
 
     @property
     def config(self) -> simulation_pb2.SimulationConfig:
@@ -59,17 +61,13 @@ class SimEngine:
             self._data.ctrl[index] = value
 
     def get_qpos(self, joint_name: str) -> float:
-        jnt_id = mujoco.mj_name2id(
-            self._model, mujoco.mjtObj.mjOBJ_JOINT, joint_name
-        )
+        jnt_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
         if jnt_id < 0:
             raise KeyError(f"Joint '{joint_name}' not found in model")
         return float(self._data.qpos[self._model.jnt_qposadr[jnt_id]])
 
     def get_sensor(self, sensor_name: str) -> float:
-        sid = mujoco.mj_name2id(
-            self._model, mujoco.mjtObj.mjOBJ_SENSOR, sensor_name
-        )
+        sid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_SENSOR, sensor_name)
         if sid < 0:
             raise KeyError(f"Sensor '{sensor_name}' not found in model")
         return float(self._data.sensordata[self._model.sensor_adr[sid]])
@@ -79,18 +77,12 @@ class SimEngine:
     ) -> np.ndarray:
         """Return an RGB image (H, W, 3) from the named camera."""
         if self._renderer is None:
-            self._renderer = mujoco.Renderer(
-                self._model, height=height, width=width
-            )
+            self._renderer = mujoco.Renderer(self._model, height=height, width=width)
         elif self._renderer.height != height or self._renderer.width != width:
             self._renderer.close()
-            self._renderer = mujoco.Renderer(
-                self._model, height=height, width=width
-            )
+            self._renderer = mujoco.Renderer(self._model, height=height, width=width)
 
-        cam_id = mujoco.mj_name2id(
-            self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera
-        )
+        cam_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera)
         if cam_id < 0:
             raise KeyError(f"Camera '{camera}' not found in model")
 

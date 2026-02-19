@@ -13,75 +13,63 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from simulation.modes.mode_interface import SimulationMode
 from simulation.proto import simulation_pb2
 from simulation.sim_engine import SimEngine
 
 
-class MirrorMode(SimulationMode):
+def run(engine: SimEngine, config: simulation_pb2.MirrorConfig) -> None:
+    import rclpy
+    from rclpy.node import Node
+    from std_msgs.msg import Float32
 
-    def __init__(self, config: simulation_pb2.MirrorConfig) -> None:
-        self._topic_mappings = list(config.topic_mappings)
+    mappings = list(config.topic_mappings)
+    if not mappings:
+        raise ValueError("MirrorConfig.topic_mappings is required for mirror mode.")
 
-    def run(self, engine: SimEngine) -> None:
-        import rclpy
-        from rclpy.node import Node
-        from std_msgs.msg import Float32
+    num_ctrl = engine.num_actuators
+    latest_values = np.zeros(num_ctrl)
+    lock = threading.Lock()
 
-        if not self._topic_mappings:
-            raise ValueError(
-                "MirrorConfig.topic_mappings is required for mirror mode."
-            )
-
-        num_ctrl = engine.num_actuators
-        latest_values = np.zeros(num_ctrl)
-        lock = threading.Lock()
-
-        class MirrorNode(Node):
-            def __init__(self, mappings):
-                super().__init__("mujoco_mirror")
-                for mapping in mappings:
-                    idx = mapping.actuator_index
-                    if idx >= num_ctrl:
-                        self.get_logger().warning(
-                            f"actuator_index {idx} exceeds model's "
-                            f"{num_ctrl} actuators; skipping"
-                        )
-                        continue
-                    self.create_subscription(
-                        Float32,
-                        mapping.topic,
-                        self._make_callback(idx),
-                        10,
+    class MirrorNode(Node):
+        def __init__(self):
+            super().__init__("mujoco_mirror")
+            for mapping in mappings:
+                idx = mapping.actuator_index
+                if idx >= num_ctrl:
+                    self.get_logger().warning(
+                        f"actuator_index {idx} exceeds model's "
+                        f"{num_ctrl} actuators; skipping"
                     )
-                    self.get_logger().info(
-                        f"  actuator[{idx}] <- {mapping.topic}"
-                    )
+                    continue
+                self.create_subscription(
+                    Float32,
+                    mapping.topic,
+                    _make_callback(idx),
+                    10,
+                )
+                self.get_logger().info(f"  actuator[{idx}] <- {mapping.topic}")
 
-            def _make_callback(self, index: int):
-                def callback(msg: Float32):
-                    with lock:
-                        latest_values[index] = msg.data
-                return callback
+    def _make_callback(index: int):
+        def callback(msg: Float32):
+            with lock:
+                latest_values[index] = msg.data
 
-        rclpy.init()
-        node = MirrorNode(self._topic_mappings)
-        spin_thread = threading.Thread(
-            target=rclpy.spin, args=(node,), daemon=True
-        )
-        spin_thread.start()
-        glog.info("Mirror mode: waiting for ROS2 messages...")
+        return callback
 
-        try:
-            with mujoco.viewer.launch_passive(
-                engine.model, engine.data
-            ) as viewer:
-                while viewer.is_running():
-                    with lock:
-                        engine.data.ctrl[:num_ctrl] = latest_values
+    rclpy.init()
+    node = MirrorNode()
+    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread.start()
+    glog.info("Mirror mode: waiting for ROS2 messages...")
 
-                    engine.step()
-                    viewer.sync()
-        finally:
-            node.destroy_node()
-            rclpy.shutdown()
+    try:
+        with mujoco.viewer.launch_passive(engine.model, engine.data) as viewer:
+            while viewer.is_running():
+                with lock:
+                    engine.data.ctrl[:num_ctrl] = latest_values
+
+                engine.step()
+                viewer.sync()
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

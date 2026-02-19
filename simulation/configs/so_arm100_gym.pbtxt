@@ -1,0 +1,11 @@
+model_path: "simulation/models/so_arm100_reach.xml"
+mode: MODE_GYM
+gym {
+  task: "reach"
+  frame_skip: 10
+  algorithm: "ppo"
+  total_timesteps: 500000
+  num_eval_episodes: 10
+  save_path: "reach_ppo"
+  render_training: true
+}

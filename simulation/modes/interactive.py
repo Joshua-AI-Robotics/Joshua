@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import mujoco.viewer
 
-from simulation.modes.mode_interface import SimulationMode
 from simulation.sim_engine import SimEngine
 
 
-class InteractiveMode(SimulationMode):
-
-    def run(self, engine: SimEngine) -> None:
-        mujoco.viewer.launch(engine.model, engine.data)
+def run(engine: SimEngine) -> None:
+    mujoco.viewer.launch(engine.model, engine.data)

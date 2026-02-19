@@ -13,7 +13,6 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from simulation.modes.mode_interface import SimulationMode
 from simulation.proto import simulation_pb2
 from simulation.sim_engine import SimEngine
 
@@ -35,37 +34,32 @@ def load_trajectory(path: str) -> np.ndarray:
     return np.array(rows)
 
 
-class PassiveMode(SimulationMode):
+def run(engine: SimEngine, config: simulation_pb2.PassiveConfig) -> None:
+    if not config.trajectory_path:
+        raise ValueError("PassiveConfig.trajectory_path is required for passive mode.")
 
-    def __init__(self, config: simulation_pb2.PassiveConfig) -> None:
-        self._trajectory_path = config.trajectory_path
-        self._speed = config.speed if config.speed > 0 else 1.0
+    speed = config.speed if config.speed > 0 else 1.0
+    trajectory = load_trajectory(config.trajectory_path)
+    glog.info(
+        f"  trajectory: {trajectory.shape[0]} steps x "
+        f"{trajectory.shape[1]} actuators"
+    )
 
-    def run(self, engine: SimEngine) -> None:
-        if not self._trajectory_path:
-            raise ValueError(
-                "PassiveConfig.trajectory_path is required for passive mode."
-            )
+    if trajectory.shape[1] != engine.num_actuators:
+        glog.warning(
+            f"trajectory has {trajectory.shape[1]} cols but model has "
+            f"{engine.num_actuators} actuators; clamping to min"
+        )
 
-        trajectory = load_trajectory(self._trajectory_path)
-        glog.info(f"  trajectory: {trajectory.shape[0]} steps x "
-                  f"{trajectory.shape[1]} actuators")
+    max_steps = trajectory.shape[0]
+    num_ctrl = min(trajectory.shape[1], engine.num_actuators)
+    step = 0
 
-        if trajectory.shape[1] != engine.num_actuators:
-            glog.warning(
-                f"trajectory has {trajectory.shape[1]} cols but model has "
-                f"{engine.num_actuators} actuators; clamping to min"
-            )
+    with mujoco.viewer.launch_passive(engine.model, engine.data) as viewer:
+        while viewer.is_running():
+            if step < max_steps:
+                engine.data.ctrl[:num_ctrl] = trajectory[step, :num_ctrl]
+                step = min(step + int(speed), max_steps)
 
-        max_steps = trajectory.shape[0]
-        num_ctrl = min(trajectory.shape[1], engine.num_actuators)
-        step = 0
-
-        with mujoco.viewer.launch_passive(engine.model, engine.data) as viewer:
-            while viewer.is_running():
-                if step < max_steps:
-                    engine.data.ctrl[:num_ctrl] = trajectory[step, :num_ctrl]
-                    step = min(step + int(self._speed), max_steps)
-
-                engine.step()
-                viewer.sync()
+            engine.step()
+            viewer.sync()

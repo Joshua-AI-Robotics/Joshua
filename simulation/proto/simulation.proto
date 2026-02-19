@@ -8,6 +8,7 @@ enum SimulationMode {
   MODE_PASSIVE = 2;
   MODE_MIRROR = 3;
   MODE_OFFSCREEN = 4;
+  MODE_GYM = 5;
 }
 
 message TopicMapping {
@@ -32,10 +33,24 @@ message OffscreenConfig {
   uint32 num_steps = 5;
 }
 
+message GymConfig {
+  string task = 1;
+  uint32 frame_skip = 2;
+  bool image_obs = 3;
+  string camera_name = 4;
+  uint32 total_timesteps = 5;    // training budget (0 = eval only)
+  uint32 num_eval_episodes = 6;  // episodes to run after training / in eval-only mode
+  string algorithm = 7;          // "ppo", "sac", etc. (default: "ppo")
+  string checkpoint_path = 8;    // load weights to resume / evaluate
+  string save_path = 9;          // where to save trained model
+  bool render_training = 10;     // show viewer window during training
+}
+
 message SimulationConfig {
   string model_path = 1;
   SimulationMode mode = 2;
   PassiveConfig passive = 3;
   MirrorConfig mirror = 4;
   OffscreenConfig offscreen = 5;
+  GymConfig gym = 6;
 }

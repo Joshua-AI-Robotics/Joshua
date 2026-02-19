@@ -17,6 +17,8 @@ num2words==0.5.13
 sympy>=1.13.0
 glog
 mujoco>=3.1.0
+gymnasium>=1.0.0
+stable-baselines3>=2.3.0
 datasets>=2.14.0
 setuptools
 tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)
