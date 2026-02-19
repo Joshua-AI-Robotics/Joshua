@@ -1,0 +1,10 @@
+model_path: "simulation/models/so_arm100_scene.xml"
+mode: MODE_MIRROR
+mirror {
+  topic_mappings { actuator_index: 0  topic: "sts3215_encoder_1" }
+  topic_mappings { actuator_index: 1  topic: "sts3215_encoder_2" }
+  topic_mappings { actuator_index: 2  topic: "sts3215_encoder_3" }
+  topic_mappings { actuator_index: 3  topic: "sts3215_encoder_4" }
+  topic_mappings { actuator_index: 4  topic: "sts3215_encoder_5" }
+  topic_mappings { actuator_index: 5  topic: "sts3215_encoder_6" }
+}

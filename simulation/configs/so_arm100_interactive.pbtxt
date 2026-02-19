@@ -1,0 +1,2 @@
+model_path: "simulation/models/so_arm100_scene.xml"
+mode: MODE_INTERACTIVE

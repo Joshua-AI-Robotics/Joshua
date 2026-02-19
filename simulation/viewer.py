@@ -1,89 +1,63 @@
-"""General-purpose MuJoCo viewer.
+"""MuJoCo simulation viewer entry point.
 
-Usage (Bazel):
-    bazel run //simulation:viewer -- --model simulation/models/so_arm100_scene.xml
-    bazel run //simulation:viewer -- --model simulation/models/so_arm100_scene.xml --passive \
-        --trajectory simulation/trajectories/example_trajectory.csv
-    bazel run //simulation:viewer -- --model simulation/models/so_arm100_scene.xml --passive \
-        --trajectory simulation/trajectories/example_trajectory.csv --speed 2.0
+Usage:
+    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_interactive.pbtxt
+    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_mirror.pbtxt
+    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_passive.pbtxt
+
+    # Override mode from config:
+    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_mirror.pbtxt \
+        --mode interactive
 """
 
-import csv
 import sys
 
 import gflags
 import glog
-import mujoco
-import mujoco.viewer
-import numpy as np
+from google.protobuf import text_format
+
+from simulation.modes.interactive import InteractiveMode
+from simulation.modes.mirror import MirrorMode
+from simulation.modes.offscreen import OffscreenMode
+from simulation.modes.passive import PassiveMode
+from simulation.proto import simulation_pb2
+from simulation.sim_engine import SimEngine
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("model", None, "Path to MJCF (.xml) or URDF model file.")
-gflags.DEFINE_bool("passive", False,
-                   "Run passive viewer with trajectory playback instead of "
-                   "interactive mode.")
-gflags.DEFINE_string("trajectory", None,
-                     "Path to trajectory file (.npy or .csv) for passive mode. "
-                     "Rows are timesteps, columns are actuator controls.")
-gflags.DEFINE_float("speed", 1.0, "Playback speed multiplier for passive mode.")
+gflags.DEFINE_string("config", None, "Path to a SimulationConfig .pbtxt file.")
+gflags.DEFINE_string(
+    "mode", None,
+    "Override the mode in the config. "
+    "One of: interactive, passive, mirror, offscreen.",
+)
+
+_MODE_ENUM = {
+    "interactive": simulation_pb2.MODE_INTERACTIVE,
+    "passive": simulation_pb2.MODE_PASSIVE,
+    "mirror": simulation_pb2.MODE_MIRROR,
+    "offscreen": simulation_pb2.MODE_OFFSCREEN,
+}
 
 
-def _load_model(path: str) -> tuple[mujoco.MjModel, mujoco.MjData]:
-    model = mujoco.MjModel.from_xml_path(path)
-    data = mujoco.MjData(model)
-    glog.info(f"Loaded: {path}")
-    glog.info(f"  bodies={model.nbody}  joints={model.njnt}  "
-              f"actuators={model.nu}  sensors={model.nsensor}")
-    return model, data
-
-
-def _load_trajectory(path: str) -> np.ndarray:
-    """Load a trajectory file. Supports .npy and .csv (rows=timesteps, cols=actuators)."""
-    if path.endswith(".npy"):
-        return np.load(path)
+def _load_config(path: str) -> simulation_pb2.SimulationConfig:
+    config = simulation_pb2.SimulationConfig()
     with open(path) as f:
-        reader = csv.reader(f)
-        rows = []
-        for row in reader:
-            try:
-                rows.append([float(v) for v in row])
-            except ValueError:
-                continue
-    if not rows:
-        raise ValueError(f"No numeric data found in {path}")
-    return np.array(rows)
+        text_format.Parse(f.read(), config)
+    return config
 
 
-def run_interactive() -> None:
-    model, data = _load_model(FLAGS.model)
-    mujoco.viewer.launch(model, data)
-
-
-def run_passive() -> None:
-    if not FLAGS.trajectory:
-        raise ValueError("--trajectory is required when --passive is set.")
-
-    model, data = _load_model(FLAGS.model)
-    trajectory = _load_trajectory(FLAGS.trajectory)
-    glog.info(f"  trajectory: {trajectory.shape[0]} steps x "
-              f"{trajectory.shape[1]} actuators")
-    if trajectory.shape[1] != model.nu:
-        glog.warning(f"trajectory has {trajectory.shape[1]} cols "
-                     f"but model has {model.nu} actuators; clamping to min")
-
-    max_steps = trajectory.shape[0]
-    num_ctrl = min(trajectory.shape[1], model.nu)
-    step = 0
-
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        while viewer.is_running():
-            if step < max_steps:
-                data.ctrl[:num_ctrl] = trajectory[step, :num_ctrl]
-                step = min(step + int(FLAGS.speed), max_steps)
-
-            mujoco.mj_step(model, data)
-            viewer.sync()
+def _create_mode(config: simulation_pb2.SimulationConfig):
+    mode = config.mode
+    if mode == simulation_pb2.MODE_INTERACTIVE:
+        return InteractiveMode()
+    if mode == simulation_pb2.MODE_PASSIVE:
+        return PassiveMode(config.passive)
+    if mode == simulation_pb2.MODE_MIRROR:
+        return MirrorMode(config.mirror)
+    if mode == simulation_pb2.MODE_OFFSCREEN:
+        return OffscreenMode(config.offscreen)
+    raise ValueError(f"Unknown or unset simulation mode: {mode}")
 
 
 def main(argv):
@@ -93,14 +67,30 @@ def main(argv):
         print(f"{e}\nUsage: {sys.argv[0]} ARGS\n{FLAGS}", file=sys.stderr)
         sys.exit(1)
 
-    if not FLAGS.model:
-        print("Error: --model is required.", file=sys.stderr)
+    if not FLAGS.config:
+        print("Error: --config is required.", file=sys.stderr)
         sys.exit(1)
 
-    if FLAGS.passive:
-        run_passive()
-    else:
-        run_interactive()
+    config = _load_config(FLAGS.config)
+
+    if FLAGS.mode:
+        override = FLAGS.mode.lower()
+        if override not in _MODE_ENUM:
+            print(f"Error: unknown mode '{override}'. "
+                  f"Choose from: {', '.join(_MODE_ENUM)}", file=sys.stderr)
+            sys.exit(1)
+        config.mode = _MODE_ENUM[override]
+
+    glog.info(f"Config: {FLAGS.config}")
+    glog.info(f"  model: {config.model_path}")
+    glog.info(f"  mode:  {simulation_pb2.SimulationMode.Name(config.mode)}")
+
+    engine = SimEngine(config)
+    mode = _create_mode(config)
+    try:
+        mode.run(engine)
+    finally:
+        engine.close()
 
 
 if __name__ == "__main__":

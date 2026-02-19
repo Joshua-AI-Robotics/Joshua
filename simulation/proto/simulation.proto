@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package simulation;
+
+enum SimulationMode {
+  MODE_INVALID = 0;
+  MODE_INTERACTIVE = 1;
+  MODE_PASSIVE = 2;
+  MODE_MIRROR = 3;
+  MODE_OFFSCREEN = 4;
+}
+
+message TopicMapping {
+  uint32 actuator_index = 1;
+  string topic = 2;
+}
+
+message PassiveConfig {
+  string trajectory_path = 1;
+  float speed = 2;
+}
+
+message MirrorConfig {
+  repeated TopicMapping topic_mappings = 1;
+}
+
+message OffscreenConfig {
+  string camera_name = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  string output_dir = 4;
+  uint32 num_steps = 5;
+}
+
+message SimulationConfig {
+  string model_path = 1;
+  SimulationMode mode = 2;
+  PassiveConfig passive = 3;
+  MirrorConfig mirror = 4;
+  OffscreenConfig offscreen = 5;
+}
