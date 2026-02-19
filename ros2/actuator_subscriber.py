@@ -29,6 +29,7 @@ class ActuatorEntry:
         self.encoder_data_mode = encoder_data_mode
         self.mapping = self._compute_mapping()
         self.subscription = None
+        self.callback = None
 
     def _compute_mapping(self) -> MappingParams:
         lower, upper = self.limits
@@ -92,10 +93,11 @@ class ActionSubscriber(Node):
                         encoder_data_mode=actuator_proto.encoder_data_mode,
                     )
                     self._actuators.append(entry)
+                    entry.callback = self._make_callback(entry)
                     entry.subscription = self.create_subscription(
                         Float32,
                         entry.topic,
-                        self._make_callback(entry),
+                        entry.callback,
                         create_qos_setting(qos_setting),
                     )
 

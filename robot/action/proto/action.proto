@@ -15,6 +15,7 @@ enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
   MOCK_MOTOR = 2;
+  SPIKE_MOTOR = 3;
 }
 
 message Actuator {
@@ -31,6 +32,7 @@ message Actuator {
   oneof action_config {
     Sts3215Config sts3215_config = 11;
     MockMotorConfig mock_motor_config = 12;
+    SpikeMotorConfig spike_motor_config = 13;
     // Add other motor type here.
   }
 }
@@ -44,6 +46,11 @@ message Sts3215Config {
 
 message MockMotorConfig {
   uint64 motor_id = 1;
+}
+
+message SpikeMotorConfig {
+  string hub_id = 1;
+  string port = 2;
 }
 
 message SingleAction {

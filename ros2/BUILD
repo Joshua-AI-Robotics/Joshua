@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -42,6 +42,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
 )
+
 
 ros2_py_binary(
     name = "inference",
@@ -223,6 +224,19 @@ ros2_py_binary(
         "//robot/action/proto:action_packet_py_proto",
         "//robot/perception/proto:perception_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/utils:qos_setting_py",
+        "//ros2/proto:node_py_proto",
+    ] + requirement("protobuf"),
+)
+
+py_test(
+    name = "actuator_subscriber_test",
+    srcs = ["actuator_subscriber_test.py"],
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/action/proto:action_py_proto",
+        "//robot/perception/proto:perception_py_proto",
+        "//robot/action/factory:action_factory_py",
         "//ros2/utils:qos_setting_py",
         "//ros2/proto:node_py_proto",
     ] + requirement("protobuf"),
