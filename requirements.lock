@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=requirements.lock requirements.txt
 #
+absl-py==2.4.0
+    # via mujoco
 accelerate==1.11.0
     # via
     #   -r requirements.txt
@@ -55,6 +57,8 @@ draccus==0.10.0
     # via lerobot
 einops==0.8.1
     # via lerobot
+etils[epath,epy]==1.13.0
+    # via mujoco
 evdev==1.9.2
     # via pynput
 farama-notifications==0.0.4
@@ -73,12 +77,15 @@ frozenlist==1.8.0
 fsspec[http]==2025.3.0
     # via
     #   datasets
+    #   etils
     #   huggingface-hub
     #   torch
 gitdb==4.0.12
     # via gitpython
 gitpython==3.1.45
     # via wandb
+glfw==2.10.0
+    # via mujoco
 glog==0.3.1
     # via -r requirements.txt
 gymnasium==1.2.2
@@ -105,6 +112,8 @@ imageio-ffmpeg==0.6.0
     # via imageio
 importlib-metadata==8.7.0
     # via diffusers
+importlib-resources==6.5.2
+    # via etils
 inquirerpy==0.3.4
     # via huggingface-hub
 jinja2==3.1.6
@@ -119,6 +128,8 @@ mergedeep==1.3.4
     # via draccus
 mpmath==1.3.0
     # via sympy
+mujoco==3.5.0
+    # via -r requirements.txt
 multidict==6.7.0
     # via
     #   aiohttp
@@ -139,6 +150,7 @@ numpy==2.2.6
     #   diffusers
     #   gymnasium
     #   imageio
+    #   mujoco
     #   opencv-python
     #   opencv-python-headless
     #   pandas
@@ -196,7 +208,8 @@ packaging==25.0
     #   huggingface-hub
     #   lerobot
     #   transformers
-pandas==2.3.3
+    #   wandb
+pandas==2.2.3
     # via
     #   -r requirements.txt
     #   datasets
@@ -236,6 +249,8 @@ pydantic-core==2.41.5
     # via pydantic
 pynput==1.8.1
     # via lerobot
+pyopengl==3.1.10
+    # via mujoco
 pyserial==3.5
     # via lerobot
 python-dateutil==2.9.0.post0
@@ -319,6 +334,7 @@ triton==3.3.0
 typing-extensions==4.15.0
     # via
     #   aiosignal
+    #   etils
     #   gymnasium
     #   huggingface-hub
     #   multidict
@@ -333,8 +349,6 @@ typing-inspect==0.9.0
     # via draccus
 typing-inspection==0.4.2
     # via pydantic
-tzdata==2025.2
-    # via pandas
 tzdata==2025.3
     # via
     #   -r requirements.txt
@@ -352,11 +366,9 @@ xxhash==3.6.0
 yarl==1.22.0
     # via aiohttp
 zipp==3.23.0
-    # via importlib-metadata
+    # via
+    #   etils
+    #   importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
-setuptools==80.9.0
-    # via
-    #   -r requirements.txt
-    #   lerobot
-    #   triton
+# setuptools
