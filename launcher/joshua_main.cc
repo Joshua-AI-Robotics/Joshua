@@ -1,6 +1,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "config/config_utils.h"
+#include "launcher/simulation_launcher.h"
 #include "node_generator/node_generator.h"
 
 DEFINE_string(config,
@@ -12,7 +14,18 @@ int main(int argc, char* argv[]) {
   FLAGS_logtostderr = 1;
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  LOG(INFO) << "Starting Node Generator with config: " << FLAGS_config;
+  LOG(INFO) << "Starting Joshua Platform with config: " << FLAGS_config;
+
+  auto config_or = config::config_util::LoadConfig(FLAGS_config);
+  if (!config_or.ok()) {
+    LOG(ERROR) << "Failed to load config: " << FLAGS_config;
+    return 1;
+  }
+  const auto& config = config_or.value();
+
+  if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
+    return launcher::RunSimulation(FLAGS_config, config);
+  }
 
   try {
     node_generator::NodeGenerator node_generator(FLAGS_config);
@@ -42,6 +55,6 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  LOG(INFO) << "NodeGenerator completed successfully";
+  LOG(INFO) << "Joshua Platform completed successfully";
   return 0;
 }

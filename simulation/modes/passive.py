@@ -13,8 +13,8 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
+from simulation.mujoco_engine import MuJoCoEngine
 from simulation.proto import simulation_pb2
-from simulation.sim_engine import SimEngine
 
 
 def load_trajectory(path: str) -> np.ndarray:
@@ -34,7 +34,7 @@ def load_trajectory(path: str) -> np.ndarray:
     return np.array(rows)
 
 
-def run(engine: SimEngine, config: simulation_pb2.PassiveConfig) -> None:
+def run(engine: MuJoCoEngine, config: simulation_pb2.PassiveConfig) -> None:
     if not config.trajectory_path:
         raise ValueError("PassiveConfig.trajectory_path is required for passive mode.")
 

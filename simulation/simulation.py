@@ -1,33 +1,38 @@
-"""MuJoCo simulation viewer entry point.
+"""MuJoCo simulation entry point (visualization modes only).
 
-Usage:
-    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_interactive.pbtxt
-    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_mirror.pbtxt
-    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_passive.pbtxt
+Usage (unified config -- launched from joshua_main or standalone):
+    bazel run //launcher:joshua_main -- \
+        --config config/config_preset/so_arm100_sim_interactive.pbtxt
 
-    # Override mode from config:
-    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_mirror.pbtxt \
-        --mode interactive
+    bazel run //simulation -- \
+        --config config/config_preset/so_arm100_sim_mirror.pbtxt --mode interactive
+
+Legacy standalone SimulationConfig pbtxt files are also accepted.
+Training workflows (RL, imitation, eval) use ai/train/trainer.py instead.
 """
 
 import sys
+from typing import Optional, Tuple
 
 import gflags
 import glog
 from google.protobuf import text_format
 
-from simulation.modes import gym, interactive, mirror, offscreen, passive
+from config.proto import config_pb2
+from simulation.modes import interactive, mirror, offscreen, passive
+from simulation.mujoco_engine import MuJoCoEngine
 from simulation.proto import simulation_pb2
-from simulation.sim_engine import SimEngine
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("config", None, "Path to a SimulationConfig .pbtxt file.")
+gflags.DEFINE_string(
+    "config", None, "Path to a Config or SimulationConfig .pbtxt file."
+)
 gflags.DEFINE_string(
     "mode",
     None,
-    "Override the mode in the config. "
-    "One of: interactive, passive, mirror, offscreen, gym.",
+    "Override the simulation sub-mode. "
+    "One of: interactive, passive, mirror, offscreen.",
 )
 
 _MODE_ENUM = {
@@ -35,18 +40,30 @@ _MODE_ENUM = {
     "passive": simulation_pb2.MODE_PASSIVE,
     "mirror": simulation_pb2.MODE_MIRROR,
     "offscreen": simulation_pb2.MODE_OFFSCREEN,
-    "gym": simulation_pb2.MODE_GYM,
 }
 
 
-def _load_config(path: str) -> simulation_pb2.SimulationConfig:
-    config = simulation_pb2.SimulationConfig()
+def _load_config(
+    path: str,
+) -> Tuple[simulation_pb2.SimulationConfig, Optional[config_pb2.Config]]:
+    """Load config, returning (SimulationConfig, full_config_or_None)."""
     with open(path) as f:
-        text_format.Parse(f.read(), config)
-    return config
+        raw = f.read()
+
+    try:
+        full = config_pb2.Config()
+        text_format.Parse(raw, full)
+        if full.HasField("simulation"):
+            return full.simulation, full
+    except text_format.ParseError:
+        pass
+
+    sim = simulation_pb2.SimulationConfig()
+    text_format.Parse(raw, sim)
+    return sim, None
 
 
-def _run_mode(config: simulation_pb2.SimulationConfig, engine: SimEngine) -> None:
+def _run_mode(config: simulation_pb2.SimulationConfig, engine: MuJoCoEngine) -> None:
     mode = config.mode
     if mode == simulation_pb2.MODE_INTERACTIVE:
         interactive.run(engine)
@@ -56,8 +73,6 @@ def _run_mode(config: simulation_pb2.SimulationConfig, engine: SimEngine) -> Non
         mirror.run(engine, config.mirror)
     elif mode == simulation_pb2.MODE_OFFSCREEN:
         offscreen.run(engine, config.offscreen)
-    elif mode == simulation_pb2.MODE_GYM:
-        gym.run(engine, config.gym)
     else:
         raise ValueError(f"Unknown or unset simulation mode: {mode}")
 
@@ -73,7 +88,7 @@ def main(argv):
         print("Error: --config is required.", file=sys.stderr)
         sys.exit(1)
 
-    config = _load_config(FLAGS.config)
+    config, _ = _load_config(FLAGS.config)
 
     if FLAGS.mode:
         override = FLAGS.mode.lower()
@@ -90,7 +105,7 @@ def main(argv):
     glog.info(f"  model: {config.model_path}")
     glog.info(f"  mode:  {simulation_pb2.SimulationMode.Name(config.mode)}")
 
-    engine = SimEngine(config)
+    engine = MuJoCoEngine(config)
     try:
         _run_mode(config, engine)
     finally:

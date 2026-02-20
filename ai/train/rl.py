@@ -1,8 +1,7 @@
-"""Gymnasium training / evaluation mode.
+"""RL training / evaluation for MuJoCo simulation environments.
 
-Launched via the viewer with MODE_GYM config, e.g.:
-
-    bazel run //simulation:viewer -- --config simulation/configs/so_arm100_gym.pbtxt
+Uses Stable-Baselines3 with Gymnasium environments registered in
+simulation.envs.register.
 """
 
 from __future__ import annotations
@@ -11,8 +10,7 @@ import glog
 import gymnasium
 
 import simulation.envs.register  # noqa: F401 -- triggers gymnasium.register()
-from simulation.proto import simulation_pb2
-from simulation.sim_engine import SimEngine
+from ai.proto import training_pb2
 
 _TASK_TO_ENV_ID = {
     "reach": "SO100Reach-v0",
@@ -27,7 +25,7 @@ _ALGORITHMS = {
 }
 
 
-def _make_env(env_id: str, config: simulation_pb2.GymConfig, render: bool):
+def _make_env(env_id: str, config: training_pb2.RLConfig, render: bool):
     kwargs = {}
     if config.frame_skip:
         kwargs["frame_skip"] = config.frame_skip
@@ -41,7 +39,6 @@ def _make_env(env_id: str, config: simulation_pb2.GymConfig, render: bool):
 
 
 def _evaluate(env, model, num_episodes: int) -> None:
-    """Run evaluation episodes and log stats."""
     for ep in range(num_episodes):
         obs, _ = env.reset()
         total_reward = 0.0
@@ -64,12 +61,12 @@ def _evaluate(env, model, num_episodes: int) -> None:
         )
 
 
-def run(engine: SimEngine, config: simulation_pb2.GymConfig) -> None:
+def run(config: training_pb2.RLConfig) -> None:
     task_name = config.task or "reach"
     env_id = _TASK_TO_ENV_ID.get(task_name)
     if env_id is None:
         raise ValueError(
-            f"Unknown gym task '{task_name}'. "
+            f"Unknown RL task '{task_name}'. "
             f"Available: {', '.join(_TASK_TO_ENV_ID)}"
         )
 
@@ -88,7 +85,7 @@ def run(engine: SimEngine, config: simulation_pb2.GymConfig) -> None:
             )
         algo_cls = {"PPO": PPO, "SAC": SAC, "TD3": TD3, "A2C": A2C}[algo_cls_name]
 
-        train_env = _make_env(env_id, config, render=config.render_training)
+        train_env = _make_env(env_id, config, render=config.render)
         glog.info(f"Training {algo_cls_name} on {env_id} for {total_timesteps} steps")
 
         if config.checkpoint_path:

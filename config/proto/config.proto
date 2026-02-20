@@ -3,6 +3,7 @@ syntax = "proto3";
 import "config/proto/robot.proto";
 import "config/proto/ai.proto";
 import "config/proto/calibration.proto";
+import "simulation/proto/simulation.proto";
 
 package config;
 
@@ -15,6 +16,7 @@ message General {
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
     MODE_DATA_STORE = 6;
+    MODE_SIMULATION = 7;
   }
 
   enum RobotType {
@@ -33,4 +35,5 @@ message Config {
   config.Robot robot = 2;
   config.Ai ai = 3;
   config.Calibration calibration = 4;
+  simulation.SimulationConfig simulation = 5;
 }

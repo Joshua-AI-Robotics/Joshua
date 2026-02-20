@@ -6,6 +6,9 @@ package(default_visibility = ["//visibility:public"])
 proto_library(
     name = "simulation_proto",
     srcs = ["simulation.proto"],
+    deps = [
+        "//ros2/proto:ros2_data_type_proto",
+    ],
 )
 
 py_proto_library(

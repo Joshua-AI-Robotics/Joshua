@@ -4,8 +4,10 @@ package config;
 
 import "ai/proto/ai_model.proto";
 import "ai/proto/data_store.proto";
+import "ai/proto/training.proto";
 
 message Ai {
   ai.models.Model models = 1;
   ai.data_store.DataStore data_stores = 2;
+  ai.training.TrainingConfig training = 3;
 }

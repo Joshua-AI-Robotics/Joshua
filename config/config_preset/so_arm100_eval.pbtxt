@@ -1,0 +1,18 @@
+general {
+  operation_mode: MODE_TRAINING
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "so100"
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_EVAL
+    model_path: "simulation/models/so_arm100_reach.xml"
+    eval {
+      task: "reach"
+      checkpoint_path: "reach_ppo"
+      num_episodes: 20
+      render: true
+    }
+  }
+}

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import mujoco.viewer
 
-from simulation.sim_engine import SimEngine
+from simulation.mujoco_engine import MuJoCoEngine
 
 
-def run(engine: SimEngine) -> None:
+def run(engine: MuJoCoEngine) -> None:
     mujoco.viewer.launch(engine.model, engine.data)

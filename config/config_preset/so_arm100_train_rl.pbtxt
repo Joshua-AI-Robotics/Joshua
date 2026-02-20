@@ -1,0 +1,21 @@
+general {
+  operation_mode: MODE_TRAINING
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "so100"
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_RL
+    model_path: "simulation/models/so_arm100_reach.xml"
+    rl {
+      task: "reach"
+      frame_skip: 10
+      algorithm: "ppo"
+      total_timesteps: 500000
+      num_eval_episodes: 10
+      save_path: "reach_ppo"
+      render: true
+    }
+  }
+}

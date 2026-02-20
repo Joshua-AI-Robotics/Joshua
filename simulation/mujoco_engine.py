@@ -15,7 +15,7 @@ import numpy as np
 from simulation.proto import simulation_pb2
 
 
-class SimEngine:
+class MuJoCoEngine:
     """Owns a MuJoCo model/data pair and exposes a clean control API."""
 
     def __init__(self, config: simulation_pb2.SimulationConfig) -> None:
@@ -26,7 +26,7 @@ class SimEngine:
 
         mujoco.mj_forward(self._model, self._data)
 
-        glog.info(f"SimEngine loaded: {config.model_path}")
+        glog.info(f"MuJoCoEngine loaded: {config.model_path}")
         glog.info(
             f"  bodies={self._model.nbody}  joints={self._model.njnt}  "
             f"actuators={self._model.nu}  sensors={self._model.nsensor}"

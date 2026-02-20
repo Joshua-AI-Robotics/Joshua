@@ -11,11 +11,11 @@ import os
 import glog
 from PIL import Image
 
+from simulation.mujoco_engine import MuJoCoEngine
 from simulation.proto import simulation_pb2
-from simulation.sim_engine import SimEngine
 
 
-def run(engine: SimEngine, config: simulation_pb2.OffscreenConfig) -> None:
+def run(engine: MuJoCoEngine, config: simulation_pb2.OffscreenConfig) -> None:
     camera_name = config.camera_name or "front"
     width = config.width or 640
     height = config.height or 480

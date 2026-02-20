@@ -13,15 +13,9 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "sim_configs",
-    srcs = glob(["configs/**"]),
-    visibility = ["//visibility:public"],
-)
-
 py_library(
-    name = "sim_engine",
-    srcs = ["sim_engine.py"],
+    name = "mujoco_engine",
+    srcs = ["mujoco_engine.py"],
     visibility = ["//visibility:public"],
     deps = [
         "//simulation/proto:simulation_py_proto",
@@ -29,20 +23,20 @@ py_library(
 )
 
 py_binary(
-    name = "viewer",
-    srcs = ["viewer.py"],
+    name = "simulation",
+    srcs = ["simulation.py"],
+    visibility = ["//visibility:public"],
     data = [
-        ":sim_configs",
         ":sim_models",
         ":sim_trajectories",
     ],
     deps = [
-        ":sim_engine",
+        ":mujoco_engine",
         "//simulation/modes:interactive",
         "//simulation/modes:mirror",
         "//simulation/modes:offscreen",
         "//simulation/modes:passive",
-        "//simulation/modes:gym",
         "//simulation/proto:simulation_py_proto",
+        "//config/proto:config_py_proto",
     ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),
 )
