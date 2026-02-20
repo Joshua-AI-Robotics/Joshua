@@ -15,6 +15,9 @@ enum SimulationMode {
 message TopicMapping {
   string topic = 1;
   ros2.data_type.Ros2DataType ros2_data_type = 2;
+  // Offset added to the encoder value before setting MuJoCo ctrl.
+  // mujoco_ctrl = encoder_value + offset
+  double offset = 3;
 }
 
 message PassiveConfig {

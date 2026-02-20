@@ -4,7 +4,7 @@ Usage (unified config -- launched from joshua_main or standalone):
     bazel run //launcher:joshua_main -- \
         --config config/config_preset/so_arm100_sim_interactive.pbtxt
 
-    bazel run //simulation -- \
+    bazel run //simulation:simulation -- \
         --config config/config_preset/so_arm100_sim_mirror.pbtxt --mode interactive
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.

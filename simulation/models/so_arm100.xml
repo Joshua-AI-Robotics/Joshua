@@ -32,22 +32,22 @@
       <joint frictionloss="0.1" armature="0.1"/>
       <position kp="50" dampratio="1" forcerange="-3.5 3.5"/>
       <default class="Rotation">
-        <joint axis="0 1 0" range="-1.5 1.5"/>
+        <joint axis="0 1 0" range="-1.57 1.57"/>
       </default>
       <default class="Pitch">
-        <joint axis="1 0 0" range="-3.32 0.174"/>
+        <joint axis="1 0 0" range="-3.14 0"/>
       </default>
       <default class="Elbow">
-        <joint axis="1 0 0" range="-1.5 1.5"/>
+        <joint axis="1 0 0" range="0.07 3.07"/>
       </default>
       <default class="Wrist_Pitch">
-        <joint axis="1 0 0" range="-1.5 1.5"/>
+        <joint axis="1 0 0" range="-1.57 1.57"/>
       </default>
       <default class="Wrist_Roll">
-        <joint axis="0 1 0" range="-1.5 1.5"/>
+        <joint axis="0 1 0" range="-1.57 1.57"/>
       </default>
       <default class="Jaw">
-        <joint axis="0 0 1" range="-1.5 1.5"/>
+        <joint axis="0 0 1" range="-1.57 1.87"/>
       </default>
       <default class="visual">
         <geom type="mesh" contype="0" conaffinity="0" density="0" group="2" material="white"/>

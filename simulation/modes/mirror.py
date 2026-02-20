@@ -29,12 +29,13 @@ def run(engine: MuJoCoEngine, config: simulation_pb2.MirrorConfig) -> None:
 
     num_ctrl = engine.num_actuators
     latest_values = np.zeros(num_ctrl)
+    offsets = np.array([m.offset for m in mappings[:num_ctrl]], dtype=np.float64)
     lock = threading.Lock()
 
     def _make_callback(index: int):
         def callback(msg):
             with lock:
-                latest_values[index] = msg.data
+                latest_values[index] = msg.data + offsets[index]
 
         return callback
 

@@ -24,11 +24,13 @@ py_library(
 
 py_binary(
     name = "simulation",
-    srcs = ["simulation.py"],
+    srcs = ["main.py"],
+    main = "main.py",
     visibility = ["//visibility:public"],
     data = [
         ":sim_models",
         ":sim_trajectories",
+        "//config/config_preset:config_presets",
     ],
     deps = [
         ":mujoco_engine",

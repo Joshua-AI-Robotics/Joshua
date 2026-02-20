@@ -204,11 +204,11 @@ simulation {
   model_path: "simulation/models/so_arm100_scene.xml"
   mode: MODE_MIRROR
   mirror {
-    topic_mappings { topic: "sts3215_encoder_1"  ros2_data_type: FLOAT32 }
-    topic_mappings { topic: "sts3215_encoder_2"  ros2_data_type: FLOAT32 }
-    topic_mappings { topic: "sts3215_encoder_3"  ros2_data_type: FLOAT32 }
-    topic_mappings { topic: "sts3215_encoder_4"  ros2_data_type: FLOAT32 }
-    topic_mappings { topic: "sts3215_encoder_5"  ros2_data_type: FLOAT32 }
-    topic_mappings { topic: "sts3215_encoder_6"  ros2_data_type: FLOAT32 }
+    topic_mappings { topic: "sts3215_encoder_1"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_2"  ros2_data_type: FLOAT32  offset: -1.57}
+    topic_mappings { topic: "sts3215_encoder_3"  ros2_data_type: FLOAT32  offset: 1.5708 }
+    topic_mappings { topic: "sts3215_encoder_4"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_5"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_6"  ros2_data_type: FLOAT32  offset: 1.37 }
   }
 }
