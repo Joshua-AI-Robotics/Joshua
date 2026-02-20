@@ -26,6 +26,21 @@ py_library(
     ] + requirement("gymnasium") + requirement("glog") + requirement("stable-baselines3"),
 )
 
+py_library(
+    name = "mjx_envs",
+    srcs = ["mjx_envs.py"],
+    deps = requirement("mujoco") + requirement("mujoco-mjx") + requirement("jax") + requirement("numpy"),
+)
+
+py_library(
+    name = "mjx_rl",
+    srcs = ["mjx_rl.py"],
+    deps = [
+        ":mjx_envs",
+        "//ai/proto:training_py_proto",
+    ] + requirement("jax") + requirement("flax") + requirement("optax") + requirement("glog") + requirement("numpy"),
+)
+
 py_binary(
     name = "trainer",
     srcs = ["trainer.py"],
@@ -36,6 +51,7 @@ py_binary(
     ],
     deps = [
         ":rl",
+        ":mjx_rl",
         "//ai/proto:training_py_proto",
         "//config/proto:config_py_proto",
     ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),

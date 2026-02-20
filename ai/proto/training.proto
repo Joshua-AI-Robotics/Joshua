@@ -26,6 +26,7 @@ message RLConfig {
   bool render = 8;
   bool image_obs = 9;
   string camera_name = 10;
+  uint32 num_envs = 11;
 }
 
 message ImitationConfig {

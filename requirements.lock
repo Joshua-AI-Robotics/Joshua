@@ -5,11 +5,17 @@
 #    pip-compile --allow-unsafe --output-file=requirements.lock requirements.txt
 #
 absl-py==2.4.0
-    # via mujoco
+    # via
+    #   mujoco
+    #   mujoco-mjx
+    #   optax
+    #   orbax-checkpoint
 accelerate==1.11.0
     # via
     #   -r requirements.txt
     #   lerobot
+aiofiles==25.1.0
+    # via orbax-checkpoint
 aiohappyeyeballs==2.6.1
     # via aiohttp
 aiohttp==3.13.2
@@ -64,7 +70,10 @@ draccus==0.10.0
 einops==0.8.1
     # via lerobot
 etils[epath,epy]==1.13.0
-    # via mujoco
+    # via
+    #   mujoco
+    #   mujoco-mjx
+    #   orbax-checkpoint
 evdev==1.9.2
     # via pynput
 farama-notifications==0.0.4
@@ -76,6 +85,8 @@ filelock==3.20.0
     #   huggingface-hub
     #   torch
     #   transformers
+flax==0.10.6
+    # via -r requirements.txt
 fonttools==4.61.1
     # via matplotlib
 frozenlist==1.8.0
@@ -113,6 +124,8 @@ huggingface-hub[cli,hf-transfer]==0.35.3
     #   lerobot
     #   tokenizers
     #   transformers
+humanize==4.15.0
+    # via orbax-checkpoint
 idna==3.11
     # via
     #   requests
@@ -127,6 +140,22 @@ importlib-resources==6.5.2
     # via etils
 inquirerpy==0.3.4
     # via huggingface-hub
+jax[cuda12]==0.5.3
+    # via
+    #   -r requirements.txt
+    #   flax
+    #   mujoco-mjx
+    #   optax
+    #   orbax-checkpoint
+jax-cuda12-pjrt==0.5.3
+    # via jax-cuda12-plugin
+jax-cuda12-plugin[with-cuda]==0.5.3
+    # via jax
+jaxlib==0.5.3
+    # via
+    #   jax
+    #   mujoco-mjx
+    #   optax
 jinja2==3.1.6
     # via torch
 jsonlines==4.0.0
@@ -135,15 +164,32 @@ kiwisolver==1.4.9
     # via matplotlib
 lerobot==0.4.1
     # via -r requirements.txt
+markdown-it-py==4.0.0
+    # via rich
 markupsafe==3.0.3
     # via jinja2
 matplotlib==3.10.8
     # via stable-baselines3
+mdurl==0.1.2
+    # via markdown-it-py
 mergedeep==1.3.4
     # via draccus
+ml-dtypes==0.5.4
+    # via
+    #   jax
+    #   jaxlib
+    #   tensorstore
 mpmath==1.3.0
     # via sympy
+msgpack==1.1.2
+    # via
+    #   flax
+    #   orbax-checkpoint
 mujoco==3.5.0
+    # via
+    #   -r requirements.txt
+    #   mujoco-mjx
+mujoco-mjx==3.5.0
     # via -r requirements.txt
 multidict==6.7.0
     # via
@@ -153,6 +199,8 @@ multiprocess==0.70.16
     # via datasets
 mypy-extensions==1.1.0
     # via typing-inspect
+nest-asyncio==1.6.0
+    # via orbax-checkpoint
 networkx==3.4.2
     # via torch
 num2words==0.5.13
@@ -166,47 +214,72 @@ numpy==2.2.6
     #   diffusers
     #   gymnasium
     #   imageio
+    #   jax
+    #   jaxlib
     #   matplotlib
+    #   ml-dtypes
     #   mujoco
     #   opencv-python
     #   opencv-python-headless
+    #   optax
+    #   orbax-checkpoint
     #   pandas
     #   rerun-sdk
     #   scipy
     #   stable-baselines3
+    #   tensorstore
     #   torchvision
     #   transformers
+    #   treescope
+    #   trimesh
 nvidia-cublas-cu12==12.6.4.1
     # via
+    #   jax-cuda12-plugin
     #   nvidia-cudnn-cu12
     #   nvidia-cusolver-cu12
     #   torch
 nvidia-cuda-cupti-cu12==12.6.80
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
+nvidia-cuda-nvcc-cu12==12.9.86
+    # via jax-cuda12-plugin
 nvidia-cuda-nvrtc-cu12==12.6.77
     # via torch
 nvidia-cuda-runtime-cu12==12.6.77
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
 nvidia-cudnn-cu12==9.5.1.17
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
 nvidia-cufft-cu12==11.3.0.4
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
 nvidia-cufile-cu12==1.11.1.6
     # via torch
 nvidia-curand-cu12==10.3.7.77
     # via torch
 nvidia-cusolver-cu12==11.7.1.2
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
 nvidia-cusparse-cu12==12.5.4.2
     # via
+    #   jax-cuda12-plugin
     #   nvidia-cusolver-cu12
     #   torch
 nvidia-cusparselt-cu12==0.6.3
     # via torch
 nvidia-nccl-cu12==2.26.2
-    # via torch
+    # via
+    #   jax-cuda12-plugin
+    #   torch
 nvidia-nvjitlink-cu12==12.6.85
     # via
+    #   jax-cuda12-plugin
     #   nvidia-cufft-cu12
     #   nvidia-cusolver-cu12
     #   nvidia-cusparse-cu12
@@ -217,6 +290,14 @@ opencv-python==4.11.0.86
     # via -r requirements.txt
 opencv-python-headless==4.12.0.88
     # via lerobot
+opt-einsum==3.4.0
+    # via jax
+optax==0.2.7
+    # via
+    #   -r requirements.txt
+    #   flax
+orbax-checkpoint==0.11.24
+    # via flax
 orderly-set==5.5.0
     # via deepdiff
 packaging==25.0
@@ -254,6 +335,7 @@ propcache==0.4.1
 protobuf==5.29.5
     # via
     #   -r requirements.txt
+    #   orbax-checkpoint
     #   wandb
 psutil==7.1.3
     # via
@@ -268,6 +350,8 @@ pydantic==2.12.5
     # via wandb
 pydantic-core==2.41.5
     # via pydantic
+pygments==2.19.2
+    # via rich
 pynput==1.8.1
     # via lerobot
 pyopengl==3.1.10
@@ -291,7 +375,9 @@ pyyaml==6.0.3
     #   accelerate
     #   datasets
     #   draccus
+    #   flax
     #   huggingface-hub
+    #   orbax-checkpoint
     #   pyyaml-include
     #   transformers
     #   wandb
@@ -310,15 +396,23 @@ requests==2.32.5
     #   wandb
 rerun-sdk==0.26.2
     # via lerobot
+rich==14.3.3
+    # via flax
 safetensors==0.7.0
     # via
     #   accelerate
     #   diffusers
     #   transformers
 scipy==1.15.3
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   jax
+    #   jaxlib
+    #   mujoco-mjx
 sentry-sdk==2.46.0
     # via wandb
+simplejson==3.20.2
+    # via orbax-checkpoint
 six==1.17.0
     # via
     #   glog
@@ -333,6 +427,10 @@ sympy==1.14.0
     # via
     #   -r requirements.txt
     #   torch
+tensorstore==0.1.78
+    # via
+    #   flax
+    #   orbax-checkpoint
 termcolor==3.2.0
     # via lerobot
 tokenizers==0.21.4
@@ -357,15 +455,21 @@ tqdm==4.67.1
     #   transformers
 transformers==4.53.2
     # via -r requirements.txt
+treescope==0.1.10
+    # via flax
+trimesh==4.11.2
+    # via mujoco-mjx
 triton==3.3.0
     # via torch
 typing-extensions==4.15.0
     # via
     #   aiosignal
     #   etils
+    #   flax
     #   gymnasium
     #   huggingface-hub
     #   multidict
+    #   orbax-checkpoint
     #   pydantic
     #   pydantic-core
     #   rerun-sdk

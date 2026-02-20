@@ -25,8 +25,8 @@ _ALGORITHMS = {
 }
 
 
-def _make_env(env_id: str, config: training_pb2.RLConfig, render: bool):
-    kwargs = {}
+def _env_kwargs(config: training_pb2.RLConfig, render: bool) -> dict:
+    kwargs: dict = {}
     if config.frame_skip:
         kwargs["frame_skip"] = config.frame_skip
     if config.image_obs:
@@ -35,7 +35,23 @@ def _make_env(env_id: str, config: training_pb2.RLConfig, render: bool):
         kwargs["camera_name"] = config.camera_name
     if render:
         kwargs["render_mode"] = "human"
-    return gymnasium.make(env_id, **kwargs)
+    return kwargs
+
+
+def _make_env(env_id: str, config: training_pb2.RLConfig, render: bool):
+    return gymnasium.make(env_id, **_env_kwargs(config, render))
+
+
+def _make_vec_env(env_id: str, config: training_pb2.RLConfig, num_envs: int):
+    from stable_baselines3.common.vec_env import SubprocVecEnv
+
+    kwargs = _env_kwargs(config, render=False)
+
+    def _factory():
+        import simulation.envs.register  # noqa: F401 -- register in subprocess
+        return gymnasium.make(env_id, **kwargs)
+
+    return SubprocVecEnv([_factory for _ in range(num_envs)])
 
 
 def _evaluate(env, model, num_episodes: int) -> None:
@@ -85,8 +101,16 @@ def run(config: training_pb2.RLConfig) -> None:
             )
         algo_cls = {"PPO": PPO, "SAC": SAC, "TD3": TD3, "A2C": A2C}[algo_cls_name]
 
-        train_env = _make_env(env_id, config, render=config.render)
-        glog.info(f"Training {algo_cls_name} on {env_id} for {total_timesteps} steps")
+        num_envs = config.num_envs or 1
+        if num_envs > 1:
+            train_env = _make_vec_env(env_id, config, num_envs)
+            glog.info(
+                f"Training {algo_cls_name} on {env_id} for {total_timesteps} steps "
+                f"({num_envs} parallel envs)"
+            )
+        else:
+            train_env = _make_env(env_id, config, render=config.render)
+            glog.info(f"Training {algo_cls_name} on {env_id} for {total_timesteps} steps")
 
         if config.checkpoint_path:
             sb3_model = algo_cls.load(config.checkpoint_path, env=train_env)

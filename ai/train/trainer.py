@@ -49,11 +49,16 @@ def main(argv):
     glog.info(f"Training config: environment={env_name}, method={method_name}")
 
     if config.method == training_pb2.TRAINING_METHOD_RL:
-        from ai.train.rl import run as run_rl
-
         if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
             glog.warning("RL training currently only supports simulation environment")
-        run_rl(config.rl)
+
+        algo = (config.rl.algorithm or "ppo").lower()
+        if algo == "mjx_ppo":
+            from ai.train.mjx_rl import run as run_mjx
+            run_mjx(config.rl)
+        else:
+            from ai.train.rl import run as run_rl
+            run_rl(config.rl)
 
     elif config.method == training_pb2.TRAINING_METHOD_IMITATION:
         glog.info("Imitation learning — not yet implemented")

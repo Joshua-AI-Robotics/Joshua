@@ -7,15 +7,16 @@ ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_RL
-    model_path: "simulation/models/so_arm100_reach.xml"
+    model_path: "simulation/models/so_arm100_pick_place.xml"
     rl {
-      task: "reach"
+      task: "pick_place"
       frame_skip: 10
       algorithm: "ppo"
       total_timesteps: 500000
       num_eval_episodes: 10
-      save_path: "reach_ppo"
+      save_path: "pick_place_ppo"
       render: true
+      num_envs: 8
     }
   }
 }
