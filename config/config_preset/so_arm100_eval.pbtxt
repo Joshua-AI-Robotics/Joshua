@@ -8,8 +8,8 @@ ai {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_EVAL
     eval {
-      task: "reach"
-      checkpoint_path: "reach_mjx_ppo.msgpack"
+      task: "pick_place"
+      checkpoint_path: "pick_place_mjx_ppo.msgpack"
       num_episodes: 10
       render: true
     }

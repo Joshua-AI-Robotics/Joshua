@@ -34,6 +34,16 @@ os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/tmp/jax_cache")
 os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES", "0")
 os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
 
+_CHECKPOINT_DIR = "/tmp/joshua_checkpoints"
+os.makedirs(_CHECKPOINT_DIR, exist_ok=True)
+
+
+def _checkpoint_path(name: str) -> str:
+    """Resolve a checkpoint path under the persistent checkpoint dir."""
+    if os.path.isabs(name):
+        return name
+    return os.path.join(_CHECKPOINT_DIR, name)
+
 # ── Hyperparameters (sensible defaults, overridden by config) ─────────
 
 _LR = 3e-4
@@ -189,6 +199,8 @@ def run(config: training_pb2.RLConfig) -> None:
     model_path = config.checkpoint_path or _MJX_MODELS.get(task_name, "")
     if not model_path:
         raise ValueError(f"No MJX model path for task '{task_name}'")
+
+    save_path = _checkpoint_path(save_path)
 
     glog.info(f"MJX PPO: task={task_name}, num_envs={num_envs}, "
               f"total_timesteps={total_timesteps}, model={model_path}")
@@ -377,6 +389,7 @@ def eval_mjx(config: training_pb2.RLConfig) -> None:
     checkpoint_path = config.checkpoint_path
     if not checkpoint_path:
         raise ValueError("checkpoint_path is required for evaluation")
+    checkpoint_path = _checkpoint_path(checkpoint_path)
 
     meta_path = checkpoint_path.replace(".msgpack", "_meta.json")
     try:

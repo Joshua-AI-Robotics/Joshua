@@ -15,7 +15,7 @@ ai {
       total_timesteps: 100000000
       num_envs: 64
       save_path: "pick_place_mjx_ppo"
-      render: true
+      render: false
     }
   }
 }
