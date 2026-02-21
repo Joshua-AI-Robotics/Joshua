@@ -1,6 +1,6 @@
 """Training entry point.
 
-Dispatches to MJX GPU-parallel RL, imitation learning, or evaluation
+``Dispatches to MJX GPU-parallel RL, imitation learning, or evaluation
 based on the TrainingConfig in the unified Config.
 
 Usage:
@@ -49,12 +49,15 @@ def main(argv):
     glog.info(f"Training config: environment={env_name}, method={method_name}")
 
     if config.method == training_pb2.TRAINING_METHOD_RL:
+        # TODO(hmoon): Implement real-world RL training
         if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
             glog.warning("RL training currently only supports simulation environment")
 
+        # TODO(hmoon): Add Issac Sim support here
         from ai.train.mjx_rl import run as run_mjx
         run_mjx(config.rl)
 
+    # TODO(hmoon): Implement imitation learning
     elif config.method == training_pb2.TRAINING_METHOD_IMITATION:
         glog.info("Imitation learning — not yet implemented")
         glog.info(f"  dataset_path: {config.imitation.dataset_path}")

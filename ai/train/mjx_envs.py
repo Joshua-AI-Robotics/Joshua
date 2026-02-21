@@ -30,10 +30,7 @@ class StepResult(NamedTuple):
 
 
 class MJXReachEnv:
-    """Reach task: move end-effector to a random 3D target.
-
-    Mirrors simulation/envs/reach.py but in pure JAX for GPU batching.
-    """
+    """Reach task: move end-effector to a random 3D target."""
 
     def __init__(self, model_path: str, frame_skip: int = 10,
                  max_episode_steps: int = 500) -> None:
@@ -125,10 +122,7 @@ class MJXReachEnv:
 
 
 class MJXPickPlaceEnv:
-    """Pick-and-place task: grasp object and move to target.
-
-    Mirrors simulation/envs/pick_place.py but in pure JAX for GPU batching.
-    """
+    """Pick-and-place task: grasp object and move to target."""
 
     def __init__(self, model_path: str, frame_skip: int = 10,
                  max_episode_steps: int = 1000) -> None:
