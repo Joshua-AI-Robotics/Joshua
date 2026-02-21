@@ -15,6 +15,12 @@ enum TrainingMethod {
   TRAINING_METHOD_EVAL = 3;
 }
 
+enum SimulatorBackend {
+  SIM_BACKEND_INVALID = 0;
+  SIM_BACKEND_MJX = 1;
+  SIM_BACKEND_ISAAC_SIM = 2;
+}
+
 message RLConfig {
   string task = 1;
   uint32 frame_skip = 2;
@@ -49,6 +55,7 @@ message TrainingConfig {
   TrainingEnvironment environment = 1;
   TrainingMethod method = 2;
   string model_path = 3;
+  SimulatorBackend simulator_backend = 4;
   RLConfig rl = 10;
   ImitationConfig imitation = 11;
   EvalConfig eval = 12;

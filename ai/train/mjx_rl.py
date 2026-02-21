@@ -1,7 +1,9 @@
 """CleanRL-style PPO for MJX GPU-parallel training.
 
 Single-file implementation: actor-critic network, GAE, clipped PPO loss,
-all running on GPU via JAX. Paired with MJX environments from mjx_envs.py.
+all running on GPU via JAX.  Environments are loaded from per-task
+modules under ``ai.train.mjx_envs`` via config -- no hardcoded model
+paths or task registries.
 
 Usage (through trainer.py):
     bazel run //ai/train:trainer -- \
@@ -10,7 +12,6 @@ Usage (through trainer.py):
 
 from __future__ import annotations
 
-import functools
 import json
 import os
 import time
@@ -28,7 +29,7 @@ from flax.training import train_state
 import glog
 
 from ai.proto import training_pb2
-from ai.train.mjx_envs import TASK_ENVS, EnvState, StepResult
+from ai.train.mjx_envs import EnvState, StepResult, load_env
 
 os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/tmp/jax_cache")
 os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES", "0")
@@ -178,34 +179,32 @@ class _MJXViewer:
 
 # ── Training loop ────────────────────────────────────────────────────
 
-def run(config: training_pb2.RLConfig) -> None:
-    task_name = config.task or "reach"
-    env_cls = TASK_ENVS.get(task_name)
-    if env_cls is None:
+def run(config: training_pb2.RLConfig, model_path: str) -> None:
+    """Run MJX PPO training.
+
+    Args:
+        config: RL hyperparameters and task selection.
+        model_path: Path to the MuJoCo XML model (from TrainingConfig).
+    """
+    task_name = config.task
+    if not task_name:
+        raise ValueError("RLConfig.task is required (e.g. 'reach', 'ant')")
+    if not model_path:
         raise ValueError(
-            f"Unknown MJX task '{task_name}'. Available: {', '.join(TASK_ENVS)}"
+            "TrainingConfig.model_path is required -- "
+            "set it in the config .pbtxt file"
         )
 
     num_envs = config.num_envs or 2048
     total_timesteps = config.total_timesteps or 10_000_000
     frame_skip = config.frame_skip or 10
     save_path = config.save_path or f"{task_name}_mjx_ppo"
-
-    _MJX_MODELS = {
-        "reach": "simulation/models/so_arm100_reach_mjx.xml",
-        "pick_place": "simulation/models/so_arm100_pick_place_mjx.xml",
-        "ant": "simulation/models/ant_mjx.xml",
-    }
-    model_path = config.checkpoint_path or _MJX_MODELS.get(task_name, "")
-    if not model_path:
-        raise ValueError(f"No MJX model path for task '{task_name}'")
-
     save_path = _checkpoint_path(save_path)
 
     glog.info(f"MJX PPO: task={task_name}, num_envs={num_envs}, "
               f"total_timesteps={total_timesteps}, model={model_path}")
 
-    env = env_cls(model_path=model_path, frame_skip=frame_skip)
+    env = load_env(task_name, model_path=model_path, frame_skip=frame_skip)
 
     num_updates = total_timesteps // (num_envs * _ROLLOUT_LENGTH)
     glog.info(f"  obs_size={env.obs_size}, action_size={env.action_size}")
@@ -384,8 +383,14 @@ def run(config: training_pb2.RLConfig) -> None:
 
 # ── Evaluation ────────────────────────────────────────────────────────
 
-def eval_mjx(config: training_pb2.RLConfig) -> None:
-    """Load a trained MJX PPO checkpoint and run with the viewer."""
+def eval_mjx(config: training_pb2.EvalConfig, model_path: str) -> None:
+    """Load a trained MJX PPO checkpoint and run with the viewer.
+
+    Args:
+        config: Eval settings (task, checkpoint, episodes, render).
+        model_path: Path to the MuJoCo XML model (from TrainingConfig).
+                    Falls back to checkpoint metadata if empty.
+    """
     checkpoint_path = config.checkpoint_path
     if not checkpoint_path:
         raise ValueError("checkpoint_path is required for evaluation")
@@ -399,24 +404,18 @@ def eval_mjx(config: training_pb2.RLConfig) -> None:
         meta = {}
 
     task_name = config.task or meta.get("task", "ant")
-    env_cls = TASK_ENVS.get(task_name)
-    if env_cls is None:
+    model_path = model_path or meta.get("model_path", "")
+    if not model_path:
         raise ValueError(
-            f"Unknown MJX task '{task_name}'. Available: {', '.join(TASK_ENVS)}"
+            "model_path is required for evaluation -- set TrainingConfig.model_path "
+            "or ensure checkpoint metadata contains it"
         )
-
-    _MJX_MODELS = {
-        "reach": "simulation/models/so_arm100_reach_mjx.xml",
-        "pick_place": "simulation/models/so_arm100_pick_place_mjx.xml",
-        "ant": "simulation/models/ant_mjx.xml",
-    }
-    model_path = meta.get("model_path") or _MJX_MODELS.get(task_name, "")
-    frame_skip = config.frame_skip or meta.get("frame_skip", 5)
+    frame_skip = meta.get("frame_skip", 5)
 
     glog.info(f"MJX eval: task={task_name}, model={model_path}, "
               f"checkpoint={checkpoint_path}")
 
-    env = env_cls(model_path=model_path, frame_skip=frame_skip)
+    env = load_env(task_name, model_path=model_path, frame_skip=frame_skip)
     network = ActorCritic(action_dim=env.action_size)
 
     rng = jax.random.PRNGKey(0)
@@ -431,7 +430,7 @@ def eval_mjx(config: training_pb2.RLConfig) -> None:
         mean, _, _ = network.apply(params, obs)
         return mean
 
-    num_episodes = config.num_eval_episodes or 5
+    num_episodes = config.num_episodes or 5
     viewer = _MJXViewer(env.mj_model)
 
     glog.info(f"Running {num_episodes} eval episodes (close viewer to stop) ...")

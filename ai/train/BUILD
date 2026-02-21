@@ -18,18 +18,12 @@ py_binary(
 )
 
 py_library(
-    name = "mjx_envs",
-    srcs = ["mjx_envs.py"],
-    deps = requirement("mujoco") + requirement("mujoco-mjx") + requirement("jax") + requirement("numpy"),
-)
-
-py_library(
     name = "mjx_rl",
     srcs = ["mjx_rl.py"],
     deps = [
-        ":mjx_envs",
+        "//ai/train/mjx_envs",
         "//ai/proto:training_py_proto",
-    ] + requirement("jax") + requirement("flax") + requirement("optax") + requirement("glog") + requirement("numpy"),
+    ] + requirement("jax") + requirement("flax") + requirement("optax") + requirement("glog") + requirement("numpy") + requirement("mujoco"),
 )
 
 py_binary(

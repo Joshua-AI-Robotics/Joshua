@@ -6,6 +6,8 @@ ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_EVAL
+    model_path: "simulation/models/ant_mjx.xml"
+    simulator_backend: SIM_BACKEND_MJX
     eval {
       task: "ant"
       checkpoint_path: "ant_mjx_ppo.msgpack"

@@ -7,7 +7,8 @@ ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_RL
-    model_path: "simulation/models/so_arm100_pick_place.xml"
+    model_path: "simulation/models/so_arm100_pick_place_mjx.xml"
+    simulator_backend: SIM_BACKEND_MJX
     rl {
       task: "pick_place"
       frame_skip: 10
