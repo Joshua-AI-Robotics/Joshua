@@ -11,6 +11,8 @@ Usage (through trainer.py):
 from __future__ import annotations
 
 import functools
+import json
+import os
 import time
 from typing import NamedTuple, Optional
 
@@ -27,6 +29,10 @@ import glog
 
 from ai.proto import training_pb2
 from ai.train.mjx_envs import TASK_ENVS, EnvState, StepResult
+
+os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", "/tmp/jax_cache")
+os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES", "0")
+os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
 
 # ── Hyperparameters (sensible defaults, overridden by config) ─────────
 
@@ -170,21 +176,24 @@ def run(config: training_pb2.RLConfig) -> None:
             f"Unknown MJX task '{task_name}'. Available: {', '.join(TASK_ENVS)}"
         )
 
-    num_envs = config.num_envs or 1024
+    num_envs = config.num_envs or 2048
     total_timesteps = config.total_timesteps or 10_000_000
     frame_skip = config.frame_skip or 10
     save_path = config.save_path or f"{task_name}_mjx_ppo"
-    model_path = config.checkpoint_path  # reuse for model xml path
+
+    _MJX_MODELS = {
+        "reach": "simulation/models/so_arm100_reach_mjx.xml",
+        "pick_place": "simulation/models/so_arm100_pick_place_mjx.xml",
+        "ant": "simulation/models/ant_mjx.xml",
+    }
+    model_path = config.checkpoint_path or _MJX_MODELS.get(task_name, "")
+    if not model_path:
+        raise ValueError(f"No MJX model path for task '{task_name}'")
 
     glog.info(f"MJX PPO: task={task_name}, num_envs={num_envs}, "
-              f"total_timesteps={total_timesteps}")
+              f"total_timesteps={total_timesteps}, model={model_path}")
 
-    env = env_cls(
-        model_path="simulation/models/so_arm100_reach.xml"
-        if task_name == "reach"
-        else "simulation/models/so_arm100_pick_place.xml",
-        frame_skip=frame_skip,
-    )
+    env = env_cls(model_path=model_path, frame_skip=frame_skip)
 
     num_updates = total_timesteps // (num_envs * _ROLLOUT_LENGTH)
     glog.info(f"  obs_size={env.obs_size}, action_size={env.action_size}")
@@ -211,17 +220,16 @@ def run(config: training_pb2.RLConfig) -> None:
     env_states, obs = v_reset(rng_envs)
 
     v_step = jax.vmap(env.step)
+    v_sample = jax.vmap(_sample_action, in_axes=(None, None, 0, 0))
 
-    @jax.jit
     def _rollout_step(carry, _):
         ts_, env_state_, obs_, rng_ = carry
         rng_, rng_act = jax.random.split(rng_)
         rng_acts = jax.random.split(rng_act, num_envs)
 
-        v_sample = jax.vmap(
-            functools.partial(_sample_action, ts_.params, ts_.apply_fn)
+        actions, log_probs, values = v_sample(
+            ts_.params, ts_.apply_fn, obs_, rng_acts
         )
-        actions, log_probs, values = v_sample(obs_, rng_acts)
         results: StepResult = v_step(env_state_, actions)
 
         transition = Transition(
@@ -246,7 +254,7 @@ def run(config: training_pb2.RLConfig) -> None:
         )
 
         _, _, last_values = jax.vmap(
-            functools.partial(ts_.apply_fn, ts_.params)
+            lambda obs: ts_.apply_fn(ts_.params, obs)
         )(obs_)
 
         advantages, returns = _compute_gae(
@@ -300,11 +308,18 @@ def run(config: training_pb2.RLConfig) -> None:
         glog.info("Opening MuJoCo viewer for live preview (env 0) ...")
         viewer = _MJXViewer(env.mj_model)
 
-    glog.info("Starting MJX PPO training ...")
     runner = RunnerState(ts, env_states, obs, rng)
+
+    glog.info("JIT-compiling _update (this may take a few minutes on first run) ...")
+    t_compile = time.time()
+    runner = _update(runner)
+    jax.block_until_ready(runner)
+    glog.info(f"Compilation + first update done in {time.time() - t_compile:.1f}s")
+
+    glog.info("Starting MJX PPO training ...")
     t0 = time.time()
 
-    for update in range(1, num_updates + 1):
+    for update in range(2, num_updates + 1):
         runner = _update(runner)
 
         if viewer is not None:
@@ -332,10 +347,106 @@ def run(config: training_pb2.RLConfig) -> None:
     glog.info(f"Training complete: {total_steps:,} steps in {total_elapsed:.1f}s "
               f"({total_steps / total_elapsed:,.0f} SPS)")
 
-    params_bytes = jax.device_get(
+    params_np = jax.device_get(
         jax.tree.map(lambda x: np.array(x), runner.train_state.params)
     )
     import flax.serialization
     with open(save_path + ".msgpack", "wb") as f:
-        f.write(flax.serialization.to_bytes(params_bytes))
-    glog.info(f"Parameters saved to {save_path}.msgpack")
+        f.write(flax.serialization.to_bytes(params_np))
+
+    meta = {
+        "task": task_name,
+        "obs_size": env.obs_size,
+        "action_size": env.action_size,
+        "model_path": model_path,
+        "total_timesteps": int(total_steps),
+        "num_envs": num_envs,
+        "frame_skip": frame_skip,
+    }
+    with open(save_path + "_meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+
+    glog.info(f"Parameters saved to {save_path}.msgpack  "
+              f"(meta: {save_path}_meta.json)")
+
+
+# ── Evaluation ────────────────────────────────────────────────────────
+
+def eval_mjx(config: training_pb2.RLConfig) -> None:
+    """Load a trained MJX PPO checkpoint and run with the viewer."""
+    checkpoint_path = config.checkpoint_path
+    if not checkpoint_path:
+        raise ValueError("checkpoint_path is required for evaluation")
+
+    meta_path = checkpoint_path.replace(".msgpack", "_meta.json")
+    try:
+        with open(meta_path) as f:
+            meta = json.load(f)
+    except FileNotFoundError:
+        meta = {}
+
+    task_name = config.task or meta.get("task", "ant")
+    env_cls = TASK_ENVS.get(task_name)
+    if env_cls is None:
+        raise ValueError(
+            f"Unknown MJX task '{task_name}'. Available: {', '.join(TASK_ENVS)}"
+        )
+
+    _MJX_MODELS = {
+        "reach": "simulation/models/so_arm100_reach_mjx.xml",
+        "pick_place": "simulation/models/so_arm100_pick_place_mjx.xml",
+        "ant": "simulation/models/ant_mjx.xml",
+    }
+    model_path = meta.get("model_path") or _MJX_MODELS.get(task_name, "")
+    frame_skip = config.frame_skip or meta.get("frame_skip", 5)
+
+    glog.info(f"MJX eval: task={task_name}, model={model_path}, "
+              f"checkpoint={checkpoint_path}")
+
+    env = env_cls(model_path=model_path, frame_skip=frame_skip)
+    network = ActorCritic(action_dim=env.action_size)
+
+    rng = jax.random.PRNGKey(0)
+    dummy_params = network.init(rng, jnp.zeros(env.obs_size))
+
+    import flax.serialization
+    with open(checkpoint_path, "rb") as f:
+        params = flax.serialization.from_bytes(dummy_params, f.read())
+
+    @jax.jit
+    def _deterministic_action(params, obs):
+        mean, _, _ = network.apply(params, obs)
+        return mean
+
+    num_episodes = config.num_eval_episodes or 5
+    viewer = _MJXViewer(env.mj_model)
+
+    glog.info(f"Running {num_episodes} eval episodes (close viewer to stop) ...")
+
+    for ep in range(num_episodes):
+        rng, rng_reset = jax.random.split(rng)
+        state, obs = env.reset(rng_reset)
+        ep_reward = 0.0
+        ep_steps = 0
+
+        while True:
+            if not viewer.is_running:
+                glog.info("Viewer closed.")
+                return
+
+            action = _deterministic_action(params, obs)
+            result = env.step(state, action)
+            state, obs = result.state, result.obs
+            ep_reward += float(jax.device_get(result.reward))
+            ep_steps += 1
+
+            viewer.update(state)
+
+            if jax.device_get(result.done):
+                break
+
+        glog.info(f"  episode {ep + 1}/{num_episodes}: "
+                  f"reward={ep_reward:.1f}, steps={ep_steps}")
+
+    viewer.close()
+    glog.info("Evaluation complete.")

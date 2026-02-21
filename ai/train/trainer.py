@@ -1,11 +1,11 @@
 """Training entry point.
 
-Dispatches to RL, imitation learning, or evaluation based on the
-TrainingConfig in the unified Config.
+Dispatches to MJX GPU-parallel RL, imitation learning, or evaluation
+based on the TrainingConfig in the unified Config.
 
 Usage:
     bazel run //ai/train:trainer -- \
-        --config config/config_preset/so_arm100_train_rl.pbtxt
+        --config config/config_preset/ant_train_mjx.pbtxt
 """
 
 import sys
@@ -52,13 +52,8 @@ def main(argv):
         if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
             glog.warning("RL training currently only supports simulation environment")
 
-        algo = (config.rl.algorithm or "ppo").lower()
-        if algo == "mjx_ppo":
-            from ai.train.mjx_rl import run as run_mjx
-            run_mjx(config.rl)
-        else:
-            from ai.train.rl import run as run_rl
-            run_rl(config.rl)
+        from ai.train.mjx_rl import run as run_mjx
+        run_mjx(config.rl)
 
     elif config.method == training_pb2.TRAINING_METHOD_IMITATION:
         glog.info("Imitation learning — not yet implemented")
@@ -67,25 +62,25 @@ def main(argv):
         raise NotImplementedError("Imitation learning is not yet implemented")
 
     elif config.method == training_pb2.TRAINING_METHOD_EVAL:
-        from ai.train.rl import run as run_rl
-
-        if config.environment == training_pb2.TRAINING_ENV_SIMULATION:
-            rl_config = training_pb2.RLConfig(
-                task=config.eval.task,
-                checkpoint_path=config.eval.checkpoint_path,
-                num_eval_episodes=config.eval.num_episodes,
-                total_timesteps=0,
-            )
-            if config.eval.render:
-                rl_config.render = True
-            run_rl(rl_config)
-        else:
+        if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
             raise NotImplementedError("Real-world evaluation is not yet implemented")
+
+        from ai.train.mjx_rl import eval_mjx
+
+        rl_config = training_pb2.RLConfig(
+            task=config.eval.task,
+            checkpoint_path=config.eval.checkpoint_path,
+            num_eval_episodes=config.eval.num_episodes,
+            total_timesteps=0,
+        )
+        if config.eval.render:
+            rl_config.render = True
+        eval_mjx(rl_config)
 
     else:
         raise ValueError(f"Unknown training method: {config.method}")
 
-    glog.info("Training complete.")
+    glog.info("Done.")
 
 
 if __name__ == "__main__":

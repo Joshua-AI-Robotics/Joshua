@@ -18,15 +18,6 @@ py_binary(
 )
 
 py_library(
-    name = "rl",
-    srcs = ["rl.py"],
-    deps = [
-        "//ai/proto:training_py_proto",
-        "//simulation/envs:register",
-    ] + requirement("gymnasium") + requirement("glog") + requirement("stable-baselines3"),
-)
-
-py_library(
     name = "mjx_envs",
     srcs = ["mjx_envs.py"],
     deps = requirement("mujoco") + requirement("mujoco-mjx") + requirement("jax") + requirement("numpy"),
@@ -50,7 +41,6 @@ py_binary(
         "//config/config_preset:config_presets",
     ],
     deps = [
-        ":rl",
         ":mjx_rl",
         "//ai/proto:training_py_proto",
         "//config/proto:config_py_proto",

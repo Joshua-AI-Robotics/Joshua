@@ -1,0 +1,8 @@
+general {
+  operation_mode: MODE_SIMULATION
+  name: "ant"
+}
+simulation {
+  model_path: "simulation/models/ant_mjx.xml"
+  mode: MODE_INTERACTIVE
+}

@@ -1,16 +1,15 @@
 general {
   operation_mode: MODE_TRAINING
-  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
-  name: "so100"
+  name: "ant"
 }
 ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_EVAL
     eval {
-      task: "reach"
-      checkpoint_path: "reach_mjx_ppo.msgpack"
-      num_episodes: 10
+      task: "ant"
+      checkpoint_path: "ant_mjx_ppo.msgpack"
+      num_episodes: 5
       render: true
     }
   }
