@@ -5,6 +5,6 @@ package(default_visibility = ["//visibility:public"])
 
 py_library(
     name = "mjx_envs",
-    srcs = glob(["*.py"]),
+    srcs = glob(["*.py"]) + glob(["terms/*.py"]),
     deps = requirement("mujoco") + requirement("mujoco-mjx") + requirement("jax") + requirement("numpy"),
 )
