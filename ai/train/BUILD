@@ -26,6 +26,18 @@ py_library(
     ] + requirement("jax") + requirement("flax") + requirement("optax") + requirement("glog") + requirement("numpy") + requirement("mujoco"),
 )
 
+py_library(
+    name = "isaac_launcher",
+    srcs = ["isaac_launcher.py"],
+    data = [
+        "isaac_runner.py",
+        "//simulation:sim_models",
+    ] + glob(["isaac_tasks/**/*.py"]),
+    deps = [
+        "//ai/proto:training_py_proto",
+    ] + requirement("glog"),
+)
+
 py_binary(
     name = "trainer",
     srcs = ["trainer.py"],
@@ -36,6 +48,7 @@ py_binary(
     ],
     deps = [
         ":mjx_rl",
+        ":isaac_launcher",
         "//ai/proto:training_py_proto",
         "//config/proto:config_py_proto",
     ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),

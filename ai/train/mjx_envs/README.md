@@ -249,26 +249,8 @@ def my_reset(noise: float = 0.1) -> ResetFn:
 
 ---
 
-## Isaac Lab Integration Path
+## Isaac Lab Integration
 
-This architecture is designed for future multi-backend support.  The
-config preset already specifies `simulator_backend`:
-
-```
-simulator_backend: SIM_BACKEND_MJX        # current
-simulator_backend: SIM_BACKEND_ISAAC_SIM  # future
-```
-
-`trainer.py` dispatches to the right backend.  To add Isaac Lab:
-
-1. Create `ai/train/isaac_envs/` mirroring this package structure.
-2. Isaac Lab term implementations use PyTorch and wrap Isaac Lab's
-   `mdp.*` functions.
-3. The MDP structure (which terms, what weights) is portable — only the
-   term implementations differ between JAX (MJX) and PyTorch (Isaac Lab).
-
-```
-trainer.py
-  ├── SIM_BACKEND_MJX       → mjx_rl.py    → mjx_envs/{task}.py    → MJXEnv
-  └── SIM_BACKEND_ISAAC_SIM → isaac_rl.py  → isaac_envs/{task}.py  → IsaacEnv
-```
+See the main training README at `ai/train/README.md` for full
+Isaac Sim / Isaac Lab documentation, including installation,
+prerequisites, and usage.

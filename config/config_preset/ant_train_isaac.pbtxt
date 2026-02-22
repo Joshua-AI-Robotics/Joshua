@@ -6,15 +6,14 @@ ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_RL
-    model_path: "simulation/models/ant.xml"
-    simulator_backend: SIM_BACKEND_MJX
+    simulator_backend: SIM_BACKEND_ISAAC_SIM
     rl {
       task: "ant"
-      frame_skip: 5
-      algorithm: "mjx_ppo"
-      max_iterations: 500
+      algorithm: "skrl"
+      max_iterations: 100
       num_envs: 1000
-      save_path: "ant_mjx_ppo"
+      save_path: "ant_isaac_skrl_ppo"
+      render: false
     }
-  }
+  }  
 }

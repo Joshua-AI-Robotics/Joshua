@@ -3,6 +3,6 @@ general {
   name: "ant"
 }
 simulation {
-  model_path: "simulation/models/ant_mjx.xml"
+  model_path: "simulation/models/ant.xml"
   mode: MODE_INTERACTIVE
 }

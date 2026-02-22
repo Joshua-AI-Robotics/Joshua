@@ -49,10 +49,8 @@ def _run_rl(config: training_pb2.TrainingConfig) -> None:
         run_mjx(config.rl, model_path)
 
     elif backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
-        raise NotImplementedError(
-            "Isaac Sim backend is not yet implemented. "
-            "Set simulator_backend: SIM_BACKEND_MJX to use MJX."
-        )
+        from ai.train.isaac_launcher import launch_isaac_training
+        launch_isaac_training(config)
 
     else:
         raise ValueError(
@@ -74,9 +72,8 @@ def _run_eval(config: training_pb2.TrainingConfig) -> None:
         eval_mjx(config.eval, model_path)
 
     elif backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
-        raise NotImplementedError(
-            "Isaac Sim evaluation is not yet implemented."
-        )
+        from ai.train.isaac_launcher import launch_isaac_eval
+        launch_isaac_eval(config)
 
     else:
         raise ValueError(f"Unknown simulator_backend: {backend}")

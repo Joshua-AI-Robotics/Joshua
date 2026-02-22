@@ -25,7 +25,7 @@ message RLConfig {
   string task = 1;
   uint32 frame_skip = 2;
   string algorithm = 3;
-  uint32 total_timesteps = 4;
+  uint32 total_timesteps = 4;  // deprecated: use max_iterations instead
   uint32 num_eval_episodes = 5;
   string checkpoint_path = 6;
   string save_path = 7;
@@ -33,6 +33,7 @@ message RLConfig {
   bool image_obs = 9;
   string camera_name = 10;
   uint32 num_envs = 11;
+  uint32 max_iterations = 12;
 }
 
 message ImitationConfig {
@@ -49,6 +50,8 @@ message EvalConfig {
   uint32 num_episodes = 2;
   bool render = 3;
   string task = 4;
+  string algorithm = 5;
+  uint32 num_envs = 6;
 }
 
 message TrainingConfig {

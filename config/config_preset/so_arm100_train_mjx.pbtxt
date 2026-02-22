@@ -13,7 +13,7 @@ ai {
       task: "pick_place"
       frame_skip: 10
       algorithm: "mjx_ppo"
-      total_timesteps: 100000000
+      max_iterations: 1000
       num_envs: 64
       save_path: "pick_place_mjx_ppo"
       render: false

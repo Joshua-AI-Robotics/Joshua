@@ -1,0 +1,377 @@
+#usda 1.0
+(
+    defaultPrim = "Ant"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "Ant"
+{
+    def Xform "torso" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsArticulationRootAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Sphere "torso_geom" (
+            apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float3[] extent = [(-0.25, -0.25, -0.25), (0.25, 0.25, 0.25)]
+            double radius = 0.25
+            color3f[] primvars:displayColor = [(0.97, 0.38, 0.06)]
+        }
+    }
+
+    def Xform "front_left_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.2, 0.2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.9238795, 0, 0, 0.3826834)
+            double3 xformOp:translate = (0.1, 0.1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.2214, -0.08, -0.08), (0.2214, 0.08, 0.08)]
+                double height = 0.2828
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.999, 0.2, 0.1)]
+            }
+        }
+    }
+
+    def Xform "front_left_foot" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.4, 0.4, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.9238795, 0, 0, 0.3826834)
+            double3 xformOp:translate = (0.2, 0.2, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "foot_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.3628, -0.08, -0.08), (0.3628, 0.08, 0.08)]
+                double height = 0.5657
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.999, 0.2, 0.1)]
+            }
+        }
+    }
+
+    def Xform "front_right_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.2, 0.2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.3826834, 0, 0, 0.9238795)
+            double3 xformOp:translate = (-0.1, 0.1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.2214, -0.08, -0.08), (0.2214, 0.08, 0.08)]
+                double height = 0.2828
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.97, 0.38, 0.06)]
+            }
+        }
+    }
+
+    def Xform "front_right_foot" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.4, 0.4, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.3826834, 0, 0, 0.9238795)
+            double3 xformOp:translate = (-0.2, 0.2, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "foot_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.3628, -0.08, -0.08), (0.3628, 0.08, 0.08)]
+                double height = 0.5657
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.97, 0.38, 0.06)]
+            }
+        }
+    }
+
+    def Xform "left_back_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.2, -0.2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (-0.3826834, 0, 0, 0.9238795)
+            double3 xformOp:translate = (-0.1, -0.1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.2214, -0.08, -0.08), (0.2214, 0.08, 0.08)]
+                double height = 0.2828
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.97, 0.38, 0.06)]
+            }
+        }
+    }
+
+    def Xform "left_back_foot" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.4, -0.4, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (-0.3826834, 0, 0, 0.9238795)
+            double3 xformOp:translate = (-0.2, -0.2, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "foot_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.3628, -0.08, -0.08), (0.3628, 0.08, 0.08)]
+                double height = 0.5657
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.97, 0.38, 0.06)]
+            }
+        }
+    }
+
+    def Xform "right_back_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.2, -0.2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.9238795, 0, 0, -0.3826834)
+            double3 xformOp:translate = (0.1, -0.1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.2214, -0.08, -0.08), (0.2214, 0.08, 0.08)]
+                double height = 0.2828
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.999, 0.2, 0.1)]
+            }
+        }
+    }
+
+    def Xform "right_back_foot" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.4, -0.4, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.9238795, 0, 0, -0.3826834)
+            double3 xformOp:translate = (0.2, -0.2, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "foot_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.3628, -0.08, -0.08), (0.3628, 0.08, 0.08)]
+                double height = 0.5657
+                double radius = 0.08
+                color3f[] primvars:displayColor = [(0.999, 0.2, 0.1)]
+            }
+        }
+    }
+
+    def Scope "joints"
+    {
+        def PhysicsRevoluteJoint "front_left_leg"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/torso>
+            rel physics:body1 = </Ant/front_left_leg>
+            point3f physics:localPos0 = (0.2, 0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -40
+            float physics:upperLimit = 40
+        }
+
+        def PhysicsRevoluteJoint "front_left_foot"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/front_left_leg>
+            rel physics:body1 = </Ant/front_left_foot>
+            point3f physics:localPos0 = (0.2, 0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.3826834, 0, 0, 0.9238795)
+            quatf physics:localRot1 = (0.3826834, 0, 0, 0.9238795)
+            float physics:lowerLimit = 30
+            float physics:upperLimit = 100
+        }
+
+        def PhysicsRevoluteJoint "front_right_leg"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/torso>
+            rel physics:body1 = </Ant/front_right_leg>
+            point3f physics:localPos0 = (-0.2, 0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -40
+            float physics:upperLimit = 40
+        }
+
+        def PhysicsRevoluteJoint "front_right_foot"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/front_right_leg>
+            rel physics:body1 = </Ant/front_right_foot>
+            point3f physics:localPos0 = (-0.2, 0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.9238795, 0, 0, 0.3826834)
+            quatf physics:localRot1 = (0.9238795, 0, 0, 0.3826834)
+            float physics:lowerLimit = -100
+            float physics:upperLimit = -30
+        }
+
+        def PhysicsRevoluteJoint "left_back_leg"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/torso>
+            rel physics:body1 = </Ant/left_back_leg>
+            point3f physics:localPos0 = (-0.2, -0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -40
+            float physics:upperLimit = 40
+        }
+
+        def PhysicsRevoluteJoint "left_back_foot"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/left_back_leg>
+            rel physics:body1 = </Ant/left_back_foot>
+            point3f physics:localPos0 = (-0.2, -0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.3826834, 0, 0, 0.9238795)
+            quatf physics:localRot1 = (0.3826834, 0, 0, 0.9238795)
+            float physics:lowerLimit = -100
+            float physics:upperLimit = -30
+        }
+
+        def PhysicsRevoluteJoint "right_back_leg"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/torso>
+            rel physics:body1 = </Ant/right_back_leg>
+            point3f physics:localPos0 = (0.2, -0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -40
+            float physics:upperLimit = 40
+        }
+
+        def PhysicsRevoluteJoint "right_back_foot"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Ant/right_back_leg>
+            rel physics:body1 = </Ant/right_back_foot>
+            point3f physics:localPos0 = (0.2, -0.2, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.9238795, 0, 0, 0.3826834)
+            quatf physics:localRot1 = (0.9238795, 0, 0, 0.3826834)
+            float physics:lowerLimit = 30
+            float physics:upperLimit = 100
+        }
+    }
+}

@@ -6,12 +6,13 @@ ai {
   training {
     environment: TRAINING_ENV_SIMULATION
     method: TRAINING_METHOD_EVAL
-    model_path: "simulation/models/ant.xml"
-    simulator_backend: SIM_BACKEND_MJX
+    simulator_backend: SIM_BACKEND_ISAAC_SIM
     eval {
       task: "ant"
-      checkpoint_path: "ant_mjx_ppo.msgpack"
-      num_episodes: 5
+      algorithm: "skrl"
+      checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/ant_isaac_skrl_ppo/final_policy.pt"
+      num_episodes: 10
+      num_envs: 4
       render: true
     }
   }

@@ -196,19 +196,24 @@ def run(config: training_pb2.RLConfig, model_path: str) -> None:
         )
 
     num_envs = config.num_envs or 2048
-    total_timesteps = config.total_timesteps or 10_000_000
     frame_skip = config.frame_skip or 10
     save_path = config.save_path or f"{task_name}_mjx_ppo"
     save_path = _checkpoint_path(save_path)
 
-    glog.info(f"MJX PPO: task={task_name}, num_envs={num_envs}, "
-              f"total_timesteps={total_timesteps}, model={model_path}")
-
     env = load_env(task_name, model_path=model_path, frame_skip=frame_skip)
 
-    num_updates = total_timesteps // (num_envs * _ROLLOUT_LENGTH)
+    if config.max_iterations:
+        num_updates = config.max_iterations
+    elif config.total_timesteps:
+        num_updates = config.total_timesteps // (num_envs * _ROLLOUT_LENGTH)
+    else:
+        num_updates = 500
+
+    glog.info(f"MJX PPO: task={task_name}, num_envs={num_envs}, "
+              f"max_iterations={num_updates}, model={model_path}")
     glog.info(f"  obs_size={env.obs_size}, action_size={env.action_size}")
-    glog.info(f"  rollout_length={_ROLLOUT_LENGTH}, num_updates={num_updates}")
+    glog.info(f"  rollout_length={_ROLLOUT_LENGTH}, "
+              f"steps_per_iteration={num_envs * _ROLLOUT_LENGTH:,}")
 
     rng = jax.random.PRNGKey(42)
 
@@ -370,7 +375,8 @@ def run(config: training_pb2.RLConfig, model_path: str) -> None:
         "obs_size": env.obs_size,
         "action_size": env.action_size,
         "model_path": model_path,
-        "total_timesteps": int(total_steps),
+        "max_iterations": num_updates,
+        "total_steps": int(total_steps),
         "num_envs": num_envs,
         "frame_skip": frame_skip,
     }
