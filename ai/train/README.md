@@ -190,14 +190,13 @@ cd ~/IsaacLab
 
 #### 5. Set Environment Variables for Joshua
 
-Joshua needs to locate Isaac Lab's Python interpreter.  Set **one**
-of these:
+Joshua needs to locate Isaac Lab's Python interpreter.
+**Recommended:** set `ISAAC_LAB_PYTHON` to the venv Python binary.
+This is more reliable than `ISAAC_LAB_PATH` because Bazel sanitizes
+the subprocess environment, which can break `isaaclab.sh`.
 
 ```bash
-# Option A: Point to the Isaac Lab root (Joshua uses isaaclab.sh -p)
 export ISAAC_LAB_PATH=~/IsaacLab
-
-# Option B: Point directly to the venv Python binary
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 ```
 
@@ -205,6 +204,7 @@ For persistence, add to your shell profile:
 
 ```bash
 echo 'export ISAAC_LAB_PATH=~/IsaacLab' >> ~/.bashrc
+echo 'export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python' >> ~/.bashrc
 source ~/.bashrc
 ```
 
