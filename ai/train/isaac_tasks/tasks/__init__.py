@@ -4,3 +4,4 @@ Importing this package triggers ``gym.register()`` for all Joshua tasks.
 """
 
 from . import ant  # noqa: F401
+from . import trileg  # noqa: F401

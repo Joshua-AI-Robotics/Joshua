@@ -11,7 +11,12 @@ from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg
 
 from isaaclab.envs.mdp import (
     action_l2 as _action_l2,
+    action_rate_l2 as _action_rate_l2,
+    ang_vel_xy_l2 as _ang_vel_xy_l2,
+    flat_orientation_l2 as _flat_orientation_l2,
     is_alive as _is_alive,
+    joint_vel_l2 as _joint_vel_l2,
+    lin_vel_z_l2 as _lin_vel_z_l2,
 )
 from isaaclab_tasks.manager_based.classic.humanoid.mdp.rewards import (
     move_to_target_bonus as _move_to_target_bonus,
@@ -78,3 +83,28 @@ def joint_pos_limits(
     return RewTerm(func=_joint_pos_limits_penalty_ratio, weight=weight,
                    params={"threshold": threshold,
                            "gear_ratio": gear_ratio or {".*": 15.0}})
+
+
+def lin_vel_z_l2(weight: float = -0.5) -> RewTerm:
+    """Penalty on vertical (z) base velocity -- reduces bouncing/jumping."""
+    return RewTerm(func=_lin_vel_z_l2, weight=weight)
+
+
+def ang_vel_xy_l2(weight: float = -0.05) -> RewTerm:
+    """Penalty on roll/pitch angular velocity -- reduces tumbling."""
+    return RewTerm(func=_ang_vel_xy_l2, weight=weight)
+
+
+def flat_orientation_l2(weight: float = -0.1) -> RewTerm:
+    """Penalty on non-flat orientation -- keeps the base level."""
+    return RewTerm(func=_flat_orientation_l2, weight=weight)
+
+
+def joint_vel_l2(weight: float = -0.001) -> RewTerm:
+    """Penalty on joint velocities -- encourages smoother motion."""
+    return RewTerm(func=_joint_vel_l2, weight=weight)
+
+
+def action_rate_l2(weight: float = -0.01) -> RewTerm:
+    """Penalty on action changes between steps -- smooths commands."""
+    return RewTerm(func=_action_rate_l2, weight=weight)

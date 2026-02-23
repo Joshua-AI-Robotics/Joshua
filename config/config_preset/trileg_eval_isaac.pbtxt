@@ -1,0 +1,19 @@
+general {
+  operation_mode: MODE_TRAINING
+  name: "trileg"
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_EVAL
+    simulator_backend: SIM_BACKEND_ISAAC_SIM
+    eval {
+      task: "trileg"
+      algorithm: "skrl"
+      checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/trileg_isaac_skrl_ppo/final_policy.pt"
+      num_episodes: 10
+      num_envs: 4
+      render: true
+    }
+  }
+}

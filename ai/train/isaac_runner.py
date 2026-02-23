@@ -30,6 +30,7 @@ if _SCRIPT_DIR not in sys.path:
 
 TASK_MAP: dict[str, str] = {
     "ant": "Joshua-Ant-v0",
+    "trileg": "Joshua-Trileg-v0",
     "humanoid": "Isaac-Humanoid-v0",
     "cartpole": "Isaac-Cartpole-v0",
 }

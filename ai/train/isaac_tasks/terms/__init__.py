@@ -31,8 +31,13 @@ from .observations import (
 )
 from .rewards import (
     action_l2,
+    action_rate_l2,
+    ang_vel_xy_l2,
+    flat_orientation_l2,
     is_alive,
     joint_pos_limits,
+    joint_vel_l2,
+    lin_vel_z_l2,
     move_to_target,
     power_consumption,
     progress_reward,
