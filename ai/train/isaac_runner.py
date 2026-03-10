@@ -1,0 +1,553 @@
+#!/usr/bin/env python3
+"""Isaac Lab training bridge for Joshua.
+
+This script runs inside Isaac Lab's Python environment (NOT Bazel).
+Communication with Joshua is via a JSON config file written by
+``isaac_launcher.py``.
+
+Environment configs, agent configs, and MDP terms are defined in the
+``isaac_tasks`` package (shipped alongside this script) -- nothing is
+hardcoded here.
+
+Usage (called automatically by isaac_launcher.py):
+    isaaclab.sh -p ai/train/isaac_runner.py --config /tmp/joshua_cfg.json --headless
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+# ── Make isaac_tasks importable (lives next to this script) ──────────
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+# ── Task name mapping: Joshua task -> Isaac Lab gym ID ────────────────
+
+TASK_MAP: dict[str, str] = {
+    "ant": "Joshua-Ant-v0",
+    "trileg": "Joshua-Trileg-v0",
+    "humanoid": "Isaac-Humanoid-v0",
+    "cartpole": "Isaac-Cartpole-v0",
+}
+
+# ── CLI + AppLauncher init (must happen before other Isaac imports) ────
+
+parser = argparse.ArgumentParser(
+    description="Joshua-to-Isaac-Lab training bridge."
+)
+parser.add_argument(
+    "--config", required=True,
+    help="Path to Joshua JSON config written by isaac_launcher.py",
+)
+
+from isaaclab.app import AppLauncher  # noqa: E402
+
+AppLauncher.add_app_launcher_args(parser)
+args_cli = parser.parse_args()
+
+app_launcher = AppLauncher(args_cli)
+simulation_app = app_launcher.app
+
+# ── Imports that require Isaac Sim to be running ──────────────────────
+
+import gymnasium as gym  # noqa: E402
+import torch  # noqa: E402
+
+import isaaclab_tasks  # noqa: E402, F401
+import isaac_tasks  # noqa: E402, F401
+from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg  # noqa: E402
+
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = False
+
+
+def _resolve_task(cfg: dict) -> str:
+    """Map Joshua task name to an Isaac Lab gym environment ID."""
+    task = cfg["task"]
+    isaac_task = cfg.get("isaac_task_name") or TASK_MAP.get(task)
+    if isaac_task is None:
+        raise ValueError(
+            f"No Isaac Lab mapping for Joshua task '{task}'. "
+            f"Known mappings: {TASK_MAP}. "
+            f"Or set 'isaac_task_name' in the config."
+        )
+    return isaac_task
+
+
+def _write_meta(cfg: dict, env, log_dir: str) -> None:
+    """Write Joshua-compatible metadata JSON."""
+    checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
+    save_name = cfg.get("save_path", f"{cfg['task']}_isaac_ppo")
+
+    obs_size = action_size = 0
+    try:
+        obs_space = getattr(env, "observation_space", None)
+        act_space = getattr(env, "action_space", None)
+        if obs_space is not None and obs_space.shape is not None:
+            obs_size = obs_space.shape[-1]
+        if act_space is not None and act_space.shape is not None:
+            action_size = act_space.shape[-1]
+    except Exception:
+        pass
+
+    meta = {
+        "task": cfg["task"],
+        "isaac_task": _resolve_task(cfg),
+        "backend": "isaac_sim",
+        "algorithm": cfg.get("algorithm", "rsl_rl"),
+        "obs_size": obs_size,
+        "action_size": action_size,
+        "num_envs": cfg.get("num_envs", 0),
+        "checkpoint_dir": log_dir,
+    }
+    meta_path = os.path.join(checkpoint_dir, save_name + "_meta.json")
+    os.makedirs(os.path.dirname(meta_path), exist_ok=True)
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+    print(f"[Joshua/Isaac] Metadata written to {meta_path}")
+    print(f"[Joshua/Isaac] Checkpoints in {log_dir}")
+
+
+# ── RSL-RL backend ───────────────────────────────────────────────────
+
+def _train_rsl_rl(cfg: dict) -> None:
+    """Train using RSL-RL's OnPolicyRunner (PPO).
+
+    Agent config is loaded from the gym registry (set in
+    ``isaac_tasks/tasks/*.py``) and overridden by values from the
+    Joshua JSON config.
+    """
+    from rsl_rl.runners import OnPolicyRunner
+    from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+
+    isaac_task = _resolve_task(cfg)
+    num_envs = cfg.get("num_envs", 4096)
+    save_name = cfg.get("save_path", f"{cfg['task']}_isaac_ppo")
+    checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    env = gym.make(isaac_task, cfg=env_cfg)
+    env = RslRlVecEnvWrapper(env)
+
+    agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
+
+    max_iterations = cfg.get("max_iterations", 0)
+    if max_iterations:
+        agent_cfg.max_iterations = max_iterations
+
+    agent_cfg.experiment_name = save_name
+    agent_cfg.device = device
+
+    log_dir = os.path.join(checkpoint_dir, "isaac_logs", save_name)
+    os.makedirs(log_dir, exist_ok=True)
+
+    agent_dict = agent_cfg.to_dict()
+    runner = OnPolicyRunner(
+        env, agent_dict, log_dir=log_dir, device=device,
+    )
+
+    total_timesteps = (agent_cfg.max_iterations
+                       * num_envs
+                       * agent_cfg.num_steps_per_env)
+    print(f"[Joshua/Isaac] RSL-RL training {isaac_task} for "
+          f"{agent_cfg.max_iterations} iterations "
+          f"({total_timesteps:,} timesteps, {num_envs} envs)")
+
+    _write_meta(cfg, env, log_dir)
+
+    runner.learn(
+        num_learning_iterations=agent_cfg.max_iterations,
+        init_at_random_ep_len=True,
+    )
+
+    env.close()
+
+
+# ── skrl backend ─────────────────────────────────────────────────────
+
+def _train_skrl(cfg: dict) -> None:
+    """Train using skrl's PPO agent.
+
+    Environment config is loaded from the gym registry.
+    Agent hyperparameters come from the registered agent config when
+    available, otherwise defaults are used.
+    """
+    import skrl  # noqa: F401
+    from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+    from skrl.envs.wrappers.torch import wrap_env
+    from skrl.memories.torch import RandomMemory
+    from skrl.models.torch import DeterministicMixin, GaussianMixin, Model
+    from skrl.trainers.torch import SequentialTrainer
+    from skrl.utils import set_seed
+
+    isaac_task = _resolve_task(cfg)
+    num_envs = cfg.get("num_envs", 4096)
+    save_name = cfg.get("save_path", f"{cfg['task']}_isaac_ppo")
+    checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    env = gym.make(isaac_task, cfg=env_cfg)
+    env = wrap_env(env, wrapper="isaaclab")
+
+    try:
+        agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
+    except KeyError:
+        agent_cfg = None
+
+    obs_size = env.observation_space.shape[-1]
+    action_size = env.action_space.shape[-1]
+
+    if agent_cfg is not None:
+        hidden = agent_cfg.policy.actor_hidden_dims
+    else:
+        hidden = [256, 256]
+
+    class Policy(GaussianMixin, Model):
+        def __init__(self, observation_space, action_space, dev, **kwargs):
+            Model.__init__(self, observation_space, action_space, dev)
+            GaussianMixin.__init__(self, min_log_std=-20.0, max_log_std=2.0)
+            layers = []
+            in_dim = obs_size
+            for h in hidden:
+                layers += [torch.nn.Linear(in_dim, h), torch.nn.ELU()]
+                in_dim = h
+            layers.append(torch.nn.Linear(in_dim, action_size))
+            self.net = torch.nn.Sequential(*layers)
+            self.log_std_parameter = torch.nn.Parameter(
+                torch.zeros(action_size))
+
+        def compute(self, inputs, role=""):
+            return self.net(inputs["states"]), self.log_std_parameter, {}
+
+    class Value(DeterministicMixin, Model):
+        def __init__(self, observation_space, action_space, dev, **kwargs):
+            Model.__init__(self, observation_space, action_space, dev)
+            DeterministicMixin.__init__(self)
+            c_hidden = (agent_cfg.policy.critic_hidden_dims
+                        if agent_cfg else [256, 256])
+            layers = []
+            in_dim = obs_size
+            for h in c_hidden:
+                layers += [torch.nn.Linear(in_dim, h), torch.nn.ELU()]
+                in_dim = h
+            layers.append(torch.nn.Linear(in_dim, 1))
+            self.net = torch.nn.Sequential(*layers)
+
+        def compute(self, inputs, role=""):
+            return self.net(inputs["states"]), {}
+
+    set_seed(agent_cfg.seed if agent_cfg else 42)
+
+    rollout_steps = (agent_cfg.num_steps_per_env if agent_cfg else 24)
+    max_iterations = cfg.get("max_iterations", 0)
+    if not max_iterations:
+        max_iterations = (agent_cfg.max_iterations if agent_cfg else 500)
+    total_timesteps = max_iterations * rollout_steps
+
+    memory = RandomMemory(
+        memory_size=rollout_steps, num_envs=num_envs, device=device)
+
+    models = {
+        "policy": Policy(env.observation_space, env.action_space, device),
+        "value": Value(env.observation_space, env.action_space, device),
+    }
+
+    ppo_cfg = PPO_DEFAULT_CONFIG.copy()
+    if agent_cfg is not None:
+        algo = agent_cfg.algorithm
+        ppo_cfg.update({
+            "rollouts": rollout_steps,
+            "learning_epochs": algo.num_learning_epochs,
+            "mini_batches": algo.num_mini_batches,
+            "discount_factor": algo.gamma,
+            "lambda": algo.lam,
+            "learning_rate": algo.learning_rate,
+            "grad_norm_clip": algo.max_grad_norm,
+            "ratio_clip": algo.clip_param,
+            "value_clip": algo.clip_param,
+            "entropy_loss_scale": algo.entropy_coef,
+            "value_loss_scale": algo.value_loss_coef,
+        })
+    else:
+        ppo_cfg.update({
+            "rollouts": rollout_steps,
+            "learning_epochs": 5,
+            "mini_batches": 4,
+            "discount_factor": 0.99,
+            "lambda": 0.95,
+            "learning_rate": 3e-4,
+            "grad_norm_clip": 1.0,
+            "ratio_clip": 0.2,
+            "value_clip": 0.2,
+            "entropy_loss_scale": 0.01,
+            "value_loss_scale": 1.0,
+        })
+
+    log_dir = os.path.join(checkpoint_dir, "isaac_logs", save_name)
+    os.makedirs(log_dir, exist_ok=True)
+
+    agent = PPO(
+        models=models,
+        memory=memory,
+        cfg=ppo_cfg,
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=device,
+    )
+
+    trainer_cfg = {
+        "timesteps": total_timesteps,
+        "headless": True,
+    }
+
+    trainer = SequentialTrainer(env=env, agents=agent, cfg=trainer_cfg)
+
+    print(f"[Joshua/Isaac] skrl training {isaac_task} for {max_iterations} "
+          f"iterations ({total_timesteps:,} timesteps, {num_envs} envs)")
+    _write_meta(cfg, env, log_dir)
+
+    trainer.train()
+
+    agent.save(os.path.join(log_dir, "final_policy.pt"))
+    env.close()
+
+
+# ── Evaluation ───────────────────────────────────────────────────────
+
+def _run_eval(cfg: dict) -> None:
+    """Run evaluation using a trained checkpoint."""
+    isaac_task = _resolve_task(cfg)
+    algorithm = cfg.get("algorithm", "skrl")
+    num_episodes = cfg.get("num_episodes", 5)
+    num_envs = cfg.get("num_envs", 32)
+    checkpoint_path = cfg.get("checkpoint_path", "")
+    if not checkpoint_path:
+        raise ValueError("checkpoint_path is required for evaluation")
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+
+    print(f"[Joshua/Isaac] Evaluating {isaac_task} ({algorithm}) "
+          f"for {num_episodes} episodes, {num_envs} envs")
+    print(f"[Joshua/Isaac] Checkpoint: {checkpoint_path}")
+
+    if algorithm == "skrl":
+        _eval_skrl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes)
+    elif algorithm == "rsl_rl":
+        _eval_rsl_rl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes)
+    else:
+        raise ValueError(f"Unknown algorithm '{algorithm}' for eval")
+
+
+def _eval_skrl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
+    """Evaluate a skrl PPO checkpoint."""
+    import skrl  # noqa: F401
+    from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+    from skrl.envs.wrappers.torch import wrap_env
+    from skrl.memories.torch import RandomMemory
+    from skrl.models.torch import DeterministicMixin, GaussianMixin, Model
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    env = gym.make(isaac_task, cfg=env_cfg)
+    env = wrap_env(env, wrapper="isaaclab")
+
+    try:
+        agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
+    except KeyError:
+        agent_cfg = None
+
+    obs_size = env.observation_space.shape[-1]
+    action_size = env.action_space.shape[-1]
+    hidden = agent_cfg.policy.actor_hidden_dims if agent_cfg else [256, 256]
+
+    class Policy(GaussianMixin, Model):
+        def __init__(self, observation_space, action_space, dev, **kwargs):
+            Model.__init__(self, observation_space, action_space, dev)
+            GaussianMixin.__init__(self, min_log_std=-20.0, max_log_std=2.0)
+            layers = []
+            in_dim = obs_size
+            for h in hidden:
+                layers += [torch.nn.Linear(in_dim, h), torch.nn.ELU()]
+                in_dim = h
+            layers.append(torch.nn.Linear(in_dim, action_size))
+            self.net = torch.nn.Sequential(*layers)
+            self.log_std_parameter = torch.nn.Parameter(
+                torch.zeros(action_size))
+
+        def compute(self, inputs, role=""):
+            return self.net(inputs["states"]), self.log_std_parameter, {}
+
+    class Value(DeterministicMixin, Model):
+        def __init__(self, observation_space, action_space, dev, **kwargs):
+            Model.__init__(self, observation_space, action_space, dev)
+            DeterministicMixin.__init__(self)
+            c_hidden = (agent_cfg.policy.critic_hidden_dims
+                        if agent_cfg else [256, 256])
+            layers = []
+            in_dim = obs_size
+            for h in c_hidden:
+                layers += [torch.nn.Linear(in_dim, h), torch.nn.ELU()]
+                in_dim = h
+            layers.append(torch.nn.Linear(in_dim, 1))
+            self.net = torch.nn.Sequential(*layers)
+
+        def compute(self, inputs, role=""):
+            return self.net(inputs["states"]), {}
+
+    models = {
+        "policy": Policy(env.observation_space, env.action_space, device),
+        "value": Value(env.observation_space, env.action_space, device),
+    }
+
+    rollout_steps = agent_cfg.num_steps_per_env if agent_cfg else 24
+    memory = RandomMemory(
+        memory_size=rollout_steps, num_envs=num_envs, device=device)
+
+    ppo_cfg = PPO_DEFAULT_CONFIG.copy()
+    agent = PPO(
+        models=models,
+        memory=memory,
+        cfg=ppo_cfg,
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=device,
+    )
+    agent.load(checkpoint_path)
+    agent.set_running_mode("eval")
+
+    print(f"[Joshua/Isaac] Loaded checkpoint, running {num_episodes} episodes")
+
+    obs, _ = env.reset()
+    episode_count = 0
+    episode_rewards = torch.zeros(num_envs, device=device)
+    all_rewards = []
+
+    while episode_count < num_episodes:
+        with torch.inference_mode():
+            outputs = agent.act(obs, timestep=0, timesteps=0)
+            actions = outputs[-1].get("mean_actions", outputs[0])
+            obs, rewards, terminated, truncated, infos = env.step(actions)
+
+        episode_rewards += rewards.squeeze()
+        dones = (terminated | truncated).squeeze()
+        if dones.any():
+            finished = dones.nonzero(as_tuple=False).squeeze(-1)
+            for idx in finished:
+                all_rewards.append(episode_rewards[idx].item())
+                episode_count += 1
+                if episode_count >= num_episodes:
+                    break
+            episode_rewards[dones] = 0.0
+
+    import statistics
+    mean_r = statistics.mean(all_rewards[:num_episodes])
+    std_r = statistics.stdev(all_rewards[:num_episodes]) if num_episodes > 1 else 0.0
+    print(f"[Joshua/Isaac] Eval complete: {num_episodes} episodes")
+    print(f"[Joshua/Isaac]   Mean reward: {mean_r:.2f} +/- {std_r:.2f}")
+    env.close()
+
+
+def _eval_rsl_rl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
+    """Evaluate an RSL-RL checkpoint."""
+    from rsl_rl.runners import OnPolicyRunner
+    from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    env = gym.make(isaac_task, cfg=env_cfg)
+    env = RslRlVecEnvWrapper(env)
+
+    agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
+    agent_cfg.device = device
+
+    runner = OnPolicyRunner(
+        env, agent_cfg.to_dict(), log_dir=None, device=device,
+    )
+    runner.load(checkpoint_path)
+
+    print(f"[Joshua/Isaac] Loaded checkpoint, running {num_episodes} episodes")
+
+    obs = env.get_observations()
+    episode_count = 0
+    episode_rewards = torch.zeros(num_envs, device=torch.device(device))
+    all_rewards = []
+
+    while episode_count < num_episodes:
+        with torch.inference_mode():
+            actions = runner.alg.act(obs)
+        obs, _, rewards, dones, infos = env.step(actions)
+
+        episode_rewards += rewards.squeeze()
+        if dones.any():
+            finished = dones.nonzero(as_tuple=False).squeeze(-1)
+            for idx in finished:
+                all_rewards.append(episode_rewards[idx].item())
+                episode_count += 1
+                if episode_count >= num_episodes:
+                    break
+            episode_rewards[dones] = 0.0
+
+    import statistics
+    mean_r = statistics.mean(all_rewards[:num_episodes])
+    std_r = statistics.stdev(all_rewards[:num_episodes]) if num_episodes > 1 else 0.0
+    print(f"[Joshua/Isaac] Eval complete: {num_episodes} episodes")
+    print(f"[Joshua/Isaac]   Mean reward: {mean_r:.2f} +/- {std_r:.2f}")
+    env.close()
+
+
+# ── Entry point ──────────────────────────────────────────────────────
+
+_TRAINERS = {
+    "rsl_rl": _train_rsl_rl,
+    "skrl": _train_skrl,
+}
+
+
+def main():
+    with open(args_cli.config) as f:
+        cfg = json.load(f)
+
+    mode = cfg.get("mode", "train")
+
+    if mode == "eval":
+        _run_eval(cfg)
+    else:
+        algorithm = cfg.get("algorithm", "rsl_rl")
+        trainer_fn = _TRAINERS.get(algorithm)
+        if trainer_fn is None:
+            raise ValueError(
+                f"Unknown algorithm '{algorithm}'. "
+                f"Supported: {', '.join(_TRAINERS)}"
+            )
+        trainer_fn(cfg)
+
+
+if __name__ == "__main__":
+    import traceback as _tb
+
+    _exit_code = 0
+    try:
+        main()
+    except SystemExit as e:
+        _exit_code = e.code if isinstance(e.code, int) else 1
+    except Exception:
+        print("[Joshua/Isaac] FATAL error during training:", file=sys.stderr)
+        _tb.print_exc()
+        _exit_code = 1
+    finally:
+        try:
+            simulation_app.close()
+        except SystemExit:
+            pass
+    sys.exit(_exit_code)

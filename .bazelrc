@@ -32,6 +32,14 @@ test:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/op
 test --test_output=all
 
 # =============================================================================
+# CUDA / CuDNN Configuration
+# =============================================================================
+# Pass LD_LIBRARY_PATH through to binaries so pip-installed NVIDIA libraries
+# (nvidia-cudnn-cu12, etc.) are found before potentially outdated system libs.
+# Set before running: export LD_LIBRARY_PATH=$(python3 -c "import nvidia.cudnn,os;print(os.path.join(os.path.dirname(nvidia.cudnn.__file__),'lib'))"):$LD_LIBRARY_PATH
+run --action_env=LD_LIBRARY_PATH
+
+# =============================================================================
 # Base Platform Configurations
 # =============================================================================
 

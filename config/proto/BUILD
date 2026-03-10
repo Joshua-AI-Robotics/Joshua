@@ -11,6 +11,7 @@ proto_library(
         ":ai_proto",
         ":calibration_proto",
         ":robot_proto",
+        "//simulation/proto:simulation_proto",
     ],
 )
 
@@ -30,6 +31,7 @@ proto_library(
     deps = [
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
+        "//ai/proto:training_proto",
     ],
     visibility = ["//visibility:public"],
 )

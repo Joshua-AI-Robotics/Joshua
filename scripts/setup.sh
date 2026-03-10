@@ -202,6 +202,32 @@ install_python_deps() {
     fi
 }
 
+install_cudnn() {
+    echo -e "${BLUE}Checking CuDNN version...${NC}"
+    local CUDNN_MAJOR=$(grep '#define CUDNN_MAJOR' /usr/include/cudnn_version.h 2>/dev/null | awk '{print $3}')
+    local CUDNN_MINOR=$(grep '#define CUDNN_MINOR' /usr/include/cudnn_version.h 2>/dev/null | awk '{print $3}')
+
+    if [ -n "$CUDNN_MAJOR" ] && [ "$CUDNN_MAJOR" -ge 9 ] && [ "$CUDNN_MINOR" -ge 1 ]; then
+        echo -e "${GREEN}CuDNN ${CUDNN_MAJOR}.${CUDNN_MINOR} already installed (>= 9.1)${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}CuDNN ${CUDNN_MAJOR:-?}.${CUDNN_MINOR:-?} is too old for JAX/MJX (need >= 9.1). Upgrading...${NC}"
+
+    if [ ! -f /usr/share/keyrings/cuda-archive-keyring.gpg ] && [ ! -f /etc/apt/sources.list.d/cuda-*.list ]; then
+        local KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu$(lsb_release -rs | tr -d '.')/$(dpkg --print-architecture)/cuda-keyring_1.1-1_all.deb"
+        wget -q "$KEYRING_URL" -O /tmp/cuda-keyring.deb
+        dpkg -i /tmp/cuda-keyring.deb
+        rm -f /tmp/cuda-keyring.deb
+    fi
+
+    apt-get update
+    apt-get install -y libcudnn9-cuda-12
+
+    local NEW_MINOR=$(grep '#define CUDNN_MINOR' /usr/include/cudnn_version.h 2>/dev/null | awk '{print $3}')
+    echo -e "${GREEN}CuDNN upgraded to 9.${NEW_MINOR:-?}${NC}"
+}
+
 fix_nvidia_libs() {
     echo -e "${BLUE}Checking for NVIDIA libraries...${NC}"
     
@@ -336,6 +362,7 @@ install_ros2_repos
 install_ros2_packages
 install_opencv
 install_python_deps
+install_cudnn
 fix_nvidia_libs
 setup_user_permissions
 setup_ros2_environment

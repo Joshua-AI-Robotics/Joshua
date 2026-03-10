@@ -107,6 +107,57 @@ The streamlined configuration and automated setup capabilities drastically reduc
 Designed with scalability in mind, Project Joshua can accommodate a wide range of robotic systems, from simple prototypes to complex, multi-component deployments.
 
 
+## Simulation & RL Training
+
+Joshua includes a simulation and reinforcement learning pipeline supporting two physics backends.
+
+### MuJoCo / MJX (Interactive Viewer)
+
+View and interact with MuJoCo models directly:
+
+```bash
+bazel run //simulation:sim -- --config config/config_preset/ant_sim_interactive.pbtxt
+```
+
+### MJX Training (GPU-Parallel JAX)
+
+Train RL policies on MuJoCo XLA with PPO:
+
+```bash
+bazel run //ai/train:trainer -- --config config/config_preset/ant_train_mjx.pbtxt
+```
+
+### Isaac Sim / Isaac Lab Training
+
+Train using NVIDIA Isaac Sim (requires Isaac Lab installed, see `ai/train/README.md`):
+
+```bash
+# Set environment variables (add to ~/.bashrc for persistence)
+export ISAAC_LAB_PATH=~/IsaacLab
+export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
+
+# Train Ant with skrl PPO
+bazel run //ai/train:trainer -- --config config/config_preset/ant_train_isaac.pbtxt
+
+# Evaluate a trained checkpoint
+bazel run //ai/train:trainer -- --config config/config_preset/ant_eval_isaac.pbtxt
+```
+
+### Available Configs
+
+| Config | Backend | What it does |
+|--------|---------|-------------|
+| `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
+| `ant_train_mjx.pbtxt` | MJX (JAX) | Train Ant PPO on GPU |
+| `ant_eval_mjx.pbtxt` | MJX (JAX) | Evaluate trained MJX policy |
+| `ant_train_isaac.pbtxt` | Isaac Sim | Train Ant with skrl/RSL-RL |
+| `ant_eval_isaac.pbtxt` | Isaac Sim | Evaluate Isaac Sim policy |
+| `trileg_train_isaac.pbtxt` | Isaac Sim | Train 3-legged robot |
+| `trileg_eval_isaac.pbtxt` | Isaac Sim | Evaluate 3-legged robot |
+
+For full documentation on the training pipeline, simulator backends, and how to add new tasks, see [`ai/train/README.md`](ai/train/README.md).
+
+
 ## Data Type Architecture
 
 Project Joshua employs a **dual-layer data type system** that ensures type safety, scalability, and modularity throughout the entire robotic system:

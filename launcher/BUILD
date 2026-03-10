@@ -1,5 +1,16 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+cc_library(
+    name = "simulation_launcher",
+    srcs = ["simulation_launcher.cc"],
+    hdrs = ["simulation_launcher.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//node_generator",
+        "@glog",
+    ],
+)
 
 cc_binary(
     name = "joshua_main",
@@ -17,9 +28,14 @@ cc_binary(
         "//ros2:inference",
         "//ros2:operational_limit_calibration",
         "//ros2:data_subscriber",
+        "//simulation:simulation",
+        "//simulation:sim_models",
+        "//simulation:sim_trajectories",
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":simulation_launcher",
+        "//config:config_utils",
         "//node_generator",
         "@gflags",
         "@glog",

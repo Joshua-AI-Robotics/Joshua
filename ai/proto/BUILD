@@ -34,3 +34,14 @@ py_proto_library(
     visibility = ["//visibility:public"],
     deps = [":data_store_proto"],
 )
+
+proto_library(
+    name = "training_proto",
+    srcs = ["training.proto"],
+)
+
+py_proto_library(
+    name = "training_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":training_proto"],
+)

@@ -16,3 +16,40 @@ py_binary(
     srcs = ["data_load.py"],
     deps = requirement("datasets") + requirement("glog") + requirement("python-gflags"),
 )
+
+py_library(
+    name = "mjx_rl",
+    srcs = ["mjx_rl.py"],
+    deps = [
+        "//ai/train/mjx_envs",
+        "//ai/proto:training_py_proto",
+    ] + requirement("jax") + requirement("flax") + requirement("optax") + requirement("glog") + requirement("numpy") + requirement("mujoco"),
+)
+
+py_library(
+    name = "isaac_launcher",
+    srcs = ["isaac_launcher.py"],
+    data = [
+        "isaac_runner.py",
+        "//simulation:sim_models",
+    ] + glob(["isaac_tasks/**/*.py"]),
+    deps = [
+        "//ai/proto:training_py_proto",
+    ] + requirement("glog"),
+)
+
+py_binary(
+    name = "trainer",
+    srcs = ["trainer.py"],
+    data = [
+        "//simulation:sim_models",
+        "//simulation:sim_trajectories",
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        ":mjx_rl",
+        ":isaac_launcher",
+        "//ai/proto:training_py_proto",
+        "//config/proto:config_py_proto",
+    ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),
+)

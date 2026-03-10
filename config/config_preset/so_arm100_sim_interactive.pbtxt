@@ -1,0 +1,9 @@
+general {
+  operation_mode: MODE_SIMULATION
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "so100"
+}
+simulation {
+  model_path: "simulation/models/so_arm100_scene.xml"
+  mode: MODE_INTERACTIVE
+}

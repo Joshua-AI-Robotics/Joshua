@@ -1,0 +1,22 @@
+general {
+  operation_mode: MODE_TRAINING
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "so100"
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_RL
+    model_path: "simulation/models/so_arm100_pick_place_mjx.xml"
+    simulator_backend: SIM_BACKEND_MJX
+    rl {
+      task: "pick_place"
+      frame_skip: 10
+      algorithm: "mjx_ppo"
+      max_iterations: 1000
+      num_envs: 64
+      save_path: "pick_place_mjx_ppo"
+      render: false
+    }
+  }
+}

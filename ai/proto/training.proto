@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package ai.training;
+
+enum TrainingEnvironment {
+  TRAINING_ENV_INVALID = 0;
+  TRAINING_ENV_SIMULATION = 1;
+  TRAINING_ENV_REAL = 2;
+}
+
+enum TrainingMethod {
+  TRAINING_METHOD_INVALID = 0;
+  TRAINING_METHOD_RL = 1;
+  TRAINING_METHOD_IMITATION = 2;
+  TRAINING_METHOD_EVAL = 3;
+}
+
+enum SimulatorBackend {
+  SIM_BACKEND_INVALID = 0;
+  SIM_BACKEND_MJX = 1;
+  SIM_BACKEND_ISAAC_SIM = 2;
+}
+
+message RLConfig {
+  string task = 1;
+  uint32 frame_skip = 2;
+  string algorithm = 3;
+  uint32 total_timesteps = 4;  // deprecated: use max_iterations instead
+  uint32 num_eval_episodes = 5;
+  string checkpoint_path = 6;
+  string save_path = 7;
+  bool render = 8;
+  bool image_obs = 9;
+  string camera_name = 10;
+  uint32 num_envs = 11;
+  uint32 max_iterations = 12;
+}
+
+message ImitationConfig {
+  string dataset_path = 1;
+  string base_model = 2;
+  uint32 epochs = 3;
+  float learning_rate = 4;
+  string save_path = 5;
+  uint32 batch_size = 6;
+}
+
+message EvalConfig {
+  string checkpoint_path = 1;
+  uint32 num_episodes = 2;
+  bool render = 3;
+  string task = 4;
+  string algorithm = 5;
+  uint32 num_envs = 6;
+}
+
+message TrainingConfig {
+  TrainingEnvironment environment = 1;
+  TrainingMethod method = 2;
+  string model_path = 3;
+  SimulatorBackend simulator_backend = 4;
+  RLConfig rl = 10;
+  ImitationConfig imitation = 11;
+  EvalConfig eval = 12;
+}
