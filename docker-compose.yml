@@ -10,10 +10,12 @@
 # Build for ARM64 (cross-platform):
 #   docker compose build joshua-u22-arm64   # Build Ubuntu 22.04 for ARM64
 #   docker compose build joshua-u24-arm64   # Build Ubuntu 24.04 for ARM64
+#   docker compose build joshua-mac-u22-arm64  # Build Ubuntu 22.04 for ARM64 (macOS optimized with mock serial ports)
 #
 # Run containers:
 #   docker compose run --rm joshua-u22      # Interactive shell (Ubuntu 22.04 + Humble)
 #   docker compose run --rm joshua-u24      # Interactive shell (Ubuntu 24.04 + Jazzy)
+#   docker compose run --rm joshua-mac-u22-arm64  # Interactive shell (Ubuntu 22.04 + Humble, macOS optimized)
 #
 # Run with Bazel target:
 #   docker compose run --rm joshua-u22 bazel run launcher:joshua_main
@@ -100,6 +102,41 @@ services:
     profiles:
       - arm64  # Only build when explicitly requested
 
+  # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64 (macOS optimized)
+  # This service includes mock serial port support for development on macOS
+  # Note: Use profile 'arm64' or 'mac' to build this service
+  joshua-mac-u22-arm64:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu22
+      platforms:
+        - linux/arm64
+    image: joshua:u22-humble-mac-arm64
+    container_name: joshua-mac-u22-arm64-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    network_mode: host
+    volumes:
+      - .:/workspace
+      # Note: /dev:/dev is NOT mounted by default for macOS because:
+      # 1. macOS device names (/dev/tty.*, /dev/cu.*) don't match Linux names (/dev/ttyACM*, /dev/ttyUSB*)
+      # 2. Mounting /dev prevents creating mock serial ports in the container
+      # To mount /dev for real device access, uncomment the line below:
+      # - /dev:/dev
+      - bazel-cache-u22-mac-arm64:/root/.cache/bazel
+    environment:
+      - ROS_DISTRO=humble
+      - DISPLAY=${DISPLAY:-}
+      # Set to "true" to automatically create mock serial ports for development
+      # Mock ports allow the application to run without physical serial devices
+      - ENABLE_MOCK_SERIAL_PORTS=${ENABLE_MOCK_SERIAL_PORTS:-true}
+    entrypoint: ["/workspace/scripts/docker_entrypoint.sh"]
+    working_dir: /workspace
+    profiles:
+      - arm64  # Only build when explicitly requested
+      - mac    # macOS-specific profile
+
   # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64 (Experimental)
   # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
   joshua-u24-arm64:
@@ -144,4 +181,5 @@ volumes:
   bazel-cache-u22:
   bazel-cache-u24:
   bazel-cache-u22-arm64:
+  bazel-cache-u22-mac-arm64:
   bazel-cache-u24-arm64:
