@@ -97,24 +97,45 @@ Reward Structure
 
 | Term              | Weight  | Notes |
 |-------------------|---------|-------|
-| progress          | +2.0    | Forward distance toward target |
+| progress          | +1.5    | Forward distance toward target |
 | alive             | +0.2    | Constant while not terminated |
-| upright           | +0.1    | Bonus when torso Z-up > 0.93 |
+| upright           | +0.3    | Bonus when torso Z-up > 0.93 |
 | move_to_target    | +0.5    | Bonus when heading aligns > 0.8 |
-| lin_vel_z         | -0.05   | Penalizes vertical bouncing |
-| ang_vel_xy        | -0.05   | Penalizes body roll/pitch rate |
-| flat_orientation  | -0.05   | Penalizes tilting away from flat |
-| action_rate       | -0.01   | Penalizes rapid action changes |
-| joint_vel         | -0.0005 | Penalizes high joint velocities |
-| action_l2         | -0.005  | Penalizes large actions |
+| lin_vel_z         | -0.5    | Strongly penalizes vertical bouncing / hopping |
+| ang_vel_xy        | -0.2    | Penalizes body roll/pitch rate |
+| flat_orientation  | -0.5    | Strongly penalizes tilting (prevents one-leg hopping) |
+| action_rate       | -0.05   | Penalizes rapid action changes |
+| joint_vel         | -0.005  | Penalizes high joint velocities |
+| action_l2         | -0.01   | Penalizes large actions |
 | energy            | -0.05   | Power consumption (gear_ratio 1.0) |
 | joint_pos_limits  | -0.1    | Penalty near joint limits (gear_ratio 1.0) |
+
+Physics Tuning
+--------------
+
+| Parameter          | Value | Purpose |
+|--------------------|-------|---------|
+| actuator_damping   | 10.0  | Physical resistance to fast joint movement |
+| action_scale       | 3.0   | Max torque multiplier (limits peak force) |
+| actuator_stiffness | 0.0   | Pure torque control (no position PD) |
 
 Design Notes
 ------------
 
-The trileg has lighter penalties on `lin_vel_z` and `flat_orientation`
-compared to a humanoid because a tripod naturally bobs vertically and
-tilts during locomotion. The `energy` and `joint_pos_limits` terms use
-`gear_ratio: 1.0` instead of the humanoid default (15.0) to avoid
-over-penalizing the smaller actuators.
+The reward structure is tuned to prevent the robot from discovering
+degenerate gaits (hopping on one leg, spinning). Key design choices:
+
+- **Strong anti-hop penalties**: `lin_vel_z` and `flat_orientation`
+  at -0.5 make jumping and tilting very costly, forcing the robot to
+  keep all three legs grounded.
+
+- **Moderate speed incentive**: `progress` at 1.5 (not 2.0+)
+  prevents the robot from sacrificing stability for forward speed.
+
+- **Joint speed limiting**: `joint_vel` at -0.005 combined with
+  `actuator_damping: 10.0` and `action_scale: 3.0` physically
+  limits how fast the legs can move, producing smoother gaits.
+
+- **Gear ratio 1.0**: The `energy` and `joint_pos_limits` terms use
+  `gear_ratio: 1.0` instead of the humanoid default to avoid
+  over-penalizing the smaller actuators.
