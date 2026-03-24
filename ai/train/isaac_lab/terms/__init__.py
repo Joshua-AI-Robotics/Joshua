@@ -5,7 +5,7 @@ Use with ``build_env_cfg()`` to compose environments declaratively.
 
 Usage::
 
-    from isaac_tasks import terms
+    from isaac_lab import terms
 
     rewards = {
         "progress": terms.progress_reward(weight=1.0),

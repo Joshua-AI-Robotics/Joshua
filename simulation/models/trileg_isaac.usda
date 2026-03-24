@@ -29,8 +29,12 @@ def Xform "Trileg"
     }
 
     # ── Leg A (0 deg, along +X) ──────────────────────────────────────
+    #
+    # Two bodies per leg:
+    #   thigh -- short upper segment, attached to torso via yaw joint
+    #   shin  -- longer lower segment, attached to thigh via pitch joint
 
-    def Xform "leg_a" (
+    def Xform "thigh_a" (
         apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
@@ -44,16 +48,46 @@ def Xform "Trileg"
         def Xform "geom_xform"
         {
             quatd xformOp:orient = (1, 0, 0, 0)
-            double3 xformOp:translate = (0.25, 0, 0)
+            double3 xformOp:translate = (0.06, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
-            def Capsule "leg_geom" (
+            def Capsule "thigh_geom" (
                 apiSchemas = ["PhysicsCollisionAPI"]
             )
             {
                 uniform token axis = "X"
-                float3[] extent = [(-0.3, -0.05, -0.05), (0.3, 0.05, 0.05)]
-                double height = 0.5
+                float3[] extent = [(-0.1, -0.04, -0.04), (0.1, 0.04, 0.04)]
+                double height = 0.12
+                double radius = 0.04
+                color3f[] primvars:displayColor = [(0.7, 0.25, 0.08)]
+            }
+        }
+    }
+
+    def Xform "shin_a" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.27, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0.19, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "shin_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.24, -0.05, -0.05), (0.24, 0.05, 0.05)]
+                double height = 0.38
                 double radius = 0.05
                 color3f[] primvars:displayColor = [(0.9, 0.3, 0.1)]
             }
@@ -62,7 +96,7 @@ def Xform "Trileg"
 
     # ── Leg B (120 deg) ──────────────────────────────────────────────
 
-    def Xform "leg_b" (
+    def Xform "thigh_b" (
         apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
@@ -76,16 +110,46 @@ def Xform "Trileg"
         def Xform "geom_xform"
         {
             quatd xformOp:orient = (0.5, 0, 0, 0.8660254)
-            double3 xformOp:translate = (-0.125, 0.2165, 0)
+            double3 xformOp:translate = (-0.03, 0.052, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
-            def Capsule "leg_geom" (
+            def Capsule "thigh_geom" (
                 apiSchemas = ["PhysicsCollisionAPI"]
             )
             {
                 uniform token axis = "X"
-                float3[] extent = [(-0.3, -0.05, -0.05), (0.3, 0.05, 0.05)]
-                double height = 0.5
+                float3[] extent = [(-0.1, -0.04, -0.04), (0.1, 0.04, 0.04)]
+                double height = 0.12
+                double radius = 0.04
+                color3f[] primvars:displayColor = [(0.08, 0.6, 0.25)]
+            }
+        }
+    }
+
+    def Xform "shin_b" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.135, 0.234, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.5, 0, 0, 0.8660254)
+            double3 xformOp:translate = (-0.095, 0.1645, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "shin_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.24, -0.05, -0.05), (0.24, 0.05, 0.05)]
+                double height = 0.38
                 double radius = 0.05
                 color3f[] primvars:displayColor = [(0.1, 0.8, 0.3)]
             }
@@ -94,7 +158,7 @@ def Xform "Trileg"
 
     # ── Leg C (240 deg) ──────────────────────────────────────────────
 
-    def Xform "leg_c" (
+    def Xform "thigh_c" (
         apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
     )
     {
@@ -108,16 +172,46 @@ def Xform "Trileg"
         def Xform "geom_xform"
         {
             quatd xformOp:orient = (0.5, 0, 0, -0.8660254)
-            double3 xformOp:translate = (-0.125, -0.2165, 0)
+            double3 xformOp:translate = (-0.03, -0.052, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
 
-            def Capsule "leg_geom" (
+            def Capsule "thigh_geom" (
                 apiSchemas = ["PhysicsCollisionAPI"]
             )
             {
                 uniform token axis = "X"
-                float3[] extent = [(-0.3, -0.05, -0.05), (0.3, 0.05, 0.05)]
-                double height = 0.5
+                float3[] extent = [(-0.1, -0.04, -0.04), (0.1, 0.04, 0.04)]
+                double height = 0.12
+                double radius = 0.04
+                color3f[] primvars:displayColor = [(0.6, 0.6, 0.08)]
+            }
+        }
+    }
+
+    def Xform "shin_c" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.135, -0.234, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (0.5, 0, 0, -0.8660254)
+            double3 xformOp:translate = (-0.095, -0.1645, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "shin_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "X"
+                float3[] extent = [(-0.24, -0.05, -0.05), (0.24, 0.05, 0.05)]
+                double height = 0.38
                 double radius = 0.05
                 color3f[] primvars:displayColor = [(0.8, 0.8, 0.1)]
             }
@@ -126,24 +220,47 @@ def Xform "Trileg"
 
     # ── Joints ───────────────────────────────────────────────────────
     #
-    # Each hip is a revolute joint whose axis is HORIZONTAL and
-    # perpendicular to the leg direction, so the leg swings up/down.
+    # 2 DOF per leg (6 DOF total):
     #
-    #   Leg A  direction (+1,  0,  0)  →  joint axis  Y     (0, 1, 0)
-    #   Leg B  direction (-½, +√3/2, 0) →  joint axis  (-√3/2, -½, 0)
-    #   Leg C  direction (-½, -√3/2, 0) →  joint axis  (+√3/2, -½, 0)
+    #   yaw_X   (torso → thigh_X)  rotates around Z (vertical)
+    #           Sweeps the leg forward / backward in the horizontal plane.
+    #
+    #   pitch_X (thigh_X → shin_X) rotates around horizontal axis
+    #           perpendicular to the leg direction, swinging shin up / down.
     #
     # physics:axis = "X" everywhere; localRot maps local-X to the
     # desired world-space axis.
+    #
+    #   Yaw joints:  local X → world Z   via quat (0.707, 0, -0.707, 0)
+    #
+    #   Pitch axes (perpendicular to leg direction, horizontal):
+    #     Leg A  dir (+1, 0, 0)          → pitch axis Y   quat (0.707, 0, 0, 0.707)
+    #     Leg B  dir (-½, +√3/2, 0)      → pitch axis 210° quat (-0.259, 0, 0, 0.966)
+    #     Leg C  dir (-½, -√3/2, 0)      → pitch axis 330° quat (0.966, 0, 0, -0.259)
 
     def Scope "joints"
     {
-        def PhysicsRevoluteJoint "hip_a"
+        # ── Leg A joints ──────────────────────────────────────────
+
+        def PhysicsRevoluteJoint "yaw_a"
         {
             uniform token physics:axis = "X"
             rel physics:body0 = </Trileg/torso>
-            rel physics:body1 = </Trileg/leg_a>
+            rel physics:body1 = </Trileg/thigh_a>
             point3f physics:localPos0 = (0.15, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -45
+            float physics:upperLimit = 45
+        }
+
+        def PhysicsRevoluteJoint "pitch_a"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Trileg/thigh_a>
+            rel physics:body1 = </Trileg/shin_a>
+            point3f physics:localPos0 = (0.12, 0, 0)
             point3f physics:localPos1 = (0, 0, 0)
             quatf physics:localRot0 = (0.7071068, 0, 0, 0.7071068)
             quatf physics:localRot1 = (0.7071068, 0, 0, 0.7071068)
@@ -151,12 +268,27 @@ def Xform "Trileg"
             float physics:upperLimit = 90
         }
 
-        def PhysicsRevoluteJoint "hip_b"
+        # ── Leg B joints ──────────────────────────────────────────
+
+        def PhysicsRevoluteJoint "yaw_b"
         {
             uniform token physics:axis = "X"
             rel physics:body0 = </Trileg/torso>
-            rel physics:body1 = </Trileg/leg_b>
+            rel physics:body1 = </Trileg/thigh_b>
             point3f physics:localPos0 = (-0.075, 0.1299, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -45
+            float physics:upperLimit = 45
+        }
+
+        def PhysicsRevoluteJoint "pitch_b"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Trileg/thigh_b>
+            rel physics:body1 = </Trileg/shin_b>
+            point3f physics:localPos0 = (-0.06, 0.104, 0)
             point3f physics:localPos1 = (0, 0, 0)
             quatf physics:localRot0 = (-0.2588190, 0, 0, 0.9659258)
             quatf physics:localRot1 = (-0.2588190, 0, 0, 0.9659258)
@@ -164,12 +296,27 @@ def Xform "Trileg"
             float physics:upperLimit = 90
         }
 
-        def PhysicsRevoluteJoint "hip_c"
+        # ── Leg C joints ──────────────────────────────────────────
+
+        def PhysicsRevoluteJoint "yaw_c"
         {
             uniform token physics:axis = "X"
             rel physics:body0 = </Trileg/torso>
-            rel physics:body1 = </Trileg/leg_c>
+            rel physics:body1 = </Trileg/thigh_c>
             point3f physics:localPos0 = (-0.075, -0.1299, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (0.7071068, 0, -0.7071068, 0)
+            quatf physics:localRot1 = (0.7071068, 0, -0.7071068, 0)
+            float physics:lowerLimit = -45
+            float physics:upperLimit = 45
+        }
+
+        def PhysicsRevoluteJoint "pitch_c"
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Trileg/thigh_c>
+            rel physics:body1 = </Trileg/shin_c>
+            point3f physics:localPos0 = (-0.06, -0.104, 0)
             point3f physics:localPos1 = (0, 0, 0)
             quatf physics:localRot0 = (0.9659258, 0, 0, -0.2588190)
             quatf physics:localRot1 = (0.9659258, 0, 0, -0.2588190)

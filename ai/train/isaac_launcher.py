@@ -23,6 +23,7 @@ import tempfile
 from typing import Optional
 
 import glog
+from google.protobuf import json_format
 
 from ai.proto import training_pb2
 
@@ -95,10 +96,16 @@ def _clean_env() -> dict:
     return env
 
 
+def _proto_sub_to_dict(msg) -> dict | None:
+    """Convert a proto sub-message to dict, returning None if empty."""
+    d = json_format.MessageToDict(msg, preserving_proto_field_name=True)
+    return d if d else None
+
+
 def _config_to_json(config: training_pb2.TrainingConfig) -> dict:
     """Extract training params into a plain dict for the subprocess."""
     rl = config.rl
-    return {
+    d: dict = {
         "task": rl.task,
         "num_envs": rl.num_envs or 4096,
         "max_iterations": rl.max_iterations or 0,
@@ -107,26 +114,48 @@ def _config_to_json(config: training_pb2.TrainingConfig) -> dict:
         "algorithm": rl.algorithm or "rsl_rl",
         "render": rl.render,
         "frame_skip": rl.frame_skip or 2,
-        "checkpoint_dir": _CHECKPOINT_DIR,
+        "checkpoint_dir": rl.checkpoint_dir or _CHECKPOINT_DIR,
+        "save_interval": rl.save_interval or 0,
+        "seed": rl.seed or 0,
     }
 
+    for field, key in [
+        (rl.ppo, "ppo"),
+        (rl.network, "network"),
+        (rl.sim_physics, "sim_physics"),
+        (rl.termination, "termination"),
+        (rl.reset, "reset"),
+        (rl.target, "target"),
+        (rl.task_config, "task_config"),
+    ]:
+        sub = _proto_sub_to_dict(field)
+        if sub:
+            d[key] = sub
 
-def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
-    """Launch Isaac Lab RL training as a subprocess."""
+    if rl.extra_params:
+        d["extra_params"] = dict(rl.extra_params)
+
+    return d
+
+
+def _launch_subprocess(
+    cfg_dict: dict,
+    cfg_prefix: str,
+    render: bool,
+) -> None:
+    """Write JSON config and run isaac_runner.py as a subprocess."""
     isaac_python = _find_isaac_python()
-    cfg_dict = _config_to_json(config)
+    checkpoint_dir = cfg_dict.get("checkpoint_dir", _CHECKPOINT_DIR)
 
-    os.makedirs(_CHECKPOINT_DIR, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix="joshua_isaac_",
-        dir=_CHECKPOINT_DIR, delete=False,
+        mode="w", suffix=".json", prefix=cfg_prefix,
+        dir=checkpoint_dir, delete=False,
     ) as f:
         json.dump(cfg_dict, f, indent=2)
         cfg_path = f.name
 
-    glog.info(f"Isaac Lab training: task={cfg_dict['task']}, "
-              f"num_envs={cfg_dict['num_envs']}")
-    glog.info(f"  config written to {cfg_path}")
+    glog.info(f"Isaac Lab config written to {cfg_path}")
     glog.info(f"  Isaac Python: {isaac_python}")
 
     runner_path = os.path.abspath(_ISAAC_RUNNER)
@@ -136,7 +165,7 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
     else:
         cmd = [isaac_python, runner_path, "--config", cfg_path]
 
-    if not cfg_dict["render"]:
+    if not render:
         cmd.append("--headless")
 
     glog.info(f"  launching: {' '.join(cmd)}")
@@ -144,7 +173,7 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
     clean_env = _clean_env()
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             check=True,
             cwd=os.environ.get("ISAAC_LAB_PATH"),
@@ -152,7 +181,7 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
         )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
-            f"Isaac Lab training failed with exit code {e.returncode}"
+            f"Isaac Lab process failed with exit code {e.returncode}"
         ) from e
     except FileNotFoundError as e:
         raise RuntimeError(
@@ -165,13 +194,23 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
         except OSError:
             pass
 
-    meta_path = os.path.join(
-        _CHECKPOINT_DIR, cfg_dict["save_path"] + "_meta.json"
-    )
+
+def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
+    """Launch Isaac Lab RL training as a subprocess."""
+    cfg_dict = _config_to_json(config)
+
+    glog.info(f"Isaac Lab training: task={cfg_dict['task']}, "
+              f"num_envs={cfg_dict['num_envs']}")
+
+    _launch_subprocess(cfg_dict, "joshua_isaac_", cfg_dict["render"])
+
+    save_name = cfg_dict.get("save_path", f"{cfg_dict['task']}_isaac_ppo")
+    checkpoint_dir = cfg_dict.get("checkpoint_dir", _CHECKPOINT_DIR)
+    meta_path = os.path.join(checkpoint_dir, save_name + "_meta.json")
     if os.path.isfile(meta_path):
         with open(meta_path) as f:
             meta = json.load(f)
-        glog.info(f"Isaac Lab training complete. Checkpoint metadata: {meta_path}")
+        glog.info(f"Isaac Lab training complete. Metadata: {meta_path}")
     else:
         glog.warning(
             f"Training completed but no metadata found at {meta_path}. "
@@ -181,10 +220,8 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
 
 def launch_isaac_eval(config: training_pb2.TrainingConfig) -> None:
     """Launch Isaac Lab evaluation as a subprocess."""
-    isaac_python = _find_isaac_python()
-
     eval_cfg = config.eval
-    cfg_dict = {
+    cfg_dict: dict = {
         "mode": "eval",
         "task": eval_cfg.task,
         "algorithm": eval_cfg.algorithm or "skrl",
@@ -193,44 +230,22 @@ def launch_isaac_eval(config: training_pb2.TrainingConfig) -> None:
         "num_envs": eval_cfg.num_envs or 32,
         "num_episodes": eval_cfg.num_episodes or 5,
         "render": eval_cfg.render,
-        "checkpoint_dir": _CHECKPOINT_DIR,
+        "checkpoint_dir": config.rl.checkpoint_dir or _CHECKPOINT_DIR,
     }
 
-    os.makedirs(_CHECKPOINT_DIR, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix="joshua_isaac_eval_",
-        dir=_CHECKPOINT_DIR, delete=False,
-    ) as f:
-        json.dump(cfg_dict, f, indent=2)
-        cfg_path = f.name
+    for field, key in [
+        (eval_cfg.task_config, "task_config"),
+        (eval_cfg.network, "network"),
+        (eval_cfg.sim_physics, "sim_physics"),
+        (eval_cfg.termination, "termination"),
+        (eval_cfg.reset, "reset"),
+        (eval_cfg.ppo, "ppo"),
+    ]:
+        sub = _proto_sub_to_dict(field)
+        if sub:
+            cfg_dict[key] = sub
 
-    glog.info(f"Isaac Lab eval: task={cfg_dict['task']}, "
+    glog.info(f"Isaac Lab eval: task={cfg_dict.get('task', '')}, "
               f"checkpoint={cfg_dict['checkpoint_path']}")
 
-    runner_path = os.path.abspath(_ISAAC_RUNNER)
-
-    if isaac_python.endswith("isaaclab.sh"):
-        cmd = [isaac_python, "-p", runner_path, "--config", cfg_path]
-    else:
-        cmd = [isaac_python, runner_path, "--config", cfg_path]
-
-    if not cfg_dict["render"]:
-        cmd.append("--headless")
-
-    clean_env = _clean_env()
-
-    try:
-        subprocess.run(
-            cmd, check=True,
-            cwd=os.environ.get("ISAAC_LAB_PATH"),
-            env=clean_env,
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"Isaac Lab eval failed with exit code {e.returncode}"
-        ) from e
-    finally:
-        try:
-            os.unlink(cfg_path)
-        except OSError:
-            pass
+    _launch_subprocess(cfg_dict, "joshua_isaac_eval_", cfg_dict["render"])

@@ -78,24 +78,6 @@ Training & Fine-Tuning
 -   **Preprocessing**: Use `LeRobotDataset` to synchronize the interleaved `DataStore` output into `(observation, action)` batches for training.
 
 
-Simulator Backends
-------------------
-
-Joshua supports two simulator backends for RL training.  The backend
-is selected per-config via `simulator_backend`:
-
-| Backend | Engine | Python | Best for |
-|---------|--------|--------|----------|
-| `SIM_BACKEND_MJX` | MuJoCo XLA (JAX) | Bazel-managed 3.10 | Fast iteration, JAX-native, massively parallel on GPU |
-| `SIM_BACKEND_ISAAC_SIM` | Isaac Sim (PhysX) | Separate venv 3.11 | High-fidelity rendering, USD assets, domain randomization |
-
-```
-trainer.py (Bazel, Python 3.10)
-  ├── SIM_BACKEND_MJX       → in-process   → mjx_rl.py  → MJXEnv
-  └── SIM_BACKEND_ISAAC_SIM → subprocess   → isaac_runner.py (Isaac Lab venv)
-```
-
-
 Isaac Sim / Isaac Lab
 ---------------------
 
@@ -109,7 +91,7 @@ Description) format.
 **Isaac Lab** is a robotics RL framework built on top of Isaac Sim.
 It provides:
 
-- `ManagerBasedRLEnvCfg` — declarative environment definitions
+- `ManagerBasedRLEnvCfg` -- declarative environment definitions
   (scene, observations, rewards, terminations, actions, events)
 - Gym-compatible vectorized environments (`gymnasium.make()`)
 - Built-in RL library integrations (RSL-RL, skrl, rl_games, SB3)
@@ -124,8 +106,8 @@ Isaac Sim  (simulator engine, PhysX, USD, rendering)
 ### Why a Separate Process?
 
 Isaac Sim bundles its own Python 3.11, numpy<2, and hundreds of
-Omniverse packages.  Joshua uses Bazel-managed Python 3.10 with
-JAX / numpy>=2.  These cannot coexist in a single process.
+Omniverse packages.  Joshua uses Bazel-managed Python 3.10.  These
+cannot coexist in a single process.
 
 Joshua solves this by running Isaac Lab in a **subprocess** with its
 own virtual environment, communicating via a JSON config file written
@@ -151,21 +133,14 @@ cd IsaacLab
 
 #### 3. Create the Virtual Environment
 
-Isaac Lab provides a setup script that creates a venv with all
-required dependencies:
-
 ```bash
 cd ~/IsaacLab
-
-# Create venv and install Isaac Lab + dependencies
 ./isaaclab.sh --install
 ```
 
-This creates a venv (typically at `~/IsaacLab/_isaac_sim/` for
-binary installs, or you can create one manually):
+Or manually:
 
 ```bash
-# Manual venv creation (if using pip-based Isaac Sim)
 python3.11 -m venv ~/env_isaaclab
 source ~/env_isaaclab/bin/activate
 pip install isaacsim-rl isaacsim-replicator isaacsim-extscache-physics
@@ -173,177 +148,361 @@ pip install -e ~/IsaacLab/source/isaaclab
 pip install -e ~/IsaacLab/source/isaaclab_tasks
 ```
 
-#### 4. Verify Isaac Lab Works
-
-```bash
-# Using isaaclab.sh
-cd ~/IsaacLab
-./isaaclab.sh -p -c "import isaaclab; print(isaaclab.__version__)"
-
-# Or using the venv directly
-~/env_isaaclab/bin/python -c "import isaaclab; print('OK')"
-
-# Run a quick sanity check (headless Ant training, 10 iterations)
-./isaaclab.sh -p scripts/reinforcement_learning/skrl/train.py \
-    --task Isaac-Ant-v0 --headless --max_iterations 10
-```
-
-#### 5. Set Environment Variables for Joshua
-
-Joshua needs to locate Isaac Lab's Python interpreter.
-**Recommended:** set `ISAAC_LAB_PYTHON` to the venv Python binary.
-This is more reliable than `ISAAC_LAB_PATH` because Bazel sanitizes
-the subprocess environment, which can break `isaaclab.sh`.
+#### 4. Set Environment Variables
 
 ```bash
 export ISAAC_LAB_PATH=~/IsaacLab
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 ```
 
-For persistence, add to your shell profile:
-
-```bash
-echo 'export ISAAC_LAB_PATH=~/IsaacLab' >> ~/.bashrc
-echo 'export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python' >> ~/.bashrc
-source ~/.bashrc
-```
-
 ### Running Training
 
 ```bash
+# Ant (RSL-RL)
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac.pbtxt
-```
+    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
 
-Example config (`ant_train_isaac.pbtxt`):
-
-```protobuf
-general {
-  operation_mode: MODE_TRAINING
-  name: "ant"
-}
-ai {
-  training {
-    environment: TRAINING_ENV_SIMULATION
-    method: TRAINING_METHOD_RL
-    simulator_backend: SIM_BACKEND_ISAAC_SIM
-    rl {
-      task: "ant"
-      algorithm: "skrl"          # or "rsl_rl"
-      max_iterations: 500        # learning iterations (not timesteps)
-      num_envs: 4096
-      save_path: "ant_isaac_skrl_ppo"
-      render: false
-    }
-  }
-}
+# Trileg (skrl)
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/trileg_train_isaac_full_skrl.pbtxt
 ```
 
 ### Running Evaluation
 
 ```bash
+# Ant (RSL-RL) -- update checkpoint_path in the pbtxt first
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_eval_isaac.pbtxt
-```
-
-Example config (`ant_eval_isaac.pbtxt`):
-
-```protobuf
-general {
-  operation_mode: MODE_TRAINING
-  name: "ant"
-}
-ai {
-  training {
-    environment: TRAINING_ENV_SIMULATION
-    method: TRAINING_METHOD_EVAL
-    simulator_backend: SIM_BACKEND_ISAAC_SIM
-    eval {
-      task: "ant"
-      algorithm: "skrl"
-      checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/ant_isaac_skrl_ppo/final_policy.pt"
-      num_episodes: 10
-      num_envs: 32
-      render: true
-    }
-  }
-}
+    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Supported RL Libraries
 
-| Algorithm | Library | Config value | Default iterations (Ant) |
-|-----------|---------|-------------|--------------------------|
-| PPO | RSL-RL | `algorithm: "rsl_rl"` | 1000 (32 rollout steps) |
-| PPO | skrl | `algorithm: "skrl"` | 500 (16 rollout steps) |
+| Algorithm | Library | Config value | Notes |
+|-----------|---------|-------------|-------|
+| PPO | RSL-RL | `algorithm: "rsl_rl"` | On-policy, higher sample efficiency |
+| PPO | skrl | `algorithm: "skrl"` | On-policy, different default hyperparams |
 
-`max_iterations` maps to learning iterations (not raw timesteps).
-Each iteration collects `rollout_steps` transitions per env, then
-performs one gradient update.
 
-### Joshua's Isaac Lab Task System
+How It Works
+------------
 
-Joshua defines custom Isaac Lab tasks in `ai/train/isaac_tasks/`
-using a generic term-based architecture:
+All robot tasks are defined entirely in `.pbtxt` configuration files --
+no Python task files are needed. The pipeline flows like this:
 
 ```
-ai/train/isaac_tasks/
-├── __init__.py             # auto-registers all tasks on import
-├── env_builder.py          # generic ManagerBasedRLEnvCfg builder
-├── terms/                  # reusable MDP term functions
-│   ├── actions.py          #   action term configs
-│   ├── events.py           #   randomization / reset events
-│   ├── observations.py     #   observation term factories
-│   ├── rewards.py          #   reward term factories
-│   └── terminations.py     #   termination conditions
-└── tasks/
-    └── ant.py              # Ant locomotion (composes generic terms)
+.pbtxt preset
+    │
+    ▼
+trainer.py          (Bazel / Python 3.10)
+    │  Parses proto, dispatches to isaac_launcher.py
+    ▼
+isaac_launcher.py   (Bazel / Python 3.10)
+    │  Serializes RLConfig → JSON, spawns subprocess
+    ▼
+isaac_runner.py     (Isaac Lab venv / Python 3.11)
+    │  Reads JSON, calls task_builder.py
+    ▼
+task_builder.py     (Isaac Lab venv / Python 3.11)
+    │  Builds robot, rewards, observations from config
+    │  Registers gym environment dynamically
+    ▼
+Isaac Lab PPO training loop (RSL-RL or skrl)
+    │
+    ▼
+Checkpoints saved to /tmp/joshua_checkpoints/
 ```
 
-All terms are **generic** — they reference body/joint names from the
-task config, not hardcoded values.  The same reward functions work
-for Ant, Humanoid, or any custom robot.
 
-### 3D Models (USD Assets)
+Configuration Reference
+------------------------
 
-Isaac Sim uses USD format.  Joshua stores local assets in
-`simulation/models/`:
+All training parameters live in `ai/proto/training.proto` and are set
+via `.pbtxt` presets in `config/config_preset/`.
 
+### task_config (robot + environment definition)
+
+```protobuf
+task_config {
+  task_name: "my_robot"
+  robot {
+    usd_filename: "my_robot_isaac.usda"
+    init_pos_z: 0.5
+    init_joint_pos { key: "hip_.*"  value: 0.0 }
+    init_joint_pos { key: "knee_.*" value: -0.5 }
+    actuator_stiffness: 0.0
+    actuator_damping: 5.0
+  }
+  rewards {
+    key: "progress"
+    value { weight: 1.0 }
+  }
+  rewards {
+    key: "alive"
+    value { weight: 0.5 }
+  }
+  observations {
+    key: "base_lin_vel"
+    value {}
+  }
+  observations {
+    key: "joint_pos_norm"
+    value {}
+  }
+  observations {
+    key: "actions"
+    value {}
+  }
+}
 ```
-simulation/models/
-├── ant.xml                 # MuJoCo XML (for MJX backend)
-├── ant_isaac.usda          # USD ASCII (for Isaac Sim backend)
-└── ...
+
+### ppo (PPO hyperparameters)
+
+```protobuf
+ppo {
+  learning_rate: 5e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  entropy_coef: 0.0
+  num_learning_epochs: 5
+  num_minibatches: 4
+  num_steps_per_env: 32
+  desired_kl: 0.01
+  max_grad_norm: 1.0
+  schedule: "adaptive"
+}
 ```
 
-To create a new robot, write a `.usda` file (or export from a
-CAD tool) and place it in `simulation/models/`.  The task file
-uses `resolve_model_path()` to locate it at runtime.
+### network (actor-critic architecture)
 
-### Adding a New Task
+```protobuf
+network {
+  actor_hidden_dims: 400
+  actor_hidden_dims: 200
+  actor_hidden_dims: 100
+  critic_hidden_dims: 400
+  critic_hidden_dims: 200
+  critic_hidden_dims: 100
+  activation: "elu"
+  init_noise_std: 1.0
+}
+```
 
-1. Create a USD asset in `simulation/models/my_robot.usda`
-2. Create `ai/train/isaac_tasks/tasks/my_robot.py` (compose
-   generic terms from `terms/`)
-3. Register in `ai/train/isaac_tasks/tasks/__init__.py`
-4. Add the mapping in `isaac_runner.py` `TASK_MAP`
-5. Create a config preset in `config/config_preset/`
+### sim_physics (simulation parameters)
 
-### Key Files
+```protobuf
+sim_physics {
+  decimation: 2
+  episode_length_s: 16.0
+  sim_dt: 0.00833
+  action_scale: 7.5
+  env_spacing: 5.0
+  terrain_friction: 1.0
+  bounce_threshold_velocity: 0.2
+}
+```
+
+### termination / reset
+
+```protobuf
+termination {
+  min_root_height: 0.31
+}
+reset {
+  joint_pos_range_min: -0.2
+  joint_pos_range_max: 0.2
+  joint_vel_range_min: -0.1
+  joint_vel_range_max: 0.1
+}
+```
+
+### eval (evaluation config)
+
+Evaluation presets mirror the training `task_config` and include all
+the same blocks (task_config, network, sim_physics, termination, reset,
+ppo) so the environment is reconstructed identically:
+
+```protobuf
+eval {
+  algorithm: "rsl_rl"
+  checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/my_model/model_999.pt"
+  num_episodes: 10
+  num_envs: 4
+  render: true
+
+  task_config { ... }
+  network { ... }
+  sim_physics { ... }
+  termination { ... }
+  reset { ... }
+}
+```
+
+
+How to Add a New Robot
+----------------------
+
+1. **Create a USD asset** at `simulation/models/my_robot_isaac.usda`
+   describing the robot's bodies, collision geometry, and joints.
+
+2. **Create a `.pbtxt` preset** with `task_config` defining the full
+   environment:
+
+```bash
+config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+```
+
+The preset must contain:
+- `task_config.robot` -- USD path, initial pose, joint positions, actuator params
+- `task_config.rewards` -- reward terms and weights
+- `task_config.observations` -- observation terms
+- `ppo` / `network` / `sim_physics` / `termination` / `reset` blocks
+
+See the existing ant and trileg presets for complete examples.
+
+3. **Run training**:
+
+```bash
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+```
+
+4. **Create an eval preset** that mirrors the training config but uses
+   `TRAINING_METHOD_EVAL` and adds `checkpoint_path`.
+
+5. **(Optional)** Create a `README.md` in `simulation/models/my_robot/`
+   documenting the robot anatomy and joint structure.
+
+
+Available Reward Terms
+----------------------
+
+| Term name | Parameters | Description |
+|-----------|-----------|-------------|
+| `progress` | `target_pos` | Distance toward target |
+| `alive` | -- | Constant bonus while alive |
+| `upright` | `threshold` | Bonus when Z-up projection > threshold |
+| `move_to_target` | `threshold`, `target_pos` | Bonus when heading aligns with target |
+| `action_l2` | -- | Penalizes large actions |
+| `energy` | `gear_ratios` | Power consumption penalty |
+| `joint_pos_limits` | `threshold`, `gear_ratios` | Penalty near joint limits |
+| `lin_vel_z` | -- | Penalizes vertical velocity |
+| `ang_vel_xy` | -- | Penalizes roll/pitch angular velocity |
+| `flat_orientation` | -- | Penalizes deviation from flat |
+| `action_rate` | -- | Penalizes rapid action changes |
+| `joint_vel` | -- | Penalizes high joint velocities |
+
+Available Observation Terms
+---------------------------
+
+| Term name | Parameters | Description |
+|-----------|-----------|-------------|
+| `base_height` | -- | Root body Z position |
+| `base_lin_vel` | -- | Root body linear velocity |
+| `base_ang_vel` | -- | Root body angular velocity |
+| `base_yaw_roll` | -- | Yaw and roll angles |
+| `base_angle_to_target` | `target_pos` | Angle to target position |
+| `base_up_proj` | -- | Projection of up vector onto Z |
+| `base_heading_proj` | `target_pos` | Heading alignment with target |
+| `joint_pos_norm` | -- | Normalized joint positions |
+| `joint_vel_rel` | `scale` | Scaled joint velocities |
+| `body_forces` | `body_names`, `scale` | Contact forces on named bodies |
+| `actions` | -- | Previous action values |
+
+
+Available Robots
+----------------
+
+| Robot | DOF | USD | Documentation |
+|-------|-----|-----|---------------|
+| Ant | 8 (4 legs x 2 joints) | `simulation/models/ant_isaac.usda` | `simulation/models/ant/README.md` |
+| Trileg | 6 (3 legs x 2 joints) | `simulation/models/trileg_isaac.usda` | `simulation/models/trileg/README.md` |
+
+
+Key Files
+---------
 
 | File | Runs in | Purpose |
 |------|---------|---------|
 | `ai/train/trainer.py` | Joshua (Bazel) | Top-level dispatcher |
-| `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, env sanitization, subprocess |
-| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge, no Joshua imports |
-| `ai/train/isaac_tasks/` | Isaac Lab (venv) | Task definitions, terms, env builder |
+| `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, subprocess launch |
+| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge |
+| `ai/train/isaac_lab/task_builder.py` | Isaac Lab (venv) | Generic proto-driven task builder |
+| `ai/train/isaac_lab/env_builder.py` | Isaac Lab (venv) | ManagerBasedRLEnvCfg builder |
+| `ai/train/isaac_lab/rsl_rl_config.py` | Isaac Lab (venv) | RSL-RL agent config builder |
+| `ai/train/isaac_lab/terms/` | Isaac Lab (venv) | Reusable MDP term factories |
+| `ai/proto/training.proto` | Both | Full config schema |
 | `simulation/models/*.usda` | Isaac Lab (venv) | Local USD robot assets |
+| `config/config_preset/*.pbtxt` | Joshua (Bazel) | Training/eval presets |
 
-### Troubleshooting
+
+Troubleshooting
+---------------
 
 | Problem | Fix |
 |---------|-----|
 | `OSError: Isaac Lab not found` | Set `ISAAC_LAB_PATH` or `ISAAC_LAB_PYTHON` env var |
-| `Error: Command failed to spawn: Aborted` | Check `nvidia-smi`; verify GPU driver is compatible with your Isaac Sim version |
-| Training much slower than native Isaac Lab | Check `max_iterations` — Joshua converts it to `max_iterations * rollout_steps` timesteps (no `num_envs` multiplier) |
-| `ModuleNotFoundError: No module named 'pxr'` | This is expected inside Bazel; USD tools only work in the Isaac Lab venv |
+| `Error: Command failed to spawn: Aborted` | Check `nvidia-smi`; verify GPU driver compatibility |
+| Training much slower than native Isaac Lab | Check `max_iterations` -- Joshua converts it to `max_iterations * rollout_steps` timesteps |
+| `ModuleNotFoundError: No module named 'pxr'` | Expected inside Bazel; USD tools only work in the Isaac Lab venv |
+| `Unknown reward term 'foo'` | Check `task_builder.py` `REWARD_REGISTRY` for available term names |
+| `AttributeError: 'tuple' object has no attribute 'get'` | Mismatch between reset event parameter types; check `_apply_env_overrides` in `isaac_runner.py` |
+
+
+Future Work
+-----------
+
+### Additional RL library backends
+
+Currently only **RSL-RL** and **skrl** are implemented. Isaac Lab also
+supports rl_games and Stable Baselines 3. Adding them requires:
+
+- [ ] **rl_games**: Add `rl_games_config.py` in `isaac_lab/` (similar
+  to `rsl_rl_config.py` -- builds a configclass for the rl_games
+  runner). Wire up `_train_rl_games()` and `_eval_rl_games()` in
+  `isaac_runner.py`. Register the config via
+  `rl_games_cfg_entry_point` in `task_builder.py`.
+
+- [ ] **Stable Baselines 3 (SB3)**: Add `sb3_config.py` in
+  `isaac_lab/`. Wire up `_train_sb3()` and `_eval_sb3()` in
+  `isaac_runner.py`. Register via `sb3_cfg_entry_point`.
+
+- [ ] **SAC / TD3 (off-policy)**: skrl and SB3 both support off-policy
+  algorithms. Extend the proto `algorithm` field to accept `"sac"`,
+  `"td3"`, etc. and add corresponding config messages.
+
+### Environment and training enhancements
+
+- [ ] **Domain randomization**: Wire `DomainRandomizationConfig` proto
+  fields to randomize physics parameters (mass, friction, joint
+  damping) during training for sim-to-real transfer.
+
+- [ ] **Curriculum learning**: Wire `CurriculumConfig` proto fields to
+  progressively increase task difficulty (e.g., terrain roughness,
+  target distance, episode length).
+
+- [ ] **Terrain generation**: Wire `TerrainConfig` proto fields to
+  generate procedural terrains (stairs, slopes, rough ground) via
+  Isaac Lab's terrain generator.
+
+- [ ] **Observation noise**: Wire `ObservationNoiseConfig` proto fields
+  to inject sensor noise into observations for robustness.
+
+- [ ] **Multi-agent training**: Support multiple robots in the same
+  environment for cooperative or competitive tasks.
+
+- [ ] **Resume training**: Wire `ResumeConfig` proto fields to resume
+  from a checkpoint with potentially modified hyperparameters.
+
+### Robot assets
+
+- [ ] **Quadruped**: 4-legged robot with 3-DOF legs (hip yaw, hip
+  pitch, knee pitch) -- 12 DOF total.
+
+- [ ] **Hexapod**: 6-legged robot with 2-DOF legs -- 12 DOF total.
+
+- [ ] **Biped / Humanoid**: Custom humanoid with upper body for
+  manipulation tasks.
+
+- [ ] **Wheeled robots**: Differential drive or omnidirectional robots
+  for navigation tasks.

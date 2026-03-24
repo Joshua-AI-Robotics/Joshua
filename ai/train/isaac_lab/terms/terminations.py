@@ -19,7 +19,7 @@ def time_out() -> DoneTerm:
     return DoneTerm(func=_time_out, time_out=True)
 
 
-def root_height_below(minimum_height: float = 0.31) -> DoneTerm:
+def root_height_below(minimum_height: float = 0.1) -> DoneTerm:
     """Terminate when the robot root drops below *minimum_height*."""
     return DoneTerm(func=_root_height_below_minimum,
                     params={"minimum_height": minimum_height})

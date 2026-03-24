@@ -5,11 +5,11 @@ configclass subclassing needed.
 
 Usage::
 
-    from isaac_tasks.agents import build_rsl_rl_cfg
+    from isaac_lab.rsl_rl_config import build_rsl_rl_cfg
 
     MyAgentCfg = build_rsl_rl_cfg(
         max_iterations=1000,
-        actor_hidden_dims=[400, 200, 100],
+        actor_hidden_dims=[256, 128, 64],
         learning_rate=5e-4,
     )
 """
@@ -51,9 +51,9 @@ def build_rsl_rl_cfg(
     ``load_cfg_from_registry`` will instantiate it.
     """
     if actor_hidden_dims is None:
-        actor_hidden_dims = [400, 200, 100]
+        actor_hidden_dims = [256, 128, 64]
     if critic_hidden_dims is None:
-        critic_hidden_dims = [400, 200, 100]
+        critic_hidden_dims = [256, 128, 64]
 
     policy_cfg = RslRlPpoActorCriticCfg(
         init_noise_std=init_noise_std,

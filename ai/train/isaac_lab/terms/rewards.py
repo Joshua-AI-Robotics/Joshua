@@ -2,7 +2,7 @@
 
 Each factory returns a ``RewardTermCfg`` ready to drop into
 ``build_env_cfg(rewards={...})``.  Wraps Isaac Lab built-in MDP
-functions and humanoid/locomotion-specific reward functions.
+functions and locomotion reward functions.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from isaaclab.envs.mdp import (
     joint_vel_l2 as _joint_vel_l2,
     lin_vel_z_l2 as _lin_vel_z_l2,
 )
+# These locomotion reward functions are defined in Isaac Lab's humanoid task
+# module but work generically with any articulated robot.
 from isaaclab_tasks.manager_based.classic.humanoid.mdp.rewards import (
     move_to_target_bonus as _move_to_target_bonus,
     joint_pos_limits_penalty_ratio as _joint_pos_limits_penalty_ratio,
@@ -71,7 +73,7 @@ def power_consumption(
 ) -> RewTerm:
     """Penalty for torque * velocity (energy usage)."""
     return RewTerm(func=_power_consumption, weight=weight,
-                   params={"gear_ratio": gear_ratio or {".*": 15.0}})
+                   params={"gear_ratio": gear_ratio or {".*": 1.0}})
 
 
 def joint_pos_limits(
@@ -82,7 +84,7 @@ def joint_pos_limits(
     """Penalty when joints approach their limits."""
     return RewTerm(func=_joint_pos_limits_penalty_ratio, weight=weight,
                    params={"threshold": threshold,
-                           "gear_ratio": gear_ratio or {".*": 15.0}})
+                           "gear_ratio": gear_ratio or {".*": 1.0}})
 
 
 def lin_vel_z_l2(weight: float = -0.5) -> RewTerm:

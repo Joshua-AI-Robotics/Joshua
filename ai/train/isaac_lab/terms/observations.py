@@ -17,6 +17,8 @@ from isaaclab.envs.mdp import (
     joint_vel_rel as _joint_vel_rel,
     last_action as _last_action,
 )
+# These locomotion observation functions are defined in Isaac Lab's humanoid
+# task module but work generically with any articulated robot.
 from isaaclab_tasks.manager_based.classic.humanoid.mdp.observations import (
     base_angle_to_target as _base_angle_to_target,
     base_heading_proj as _base_heading_proj,
