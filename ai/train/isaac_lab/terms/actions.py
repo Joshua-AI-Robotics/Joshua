@@ -10,7 +10,7 @@ from isaaclab.utils import configclass
 
 
 def joint_effort_actions(
-    scale: float = 7.5,
+    scale: float = 1.0,
     joint_names: list[str] | None = None,
     asset_name: str = "robot",
 ):

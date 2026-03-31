@@ -6,7 +6,7 @@ Communication with Joshua is via a JSON config file written by
 ``isaac_launcher.py``.
 
 Environment configs, agent configs, and MDP terms are defined in the
-``isaac_tasks`` package (shipped alongside this script) -- nothing is
+``isaac_lab`` package (shipped alongside this script) -- nothing is
 hardcoded here.
 
 Usage (called automatically by isaac_launcher.py):
@@ -20,20 +20,11 @@ import json
 import os
 import sys
 
-# ── Make isaac_tasks importable (lives next to this script) ──────────
+# ── Make isaac_lab importable (lives next to this script) ──────────
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
-
-# ── Task name mapping: Joshua task -> Isaac Lab gym ID ────────────────
-
-TASK_MAP: dict[str, str] = {
-    "ant": "Joshua-Ant-v0",
-    "trileg": "Joshua-Trileg-v0",
-    "humanoid": "Isaac-Humanoid-v0",
-    "cartpole": "Isaac-Cartpole-v0",
-}
 
 # ── CLI + AppLauncher init (must happen before other Isaac imports) ────
 
@@ -59,7 +50,7 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 
 import isaaclab_tasks  # noqa: E402, F401
-import isaac_tasks  # noqa: E402, F401
+import isaac_lab  # noqa: E402, F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg  # noqa: E402
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -68,17 +59,140 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
+# ── Config override system ───────────────────────────────────────────
+
+def _apply_agent_overrides(agent_cfg, cfg: dict) -> None:
+    """Patch agent config from JSON ppo/network/seed/save_interval."""
+    ppo = cfg.get("ppo", {})
+    if ppo:
+        algo = agent_cfg.algorithm
+        for src, dst in [
+            ("learning_rate", "learning_rate"),
+            ("gamma", "gamma"),
+            ("gae_lambda", "lam"),
+            ("clip_epsilon", "clip_param"),
+            ("entropy_coef", "entropy_coef"),
+            ("max_grad_norm", "max_grad_norm"),
+            ("num_learning_epochs", "num_learning_epochs"),
+            ("num_minibatches", "num_mini_batches"),
+            ("desired_kl", "desired_kl"),
+            ("vf_coeff", "value_loss_coef"),
+        ]:
+            if src in ppo:
+                setattr(algo, dst, ppo[src])
+        if "schedule" in ppo:
+            algo.schedule = ppo["schedule"]
+        if "use_clipped_value_loss" in ppo:
+            algo.use_clipped_value_loss = ppo["use_clipped_value_loss"]
+        if "num_steps_per_env" in ppo:
+            agent_cfg.num_steps_per_env = ppo["num_steps_per_env"]
+
+    net = cfg.get("network", {})
+    if net and hasattr(agent_cfg, "policy"):
+        policy = agent_cfg.policy
+        if "actor_hidden_dims" in net:
+            policy.actor_hidden_dims = list(net["actor_hidden_dims"])
+        if "critic_hidden_dims" in net:
+            policy.critic_hidden_dims = list(net["critic_hidden_dims"])
+        if "activation" in net:
+            policy.activation = net["activation"]
+        if "init_noise_std" in net:
+            policy.init_noise_std = net["init_noise_std"]
+    if net and "empirical_normalization" in net:
+        agent_cfg.empirical_normalization = net["empirical_normalization"]
+
+    if cfg.get("save_interval"):
+        agent_cfg.save_interval = cfg["save_interval"]
+    if cfg.get("seed"):
+        agent_cfg.seed = cfg["seed"]
+
+    max_iters = cfg.get("max_iterations", 0)
+    if max_iters:
+        agent_cfg.max_iterations = max_iters
+
+
+def _apply_env_overrides(env_cfg, cfg: dict) -> None:
+    """Patch env config from JSON sim_physics/termination/reset/target."""
+    sp = cfg.get("sim_physics", {})
+    if sp:
+        if "decimation" in sp:
+            env_cfg.decimation = int(sp["decimation"])
+        if "episode_length_s" in sp:
+            env_cfg.episode_length_s = sp["episode_length_s"]
+        if "sim_dt" in sp:
+            env_cfg.sim.dt = sp["sim_dt"]
+        if "action_scale" in sp:
+            for attr_name in dir(env_cfg.actions):
+                attr = getattr(env_cfg.actions, attr_name, None)
+                if hasattr(attr, "scale"):
+                    attr.scale = sp["action_scale"]
+        if "bounce_threshold_velocity" in sp:
+            env_cfg.sim.physx.bounce_threshold_velocity = sp["bounce_threshold_velocity"]
+        if "terrain_friction" in sp:
+            env_cfg.sim.physics_material.static_friction = sp["terrain_friction"]
+            env_cfg.sim.physics_material.dynamic_friction = sp["terrain_friction"]
+
+    term = cfg.get("termination", {})
+    if term and "min_root_height" in term:
+        for attr_name in dir(env_cfg.terminations):
+            t = getattr(env_cfg.terminations, attr_name, None)
+            if hasattr(t, "params") and isinstance(t.params, dict):
+                if "minimum_height" in t.params:
+                    t.params["minimum_height"] = term["min_root_height"]
+
+    rst = cfg.get("reset", {})
+    if rst:
+        for attr_name in dir(env_cfg.events):
+            ev = getattr(env_cfg.events, attr_name, None)
+            if hasattr(ev, "params") and isinstance(ev.params, dict):
+                if "position_range" in ev.params and isinstance(
+                    ev.params["position_range"], tuple
+                ):
+                    ev.params["position_range"] = (
+                        rst.get("joint_pos_range_min", -0.2),
+                        rst.get("joint_pos_range_max", 0.2),
+                    )
+                if "velocity_range" in ev.params and isinstance(
+                    ev.params["velocity_range"], tuple
+                ):
+                    ev.params["velocity_range"] = (
+                        rst.get("joint_vel_range_min", -0.1),
+                        rst.get("joint_vel_range_max", 0.1),
+                    )
+
+    target = cfg.get("target", {})
+    if target:
+        target_pos = (target.get("x", 1000.0),
+                      target.get("y", 0.0),
+                      target.get("z", 0.0))
+        for group_name in ("rewards", "observations"):
+            group = getattr(env_cfg, group_name, None)
+            if group is None:
+                continue
+            for attr_name in dir(group):
+                t = getattr(group, attr_name, None)
+                if hasattr(t, "params") and isinstance(t.params, dict):
+                    if "target_pos" in t.params:
+                        t.params["target_pos"] = target_pos
+
+    # Override individual reward weights
+    rw = cfg.get("reward_weights", {})
+    if rw and hasattr(env_cfg, "rewards"):
+        for name, weight in rw.items():
+            if hasattr(env_cfg.rewards, name):
+                getattr(env_cfg.rewards, name).weight = weight
+
+
 def _resolve_task(cfg: dict) -> str:
-    """Map Joshua task name to an Isaac Lab gym environment ID."""
-    task = cfg["task"]
-    isaac_task = cfg.get("isaac_task_name") or TASK_MAP.get(task)
-    if isaac_task is None:
+    """Build the task from proto-defined task_config and return the gym ID."""
+    if "task_config" not in cfg:
         raise ValueError(
-            f"No Isaac Lab mapping for Joshua task '{task}'. "
-            f"Known mappings: {TASK_MAP}. "
-            f"Or set 'isaac_task_name' in the config."
+            "Missing 'task_config' in config. All tasks must be defined "
+            "via task_config in the .pbtxt preset."
         )
-    return isaac_task
+    from isaac_lab.task_builder import build_task_from_config
+    _, _, gym_id = build_task_from_config(cfg)
+    return gym_id
 
 
 def _write_meta(cfg: dict, env, log_dir: str) -> None:
@@ -98,7 +212,7 @@ def _write_meta(cfg: dict, env, log_dir: str) -> None:
         pass
 
     meta = {
-        "task": cfg["task"],
+        "task": cfg.get("task", cfg.get("task_config", {}).get("task_name", "")),
         "isaac_task": _resolve_task(cfg),
         "backend": "isaac_sim",
         "algorithm": cfg.get("algorithm", "rsl_rl"),
@@ -118,30 +232,24 @@ def _write_meta(cfg: dict, env, log_dir: str) -> None:
 # ── RSL-RL backend ───────────────────────────────────────────────────
 
 def _train_rsl_rl(cfg: dict) -> None:
-    """Train using RSL-RL's OnPolicyRunner (PPO).
-
-    Agent config is loaded from the gym registry (set in
-    ``isaac_tasks/tasks/*.py``) and overridden by values from the
-    Joshua JSON config.
-    """
+    """Train using RSL-RL's OnPolicyRunner (PPO)."""
     from rsl_rl.runners import OnPolicyRunner
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
     isaac_task = _resolve_task(cfg)
     num_envs = cfg.get("num_envs", 4096)
-    save_name = cfg.get("save_path", f"{cfg['task']}_isaac_ppo")
+    save_name = cfg.get("save_path", f"{cfg.get('task', 'task')}_isaac_ppo")
     checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    _apply_env_overrides(env_cfg, cfg)
+
     env = gym.make(isaac_task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env)
 
     agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
-
-    max_iterations = cfg.get("max_iterations", 0)
-    if max_iterations:
-        agent_cfg.max_iterations = max_iterations
+    _apply_agent_overrides(agent_cfg, cfg)
 
     agent_cfg.experiment_name = save_name
     agent_cfg.device = device
@@ -174,12 +282,7 @@ def _train_rsl_rl(cfg: dict) -> None:
 # ── skrl backend ─────────────────────────────────────────────────────
 
 def _train_skrl(cfg: dict) -> None:
-    """Train using skrl's PPO agent.
-
-    Environment config is loaded from the gym registry.
-    Agent hyperparameters come from the registered agent config when
-    available, otherwise defaults are used.
-    """
+    """Train using skrl's PPO agent."""
     import skrl  # noqa: F401
     from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
     from skrl.envs.wrappers.torch import wrap_env
@@ -190,11 +293,13 @@ def _train_skrl(cfg: dict) -> None:
 
     isaac_task = _resolve_task(cfg)
     num_envs = cfg.get("num_envs", 4096)
-    save_name = cfg.get("save_path", f"{cfg['task']}_isaac_ppo")
+    save_name = cfg.get("save_path", f"{cfg.get('task', 'task')}_isaac_ppo")
     checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    _apply_env_overrides(env_cfg, cfg)
+
     env = gym.make(isaac_task, cfg=env_cfg)
     env = wrap_env(env, wrapper="isaaclab")
 
@@ -203,13 +308,17 @@ def _train_skrl(cfg: dict) -> None:
     except KeyError:
         agent_cfg = None
 
+    if agent_cfg is not None:
+        _apply_agent_overrides(agent_cfg, cfg)
+
     obs_size = env.observation_space.shape[-1]
     action_size = env.action_space.shape[-1]
 
     if agent_cfg is not None:
         hidden = agent_cfg.policy.actor_hidden_dims
     else:
-        hidden = [256, 256]
+        net = cfg.get("network", {})
+        hidden = list(net.get("actor_hidden_dims", [256, 256]))
 
     class Policy(GaussianMixin, Model):
         def __init__(self, observation_space, action_space, dev, **kwargs):
@@ -232,8 +341,11 @@ def _train_skrl(cfg: dict) -> None:
         def __init__(self, observation_space, action_space, dev, **kwargs):
             Model.__init__(self, observation_space, action_space, dev)
             DeterministicMixin.__init__(self)
-            c_hidden = (agent_cfg.policy.critic_hidden_dims
-                        if agent_cfg else [256, 256])
+            if agent_cfg:
+                c_hidden = agent_cfg.policy.critic_hidden_dims
+            else:
+                net = cfg.get("network", {})
+                c_hidden = list(net.get("critic_hidden_dims", [256, 256]))
             layers = []
             in_dim = obs_size
             for h in c_hidden:
@@ -245,9 +357,12 @@ def _train_skrl(cfg: dict) -> None:
         def compute(self, inputs, role=""):
             return self.net(inputs["states"]), {}
 
-    set_seed(agent_cfg.seed if agent_cfg else 42)
+    seed_val = cfg.get("seed", 0) or (agent_cfg.seed if agent_cfg else 42)
+    set_seed(seed_val)
 
-    rollout_steps = (agent_cfg.num_steps_per_env if agent_cfg else 24)
+    ppo_cfg_json = cfg.get("ppo", {})
+    rollout_steps = (ppo_cfg_json.get("num_steps_per_env")
+                     or (agent_cfg.num_steps_per_env if agent_cfg else 24))
     max_iterations = cfg.get("max_iterations", 0)
     if not max_iterations:
         max_iterations = (agent_cfg.max_iterations if agent_cfg else 500)
@@ -280,16 +395,16 @@ def _train_skrl(cfg: dict) -> None:
     else:
         ppo_cfg.update({
             "rollouts": rollout_steps,
-            "learning_epochs": 5,
-            "mini_batches": 4,
-            "discount_factor": 0.99,
-            "lambda": 0.95,
-            "learning_rate": 3e-4,
-            "grad_norm_clip": 1.0,
-            "ratio_clip": 0.2,
-            "value_clip": 0.2,
-            "entropy_loss_scale": 0.01,
-            "value_loss_scale": 1.0,
+            "learning_epochs": int(ppo_cfg_json.get("num_learning_epochs", 5)),
+            "mini_batches": int(ppo_cfg_json.get("num_minibatches", 4)),
+            "discount_factor": ppo_cfg_json.get("gamma", 0.99),
+            "lambda": ppo_cfg_json.get("gae_lambda", 0.95),
+            "learning_rate": ppo_cfg_json.get("learning_rate", 3e-4),
+            "grad_norm_clip": ppo_cfg_json.get("max_grad_norm", 1.0),
+            "ratio_clip": ppo_cfg_json.get("clip_epsilon", 0.2),
+            "value_clip": ppo_cfg_json.get("clip_epsilon", 0.2),
+            "entropy_loss_scale": ppo_cfg_json.get("entropy_coef", 0.01),
+            "value_loss_scale": ppo_cfg_json.get("vf_coeff", 1.0),
         })
 
     log_dir = os.path.join(checkpoint_dir, "isaac_logs", save_name)
@@ -358,6 +473,7 @@ def _eval_skrl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    _apply_env_overrides(env_cfg, cfg)
     env = gym.make(isaac_task, cfg=env_cfg)
     env = wrap_env(env, wrapper="isaaclab")
 
@@ -365,6 +481,9 @@ def _eval_skrl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
         agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
     except KeyError:
         agent_cfg = None
+
+    if agent_cfg is not None:
+        _apply_agent_overrides(agent_cfg, cfg)
 
     obs_size = env.observation_space.shape[-1]
     action_size = env.action_space.shape[-1]
@@ -465,10 +584,12 @@ def _eval_rsl_rl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
+    _apply_env_overrides(env_cfg, cfg)
     env = gym.make(isaac_task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env)
 
     agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
+    _apply_agent_overrides(agent_cfg, cfg)
     agent_cfg.device = device
 
     runner = OnPolicyRunner(

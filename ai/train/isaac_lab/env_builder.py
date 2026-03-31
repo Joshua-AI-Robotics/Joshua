@@ -5,12 +5,12 @@ dicts of term configs -- no per-task configclass boilerplate needed.
 
 Usage::
 
-    from isaac_tasks.env_builder import build_env_cfg, build_scene_cfg
-    from isaac_tasks import terms
+    from isaac_lab.env_builder import build_env_cfg, build_scene_cfg
+    from isaac_lab import terms
 
-    AntEnvCfg = build_env_cfg(
-        scene_cfg=build_scene_cfg(robot=ANT_CFG, num_envs=4096),
-        actions_cfg=terms.joint_effort_actions(scale=7.5),
+    MyEnvCfg = build_env_cfg(
+        scene_cfg=build_scene_cfg(robot=ROBOT_CFG, num_envs=4096),
+        actions_cfg=terms.joint_effort_actions(scale=5.0),
         rewards={"alive": terms.is_alive(weight=0.5), ...},
         observations={"base_height": terms.base_pos_z(), ...},
         terminations={"time_out": terms.time_out(), ...},
@@ -65,7 +65,7 @@ def resolve_model_path(filename: str) -> str:
 
 def build_robot_from_usd(
     usd_path: str,
-    init_pos: tuple = (0.0, 0.0, 0.5),
+    init_pos: tuple = (0.0, 0.0, 0.3),
     init_joint_pos: dict | None = None,
     actuator_stiffness: float = 0.0,
     actuator_damping: float = 0.0,
@@ -123,7 +123,7 @@ def build_scene_cfg(
     """Build a standard scene with flat terrain, robot, and distant light.
 
     Args:
-        robot: An Isaac Lab ``ArticulationCfg`` (e.g. ``ANT_CFG``).
+        robot: An Isaac Lab ``ArticulationCfg`` from ``build_robot_from_usd``.
         num_envs: Number of parallel environments.
         env_spacing: Spacing between environment origins.
         terrain_friction: Static and dynamic friction for the ground plane.
@@ -173,6 +173,10 @@ def build_env_cfg(
     decimation: int = 2,
     episode_length_s: float = 16.0,
     sim_dt: float = 1.0 / 120.0,
+    bounce_threshold_velocity: float = 0.2,
+    physics_static_friction: float = 1.0,
+    physics_dynamic_friction: float = 1.0,
+    physics_restitution: float = 0.0,
 ) -> type:
     """Build a ``ManagerBasedRLEnvCfg`` subclass from dicts of terms.
 
@@ -209,16 +213,20 @@ def build_env_cfg(
     _dec = decimation
     _eps = episode_length_s
     _dt = sim_dt
+    _bounce = bounce_threshold_velocity
+    _sf = physics_static_friction
+    _df = physics_dynamic_friction
+    _rest = physics_restitution
 
     def _env_post_init(self):
         self.decimation = _dec
         self.episode_length_s = _eps
         self.sim.dt = _dt
         self.sim.render_interval = self.decimation
-        self.sim.physx.bounce_threshold_velocity = 0.2
-        self.sim.physics_material.static_friction = 1.0
-        self.sim.physics_material.dynamic_friction = 1.0
-        self.sim.physics_material.restitution = 0.0
+        self.sim.physx.bounce_threshold_velocity = _bounce
+        self.sim.physics_material.static_friction = _sf
+        self.sim.physics_material.dynamic_friction = _df
+        self.sim.physics_material.restitution = _rest
 
     env_fields = {
         "scene": scene_cfg,
