@@ -55,17 +55,12 @@ def _find_isaac_python() -> str:
 
     lab_path = os.environ.get("ISAAC_LAB_PATH")
     if lab_path:
-        launcher_names = ("isaaclab.bat", "isaaclab.sh") if _is_windows() else (
-            "isaaclab.sh",
-            "isaaclab.bat",
-        )
-        for launcher_name in launcher_names:
-            launcher = os.path.join(lab_path, launcher_name)
-            if os.path.isfile(launcher):
-                return launcher
+        launcher_name = "isaaclab.bat" if _is_windows() else "isaaclab.sh"
+        launcher = os.path.join(lab_path, launcher_name)
+        if os.path.isfile(launcher):
+            return launcher
         raise FileNotFoundError(
-            f"ISAAC_LAB_PATH={lab_path} but isaaclab.sh/isaaclab.bat "
-            "not found there"
+            f"ISAAC_LAB_PATH={lab_path} but {launcher_name} not found there"
         )
 
     raise EnvironmentError(
