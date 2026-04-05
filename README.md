@@ -162,6 +162,7 @@ bazel run //ai/train:trainer -- --config config/config_preset/ant_eval_isaac.pbt
 | Config | Backend | What it does |
 |--------|---------|-------------|
 | `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
+| `ant_sim_passive.pbtxt` | MuJoCo | Passive viewer with built-in Ant demo motion |
 | `ant_train_mjx.pbtxt` | MJX (JAX) | Train Ant PPO on GPU |
 | `ant_eval_mjx.pbtxt` | MJX (JAX) | Evaluate trained MJX policy |
 | `ant_train_isaac.pbtxt` | Isaac Sim | Train Ant with skrl/RSL-RL |

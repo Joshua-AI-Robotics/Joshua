@@ -1,0 +1,11 @@
+general {
+  operation_mode: MODE_SIMULATION
+  name: "ant_passive_demo"
+}
+simulation {
+  model_path: "simulation/models/ant.xml"
+  mode: MODE_PASSIVE
+  passive {
+    speed: 1.0
+  }
+}

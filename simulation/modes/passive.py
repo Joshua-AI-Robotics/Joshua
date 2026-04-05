@@ -17,6 +17,24 @@ from simulation.mujoco_engine import MuJoCoEngine
 from simulation.proto import simulation_pb2
 
 
+def _generate_demo_trajectory(
+    num_actuators: int, num_steps: int = 2_000, amplitude: float = 0.35
+) -> np.ndarray:
+    """Generate a simple alternating gait for quick viewer demos."""
+    if num_actuators <= 0:
+        raise ValueError("Model has no actuators to drive.")
+
+    t = np.linspace(0.0, 8.0 * np.pi, num_steps, dtype=np.float32)
+    trajectory = np.zeros((num_steps, num_actuators), dtype=np.float32)
+
+    for actuator_idx in range(num_actuators):
+        phase = 0.0 if actuator_idx % 2 == 0 else np.pi
+        # Keep neighboring joints out of phase so the body visibly rocks forward.
+        trajectory[:, actuator_idx] = amplitude * np.sin(t + phase)
+
+    return trajectory
+
+
 def load_trajectory(path: str) -> np.ndarray:
     """Load a trajectory file. Supports .npy and .csv (rows=timesteps, cols=actuators)."""
     if path.endswith(".npy"):
@@ -35,15 +53,19 @@ def load_trajectory(path: str) -> np.ndarray:
 
 
 def run(engine: MuJoCoEngine, config: simulation_pb2.PassiveConfig) -> None:
-    if not config.trajectory_path:
-        raise ValueError("PassiveConfig.trajectory_path is required for passive mode.")
-
     speed = config.speed if config.speed > 0 else 1.0
-    trajectory = load_trajectory(config.trajectory_path)
-    glog.info(
-        f"  trajectory: {trajectory.shape[0]} steps x "
-        f"{trajectory.shape[1]} actuators"
-    )
+    if config.trajectory_path:
+        trajectory = load_trajectory(config.trajectory_path)
+        glog.info(
+            f"  trajectory: {trajectory.shape[0]} steps x "
+            f"{trajectory.shape[1]} actuators"
+        )
+    else:
+        trajectory = _generate_demo_trajectory(engine.num_actuators)
+        glog.info(
+            "  trajectory: generated built-in sinusoidal demo "
+            f"({trajectory.shape[0]} steps x {trajectory.shape[1]} actuators)"
+        )
 
     if trajectory.shape[1] != engine.num_actuators:
         glog.warning(

@@ -34,12 +34,16 @@ _ISAAC_RUNNER = os.path.join(
 _CHECKPOINT_DIR = "/tmp/joshua_checkpoints"
 
 
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
 def _find_isaac_python() -> str:
     """Resolve the Isaac Lab Python interpreter.
 
     Search order:
       1. ISAAC_LAB_PYTHON env var (explicit path to python binary)
-      2. ISAAC_LAB_PATH env var  (uses isaaclab.sh -p)
+      2. ISAAC_LAB_PATH env var  (uses isaaclab.sh on POSIX / isaaclab.bat on Windows)
     """
     explicit = os.environ.get("ISAAC_LAB_PYTHON")
     if explicit:
@@ -51,16 +55,23 @@ def _find_isaac_python() -> str:
 
     lab_path = os.environ.get("ISAAC_LAB_PATH")
     if lab_path:
-        launcher = os.path.join(lab_path, "isaaclab.sh")
-        if os.path.isfile(launcher):
-            return launcher
+        launcher_names = ("isaaclab.bat", "isaaclab.sh") if _is_windows() else (
+            "isaaclab.sh",
+            "isaaclab.bat",
+        )
+        for launcher_name in launcher_names:
+            launcher = os.path.join(lab_path, launcher_name)
+            if os.path.isfile(launcher):
+                return launcher
         raise FileNotFoundError(
-            f"ISAAC_LAB_PATH={lab_path} but isaaclab.sh not found there"
+            f"ISAAC_LAB_PATH={lab_path} but isaaclab.sh/isaaclab.bat "
+            "not found there"
         )
 
     raise EnvironmentError(
         "Isaac Lab not found. Set one of:\n"
         "  ISAAC_LAB_PYTHON=/path/to/isaac_venv/bin/python\n"
+        "  ISAAC_LAB_PYTHON=C:\\path\\to\\isaac_venv\\Scripts\\python.exe\n"
         "  ISAAC_LAB_PATH=/path/to/IsaacLab"
     )
 
@@ -160,8 +171,12 @@ def _launch_subprocess(
 
     runner_path = os.path.abspath(_ISAAC_RUNNER)
 
-    if isaac_python.endswith("isaaclab.sh"):
+    lower_isaac_python = isaac_python.lower()
+
+    if lower_isaac_python.endswith("isaaclab.sh"):
         cmd = [isaac_python, "-p", runner_path, "--config", cfg_path]
+    elif lower_isaac_python.endswith("isaaclab.bat") and _is_windows():
+        cmd = ["cmd.exe", "/c", isaac_python, "-p", runner_path, "--config", cfg_path]
     else:
         cmd = [isaac_python, runner_path, "--config", cfg_path]
 
