@@ -169,37 +169,37 @@ The Windows validation path used:
 2. Set PowerShell environment variables to your local Isaac install:
 
 ```powershell
-$env:ISAAC_LAB_PATH = "C:\Users\doneg\IsaacLab"
-$env:ISAAC_LAB_PYTHON = "C:\Users\doneg\env_isaaclab_51\Scripts\python.exe"
+$env:ISAAC_LAB_PATH = "C:\path\to\IsaacLab"
+$env:ISAAC_LAB_PYTHON = "C:\path\to\env_isaaclab\Scripts\python.exe"
 $env:OMNI_KIT_ACCEPT_EULA = "YES"
-$env:PYTHONPATH = "C:\Users\doneg\OneDrive\Documents\GitHub\Joshua"
+$env:PYTHONPATH = "C:\path\to\Joshua"
 ```
 
 3. Validate simulator startup ("isaacsim running sim only"):
 
 ```powershell
-C:\Users\doneg\env_isaaclab_51\Scripts\python.exe -c "import os; os.environ['OMNI_KIT_ACCEPT_EULA']='YES'; from isaacsim import SimulationApp; app=SimulationApp({'headless': True}); print('SIMULATION_APP_OK'); app.close()"
+C:\path\to\env_isaaclab\Scripts\python.exe -c "import os; os.environ['OMNI_KIT_ACCEPT_EULA']='YES'; from isaacsim import SimulationApp; app=SimulationApp({'headless': True}); print('SIMULATION_APP_OK'); app.close()"
 ```
 
 4. Run a minimal Isaac Lab training smoke test for `Isaac-Ant-v0`:
 
 ```powershell
-cmd /c "set OMNI_KIT_ACCEPT_EULA=YES && C:\Users\doneg\env_isaaclab_51\Scripts\python.exe C:\Users\doneg\IsaacLab\scripts\reinforcement_learning\skrl\train.py --task Isaac-Ant-v0 --num_envs 1 --max_iterations 1 --headless"
+cmd /c "set OMNI_KIT_ACCEPT_EULA=YES && C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\IsaacLab\scripts\reinforcement_learning\skrl\train.py --task Isaac-Ant-v0 --num_envs 1 --max_iterations 1 --headless"
 ```
 
 5. Validate checkpoint loading / policy stepping without the fragile
 rendered play path:
 
 ```powershell
-C:\Users\doneg\env_isaaclab_51\Scripts\python.exe C:\Users\doneg\OneDrive\Documents\GitHub\Joshua\ai\train\isaac_play_headless.py --task Isaac-Ant-v0 --checkpoint C:\Users\doneg\IsaacLab\logs\skrl\ant\<run_dir>\checkpoints\agent_16.pt --num_envs 1 --steps 50
+C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\isaac_play_headless.py --task Isaac-Ant-v0 --checkpoint C:\path\to\IsaacLab\logs\skrl\ant\<run_dir>\checkpoints\agent_16.pt --num_envs 1 --steps 50
 ```
 
 6. If you want a lightweight local viewer fallback, launch the MuJoCo
 Ant passive demo:
 
 ```powershell
-$env:PYTHONPATH = "C:\Users\doneg\OneDrive\Documents\GitHub\Joshua"
-C:\Users\doneg\env_isaaclab_51\Scripts\python.exe C:\Users\doneg\OneDrive\Documents\GitHub\Joshua\simulation\main.py --config C:\Users\doneg\OneDrive\Documents\GitHub\Joshua\config\config_preset\ant_sim_passive.pbtxt
+$env:PYTHONPATH = "C:\path\to\Joshua"
+C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\simulation\main.py --config C:\path\to\Joshua\config\config_preset\ant_sim_passive.pbtxt
 ```
 
 What was validated on Windows:
