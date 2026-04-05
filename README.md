@@ -163,6 +163,38 @@ The trainer can also be invoked directly for development:
 bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 ```
 
+### Windows Native Isaac Lab Notes
+
+If you are running Joshua from Windows, the Isaac launcher supports a
+native Windows Isaac Lab install in addition to the Linux shell path.
+
+Set PowerShell environment variables to your local Isaac install:
+
+```powershell
+$env:ISAAC_LAB_PATH = "C:\path\to\IsaacLab"
+$env:ISAAC_LAB_PYTHON = "C:\path\to\env_isaaclab\Scripts\python.exe"
+$env:OMNI_KIT_ACCEPT_EULA = "YES"
+$env:PYTHONPATH = "C:\path\to\Joshua"
+```
+
+You can validate simulator startup ("isaacsim running sim only") with:
+
+```powershell
+C:\path\to\env_isaaclab\Scripts\python.exe -c "import os; os.environ['OMNI_KIT_ACCEPT_EULA']='YES'; from isaacsim import SimulationApp; app=SimulationApp({'headless': True}); print('SIMULATION_APP_OK'); app.close()"
+```
+
+And run a minimal Isaac Lab training smoke test for `Isaac-Ant-v0` with:
+
+```powershell
+cmd /c "set OMNI_KIT_ACCEPT_EULA=YES && C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\IsaacLab\scripts\reinforcement_learning\skrl\train.py --task Isaac-Ant-v0 --num_envs 1 --max_iterations 1 --headless"
+```
+
+The subprocess launcher in [`ai/train/isaac_launcher.py`](ai/train/isaac_launcher.py) will:
+
+- use `isaaclab.bat` when `ISAAC_LAB_PATH` points at a Windows Isaac Lab install
+- keep using `isaaclab.sh` on non-Windows systems
+- still accept an explicit `ISAAC_LAB_PYTHON` override on either platform
+
 ### Available Configs
 
 | Config | Backend | What it does |
@@ -178,6 +210,21 @@ bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaa
 | `trileg/trileg_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (RSL-RL) |
 | `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 | `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
+
+### MuJoCo-native Ant Scripts
+
+For a lightweight local MuJoCo training/playback loop, use the Python
+scripts in [`ai/train`](ai/train):
+
+```powershell
+$env:PYTHONPATH = "C:\path\to\Joshua"
+C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\mujoco_ant_train.py --timesteps 100000 --log_dir C:\path\to\Joshua\logs\mujoco_ant --experiment_name ant_walk
+```
+
+```powershell
+$env:PYTHONPATH = "C:\path\to\Joshua"
+C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\mujoco_ant_play.py --checkpoint C:\path\to\Joshua\logs\mujoco_ant\ant_walk\final_policy.pt --episodes 3
+```
 
 For full documentation on the training pipeline, simulator backends, and how to add new tasks, see [`ai/train/README.md`](ai/train/README.md).
 
