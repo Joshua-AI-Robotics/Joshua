@@ -179,7 +179,15 @@ bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaa
 | `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 | `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
-For full documentation on the training pipeline, simulator backends, and how to add new tasks, see [`ai/train/README.md`](ai/train/README.md).
+### Adding a New Robot
+
+Use the scaffold script to generate config presets and documentation for a new robot:
+
+```bash
+python3 scripts/new_robot.py --name my_robot --usd my_robot_isaac.usda
+```
+
+This creates training/eval config presets with all available reward and observation terms documented inline, plus a starter README. See [`ai/train/README.md`](ai/train/README.md) for the full training pipeline documentation.
 
 
 ## Data Type Architecture

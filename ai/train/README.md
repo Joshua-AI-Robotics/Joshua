@@ -366,29 +366,48 @@ eval {
 How to Add a New Robot
 ----------------------
 
-1. **Create a USD asset** at `simulation/models/my_robot_isaac.usda`
-   describing the robot's bodies, collision geometry, and joints.
-
-2. **Create a `.pbtxt` preset** with `task_config` defining the full
-   environment:
+The fastest way is the scaffold script:
 
 ```bash
-config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
+python3 scripts/new_robot.py --name my_robot --usd my_robot_isaac.usda
 ```
 
-The preset must contain:
-- `task_config.robot` -- USD path, initial pose, joint positions, actuator params
-- `task_config.rewards` -- reward terms and weights
-- `task_config.observations` -- observation terms
-- `ppo` / `network` / `sim_physics` / `termination` / `reset` blocks
+This generates:
+- `config/config_preset/my_robot/my_robot_train_isaac.pbtxt` -- training preset
+  with all available rewards/observations documented inline
+- `config/config_preset/my_robot/my_robot_eval_isaac.pbtxt` -- matching eval preset
+- `simulation/models/my_robot/README.md` -- starter documentation
 
-See the existing ant and trileg presets for complete examples.
+Then follow the printed checklist.
+
+### Manual steps (or to understand what the scaffold generates)
+
+1. **Create a USD articulation** at `simulation/models/my_robot_isaac.usda`:
+   - Articulation root on the main body (e.g. torso)
+   - Z-up axis, meter units
+   - Collision geometry on all bodies
+   - Descriptive joint names (they appear in the config)
+
+2. **Create a training preset** (or copy the template):
+
+```bash
+cp config/config_preset/_template_train.pbtxt \
+   config/config_preset/my_robot/my_robot_train_isaac.pbtxt
+```
+
+Fill in the `TODO:` markers:
+- `task_config.robot` -- USD filename, initial pose, joint positions
+- `task_config.rewards` -- reward terms and weights (all terms are
+  listed in the template with descriptions)
+- `task_config.observations` -- observation terms
+- `sim_physics.action_scale` -- tune for your actuators
+- `termination.min_root_height` -- adjust for your robot's height
 
 3. **Run training**:
 
 ```bash
 bazel run //launcher:joshua_main -- \
-    --config config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/my_robot/my_robot_train_isaac.pbtxt
 ```
 
 4. **Create an eval preset** that mirrors the training config but uses

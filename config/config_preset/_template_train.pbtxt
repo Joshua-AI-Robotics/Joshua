@@ -1,0 +1,278 @@
+# =============================================================================
+# Training config template for a new robot.
+#
+# Usage:
+#   1. Copy this file to config/config_preset/<robot>/<robot>_train_isaac.pbtxt
+#   2. Replace all TODO markers with your robot's values
+#   3. Uncomment/remove reward and observation terms as needed
+#   4. Run: bazel run //launcher:joshua_main -- \
+#              --config config/config_preset/<robot>/<robot>_train_isaac.pbtxt
+#
+# Or use the scaffold script:
+#   python scripts/new_robot.py --name my_robot --usd my_robot_isaac.usda
+# =============================================================================
+
+general {
+  operation_mode: MODE_TRAINING
+  name: "{{ROBOT_NAME}}"                    # TODO: your robot name
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_RL
+    simulator_backend: SIM_BACKEND_ISAAC_SIM
+    rl {
+      algorithm: "rsl_rl"                    # "rsl_rl" or "skrl"
+      max_iterations: 1000
+      num_envs: 4096
+      save_path: "{{ROBOT_NAME}}_ppo"        # TODO: experiment name for checkpoints
+      render: false
+      seed: 42
+      save_interval: 50
+
+      # =====================================================================
+      # TASK CONFIG -- defines robot, rewards, and observations from proto.
+      # No Python task file needed.
+      # =====================================================================
+      task_config {
+        task_name: "{{ROBOT_NAME}}"          # TODO: drives the gym environment ID
+
+        # -------------------------------------------------------------------
+        # Robot definition
+        #   usd_filename: must exist under simulation/models/
+        #   init_pos_z:   spawn height (meters above ground)
+        #   init_joint_pos: regex patterns matching USD joint names -> radians
+        # -------------------------------------------------------------------
+        robot {
+          usd_filename: "{{USD_FILENAME}}"   # TODO: e.g. "my_robot_isaac.usda"
+          init_pos_z: 0.5                    # TODO: adjust spawn height
+          # init_joint_pos {                 # TODO: set initial joint angles
+          #   key: ".*"                      #   regex matching joint names in USD
+          #   value: 0.0                     #   angle in radians
+          # }
+        }
+
+        # -------------------------------------------------------------------
+        # REWARDS -- pick from the registry below. Use positive weight for
+        # bonuses and negative weight for penalties.
+        #
+        # Available reward terms:
+        #   progress        -- distance toward target (locomotion)
+        #   alive           -- constant bonus while robot is alive
+        #   upright         -- bonus when Z-up projection > threshold
+        #                      params: threshold (default 0.93)
+        #   move_to_target  -- bonus when heading aligns with target
+        #                      params: threshold (default 0.8)
+        #   action_l2       -- penalizes large actions
+        #   energy          -- power consumption penalty
+        #                      gear_ratios: per-joint gear multipliers
+        #   joint_pos_limits -- penalty near joint limits
+        #                      params: threshold; gear_ratios: per-joint
+        #   lin_vel_z       -- penalizes vertical velocity
+        #   ang_vel_xy      -- penalizes roll/pitch angular velocity
+        #   flat_orientation -- penalizes deviation from flat orientation
+        #   action_rate     -- penalizes rapid action changes
+        #   joint_vel       -- penalizes high joint velocities
+        # -------------------------------------------------------------------
+
+        # Locomotion rewards
+        rewards {
+          key: "progress"
+          value { weight: 1.0 }
+        }
+        rewards {
+          key: "alive"
+          value { weight: 0.5 }
+        }
+
+        # Regularization penalties (negative weights)
+        rewards {
+          key: "action_l2"
+          value { weight: -0.005 }
+        }
+        rewards {
+          key: "energy"
+          value { weight: -0.05 }
+        }
+
+        # Uncomment any of these as needed:
+        # rewards {
+        #   key: "upright"
+        #   value {
+        #     weight: 0.1
+        #     params { key: "threshold"  value: 0.93 }
+        #   }
+        # }
+        # rewards {
+        #   key: "move_to_target"
+        #   value {
+        #     weight: 0.5
+        #     params { key: "threshold"  value: 0.8 }
+        #   }
+        # }
+        # rewards {
+        #   key: "joint_pos_limits"
+        #   value { weight: -0.1 }
+        # }
+        # rewards {
+        #   key: "lin_vel_z"
+        #   value { weight: -2.0 }
+        # }
+        # rewards {
+        #   key: "ang_vel_xy"
+        #   value { weight: -0.05 }
+        # }
+        # rewards {
+        #   key: "flat_orientation"
+        #   value { weight: -1.0 }
+        # }
+        # rewards {
+        #   key: "action_rate"
+        #   value { weight: -0.01 }
+        # }
+        # rewards {
+        #   key: "joint_vel"
+        #   value { weight: -0.001 }
+        # }
+
+        # -------------------------------------------------------------------
+        # OBSERVATIONS -- policy inputs. Pick from the registry below.
+        #
+        # Available observation terms:
+        #   base_height       -- root body Z position (1D)
+        #   base_lin_vel      -- root body linear velocity (3D)
+        #   base_ang_vel      -- root body angular velocity (3D)
+        #   base_yaw_roll     -- yaw and roll angles (2D)
+        #   base_angle_to_target -- angle to target position (1D)
+        #   base_up_proj      -- projection of up vector onto Z (1D)
+        #   base_heading_proj -- heading alignment with target (1D)
+        #   joint_pos_norm    -- normalized joint positions (num_joints D)
+        #   joint_vel_rel     -- scaled joint velocities (num_joints D)
+        #                        params: scale (default 0.2)
+        #   body_forces       -- contact forces on named bodies
+        #                        body_names: list of USD body/link names
+        #                        params: scale (default 1.0)
+        #   actions           -- previous action values (num_actions D)
+        # -------------------------------------------------------------------
+
+        observations {
+          key: "base_height"
+          value {}
+        }
+        observations {
+          key: "base_lin_vel"
+          value {}
+        }
+        observations {
+          key: "base_ang_vel"
+          value {}
+        }
+        observations {
+          key: "joint_pos_norm"
+          value {}
+        }
+        observations {
+          key: "joint_vel_rel"
+          value {
+            params { key: "scale"  value: 0.2 }
+          }
+        }
+        observations {
+          key: "actions"
+          value {}
+        }
+
+        # Uncomment for navigation-aware observations:
+        # observations {
+        #   key: "base_yaw_roll"
+        #   value {}
+        # }
+        # observations {
+        #   key: "base_angle_to_target"
+        #   value {}
+        # }
+        # observations {
+        #   key: "base_up_proj"
+        #   value {}
+        # }
+        # observations {
+        #   key: "base_heading_proj"
+        #   value {}
+        # }
+
+        # Uncomment for contact sensing (body_names must match USD links):
+        # observations {
+        #   key: "body_forces"
+        #   value {
+        #     body_names: "foot_1"           # TODO: match your USD body names
+        #     body_names: "foot_2"
+        #     params { key: "scale"  value: 0.1 }
+        #   }
+        # }
+      }
+
+      # =====================================================================
+      # PPO hyperparameters
+      # =====================================================================
+      ppo {
+        learning_rate: 0.0005
+        gamma: 0.99
+        gae_lambda: 0.95
+        clip_epsilon: 0.2
+        entropy_coef: 0.0
+        num_learning_epochs: 5
+        num_minibatches: 4
+        num_steps_per_env: 32
+        desired_kl: 0.01
+        max_grad_norm: 1.0
+        schedule: "adaptive"
+      }
+
+      # =====================================================================
+      # Actor-critic network architecture
+      # =====================================================================
+      network {
+        actor_hidden_dims: 256
+        actor_hidden_dims: 128
+        actor_hidden_dims: 64
+        critic_hidden_dims: 256
+        critic_hidden_dims: 128
+        critic_hidden_dims: 64
+        activation: "elu"
+        init_noise_std: 1.0
+      }
+
+      # =====================================================================
+      # Simulation physics
+      #   decimation:      action repeat (physics steps per env step)
+      #   episode_length_s: max episode duration in seconds
+      #   sim_dt:          physics timestep (seconds)
+      #   action_scale:    multiplier on joint effort actions
+      #   env_spacing:     distance between parallel environments
+      # =====================================================================
+      sim_physics {
+        decimation: 2
+        episode_length_s: 16.0
+        sim_dt: 0.00833
+        action_scale: 5.0                   # TODO: tune for your robot's actuators
+        env_spacing: 5.0
+        terrain_friction: 1.0
+      }
+
+      # =====================================================================
+      # Termination and reset
+      #   min_root_height: episode ends if torso drops below this (meters)
+      #   reset ranges:    joint randomization on episode reset (radians)
+      # =====================================================================
+      termination {
+        min_root_height: 0.2                 # TODO: adjust for your robot's height
+      }
+      reset {
+        joint_pos_range_min: -0.2
+        joint_pos_range_max: 0.2
+        joint_vel_range_min: -0.1
+        joint_vel_range_max: 0.1
+      }
+    }
+  }
+}

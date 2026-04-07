@@ -1,0 +1,120 @@
+# =============================================================================
+# Evaluation config template for a trained robot.
+#
+# This must mirror the training config's task_config, network, sim_physics,
+# termination, and reset blocks exactly so the environment is reconstructed
+# identically.
+#
+# Usage:
+#   1. Copy your training preset's task_config into this eval preset
+#   2. Set checkpoint_path to your trained model
+#   3. Run: bazel run //launcher:joshua_main -- \
+#              --config config/config_preset/<robot>/<robot>_eval_isaac.pbtxt
+# =============================================================================
+
+general {
+  operation_mode: MODE_TRAINING
+  name: "{{ROBOT_NAME}}"                    # TODO: must match training preset
+}
+ai {
+  training {
+    environment: TRAINING_ENV_SIMULATION
+    method: TRAINING_METHOD_EVAL
+    simulator_backend: SIM_BACKEND_ISAAC_SIM
+    eval {
+      algorithm: "rsl_rl"                    # must match training algorithm
+      checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/{{ROBOT_NAME}}_ppo/model_999.pt"  # TODO: path to trained checkpoint
+      num_episodes: 10
+      num_envs: 4
+      render: true
+
+      # =====================================================================
+      # TASK CONFIG -- must be identical to training preset
+      # =====================================================================
+      task_config {
+        task_name: "{{ROBOT_NAME}}"          # TODO: must match training task_name
+        robot {
+          usd_filename: "{{USD_FILENAME}}"   # TODO: must match training usd_filename
+          init_pos_z: 0.5
+          # init_joint_pos {                 # TODO: copy from training preset
+          #   key: ".*"
+          #   value: 0.0
+          # }
+        }
+
+        # Copy rewards and observations from your training preset.
+        rewards {
+          key: "progress"
+          value { weight: 1.0 }
+        }
+        rewards {
+          key: "alive"
+          value { weight: 0.5 }
+        }
+        rewards {
+          key: "action_l2"
+          value { weight: -0.005 }
+        }
+        rewards {
+          key: "energy"
+          value { weight: -0.05 }
+        }
+
+        observations {
+          key: "base_height"
+          value {}
+        }
+        observations {
+          key: "base_lin_vel"
+          value {}
+        }
+        observations {
+          key: "base_ang_vel"
+          value {}
+        }
+        observations {
+          key: "joint_pos_norm"
+          value {}
+        }
+        observations {
+          key: "joint_vel_rel"
+          value {
+            params { key: "scale"  value: 0.2 }
+          }
+        }
+        observations {
+          key: "actions"
+          value {}
+        }
+      }
+
+      # Copy network, sim_physics, termination, reset from training preset.
+      network {
+        actor_hidden_dims: 256
+        actor_hidden_dims: 128
+        actor_hidden_dims: 64
+        critic_hidden_dims: 256
+        critic_hidden_dims: 128
+        critic_hidden_dims: 64
+        activation: "elu"
+      }
+      sim_physics {
+        decimation: 2
+        episode_length_s: 16.0
+        sim_dt: 0.00833
+        action_scale: 5.0
+        env_spacing: 5.0
+        terrain_friction: 1.0
+      }
+      termination {
+        min_root_height: 0.2
+      }
+      reset {
+        joint_pos_range_min: -0.2
+        joint_pos_range_max: 0.2
+        joint_vel_range_min: -0.1
+        joint_vel_range_max: 0.1
+      }
+    }
+  }
+}
