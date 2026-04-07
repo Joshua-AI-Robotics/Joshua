@@ -2,6 +2,7 @@
 
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDir>
+#include <QtCore/QDirIterator>
 #include <QtCore/QItemSelectionModel>
 #include <QtCore/QSet>
 #include <QtCore/QSortFilterProxyModel>
@@ -34,9 +35,15 @@ constexpr auto kDisabledStyle = "QPushButton { background-color:rgb(225, 220, 22
 MonitorTab::MonitorTab(QWidget* parent) : QWidget(parent), ui(new Ui::MonitorTab) {
   ui->setupUi(this);
 
-  // Initialize config_preset list view.
-  QDir config_preset_dir("config/config_preset");
-  QStringList config_preset_files = config_preset_dir.entryList(QDir::Files);
+  // Initialize config_preset list view (recurse into subdirectories).
+  QStringList config_preset_files;
+  QDirIterator it("config/config_preset", {"*.pbtxt"}, QDir::Files, QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    it.next();
+    QDir base("config/config_preset");
+    config_preset_files << base.relativeFilePath(it.filePath());
+  }
+  config_preset_files.sort();
   ui->config_preset_listView->setModel(new QStringListModel(config_preset_files));
 
   // Initialize topic tree view with model + filter

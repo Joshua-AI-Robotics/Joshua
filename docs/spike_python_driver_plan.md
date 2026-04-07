@@ -31,13 +31,13 @@ Proposed edits
   - `CommType` add `BLE = <new_id>`, `USB = <new_id>`
   - Add `BleConfig` / `UsbConfig` messages if you want structured transport config.
 - Add example pbtxt:
-  - `config/config_preset/python_spike_actuator_example.pbtxt`
+  - `config/config_preset/example/python_spike_actuator_example.pbtxt`
 
 Test commands
 1) Build protos:
    - `bazel build //robot/action/proto:... //robot/comm/proto:... //config/proto:...`
 2) Validate pbtxt parsing:
-   - `bazel run //utils:config_loader -- config/config_preset/python_spike_actuator_example.pbtxt`
+   - `bazel run //utils:config_loader -- config/config_preset/example/python_spike_actuator_example.pbtxt`
    - If `config_loader` is not available, use your existing config validation command.
 
 Notes
@@ -47,7 +47,7 @@ Notes
 Completed work
 - Added `SPIKE_MOTOR` actuator type and `SpikeMotorConfig` (`hub_id`, `port`).
 - Added `BLE` to `CommType`.
-- Added example config: `config/config_preset/python_spike_actuator_example.pbtxt`.
+- Added example config: `config/config_preset/example/python_spike_actuator_example.pbtxt`.
 
 ## Phase 2: Python driver implementation (decisions)
 

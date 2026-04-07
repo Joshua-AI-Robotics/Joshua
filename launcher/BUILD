@@ -12,6 +12,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "training_launcher",
+    srcs = ["training_launcher.cc"],
+    hdrs = ["training_launcher.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "@glog",
+    ],
+)
+
 cc_binary(
     name = "joshua_main",
     srcs = ["joshua_main.cc"],
@@ -31,10 +41,12 @@ cc_binary(
         "//simulation:simulation",
         "//simulation:sim_models",
         "//simulation:sim_trajectories",
+        "//ai/train:trainer",
     ],
     visibility = ["//visibility:public"],
     deps = [
         ":simulation_launcher",
+        ":training_launcher",
         "//config:config_utils",
         "//node_generator",
         "@gflags",

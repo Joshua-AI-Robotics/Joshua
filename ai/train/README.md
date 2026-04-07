@@ -29,13 +29,13 @@ DataStore (Data Collection)
 ### Usage
 
 **1. Configuration**
-Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/sample_data_store.pbtxt`).
+Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/example/sample_data_store.pbtxt`).
 
 **2. Running the Data Subscriber**
 The `ros2/data_subscriber.py` node wraps the DataStore.
 ```bash
 # Launch the subscriber
-bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
+bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
 ```
 
 **3. Controlling Recording**
@@ -157,22 +157,38 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
 ### Running Training
 
-```bash
-# Ant (RSL-RL)
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
+The recommended way is through the unified `joshua_main` launcher, which
+dispatches to the trainer automatically when the config uses
+`operation_mode: MODE_TRAINING`:
 
-# Trileg (skrl)
+```bash
+# Ant (RSL-RL) -- via unified launcher
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
+
+# Trileg (skrl) -- via unified launcher
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/trileg/trileg_train_isaac_full_skrl.pbtxt
+```
+
+Direct invocation also works for development:
+
+```bash
+# Ant (RSL-RL) -- direct
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg_train_isaac_full_skrl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Running Evaluation
 
 ```bash
 # Ant (RSL-RL) -- update checkpoint_path in the pbtxt first
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
+
+# Direct invocation also works:
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Supported RL Libraries
@@ -193,6 +209,10 @@ no Python task files are needed. The pipeline flows like this:
 .pbtxt preset
     │
     ▼
+joshua_main         (C++ launcher)
+    │  Loads config, sees MODE_TRAINING
+    │  Resolves and fork/execs trainer binary
+    ▼
 trainer.py          (Bazel / Python 3.10)
     │  Parses proto, dispatches to isaac_launcher.py
     ▼
@@ -212,12 +232,16 @@ Isaac Lab PPO training loop (RSL-RL or skrl)
 Checkpoints saved to /tmp/joshua_checkpoints/
 ```
 
+Ctrl+C (SIGINT) cleanly propagates through the entire process tree --
+`joshua_main` forwards the signal to the trainer's process group, which
+in turn terminates Isaac Sim and all child processes.
+
 
 Configuration Reference
 ------------------------
 
 All training parameters live in `ai/proto/training.proto` and are set
-via `.pbtxt` presets in `config/config_preset/`.
+via `.pbtxt` presets in `config/config_preset/`, organized by robot.
 
 ### task_config (robot + environment definition)
 
@@ -349,7 +373,7 @@ How to Add a New Robot
    environment:
 
 ```bash
-config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 The preset must contain:
@@ -363,8 +387,8 @@ See the existing ant and trileg presets for complete examples.
 3. **Run training**:
 
 ```bash
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 4. **Create an eval preset** that mirrors the training config but uses
@@ -424,7 +448,9 @@ Key Files
 
 | File | Runs in | Purpose |
 |------|---------|---------|
-| `ai/train/trainer.py` | Joshua (Bazel) | Top-level dispatcher |
+| `launcher/joshua_main.cc` | Joshua (C++) | Unified entry point, dispatches by operation mode |
+| `launcher/training_launcher.cc` | Joshua (C++) | Resolves and fork/execs the trainer binary |
+| `ai/train/trainer.py` | Joshua (Bazel) | Training dispatcher (RL, imitation, eval) |
 | `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, subprocess launch |
 | `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge |
 | `ai/train/isaac_lab/task_builder.py` | Isaac Lab (venv) | Generic proto-driven task builder |
@@ -433,7 +459,7 @@ Key Files
 | `ai/train/isaac_lab/terms/` | Isaac Lab (venv) | Reusable MDP term factories |
 | `ai/proto/training.proto` | Both | Full config schema |
 | `simulation/models/*.usda` | Isaac Lab (venv) | Local USD robot assets |
-| `config/config_preset/*.pbtxt` | Joshua (Bazel) | Training/eval presets |
+| `config/config_preset/**/*.pbtxt` | Joshua (Bazel) | Training/eval presets (organized by robot) |
 
 
 Troubleshooting

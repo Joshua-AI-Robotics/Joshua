@@ -28,7 +28,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Config Preset List (config/config_preset/*)</string>
+         <string>Config Preset List (config/config_preset/**/*)</string>
         </property>
        </widget>
       </item>

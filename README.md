@@ -6,7 +6,7 @@ Project Joshua is a user‑friendly, modular framework that turns a single confi
 ## Core Concepts
 ![Project Joshua Core Concept](assets/images/project_joshua_diagram_napkin.png)
 
-Project Joshua uses ROS2 and Protocol Buffers. A single configuration file is the source of truth for your robot: it declares actions (e.g., number of actuators, actuator type), perceptions (e.g., cameras, encoders), AI policy, and operation mode. For example, a file like [`config/config_preset/so100_mock_inference.pbtxt`](config/config_preset/so100_mock_inference.pbtxt) defines the entire robot and AI system. From this one file, the system instantiates the required ROS2 nodes and runs them to make the robot operational.
+Project Joshua uses ROS2 and Protocol Buffers. A single configuration file is the source of truth for your robot: it declares actions (e.g., number of actuators, actuator type), perceptions (e.g., cameras, encoders), AI policy, and operation mode. For example, a file like [`config/config_preset/so100/so100_teleoperate.pbtxt`](config/config_preset/so100/so100_teleoperate.pbtxt) defines the entire robot and AI system. From this one file, the system instantiates the required ROS2 nodes and runs them to make the robot operational.
 
 The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load the configuration, build required targets, launch the selected preset, and monitor running nodes and their publish/subscribe topics—all from one place.
 
@@ -78,7 +78,7 @@ The Joshua Control Panel (Qt6 C++ GUI) ties it together: you can create or load 
 
 ### Example: Running SO100 Teleoperation with Follower and Lead Arm
 
-This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100_teleoperate.pbtxt`](config/config_preset/so100_teleoperate.pbtxt).
+This example demonstrates how to launch the SO100 robot in teleoperation mode, with both the follower and lead arm managed according to your configuration file. The configuration file is predefined at [`config/config_preset/so100/so100_teleoperate.pbtxt`](config/config_preset/so100/so100_teleoperate.pbtxt).
 
 *Please make sure to calibrate the operational limits for your servo motors.*
 
@@ -90,7 +90,7 @@ bazel run launcher:joshua_main
 
 ### Simplified Configuration
 
-At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., [so100_with_example_ai.pbtxt](`config/config_preset/so100_with_example_ai.pbtxt`)) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
+At the core of Project Joshua's ease of use is its single configuration file approach. A simple text file (e.g., [`so100/so100_teleoperate.pbtxt`](config/config_preset/so100/so100_teleoperate.pbtxt)) is all that's needed to define and orchestrate an entire robotic AI system. This eliminates the need for extensive manual setup and reduces potential for configuration errors.
 
 ### Automated System Setup
 
@@ -123,14 +123,14 @@ Designed with scalability in mind, Project Joshua can accommodate a wide range o
 
 ## Simulation & RL Training
 
-Joshua includes a simulation and reinforcement learning pipeline supporting two physics backends.
+Joshua includes a simulation and reinforcement learning pipeline supporting two physics backends. All modes are accessible through the unified `joshua_main` launcher -- the config's `operation_mode` determines what runs.
 
 ### MuJoCo / MJX (Interactive Viewer)
 
 View and interact with MuJoCo models directly:
 
 ```bash
-bazel run //simulation:sim -- --config config/config_preset/ant_sim_interactive.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
 ### MJX Training (GPU-Parallel JAX)
@@ -138,7 +138,7 @@ bazel run //simulation:sim -- --config config/config_preset/ant_sim_interactive.
 Train RL policies on MuJoCo XLA with PPO:
 
 ```bash
-bazel run //ai/train:trainer -- --config config/config_preset/ant_train_mjx.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_mjx.pbtxt
 ```
 
 ### Isaac Sim / Isaac Lab Training
@@ -151,23 +151,33 @@ export ISAAC_LAB_PATH=~/IsaacLab
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
 # Train Ant with skrl PPO
-bazel run //ai/train:trainer -- --config config/config_preset/ant_train_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 
 # Evaluate a trained checkpoint
-bazel run //ai/train:trainer -- --config config/config_preset/ant_eval_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_eval_isaac_full_skrl.pbtxt
+```
+
+The trainer can also be invoked directly for development:
+
+```bash
+bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 ```
 
 ### Available Configs
 
 | Config | Backend | What it does |
 |--------|---------|-------------|
-| `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant_train_mjx.pbtxt` | MJX (JAX) | Train Ant PPO on GPU |
-| `ant_eval_mjx.pbtxt` | MJX (JAX) | Evaluate trained MJX policy |
-| `ant_train_isaac.pbtxt` | Isaac Sim | Train Ant with skrl/RSL-RL |
-| `ant_eval_isaac.pbtxt` | Isaac Sim | Evaluate Isaac Sim policy |
-| `trileg_train_isaac.pbtxt` | Isaac Sim | Train 3-legged robot |
-| `trileg_eval_isaac.pbtxt` | Isaac Sim | Evaluate 3-legged robot |
+| `ant/ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
+| `ant/ant_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train Ant (skrl PPO) |
+| `ant/ant_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train Ant (RSL-RL PPO) |
+| `ant/ant_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate Ant (skrl) |
+| `ant/ant_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate Ant (RSL-RL) |
+| `trileg/trileg_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train 3-legged robot (skrl) |
+| `trileg/trileg_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train 3-legged robot (RSL-RL) |
+| `trileg/trileg_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (skrl) |
+| `trileg/trileg_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (RSL-RL) |
+| `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
+| `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
 For full documentation on the training pipeline, simulator backends, and how to add new tasks, see [`ai/train/README.md`](ai/train/README.md).
 

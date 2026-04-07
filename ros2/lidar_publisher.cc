@@ -156,6 +156,6 @@ class LidarPublisher : public rclcpp::Node {
 
 int main(int argc, char* argv[]) {
   // For test run:
-  // bazel run ros2:lidar_publisher -- test_lidar 1 config/config_preset/lds01_lidar.pbtxt
+  // bazel run ros2:lidar_publisher -- test_lidar 1 config/config_preset/example/lds01_lidar.pbtxt
   return ros2_utils::RunNode<LidarPublisher>(argc, argv, "lidar_publisher");
 }

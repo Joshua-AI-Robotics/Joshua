@@ -72,7 +72,7 @@ class OperationalLimitCalibration : public rclcpp::Node {
 int main(int argc, char* argv[]) {
   // For test run:
   // bazel run ros2:operational_limit_calibration -- test_encoder 3
-  // config/config_preset/calibrate_so100_operational_limit.pbtxt
+  // config/config_preset/so100/calibrate_so100_leader_arm_operational_limit.pbtxt
   return ros2_utils::RunNode<OperationalLimitCalibration>(
       argc, argv, "operational_limit_calibration");
 }
