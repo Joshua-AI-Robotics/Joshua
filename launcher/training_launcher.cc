@@ -1,4 +1,4 @@
-#include "launcher/simulation_launcher.h"
+#include "launcher/training_launcher.h"
 
 #include <glog/logging.h>
 #include <limits.h>
@@ -8,12 +8,9 @@
 
 #include <cstdlib>
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include "node_generator/node_generator.h"
 
 namespace launcher {
 namespace {
@@ -48,22 +45,24 @@ std::optional<std::filesystem::path> GetRunfilesRoot() {
   return std::nullopt;
 }
 
-std::optional<std::filesystem::path> ResolveSimulationBinary() {
+std::optional<std::filesystem::path> ResolveTrainerBinary() {
   std::string self = GetSelfExePath();
   if (self.empty()) return std::nullopt;
 
   std::filesystem::path exe_dir = std::filesystem::path(self).parent_path();
   if (!exe_dir.has_parent_path()) return std::nullopt;
 
+  // Look for ai/train/trainer under bazel-bin sibling directory.
   std::filesystem::path bazel_bin_root = exe_dir.parent_path();
-  std::filesystem::path candidate = bazel_bin_root / "simulation" / "simulation";
+  std::filesystem::path candidate = bazel_bin_root / "ai" / "train" / "trainer";
   if (std::filesystem::exists(candidate) && access(candidate.c_str(), X_OK) == 0) {
     return candidate;
   }
 
+  // Fall back to runfiles lookup.
   if (auto runfiles = GetRunfilesRoot()) {
     for (const char* ws : {"_main", "__main__"}) {
-      std::filesystem::path c = *runfiles / ws / "simulation" / "simulation";
+      std::filesystem::path c = *runfiles / ws / "ai" / "train" / "trainer";
       if (std::filesystem::exists(c) && access(c.c_str(), X_OK) == 0) {
         return c;
       }
@@ -73,11 +72,11 @@ std::optional<std::filesystem::path> ResolveSimulationBinary() {
   return std::nullopt;
 }
 
-pid_t ForkExecSimulation(const std::filesystem::path& sim_bin, const std::string& config_path) {
-  std::string exec_path = sim_bin.string();
+pid_t ForkExecTrainer(const std::filesystem::path& trainer_bin, const std::string& config_path) {
+  std::string exec_path = trainer_bin.string();
 
   std::filesystem::path runfiles_dir =
-      sim_bin.parent_path() / (sim_bin.filename().string() + ".runfiles");
+      trainer_bin.parent_path() / (trainer_bin.filename().string() + ".runfiles");
 
   std::vector<std::pair<std::string, std::string>> env_set;
   std::vector<std::string> env_unset;
@@ -122,52 +121,34 @@ pid_t ForkExecSimulation(const std::filesystem::path& sim_bin, const std::string
     if (!work_dir.empty()) chdir(work_dir.c_str());
 
     execv(exec_path.c_str(), argv_ptrs.data());
-    const char* msg = "Failed to execute simulation binary\n";
+    const char* msg = "Failed to execute trainer binary\n";
     write(STDERR_FILENO, msg, strlen(msg));
     _exit(1);
   }
   return pid;
 }
 
-bool HasPerceptionNodes(const config::Config& config) {
-  return config.robot().perceptions().single_perceptions_size() > 0;
-}
-
 }  // namespace
 
-int RunSimulation(const std::string& config_path, const config::Config& config) {
-  auto sim_bin = ResolveSimulationBinary();
-  if (!sim_bin) {
-    LOG(ERROR) << "Could not locate simulation/simulation binary. "
-               << "Make sure //simulation:simulation is built.";
+int RunTraining(const std::string& config_path, const config::Config& config) {
+  auto trainer_bin = ResolveTrainerBinary();
+  if (!trainer_bin) {
+    LOG(ERROR) << "Could not locate ai/train/trainer binary. "
+               << "Make sure //ai/train:trainer is built.";
     return 1;
   }
-  LOG(INFO) << "Resolved simulation binary: " << sim_bin->string();
+  LOG(INFO) << "Resolved trainer binary: " << trainer_bin->string();
 
-  std::unique_ptr<node_generator::NodeGenerator> ng;
+  LOG(INFO) << "Launching trainer with config: " << config_path;
 
-  if (HasPerceptionNodes(config)) {
-    LOG(INFO) << "Config has robot perceptions -- launching encoder publishers "
-              << "for mirror mode via NodeGenerator";
-    ng = std::make_unique<node_generator::NodeGenerator>(config_path);
-    if (!ng->Initialize().ok()) {
-      LOG(ERROR) << "Failed to initialize NodeGenerator for perception nodes";
-      return 1;
-    }
-    if (!ng->LaunchAllNodes().ok()) {
-      LOG(WARNING) << "NodeGenerator launched no perception nodes";
-    }
-  }
-
-  pid_t sim_pid = ForkExecSimulation(*sim_bin, config_path);
-  if (sim_pid <= 0) {
-    LOG(ERROR) << "Failed to fork simulation process";
-    if (ng) ng->Shutdown();
+  pid_t trainer_pid = ForkExecTrainer(*trainer_bin, config_path);
+  if (trainer_pid <= 0) {
+    LOG(ERROR) << "Failed to fork trainer process";
     return 1;
   }
-  LOG(INFO) << "Simulation launched with PID: " << sim_pid;
+  LOG(INFO) << "Trainer launched with PID: " << trainer_pid;
 
-  g_child_pid = sim_pid;
+  g_child_pid = trainer_pid;
 
   struct sigaction sa = {};
   sa.sa_handler = ForwardSignalToChild;
@@ -179,19 +160,14 @@ int RunSimulation(const std::string& config_path, const config::Config& config) 
   sigaction(SIGTERM, &sa, &old_term);
 
   int status = 0;
-  waitpid(sim_pid, &status, 0);
+  waitpid(trainer_pid, &status, 0);
 
   sigaction(SIGINT, &old_int, nullptr);
   sigaction(SIGTERM, &old_term, nullptr);
   g_child_pid = 0;
 
   int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-  LOG(INFO) << "Simulation exited with code: " << exit_code;
-
-  if (ng) {
-    LOG(INFO) << "Shutting down perception nodes ...";
-    ng->Shutdown();
-  }
+  LOG(INFO) << "Trainer exited with code: " << exit_code;
 
   return exit_code;
 }
