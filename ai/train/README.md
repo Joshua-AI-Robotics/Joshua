@@ -157,20 +157,36 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
 ### Running Training
 
+The recommended way is through the unified `joshua_main` launcher, which
+dispatches to the trainer automatically when the config uses
+`operation_mode: MODE_TRAINING`:
+
 ```bash
-# Ant (RSL-RL)
-bazel run //ai/train:trainer -- \
+# Ant (RSL-RL) -- via unified launcher
+bazel run //launcher:joshua_main -- \
     --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
 
-# Trileg (skrl)
-bazel run //ai/train:trainer -- \
+# Trileg (skrl) -- via unified launcher
+bazel run //launcher:joshua_main -- \
     --config config/config_preset/trileg_train_isaac_full_skrl.pbtxt
+```
+
+Direct invocation also works for development:
+
+```bash
+# Ant (RSL-RL) -- direct
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Running Evaluation
 
 ```bash
 # Ant (RSL-RL) -- update checkpoint_path in the pbtxt first
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+
+# Direct invocation also works:
 bazel run //ai/train:trainer -- \
     --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
@@ -193,6 +209,10 @@ no Python task files are needed. The pipeline flows like this:
 .pbtxt preset
     │
     ▼
+joshua_main         (C++ launcher)
+    │  Loads config, sees MODE_TRAINING
+    │  Resolves and fork/execs trainer binary
+    ▼
 trainer.py          (Bazel / Python 3.10)
     │  Parses proto, dispatches to isaac_launcher.py
     ▼
@@ -211,6 +231,10 @@ Isaac Lab PPO training loop (RSL-RL or skrl)
     ▼
 Checkpoints saved to /tmp/joshua_checkpoints/
 ```
+
+Ctrl+C (SIGINT) cleanly propagates through the entire process tree --
+`joshua_main` forwards the signal to the trainer's process group, which
+in turn terminates Isaac Sim and all child processes.
 
 
 Configuration Reference
@@ -363,7 +387,7 @@ See the existing ant and trileg presets for complete examples.
 3. **Run training**:
 
 ```bash
-bazel run //ai/train:trainer -- \
+bazel run //launcher:joshua_main -- \
     --config config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
@@ -424,7 +448,9 @@ Key Files
 
 | File | Runs in | Purpose |
 |------|---------|---------|
-| `ai/train/trainer.py` | Joshua (Bazel) | Top-level dispatcher |
+| `launcher/joshua_main.cc` | Joshua (C++) | Unified entry point, dispatches by operation mode |
+| `launcher/training_launcher.cc` | Joshua (C++) | Resolves and fork/execs the trainer binary |
+| `ai/train/trainer.py` | Joshua (Bazel) | Training dispatcher (RL, imitation, eval) |
 | `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, subprocess launch |
 | `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge |
 | `ai/train/isaac_lab/task_builder.py` | Isaac Lab (venv) | Generic proto-driven task builder |

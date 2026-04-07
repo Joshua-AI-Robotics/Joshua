@@ -123,14 +123,14 @@ Designed with scalability in mind, Project Joshua can accommodate a wide range o
 
 ## Simulation & RL Training
 
-Joshua includes a simulation and reinforcement learning pipeline supporting two physics backends.
+Joshua includes a simulation and reinforcement learning pipeline supporting two physics backends. All modes are accessible through the unified `joshua_main` launcher -- the config's `operation_mode` determines what runs.
 
 ### MuJoCo / MJX (Interactive Viewer)
 
 View and interact with MuJoCo models directly:
 
 ```bash
-bazel run //simulation:sim -- --config config/config_preset/ant_sim_interactive.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant_sim_interactive.pbtxt
 ```
 
 ### MJX Training (GPU-Parallel JAX)
@@ -138,7 +138,7 @@ bazel run //simulation:sim -- --config config/config_preset/ant_sim_interactive.
 Train RL policies on MuJoCo XLA with PPO:
 
 ```bash
-bazel run //ai/train:trainer -- --config config/config_preset/ant_train_mjx.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant_train_mjx.pbtxt
 ```
 
 ### Isaac Sim / Isaac Lab Training
@@ -151,10 +151,16 @@ export ISAAC_LAB_PATH=~/IsaacLab
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
 # Train Ant with skrl PPO
-bazel run //ai/train:trainer -- --config config/config_preset/ant_train_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant_train_isaac.pbtxt
 
 # Evaluate a trained checkpoint
-bazel run //ai/train:trainer -- --config config/config_preset/ant_eval_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant_eval_isaac.pbtxt
+```
+
+The trainer can also be invoked directly for development:
+
+```bash
+bazel run //ai/train:trainer -- --config config/config_preset/ant_train_isaac.pbtxt
 ```
 
 ### Available Configs
@@ -166,6 +172,10 @@ bazel run //ai/train:trainer -- --config config/config_preset/ant_eval_isaac.pbt
 | `ant_eval_mjx.pbtxt` | MJX (JAX) | Evaluate trained MJX policy |
 | `ant_train_isaac.pbtxt` | Isaac Sim | Train Ant with skrl/RSL-RL |
 | `ant_eval_isaac.pbtxt` | Isaac Sim | Evaluate Isaac Sim policy |
+| `ant_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train Ant (fully proto-defined, skrl) |
+| `ant_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train Ant (fully proto-defined, RSL-RL) |
+| `ant_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate Ant (fully proto-defined, skrl) |
+| `ant_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate Ant (fully proto-defined, RSL-RL) |
 | `trileg_train_isaac.pbtxt` | Isaac Sim | Train 3-legged robot |
 | `trileg_eval_isaac.pbtxt` | Isaac Sim | Evaluate 3-legged robot |
 
