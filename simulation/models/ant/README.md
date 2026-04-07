@@ -82,15 +82,15 @@ Quick Start
 ```bash
 # Train with RSL-RL
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
 
 # Train with skrl
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac_full_skrl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 
 # Evaluate (update checkpoint_path in the pbtxt first)
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
 
 Reward Structure

@@ -136,6 +136,7 @@ class CameraPublisher : public rclcpp::Node {
 
 int main(int argc, char* argv[]) {
   // For test run:
-  // bazel run ros2:camera_publisher -- test_camera 1 config/config_preset/publish_camera.pbtxt
+  // bazel run ros2:camera_publisher -- test_camera 1
+  // config/config_preset/example/publish_camera.pbtxt
   return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
 }

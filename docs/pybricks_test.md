@@ -57,7 +57,7 @@ In one terminal:
 ```bash
 conda deactivate
 source /opt/ros/humble/setup.bash
-bazel run //ros2:actuator_subscriber_py -- actuator_subscriber 901 config/config_preset/python_spike_actuator_example.pbtxt
+bazel run //ros2:actuator_subscriber_py -- actuator_subscriber 901 config/config_preset/example/python_spike_actuator_example.pbtxt
 ```
 You should see:
 ```

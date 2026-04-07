@@ -18,7 +18,7 @@ TEST(ConfigValidationTest, ValidateAllConfigPresets) {
   }
 
   int checked_files = 0;
-  for (const auto& entry : fs::directory_iterator(directory)) {
+  for (const auto& entry : fs::recursive_directory_iterator(directory)) {
     if (entry.path().extension() == ".pbtxt") {
       const std::string config_path = entry.path().string();
       auto result = config::config_util::LoadConfig(config_path);

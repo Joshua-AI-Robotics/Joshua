@@ -29,13 +29,13 @@ DataStore (Data Collection)
 ### Usage
 
 **1. Configuration**
-Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/sample_data_store.pbtxt`).
+Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/example/sample_data_store.pbtxt`).
 
 **2. Running the Data Subscriber**
 The `ros2/data_subscriber.py` node wraps the DataStore.
 ```bash
 # Launch the subscriber
-bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
+bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
 ```
 
 **3. Controlling Recording**
@@ -164,11 +164,11 @@ dispatches to the trainer automatically when the config uses
 ```bash
 # Ant (RSL-RL) -- via unified launcher
 bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
 
 # Trileg (skrl) -- via unified launcher
 bazel run //launcher:joshua_main -- \
-    --config config/config_preset/trileg_train_isaac_full_skrl.pbtxt
+    --config config/config_preset/trileg/trileg_train_isaac_full_skrl.pbtxt
 ```
 
 Direct invocation also works for development:
@@ -176,7 +176,7 @@ Direct invocation also works for development:
 ```bash
 # Ant (RSL-RL) -- direct
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Running Evaluation
@@ -184,11 +184,11 @@ bazel run //ai/train:trainer -- \
 ```bash
 # Ant (RSL-RL) -- update checkpoint_path in the pbtxt first
 bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
 
 # Direct invocation also works:
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Supported RL Libraries
@@ -241,7 +241,7 @@ Configuration Reference
 ------------------------
 
 All training parameters live in `ai/proto/training.proto` and are set
-via `.pbtxt` presets in `config/config_preset/`.
+via `.pbtxt` presets in `config/config_preset/`, organized by robot.
 
 ### task_config (robot + environment definition)
 
@@ -373,7 +373,7 @@ How to Add a New Robot
    environment:
 
 ```bash
-config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 The preset must contain:
@@ -388,7 +388,7 @@ See the existing ant and trileg presets for complete examples.
 
 ```bash
 bazel run //launcher:joshua_main -- \
-    --config config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 4. **Create an eval preset** that mirrors the training config but uses
@@ -459,7 +459,7 @@ Key Files
 | `ai/train/isaac_lab/terms/` | Isaac Lab (venv) | Reusable MDP term factories |
 | `ai/proto/training.proto` | Both | Full config schema |
 | `simulation/models/*.usda` | Isaac Lab (venv) | Local USD robot assets |
-| `config/config_preset/*.pbtxt` | Joshua (Bazel) | Training/eval presets |
+| `config/config_preset/**/*.pbtxt` | Joshua (Bazel) | Training/eval presets (organized by robot) |
 
 
 Troubleshooting

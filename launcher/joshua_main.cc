@@ -7,7 +7,7 @@
 #include "node_generator/node_generator.h"
 
 DEFINE_string(config,
-              "config/config_preset/so100_teleoperate.pbtxt",
+              "config/config_preset/so100/so100_teleoperate.pbtxt",
               "Path to the robot config file");
 
 int main(int argc, char* argv[]) {
