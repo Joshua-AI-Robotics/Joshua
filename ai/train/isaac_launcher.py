@@ -18,9 +18,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
-from typing import Optional
 
 import glog
 from google.protobuf import json_format
@@ -31,11 +29,13 @@ _ISAAC_RUNNER = os.path.join(
     os.path.dirname(__file__), "isaac_runner.py"
 )
 
-_CHECKPOINT_DIR = "/tmp/joshua_checkpoints"
-
 
 def _is_windows() -> bool:
     return os.name == "nt"
+
+
+def _default_checkpoint_dir() -> str:
+    return os.path.join(tempfile.gettempdir(), "joshua_checkpoints")
 
 
 def _find_isaac_python() -> str:
@@ -120,7 +120,7 @@ def _config_to_json(config: training_pb2.TrainingConfig) -> dict:
         "algorithm": rl.algorithm or "rsl_rl",
         "render": rl.render,
         "frame_skip": rl.frame_skip or 2,
-        "checkpoint_dir": rl.checkpoint_dir or _CHECKPOINT_DIR,
+        "checkpoint_dir": rl.checkpoint_dir or _default_checkpoint_dir(),
         "save_interval": rl.save_interval or 0,
         "seed": rl.seed or 0,
     }
@@ -151,7 +151,7 @@ def _launch_subprocess(
 ) -> None:
     """Write JSON config and run isaac_runner.py as a subprocess."""
     isaac_python = _find_isaac_python()
-    checkpoint_dir = cfg_dict.get("checkpoint_dir", _CHECKPOINT_DIR)
+    checkpoint_dir = cfg_dict.get("checkpoint_dir", _default_checkpoint_dir())
 
     os.makedirs(checkpoint_dir, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -215,7 +215,7 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
     _launch_subprocess(cfg_dict, "joshua_isaac_", cfg_dict["render"])
 
     save_name = cfg_dict.get("save_path", f"{cfg_dict['task']}_isaac_ppo")
-    checkpoint_dir = cfg_dict.get("checkpoint_dir", _CHECKPOINT_DIR)
+    checkpoint_dir = cfg_dict.get("checkpoint_dir", _default_checkpoint_dir())
     meta_path = os.path.join(checkpoint_dir, save_name + "_meta.json")
     if os.path.isfile(meta_path):
         with open(meta_path) as f:
@@ -240,7 +240,7 @@ def launch_isaac_eval(config: training_pb2.TrainingConfig) -> None:
         "num_envs": eval_cfg.num_envs or 32,
         "num_episodes": eval_cfg.num_episodes or 5,
         "render": eval_cfg.render,
-        "checkpoint_dir": config.rl.checkpoint_dir or _CHECKPOINT_DIR,
+        "checkpoint_dir": config.rl.checkpoint_dir or _default_checkpoint_dir(),
     }
 
     for field, key in [
