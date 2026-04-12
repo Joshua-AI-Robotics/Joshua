@@ -163,10 +163,12 @@ The trainer can also be invoked directly for development:
 bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 ```
 
-### Windows Native Isaac Lab Notes
+### Windows Native Isaac Lab Workflow
 
-If you are running Joshua from Windows, the Isaac launcher supports a
-native Windows Isaac Lab install in addition to the Linux shell path.
+If you are running Joshua from Windows, use this section as the
+Windows-specific source of truth for Isaac Lab and local playback.
+Joshua's Isaac launcher supports a native Windows Isaac Lab install in
+addition to the Linux shell path.
 
 For Isaac Lab installation itself, follow NVIDIA's official Windows setup
 guide first:
@@ -205,7 +207,7 @@ Current status on this Windows setup:
 
 - the native Isaac Lab training smoke test for `Isaac-Ant-v0` worked
 - the official rendered Isaac Lab `play.py` path was not the validated local playback path on this machine
-- the current local playback workaround is to use the MuJoCo-native Ant scripts below
+- the current local playback workaround is to use the MuJoCo-native Ant scripts in this Windows section
 
 ### Available Configs
 
@@ -223,10 +225,13 @@ Current status on this Windows setup:
 | `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 | `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
-### MuJoCo-native Ant Scripts
+#### Windows playback workaround: MuJoCo-native Ant scripts
 
-For a lightweight local MuJoCo training/playback loop, use the Python
-scripts in [`ai/train`](ai/train):
+If Isaac rendering is unreliable on Windows, use the lightweight
+MuJoCo-native training/playback loop below. This is the validated local
+workaround for now.
+
+The scripts live in [`ai/train`](ai/train):
 
 ```powershell
 $env:PYTHONPATH = "C:\path\to\Joshua"
