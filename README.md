@@ -195,6 +195,12 @@ The subprocess launcher in [`ai/train/isaac_launcher.py`](ai/train/isaac_launche
 - keep using `isaaclab.sh` on non-Windows systems
 - still accept an explicit `ISAAC_LAB_PYTHON` override on either platform
 
+Current status on this Windows setup:
+
+- the native Isaac Lab training smoke test for `Isaac-Ant-v0` worked
+- the official rendered Isaac Lab `play.py` path was not the validated local playback path on this machine
+- the current local playback workaround is to use the MuJoCo-native Ant scripts below
+
 ### Available Configs
 
 | Config | Backend | What it does |
