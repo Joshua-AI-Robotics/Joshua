@@ -207,7 +207,7 @@ Current status on this Windows setup:
 
 - the native Isaac Lab training smoke test for `Isaac-Ant-v0` worked
 - the official rendered Isaac Lab `play.py` path was not the validated local playback path on this machine
-- the current local playback workaround is to use the MuJoCo-native Ant scripts in this Windows section
+- the current local playback workaround is MuJoCo trajectory replay
 
 ### Available Configs
 
@@ -225,23 +225,23 @@ Current status on this Windows setup:
 | `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 | `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
-#### Windows playback workaround: MuJoCo-native Ant scripts
+#### Windows playback workaround: MuJoCo Ant replay
 
-If Isaac rendering is unreliable on Windows, use the lightweight
-MuJoCo-native training/playback loop below. This is the validated local
-workaround for now.
+If Isaac rendering is unreliable on Windows, keep training in Isaac Lab
+through Joshua's normal `.pbtxt` / `trainer.py` flow and use MuJoCo only
+for local playback.
 
-The scripts live in [`ai/train`](ai/train):
-
-```powershell
-$env:PYTHONPATH = "C:\path\to\Joshua"
-C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\mujoco_ant_train.py --timesteps 100000 --log_dir C:\path\to\Joshua\logs\mujoco_ant --experiment_name ant_walk
-```
+The replay helper in [`ai/train/mujoco_ant_play.py`](ai/train/mujoco_ant_play.py)
+wraps Joshua's existing passive MuJoCo viewer. Give it an exported
+trajectory CSV (rows = timesteps, columns = actuator commands):
 
 ```powershell
 $env:PYTHONPATH = "C:\path\to\Joshua"
-C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\mujoco_ant_play.py --checkpoint C:\path\to\Joshua\logs\mujoco_ant\ant_walk\final_policy.pt --episodes 3
+C:\path\to\env_isaaclab\Scripts\python.exe C:\path\to\Joshua\ai\train\mujoco_ant_play.py --trajectory_csv C:\path\to\ant_rollout.csv --speed 0.25
 ```
+
+This keeps Isaac as the training backend and uses MuJoCo only as a
+lightweight playback fallback.
 
 For full documentation on the training pipeline, simulator backends, and how to add new tasks, see [`ai/train/README.md`](ai/train/README.md).
 
