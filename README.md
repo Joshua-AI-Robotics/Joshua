@@ -168,6 +168,12 @@ bazel run //ai/train:trainer -- --config config/config_preset/ant/ant_train_isaa
 If you are running Joshua from Windows, the Isaac launcher supports a
 native Windows Isaac Lab install in addition to the Linux shell path.
 
+For Isaac Lab installation itself, follow NVIDIA's official Windows setup
+guide first:
+
+- Isaac Lab install guide: <https://isaac-sim.github.io/IsaacLab/main/source/setup/quickstart.html>
+- Isaac Lab pip/source installation details: <https://isaac-sim.github.io/IsaacLab/develop/source/setup/installation/pip_installation.html>
+
 Set PowerShell environment variables to your local Isaac install:
 
 ```powershell
