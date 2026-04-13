@@ -30,6 +30,7 @@ MODULE.bazel.lock
 # Python bytecode
 __pycache__/
 *.pyc
+*_pb2.py
 
 # MuJoCo logs
 MUJOCO_LOG.TXT
@@ -38,6 +39,11 @@ ui/public/proto-schema*
 
 # Build output
 dist/
+
+# Local experiment artifacts
+/logs/
+/simulation/trajectories/*.csv
+/config/config_preset/**/*_tmp.pbtxt
 
 # Ignore MAC OS files
 .DS_Store

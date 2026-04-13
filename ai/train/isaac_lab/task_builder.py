@@ -19,7 +19,6 @@ from typing import Any
 import gymnasium as gym
 
 from isaac_lab import terms
-from isaac_lab.rsl_rl_config import build_rsl_rl_cfg
 from isaac_lab.env_builder import (
     build_env_cfg,
     build_robot_from_usd,
@@ -190,38 +189,46 @@ def build_task_from_config(
         physics_restitution=0.0,
     )
 
-    ppo = cfg.get("ppo", {})
-    net = cfg.get("network", {})
-    agent_cfg_cls = build_rsl_rl_cfg(
-        max_iterations=cfg.get("max_iterations", 0) or 1000,
-        num_steps_per_env=ppo.get("num_steps_per_env", 32),
-        save_interval=cfg.get("save_interval", 50),
-        experiment_name=task_name,
-        actor_hidden_dims=list(net.get("actor_hidden_dims", [256, 128, 64])),
-        critic_hidden_dims=list(net.get("critic_hidden_dims", [256, 128, 64])),
-        activation=net.get("activation", "elu"),
-        init_noise_std=net.get("init_noise_std", 1.0),
-        learning_rate=ppo.get("learning_rate", 5e-4),
-        entropy_coef=ppo.get("entropy_coef", 0.0),
-        num_learning_epochs=ppo.get("num_learning_epochs", 5),
-        num_mini_batches=ppo.get("num_minibatches", 4),
-        clip_param=ppo.get("clip_epsilon", 0.2),
-        gamma=ppo.get("gamma", 0.99),
-        lam=ppo.get("gae_lambda", 0.95),
-        desired_kl=ppo.get("desired_kl", 0.01),
-        max_grad_norm=ppo.get("max_grad_norm", 1.0),
-        schedule=ppo.get("schedule", "adaptive"),
-        seed=cfg.get("seed", 42),
-    )
+    algorithm = cfg.get("algorithm", "rsl_rl")
+    agent_cfg_cls = None
+    if algorithm != "skrl":
+        from isaac_lab.rsl_rl_config import build_rsl_rl_cfg
+
+        ppo = cfg.get("ppo", {})
+        net = cfg.get("network", {})
+        agent_cfg_cls = build_rsl_rl_cfg(
+            max_iterations=cfg.get("max_iterations", 0) or 1000,
+            num_steps_per_env=ppo.get("num_steps_per_env", 32),
+            save_interval=cfg.get("save_interval", 50),
+            experiment_name=task_name,
+            actor_hidden_dims=list(net.get("actor_hidden_dims", [256, 128, 64])),
+            critic_hidden_dims=list(net.get("critic_hidden_dims", [256, 128, 64])),
+            activation=net.get("activation", "elu"),
+            init_noise_std=net.get("init_noise_std", 1.0),
+            learning_rate=ppo.get("learning_rate", 5e-4),
+            entropy_coef=ppo.get("entropy_coef", 0.0),
+            num_learning_epochs=ppo.get("num_learning_epochs", 5),
+            num_mini_batches=ppo.get("num_minibatches", 4),
+            clip_param=ppo.get("clip_epsilon", 0.2),
+            gamma=ppo.get("gamma", 0.99),
+            lam=ppo.get("gae_lambda", 0.95),
+            desired_kl=ppo.get("desired_kl", 0.01),
+            max_grad_norm=ppo.get("max_grad_norm", 1.0),
+            schedule=ppo.get("schedule", "adaptive"),
+            seed=cfg.get("seed", 42),
+        )
+
+    gym_kwargs = {
+        "env_cfg_entry_point": env_cfg_cls,
+    }
+    if agent_cfg_cls is not None:
+        gym_kwargs["rsl_rl_cfg_entry_point"] = agent_cfg_cls
 
     gym.register(
         id=gym_id,
         entry_point="isaaclab.envs:ManagerBasedRLEnv",
         disable_env_checker=True,
-        kwargs={
-            "env_cfg_entry_point": env_cfg_cls,
-            "rsl_rl_cfg_entry_point": agent_cfg_cls,
-        },
+        kwargs=gym_kwargs,
     )
 
     return env_cfg_cls, agent_cfg_cls, gym_id
