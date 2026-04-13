@@ -91,7 +91,7 @@ def _build_term(factory, term_cfg: dict) -> Any:
 
 def build_task_from_config(
     cfg: dict,
-) -> tuple[type, type, str]:
+) -> tuple[type, type | None, str]:
     """Build env/agent config classes and gym ID from a JSON task_config.
 
     Args:
@@ -101,102 +101,19 @@ def build_task_from_config(
         ``(EnvCfg_class, AgentCfg_class, gym_id)`` ready for
         ``gym.make(gym_id, cfg=EnvCfg_class())``.
     """
-    tc = cfg["task_config"]
-    task_name = tc["task_name"]
-    gym_id = f"Joshua-{task_name.replace('_', '-').title()}-v0"
 
-    rc = tc["robot"]
-    robot = build_robot_from_usd(
-        usd_path=resolve_model_path(rc["usd_filename"]),
-        init_pos=(
-            rc.get("init_pos_x", 0.0),
-            rc.get("init_pos_y", 0.0),
-            rc.get("init_pos_z", 0.3),
-        ),
-        init_joint_pos=rc.get("init_joint_pos", {}),
-        actuator_stiffness=rc.get("actuator_stiffness", 0.0),
-        actuator_damping=rc.get("actuator_damping", 0.0),
-    )
+    def _maybe_build_rsl_rl_agent_cfg(task_name: str) -> type | None:
+        """Build the optional RSL-RL agent cfg class from top-level ppo/network."""
+        algorithm = str(cfg.get("algorithm", "rsl_rl")).lower()
+        if algorithm == "skrl":
+            # skrl doesn't consume Isaac Lab's rsl_rl_cfg_entry_point.
+            return None
 
-    sp = cfg.get("sim_physics", {})
-    num_envs = cfg.get("num_envs", 4096)
-    scene = build_scene_cfg(
-        robot=robot,
-        num_envs=num_envs,
-        env_spacing=sp.get("env_spacing", 5.0),
-        terrain_friction=sp.get("terrain_friction", 1.0),
-    )
-
-    action_scale = sp.get("action_scale", 1.0)
-    actions = terms.joint_effort_actions(scale=action_scale)
-
-    rewards: dict[str, Any] = {}
-    for name, term_cfg in tc.get("rewards", {}).items():
-        factory = REWARD_REGISTRY.get(name)
-        if factory is None:
-            raise ValueError(
-                f"Unknown reward term '{name}'. "
-                f"Known: {sorted(REWARD_REGISTRY)}"
-            )
-        rewards[name] = _build_term(factory, term_cfg)
-
-    observations: dict[str, Any] = {}
-    for name, term_cfg in tc.get("observations", {}).items():
-        factory = OBSERVATION_REGISTRY.get(name)
-        if factory is None:
-            raise ValueError(
-                f"Unknown observation term '{name}'. "
-                f"Known: {sorted(OBSERVATION_REGISTRY)}"
-            )
-        observations[name] = _build_term(factory, term_cfg)
-
-    term = cfg.get("termination", {})
-    terminations = {
-        "time_out": terms.time_out(),
-        "torso_height": terms.root_height_below(
-            minimum_height=term.get("min_root_height", 0.1),
-        ),
-    }
-
-    rst = cfg.get("reset", {})
-    events = {
-        "reset_base": terms.reset_root_state(),
-        "reset_robot_joints": terms.reset_joints_by_offset(
-            pos_range=(
-                rst.get("joint_pos_range_min", -0.2),
-                rst.get("joint_pos_range_max", 0.2),
-            ),
-            vel_range=(
-                rst.get("joint_vel_range_min", -0.1),
-                rst.get("joint_vel_range_max", 0.1),
-            ),
-        ),
-    }
-
-    env_cfg_cls = build_env_cfg(
-        scene_cfg=scene,
-        actions_cfg=actions,
-        rewards=rewards,
-        observations=observations,
-        terminations=terminations,
-        events=events,
-        decimation=int(sp.get("decimation", 2)),
-        episode_length_s=sp.get("episode_length_s", 16.0),
-        sim_dt=sp.get("sim_dt", 1.0 / 120.0),
-        bounce_threshold_velocity=sp.get("bounce_threshold_velocity", 0.2),
-        physics_static_friction=sp.get("terrain_friction", 1.0),
-        physics_dynamic_friction=sp.get("terrain_friction", 1.0),
-        physics_restitution=0.0,
-    )
-
-    algorithm = cfg.get("algorithm", "rsl_rl")
-    agent_cfg_cls = None
-    if algorithm != "skrl":
         from isaac_lab.rsl_rl_config import build_rsl_rl_cfg
 
         ppo = cfg.get("ppo", {})
         net = cfg.get("network", {})
-        agent_cfg_cls = build_rsl_rl_cfg(
+        return build_rsl_rl_cfg(
             max_iterations=cfg.get("max_iterations", 0) or 1000,
             num_steps_per_env=ppo.get("num_steps_per_env", 32),
             save_interval=cfg.get("save_interval", 50),
@@ -217,6 +134,96 @@ def build_task_from_config(
             schedule=ppo.get("schedule", "adaptive"),
             seed=cfg.get("seed", 42),
         )
+
+    task_cfg = cfg["task_config"]
+    task_name = task_cfg["task_name"]
+    gym_id = f"Joshua-{task_name.replace('_', '-').title()}-v0"
+
+    robot_cfg = task_cfg["robot"]
+    robot = build_robot_from_usd(
+        usd_path=resolve_model_path(robot_cfg["usd_filename"]),
+        init_pos=(
+            robot_cfg.get("init_pos_x", 0.0),
+            robot_cfg.get("init_pos_y", 0.0),
+            robot_cfg.get("init_pos_z", 0.3),
+        ),
+        init_joint_pos=robot_cfg.get("init_joint_pos", {}),
+        actuator_stiffness=robot_cfg.get("actuator_stiffness", 0.0),
+        actuator_damping=robot_cfg.get("actuator_damping", 0.0),
+    )
+
+    physics_cfg = cfg.get("sim_physics", {})
+    num_envs = cfg.get("num_envs", 4096)
+    scene = build_scene_cfg(
+        robot=robot,
+        num_envs=num_envs,
+        env_spacing=physics_cfg.get("env_spacing", 5.0),
+        terrain_friction=physics_cfg.get("terrain_friction", 1.0),
+    )
+
+    action_scale = physics_cfg.get("action_scale", 1.0)
+    actions = terms.joint_effort_actions(scale=action_scale)
+
+    rewards: dict[str, Any] = {}
+    for name, term_cfg in task_cfg.get("rewards", {}).items():
+        factory = REWARD_REGISTRY.get(name)
+        if factory is None:
+            raise ValueError(
+                f"Unknown reward term '{name}'. "
+                f"Known: {sorted(REWARD_REGISTRY)}"
+            )
+        rewards[name] = _build_term(factory, term_cfg)
+
+    observations: dict[str, Any] = {}
+    for name, term_cfg in task_cfg.get("observations", {}).items():
+        factory = OBSERVATION_REGISTRY.get(name)
+        if factory is None:
+            raise ValueError(
+                f"Unknown observation term '{name}'. "
+                f"Known: {sorted(OBSERVATION_REGISTRY)}"
+            )
+        observations[name] = _build_term(factory, term_cfg)
+
+    termination_cfg = cfg.get("termination", {})
+    terminations = {
+        "time_out": terms.time_out(),
+        "torso_height": terms.root_height_below(
+            minimum_height=termination_cfg.get("min_root_height", 0.1),
+        ),
+    }
+
+    reset_cfg = cfg.get("reset", {})
+    events = {
+        "reset_base": terms.reset_root_state(),
+        "reset_robot_joints": terms.reset_joints_by_offset(
+            pos_range=(
+                reset_cfg.get("joint_pos_range_min", -0.2),
+                reset_cfg.get("joint_pos_range_max", 0.2),
+            ),
+            vel_range=(
+                reset_cfg.get("joint_vel_range_min", -0.1),
+                reset_cfg.get("joint_vel_range_max", 0.1),
+            ),
+        ),
+    }
+
+    env_cfg_cls = build_env_cfg(
+        scene_cfg=scene,
+        actions_cfg=actions,
+        rewards=rewards,
+        observations=observations,
+        terminations=terminations,
+        events=events,
+        decimation=int(physics_cfg.get("decimation", 2)),
+        episode_length_s=physics_cfg.get("episode_length_s", 16.0),
+        sim_dt=physics_cfg.get("sim_dt", 1.0 / 120.0),
+        bounce_threshold_velocity=physics_cfg.get("bounce_threshold_velocity", 0.2),
+        physics_static_friction=physics_cfg.get("terrain_friction", 1.0),
+        physics_dynamic_friction=physics_cfg.get("terrain_friction", 1.0),
+        physics_restitution=0.0,
+    )
+
+    agent_cfg_cls = _maybe_build_rsl_rl_agent_cfg(task_name)
 
     gym_kwargs = {
         "env_cfg_entry_point": env_cfg_cls,
