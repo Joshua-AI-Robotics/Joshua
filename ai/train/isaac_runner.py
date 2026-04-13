@@ -70,8 +70,13 @@ _VERBOSE = bool(
 ) or bool(getattr(args_cli, "verbose", False))
 
 
-def _log(message: str) -> None:
-    """Emit a timestamped log line and flush immediately."""
+def _info(message: str) -> None:
+    """Always-on status line (keeps runs from feeling 'stuck')."""
+    print(f"[Joshua/Isaac] {message}", flush=True)
+
+
+def _debug(message: str) -> None:
+    """Verbose-only debug line with a timestamp."""
     if not _VERBOSE:
         return
     ts = datetime.now().strftime("%H:%M:%S")
@@ -209,10 +214,10 @@ def _resolve_task(cfg: dict) -> str:
             "Missing 'task_config' in config. All tasks must be defined "
             "via task_config in the .pbtxt preset."
         )
-    _log("Resolving proto-defined Isaac task via task_builder")
+    _debug("Resolving proto-defined Isaac task via task_builder")
     from isaac_lab.task_builder import build_task_from_config
     _, _, gym_id = build_task_from_config(cfg)
-    _log(f"Task resolved to gym id: {gym_id}")
+    _debug(f"Task resolved to gym id: {gym_id}")
     return gym_id
 
 
@@ -254,7 +259,7 @@ def _write_meta(cfg: dict, env, log_dir: str) -> None:
 
 def _train_rsl_rl(cfg: dict) -> None:
     """Train using RSL-RL's OnPolicyRunner (PPO)."""
-    _log("Entering RSL-RL training path")
+    _debug("Entering RSL-RL training path")
     from rsl_rl.runners import OnPolicyRunner
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 
@@ -263,18 +268,18 @@ def _train_rsl_rl(cfg: dict) -> None:
     save_name = cfg.get("save_path", f"{cfg.get('task', 'task')}_isaac_ppo")
     checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    _log(f"RSL-RL config: task={isaac_task}, num_envs={num_envs}, device={device}")
+    _debug(f"RSL-RL config: task={isaac_task}, num_envs={num_envs}, device={device}")
 
-    _log("Parsing Isaac environment config from registry")
+    _debug("Parsing Isaac environment config from registry")
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
     _apply_env_overrides(env_cfg, cfg)
 
-    _log("Creating Isaac gym environment")
+    _debug("Creating Isaac gym environment")
     env = gym.make(isaac_task, cfg=env_cfg)
-    _log("Wrapping environment for RSL-RL")
+    _debug("Wrapping environment for RSL-RL")
     env = RslRlVecEnvWrapper(env)
 
-    _log("Loading RSL-RL agent config from registry")
+    _debug("Loading RSL-RL agent config from registry")
     agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
     _apply_agent_overrides(agent_cfg, cfg)
 
@@ -283,10 +288,10 @@ def _train_rsl_rl(cfg: dict) -> None:
 
     log_dir = os.path.join(checkpoint_dir, "isaac_logs", save_name)
     os.makedirs(log_dir, exist_ok=True)
-    _log(f"RSL-RL log dir prepared at {log_dir}")
+    _debug(f"RSL-RL log dir prepared at {log_dir}")
 
     agent_dict = agent_cfg.to_dict()
-    _log("Constructing OnPolicyRunner")
+    _debug("Constructing OnPolicyRunner")
     runner = OnPolicyRunner(
         env, agent_dict, log_dir=log_dir, device=device,
     )
@@ -294,29 +299,29 @@ def _train_rsl_rl(cfg: dict) -> None:
     total_timesteps = (agent_cfg.max_iterations
                        * num_envs
                        * agent_cfg.num_steps_per_env)
-    _log(
+    _info(
         f"RSL-RL training {isaac_task} for {agent_cfg.max_iterations} iterations "
         f"({total_timesteps:,} timesteps, {num_envs} envs)"
     )
 
     _write_meta(cfg, env, log_dir)
 
-    _log("Calling runner.learn()")
+    _debug("Calling runner.learn()")
     runner.learn(
         num_learning_iterations=agent_cfg.max_iterations,
         init_at_random_ep_len=True,
     )
-    _log("runner.learn() returned")
+    _info("RSL-RL training complete")
 
     env.close()
-    _log("RSL-RL environment closed")
+    _debug("RSL-RL environment closed")
 
 
 # ── skrl backend ─────────────────────────────────────────────────────
 
 def _train_skrl(cfg: dict) -> None:
     """Train using skrl's PPO agent."""
-    _log("Entering skrl training path")
+    _debug("Entering skrl training path")
     import skrl  # noqa: F401
     from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
     from skrl.envs.wrappers.torch import wrap_env
@@ -330,38 +335,38 @@ def _train_skrl(cfg: dict) -> None:
     save_name = cfg.get("save_path", f"{cfg.get('task', 'task')}_isaac_ppo")
     checkpoint_dir = cfg.get("checkpoint_dir", "/tmp/joshua_checkpoints")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    _log(
+    _debug(
         f"skrl config: task={isaac_task}, num_envs={num_envs}, "
         f"device={device}, save_name={save_name}"
     )
 
-    _log("Parsing Isaac environment config from registry")
+    _debug("Parsing Isaac environment config from registry")
     env_cfg = parse_env_cfg(isaac_task, num_envs=num_envs)
     _apply_env_overrides(env_cfg, cfg)
 
-    _log("Creating Isaac gym environment")
+    _debug("Creating Isaac gym environment")
     env = gym.make(isaac_task, cfg=env_cfg)
-    _log("Wrapping environment for skrl")
+    _debug("Wrapping environment for skrl")
     env = wrap_env(env, wrapper="isaaclab")
-    _log(
+    _debug(
         f"Environment ready: obs_shape={getattr(env.observation_space, 'shape', None)}, "
         f"action_shape={getattr(env.action_space, 'shape', None)}"
     )
 
     try:
-        _log("Attempting to load optional registry agent config")
+        _debug("Attempting to load optional registry agent config")
         agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
     except (KeyError, ValueError):
         agent_cfg = None
-        _log("No registry agent config found for skrl path; using Joshua config only")
+        _debug("No registry agent config found for skrl path; using Joshua config only")
 
     if agent_cfg is not None:
-        _log("Applying agent overrides from Joshua config")
+        _debug("Applying agent overrides from Joshua config")
         _apply_agent_overrides(agent_cfg, cfg)
 
     obs_size = env.observation_space.shape[-1]
     action_size = env.action_space.shape[-1]
-    _log(f"Derived network sizes: obs_size={obs_size}, action_size={action_size}")
+    _debug(f"Derived network sizes: obs_size={obs_size}, action_size={action_size}")
 
     if agent_cfg is not None:
         hidden = agent_cfg.policy.actor_hidden_dims
@@ -407,7 +412,7 @@ def _train_skrl(cfg: dict) -> None:
             return self.net(inputs["states"]), {}
 
     seed_val = cfg.get("seed", 0) or (agent_cfg.seed if agent_cfg else 42)
-    _log(f"Setting random seed: {seed_val}")
+    _debug(f"Setting random seed: {seed_val}")
     set_seed(seed_val)
 
     ppo_cfg_json = cfg.get("ppo", {})
@@ -417,16 +422,16 @@ def _train_skrl(cfg: dict) -> None:
     if not max_iterations:
         max_iterations = (agent_cfg.max_iterations if agent_cfg else 500)
     total_timesteps = max_iterations * rollout_steps
-    _log(
+    _debug(
         f"Training schedule: rollout_steps={rollout_steps}, "
         f"max_iterations={max_iterations}, total_timesteps={total_timesteps}"
     )
 
-    _log("Allocating skrl rollout memory")
+    _debug("Allocating skrl rollout memory")
     memory = RandomMemory(
         memory_size=rollout_steps, num_envs=num_envs, device=device)
 
-    _log("Constructing policy/value models")
+    _debug("Constructing policy/value models")
     models = {
         "policy": Policy(env.observation_space, env.action_space, device),
         "value": Value(env.observation_space, env.action_space, device),
@@ -465,9 +470,9 @@ def _train_skrl(cfg: dict) -> None:
 
     log_dir = os.path.join(checkpoint_dir, "isaac_logs", save_name)
     os.makedirs(log_dir, exist_ok=True)
-    _log(f"skrl log dir prepared at {log_dir}")
+    _debug(f"skrl log dir prepared at {log_dir}")
 
-    _log("Constructing PPO agent")
+    _debug("Constructing PPO agent")
     agent = PPO(
         models=models,
         memory=memory,
@@ -482,24 +487,24 @@ def _train_skrl(cfg: dict) -> None:
         "headless": True,
     }
 
-    _log(f"Constructing SequentialTrainer with cfg={trainer_cfg}")
+    _debug(f"Constructing SequentialTrainer with cfg={trainer_cfg}")
     trainer = SequentialTrainer(env=env, agents=agent, cfg=trainer_cfg)
 
-    _log(
+    _info(
         f"skrl training {isaac_task} for {max_iterations} iterations "
         f"({total_timesteps:,} timesteps, {num_envs} envs)"
     )
     _write_meta(cfg, env, log_dir)
 
-    _log("Calling trainer.train()")
+    _debug("Calling trainer.train()")
     trainer.train()
-    _log("trainer.train() returned")
+    _info("skrl training complete")
 
-    _log("Saving final policy checkpoint")
+    _debug("Saving final policy checkpoint")
     agent.save(os.path.join(log_dir, "final_policy.pt"))
-    _log("Final policy checkpoint saved")
+    _debug("Final policy checkpoint saved")
     env.close()
-    _log("skrl environment closed")
+    _debug("skrl environment closed")
 
 
 # ── Evaluation ───────────────────────────────────────────────────────
@@ -703,7 +708,7 @@ _TRAINERS = {
 
 def main():
     global _VERBOSE
-    _log(f"Opening Joshua config: {args_cli.config}")
+    _debug(f"Opening Joshua config: {args_cli.config}")
     with open(args_cli.config) as f:
         cfg = json.load(f)
 
@@ -711,14 +716,14 @@ def main():
 
     mode = cfg.get("mode", "train")
     algorithm = cfg.get("algorithm", "rsl_rl")
-    _log(
+    _debug(
         f"Loaded config: mode={mode}, algorithm={algorithm}, "
         f"task_name={cfg.get('task_config', {}).get('task_name', '')}, "
         f"num_envs={cfg.get('num_envs', '')}"
     )
 
     if mode == "eval":
-        _log("Dispatching to evaluation path")
+        _debug("Dispatching to evaluation path")
         _run_eval(cfg)
     else:
         trainer_fn = _TRAINERS.get(algorithm)
@@ -727,9 +732,9 @@ def main():
                 f"Unknown algorithm '{algorithm}'. "
                 f"Supported: {', '.join(_TRAINERS)}"
             )
-        _log(f"Dispatching to trainer function for algorithm={algorithm}")
+        _debug(f"Dispatching to trainer function for algorithm={algorithm}")
         trainer_fn(cfg)
-        _log("Trainer function returned to main()")
+        _debug("Trainer function returned to main()")
 
 
 if __name__ == "__main__":
@@ -745,10 +750,10 @@ if __name__ == "__main__":
         _tb.print_exc()
         _exit_code = 1
     finally:
-        _log(f"Entering isaac_runner finally block with exit_code={_exit_code}")
+        _debug(f"Entering isaac_runner finally block with exit_code={_exit_code}")
         try:
             simulation_app.close()
         except SystemExit:
             pass
-        _log("simulation_app.close() completed")
+        _debug("simulation_app.close() completed")
     sys.exit(_exit_code)
