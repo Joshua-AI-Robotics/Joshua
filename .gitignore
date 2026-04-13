@@ -30,7 +30,6 @@ MODULE.bazel.lock
 # Python bytecode
 __pycache__/
 *.pyc
-*_pb2.py
 
 # MuJoCo logs
 MUJOCO_LOG.TXT
