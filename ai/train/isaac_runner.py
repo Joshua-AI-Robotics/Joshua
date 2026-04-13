@@ -36,6 +36,11 @@ parser.add_argument(
     "--config", required=True,
     help="Path to Joshua JSON config written by isaac_launcher.py",
 )
+parser.add_argument(
+    "--verbose",
+    action="store_true",
+    help="Enable Joshua debug logging inside the Isaac runner.",
+)
 
 from isaaclab.app import AppLauncher  # noqa: E402
 
@@ -60,8 +65,15 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
+_VERBOSE = bool(
+    os.environ.get("JOSHUA_ISAAC_VERBOSE") or os.environ.get("JOSHUA_VERBOSE")
+) or bool(getattr(args_cli, "verbose", False))
+
+
 def _log(message: str) -> None:
     """Emit a timestamped log line and flush immediately."""
+    if not _VERBOSE:
+        return
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[Joshua/Isaac {ts}] {message}", flush=True)
 
@@ -690,9 +702,12 @@ _TRAINERS = {
 
 
 def main():
+    global _VERBOSE
     _log(f"Opening Joshua config: {args_cli.config}")
     with open(args_cli.config) as f:
         cfg = json.load(f)
+
+    _VERBOSE = _VERBOSE or bool(cfg.get("verbose", False))
 
     mode = cfg.get("mode", "train")
     algorithm = cfg.get("algorithm", "rsl_rl")
