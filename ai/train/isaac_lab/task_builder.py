@@ -101,14 +101,8 @@ def build_task_from_config(
         ``(EnvCfg_class, AgentCfg_class, gym_id)`` ready for
         ``gym.make(gym_id, cfg=EnvCfg_class())``.
     """
-
-    def _maybe_build_rsl_rl_agent_cfg(task_name: str) -> type | None:
-        """Build the optional RSL-RL agent cfg class from top-level ppo/network."""
-        algorithm = str(cfg.get("algorithm", "rsl_rl")).lower()
-        if algorithm == "skrl":
-            # skrl doesn't consume Isaac Lab's rsl_rl_cfg_entry_point.
-            return None
-
+    def _build_rsl_rl_agent_cfg(task_name: str) -> type:
+        """Build the RSL-RL agent cfg class from top-level ppo/network."""
         from isaac_lab.rsl_rl_config import build_rsl_rl_cfg
 
         ppo = cfg.get("ppo", {})
@@ -223,7 +217,8 @@ def build_task_from_config(
         physics_restitution=0.0,
     )
 
-    agent_cfg_cls = _maybe_build_rsl_rl_agent_cfg(task_name)
+    algorithm = str(cfg.get("algorithm", "rsl_rl")).lower()
+    agent_cfg_cls = None if algorithm == "skrl" else _build_rsl_rl_agent_cfg(task_name)
 
     gym_kwargs = {
         "env_cfg_entry_point": env_cfg_cls,
