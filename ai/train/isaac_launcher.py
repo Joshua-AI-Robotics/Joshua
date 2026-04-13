@@ -38,8 +38,8 @@ def _default_checkpoint_dir() -> str:
     return os.path.join(tempfile.gettempdir(), "joshua_checkpoints")
 
 
-def _find_isaac_python() -> str:
-    """Resolve the Isaac Lab Python interpreter.
+def _resolve_isaac_entrypoint() -> str:
+    """Resolve how we should invoke Isaac Lab.
 
     Search order:
       1. ISAAC_LAB_PYTHON env var (explicit path to python binary)
@@ -69,6 +69,19 @@ def _find_isaac_python() -> str:
         "  ISAAC_LAB_PYTHON=C:\\path\\to\\isaac_venv\\Scripts\\python.exe\n"
         "  ISAAC_LAB_PATH=/path/to/IsaacLab"
     )
+
+
+def _build_isaac_cmd(entrypoint: str, runner_path: str, cfg_path: str) -> list[str]:
+    """Build the platform-correct subprocess command for Isaac Lab."""
+    ep = entrypoint.lower()
+    if ep.endswith("isaaclab.sh"):
+        return [entrypoint, "-p", runner_path, "--config", cfg_path]
+    if ep.endswith("isaaclab.bat"):
+        # Running a .bat directly is unreliable; invoke via cmd.exe.
+        if not _is_windows():
+            raise RuntimeError(f"isaaclab.bat entrypoint is only supported on Windows: {entrypoint}")
+        return ["cmd.exe", "/c", entrypoint, "-p", runner_path, "--config", cfg_path]
+    return [entrypoint, runner_path, "--config", cfg_path]
 
 
 def _clean_env() -> dict:
@@ -150,7 +163,7 @@ def _launch_subprocess(
     render: bool,
 ) -> None:
     """Write JSON config and run isaac_runner.py as a subprocess."""
-    isaac_python = _find_isaac_python()
+    entrypoint = _resolve_isaac_entrypoint()
     checkpoint_dir = cfg_dict.get("checkpoint_dir", _default_checkpoint_dir())
 
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -162,18 +175,10 @@ def _launch_subprocess(
         cfg_path = f.name
 
     glog.info(f"Isaac Lab config written to {cfg_path}")
-    glog.info(f"  Isaac Python: {isaac_python}")
+    glog.info(f"  Isaac entrypoint: {entrypoint}")
 
     runner_path = os.path.abspath(_ISAAC_RUNNER)
-
-    lower_isaac_python = isaac_python.lower()
-
-    if lower_isaac_python.endswith("isaaclab.sh"):
-        cmd = [isaac_python, "-p", runner_path, "--config", cfg_path]
-    elif lower_isaac_python.endswith("isaaclab.bat") and _is_windows():
-        cmd = ["cmd.exe", "/c", isaac_python, "-p", runner_path, "--config", cfg_path]
-    else:
-        cmd = [isaac_python, runner_path, "--config", cfg_path]
+    cmd = _build_isaac_cmd(entrypoint, runner_path, cfg_path)
 
     if not render:
         cmd.append("--headless")
