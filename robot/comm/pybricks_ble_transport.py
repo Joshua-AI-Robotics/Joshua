@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import tempfile
 import threading
 from typing import Optional
+
+_log = logging.getLogger(__name__)
+
+_MAX_CONNECT_RETRIES = 3
+_RETRY_BACKOFF_SEC = 5.0
 
 
 _PROGRAM_SOURCE = """\
@@ -118,7 +124,10 @@ class PybricksBleTransport:
             return
         if self._hub_id != hub_id:
             raise RuntimeError("Transport hub_id mismatch during disconnect")
-        self._runner.run(self._hub.disconnect())
+        try:
+            self._runner.run(self._hub.disconnect())
+        except Exception as exc:
+            _log.warning("BLE disconnect error (ignored): %s", exc)
         self._hub = None
         self._hub_id = None
         self._runner.close()
@@ -130,6 +139,19 @@ class PybricksBleTransport:
             raise RuntimeError("Transport hub_id mismatch during command")
         self._runner.run(self._hub.write_line(f"SET {port} {angle}"))
 
+    @staticmethod
+    async def _remove_stale_ble_device(address: str) -> None:
+        """Try to remove a cached BLE device so the adapter re-scans cleanly."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "remove", address,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except Exception:
+            pass
+
     async def _connect_async(self, hub_id: Optional[str]):
         try:
             from pybricksdev.ble import find_device
@@ -137,17 +159,64 @@ class PybricksBleTransport:
         except Exception as exc:
             raise RuntimeError("pybricksdev BLE dependencies are not available") from exc
 
-        device = await find_device(name=hub_id)
-        hub = PybricksHubBLE(device)
-        await hub.connect()
-        await hub.run(
-            self._ensure_program_path(),
-            wait=False,
-            print_output=True,
-            line_handler=True,
-        )
-        await asyncio.sleep(0.5)
-        return hub
+        last_exc: Exception | None = None
+        last_device_address: str | None = None
+
+        for attempt in range(1, _MAX_CONNECT_RETRIES + 1):
+            hub = None
+            try:
+                _log.info(
+                    "BLE connect attempt %d/%d for hub '%s'",
+                    attempt, _MAX_CONNECT_RETRIES, hub_id,
+                )
+
+                if attempt > 1 and last_device_address:
+                    _log.info(
+                        "Removing stale BLE cache for %s", last_device_address,
+                    )
+                    await self._remove_stale_ble_device(last_device_address)
+
+                _log.info("Scanning for hub '%s' (timeout=15s)...", hub_id)
+                device = await find_device(name=hub_id, timeout=15)
+                last_device_address = device.address
+                _log.info("Found hub '%s' at %s", hub_id, device.address)
+
+                hub = PybricksHubBLE(device)
+                await hub.connect()
+                _log.info("BLE connected to hub '%s'", hub_id)
+
+                await hub.run(
+                    self._ensure_program_path(),
+                    wait=False,
+                    print_output=True,
+                    line_handler=True,
+                )
+                await asyncio.sleep(0.5)
+                _log.info(
+                    "Program uploaded to hub '%s' on attempt %d",
+                    hub_id, attempt,
+                )
+                return hub
+            except Exception as exc:
+                last_exc = exc
+                _log.warning(
+                    "BLE connect attempt %d/%d failed for hub '%s': %s",
+                    attempt, _MAX_CONNECT_RETRIES, hub_id, exc,
+                )
+                if hub is not None:
+                    try:
+                        await hub.disconnect()
+                    except Exception:
+                        pass
+                if attempt < _MAX_CONNECT_RETRIES:
+                    wait = _RETRY_BACKOFF_SEC * attempt
+                    _log.info("Retrying in %.1fs...", wait)
+                    await asyncio.sleep(wait)
+
+        raise RuntimeError(
+            f"Failed to connect to hub '{hub_id}' after "
+            f"{_MAX_CONNECT_RETRIES} attempts"
+        ) from last_exc
 
     def _ensure_program_path(self) -> str:
         if self._program_path is None:

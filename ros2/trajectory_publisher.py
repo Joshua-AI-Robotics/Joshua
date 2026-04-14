@@ -82,10 +82,22 @@ class TrajectoryPublisher(Node):
         )
 
         self._loop_running = True
-        self._timer = self.create_timer(0.0, self._run_trajectory_loop)
+        self._timer = self.create_timer(1.0, self._wait_for_subscribers)
+
+    def _wait_for_subscribers(self) -> None:
+        for topic, pub in self._topic_pubs.items():
+            if pub.get_subscription_count() == 0:
+                self.get_logger().info(
+                    f"Waiting for subscribers on '{topic}'..."
+                )
+                return
+
+        self._timer.cancel()
+        self.get_logger().info("All topics have subscribers, starting trajectory loop")
+        self._loop_timer = self.create_timer(0.0, self._run_trajectory_loop)
 
     def _run_trajectory_loop(self) -> None:
-        self._timer.cancel()
+        self._loop_timer.cancel()
 
         while self._loop_running:
             loop_start = time.monotonic()

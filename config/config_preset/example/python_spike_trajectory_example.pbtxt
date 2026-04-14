@@ -119,15 +119,24 @@ robot {
         }
       }
       trajectory {
-        waypoints { timestamp_sec: 0.0  topic: "spike/motor_A/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 0.0  topic: "spike/motor_B/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 0.0  topic: "spike/motor_C/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 0.5  topic: "spike/motor_A/command"  action { position: 10 } }
-        waypoints { timestamp_sec: 1.0  topic: "spike/motor_B/command"  action { position: 50 } }
-        waypoints { timestamp_sec: 1.5  topic: "spike/motor_C/command"  action { position: 70 } }
-        waypoints { timestamp_sec: 2.0  topic: "spike/motor_A/command"  action { position: -25 } }
-        waypoints { timestamp_sec: 2.5  topic: "spike/motor_B/command"  action { position: -12 } }
-        waypoints { timestamp_sec: 3.0  topic: "spike/motor_C/command"  action { position: -13 } }
+        waypoints { timestamp_sec: 0.0  topic: "spike/motor_A/command"  action { position: -120 } }
+        waypoints { timestamp_sec: 0.0  topic: "spike/motor_B/command"  action { position: -120 } }
+        waypoints { timestamp_sec: 0.0  topic: "spike/motor_C/command"  action { position: -120 } }
+        waypoints { timestamp_sec: 0.5  topic: "spike/motor_A/command"  action { position: -60 } }
+        waypoints { timestamp_sec: 0.5  topic: "spike/motor_B/command"  action { position: -60 } }
+        waypoints { timestamp_sec: 0.5  topic: "spike/motor_C/command"  action { position: -60 } }
+        waypoints { timestamp_sec: 1.0  topic: "spike/motor_A/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 1.0  topic: "spike/motor_B/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 1.0  topic: "spike/motor_C/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 1.5  topic: "spike/motor_A/command"  action { position: 60 } }
+        waypoints { timestamp_sec: 1.5  topic: "spike/motor_B/command"  action { position: 60 } }
+        waypoints { timestamp_sec: 1.5  topic: "spike/motor_C/command"  action { position: 60 } }
+        waypoints { timestamp_sec: 2.0  topic: "spike/motor_A/command"  action { position: 120 } }
+        waypoints { timestamp_sec: 2.0  topic: "spike/motor_B/command"  action { position: 120 } }
+        waypoints { timestamp_sec: 2.0  topic: "spike/motor_C/command"  action { position: 120 } }
+        waypoints { timestamp_sec: 2.5  topic: "spike/motor_A/command"  action { position: 60 } }
+        waypoints { timestamp_sec: 2.5  topic: "spike/motor_B/command"  action { position: 60 } }
+        waypoints { timestamp_sec: 2.5  topic: "spike/motor_C/command"  action { position: 60 } }
       }
     }
   }
