@@ -40,6 +40,7 @@ proto_library(
     srcs = ["trajectory.proto"],
     deps = [
         ":node_proto",
+        "//robot/action/proto:action_packet_proto",
     ],
 )
 

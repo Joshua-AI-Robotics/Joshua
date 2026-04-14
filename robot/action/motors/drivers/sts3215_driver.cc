@@ -257,7 +257,8 @@ std::string Sts3215Driver::GetId() {
 
 absl::Status Sts3215Driver::SetMiddlePosition() {
   try {
-    auto middle_position = (operational_lower_limit_ + operational_upper_limit_) / 2;
+    auto middle_position =
+        static_cast<uint16_t>((operational_lower_limit_ + operational_upper_limit_) / 2.0f);
     ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(middle_position)));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
@@ -268,7 +269,7 @@ absl::Status Sts3215Driver::SetMiddlePosition() {
 
 absl::Status Sts3215Driver::SetIdlePosition() {
   try {
-    ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(idle_position_)));
+    ABSL_RETURN_IF_ERROR(serial_->Write(create_move_packet(static_cast<uint16_t>(idle_position_))));
   } catch (const std::exception& e) {
     LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal, "Failed to set idle position.");

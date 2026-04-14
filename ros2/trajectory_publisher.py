@@ -8,6 +8,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 
 from config.proto import config_pb2
+from robot.action.proto import action_packet_pb2
 from ros2.node_runner import run_node
 from ros2.proto import node_pb2
 from ros2.utils.qos_setting import create_qos_setting
@@ -17,7 +18,19 @@ from ros2.utils.qos_setting import create_qos_setting
 class TrajectoryWaypointEntry:
     timestamp_sec: float
     topic: str
-    value: float
+    action: action_packet_pb2.ActionPacket
+
+
+def _extract_float_value(action: action_packet_pb2.ActionPacket) -> float | None:
+    """Extract the float value from whichever oneof field is set."""
+    which = action.WhichOneof("action_type")
+    if which == "position":
+        return action.position
+    if which == "speed":
+        return action.speed
+    if which == "torque":
+        return action.torque
+    return None
 
 
 class TrajectoryPublisher(Node):
@@ -41,7 +54,7 @@ class TrajectoryPublisher(Node):
                         TrajectoryWaypointEntry(
                             timestamp_sec=waypoint.timestamp_sec,
                             topic=waypoint.topic,
-                            value=waypoint.value,
+                            action=waypoint.action,
                         )
                     )
 
@@ -77,7 +90,7 @@ class TrajectoryPublisher(Node):
         while self._loop_running:
             loop_start = time.monotonic()
 
-            for i, waypoint in enumerate(self._waypoints):
+            for waypoint in self._waypoints:
                 if not self._loop_running:
                     return
 
@@ -87,12 +100,20 @@ class TrajectoryPublisher(Node):
                 if sleep_duration > 0:
                     time.sleep(sleep_duration)
 
+                value = _extract_float_value(waypoint.action)
+                if value is None:
+                    self.get_logger().warning(
+                        f"[t={waypoint.timestamp_sec:.3f}s] "
+                        f"Unsupported action type for {waypoint.topic}, skipping"
+                    )
+                    continue
+
                 msg = Float32()
-                msg.data = waypoint.value
+                msg.data = value
                 self._topic_pubs[waypoint.topic].publish(msg)
                 self.get_logger().debug(
                     f"[t={waypoint.timestamp_sec:.3f}s] "
-                    f"{waypoint.topic} -> {waypoint.value}"
+                    f"{waypoint.topic} -> {value}"
                 )
 
             self.get_logger().info("Trajectory loop completed, restarting...")

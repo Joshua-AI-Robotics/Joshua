@@ -261,6 +261,7 @@ ros2_py_binary(
     set_up_ament = True,
     deps = [
         "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
         "//ros2:node_runner_py",
         "//ros2/proto:node_py_proto",
         "//ros2/proto:trajectory_py_proto",

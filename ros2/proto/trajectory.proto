@@ -2,12 +2,13 @@ syntax = "proto3";
 
 package ros2.trajectory;
 
+import "robot/action/proto/action_packet.proto";
 import "ros2/proto/node.proto";
 
 message TrajectoryWaypoint {
   double timestamp_sec = 1;
   string topic = 2;
-  float value = 3;
+  robot.action.ActionPacket action = 3;
 }
 
 message TrajectoryConfig {

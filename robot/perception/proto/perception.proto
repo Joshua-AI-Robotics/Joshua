@@ -59,8 +59,8 @@ message Encoder {
   uint64 id = 2;
   EncoderType encoder_type = 3;
   robot.comm.Comm comm = 4;
-  uint32 operational_lower_limit = 5;
-  uint32 operational_upper_limit = 6;
+  float operational_lower_limit = 5;
+  float operational_upper_limit = 6;
   EncoderDataMode encoder_data_mode = 7;
   oneof encoder_config {
     Sts3215EncoderConfig sts3215_encoder_config = 9;
