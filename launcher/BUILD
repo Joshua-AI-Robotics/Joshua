@@ -38,6 +38,7 @@ cc_binary(
         "//ros2:inference",
         "//ros2:operational_limit_calibration",
         "//ros2:data_subscriber",
+        "//ros2:trajectory_publisher_py",
         "//simulation:simulation",
         "//simulation:sim_models",
         "//simulation:sim_trajectories",

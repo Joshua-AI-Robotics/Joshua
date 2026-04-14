@@ -23,6 +23,7 @@ class SpikeTransport(Protocol):
 class SpikeMotorSpec:
     hub_id: Optional[str]
     port: str
+    idle_position: float
 
 
 class PybricksMotorDriver(ActuatorInterface):
@@ -53,6 +54,13 @@ class PybricksMotorDriver(ActuatorInterface):
         self._transport.set_motor_angle(self._spec.hub_id, self._spec.port, angle)
 
     def teardown(self) -> None:
+        try:
+            self._transport.set_motor_angle(
+                self._spec.hub_id, self._spec.port, self._spec.idle_position
+            )
+        except Exception:
+            pass
+
         if self._owns_transport:
             from robot.comm.pybricks_ble_transport import PybricksBleTransport
 
@@ -73,4 +81,8 @@ class PybricksMotorDriver(ActuatorInterface):
             raise ValueError("SpikeMotorConfig.port must be set (e.g., 'A')")
 
         hub_id = config.hub_id or None
-        return SpikeMotorSpec(hub_id=hub_id, port=config.port)
+        return SpikeMotorSpec(
+            hub_id=hub_id,
+            port=config.port,
+            idle_position=config.idle_position,
+        )

@@ -40,11 +40,11 @@ class Sts3215Driver : public robot::action::ActuatorInterface {
   uint8_t servo_id_;
   uint16_t move_speed_;
   uint16_t move_time_in_ms_;
-  uint16_t physical_lower_limit_;
-  uint16_t physical_upper_limit_;
-  uint16_t operational_lower_limit_;
-  uint16_t operational_upper_limit_;
-  uint16_t idle_position_;
-  uint16_t current_position_;
+  float physical_lower_limit_;
+  float physical_upper_limit_;
+  float operational_lower_limit_;
+  float operational_upper_limit_;
+  float idle_position_;
+  float current_position_;
 };
 }  // namespace robot::action
