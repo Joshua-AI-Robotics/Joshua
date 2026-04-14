@@ -34,3 +34,23 @@ py_proto_library(
     visibility = ["//visibility:public"],
     deps = [":ros2_data_type_proto"],
 )
+
+proto_library(
+    name = "trajectory_proto",
+    srcs = ["trajectory.proto"],
+    deps = [
+        ":node_proto",
+    ],
+)
+
+py_proto_library(
+    name = "trajectory_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":trajectory_proto"],
+)
+
+cc_proto_library(
+    name = "trajectory_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":trajectory_proto"],
+)

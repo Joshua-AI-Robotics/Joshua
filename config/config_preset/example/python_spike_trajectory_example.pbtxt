@@ -1,0 +1,135 @@
+general {
+  operation_mode: MODE_INFERENCE
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "python_spike_trajectory_example"
+  id: 902
+}
+
+robot {
+  actions {
+    single_actions {
+      node {
+        id: 901
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_A/command"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "spike_motor_A"
+        id: 1
+        actuator_type: SPIKE_MOTOR
+        comm {
+          comm_type: BLE
+        }
+        spike_motor_config {
+          hub_id: "Pybricks Hub"
+          port: "A"
+        }
+        physical_lower_limit: 0
+        physical_upper_limit: 1000
+        operational_lower_limit: 0
+        operational_upper_limit: 1000
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+      }
+    }
+    single_actions {
+      node {
+        id: 901
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_B/command"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "spike_motor_B"
+        id: 2
+        actuator_type: SPIKE_MOTOR
+        comm {
+          comm_type: BLE
+        }
+        spike_motor_config {
+          hub_id: "Pybricks Hub"
+          port: "B"
+        }
+        physical_lower_limit: 0
+        physical_upper_limit: 1000
+        operational_lower_limit: 0
+        operational_upper_limit: 1000
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+      }
+    }
+    single_actions {
+      node {
+        id: 901
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_C/command"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "spike_motor_C"
+        id: 3
+        actuator_type: SPIKE_MOTOR
+        comm {
+          comm_type: BLE
+        }
+        spike_motor_config {
+          hub_id: "Pybricks Hub"
+          port: "C"
+        }
+        physical_lower_limit: 0
+        physical_upper_limit: 1000
+        operational_lower_limit: 0
+        operational_upper_limit: 1000
+        encoder_data_mode: ENCODER_DATA_MODE_RAW
+      }
+    }
+  }
+  perceptions {}
+  trajectories {
+    single_trajectories {
+      node {
+        id: 902
+        node_type: TRAJECTORY_PUBLISHER
+        qos_setting { depth: 10 }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_A/command"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_B/command"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "spike/motor_C/command"
+        }
+      }
+      trajectory {
+        waypoints { timestamp_sec: 0.0  topic: "spike/motor_A/command"  value: 10 }
+        waypoints { timestamp_sec: 0.5  topic: "spike/motor_B/command"  value: 30 }
+        waypoints { timestamp_sec: 1.0  topic: "spike/motor_C/command"  value: 20 }
+        waypoints { timestamp_sec: 1.5  topic: "spike/motor_A/command"  value: -10 }
+        waypoints { timestamp_sec: 2.0  topic: "spike/motor_B/command"  value: -30 }
+        waypoints { timestamp_sec: 2.5  topic: "spike/motor_C/command"  value: -20 }
+      }
+    }
+  }
+}
+
+ai {
+  models {}
+  data_stores {}
+}
+
+calibration {}
