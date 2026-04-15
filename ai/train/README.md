@@ -274,7 +274,7 @@ isaac_runner.py     (Isaac Lab venv / Python 3.11)
     │  Reads JSON, dispatches by mode:
     │    "train"             → _train_rsl_rl() / _train_skrl()
     │    "eval"              → _eval_rsl_rl() / _eval_skrl()
-    │    "trajectory_export" → _trajectory_export_rsl_rl() / _trajectory_export_skrl()
+    │    "trajectory_export" → trajectory_export.run_trajectory_export()
     ▼
 task_builder.py     (Isaac Lab venv / Python 3.11)
     │  Builds robot, rewards, observations from config
@@ -282,7 +282,7 @@ task_builder.py     (Isaac Lab venv / Python 3.11)
     ▼
 Train: Isaac Lab PPO training loop → checkpoints in /tmp/joshua_checkpoints/
 Eval:  Rollout episodes → reward statistics
-Export: Record joint data → .pbtxt + .npy trajectory files
+Export: Record joint data → .pbtxt + .npy trajectory files (via trajectory_export/ package)
 ```
 
 Ctrl+C (SIGINT) cleanly propagates through the entire process tree --
@@ -538,7 +538,8 @@ Key Files
 | `launcher/training_launcher.cc` | Joshua (C++) | Resolves and fork/execs the trainer binary |
 | `ai/train/trainer.py` | Joshua (Bazel) | Training dispatcher (RL, imitation, eval, trajectory export) |
 | `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, subprocess launch |
-| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval/trajectory-export bridge |
+| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge, delegates trajectory export to `trajectory_export/` |
+| `ai/train/trajectory_export/` | Isaac Lab (venv) | Policy-to-trajectory conversion package ([README](trajectory_export/README.md)) |
 | `ai/train/isaac_lab/task_builder.py` | Isaac Lab (venv) | Generic proto-driven task builder |
 | `ai/train/isaac_lab/env_builder.py` | Isaac Lab (venv) | ManagerBasedRLEnvCfg builder |
 | `ai/train/isaac_lab/rsl_rl_config.py` | Isaac Lab (venv) | RSL-RL agent config builder |

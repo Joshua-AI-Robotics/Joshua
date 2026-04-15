@@ -23,7 +23,7 @@ py_library(
     data = [
         "isaac_runner.py",
         "//simulation:sim_models",
-    ] + glob(["isaac_lab/**/*.py"]),
+    ] + glob(["isaac_lab/**/*.py"]) + glob(["trajectory_export/**/*.py"]),
     deps = [
         "//ai/proto:training_py_proto",
     ] + requirement("glog") + requirement("protobuf"),
