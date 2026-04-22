@@ -1,0 +1,159 @@
+#usda 1.0
+(
+    defaultPrim = "Bileg"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "Bileg"
+{
+    def Xform "torso" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsArticulationRootAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Cube "body_geom" (
+            apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 1
+            double3 xformOp:scale = (0.2, 0.36, 0.2)
+            uniform token[] xformOpOrder = ["xformOp:scale"]
+            float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+            color3f[] primvars:displayColor = [(0.3, 0.5, 0.8)]
+        }
+
+        def Xform "tail_arm_xform"
+        {
+            double3 xformOp:translate = (0, -0.22, -0.12)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Capsule "tail_arm_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "Z"
+                float3[] extent = [(-0.015, -0.015, -0.075), (0.015, 0.015, 0.075)]
+                double height = 0.12
+                double radius = 0.015
+                color3f[] primvars:displayColor = [(0.5, 0.5, 0.5)]
+            }
+        }
+
+        def Xform "tail_ball_xform"
+        {
+            double3 xformOp:translate = (0, -0.22, -0.18)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Sphere "tail_ball_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                float3[] extent = [(-0.05, -0.05, -0.05), (0.05, 0.05, 0.05)]
+                double radius = 0.05
+                color3f[] primvars:displayColor = [(0.7, 0.7, 0.7)]
+            }
+        }
+    }
+
+    def Xform "left_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (-0.18, 0.18, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, -0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "Z"
+                float3[] extent = [(-0.03, -0.03, -0.13), (0.03, 0.03, 0.13)]
+                double height = 0.2
+                double radius = 0.03
+                color3f[] primvars:displayColor = [(0.9, 0.3, 0.1)]
+            }
+        }
+    }
+
+    def Xform "right_leg" (
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+    )
+    {
+        float physics:density = 5
+        bool physics:rigidBodyEnabled = 1
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.18, 0.18, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "geom_xform"
+        {
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:translate = (0, 0, -0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+            def Capsule "leg_geom" (
+                apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                uniform token axis = "Z"
+                float3[] extent = [(-0.03, -0.03, -0.13), (0.03, 0.03, 0.13)]
+                double height = 0.2
+                double radius = 0.03
+                color3f[] primvars:displayColor = [(0.9, 0.3, 0.1)]
+            }
+        }
+    }
+
+    def Scope "joints"
+    {
+        def PhysicsRevoluteJoint "left_motor" (
+            apiSchemas = ["PhysxJointAPI"]
+        )
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Bileg/torso>
+            rel physics:body1 = </Bileg/left_leg>
+            point3f physics:localPos0 = (-0.18, 0.18, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = -90
+            float physics:upperLimit = 90
+            float physxJoint:maxJointVelocity = 5.0
+        }
+
+        def PhysicsRevoluteJoint "right_motor" (
+            apiSchemas = ["PhysxJointAPI"]
+        )
+        {
+            uniform token physics:axis = "X"
+            rel physics:body0 = </Bileg/torso>
+            rel physics:body1 = </Bileg/right_leg>
+            point3f physics:localPos0 = (0.18, 0.18, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = -90
+            float physics:upperLimit = 90
+            float physxJoint:maxJointVelocity = 5.0
+        }
+    }
+}
