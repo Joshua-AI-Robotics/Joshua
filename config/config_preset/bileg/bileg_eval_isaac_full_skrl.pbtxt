@@ -30,18 +30,18 @@ ai {
             key: ".*_motor"
             value: 0.0
           }
-          actuator_damping: 20.0
+          actuator_damping: 15.0
         }
         rewards {
           key: "progress"
           value {
-            weight: 3.0
+            weight: 5.0
           }
         }
         rewards {
           key: "alive"
           value {
-            weight: 0.1
+            weight: 0.0
           }
         }
         rewards {
@@ -57,7 +57,7 @@ ai {
         rewards {
           key: "move_to_target"
           value {
-            weight: 1.5
+            weight: 2.0
             params {
               key: "threshold"
               value: 0.8
@@ -85,7 +85,7 @@ ai {
         rewards {
           key: "action_rate"
           value {
-            weight: -0.05
+            weight: -0.01
           }
         }
         rewards {
@@ -113,7 +113,7 @@ ai {
         rewards {
           key: "joint_pos_limits"
           value {
-            weight: -0.1
+            weight: -0.01
             gear_ratios {
               key: ".*"
               value: 1.0
@@ -186,7 +186,7 @@ ai {
         critic_hidden_dims: 64
         critic_hidden_dims: 32
         activation: "elu"
-        init_noise_std: 1.5
+        init_noise_std: 1.0
       }
       sim_physics {
         decimation: 2

@@ -17,7 +17,7 @@ ai {
     simulator_backend: SIM_BACKEND_ISAAC_SIM
     rl {
       algorithm: "skrl"
-      max_iterations: 1500
+      max_iterations: 3000
       num_envs: 4096
       save_path: "bileg_full_skrl_ppo"
       render: false
@@ -33,18 +33,18 @@ ai {
             key: ".*_motor"
             value: 0.0
           }
-          actuator_damping: 20.0
+          actuator_damping: 15.0
         }
         rewards {
           key: "progress"
           value {
-            weight: 3.0
+            weight: 5.0
           }
         }
         rewards {
           key: "alive"
           value {
-            weight: 0.1
+            weight: 0.0
           }
         }
         rewards {
@@ -60,7 +60,7 @@ ai {
         rewards {
           key: "move_to_target"
           value {
-            weight: 1.5
+            weight: 2.0
             params {
               key: "threshold"
               value: 0.8
@@ -88,7 +88,7 @@ ai {
         rewards {
           key: "action_rate"
           value {
-            weight: -0.05
+            weight: -0.01
           }
         }
         rewards {
@@ -116,7 +116,7 @@ ai {
         rewards {
           key: "joint_pos_limits"
           value {
-            weight: -0.1
+            weight: -0.01
             gear_ratios {
               key: ".*"
               value: 1.0
@@ -186,7 +186,7 @@ ai {
         gamma: 0.99
         gae_lambda: 0.95
         clip_epsilon: 0.2
-        entropy_coef: 0.05
+        entropy_coef: 0.03
         num_learning_epochs: 5
         num_minibatches: 4
         num_steps_per_env: 32
@@ -202,7 +202,7 @@ ai {
         critic_hidden_dims: 64
         critic_hidden_dims: 32
         activation: "elu"
-        init_noise_std: 1.5
+        init_noise_std: 1.0
       }
       sim_physics {
         decimation: 2
