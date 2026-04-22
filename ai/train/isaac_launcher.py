@@ -266,6 +266,7 @@ def launch_isaac_trajectory_export(config: training_pb2.TrainingConfig) -> None:
         "trajectory_node_id": te.trajectory_node_id or 1,
         "render": te.render,
         "checkpoint_dir": _CHECKPOINT_DIR,
+        "export_frequency_hz": te.export_frequency_hz,
     }
 
     if te.joint_topic_mappings:

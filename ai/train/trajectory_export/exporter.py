@@ -11,6 +11,27 @@ from trajectory_export.cycle_detection import detect_gait_cycle
 from trajectory_export.pbtxt_writer import write_trajectory_pbtxt
 
 
+def _downsample(
+    data: np.ndarray,
+    sim_dt: float,
+    export_dt: float,
+) -> np.ndarray:
+    """Downsample ``data`` from simulation rate to export rate.
+
+    Picks the nearest simulation frame for each export timestep.
+
+    Returns:
+        Downsampled array with shape ``(num_export_steps, ...)``.
+    """
+    num_sim_steps = len(data)
+    total_time = (num_sim_steps - 1) * sim_dt
+    num_export_steps = int(total_time / export_dt) + 1
+    export_times = np.arange(num_export_steps) * export_dt
+    sim_indices = np.round(export_times / sim_dt).astype(int)
+    sim_indices = np.clip(sim_indices, 0, num_sim_steps - 1)
+    return data[sim_indices]
+
+
 def export_trajectory_data(
     positions: np.ndarray,
     actions: np.ndarray,
@@ -41,6 +62,7 @@ def export_trajectory_data(
     detect_cycle_flag = cfg.get("detect_cycle", False)
     node_id = cfg.get("trajectory_node_id", 1)
     mappings = cfg.get("joint_topic_mappings", [])
+    export_freq = cfg.get("export_frequency_hz", 0)
 
     topic_map = {m["joint_name"]: m["topic"] for m in mappings}
 
@@ -73,6 +95,15 @@ def export_trajectory_data(
         else:
             print("[Joshua/Isaac] Could not detect cycle, using full recording")
 
+    if export_freq > 0:
+        export_dt = 1.0 / export_freq
+        sim_rate = 1.0 / step_dt
+        print(f"[Joshua/Isaac] Downsampling from {sim_rate:.1f}Hz "
+              f"to {export_freq:.1f}Hz")
+        pos_data = _downsample(pos_data, step_dt, export_dt)
+        act_data = _downsample(act_data, step_dt, export_dt)
+        step_dt = export_dt
+
     num_steps = len(pos_data)
     timestamps = np.arange(num_steps) * step_dt
 
@@ -102,6 +133,7 @@ def export_trajectory_data(
         "topics": export_topics,
         "num_steps": num_steps,
         "step_dt_s": step_dt,
+        "export_frequency_hz": export_freq if export_freq > 0 else 1.0 / step_dt,
         "total_duration_s": float(timestamps[-1]),
         "position_units": "observed joint positions (radians)",
         "torque_units": "raw policy action outputs (pre-action-scale)",

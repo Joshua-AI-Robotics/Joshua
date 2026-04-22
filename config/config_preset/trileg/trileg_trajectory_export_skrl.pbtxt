@@ -23,6 +23,7 @@ ai {
       num_record_steps: 1000
       detect_cycle: true
       trajectory_node_id: 1
+      export_frequency_hz: 1.0
       render: false
 
       # Map Isaac Lab joint names to ROS2 actuator command topics.

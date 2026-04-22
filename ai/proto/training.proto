@@ -243,6 +243,12 @@ message TrajectoryExportConfig {
 
   repeated JointTopicMapping joint_topic_mappings = 10;
 
+  // Output frequency in Hz. Controls timestamp spacing in the exported
+  // trajectory.  E.g. 1.0 → 1s apart, 10.0 → 100ms apart.
+  // When set, recorded data is downsampled from the simulation rate to
+  // this frequency.  0 or unset keeps the native simulation rate.
+  float export_frequency_hz = 11;
+
   TaskConfig task_config = 20;
   NetworkConfig network = 21;
   SimPhysicsConfig sim_physics = 22;
