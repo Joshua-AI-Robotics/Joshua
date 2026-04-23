@@ -69,6 +69,26 @@ def _run_eval(config: training_pb2.TrainingConfig) -> None:
         )
 
 
+def _run_trajectory_export(config: training_pb2.TrainingConfig) -> None:
+    """Dispatch trajectory export to Isaac Sim."""
+    if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
+        raise NotImplementedError(
+            "Trajectory export only supports simulation environment")
+
+    backend = config.simulator_backend
+
+    if backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
+        from ai.train.isaac_launcher import launch_isaac_trajectory_export
+
+        launch_isaac_trajectory_export(config)
+
+    else:
+        raise ValueError(
+            f"Unknown or unset simulator_backend: {backend}. "
+            f"Set simulator_backend: SIM_BACKEND_ISAAC_SIM in your config."
+        )
+
+
 def main(argv):
     try:
         argv = FLAGS(argv)
@@ -101,6 +121,9 @@ def main(argv):
 
     elif config.method == training_pb2.TRAINING_METHOD_EVAL:
         _run_eval(config)
+
+    elif config.method == training_pb2.TRAINING_METHOD_TRAJECTORY_EXPORT:
+        _run_trajectory_export(config)
 
     else:
         raise ValueError(f"Unknown training method: {config.method}")

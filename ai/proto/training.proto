@@ -13,6 +13,7 @@ enum TrainingMethod {
   TRAINING_METHOD_RL = 1;
   TRAINING_METHOD_IMITATION = 2;
   TRAINING_METHOD_EVAL = 3;
+  TRAINING_METHOD_TRAJECTORY_EXPORT = 4;
 }
 
 enum SimulatorBackend {
@@ -224,6 +225,38 @@ message EvalConfig {
   PPOConfig ppo = 15;
 }
 
+message JointTopicMapping {
+  string joint_name = 1;
+  string topic = 2;
+}
+
+message TrajectoryExportConfig {
+  string checkpoint_path = 1;
+  string task = 2;
+  string algorithm = 3;
+  uint32 warmup_steps = 4;
+  uint32 num_record_steps = 5;
+  string output_dir = 6;
+  bool detect_cycle = 7;
+  uint32 trajectory_node_id = 8;
+  bool render = 9;
+
+  repeated JointTopicMapping joint_topic_mappings = 10;
+
+  // Output frequency in Hz. Controls timestamp spacing in the exported
+  // trajectory.  E.g. 1.0 → 1s apart, 10.0 → 100ms apart.
+  // When set, recorded data is downsampled from the simulation rate to
+  // this frequency.  0 or unset keeps the native simulation rate.
+  float export_frequency_hz = 11;
+
+  TaskConfig task_config = 20;
+  NetworkConfig network = 21;
+  SimPhysicsConfig sim_physics = 22;
+  TerminationConfig termination = 23;
+  ResetConfig reset = 24;
+  PPOConfig ppo = 25;
+}
+
 message TrainingConfig {
   TrainingEnvironment environment = 1;
   TrainingMethod method = 2;
@@ -232,4 +265,5 @@ message TrainingConfig {
   RLConfig rl = 10;
   ImitationConfig imitation = 11;
   EvalConfig eval = 12;
+  TrajectoryExportConfig trajectory_export = 13;
 }

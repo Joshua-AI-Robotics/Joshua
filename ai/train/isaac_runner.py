@@ -47,6 +47,7 @@ simulation_app = app_launcher.app
 # ── Imports that require Isaac Sim to be running ──────────────────────
 
 import gymnasium as gym  # noqa: E402
+
 import torch  # noqa: E402
 
 import isaaclab_tasks  # noqa: E402, F401
@@ -627,6 +628,11 @@ def _eval_rsl_rl(cfg, isaac_task, checkpoint_path, num_envs, num_episodes):
     env.close()
 
 
+# ── Trajectory Export (see trajectory_export/ package) ────────────────
+
+from trajectory_export import run_trajectory_export as _run_trajectory_export  # noqa: E402
+
+
 # ── Entry point ──────────────────────────────────────────────────────
 
 _TRAINERS = {
@@ -643,6 +649,8 @@ def main():
 
     if mode == "eval":
         _run_eval(cfg)
+    elif mode == "trajectory_export":
+        _run_trajectory_export(cfg)
     else:
         algorithm = cfg.get("algorithm", "rsl_rl")
         trainer_fn = _TRAINERS.get(algorithm)

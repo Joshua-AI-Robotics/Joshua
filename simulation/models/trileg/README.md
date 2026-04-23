@@ -74,6 +74,8 @@ Config Presets
 | `trileg_train_isaac_full_skrl.pbtxt`   | skrl   | Training (1500 iter) |
 | `trileg_eval_isaac_full_rsl_rl.pbtxt`  | RSL-RL | Evaluation |
 | `trileg_eval_isaac_full_skrl.pbtxt`    | skrl   | Evaluation |
+| `trileg_trajectory_export_rsl_rl.pbtxt` | RSL-RL | Export trained policy as constant trajectory |
+| `trileg_trajectory_export_skrl.pbtxt`   | skrl   | Export trained policy as constant trajectory |
 
 Quick Start
 -----------
@@ -90,6 +92,14 @@ bazel run //ai/train:trainer -- \
 # Evaluate (update checkpoint_path in the pbtxt first)
 bazel run //ai/train:trainer -- \
     --config config/config_preset/trileg/trileg_eval_isaac_full_rsl_rl.pbtxt
+
+# Export trained policy as a constant trajectory
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/trileg/trileg_trajectory_export_rsl_rl.pbtxt
+
+# Export with skrl checkpoint
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/trileg/trileg_trajectory_export_skrl.pbtxt
 ```
 
 Reward Structure
