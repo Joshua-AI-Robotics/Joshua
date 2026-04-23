@@ -16,16 +16,26 @@ _DEFAULT_SPEED = 500
 class SpikeTransport(Protocol):
     def connect(self, hub_id: Optional[str]) -> None: ...
     def disconnect(self, hub_id: Optional[str]) -> None: ...
-    def set_motor_angle(self, hub_id: Optional[str], port: str, angle: float) -> None: ...
-    def run_target(self, hub_id: Optional[str], port: str, speed: float, angle: float) -> None: ...
+    def set_motor_angle(
+        self, hub_id: Optional[str], port: str, angle: float
+    ) -> None: ...
+    def run_target(
+        self, hub_id: Optional[str], port: str, speed: float, angle: float
+    ) -> None: ...
     def run_speed(self, hub_id: Optional[str], port: str, speed: float) -> None: ...
     def set_dc(self, hub_id: Optional[str], port: str, duty: float) -> None: ...
     def stop(self, hub_id: Optional[str], port: str) -> None: ...
     def brake(self, hub_id: Optional[str], port: str) -> None: ...
     def hold(self, hub_id: Optional[str], port: str) -> None: ...
-    def reset_angle(self, hub_id: Optional[str], port: str, angle: float = 0) -> None: ...
-    def run_time(self, hub_id: Optional[str], port: str, speed: float, time_ms: float) -> None: ...
-    def run_angle(self, hub_id: Optional[str], port: str, speed: float, angle: float) -> None: ...
+    def reset_angle(
+        self, hub_id: Optional[str], port: str, angle: float = 0
+    ) -> None: ...
+    def run_time(
+        self, hub_id: Optional[str], port: str, speed: float, time_ms: float
+    ) -> None: ...
+    def run_angle(
+        self, hub_id: Optional[str], port: str, speed: float, angle: float
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -65,9 +75,7 @@ class PybricksMotorDriver(ActuatorInterface):
 
     def set_action(self, action_packet: action_packet_pb2.ActionPacket) -> None:
         action_type = action_packet.WhichOneof("action_type")
-        _log.debug(
-            "ActionPacket [%s] type=%s", action_packet.action_id, action_type
-        )
+        _log.debug("ActionPacket [%s] type=%s", action_packet.action_id, action_type)
 
         if action_type == "preset":
             self._handle_preset(action_packet.preset)
@@ -78,11 +86,14 @@ class PybricksMotorDriver(ActuatorInterface):
         elif action_type == "position":
             self._set_position(action_packet.position)
 
-        elif action_type == "torque":
-            self._set_torque(action_packet.torque)
+        elif action_type == "dc":
+            self._set_dc(action_packet.dc)
 
         elif action_type == "speed":
             self._set_speed(action_packet.speed)
+
+        elif action_type == "torque":
+            self._set_torque(action_packet.torque)
 
         else:
             _log.warning(
@@ -98,8 +109,7 @@ class PybricksMotorDriver(ActuatorInterface):
 
         if preset == preset_enum.PRESET_MIDDLE_POSITION:
             middle = (
-                self._spec.operational_lower_limit
-                + self._spec.operational_upper_limit
+                self._spec.operational_lower_limit + self._spec.operational_upper_limit
             ) / 2.0
             self._transport.run_target(hub, port, self._move_speed, middle)
 
@@ -119,20 +129,21 @@ class PybricksMotorDriver(ActuatorInterface):
         elif preset == preset_enum.PRESET_DISABLE_TORQUE:
             self._transport.stop(hub, port)
 
+        elif preset == preset_enum.PRESET_RESET_ENCODER:
+            self._transport.reset_angle(hub, port, 0)
+
         else:
             _log.warning("Unknown preset command: %s", preset)
 
     # -- Complex action handling (multi-field) --------------------------------
 
-    def _handle_complex(
-        self, complex_action: action_packet_pb2.ComplexAction
-    ) -> None:
+    def _handle_complex(self, complex_action: action_packet_pb2.ComplexAction) -> None:
         has_pos = complex_action.HasField("position")
         has_spd = complex_action.HasField("speed")
-        has_torque = complex_action.HasField("torque")
+        has_dc = complex_action.HasField("dc")
         has_dur = complex_action.HasField("duration_ms")
 
-        if not has_pos and not has_spd and not has_torque:
+        if not has_pos and not has_spd and not has_dc:
             _log.warning("Complex action has no fields set")
             return
 
@@ -143,12 +154,12 @@ class PybricksMotorDriver(ActuatorInterface):
             else:
                 _log.warning("Invalid speed value: %s", speed)
 
-        if has_torque:
-            torque = complex_action.torque
-            if -100 <= torque <= 100:
-                self._set_torque(torque)
+        if has_dc:
+            dc = complex_action.dc
+            if -100 <= dc <= 100:
+                self._set_dc(dc)
             else:
-                _log.warning("Invalid torque/dc value: %s", torque)
+                _log.warning("Invalid dc value: %s", dc)
 
         if has_pos and has_dur:
             _log.debug(
@@ -187,14 +198,23 @@ class PybricksMotorDriver(ActuatorInterface):
         self._move_speed = speed
         self._transport.run_speed(self._spec.hub_id, self._spec.port, speed)
 
-    def _set_torque(self, duty: float) -> None:
-        """Maps torque field to Pybricks dc() (-100 to 100 duty cycle)."""
+    def _set_dc(self, duty: float) -> None:
+        """Sets Pybricks dc() duty cycle (-100 to 100)."""
         self._transport.set_dc(self._spec.hub_id, self._spec.port, duty)
+
+    def _set_torque(self, value: float) -> None:
+        """Torque enable/disable: >0 holds position, 0 coasts."""
+        hub, port = self._spec.hub_id, self._spec.port
+        if value > 0:
+            self._transport.hold(hub, port)
+        else:
+            self._transport.stop(hub, port)
 
     # -- Lifecycle ------------------------------------------------------------
 
     def teardown(self) -> None:
         try:
+            self._transport.reset_angle(self._spec.hub_id, self._spec.port, 0)
             self._transport.run_target(
                 self._spec.hub_id,
                 self._spec.port,

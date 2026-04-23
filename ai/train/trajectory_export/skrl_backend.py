@@ -5,10 +5,8 @@ from __future__ import annotations
 import gymnasium as gym
 import numpy as np
 import torch
-
 from isaac_lab.task_builder import build_task_from_config  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
-
 from trajectory_export.exporter import export_trajectory_data
 from trajectory_export.rsl_rl_backend import (
     _apply_agent_overrides,
@@ -50,8 +48,7 @@ def trajectory_export_skrl(cfg: dict) -> None:
     env = wrap_env(env, wrapper="isaaclab")
 
     try:
-        agent_cfg = load_cfg_from_registry(
-            isaac_task, "rsl_rl_cfg_entry_point")
+        agent_cfg = load_cfg_from_registry(isaac_task, "rsl_rl_cfg_entry_point")
     except KeyError:
         agent_cfg = None
 
@@ -60,14 +57,12 @@ def trajectory_export_skrl(cfg: dict) -> None:
 
     obs_size = env.observation_space.shape[-1]
     action_size = env.action_space.shape[-1]
-    hidden = (agent_cfg.policy.actor_hidden_dims
-              if agent_cfg else [256, 256])
+    hidden = agent_cfg.policy.actor_hidden_dims if agent_cfg else [256, 256]
 
     class Policy(GaussianMixin, Model):
         def __init__(self, observation_space, action_space, dev, **kwargs):
             Model.__init__(self, observation_space, action_space, dev)
-            GaussianMixin.__init__(
-                self, min_log_std=-20.0, max_log_std=2.0)
+            GaussianMixin.__init__(self, min_log_std=-20.0, max_log_std=2.0)
             layers = []
             in_dim = obs_size
             for h in hidden:
@@ -75,19 +70,16 @@ def trajectory_export_skrl(cfg: dict) -> None:
                 in_dim = h
             layers.append(torch.nn.Linear(in_dim, action_size))
             self.net = torch.nn.Sequential(*layers)
-            self.log_std_parameter = torch.nn.Parameter(
-                torch.zeros(action_size))
+            self.log_std_parameter = torch.nn.Parameter(torch.zeros(action_size))
 
         def compute(self, inputs, role=""):
-            return (self.net(inputs["states"]),
-                    self.log_std_parameter, {})
+            return (self.net(inputs["states"]), self.log_std_parameter, {})
 
     class Value(DeterministicMixin, Model):
         def __init__(self, observation_space, action_space, dev, **kwargs):
             Model.__init__(self, observation_space, action_space, dev)
             DeterministicMixin.__init__(self)
-            c_hidden = (agent_cfg.policy.critic_hidden_dims
-                        if agent_cfg else [256, 256])
+            c_hidden = agent_cfg.policy.critic_hidden_dims if agent_cfg else [256, 256]
             layers = []
             in_dim = obs_size
             for h in c_hidden:
@@ -105,8 +97,7 @@ def trajectory_export_skrl(cfg: dict) -> None:
     }
 
     rollout_steps = agent_cfg.num_steps_per_env if agent_cfg else 24
-    memory = RandomMemory(
-        memory_size=rollout_steps, num_envs=1, device=device)
+    memory = RandomMemory(memory_size=rollout_steps, num_envs=1, device=device)
 
     ppo_cfg = PPO_DEFAULT_CONFIG.copy()
     agent = PPO(
@@ -125,8 +116,10 @@ def trajectory_export_skrl(cfg: dict) -> None:
     num_joints = len(joint_names)
 
     print(f"[Joshua/Isaac] Joints ({num_joints}): {joint_names}")
-    print(f"[Joshua/Isaac] dt={step_dt:.6f}s  "
-          f"warmup={warmup_steps}  record={num_record_steps}")
+    print(
+        f"[Joshua/Isaac] dt={step_dt:.6f}s  "
+        f"warmup={warmup_steps}  record={num_record_steps}"
+    )
 
     obs, _ = env.reset()
     for _ in range(warmup_steps):
@@ -143,10 +136,8 @@ def trajectory_export_skrl(cfg: dict) -> None:
             outputs = agent.act(obs, timestep=0, timesteps=0)
             actions = outputs[-1].get("mean_actions", outputs[0])
             obs, _, _, _, _ = env.step(actions)
-        all_positions[t] = (
-            raw_env.scene["robot"].data.joint_pos[0].cpu().numpy())
+        all_positions[t] = raw_env.scene["robot"].data.joint_pos[0].cpu().numpy()
         all_actions[t] = actions[0].cpu().numpy()
 
     env.close()
-    export_trajectory_data(
-        all_positions, all_actions, step_dt, cfg, joint_names)
+    export_trajectory_data(all_positions, all_actions, step_dt, cfg, joint_names)

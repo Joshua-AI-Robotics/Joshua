@@ -1,14 +1,21 @@
 #include <chrono>
 #include <list>
 #include <thread>
+#include <variant>
 
+#include "absl/strings/escaping.h"
 #include "config/proto/config.pb.h"
+#include "google/protobuf/text_format.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/string.hpp"
+
+using SubscriptionVariant = std::variant<rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr,
+                                         rclcpp::Subscription<std_msgs::msg::String>::SharedPtr>;
 
 class ActionSubscriber : public rclcpp::Node {
  private:
@@ -17,13 +24,12 @@ class ActionSubscriber : public rclcpp::Node {
     std::unique_ptr<robot::action::ActionInterface> interface;
     std::pair<float, float> limits;
     robot::perception::EncoderDataMode encoder_data_mode;
-    // Precomputed mapping constants to remove switch and expensive math from callback
-    float offset = 0.0f;        // Added to mapped value after scaling
-    float multiplier = 1.0f;    // Scale applied to (input + pre_shift)
-    float pre_shift = 0.0f;     // Added to input before scaling
-    bool mapping_valid = true;  // If false, callback will warn and return
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscription;
-    robot::action::ActionPacket reusable_packet;  // Pre-allocated packet for reuse
+    float offset = 0.0f;
+    float multiplier = 1.0f;
+    float pre_shift = 0.0f;
+    bool mapping_valid = true;
+    SubscriptionVariant subscription;
+    robot::action::ActionPacket reusable_packet;
   };
 
  public:
@@ -62,37 +68,58 @@ class ActionSubscriber : public rclcpp::Node {
             continue;
           }
 
-          // Precompute mapping parameters per actuator.
-          ComputeMapping(actuator);
-
-          // With std::list, the reference captured here is stable and will not be
-          // invalidated by adding more elements to the list. The callback only
-          // needs to set the position.
-          auto callback = [this, &actuator](const std_msgs::msg::Float32::ConstSharedPtr msg) {
-            if (!actuator.mapping_valid) {
-              RCLCPP_WARN(this->get_logger(),
-                          "Invalid encoder data mode for actuator '%s'!",
-                          actuator.topic.c_str());
-              return;
-            }
-
-            const float action_value = msg->data;
-            const float mapped_position =
-                actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
-
-            // Reuse pre-allocated packet for optimal performance
-            actuator.reusable_packet.Clear();
-            actuator.reusable_packet.set_position(mapped_position);
-
-            if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
-              RCLCPP_ERROR(this->get_logger(),
-                           "Failed to set action for actuator '%s'!",
-                           actuator.topic.c_str());
-            }
-          };
-
-          actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
-              actuator.topic, ros2_utils::CreateQosSetting(qos_setting), callback);
+          const auto data_type = subscription.ros2_data_type();
+          if (data_type == ros2::data_type::STRING) {
+            actuator.subscription = this->create_subscription<std_msgs::msg::String>(
+                actuator.topic,
+                ros2_utils::CreateQosSetting(qos_setting),
+                [this, &actuator](const std_msgs::msg::String::ConstSharedPtr msg) {
+                  actuator.reusable_packet.Clear();
+                  std::string decoded;
+                  bool parsed = false;
+                  if (absl::Base64Unescape(msg->data, &decoded)) {
+                    parsed = actuator.reusable_packet.ParseFromString(decoded);
+                  }
+                  if (!parsed) {
+                    parsed = google::protobuf::TextFormat::ParseFromString(
+                        msg->data, &actuator.reusable_packet);
+                  }
+                  if (!parsed) {
+                    RCLCPP_ERROR(this->get_logger(),
+                                 "Failed to parse ActionPacket for '%s'!",
+                                 actuator.topic.c_str());
+                    return;
+                  }
+                  if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
+                    RCLCPP_ERROR(this->get_logger(),
+                                 "Failed to set action for actuator '%s'!",
+                                 actuator.topic.c_str());
+                  }
+                });
+          } else {
+            ComputeMapping(actuator);
+            actuator.subscription = this->create_subscription<std_msgs::msg::Float32>(
+                actuator.topic,
+                ros2_utils::CreateQosSetting(qos_setting),
+                [this, &actuator](const std_msgs::msg::Float32::ConstSharedPtr msg) {
+                  if (!actuator.mapping_valid) {
+                    RCLCPP_WARN(this->get_logger(),
+                                "Invalid encoder data mode for actuator '%s'!",
+                                actuator.topic.c_str());
+                    return;
+                  }
+                  const float action_value = msg->data;
+                  const float mapped_position =
+                      actuator.offset + (action_value + actuator.pre_shift) * actuator.multiplier;
+                  actuator.reusable_packet.Clear();
+                  actuator.reusable_packet.set_position(mapped_position);
+                  if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
+                    RCLCPP_ERROR(this->get_logger(),
+                                 "Failed to set action for actuator '%s'!",
+                                 actuator.topic.c_str());
+                  }
+                });
+          }
         }
       }
     }
@@ -112,7 +139,6 @@ class ActionSubscriber : public rclcpp::Node {
   ~ActionSubscriber() {
     std::vector<std::thread> threads;
 
-    // Start all shutdown threads in parallel for teardown.
     for (auto& actuator : actuators_) {
       threads.emplace_back([&actuator]() {
         actuator.reusable_packet.Clear();
@@ -132,7 +158,6 @@ class ActionSubscriber : public rclcpp::Node {
  private:
   std::list<Actuator> actuators_;
 
-  // Compute mapping constants for the given actuator, called during setup
   void ComputeMapping(Actuator& actuator) {
     const float range = actuator.limits.second - actuator.limits.first;
     switch (actuator.encoder_data_mode) {
@@ -150,14 +175,14 @@ class ActionSubscriber : public rclcpp::Node {
         return;
       case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE:
         actuator.offset = actuator.limits.first;
-        actuator.pre_shift = 1.0f;           // (x + 1)
-        actuator.multiplier = range / 2.0f;  // ... * range/2
+        actuator.pre_shift = 1.0f;
+        actuator.multiplier = range / 2.0f;
         actuator.mapping_valid = true;
         return;
       case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
         actuator.offset = actuator.limits.first;
-        actuator.pre_shift = static_cast<float>(M_PI) / 2.0f;    // + pi/2
-        actuator.multiplier = range / static_cast<float>(M_PI);  // ... / pi
+        actuator.pre_shift = static_cast<float>(M_PI) / 2.0f;
+        actuator.multiplier = range / static_cast<float>(M_PI);
         actuator.mapping_valid = true;
         return;
       default:

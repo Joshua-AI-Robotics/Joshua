@@ -10,13 +10,15 @@ enum PresetCommand {
   PRESET_TEARDOWN = 3;
   PRESET_ENABLE_TORQUE = 4;
   PRESET_DISABLE_TORQUE = 5;
+  PRESET_RESET_ENCODER = 6;
 }
 
 message ComplexAction {
   optional float position = 1;      // Target position
   optional float speed = 2;         // Movement speed
-  optional float torque = 3;        // Torque setting
+  optional float torque = 3;        // Torque setting (e.g. servo torque enable/disable)
   optional uint32 duration_ms = 4;  // Duration in milliseconds
+  optional float dc = 5;            // Duty cycle (-100 to 100)
 }
 
 // Main action packet - uses oneof for type safety
@@ -26,9 +28,10 @@ message ActionPacket {
 
   oneof action_type {
     float position = 3;         // Simple position command
-    float torque = 4;           // Simple torque command
+    float torque = 4;           // Torque setting (e.g. servo torque enable/disable)
     float speed = 5;            // Simple speed command
     PresetCommand preset = 6;   // Preset command
     ComplexAction complex = 7;  // Complex multi-parameter action
+    float dc = 8;               // Duty cycle (-100 to 100)
   }
 }

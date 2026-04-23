@@ -6,7 +6,6 @@ import json
 import os
 
 import numpy as np
-
 from trajectory_export.cycle_detection import detect_gait_cycle
 from trajectory_export.pbtxt_writer import write_trajectory_pbtxt
 
@@ -73,8 +72,10 @@ def export_trajectory_data(
             export_indices.append(i)
             export_topics.append(topic_map[name])
         else:
-            print(f"[Joshua/Isaac] WARNING: no topic mapping for joint "
-                  f"'{name}', skipping")
+            print(
+                f"[Joshua/Isaac] WARNING: no topic mapping for joint "
+                f"'{name}', skipping"
+            )
 
     if not export_indices:
         raise ValueError(
@@ -88,8 +89,10 @@ def export_trajectory_data(
     if detect_cycle_flag:
         period = detect_gait_cycle(pos_data)
         if period and period < len(pos_data):
-            print(f"[Joshua/Isaac] Detected gait cycle: {period} steps "
-                  f"({period * step_dt:.3f}s)")
+            print(
+                f"[Joshua/Isaac] Detected gait cycle: {period} steps "
+                f"({period * step_dt:.3f}s)"
+            )
             pos_data = pos_data[:period]
             act_data = act_data[:period]
         else:
@@ -98,8 +101,10 @@ def export_trajectory_data(
     if export_freq > 0:
         export_dt = 1.0 / export_freq
         sim_rate = 1.0 / step_dt
-        print(f"[Joshua/Isaac] Downsampling from {sim_rate:.1f}Hz "
-              f"to {export_freq:.1f}Hz")
+        print(
+            f"[Joshua/Isaac] Downsampling from {sim_rate:.1f}Hz "
+            f"to {export_freq:.1f}Hz"
+        )
         pos_data = _downsample(pos_data, step_dt, export_dt)
         act_data = _downsample(act_data, step_dt, export_dt)
         step_dt = export_dt
@@ -107,17 +112,27 @@ def export_trajectory_data(
     num_steps = len(pos_data)
     timestamps = np.arange(num_steps) * step_dt
 
-    print(f"[Joshua/Isaac] Exporting {num_steps} steps, "
-          f"{len(export_topics)} joints, "
-          f"duration={timestamps[-1]:.3f}s")
+    print(
+        f"[Joshua/Isaac] Exporting {num_steps} steps, "
+        f"{len(export_topics)} joints, "
+        f"duration={timestamps[-1]:.3f}s"
+    )
 
     write_trajectory_pbtxt(
         os.path.join(output_dir, "trajectory_position.pbtxt"),
-        export_topics, timestamps, pos_data, "position", node_id,
+        export_topics,
+        timestamps,
+        pos_data,
+        "position",
+        node_id,
     )
     write_trajectory_pbtxt(
         os.path.join(output_dir, "trajectory_torque.pbtxt"),
-        export_topics, timestamps, act_data, "torque", node_id,
+        export_topics,
+        timestamps,
+        act_data,
+        "torque",
+        node_id,
     )
 
     npy_pos_path = os.path.join(output_dir, "trajectory_position.npy")
@@ -162,10 +177,11 @@ def run_trajectory_export(cfg: dict) -> None:
 
     if algorithm == "rsl_rl":
         from trajectory_export.rsl_rl_backend import trajectory_export_rsl_rl
+
         trajectory_export_rsl_rl(cfg)
     elif algorithm == "skrl":
         from trajectory_export.skrl_backend import trajectory_export_skrl
+
         trajectory_export_skrl(cfg)
     else:
-        raise ValueError(
-            f"Unknown algorithm '{algorithm}' for trajectory export")
+        raise ValueError(f"Unknown algorithm '{algorithm}' for trajectory export")

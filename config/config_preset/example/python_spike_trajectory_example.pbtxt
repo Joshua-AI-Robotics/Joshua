@@ -13,7 +13,7 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_A/command"
         }
       }
@@ -43,7 +43,7 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_B/command"
         }
       }
@@ -73,7 +73,7 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_C/command"
         }
       }
@@ -106,15 +106,15 @@ robot {
         node_type: TRAJECTORY_PUBLISHER
         qos_setting { depth: 10 }
         publishers {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_A/command"
         }
         publishers {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_B/command"
         }
         publishers {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_C/command"
         }
       }

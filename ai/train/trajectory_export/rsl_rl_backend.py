@@ -5,10 +5,8 @@ from __future__ import annotations
 import gymnasium as gym
 import numpy as np
 import torch
-
 from isaac_lab.task_builder import build_task_from_config  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
-
 from trajectory_export.exporter import export_trajectory_data
 
 
@@ -81,12 +79,11 @@ def _apply_env_overrides(env_cfg, cfg: dict) -> None:
                     attr.scale = sp["action_scale"]
         if "bounce_threshold_velocity" in sp:
             env_cfg.sim.physx.bounce_threshold_velocity = sp[
-                "bounce_threshold_velocity"]
+                "bounce_threshold_velocity"
+            ]
         if "terrain_friction" in sp:
-            env_cfg.sim.physics_material.static_friction = sp[
-                "terrain_friction"]
-            env_cfg.sim.physics_material.dynamic_friction = sp[
-                "terrain_friction"]
+            env_cfg.sim.physics_material.static_friction = sp["terrain_friction"]
+            env_cfg.sim.physics_material.dynamic_friction = sp["terrain_friction"]
 
     term = cfg.get("termination", {})
     if term and "min_root_height" in term:
@@ -118,9 +115,11 @@ def _apply_env_overrides(env_cfg, cfg: dict) -> None:
 
     target = cfg.get("target", {})
     if target:
-        target_pos = (target.get("x", 1000.0),
-                      target.get("y", 0.0),
-                      target.get("z", 0.0))
+        target_pos = (
+            target.get("x", 1000.0),
+            target.get("y", 0.0),
+            target.get("z", 0.0),
+        )
         for group_name in ("rewards", "observations"):
             group = getattr(env_cfg, group_name, None)
             if group is None:
@@ -134,8 +133,8 @@ def _apply_env_overrides(env_cfg, cfg: dict) -> None:
 
 def trajectory_export_rsl_rl(cfg: dict) -> None:
     """Export trajectory from an RSL-RL checkpoint."""
-    from rsl_rl.runners import OnPolicyRunner
     from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+    from rsl_rl.runners import OnPolicyRunner
 
     isaac_task = _resolve_task(cfg)
     checkpoint_path = cfg["checkpoint_path"]
@@ -156,7 +155,10 @@ def trajectory_export_rsl_rl(cfg: dict) -> None:
     agent_cfg.device = device
 
     runner = OnPolicyRunner(
-        env, agent_cfg.to_dict(), log_dir=None, device=device,
+        env,
+        agent_cfg.to_dict(),
+        log_dir=None,
+        device=device,
     )
     runner.load(checkpoint_path)
 
@@ -165,8 +167,10 @@ def trajectory_export_rsl_rl(cfg: dict) -> None:
     num_joints = len(joint_names)
 
     print(f"[Joshua/Isaac] Joints ({num_joints}): {joint_names}")
-    print(f"[Joshua/Isaac] dt={step_dt:.6f}s  "
-          f"warmup={warmup_steps}  record={num_record_steps}")
+    print(
+        f"[Joshua/Isaac] dt={step_dt:.6f}s  "
+        f"warmup={warmup_steps}  record={num_record_steps}"
+    )
 
     obs = env.get_observations()
     for _ in range(warmup_steps):
@@ -181,10 +185,8 @@ def trajectory_export_rsl_rl(cfg: dict) -> None:
         with torch.inference_mode():
             actions = runner.alg.act(obs)
         obs, _, _, dones, _ = env.step(actions)
-        all_positions[t] = (
-            raw_env.scene["robot"].data.joint_pos[0].cpu().numpy())
+        all_positions[t] = raw_env.scene["robot"].data.joint_pos[0].cpu().numpy()
         all_actions[t] = actions[0].cpu().numpy()
 
     env.close()
-    export_trajectory_data(
-        all_positions, all_actions, step_dt, cfg, joint_names)
+    export_trajectory_data(all_positions, all_actions, step_dt, cfg, joint_names)

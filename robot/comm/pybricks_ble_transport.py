@@ -218,9 +218,7 @@ class PybricksBleTransport:
     def hold(self, hub_id: Optional[str], port: str) -> None:
         self._send(hub_id, f"HOLD {port}")
 
-    def reset_angle(
-        self, hub_id: Optional[str], port: str, angle: float = 0
-    ) -> None:
+    def reset_angle(self, hub_id: Optional[str], port: str, angle: float = 0) -> None:
         self._send(hub_id, f"RST {port} {angle}")
 
     def run_time(
@@ -238,7 +236,9 @@ class PybricksBleTransport:
         """Try to remove a cached BLE device so the adapter re-scans cleanly."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "bluetoothctl", "remove", address,
+                "bluetoothctl",
+                "remove",
+                address,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -251,7 +251,9 @@ class PybricksBleTransport:
             from pybricksdev.ble import find_device
             from pybricksdev.connections.pybricks import PybricksHubBLE
         except Exception as exc:
-            raise RuntimeError("pybricksdev BLE dependencies are not available") from exc
+            raise RuntimeError(
+                "pybricksdev BLE dependencies are not available"
+            ) from exc
 
         last_exc: Exception | None = None
         last_device_address: str | None = None
@@ -261,12 +263,15 @@ class PybricksBleTransport:
             try:
                 _log.info(
                     "BLE connect attempt %d/%d for hub '%s'",
-                    attempt, _MAX_CONNECT_RETRIES, hub_id,
+                    attempt,
+                    _MAX_CONNECT_RETRIES,
+                    hub_id,
                 )
 
                 if attempt > 1 and last_device_address:
                     _log.info(
-                        "Removing stale BLE cache for %s", last_device_address,
+                        "Removing stale BLE cache for %s",
+                        last_device_address,
                     )
                     await self._remove_stale_ble_device(last_device_address)
 
@@ -288,14 +293,18 @@ class PybricksBleTransport:
                 await asyncio.sleep(0.5)
                 _log.info(
                     "Program uploaded to hub '%s' on attempt %d",
-                    hub_id, attempt,
+                    hub_id,
+                    attempt,
                 )
                 return hub
             except Exception as exc:
                 last_exc = exc
                 _log.warning(
                     "BLE connect attempt %d/%d failed for hub '%s': %s",
-                    attempt, _MAX_CONNECT_RETRIES, hub_id, exc,
+                    attempt,
+                    _MAX_CONNECT_RETRIES,
+                    hub_id,
+                    exc,
                 )
                 if hub is not None:
                     try:
