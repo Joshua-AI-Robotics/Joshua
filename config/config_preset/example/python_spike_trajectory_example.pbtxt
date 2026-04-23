@@ -129,7 +129,6 @@ robot {
         waypoints { timestamp_sec: 3.000000  topic: "spike/motor_B/command"  action { position: -30 } }
         waypoints { timestamp_sec: 4.000000  topic: "spike/motor_A/command"  action { position: 0 } }
         waypoints { timestamp_sec: 4.000000  topic: "spike/motor_B/command"  action { position: 0 } }
-        
       }
     }
   }

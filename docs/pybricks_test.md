@@ -93,9 +93,9 @@ source /opt/ros/humble/setup.bash
 
 ## Troubleshooting
 - If BLE connect fails: power‑cycle the hub and retry.
-- If you see `ModuleNotFoundError: rclpy._rclpy_pybind11`, you’re using conda Python.
+- If you see `ModuleNotFoundError: rclpy._rclpy_pybind11`, you're using conda Python.
   Use `/usr/bin/python3` after `conda deactivate`.
-- If the motor doesn’t move, double‑check the port (`A/B/C/D`) and hub name.
+- If the motor doesn't move, double‑check the port (`A/B/C/D`) and hub name.
 
 ### BLE connection fail
 Intel Bluetooth adapters (specifically the Intel AX210, AC 9260, and similar chips) are notorious for two specific issues on Linux that would cause your TimeoutError:
