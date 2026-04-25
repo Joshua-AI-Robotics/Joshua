@@ -69,6 +69,7 @@ def build_robot_from_usd(
     init_joint_pos: dict | None = None,
     actuator_stiffness: float = 0.0,
     actuator_damping: float = 0.0,
+    actuator_joint_names: list[str] | None = None,
 ) -> ArticulationCfg:
     """Build an ``ArticulationCfg`` from a local USD file.
 
@@ -81,6 +82,9 @@ def build_robot_from_usd(
         init_joint_pos: Optional joint position overrides ``{"pattern": value}``.
         actuator_stiffness: Joint stiffness (0 = pure torque control).
         actuator_damping: Joint damping.
+        actuator_joint_names: Regex patterns for actuated joints.
+            Joints not matched are passive (no drive).
+            Defaults to ``[".*"]`` (all joints actuated).
     """
     return ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
@@ -106,7 +110,7 @@ def build_robot_from_usd(
         ),
         actuators={
             "body": ImplicitActuatorCfg(
-                joint_names_expr=[".*"],
+                joint_names_expr=actuator_joint_names or [".*"],
                 stiffness=actuator_stiffness,
                 damping=actuator_damping,
             ),

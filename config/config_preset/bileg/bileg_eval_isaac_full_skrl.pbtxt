@@ -31,6 +31,7 @@ ai {
             value: 0.0
           }
           actuator_damping: 15.0
+          actuator_joint_names: ".*_motor"
         }
         rewards {
           key: "progress"
@@ -164,8 +165,8 @@ ai {
         observations {
           key: "body_forces"
           value {
-            body_names: "left_leg"
-            body_names: "right_leg"
+            body_names: "left_wheel"
+            body_names: "right_wheel"
             params {
               key: "scale"
               value: 0.1

@@ -119,16 +119,13 @@ robot {
         }
       }
       trajectory {
-        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_A/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_B/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 1.000000  topic: "spike/motor_A/command"  action { position: -30 } }
-        waypoints { timestamp_sec: 1.000000  topic: "spike/motor_B/command"  action { position: 30 } }
-        waypoints { timestamp_sec: 2.000000  topic: "spike/motor_A/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 2.000000  topic: "spike/motor_B/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 3.000000  topic: "spike/motor_A/command"  action { position: 30 } }
-        waypoints { timestamp_sec: 3.000000  topic: "spike/motor_B/command"  action { position: -30 } }
-        waypoints { timestamp_sec: 4.000000  topic: "spike/motor_A/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 4.000000  topic: "spike/motor_B/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_A/command"  action { dc: -30 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_B/command"  action { dc: 30 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_C/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 2.000000  topic: "spike/motor_C/command"  action { position: -30 } }
+        waypoints { timestamp_sec: 4.000000  topic: "spike/motor_C/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 6.000000  topic: "spike/motor_C/command"  action { position: -30 } }
+        waypoints { timestamp_sec: 10.000000  topic: "spike/motor_C/command"  action { position: 0 } }
       }
     }
   }
