@@ -1,0 +1,18 @@
+0 Technic Pin Connector Perpendicular 3 x 3 Bent 90 with 4 Pins
+0 Name: 55615.dat
+0 Author: Lego2USD
+0 !LDRAW_ORG Unofficial_Part
+0 !LICENSE Licensed under CC BY-SA 4.0 : see CAreadme.txt
+
+0 BFC CERTIFY CCW
+
+0 // Beam connector holes.
+0 !LDCAD SNAP_INCL [ref=connhole.dat] [pos=0 0 0] [ori=0 1 0 0 0 1 1 0 0]
+0 !LDCAD SNAP_INCL [ref=connhole.dat] [pos=0 0 40] [ori=0 1 0 0 0 1 1 0 0]
+0 !LDCAD SNAP_INCL [ref=connhole.dat] [pos=0 -40 0] [ori=0 1 0 -1 0 0 0 0 -1]
+
+0 // Four integrated Technic pin snaps.
+0 !LDCAD SNAP_CYL [id=pinZ0] [gender=M] [caps=none] [secs=R 6 20] [center=true] [slide=true] [pos=0 0 -20] [ori=1 0 0 0 0 1 0 -1 0]
+0 !LDCAD SNAP_CYL [id=pinZ1] [gender=M] [caps=none] [secs=R 6 20] [center=true] [slide=true] [pos=0 -40 -20] [ori=1 0 0 0 0 1 0 -1 0]
+0 !LDCAD SNAP_CYL [id=pinY0] [gender=M] [caps=none] [secs=R 6 20] [center=true] [slide=true] [pos=0 20 0] [ori=1 0 0 0 1 0 0 0 1]
+0 !LDCAD SNAP_CYL [id=pinY1] [gender=M] [caps=none] [secs=R 6 20] [center=true] [slide=true] [pos=0 20 40] [ori=1 0 0 0 1 0 0 0 1]
