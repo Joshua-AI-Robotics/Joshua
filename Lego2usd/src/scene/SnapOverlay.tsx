@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { hotspotKey, useInstanceHotspots, type InstanceHotspot } from './snapHotspots';
+import { hotspotKey, type InstanceHotspot } from './snapHotspots';
 import { useSceneStore } from './store';
 
 type SnapOverlayProps = {
+  spots: InstanceHotspot[];
   onPickTarget: (spot: InstanceHotspot) => void;
   onGrabTarget?: (spot: InstanceHotspot) => void;
   onContextTarget?: (spot: InstanceHotspot) => void;
@@ -33,13 +34,13 @@ function spotWithPreferredSide(
 }
 
 export function SnapOverlay({
+  spots,
   onPickTarget,
   onGrabTarget,
   onContextTarget,
   highlightKeys = [],
   collisionInstanceIds = [],
 }: SnapOverlayProps) {
-  const spots = useInstanceHotspots();
   const joints = useSceneStore((s) => s.joints);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const collisionInstances = useMemo(

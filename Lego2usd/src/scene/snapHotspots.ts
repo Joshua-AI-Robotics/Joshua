@@ -22,12 +22,17 @@ function useInstanceHotspots(): InstanceHotspot[] {
   const parts = useSceneStore((s) => s.parts);
   const motorAngles = useSceneStore((s) => s.motorAngles);
   const [loaded, setLoaded] = useState<Map<string, LoadedPart>>(new Map());
+  const partIdsKey = useMemo(
+    () => [...new Set(parts.map((p) => p.partId))].sort().join('\0'),
+    [parts],
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const next = new Map<string, LoadedPart>();
-      for (const partId of new Set(parts.map((p) => p.partId))) {
+      const partIds = partIdsKey ? partIdsKey.split('\0') : [];
+      for (const partId of partIds) {
         next.set(partId, await loadPart(partId));
       }
       if (!cancelled) setLoaded(next);
@@ -35,7 +40,7 @@ function useInstanceHotspots(): InstanceHotspot[] {
     return () => {
       cancelled = true;
     };
-  }, [parts]);
+  }, [partIdsKey]);
 
   return useMemo(() => {
     const out: InstanceHotspot[] = [];

@@ -232,9 +232,12 @@ export function connectSnapCandidate(candidate: SnapConnectionCandidate): boolea
     return false;
   }
 
-  for (const placement of liveCandidate.assemblyTransforms) {
-    state.setTransform(placement.instanceId, placement.transform);
-  }
+  state.setTransforms(
+    liveCandidate.assemblyTransforms.map((placement) => ({
+      instanceId: placement.instanceId,
+      transform: placement.transform,
+    })),
+  );
   addSnapJoint(
     liveCandidate.fixed.instanceId,
     liveCandidate.moving.instanceId,

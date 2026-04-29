@@ -55,6 +55,7 @@ type SceneState = {
   addPart: (partId: string, transform?: THREE.Matrix4) => string;
   removePart: (instanceId: string) => void;
   setTransform: (instanceId: string, m: THREE.Matrix4) => void;
+  setTransforms: (updates: { instanceId: string; transform: THREE.Matrix4 }[]) => void;
   rotatePart: (instanceId: string, axis: TransformAxis, degrees: number) => void;
   mirrorPart: (instanceId: string, axis: TransformAxis) => void;
   toggleMotorAnimation: (instanceId: string) => void;
@@ -146,6 +147,23 @@ export const useSceneStore = create<SceneState>((set) => ({
         p.instanceId === instanceId ? { ...p, ...pose } : p,
       ),
     }));
+  },
+
+  setTransforms: (updates) => {
+    if (updates.length === 0) return;
+    const posesById = new Map(
+      updates.map(({ instanceId, transform }) => [instanceId, matrixToPose(transform)]),
+    );
+    set((s) => {
+      let changed = false;
+      const parts = s.parts.map((part) => {
+        const pose = posesById.get(part.instanceId);
+        if (!pose) return part;
+        changed = true;
+        return { ...part, ...pose };
+      });
+      return changed ? { parts } : s;
+    });
   },
 
   rotatePart: (instanceId, axis, degrees) =>

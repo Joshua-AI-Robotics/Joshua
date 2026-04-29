@@ -183,6 +183,9 @@ export default function App() {
   const joints = useSceneStore((s) => s.joints);
   const removePart = useSceneStore((s) => s.removePart);
   const removeJoint = useSceneStore((s) => s.removeJoint);
+  const anyMotorAnimating = useSceneStore((s) =>
+    Object.values(s.motorAnimations).some(Boolean),
+  );
 
   const hotspots = useInstanceHotspots();
   const hotspotsRef = useRef<InstanceHotspot[]>([]);
@@ -227,26 +230,37 @@ export default function App() {
     if (snapConnect.first) highlightedSnapKeys.push(hotspotKey(snapConnect.first));
     if (snapConnect.second) highlightedSnapKeys.push(hotspotKey(snapConnect.second));
   }
+  const motionActive = Boolean(drag) || gizmoDragging || anyMotorAnimating;
+  const visibleSceneOverlaps = useMemo(
+    () => (motionActive ? [] : sceneOverlaps),
+    [motionActive, sceneOverlaps],
+  );
   const collisionInstanceIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const overlap of sceneOverlaps) {
+    for (const overlap of visibleSceneOverlaps) {
       ids.add(overlap.aInstanceId);
       ids.add(overlap.bInstanceId);
     }
     return [...ids];
-  }, [sceneOverlaps]);
+  }, [visibleSceneOverlaps]);
 
   useEffect(() => {
+    if (motionActive) return;
+
     let cancelled = false;
-    findSceneOverlaps(parts, joints)
-      .then((overlaps) => {
-        if (!cancelled) setSceneOverlaps(overlaps);
-      })
-      .catch((err) => console.warn('findSceneOverlaps failed', err));
+    const handle = window.setTimeout(() => {
+      findSceneOverlaps(parts, joints)
+        .then((overlaps) => {
+          if (!cancelled) setSceneOverlaps(overlaps);
+        })
+        .catch((err) => console.warn('findSceneOverlaps failed', err));
+    }, 120);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(handle);
     };
-  }, [parts, joints]);
+  }, [parts, joints, motionActive]);
 
   const restoreIfMoved = useCallback((d: DragState | null) => {
     if (!d || d.source !== 'scene' || !d.moved) {
@@ -254,10 +268,12 @@ export default function App() {
     }
     const poses = d.connectedPoses ?? [];
     if (poses.length > 0) {
-      const state = useSceneStore.getState();
-      for (const pose of poses) {
-        state.setTransform(pose.instanceId, pose.originalMatrix);
-      }
+      useSceneStore.getState().setTransforms(
+        poses.map((pose) => ({
+          instanceId: pose.instanceId,
+          transform: pose.originalMatrix,
+        })),
+      );
       return;
     }
     if (d.originalPose && d.instanceId) {
@@ -357,10 +373,49 @@ export default function App() {
         nextRoot,
         rootOriginal.originalMatrix.clone().invert(),
       );
-      for (const entry of connectedPoses) {
-        const next = new THREE.Matrix4().multiplyMatrices(delta, entry.originalMatrix);
-        state.setTransform(entry.instanceId, next);
+      state.setTransforms(
+        connectedPoses.map((entry) => ({
+          instanceId: entry.instanceId,
+          transform: new THREE.Matrix4().multiplyMatrices(
+            delta,
+            entry.originalMatrix,
+          ),
+        })),
+      );
+    };
+
+    let scenePoseFrame: number | null = null;
+    let pendingScenePose: {
+      partId: string;
+      instanceId?: string;
+      pose: Pose;
+    } | null = null;
+
+    const flushScenePose = () => {
+      const pending = pendingScenePose;
+      pendingScenePose = null;
+      scenePoseFrame = null;
+      if (!pending) return;
+      const activeDrag = dragRef.current;
+      if (
+        !activeDrag ||
+        activeDrag.source !== 'scene' ||
+        activeDrag.partId !== pending.partId ||
+        activeDrag.instanceId !== pending.instanceId
+      ) {
+        return;
       }
+      applyScenePose(activeDrag, pending.pose);
+    };
+
+    const scheduleScenePose = (current: DragState, pose: Pose) => {
+      pendingScenePose = {
+        partId: current.partId,
+        instanceId: current.instanceId,
+        pose,
+      };
+      if (scenePoseFrame !== null) return;
+      scenePoseFrame = window.requestAnimationFrame(flushScenePose);
     };
 
     const onMove = (ev: PointerEvent) => {
@@ -385,12 +440,14 @@ export default function App() {
         ev.clientY >= rect.top &&
         ev.clientY <= rect.bottom;
       if (!inside) {
-        setDrag((prev) => {
-          if (!prev) return prev;
-          const next = { ...prev, target: null, pose: null };
-          dragRef.current = next;
-          return next;
-        });
+        const next = { ...current, target: null, pose: null };
+        dragRef.current = next;
+        if (dragSource === 'palette' || current.target || current.pose) {
+          setDrag((prev) => {
+            if (!prev || prev.partId !== dragPartId) return prev;
+            return next;
+          });
+        }
         return;
       }
       const screenX = ev.clientX - rect.left;
@@ -419,6 +476,9 @@ export default function App() {
 
       if (nearest) {
         const tgt = nearest;
+        const nextTargetKey = hotspotKey(tgt);
+        const currentTargetKey = current.target ? hotspotKey(current.target) : null;
+        if (currentTargetKey === nextTargetKey && current.pose) return;
         computeSnapPose(dragPartId, tgt)
           .then(({ transform }) => {
             const activeDrag = dragRef.current;
@@ -441,18 +501,23 @@ export default function App() {
                   ? [originalScale[0], originalScale[1], originalScale[2]]
                   : [sv.x, sv.y, sv.z],
             };
-            if (dragSource === 'scene') applyScenePose(activeDrag, nextPose);
-            setDrag((prev) => {
-              if (!prev || prev.partId !== dragPartId) return prev;
-              const next = {
-                ...prev,
-                target: tgt,
-                pose: nextPose,
-                moved: dragSource === 'scene' ? true : prev.moved,
-              };
-              dragRef.current = next;
-              return next;
-            });
+            const previousTargetKey = activeDrag.target
+              ? hotspotKey(activeDrag.target)
+              : null;
+            const next = {
+              ...activeDrag,
+              target: tgt,
+              pose: nextPose,
+              moved: dragSource === 'scene' ? true : activeDrag.moved,
+            };
+            dragRef.current = next;
+            if (dragSource === 'scene') scheduleScenePose(next, nextPose);
+            if (dragSource === 'palette' || previousTargetKey !== nextTargetKey) {
+              setDrag((prev) => {
+                if (!prev || prev.partId !== dragPartId) return prev;
+                return next;
+              });
+            }
           })
           .catch((err) => console.warn('computeSnapPose failed', err));
         return;
@@ -478,21 +543,24 @@ export default function App() {
                 : [1, 1, 1],
           }
         : null;
-      if (dragSource === 'scene' && nextPose) applyScenePose(current, nextPose);
-      setDrag((prev) => {
-        if (!prev || prev.partId !== dragPartId) return prev;
-        const next = {
-          ...prev,
-          target: null,
-          pose: nextPose,
-          moved: dragSource === 'scene' && nextPose ? true : prev.moved,
-        };
-        dragRef.current = next;
-        return next;
-      });
+      const next = {
+        ...current,
+        target: null,
+        pose: nextPose,
+        moved: dragSource === 'scene' && nextPose ? true : current.moved,
+      };
+      dragRef.current = next;
+      if (dragSource === 'scene' && nextPose) scheduleScenePose(next, nextPose);
+      if (dragSource === 'palette' || current.target) {
+        setDrag((prev) => {
+          if (!prev || prev.partId !== dragPartId) return prev;
+          return next;
+        });
+      }
     };
 
     const onUp = async (ev: PointerEvent) => {
+      flushScenePose();
       const snapshot = dragRef.current;
       dragRef.current = null;
       setDrag(null);
@@ -548,6 +616,9 @@ export default function App() {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     return () => {
+      if (scenePoseFrame !== null) {
+        window.cancelAnimationFrame(scenePoseFrame);
+      }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
@@ -768,6 +839,7 @@ export default function App() {
                   />
                 )}
                 <SnapOverlay
+                  spots={hotspots}
                   onPickTarget={handlePick}
                   onGrabTarget={beginMoveFromHotspot}
                   onContextTarget={openContextMenuForHotspot}
@@ -834,13 +906,13 @@ export default function App() {
               onCancel={() => setSnapConnect(emptySnapConnectState())}
             />
           )}
-          {!usdaPreview && sceneOverlaps.length > 0 && (
+          {!usdaPreview && visibleSceneOverlaps.length > 0 && (
             <div className="scene-warning">
               Overlap detected
               <span>
-                {sceneOverlaps.length === 1
+                {visibleSceneOverlaps.length === 1
                   ? '1 part pair conflicts'
-                  : `${sceneOverlaps.length} part pairs conflict`}
+                  : `${visibleSceneOverlaps.length} part pairs conflict`}
               </span>
             </div>
           )}
