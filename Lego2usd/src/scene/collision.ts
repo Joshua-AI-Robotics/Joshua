@@ -1,8 +1,15 @@
 import * as THREE from 'three';
 import { loadPart, type LoadedPart } from '../ldraw/loadPart';
+import {
+  type MotorSpec,
+  motorAxisInSceneFrame,
+  motorPivotInSceneFrame,
+  motorSpecForPart,
+} from '../ldraw/motorSpecs';
 import type { SnapHotspot } from '../ldraw/snapParser';
 import {
   instancePoseMatrix,
+  useSceneStore,
   type JointInstance,
   type PartInstance,
 } from './store';
@@ -33,6 +40,7 @@ type LoadedCollisionPart = {
   instance: PartInstance;
   part: LoadedPart;
   transform: THREE.Matrix4;
+  motorAngle: number;
   bounds: THREE.Box3;
   boxes: CollisionBox[];
 };
@@ -85,21 +93,26 @@ export async function overlapVolumeForPartTransforms(
   partTransforms: PartTransform[],
   others: PartInstance[],
   allowances: ConnectorOverlapAllowance[] = [],
+  motorAngles: Record<string, number> = useSceneStore.getState().motorAngles,
 ): Promise<number> {
   const moving = await Promise.all(
     partTransforms.map(async ({ instanceId, partId, transform }, index) => {
       const part = await loadPart(partId);
       const resolvedInstanceId = instanceId ?? `moving_${index}`;
+      const motorAngle = instanceId ? motorAngles[instanceId] ?? 0 : 0;
+      const boxes = await transformedCollisionBoxes(
+        resolvedInstanceId,
+        partId,
+        transform,
+        motorAngle,
+      );
       return {
         instanceId: resolvedInstanceId,
         partId,
         transform,
-        bounds: transformedBounds(part.bounds, transform),
-        boxes: await transformedCollisionBoxes(
-          resolvedInstanceId,
-          partId,
-          transform,
-        ),
+        bounds: collisionBounds(part.bounds, transform, boxes, motorAngle),
+        boxes,
+        motorAngle,
       };
     }),
   );
@@ -108,11 +121,18 @@ export async function overlapVolumeForPartTransforms(
   for (const other of others) {
     const otherPart = await loadPart(other.partId);
     const otherTransform = instancePoseMatrix(other);
-    const otherBounds = transformedBounds(otherPart.bounds, otherTransform);
+    const otherMotorAngle = motorAngles[other.instanceId] ?? 0;
     const otherBoxes = await transformedCollisionBoxes(
       other.instanceId,
       other.partId,
       otherTransform,
+      otherMotorAngle,
+    );
+    const otherBounds = collisionBounds(
+      otherPart.bounds,
+      otherTransform,
+      otherBoxes,
+      otherMotorAngle,
     );
     for (const placement of moving) {
       const broadVolume = boxOverlapVolume(placement.bounds, otherBounds);
@@ -123,17 +143,16 @@ export async function overlapVolumeForPartTransforms(
         allowances,
       );
       overlapVolume += collisionOverlap;
-      if (
-        collisionOverlap > CONTAINMENT_OVERLAP_EPSILON_LDU3 ||
-        allowances.length === 0
-      ) {
+      if (collisionOverlap > CONTAINMENT_OVERLAP_EPSILON_LDU3) {
         overlapVolume += await containmentPenalty(
           placement.boxes,
           placement.partId,
           placement.transform,
+          placement.motorAngle,
           otherBoxes,
           other.partId,
           otherTransform,
+          otherMotorAngle,
           allowances,
         );
       }
@@ -146,21 +165,26 @@ export async function overlapVolumeForPartTransforms(
 export async function findSceneOverlaps(
   parts: PartInstance[],
   joints: JointInstance[] = [],
+  motorAngles: Record<string, number> = useSceneStore.getState().motorAngles,
 ): Promise<SceneOverlap[]> {
   const loaded = await Promise.all(
     parts.map(async (instance) => {
       const part = await loadPart(instance.partId);
       const transform = instancePoseMatrix(instance);
+      const motorAngle = motorAngles[instance.instanceId] ?? 0;
+      const boxes = await transformedCollisionBoxes(
+        instance.instanceId,
+        instance.partId,
+        transform,
+        motorAngle,
+      );
       return {
         instance,
         part,
         transform,
-        bounds: transformedBounds(part.bounds, transform),
-        boxes: await transformedCollisionBoxes(
-          instance.instanceId,
-          instance.partId,
-          transform,
-        ),
+        motorAngle,
+        bounds: collisionBounds(part.bounds, transform, boxes, motorAngle),
+        boxes,
       };
     }),
   );
@@ -184,17 +208,16 @@ export async function findSceneOverlaps(
         allowances,
       );
       let volume = collisionOverlap;
-      if (
-        collisionOverlap > CONTAINMENT_OVERLAP_EPSILON_LDU3 ||
-        allowances.length === 0
-      ) {
+      if (collisionOverlap > CONTAINMENT_OVERLAP_EPSILON_LDU3) {
         volume += await containmentPenalty(
           loaded[a].boxes,
           loaded[a].instance.partId,
           loaded[a].transform,
+          loaded[a].motorAngle,
           loaded[b].boxes,
           loaded[b].instance.partId,
           loaded[b].transform,
+          loaded[b].motorAngle,
           allowances,
         );
       }
@@ -289,15 +312,32 @@ function connectorAllowancesForJointPair(
     const childHotspot = child?.part.hotspots.find(
       (hotspot) => hotspot.id === joint.childHotspotId,
     );
+    const currentParentHotspot =
+      parentHotspot && parent
+        ? motorAwareHotspot(parent.instance, parentHotspot, parent.motorAngle)
+        : null;
+    const currentChildHotspot =
+      childHotspot && child
+        ? motorAwareHotspot(child.instance, childHotspot, child.motorAngle)
+        : null;
 
     const compatibleProfile =
       parentHotspot &&
       childHotspot &&
       areCompatibleSnapProfiles(parentHotspot, childHotspot);
+    if (
+      !parentHotspot ||
+      !childHotspot ||
+      !currentParentHotspot ||
+      !currentChildHotspot ||
+      !compatibleProfile
+    ) {
+      continue;
+    }
 
     if (
-      parentHotspot?.gender &&
-      childHotspot?.gender &&
+      parentHotspot.gender &&
+      childHotspot.gender &&
       parentHotspot.gender !== childHotspot.gender &&
       compatibleProfile
     ) {
@@ -308,28 +348,28 @@ function connectorAllowancesForJointPair(
           ? connectorAllowanceFromHotspot(
               parent.instance.instanceId,
               child.instance.instanceId,
-              parentHotspot,
+              currentParentHotspot,
               parentTransform,
             )
           : connectorAllowanceFromHotspot(
               child.instance.instanceId,
               parent.instance.instanceId,
-              childHotspot,
+              currentChildHotspot,
               childTransform,
             ),
       );
     } else if (
-      parentHotspot?.gender === 'F' &&
-      childHotspot?.gender === 'F' &&
+      parentHotspot.gender === 'F' &&
+      childHotspot.gender === 'F' &&
       compatibleProfile
     ) {
       allowances.push(
         ...virtualConnectorAllowancesFromFemaleHotspots(
           parent.instance.instanceId,
-          parentHotspot,
+          currentParentHotspot,
           instancePoseMatrix(parent.instance),
           child.instance.instanceId,
-          childHotspot,
+          currentChildHotspot,
           instancePoseMatrix(child.instance),
         ),
       );
@@ -350,29 +390,39 @@ function alignedConnectorAllowancesForParts(
   const allowances: ConnectorOverlapAllowance[] = [];
   for (const aHotspot of a.part.hotspots) {
     if (!aHotspot.gender) continue;
-    const aCenter = aHotspot.center.clone().applyMatrix4(a.transform);
-    const aAxis = aHotspot.axis.clone().transformDirection(a.transform).normalize();
+    const currentAHotspot = motorAwareHotspot(
+      a.instance,
+      aHotspot,
+      a.motorAngle,
+    );
+    const aCenter = currentAHotspot.center.clone().applyMatrix4(a.transform);
+    const aAxis = currentAHotspot.axis.clone().transformDirection(a.transform).normalize();
     for (const bHotspot of b.part.hotspots) {
       if (!bHotspot.gender || aHotspot.gender === bHotspot.gender) continue;
       if (!areCompatibleSnapProfiles(aHotspot, bHotspot)) continue;
-      const bCenter = bHotspot.center.clone().applyMatrix4(b.transform);
+      const currentBHotspot = motorAwareHotspot(
+        b.instance,
+        bHotspot,
+        b.motorAngle,
+      );
+      const bCenter = currentBHotspot.center.clone().applyMatrix4(b.transform);
       if (aCenter.distanceTo(bCenter) > CONNECTOR_CENTER_ALIGNMENT_TOLERANCE_LDU) {
         continue;
       }
-      const bAxis = bHotspot.axis.clone().transformDirection(b.transform).normalize();
+      const bAxis = currentBHotspot.axis.clone().transformDirection(b.transform).normalize();
       if (Math.abs(aAxis.dot(bAxis)) < CONNECTOR_AXIS_ALIGNMENT_DOT) continue;
       allowances.push(
         aHotspot.gender === 'M'
           ? connectorAllowanceFromHotspot(
               a.instance.instanceId,
               b.instance.instanceId,
-              aHotspot,
+              currentAHotspot,
               a.transform,
             )
           : connectorAllowanceFromHotspot(
               b.instance.instanceId,
               a.instance.instanceId,
-              bHotspot,
+              currentBHotspot,
               b.transform,
             ),
       );
@@ -381,12 +431,39 @@ function alignedConnectorAllowancesForParts(
   return allowances;
 }
 
+function motorAwareHotspot(
+  instance: PartInstance,
+  hotspot: SnapHotspot,
+  motorAngle: number,
+): SnapHotspot {
+  const current = {
+    ...hotspot,
+    center: hotspot.center.clone(),
+    axis: hotspot.axis.clone(),
+  };
+  const spec = motorSpecForPart(instance.partId);
+  if (
+    !spec ||
+    Math.abs(motorAngle) < 1e-9 ||
+    !spec.outputHotspotIds.includes(hotspot.id)
+  ) {
+    return current;
+  }
+
+  const pivot = motorPivotInSceneFrame(spec);
+  const axis = motorAxisInSceneFrame(spec);
+  current.center.sub(pivot).applyAxisAngle(axis, motorAngle).add(pivot);
+  current.axis.applyAxisAngle(axis, motorAngle).normalize();
+  return current;
+}
+
 async function transformedCollisionBoxes(
   instanceId: string,
   partId: string,
   transform: THREE.Matrix4,
+  motorAngle = 0,
 ): Promise<CollisionBox[]> {
-  const localBoxes = await localCollisionBoxesForPart(partId);
+  const localBoxes = await localCollisionBoxesForPart(partId, motorAngle);
   return localBoxes.map((box) => ({
     instanceId,
     box: box
@@ -396,13 +473,26 @@ async function transformedCollisionBoxes(
   }));
 }
 
-async function localCollisionBoxesForPart(partId: string): Promise<THREE.Box3[]> {
-  if (localCollisionBoxCache.has(partId)) {
+async function localCollisionBoxesForPart(
+  partId: string,
+  motorAngle = 0,
+): Promise<THREE.Box3[]> {
+  const cacheKey = motorCollisionCacheKey(partId, motorAngle);
+  if (localCollisionBoxCache.has(cacheKey)) {
+    return localCollisionBoxCache.get(cacheKey)!;
+  }
+  if (!motorSpecForPart(partId) && localCollisionBoxCache.has(partId)) {
     return localCollisionBoxCache.get(partId)!;
   }
 
   const promise = (async () => {
     const part = await loadPart(partId);
+    const motorSpec = motorSpecForPart(partId);
+    const outputFile = motorSpec?.outputFile;
+    const outputRotation =
+      motorSpec && Math.abs(motorAngle) >= 1e-9
+        ? motorOutputLocalRotation(motorSpec, motorAngle)
+        : null;
     const boxes: THREE.Box3[] = [];
     const vertex = new THREE.Vector3();
     const triangle = new THREE.Box3();
@@ -422,7 +512,11 @@ async function localCollisionBoxesForPart(partId: string): Promise<THREE.Box3[]>
             ? index.getX(tri * 3 + corner)
             : tri * 3 + corner;
           vertex.fromBufferAttribute(position, attributeIndex);
-          triangle.expandByPoint(vertex.applyMatrix4(mesh.matrixWorld));
+          vertex.applyMatrix4(mesh.matrixWorld);
+          if (outputRotation && outputFile && isDescendantOfFile(object, outputFile)) {
+            vertex.applyMatrix4(outputRotation);
+          }
+          triangle.expandByPoint(vertex);
         }
         if (!triangle.isEmpty()) boxes.push(triangle.clone());
       }
@@ -430,17 +524,30 @@ async function localCollisionBoxesForPart(partId: string): Promise<THREE.Box3[]>
 
     return boxes.length > 0 ? boxes : [part.bounds.clone()];
   })();
-  localCollisionBoxCache.set(partId, promise);
+  localCollisionBoxCache.set(cacheKey, promise);
   return promise;
 }
 
-async function localTrianglesForPart(partId: string): Promise<THREE.Triangle[]> {
-  if (localTriangleCache.has(partId)) {
+async function localTrianglesForPart(
+  partId: string,
+  motorAngle = 0,
+): Promise<THREE.Triangle[]> {
+  const cacheKey = motorCollisionCacheKey(partId, motorAngle);
+  if (localTriangleCache.has(cacheKey)) {
+    return localTriangleCache.get(cacheKey)!;
+  }
+  if (!motorSpecForPart(partId) && localTriangleCache.has(partId)) {
     return localTriangleCache.get(partId)!;
   }
 
   const promise = (async () => {
     const part = await loadPart(partId);
+    const motorSpec = motorSpecForPart(partId);
+    const outputFile = motorSpec?.outputFile;
+    const outputRotation =
+      motorSpec && Math.abs(motorAngle) >= 1e-9
+        ? motorOutputLocalRotation(motorSpec, motorAngle)
+        : null;
     const triangles: THREE.Triangle[] = [];
     const vertices = [
       new THREE.Vector3(),
@@ -463,6 +570,9 @@ async function localTrianglesForPart(partId: string): Promise<THREE.Triangle[]> 
             : tri * 3 + corner;
           vertices[corner].fromBufferAttribute(position, attributeIndex);
           vertices[corner].applyMatrix4(mesh.matrixWorld);
+          if (outputRotation && outputFile && isDescendantOfFile(object, outputFile)) {
+            vertices[corner].applyMatrix4(outputRotation);
+          }
         }
         triangles.push(
           new THREE.Triangle(
@@ -475,8 +585,35 @@ async function localTrianglesForPart(partId: string): Promise<THREE.Triangle[]> 
     });
     return triangles;
   })();
-  localTriangleCache.set(partId, promise);
+  localTriangleCache.set(cacheKey, promise);
   return promise;
+}
+
+function motorCollisionCacheKey(partId: string, motorAngle: number): string {
+  const spec = motorSpecForPart(partId);
+  if (!spec || Math.abs(motorAngle) < 1e-9) return partId;
+  return `${partId}@${Math.round(motorAngle * 1000) / 1000}`;
+}
+
+function motorOutputLocalRotation(
+  spec: MotorSpec,
+  motorAngle: number,
+): THREE.Matrix4 {
+  const pivot = motorPivotInSceneFrame(spec);
+  const axis = motorAxisInSceneFrame(spec);
+  return new THREE.Matrix4()
+    .makeTranslation(pivot.x, pivot.y, pivot.z)
+    .multiply(new THREE.Matrix4().makeRotationAxis(axis, motorAngle))
+    .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+}
+
+function isDescendantOfFile(object: THREE.Object3D, fileName: string): boolean {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (current.userData?.fileName === fileName) return true;
+    current = current.parent;
+  }
+  return false;
 }
 
 function overlapVolumeBetweenCollisionBoxes(
@@ -519,15 +656,33 @@ async function containmentPenalty(
   aBoxes: CollisionBox[],
   aPartId: string,
   aTransform: THREE.Matrix4,
+  aMotorAngle: number,
   bBoxes: CollisionBox[],
   bPartId: string,
   bTransform: THREE.Matrix4,
+  bMotorAngle: number,
   allowances: ConnectorOverlapAllowance[],
 ): Promise<number> {
-  if (await hasContainedCollisionSample(aBoxes, bPartId, bTransform, allowances)) {
+  if (
+    await hasContainedCollisionSample(
+      aBoxes,
+      bPartId,
+      bTransform,
+      bMotorAngle,
+      allowances,
+    )
+  ) {
     return CONTAINMENT_PENALTY_VOLUME;
   }
-  if (await hasContainedCollisionSample(bBoxes, aPartId, aTransform, allowances)) {
+  if (
+    await hasContainedCollisionSample(
+      bBoxes,
+      aPartId,
+      aTransform,
+      aMotorAngle,
+      allowances,
+    )
+  ) {
     return CONTAINMENT_PENALTY_VOLUME;
   }
   return 0;
@@ -537,9 +692,10 @@ async function hasContainedCollisionSample(
   sampleBoxes: CollisionBox[],
   solidPartId: string,
   solidTransform: THREE.Matrix4,
+  solidMotorAngle: number,
   allowances: ConnectorOverlapAllowance[],
 ): Promise<boolean> {
-  const triangles = await localTrianglesForPart(solidPartId);
+  const triangles = await localTrianglesForPart(solidPartId, solidMotorAngle);
   if (triangles.length === 0) return false;
   const inverse = solidTransform.clone().invert();
   const localPoint = new THREE.Vector3();
@@ -628,6 +784,18 @@ function boxFallsInsideConnectorAllowance(
 
 function transformedBounds(bounds: THREE.Box3, transform: THREE.Matrix4): THREE.Box3 {
   return bounds.clone().expandByScalar(-COLLISION_MARGIN_LDU).applyMatrix4(transform);
+}
+
+function collisionBounds(
+  bounds: THREE.Box3,
+  transform: THREE.Matrix4,
+  boxes: CollisionBox[],
+  motorAngle: number,
+): THREE.Box3 {
+  if (Math.abs(motorAngle) < 1e-9) return transformedBounds(bounds, transform);
+  const out = new THREE.Box3();
+  for (const { box } of boxes) out.union(box);
+  return out.isEmpty() ? transformedBounds(bounds, transform) : out;
 }
 
 function boxOverlapVolume(a: THREE.Box3, b: THREE.Box3): number {

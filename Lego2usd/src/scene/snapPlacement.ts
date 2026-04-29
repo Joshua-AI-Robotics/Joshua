@@ -472,6 +472,7 @@ async function markCandidateCollision(
     candidate.assemblyTransforms,
     others,
     allowances,
+    state.motorAngles,
   );
   const blocked = overlapVolume > COLLISION_VOLUME_THRESHOLD;
 

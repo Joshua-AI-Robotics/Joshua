@@ -186,6 +186,7 @@ export default function App() {
   const anyMotorAnimating = useSceneStore((s) =>
     Object.values(s.motorAnimations).some(Boolean),
   );
+  const motorAngles = useSceneStore((s) => s.motorAngles);
 
   const hotspots = useInstanceHotspots();
   const hotspotsRef = useRef<InstanceHotspot[]>([]);
@@ -249,7 +250,7 @@ export default function App() {
 
     let cancelled = false;
     const handle = window.setTimeout(() => {
-      findSceneOverlaps(parts, joints)
+      findSceneOverlaps(parts, joints, motorAngles)
         .then((overlaps) => {
           if (!cancelled) setSceneOverlaps(overlaps);
         })
@@ -260,7 +261,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [parts, joints, motionActive]);
+  }, [parts, joints, motorAngles, motionActive]);
 
   const restoreIfMoved = useCallback((d: DragState | null) => {
     if (!d || d.source !== 'scene' || !d.moved) {
