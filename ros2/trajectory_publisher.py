@@ -1,17 +1,29 @@
 from __future__ import annotations
 
+import base64
 import time
 from dataclasses import dataclass
 from typing import Dict, List
 
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, String
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
 from ros2.node_runner import run_node
-from ros2.proto import node_pb2
+from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
+
+_DATA_TYPE_TO_MSG = {
+    ros2_data_type_pb2.FLOAT32: Float32,
+    ros2_data_type_pb2.STRING: String,
+}
+
+
+@dataclass
+class TopicPub:
+    publisher: object
+    data_type: int
 
 
 @dataclass
@@ -22,7 +34,6 @@ class TrajectoryWaypointEntry:
 
 
 def _extract_float_value(action: action_packet_pb2.ActionPacket) -> float | None:
-    """Extract the float value from whichever oneof field is set."""
     which = action.WhichOneof("action_type")
     if which == "position":
         return action.position
@@ -30,6 +41,8 @@ def _extract_float_value(action: action_packet_pb2.ActionPacket) -> float | None
         return action.speed
     if which == "torque":
         return action.torque
+    if which == "dc":
+        return action.dc
     return None
 
 
@@ -37,7 +50,7 @@ class TrajectoryPublisher(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
         self._waypoints: List[TrajectoryWaypointEntry] = []
-        self._topic_pubs: Dict[str, object] = {}
+        self._topic_pubs: Dict[str, TopicPub] = {}
         self._loop_running = False
 
         for single_trajectory in config.robot.trajectories.single_trajectories:
@@ -49,6 +62,10 @@ class TrajectoryPublisher(Node):
                 qos_setting = single_trajectory.node.qos_setting
                 trajectory = single_trajectory.trajectory
 
+                pub_data_types: Dict[str, int] = {}
+                for pub_cfg in single_trajectory.node.publishers:
+                    pub_data_types[pub_cfg.topic] = pub_cfg.ros2_data_type
+
                 for waypoint in trajectory.waypoints:
                     self._waypoints.append(
                         TrajectoryWaypointEntry(
@@ -59,12 +76,18 @@ class TrajectoryPublisher(Node):
                     )
 
                     if waypoint.topic not in self._topic_pubs:
+                        data_type = pub_data_types.get(
+                            waypoint.topic, ros2_data_type_pb2.FLOAT32
+                        )
+                        msg_cls = _DATA_TYPE_TO_MSG.get(data_type, Float32)
                         pub = self.create_publisher(
-                            Float32,
+                            msg_cls,
                             waypoint.topic,
                             create_qos_setting(qos_setting),
                         )
-                        self._topic_pubs[waypoint.topic] = pub
+                        self._topic_pubs[waypoint.topic] = TopicPub(
+                            publisher=pub, data_type=data_type
+                        )
 
         if not self._waypoints:
             self.get_logger().error(
@@ -85,16 +108,46 @@ class TrajectoryPublisher(Node):
         self._timer = self.create_timer(1.0, self._wait_for_subscribers)
 
     def _wait_for_subscribers(self) -> None:
-        for topic, pub in self._topic_pubs.items():
-            if pub.get_subscription_count() == 0:
-                self.get_logger().info(
-                    f"Waiting for subscribers on '{topic}'..."
-                )
+        for topic, entry in self._topic_pubs.items():
+            if entry.publisher.get_subscription_count() == 0:
+                self.get_logger().info(f"Waiting for subscribers on '{topic}'...")
                 return
 
         self._timer.cancel()
         self.get_logger().info("All topics have subscribers, starting trajectory loop")
         self._loop_timer = self.create_timer(0.0, self._run_trajectory_loop)
+
+    def _publish_waypoint(self, waypoint: TrajectoryWaypointEntry) -> None:
+        topic_pub = self._topic_pubs.get(waypoint.topic)
+        if topic_pub is None:
+            return
+
+        if topic_pub.data_type == ros2_data_type_pb2.STRING:
+            msg = String()
+            msg.data = base64.b64encode(waypoint.action.SerializeToString()).decode(
+                "ascii"
+            )
+            topic_pub.publisher.publish(msg)
+            action_type = waypoint.action.WhichOneof("action_type") or "none"
+            self.get_logger().debug(
+                f"[t={waypoint.timestamp_sec:.3f}s] "
+                f"{waypoint.topic} -> ActionPacket({action_type})"
+            )
+        else:
+            value = _extract_float_value(waypoint.action)
+            if value is None:
+                self.get_logger().warning(
+                    f"[t={waypoint.timestamp_sec:.3f}s] "
+                    f"Unsupported action type for Float32 topic "
+                    f"{waypoint.topic}, skipping"
+                )
+                return
+            msg = Float32()
+            msg.data = value
+            topic_pub.publisher.publish(msg)
+            self.get_logger().debug(
+                f"[t={waypoint.timestamp_sec:.3f}s] " f"{waypoint.topic} -> {value}"
+            )
 
     def _run_trajectory_loop(self) -> None:
         self._loop_timer.cancel()
@@ -112,21 +165,7 @@ class TrajectoryPublisher(Node):
                 if sleep_duration > 0:
                     time.sleep(sleep_duration)
 
-                value = _extract_float_value(waypoint.action)
-                if value is None:
-                    self.get_logger().warning(
-                        f"[t={waypoint.timestamp_sec:.3f}s] "
-                        f"Unsupported action type for {waypoint.topic}, skipping"
-                    )
-                    continue
-
-                msg = Float32()
-                msg.data = value
-                self._topic_pubs[waypoint.topic].publish(msg)
-                self.get_logger().debug(
-                    f"[t={waypoint.timestamp_sec:.3f}s] "
-                    f"{waypoint.topic} -> {value}"
-                )
+                self._publish_waypoint(waypoint)
 
             self.get_logger().info("Trajectory loop completed, restarting...")
 

@@ -91,6 +91,10 @@ message RobotConfig {
   map<string, double> init_joint_pos = 5;
   double actuator_stiffness = 6;
   double actuator_damping = 7;
+  // Regex pattern for actuated joints (e.g. ".*_motor").
+  // Joints not matching this pattern are passive (no drive).
+  // Empty means all joints are actuated (backward compatible).
+  string actuator_joint_names = 8;
 }
 
 message TermConfig {

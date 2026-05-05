@@ -22,7 +22,7 @@ def detect_gait_cycle(positions: np.ndarray) -> int | None:
     sig /= std
 
     n = len(sig)
-    autocorr = np.correlate(sig, sig, mode="full")[n - 1:]
+    autocorr = np.correlate(sig, sig, mode="full")[n - 1 :]
     autocorr /= autocorr[0]
 
     min_lag = max(5, n // 50)

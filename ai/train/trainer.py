@@ -73,7 +73,8 @@ def _run_trajectory_export(config: training_pb2.TrainingConfig) -> None:
     """Dispatch trajectory export to Isaac Sim."""
     if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
         raise NotImplementedError(
-            "Trajectory export only supports simulation environment")
+            "Trajectory export only supports simulation environment"
+        )
 
     backend = config.simulator_backend
 
