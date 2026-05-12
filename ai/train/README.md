@@ -29,13 +29,13 @@ DataStore (Data Collection)
 ### Usage
 
 **1. Configuration**
-Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/sample_data_store.pbtxt`).
+Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/example/sample_data_store.pbtxt`).
 
 **2. Running the Data Subscriber**
 The `ros2/data_subscriber.py` node wraps the DataStore.
 ```bash
 # Launch the subscriber
-bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
+bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
 ```
 
 **3. Controlling Recording**
@@ -157,23 +157,87 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
 ### Running Training
 
-```bash
-# Ant (RSL-RL)
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_train_isaac_full_rsl_rl.pbtxt
+The recommended way is through the unified `joshua_main` launcher, which
+dispatches to the trainer automatically when the config uses
+`operation_mode: MODE_TRAINING`:
 
-# Trileg (skrl)
+```bash
+# Ant (RSL-RL) -- via unified launcher
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
+
+# Trileg (skrl) -- via unified launcher
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/trileg/trileg_train_isaac_full_skrl.pbtxt
+```
+
+Direct invocation also works for development:
+
+```bash
+# Ant (RSL-RL) -- direct
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg_train_isaac_full_skrl.pbtxt
+    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
 ```
 
 ### Running Evaluation
 
 ```bash
 # Ant (RSL-RL) -- update checkpoint_path in the pbtxt first
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
+
+# Direct invocation also works:
 bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant_eval_isaac_full_rsl_rl.pbtxt
+    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
 ```
+
+### Trajectory Export (Policy → Constant Trajectory)
+
+For robots without perception running simple periodic tasks (e.g.
+walking), a trained RL policy can be "baked" into a constant
+trajectory.  The trajectory export mode loads a checkpoint, runs it
+closed-loop in Isaac Sim, records the resulting joint positions and
+actions, and outputs deployable `.pbtxt` trajectory files that work
+directly with the existing `trajectory_publisher.py`.
+
+```bash
+# Export the trained ant gait as a trajectory
+bazel run //ai/train:trainer -- \
+    --config config/config_preset/ant/ant_trajectory_export_rsl_rl.pbtxt
+```
+
+Output files appear in the configured `output_dir` (default
+`/tmp/joshua_checkpoints/trajectory_export/`):
+
+| File | Format | Purpose |
+|------|--------|---------|
+| `trajectory_position.pbtxt` | Text proto | Waypoints using observed joint positions -- paste into robot config |
+| `trajectory_torque.pbtxt` | Text proto | Waypoints using raw policy actions (torques) -- paste into robot config |
+| `trajectory_position.npy` | NumPy | MuJoCo passive playback verification |
+| `trajectory_torque.npy` | NumPy | MuJoCo passive playback verification |
+| `trajectory_meta.json` | JSON | Metadata (joint names, topics, dt, duration) |
+
+The `.pbtxt` files contain a complete `trajectories { ... }` block in
+the same format as `python_spike_trajectory_example.pbtxt`, ready to
+paste into any robot config that uses `trajectory_publisher.py`.
+
+**Key config fields** (`TrajectoryExportConfig`):
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `checkpoint_path` | (required) | Path to trained `.pt` checkpoint |
+| `warmup_steps` | 200 | Steps to skip before recording (lets gait stabilize) |
+| `num_record_steps` | 1000 | Steps to record |
+| `detect_cycle` | false | Auto-detect gait period via autocorrelation |
+| `joint_topic_mappings` | (required) | Maps Isaac Lab joint names to ROS2 topics |
+| `trajectory_node_id` | 1 | Node ID for the `TRAJECTORY_PUBLISHER` in output |
+
+**End-to-end workflow**:
+
+1. **Train**: run a training preset to produce a checkpoint
+2. **Export**: run a trajectory export preset (same `task_config` + `network` + `sim_physics`)
+3. **Verify** (optional): load `trajectory_position.npy` in MuJoCo passive mode
+4. **Deploy**: paste the `.pbtxt` trajectories block into your robot config
 
 ### Supported RL Libraries
 
@@ -193,31 +257,44 @@ no Python task files are needed. The pipeline flows like this:
 .pbtxt preset
     │
     ▼
+joshua_main         (C++ launcher)
+    │  Loads config, sees MODE_TRAINING
+    │  Resolves and fork/execs trainer binary
+    ▼
 trainer.py          (Bazel / Python 3.10)
-    │  Parses proto, dispatches to isaac_launcher.py
+    │  Parses proto, dispatches by TrainingMethod:
+    │    TRAINING_METHOD_RL             → isaac_launcher.launch_isaac_training()
+    │    TRAINING_METHOD_EVAL           → isaac_launcher.launch_isaac_eval()
+    │    TRAINING_METHOD_TRAJECTORY_EXPORT → isaac_launcher.launch_isaac_trajectory_export()
     ▼
 isaac_launcher.py   (Bazel / Python 3.10)
-    │  Serializes RLConfig → JSON, spawns subprocess
+    │  Serializes config → JSON, spawns subprocess
     ▼
 isaac_runner.py     (Isaac Lab venv / Python 3.11)
-    │  Reads JSON, calls task_builder.py
+    │  Reads JSON, dispatches by mode:
+    │    "train"             → _train_rsl_rl() / _train_skrl()
+    │    "eval"              → _eval_rsl_rl() / _eval_skrl()
+    │    "trajectory_export" → trajectory_export.run_trajectory_export()
     ▼
 task_builder.py     (Isaac Lab venv / Python 3.11)
     │  Builds robot, rewards, observations from config
     │  Registers gym environment dynamically
     ▼
-Isaac Lab PPO training loop (RSL-RL or skrl)
-    │
-    ▼
-Checkpoints saved to /tmp/joshua_checkpoints/
+Train: Isaac Lab PPO training loop → checkpoints in /tmp/joshua_checkpoints/
+Eval:  Rollout episodes → reward statistics
+Export: Record joint data → .pbtxt + .npy trajectory files (via trajectory_export/ package)
 ```
+
+Ctrl+C (SIGINT) cleanly propagates through the entire process tree --
+`joshua_main` forwards the signal to the trainer's process group, which
+in turn terminates Isaac Sim and all child processes.
 
 
 Configuration Reference
 ------------------------
 
 All training parameters live in `ai/proto/training.proto` and are set
-via `.pbtxt` presets in `config/config_preset/`.
+via `.pbtxt` presets in `config/config_preset/`, organized by robot.
 
 ### task_config (robot + environment definition)
 
@@ -338,6 +415,34 @@ eval {
 }
 ```
 
+### trajectory_export (policy-to-trajectory conversion)
+
+Trajectory export presets mirror the training config and add the
+joint-to-topic mapping that determines which ROS2 topics each joint's
+trajectory is published on:
+
+```protobuf
+trajectory_export {
+  algorithm: "rsl_rl"
+  checkpoint_path: "/tmp/joshua_checkpoints/isaac_logs/my_model/model_999.pt"
+  warmup_steps: 200
+  num_record_steps: 1000
+  detect_cycle: true
+  trajectory_node_id: 1
+
+  joint_topic_mappings { joint_name: "hip_left"   topic: "robot/hip_left/command" }
+  joint_topic_mappings { joint_name: "knee_left"  topic: "robot/knee_left/command" }
+  joint_topic_mappings { joint_name: "hip_right"  topic: "robot/hip_right/command" }
+  joint_topic_mappings { joint_name: "knee_right" topic: "robot/knee_right/command" }
+
+  task_config { ... }
+  network { ... }
+  sim_physics { ... }
+  termination { ... }
+  reset { ... }
+}
+```
+
 
 How to Add a New Robot
 ----------------------
@@ -349,7 +454,7 @@ How to Add a New Robot
    environment:
 
 ```bash
-config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 The preset must contain:
@@ -363,14 +468,19 @@ See the existing ant and trileg presets for complete examples.
 3. **Run training**:
 
 ```bash
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/my_robot_train_isaac_full_rsl_rl.pbtxt
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/my_robot/my_robot_train_isaac_full_rsl_rl.pbtxt
 ```
 
 4. **Create an eval preset** that mirrors the training config but uses
    `TRAINING_METHOD_EVAL` and adds `checkpoint_path`.
 
-5. **(Optional)** Create a `README.md` in `simulation/models/my_robot/`
+5. **(Optional)** Create a **trajectory export preset** that mirrors
+   the training config but uses `TRAINING_METHOD_TRAJECTORY_EXPORT`,
+   adds `checkpoint_path`, and defines `joint_topic_mappings` to map
+   each joint to its ROS2 actuator command topic.
+
+6. **(Optional)** Create a `README.md` in `simulation/models/my_robot/`
    documenting the robot anatomy and joint structure.
 
 
@@ -424,16 +534,19 @@ Key Files
 
 | File | Runs in | Purpose |
 |------|---------|---------|
-| `ai/train/trainer.py` | Joshua (Bazel) | Top-level dispatcher |
+| `launcher/joshua_main.cc` | Joshua (C++) | Unified entry point, dispatches by operation mode |
+| `launcher/training_launcher.cc` | Joshua (C++) | Resolves and fork/execs the trainer binary |
+| `ai/train/trainer.py` | Joshua (Bazel) | Training dispatcher (RL, imitation, eval, trajectory export) |
 | `ai/train/isaac_launcher.py` | Joshua (Bazel) | Config serialization, subprocess launch |
-| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge |
+| `ai/train/isaac_runner.py` | Isaac Lab (venv) | Training/eval bridge, delegates trajectory export to `trajectory_export/` |
+| `ai/train/trajectory_export/` | Isaac Lab (venv) | Policy-to-trajectory conversion package ([README](trajectory_export/README.md)) |
 | `ai/train/isaac_lab/task_builder.py` | Isaac Lab (venv) | Generic proto-driven task builder |
 | `ai/train/isaac_lab/env_builder.py` | Isaac Lab (venv) | ManagerBasedRLEnvCfg builder |
 | `ai/train/isaac_lab/rsl_rl_config.py` | Isaac Lab (venv) | RSL-RL agent config builder |
 | `ai/train/isaac_lab/terms/` | Isaac Lab (venv) | Reusable MDP term factories |
 | `ai/proto/training.proto` | Both | Full config schema |
 | `simulation/models/*.usda` | Isaac Lab (venv) | Local USD robot assets |
-| `config/config_preset/*.pbtxt` | Joshua (Bazel) | Training/eval presets |
+| `config/config_preset/**/*.pbtxt` | Joshua (Bazel) | Training/eval presets (organized by robot) |
 
 
 Troubleshooting

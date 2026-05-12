@@ -9,11 +9,11 @@ robot {
   actions {
     single_actions {
       node {
-        id: 901
+        id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_A/command"
         }
       }
@@ -28,21 +28,22 @@ robot {
         spike_motor_config {
           hub_id: "Pybricks Hub"
           port: "A"
+          idle_position: 0
         }
-        physical_lower_limit: 0
-        physical_upper_limit: 1000
-        operational_lower_limit: 0
-        operational_upper_limit: 1000
+        physical_lower_limit: -360
+        physical_upper_limit: 360
+        operational_lower_limit: -360
+        operational_upper_limit: 360
         encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
       node {
-        id: 901
+        id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_B/command"
         }
       }
@@ -57,21 +58,22 @@ robot {
         spike_motor_config {
           hub_id: "Pybricks Hub"
           port: "B"
+          idle_position: 0
         }
-        physical_lower_limit: 0
-        physical_upper_limit: 1000
-        operational_lower_limit: 0
-        operational_upper_limit: 1000
+        physical_lower_limit: -360
+        physical_upper_limit: 360
+        operational_lower_limit: -360
+        operational_upper_limit: 360
         encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
       node {
-        id: 901
+        id: 1
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
+          ros2_data_type: STRING
           topic: "spike/motor_C/command"
         }
       }
@@ -86,11 +88,12 @@ robot {
         spike_motor_config {
           hub_id: "Pybricks Hub"
           port: "C"
+          idle_position: 0
         }
-        physical_lower_limit: 0
-        physical_upper_limit: 1000
-        operational_lower_limit: 0
-        operational_upper_limit: 1000
+        physical_lower_limit: -360
+        physical_upper_limit: 360
+        operational_lower_limit: -360
+        operational_upper_limit: 360
         encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }

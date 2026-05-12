@@ -5,7 +5,7 @@ eval) based on the unified Config.
 
 Usage:
     bazel run //ai/train:trainer -- \
-        --config config/config_preset/ant_train_isaac.pbtxt
+        --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
 """
 
 import sys
@@ -40,6 +40,7 @@ def _run_rl(config: training_pb2.TrainingConfig) -> None:
 
     if backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
         from ai.train.isaac_launcher import launch_isaac_training
+
         launch_isaac_training(config)
 
     else:
@@ -58,7 +59,29 @@ def _run_eval(config: training_pb2.TrainingConfig) -> None:
 
     if backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
         from ai.train.isaac_launcher import launch_isaac_eval
+
         launch_isaac_eval(config)
+
+    else:
+        raise ValueError(
+            f"Unknown or unset simulator_backend: {backend}. "
+            f"Set simulator_backend: SIM_BACKEND_ISAAC_SIM in your config."
+        )
+
+
+def _run_trajectory_export(config: training_pb2.TrainingConfig) -> None:
+    """Dispatch trajectory export to Isaac Sim."""
+    if config.environment != training_pb2.TRAINING_ENV_SIMULATION:
+        raise NotImplementedError(
+            "Trajectory export only supports simulation environment"
+        )
+
+    backend = config.simulator_backend
+
+    if backend == training_pb2.SIM_BACKEND_ISAAC_SIM:
+        from ai.train.isaac_launcher import launch_isaac_trajectory_export
+
+        launch_isaac_trajectory_export(config)
 
     else:
         raise ValueError(
@@ -83,8 +106,10 @@ def main(argv):
     env_name = training_pb2.TrainingEnvironment.Name(config.environment)
     method_name = training_pb2.TrainingMethod.Name(config.method)
     backend_name = training_pb2.SimulatorBackend.Name(config.simulator_backend)
-    glog.info(f"Training config: environment={env_name}, method={method_name}, "
-              f"backend={backend_name}")
+    glog.info(
+        f"Training config: environment={env_name}, method={method_name}, "
+        f"backend={backend_name}"
+    )
 
     if config.method == training_pb2.TRAINING_METHOD_RL:
         _run_rl(config)
@@ -97,6 +122,9 @@ def main(argv):
 
     elif config.method == training_pb2.TRAINING_METHOD_EVAL:
         _run_eval(config)
+
+    elif config.method == training_pb2.TRAINING_METHOD_TRAJECTORY_EXPORT:
+        _run_trajectory_export(config)
 
     else:
         raise ValueError(f"Unknown training method: {config.method}")

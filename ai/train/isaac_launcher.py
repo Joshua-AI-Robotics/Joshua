@@ -27,9 +27,7 @@ from google.protobuf import json_format
 
 from ai.proto import training_pb2
 
-_ISAAC_RUNNER = os.path.join(
-    os.path.dirname(__file__), "isaac_runner.py"
-)
+_ISAAC_RUNNER = os.path.join(os.path.dirname(__file__), "isaac_runner.py")
 
 _CHECKPOINT_DIR = "/tmp/joshua_checkpoints"
 
@@ -48,9 +46,7 @@ def _find_isaac_python() -> str:
     explicit = os.environ.get("ISAAC_LAB_PYTHON")
     if explicit:
         if not os.path.isfile(explicit):
-            raise FileNotFoundError(
-                f"ISAAC_LAB_PYTHON={explicit} does not exist"
-            )
+            raise FileNotFoundError(f"ISAAC_LAB_PYTHON={explicit} does not exist")
         return explicit
 
     lab_path = os.environ.get("ISAAC_LAB_PATH")
@@ -89,7 +85,8 @@ def _clean_env() -> dict:
         val = env.get(path_var, "")
         if val:
             clean = [
-                p for p in val.split(os.pathsep)
+                p
+                for p in val.split(os.pathsep)
                 if not any(m in p for m in bazel_markers)
             ]
             if clean:
@@ -155,8 +152,11 @@ def _launch_subprocess(
 
     os.makedirs(checkpoint_dir, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix=cfg_prefix,
-        dir=checkpoint_dir, delete=False,
+        mode="w",
+        suffix=".json",
+        prefix=cfg_prefix,
+        dir=checkpoint_dir,
+        delete=False,
     ) as f:
         json.dump(cfg_dict, f, indent=2)
         cfg_path = f.name
@@ -209,8 +209,10 @@ def launch_isaac_training(config: training_pb2.TrainingConfig) -> None:
     """Launch Isaac Lab RL training as a subprocess."""
     cfg_dict = _config_to_json(config)
 
-    glog.info(f"Isaac Lab training: task={cfg_dict['task']}, "
-              f"num_envs={cfg_dict['num_envs']}")
+    glog.info(
+        f"Isaac Lab training: task={cfg_dict['task']}, "
+        f"num_envs={cfg_dict['num_envs']}"
+    )
 
     _launch_subprocess(cfg_dict, "joshua_isaac_", cfg_dict["render"])
 
@@ -255,7 +257,53 @@ def launch_isaac_eval(config: training_pb2.TrainingConfig) -> None:
         if sub:
             cfg_dict[key] = sub
 
-    glog.info(f"Isaac Lab eval: task={cfg_dict.get('task', '')}, "
-              f"checkpoint={cfg_dict['checkpoint_path']}")
+    glog.info(
+        f"Isaac Lab eval: task={cfg_dict.get('task', '')}, "
+        f"checkpoint={cfg_dict['checkpoint_path']}"
+    )
 
     _launch_subprocess(cfg_dict, "joshua_isaac_eval_", cfg_dict["render"])
+
+
+def launch_isaac_trajectory_export(config: training_pb2.TrainingConfig) -> None:
+    """Launch Isaac Lab trajectory export as a subprocess."""
+    te = config.trajectory_export
+    cfg_dict: dict = {
+        "mode": "trajectory_export",
+        "task": te.task,
+        "algorithm": te.algorithm or "rsl_rl",
+        "checkpoint_path": te.checkpoint_path,
+        "warmup_steps": te.warmup_steps or 200,
+        "num_record_steps": te.num_record_steps or 1000,
+        "output_dir": te.output_dir or "",
+        "detect_cycle": te.detect_cycle,
+        "trajectory_node_id": te.trajectory_node_id or 1,
+        "render": te.render,
+        "checkpoint_dir": _CHECKPOINT_DIR,
+        "export_frequency_hz": te.export_frequency_hz,
+    }
+
+    if te.joint_topic_mappings:
+        cfg_dict["joint_topic_mappings"] = [
+            {"joint_name": m.joint_name, "topic": m.topic}
+            for m in te.joint_topic_mappings
+        ]
+
+    for field, key in [
+        (te.task_config, "task_config"),
+        (te.network, "network"),
+        (te.sim_physics, "sim_physics"),
+        (te.termination, "termination"),
+        (te.reset, "reset"),
+        (te.ppo, "ppo"),
+    ]:
+        sub = _proto_sub_to_dict(field)
+        if sub:
+            cfg_dict[key] = sub
+
+    glog.info(
+        f"Isaac Lab trajectory export: task={cfg_dict.get('task', '')}, "
+        f"checkpoint={cfg_dict['checkpoint_path']}"
+    )
+
+    _launch_subprocess(cfg_dict, "joshua_isaac_traj_export_", cfg_dict["render"])

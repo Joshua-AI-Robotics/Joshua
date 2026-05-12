@@ -151,6 +151,6 @@ class EncoderPublisher : public rclcpp::Node {
 int main(int argc, char* argv[]) {
   // For test run:
   // bazel run ros2:encoder_publisher -- test_encoder 1
-  // config/config_preset/so100_leader_arm_encoder_publish.pbtxt
+  // config/config_preset/so100/so100_leader_arm_encoder_publish.pbtxt
   return ros2_utils::RunNode<EncoderPublisher>(argc, argv, "encoder_publisher");
 }

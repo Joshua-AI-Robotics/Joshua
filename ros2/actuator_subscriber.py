@@ -1,15 +1,18 @@
+import base64
 import math
 from dataclasses import dataclass
 
 import rclpy
+from google.protobuf import text_format
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, String
 
 from config.proto import config_pb2
 from robot.action.factory import action_factory
 from robot.action.proto import action_packet_pb2, action_pb2
 from robot.perception.proto import perception_pb2
 from ros2.node_runner import run_node
+from ros2.proto import ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -22,11 +25,12 @@ class MappingParams:
 
 
 class ActuatorEntry:
-    def __init__(self, topic, interface, limits, encoder_data_mode):
+    def __init__(self, topic, interface, limits, encoder_data_mode, data_type):
         self.topic = topic
         self.interface = interface
         self.limits = limits
         self.encoder_data_mode = encoder_data_mode
+        self.data_type = data_type
         self.mapping = self._compute_mapping()
         self.subscription = None
         self.callback = None
@@ -83,6 +87,7 @@ class ActionSubscriber(Node):
                     continue
 
                 for subscription in single_action.node.subscriptions:
+                    data_type = subscription.ros2_data_type
                     entry = ActuatorEntry(
                         topic=subscription.topic,
                         interface=interface,
@@ -91,15 +96,26 @@ class ActionSubscriber(Node):
                             actuator_proto.operational_upper_limit,
                         ),
                         encoder_data_mode=actuator_proto.encoder_data_mode,
+                        data_type=data_type,
                     )
                     self._actuators.append(entry)
-                    entry.callback = self._make_callback(entry)
-                    entry.subscription = self.create_subscription(
-                        Float32,
-                        entry.topic,
-                        entry.callback,
-                        create_qos_setting(qos_setting),
-                    )
+
+                    if data_type == ros2_data_type_pb2.STRING:
+                        entry.callback = self._make_string_callback(entry)
+                        entry.subscription = self.create_subscription(
+                            String,
+                            entry.topic,
+                            entry.callback,
+                            create_qos_setting(qos_setting),
+                        )
+                    else:
+                        entry.callback = self._make_float32_callback(entry)
+                        entry.subscription = self.create_subscription(
+                            Float32,
+                            entry.topic,
+                            entry.callback,
+                            create_qos_setting(qos_setting),
+                        )
 
         if not self._actuators:
             self.get_logger().error(
@@ -112,7 +128,33 @@ class ActionSubscriber(Node):
             f"node_id {node_id}!"
         )
 
-    def _make_callback(self, entry: ActuatorEntry):
+    def _make_string_callback(self, entry: ActuatorEntry):
+        """Callback for STRING topics. Tries base64 binary first, then text format."""
+
+        def callback(msg: String):
+            packet = action_packet_pb2.ActionPacket()
+            try:
+                packet.ParseFromString(base64.b64decode(msg.data))
+            except Exception:
+                try:
+                    text_format.Parse(msg.data, packet)
+                except text_format.ParseError as exc:
+                    self.get_logger().error(
+                        f"Failed to parse ActionPacket for " f"'{entry.topic}': {exc}"
+                    )
+                    return
+            try:
+                entry.interface.set_action(packet)
+            except Exception as exc:
+                self.get_logger().error(
+                    f"Failed to set action for actuator '{entry.topic}': {exc}"
+                )
+
+        return callback
+
+    def _make_float32_callback(self, entry: ActuatorEntry):
+        """Legacy callback for FLOAT32 topics (position-only)."""
+
         def callback(msg: Float32):
             if not entry.mapping.mapping_valid:
                 self.get_logger().warning(

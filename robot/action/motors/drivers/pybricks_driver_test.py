@@ -20,6 +20,9 @@ class FakeTransport:
     def set_motor_angle(self, hub_id, port, angle):
         self.commands.append((hub_id, port, angle))
 
+    def run_target(self, hub_id, port, speed, angle):
+        self.commands.append((hub_id, port, angle))
+
 
 class PybricksMotorDriverTest(unittest.TestCase):
     """Unit tests for PybricksMotorDriver using a fake transport (no hardware)."""
@@ -36,6 +39,8 @@ class PybricksMotorDriverTest(unittest.TestCase):
     def test_init_set_action_teardown(self):
         transport = FakeTransport()
         actuator = self._make_actuator(hub_id="hub-1", port="A")
+        actuator.operational_lower_limit = 0.0
+        actuator.operational_upper_limit = 180.0
         driver = PybricksMotorDriver(actuator, transport=transport)
 
         driver.init()

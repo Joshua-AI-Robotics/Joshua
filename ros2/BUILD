@@ -26,6 +26,7 @@ py_library(
     ],
     deps = [
         "//config/proto:config_py_proto",
+        "//ros2/proto:trajectory_py_proto",
         # Note: rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
     ] + requirement("protobuf") + requirement("PyYAML"),
@@ -58,6 +59,7 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//ros2:ros2_type_resolver",
         "//ros2:node_runner_py",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
         "//ai/models:model_registry",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
@@ -109,6 +111,7 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
         "//ros2:node_runner_py",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -146,6 +149,7 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
         "//ros2:node_runner_py",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -184,6 +188,7 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
         "//ros2:node_runner_py",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -201,7 +206,10 @@ ros2_cpp_binary(
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
+        "//ros2/proto:node_cc_proto",
         "//ros2/utils:qos_setting",
+        "@abseil-cpp//absl/strings",
+        "@protobuf//:protobuf",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
@@ -224,6 +232,8 @@ ros2_py_binary(
         "//robot/action/proto:action_packet_py_proto",
         "//robot/perception/proto:perception_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
         "//ros2/proto:node_py_proto",
     ] + requirement("protobuf"),
@@ -237,8 +247,31 @@ py_test(
         "//robot/action/proto:action_py_proto",
         "//robot/perception/proto:perception_py_proto",
         "//robot/action/factory:action_factory_py",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
         "//ros2/proto:node_py_proto",
+    ] + requirement("protobuf"),
+)
+
+ros2_py_binary(
+    name = "trajectory_publisher_py",
+    srcs = [
+        "trajectory_publisher.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "trajectory_publisher.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
 
@@ -258,6 +291,7 @@ ros2_py_binary(
         "//ros2:node_runner_py",
         "//ros2:ros2_type_resolver",
         "//ros2/proto:node_py_proto",
+        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:qos_setting_py",
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
     ] + requirement("protobuf"),

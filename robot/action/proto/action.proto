@@ -23,10 +23,10 @@ message Actuator {
   uint64 id = 2;
   ActuatorType actuator_type = 3;
   robot.comm.Comm comm = 4;
-  uint32 physical_lower_limit = 5;  // TODO: Move this to physical layout.
-  uint32 physical_upper_limit = 6;  // TODO: Move this to physical layout.
-  uint32 operational_lower_limit = 7;
-  uint32 operational_upper_limit = 8;
+  float physical_lower_limit = 5;  // TODO: Move this to physical layout.
+  float physical_upper_limit = 6;  // TODO: Move this to physical layout.
+  float operational_lower_limit = 7;
+  float operational_upper_limit = 8;
   robot.perception.EncoderDataMode encoder_data_mode =
       9;  // How the actuator data is processed for action.
   oneof action_config {
@@ -41,7 +41,7 @@ message Sts3215Config {
   uint64 servo_id = 1;
   uint32 move_time_in_ms = 2;
   uint32 move_speed = 3;
-  uint32 idle_position = 4;
+  float idle_position = 4;
 }
 
 message MockMotorConfig {
@@ -51,6 +51,7 @@ message MockMotorConfig {
 message SpikeMotorConfig {
   string hub_id = 1;
   string port = 2;
+  float idle_position = 3;
 }
 
 message SingleAction {

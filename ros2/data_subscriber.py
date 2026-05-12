@@ -36,10 +36,7 @@ class DataSubscriber(Node):
 
         # Subscribe to recording control topic
         self.create_subscription(
-            Bool,
-            "recording_control",
-            self.recording_control_callback,
-            10
+            Bool, "recording_control", self.recording_control_callback, 10
         )
 
         self.next_episode_index = 0
@@ -132,8 +129,8 @@ def main(argv=None):
 
 # How to test:
 # On terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_publish.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_publish.pbtxt
 # On separate terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/sample_data_store.pbtxt
+# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())

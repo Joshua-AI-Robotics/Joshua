@@ -2,6 +2,7 @@
 
 #include <glog/logging.h>
 #include <limits.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -16,6 +17,15 @@
 
 namespace launcher {
 namespace {
+
+volatile sig_atomic_t g_child_pid = 0;
+
+void ForwardSignalToChild(int sig) {
+  pid_t pid = g_child_pid;
+  if (pid > 0) {
+    kill(-pid, sig);
+  }
+}
 
 std::string GetSelfExePath() {
   char buf[PATH_MAX];
@@ -157,8 +167,23 @@ int RunSimulation(const std::string& config_path, const config::Config& config) 
   }
   LOG(INFO) << "Simulation launched with PID: " << sim_pid;
 
+  g_child_pid = sim_pid;
+
+  struct sigaction sa = {};
+  sa.sa_handler = ForwardSignalToChild;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+
+  struct sigaction old_int, old_term;
+  sigaction(SIGINT, &sa, &old_int);
+  sigaction(SIGTERM, &sa, &old_term);
+
   int status = 0;
   waitpid(sim_pid, &status, 0);
+
+  sigaction(SIGINT, &old_int, nullptr);
+  sigaction(SIGTERM, &old_term, nullptr);
+  g_child_pid = 0;
 
   int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
   LOG(INFO) << "Simulation exited with code: " << exit_code;

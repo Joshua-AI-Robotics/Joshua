@@ -107,6 +107,8 @@ def build_task_from_config(
     gym_id = f"Joshua-{task_name.replace('_', '-').title()}-v0"
 
     rc = tc["robot"]
+    actuator_joint_pat = rc.get("actuator_joint_names", "")
+    actuator_joint_names = [actuator_joint_pat] if actuator_joint_pat else None
     robot = build_robot_from_usd(
         usd_path=resolve_model_path(rc["usd_filename"]),
         init_pos=(
@@ -117,6 +119,7 @@ def build_task_from_config(
         init_joint_pos=rc.get("init_joint_pos", {}),
         actuator_stiffness=rc.get("actuator_stiffness", 0.0),
         actuator_damping=rc.get("actuator_damping", 0.0),
+        actuator_joint_names=actuator_joint_names,
     )
 
     sp = cfg.get("sim_physics", {})
@@ -129,7 +132,10 @@ def build_task_from_config(
     )
 
     action_scale = sp.get("action_scale", 1.0)
-    actions = terms.joint_effort_actions(scale=action_scale)
+    actions = terms.joint_effort_actions(
+        scale=action_scale,
+        joint_names=actuator_joint_names,
+    )
 
     rewards: dict[str, Any] = {}
     for name, term_cfg in tc.get("rewards", {}).items():

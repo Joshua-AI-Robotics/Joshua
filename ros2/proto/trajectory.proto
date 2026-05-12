@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package ros2.trajectory;
+
+import "robot/action/proto/action_packet.proto";
+import "ros2/proto/node.proto";
+
+message TrajectoryWaypoint {
+  double timestamp_sec = 1;
+  string topic = 2;
+  robot.action.ActionPacket action = 3;
+}
+
+message TrajectoryConfig {
+  repeated TrajectoryWaypoint waypoints = 1;
+}
+
+message SingleTrajectory {
+  ros2.node.Node node = 1;
+  TrajectoryConfig trajectory = 2;
+}
+
+message Trajectories {
+  repeated SingleTrajectory single_trajectories = 1;
+}
