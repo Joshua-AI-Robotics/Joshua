@@ -5,12 +5,13 @@ from dataclasses import dataclass
 from typing import List
 
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.perception.factory import perception_factory
-from robot.perception.proto import perception_pb2
+from robot.perception.proto import perception_packet_pb2, perception_pb2
 from ros2.node_runner import run_node
+from ros2.proto import ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -48,6 +49,14 @@ class EncoderPublisher(Node):
                     continue
 
                 for publisher in single_perception.node.publishers:
+                    if publisher.ros2_data_type != ros2_data_type_pb2.UINT8_MULTI_ARRAY:
+                        self.get_logger().error(
+                            "Unsupported ros2_data_type %s for encoder '%s'. "
+                            "Only UINT8_MULTI_ARRAY is supported.",
+                            str(publisher.ros2_data_type),
+                            publisher.topic,
+                        )
+                        continue
                     self._encoders.append(
                         EncoderEntry(
                             topic=publisher.topic,
@@ -58,7 +67,7 @@ class EncoderPublisher(Node):
                             ),
                             encoder_data_mode=encoder_proto.encoder_data_mode,
                             publisher=self.create_publisher(
-                                Float32,
+                                UInt8MultiArray,
                                 publisher.topic,
                                 create_qos_setting(qos_setting),
                             ),
@@ -115,8 +124,10 @@ class EncoderPublisher(Node):
                 if position_data is None:
                     continue
 
-                message = Float32()
-                message.data = float(position_data)
+                packet = perception_packet_pb2.PerceptionPacket()
+                packet.position.position = float(position_data)
+                message = UInt8MultiArray()
+                message.data = packet.SerializeToString()
                 encoder.publisher.publish(message)
 
         except Exception as exc:

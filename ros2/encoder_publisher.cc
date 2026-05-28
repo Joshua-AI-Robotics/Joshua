@@ -11,7 +11,7 @@
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/qos_setting.h"
-#include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/u_int8_multi_array.hpp"
 
 class EncoderPublisher : public rclcpp::Node {
  private:
@@ -19,7 +19,7 @@ class EncoderPublisher : public rclcpp::Node {
     std::string topic;
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
     std::pair<float, float> limits;
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher;
+    rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr publisher;
     robot::perception::EncoderDataMode encoder_data_mode;
     rclcpp::TimerBase::SharedPtr timer;
   };
@@ -44,12 +44,20 @@ class EncoderPublisher : public rclcpp::Node {
         }
 
         for (const auto& publisher : single_perception.node().publishers()) {
+          if (publisher.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Unsupported ros2_data_type %d for encoder '%s'. "
+                         "Only UINT8_MULTI_ARRAY is supported.",
+                         static_cast<int>(publisher.ros2_data_type()),
+                         publisher.topic().c_str());
+            continue;
+          }
           encoders_.emplace_back(
               Encoder{.topic = publisher.topic(),
                       .interface = std::move(interface.value()),
                       .limits = {encoder_proto.operational_lower_limit(),
                                  encoder_proto.operational_upper_limit()},
-                      .publisher = this->create_publisher<std_msgs::msg::Float32>(
+                      .publisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
                           publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
                       .encoder_data_mode = encoder_proto.encoder_data_mode(),
                       .timer = this->create_wall_timer(
@@ -108,8 +116,12 @@ class EncoderPublisher : public rclcpp::Node {
           continue;
         }
 
-        auto message = std_msgs::msg::Float32();
-        message.data = *normalized;
+        auto perception_packet = robot::perception::PerceptionPacket();
+        perception_packet.mutable_position()->set_position(*normalized);
+        auto serialized = perception_packet.SerializeAsString();
+
+        auto message = std_msgs::msg::UInt8MultiArray();
+        message.data.assign(serialized.begin(), serialized.end());
         encoder.publisher->publish(message);
       }
     } catch (const std::exception& e) {

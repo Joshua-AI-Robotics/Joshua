@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package ros2.bridge;
+
+import "ros2/proto/node.proto";
+
+enum PayloadType {
+  PAYLOAD_TYPE_INVALID = 0;
+  PAYLOAD_TYPE_PERCEPTION_PACKET = 1;
+  PAYLOAD_TYPE_ACTION_PACKET = 2;
+}
+
+enum MappingType {
+  MAPPING_TYPE_INVALID = 0;
+  MAPPING_TYPE_POSITION_TO_POSITION = 1;
+  MAPPING_TYPE_PASS_THROUGH_ACTION = 2;
+}
+
+message AffineTransform {
+  float scale = 1;
+  float offset = 2;
+  bool invert = 3;
+  bool clamp_enabled = 4;
+  float clamp_min = 5;
+  float clamp_max = 6;
+}
+
+message Mapping {
+  string mapping_id = 1;
+  string source_topic = 2;
+  PayloadType source_payload_type = 3;
+  string target_topic = 4;
+  MappingType mapping_type = 5;
+  AffineTransform affine = 6;
+  string action_id = 7;
+}
+
+message BridgeConfig {
+  repeated Mapping mappings = 1;
+}
+
+message SingleBridge {
+  ros2.node.Node node = 1;
+  BridgeConfig bridge = 2;
+}
+
+message Bridges {
+  repeated SingleBridge single_bridges = 1;
+}

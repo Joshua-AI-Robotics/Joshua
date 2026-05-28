@@ -276,6 +276,49 @@ ros2_py_binary(
 )
 
 ros2_py_binary(
+    name = "signal_bridge_py",
+    srcs = [
+        "signal_bridge.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "signal_bridge.py",
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2/proto:bridge_py_proto",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
+)
+
+ros2_cpp_binary(
+    name = "signal_bridge",
+    srcs = ["signal_bridge.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    set_up_ament = True,
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:node_runner",
+        "//ros2/proto:bridge_cc_proto",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/proto:ros2_data_type_cc_proto",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_py_binary(
     name = "data_subscriber",
     srcs = [
         "data_subscriber.py",

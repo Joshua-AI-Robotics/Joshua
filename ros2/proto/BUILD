@@ -1,6 +1,6 @@
+load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_python//python:proto.bzl", "py_proto_library")
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -29,6 +29,12 @@ proto_library(
     srcs = ["ros2_data_type.proto"],
 )
 
+cc_proto_library(
+    name = "ros2_data_type_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":ros2_data_type_proto"],
+)
+
 py_proto_library(
     name = "ros2_data_type_py_proto",
     visibility = ["//visibility:public"],
@@ -42,6 +48,26 @@ proto_library(
         ":node_proto",
         "//robot/action/proto:action_packet_proto",
     ],
+)
+
+proto_library(
+    name = "bridge_proto",
+    srcs = ["bridge.proto"],
+    deps = [
+        ":node_proto",
+    ],
+)
+
+py_proto_library(
+    name = "bridge_py_proto",
+    visibility = ["//visibility:public"],
+    deps = [":bridge_proto"],
+)
+
+cc_proto_library(
+    name = "bridge_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":bridge_proto"],
 )
 
 py_proto_library(

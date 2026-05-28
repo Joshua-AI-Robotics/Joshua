@@ -257,6 +257,8 @@ BackendPreference DeterminePreferredBackend(const ros2::node::NodeType node_type
     case ros2::node::DATA_SUBSCRIBER:
     case ros2::node::TRAJECTORY_PUBLISHER:
       return BackendPreference::kPython;
+    case ros2::node::SIGNAL_BRIDGE:
+      return BackendPreference::kCpp;
     case ros2::node::OPERATIONAL_LIMIT_CALIBRATION:
       return BackendPreference::kCpp;
     default:
@@ -396,6 +398,17 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_trajectory.node().node_type());
     if (!inserted && it->second != single_trajectory.node().node_type()) {
+      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
+                 << NodeTypeToString(it->second);
+      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+    }
+  }
+
+  // Bridges
+  for (const auto& single_bridge : config_.robot().bridges().single_bridges()) {
+    const uint32_t node_id = single_bridge.node().id();
+    auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_bridge.node().node_type());
+    if (!inserted && it->second != single_bridge.node().node_type()) {
       LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
                  << NodeTypeToString(it->second);
       return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
@@ -842,6 +855,10 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_trajectory : config_.robot().trajectories().single_trajectories()) {
     ExtractTopicsFromNode(single_trajectory.node(), node_id, publish_topics, subscribe_topics);
+  }
+
+  for (const auto& single_bridge : config_.robot().bridges().single_bridges()) {
+    ExtractTopicsFromNode(single_bridge.node(), node_id, publish_topics, subscribe_topics);
   }
 
   for (const auto& single_calibration : config_.calibration().single_calibrations()) {

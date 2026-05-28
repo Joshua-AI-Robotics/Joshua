@@ -12,8 +12,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_1_cmd"
         }
       }
       action_type: ACTUATOR
@@ -48,8 +48,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_2_cmd"
         }
       }
       action_type: ACTUATOR
@@ -84,8 +84,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_3_cmd"
         }
       }
       action_type: ACTUATOR
@@ -120,8 +120,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_4_cmd"
         }
       }
       action_type: ACTUATOR
@@ -156,8 +156,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_5_cmd"
         }
       }
       action_type: ACTUATOR
@@ -192,8 +192,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_servo_6_cmd"
         }
       }
       action_type: ACTUATOR
@@ -231,8 +231,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_1_state"
           publish_rate_hz: 30
         }
       }
@@ -263,8 +263,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_2_state"
           publish_rate_hz: 30
         }
       }
@@ -296,8 +296,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_3_state"
           publish_rate_hz: 30
         }
       }
@@ -329,8 +329,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_4_state"
           publish_rate_hz: 30
         }
       }
@@ -362,8 +362,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_5_state"
           publish_rate_hz: 30
         }
       }
@@ -394,8 +394,8 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6"
+          ros2_data_type: UINT8_MULTI_ARRAY
+          topic: "sts3215_encoder_6_state"
           publish_rate_hz: 30
         }
       }
@@ -417,6 +417,84 @@ robot {
         encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_encoder_config {
           servo_id: 6
+        }
+      }
+    }
+  }
+
+  bridges {
+    single_bridges {
+      node {
+        id: 3
+        node_type: SIGNAL_BRIDGE
+        qos_setting {}
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_1_cmd" }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_2_cmd" }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_3_cmd" }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_4_cmd" }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_5_cmd" }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_servo_6_cmd" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_1_state" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_2_state" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_3_state" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_4_state" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_5_state" }
+        subscriptions { ros2_data_type: UINT8_MULTI_ARRAY topic: "sts3215_encoder_6_state" }
+      }
+      bridge {
+        mappings {
+          mapping_id: "joint_1"
+          source_topic: "sts3215_encoder_1_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_1_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_1_follow"
+        }
+        mappings {
+          mapping_id: "joint_2"
+          source_topic: "sts3215_encoder_2_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_2_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_2_follow"
+        }
+        mappings {
+          mapping_id: "joint_3"
+          source_topic: "sts3215_encoder_3_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_3_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_3_follow"
+        }
+        mappings {
+          mapping_id: "joint_4"
+          source_topic: "sts3215_encoder_4_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_4_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_4_follow"
+        }
+        mappings {
+          mapping_id: "joint_5"
+          source_topic: "sts3215_encoder_5_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_5_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_5_follow"
+        }
+        mappings {
+          mapping_id: "joint_6"
+          source_topic: "sts3215_encoder_6_state"
+          source_payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          target_topic: "sts3215_servo_6_cmd"
+          mapping_type: MAPPING_TYPE_POSITION_TO_POSITION
+          affine { scale: 1.0 offset: 0.0 invert: false }
+          action_id: "joint_6_follow"
         }
       }
     }
