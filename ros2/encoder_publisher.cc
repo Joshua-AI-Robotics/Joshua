@@ -1,6 +1,5 @@
-#include <cmath>
+#include <chrono>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,9 +17,7 @@ class EncoderPublisher : public rclcpp::Node {
   struct Encoder {
     std::string topic;
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
-    std::pair<float, float> limits;
     rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr publisher;
-    robot::perception::EncoderDataMode encoder_data_mode;
     rclcpp::TimerBase::SharedPtr timer;
   };
 
@@ -33,14 +30,13 @@ class EncoderPublisher : public rclcpp::Node {
         const auto& encoder_proto = single_perception.encoder();
         const auto& qos_setting = single_perception.node().qos_setting();
 
-        // First, create the interface and check if it's valid.
         auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
         if (!interface.ok()) {
           RCLCPP_ERROR(this->get_logger(),
                        "Failed to create perception interface for encoder '%s'. Check hardware "
                        "connection or permissions.",
                        encoder_proto.encoder_name().c_str());
-          continue;  // Skip this encoder if initialization failed.
+          continue;
         }
 
         for (const auto& publisher : single_perception.node().publishers()) {
@@ -55,19 +51,15 @@ class EncoderPublisher : public rclcpp::Node {
           encoders_.emplace_back(
               Encoder{.topic = publisher.topic(),
                       .interface = std::move(interface.value()),
-                      .limits = {encoder_proto.operational_lower_limit(),
-                                 encoder_proto.operational_upper_limit()},
                       .publisher = this->create_publisher<std_msgs::msg::UInt8MultiArray>(
                           publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
-                      .encoder_data_mode = encoder_proto.encoder_data_mode(),
                       .timer = this->create_wall_timer(
                           std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
                           std::bind(&EncoderPublisher::publish_encoder_data, this))});
         }
 
         RCLCPP_INFO(this->get_logger(),
-                    "Found encoder '%s' in configuration for node_id %d. Publishing on %zu topics "
-                    "with data mode: %d",
+                    "Found encoder '%s' in configuration for node_id %d. Publishing on %zu topics.",
                     encoder_proto.encoder_name().c_str(),
                     node_id,
                     single_perception.node().publishers().size());
@@ -103,7 +95,6 @@ class EncoderPublisher : public rclcpp::Node {
           continue;
         }
 
-        // Check if packet contains position data
         if (!packet.value().has_position()) {
           RCLCPP_WARN(this->get_logger(),
                       "Failed to get position data from encoder '%s'!",
@@ -111,14 +102,9 @@ class EncoderPublisher : public rclcpp::Node {
           continue;
         }
 
-        auto normalized = NormalizePosition(packet.value().position().position(), encoder);
-        if (!normalized.has_value()) {
-          continue;
-        }
-
         auto perception_packet = robot::perception::PerceptionPacket();
-        perception_packet.mutable_position()->set_position(*normalized);
-        auto serialized = perception_packet.SerializeAsString();
+        perception_packet.mutable_position()->set_position(packet.value().position().position());
+        const auto serialized = perception_packet.SerializeAsString();
 
         auto message = std_msgs::msg::UInt8MultiArray();
         message.data.assign(serialized.begin(), serialized.end());
@@ -129,40 +115,9 @@ class EncoderPublisher : public rclcpp::Node {
     }
   }
 
-  std::optional<float> NormalizePosition(const float position, const Encoder& encoder) {
-    float position_data = position;
-    switch (encoder.encoder_data_mode) {
-      case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_RAW:
-        return position_data;
-      case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE:
-        position_data =
-            (position_data - encoder.limits.first) / (encoder.limits.second - encoder.limits.first);
-        return std::max(0.0f, std::min(1.0f, position_data));
-      case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE:
-        position_data = 2.0f * (position_data - encoder.limits.first) /
-                            (encoder.limits.second - encoder.limits.first) -
-                        1.0f;
-        return std::max(-1.0f, std::min(1.0f, position_data));
-      case robot::perception::EncoderDataMode::ENCODER_DATA_MODE_NORMALIZED_RADIAN:
-        position_data = static_cast<float>(M_PI) * (position_data - encoder.limits.first) /
-                            (encoder.limits.second - encoder.limits.first) -
-                        (static_cast<float>(M_PI) / 2.0f);
-        return std::max(-static_cast<float>(M_PI) / 2.0f,
-                        std::min(static_cast<float>(M_PI) / 2.0f, position_data));
-      default:
-        RCLCPP_WARN(this->get_logger(),
-                    "Invalid publish data mode for encoder '%s'!",
-                    encoder.topic.c_str());
-        return std::nullopt;
-    }
-  }
-
   std::vector<Encoder> encoders_;
 };
 
 int main(int argc, char* argv[]) {
-  // For test run:
-  // bazel run ros2:encoder_publisher -- test_encoder 1
-  // config/config_preset/so100/so100_leader_arm_encoder_publish.pbtxt
   return ros2_utils::RunNode<EncoderPublisher>(argc, argv, "encoder_publisher");
 }

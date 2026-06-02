@@ -34,7 +34,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
@@ -64,7 +63,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
@@ -94,7 +92,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
   }

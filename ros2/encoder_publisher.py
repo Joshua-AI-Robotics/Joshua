@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import List
 
@@ -19,8 +18,6 @@ from ros2.utils.qos_setting import create_qos_setting
 class EncoderEntry:
     topic: str
     interface: object
-    limits: tuple
-    encoder_data_mode: int
     publisher: object
     timer: object
 
@@ -61,11 +58,6 @@ class EncoderPublisher(Node):
                         EncoderEntry(
                             topic=publisher.topic,
                             interface=interface,
-                            limits=(
-                                encoder_proto.operational_lower_limit,
-                                encoder_proto.operational_upper_limit,
-                            ),
-                            encoder_data_mode=encoder_proto.encoder_data_mode,
                             publisher=self.create_publisher(
                                 UInt8MultiArray,
                                 publisher.topic,
@@ -80,8 +72,7 @@ class EncoderPublisher(Node):
 
                 self.get_logger().info(
                     f"Found encoder '{encoder_proto.encoder_name}' in configuration for node_id "
-                    f"{node_id}. Publishing on {len(single_perception.node.publishers)} topics "
-                    f"with data mode: {encoder_proto.encoder_data_mode}"
+                    f"{node_id}. Publishing on {len(single_perception.node.publishers)} topics."
                 )
 
         if not self._encoders:
@@ -118,52 +109,14 @@ class EncoderPublisher(Node):
                     )
                     continue
 
-                position_data = self._normalize_position(
-                    packet.position.position, encoder
-                )
-                if position_data is None:
-                    continue
-
-                packet = perception_packet_pb2.PerceptionPacket()
-                packet.position.position = float(position_data)
+                out = perception_packet_pb2.PerceptionPacket()
+                out.position.position = float(packet.position.position)
                 message = UInt8MultiArray()
-                message.data = packet.SerializeToString()
+                message.data = out.SerializeToString()
                 encoder.publisher.publish(message)
 
         except Exception as exc:
             self.get_logger().error(f"Error publishing encoder data: {exc}")
-
-    def _normalize_position(self, position, encoder: EncoderEntry) -> float | None:
-        position_data = float(position)
-        lower, upper = encoder.limits
-
-        if encoder.encoder_data_mode == perception_pb2.ENCODER_DATA_MODE_RAW:
-            return position_data
-        if (
-            encoder.encoder_data_mode
-            == perception_pb2.ENCODER_DATA_MODE_NORMALIZED_ZERO_TO_ONE
-        ):
-            position_data = (position_data - lower) / (upper - lower)
-            return max(0.0, min(1.0, position_data))
-        if (
-            encoder.encoder_data_mode
-            == perception_pb2.ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
-        ):
-            position_data = 2.0 * (position_data - lower) / (upper - lower) - 1.0
-            return max(-1.0, min(1.0, position_data))
-        if (
-            encoder.encoder_data_mode
-            == perception_pb2.ENCODER_DATA_MODE_NORMALIZED_RADIAN
-        ):
-            position_data = (math.pi * (position_data - lower) / (upper - lower)) - (
-                math.pi / 2.0
-            )
-            return max(-math.pi / 2.0, min(math.pi / 2.0, position_data))
-
-        self.get_logger().warning(
-            f"Invalid publish data mode for encoder '{encoder.topic}'!"
-        )
-        return None
 
 
 def main() -> int:

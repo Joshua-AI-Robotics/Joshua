@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <list>
 #include <thread>
@@ -21,10 +22,27 @@ class ActionSubscriber : public rclcpp::Node {
   struct Actuator {
     std::string topic;
     std::unique_ptr<robot::action::ActionInterface> interface;
+    std::pair<float, float> limits;
     ros2::node::PayloadType payload_type;
     SubscriptionVariant subscription;
     robot::action::ActionPacket reusable_packet;
   };
+
+  static float MapNormalizedPosition(const float value, const float lower, const float upper) {
+    const float normalized = std::max(-1.0f, std::min(1.0f, value));
+    return lower + (normalized + 1.0f) * (upper - lower) / 2.0f;
+  }
+
+  static void PrepareActionPacket(const Actuator& actuator, robot::action::ActionPacket& packet) {
+    if (!packet.normalized()) {
+      return;
+    }
+    const auto [lower, upper] = actuator.limits;
+    if (packet.has_position()) {
+      float position = MapNormalizedPosition(packet.position(), lower, upper);
+      packet.set_position(std::max(lower, std::min(upper, position)));
+    }
+  }
 
   static bool ParseSubscriptionPayload(const Actuator& actuator,
                                        const std_msgs::msg::UInt8MultiArray& msg,
@@ -77,6 +95,8 @@ class ActionSubscriber : public rclcpp::Node {
           Actuator& actuator =
               actuators_.emplace_back(Actuator{.topic = subscription.topic(),
                                                .interface = std::move(interface.value()),
+                                               .limits = {action_proto.operational_lower_limit(),
+                                                          action_proto.operational_upper_limit()},
                                                .payload_type = subscription.payload_type()});
 
           actuator.reusable_packet.Clear();
@@ -102,6 +122,7 @@ class ActionSubscriber : public rclcpp::Node {
                                  actuator.topic.c_str());
                     return;
                   }
+                  PrepareActionPacket(actuator, actuator.reusable_packet);
                   if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
                     RCLCPP_ERROR(this->get_logger(),
                                  "Failed to set action for actuator '%s'!",

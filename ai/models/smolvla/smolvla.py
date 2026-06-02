@@ -16,6 +16,7 @@ from sensor_msgs.msg import Image as ImageMsg
 from std_msgs.msg import Float32
 
 from ai.models.model_base import ModelBase
+from robot.action.proto import action_packet_pb2
 from ros2.image_converter import ImageConverter
 from ros2.proto import ros2_data_type_pb2
 
@@ -94,8 +95,10 @@ class SmolVla(ModelBase):
         so we can only access _single_model_config and _model_config here.
         """
         # "SmolVLA inference node requires a model path."
-        if not (self._single_model_config.pretrained_model_hf_path
-            or self._single_model_config.pretrained_model_local_path):
+        if not (
+            self._single_model_config.pretrained_model_hf_path
+            or self._single_model_config.pretrained_model_local_path
+        ):
             raise ValueError("SmolVLA inference node requires a pretrained model path.")
 
     def _initialize_inference(self) -> None:
@@ -234,9 +237,8 @@ class SmolVla(ModelBase):
         """
         Postprocess output data for SmolVLA inference.
 
-        SmolVLA select_action returns actions that may already be normalized or
-        in an unknown range. We clamp to [-1, 1] since the actuator driver
-        expects ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE.
+        Model actions are normalized to [-1, 1] on ActionPacket with normalized=true.
+        actuator_subscriber maps to raw ticks using actuator operational limits.
         """
         # Handle None or failed inference
         if output_data is None:
@@ -261,17 +263,12 @@ class SmolVla(ModelBase):
         # Log raw values for debugging
         glog.debug(f"Raw model output: {action_values}")
 
-        # SmolVLA output is likely already normalized to roughly [-1, 1]
-        # Just clamp to ensure values stay in [-1, 1] for actuator driver
         action_values = [max(-1.0, min(1.0, v)) for v in action_values]
-
-        glog.debug(f"Clamped output: {action_values}")
 
         if len(action_values) != self._num_publishers:
             glog.warning(
                 f"Model output {len(action_values)} actions, but need {self._num_publishers}. Padding/truncating."
             )
-            # Pad with zeros or truncate
             if len(action_values) < self._num_publishers:
                 action_values.extend(
                     [0.0] * (self._num_publishers - len(action_values))
@@ -279,7 +276,15 @@ class SmolVla(ModelBase):
             else:
                 action_values = action_values[: self._num_publishers]
 
-        return action_values
+        packets = []
+        for value in action_values:
+            packet = action_packet_pb2.ActionPacket()
+            packet.position = float(value)
+            packet.normalized = True
+            packets.append(packet)
+
+        glog.debug(f"Normalized output: {action_values}")
+        return packets
 
     def inference(self, images: Dict[str, Any], state_history: List[Any]) -> List[Any]:
         """

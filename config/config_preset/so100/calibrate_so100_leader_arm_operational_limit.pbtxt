@@ -32,7 +32,6 @@ robot {
         }
         operational_lower_limit: 973
         operational_upper_limit: 3034
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 1
         }
@@ -64,7 +63,6 @@ robot {
         }
         operational_lower_limit: 858
         operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 2
         }
@@ -96,7 +94,6 @@ robot {
         }
         operational_lower_limit: 798
         operational_upper_limit: 3015
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 3
         }
@@ -128,7 +125,6 @@ robot {
         }
         operational_lower_limit: 668
         operational_upper_limit: 3124
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 4
         }
@@ -160,7 +156,6 @@ robot {
         }
         operational_lower_limit: 902
         operational_upper_limit: 2955
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 5
         }
@@ -192,7 +187,6 @@ robot {
         }
         operational_lower_limit: 1795
         operational_upper_limit: 3235
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         sts3215_encoder_config {
           servo_id: 6
         }

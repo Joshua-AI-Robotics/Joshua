@@ -4,17 +4,18 @@ from unittest import mock
 
 class ActuatorSubscriberTest(unittest.TestCase):
     """Regression test for actuator subscriber callback wiring without hardware."""
+
     def test_callback_mapping_raw(self):
         try:
             import rclpy
         except Exception as exc:
             self.skipTest(f"rclpy not available: {exc}")
 
-        from config.proto import config_pb2
-        from robot.action.proto import action_pb2
-        from robot.perception.proto import perception_pb2
         from actuator_subscriber import ActionSubscriber
         from std_msgs.msg import Float32
+
+        from config.proto import config_pb2
+        from robot.action.proto import action_pb2
 
         class FakeDriver:
             def __init__(self):
@@ -54,7 +55,6 @@ class ActuatorSubscriberTest(unittest.TestCase):
             actuator.mock_motor_config.motor_id = 1
             actuator.operational_lower_limit = 0
             actuator.operational_upper_limit = 1000
-            actuator.encoder_data_mode = perception_pb2.ENCODER_DATA_MODE_RAW
 
             with mock.patch(
                 "ros2.actuator_subscriber.action_factory.create_action",

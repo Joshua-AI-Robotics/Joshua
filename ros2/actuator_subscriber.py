@@ -11,12 +11,19 @@ from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
 
 
+def _map_normalized_position(value: float, lower: float, upper: float) -> float:
+    """Map normalized [-1, 1] to raw ticks in [lower, upper]."""
+    normalized = max(-1.0, min(1.0, float(value)))
+    return lower + (normalized + 1.0) * (upper - lower) / 2.0
+
+
 class ActuatorEntry:
-    def __init__(self, topic, interface, data_type, payload_type):
+    def __init__(self, topic, interface, data_type, payload_type, limits):
         self.topic = topic
         self.interface = interface
         self.data_type = data_type
         self.payload_type = payload_type
+        self.limits = limits
         self.subscription = None
         self.callback = None
 
@@ -50,6 +57,10 @@ class ActionSubscriber(Node):
                         interface=interface,
                         data_type=data_type,
                         payload_type=subscription.payload_type,
+                        limits=(
+                            actuator_proto.operational_lower_limit,
+                            actuator_proto.operational_upper_limit,
+                        ),
                     )
                     self._actuators.append(entry)
 
@@ -102,6 +113,15 @@ class ActionSubscriber(Node):
 
         raise ValueError(f"Unsupported payload_type {entry.payload_type}")
 
+    def _prepare_action_packet(self, entry: ActuatorEntry, packet):
+        if not packet.normalized:
+            return packet
+        lower, upper = entry.limits
+        if packet.HasField("position"):
+            position = _map_normalized_position(packet.position, lower, upper)
+            packet.position = max(lower, min(upper, position))
+        return packet
+
     def _make_uint8_multi_array_callback(self, entry: ActuatorEntry):
         """Callback for UINT8_MULTI_ARRAY topics carrying ActionPacket or PerceptionPacket."""
 
@@ -115,6 +135,7 @@ class ActionSubscriber(Node):
                 return
 
             try:
+                packet = self._prepare_action_packet(entry, packet)
                 entry.interface.set_action(packet)
             except Exception as exc:
                 self.get_logger().error(
