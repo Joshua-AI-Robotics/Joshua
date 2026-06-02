@@ -1,3 +1,4 @@
+# TODO(hmoon): Need to bridge action packet and perception packet.
 general{
   operation_mode: MODE_TELEOPERATE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM

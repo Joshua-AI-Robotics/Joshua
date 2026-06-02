@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from rclpy.node import Node
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Float32, String, UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
@@ -17,6 +17,7 @@ from ros2.utils.qos_setting import create_qos_setting
 _DATA_TYPE_TO_MSG = {
     ros2_data_type_pb2.FLOAT32: Float32,
     ros2_data_type_pb2.STRING: String,
+    ros2_data_type_pb2.UINT8_MULTI_ARRAY: UInt8MultiArray,
 }
 
 
@@ -132,6 +133,15 @@ class TrajectoryPublisher(Node):
             self.get_logger().debug(
                 f"[t={waypoint.timestamp_sec:.3f}s] "
                 f"{waypoint.topic} -> ActionPacket({action_type})"
+            )
+        elif topic_pub.data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
+            msg = UInt8MultiArray()
+            msg.data = list(waypoint.action.SerializeToString())
+            topic_pub.publisher.publish(msg)
+            action_type = waypoint.action.WhichOneof("action_type") or "none"
+            self.get_logger().debug(
+                f"[t={waypoint.timestamp_sec:.3f}s] "
+                f"{waypoint.topic} -> ActionPacket bytes ({action_type})"
             )
         else:
             value = _extract_float_value(waypoint.action)
