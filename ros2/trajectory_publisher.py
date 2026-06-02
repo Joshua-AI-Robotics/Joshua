@@ -87,7 +87,8 @@ class TrajectoryPublisher(Node):
                             create_qos_setting(qos_setting),
                         )
                         self._topic_pubs[waypoint.topic] = TopicPub(
-                            publisher=pub, data_type=data_type
+                            publisher=pub,
+                            data_type=data_type,
                         )
 
         if not self._waypoints:

@@ -17,6 +17,12 @@ def _map_normalized_position(value: float, lower: float, upper: float) -> float:
     return lower + (normalized + 1.0) * (upper - lower) / 2.0
 
 
+def _denormalize_position_value(value: float, lower: float, upper: float) -> float:
+    """Map normalized position to raw ticks and clamp to operational limits."""
+    position = _map_normalized_position(value, lower, upper)
+    return max(lower, min(upper, position))
+
+
 class ActuatorEntry:
     def __init__(self, topic, interface, data_type, payload_type, limits):
         self.topic = topic
@@ -97,11 +103,13 @@ class ActionSubscriber(Node):
             node_pb2.PAYLOAD_TYPE_ACTION_PACKET,
         ):
             packet = action_packet_pb2.ActionPacket()
+            # TODO: check ParseFromString return value; reject corrupt payloads.
             packet.ParseFromString(data)
             return packet
 
         if entry.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
             perception = perception_packet_pb2.PerceptionPacket()
+            # TODO: check ParseFromString return value; reject corrupt payloads.
             perception.ParseFromString(data)
             if not perception.HasField("position"):
                 raise ValueError("PerceptionPacket has no position field")
@@ -118,8 +126,11 @@ class ActionSubscriber(Node):
             return packet
         lower, upper = entry.limits
         if packet.HasField("position"):
-            position = _map_normalized_position(packet.position, lower, upper)
-            packet.position = max(lower, min(upper, position))
+            packet.position = _denormalize_position_value(packet.position, lower, upper)
+        if packet.HasField("complex") and packet.complex.HasField("position"):
+            packet.complex.position = _denormalize_position_value(
+                packet.complex.position, lower, upper
+            )
         return packet
 
     def _make_uint8_multi_array_callback(self, entry: ActuatorEntry):

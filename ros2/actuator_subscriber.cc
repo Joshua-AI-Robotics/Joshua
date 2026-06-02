@@ -39,8 +39,12 @@ class ActionSubscriber : public rclcpp::Node {
     }
     const auto [lower, upper] = actuator.limits;
     if (packet.has_position()) {
-      float position = MapNormalizedPosition(packet.position(), lower, upper);
+      const float position = MapNormalizedPosition(packet.position(), lower, upper);
       packet.set_position(std::max(lower, std::min(upper, position)));
+    }
+    if (packet.has_complex() && packet.complex().has_position()) {
+      const float position = MapNormalizedPosition(packet.complex().position(), lower, upper);
+      packet.mutable_complex()->set_position(std::max(lower, std::min(upper, position)));
     }
   }
 
@@ -91,6 +95,8 @@ class ActionSubscriber : public rclcpp::Node {
           continue;
         }
 
+        // TODO: std::move(interface) runs per subscription; share one driver when an actuator
+        // has multiple subscriptions (second subscription currently gets a null unique_ptr).
         for (const auto& subscription : single_action.node().subscriptions()) {
           Actuator& actuator =
               actuators_.emplace_back(Actuator{.topic = subscription.topic(),

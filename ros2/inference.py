@@ -209,36 +209,26 @@ class Inference(Node):
 
         return None
 
-    def _encode_action_packet(
-        self, packet: action_packet_pb2.ActionPacket, ros2_data_type: int
-    ) -> Any:
-        """Encode ActionPacket for the configured ROS2 publisher type."""
-        if ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-            msg = UInt8MultiArray()
-            msg.data = packet.SerializeToString()
-            return msg
+    def _lookup_operational_limits_by_topic(
+        self, topic: str
+    ) -> tuple[float, float] | None:
+        for single_action in self.config.robot.actions.single_actions:
+            if single_action.action_type != single_action.ACTUATOR:
+                continue
+            for subscription in single_action.node.subscriptions:
+                if subscription.topic == topic:
+                    actuator = single_action.actuator
+                    return (
+                        float(actuator.operational_lower_limit),
+                        float(actuator.operational_upper_limit),
+                    )
+        return None
 
-        if ros2_data_type == ros2_data_type_pb2.FLOAT32:
-            msg = Float32()
-            which = packet.WhichOneof("action_type")
-            if which == "position":
-                msg.data = packet.position
-            elif which == "speed":
-                msg.data = packet.speed
-            elif which == "torque":
-                msg.data = packet.torque
-            elif which == "dc":
-                msg.data = packet.dc
-            else:
-                raise ValueError(
-                    f"ActionPacket has no scalar action_type for FLOAT32 publish "
-                    f"(action_type={which!r})."
-                )
-            return msg
-
-        raise ValueError(
-            f"Unsupported inference publisher ros2_data_type: {ros2_data_type}"
-        )
+    @staticmethod
+    def _map_normalized_to_limits(value: float, lower: float, upper: float) -> float:
+        normalized = max(-1.0, min(1.0, float(value)))
+        mapped = lower + (normalized + 1.0) * (upper - lower) / 2.0
+        return max(lower, min(upper, mapped))
 
     def _publish_output(self, publisher_index: int, output_value: Any) -> None:
         """Publish model output as ActionPacket on the configured ROS topic."""
@@ -258,7 +248,37 @@ class Inference(Node):
             if packet.timestamp_ns == 0:
                 packet.timestamp_ns = time.time_ns()
 
-            ros_msg = self._encode_action_packet(packet, pub_cfg.ros2_data_type)
+            if pub_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
+                ros_msg = UInt8MultiArray()
+                ros_msg.data = packet.SerializeToString()
+            elif pub_cfg.ros2_data_type == ros2_data_type_pb2.FLOAT32:
+                ros_msg = Float32()
+                which = packet.WhichOneof("action_type")
+                if which == "position":
+                    value = packet.position
+                    if packet.normalized:
+                        limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
+                        if limits is None:
+                            raise ValueError(
+                                f"normalized position output requires actuator limits for topic '{pub_cfg.topic}'"
+                            )
+                        value = self._map_normalized_to_limits(value, limits[0], limits[1])
+                    ros_msg.data = value
+                elif which == "speed":
+                    ros_msg.data = packet.speed
+                elif which == "torque":
+                    ros_msg.data = packet.torque
+                elif which == "dc":
+                    ros_msg.data = packet.dc
+                else:
+                    raise ValueError(
+                        f"ActionPacket has no scalar action_type for FLOAT32 publish "
+                        f"(action_type={which!r})."
+                    )
+            else:
+                raise ValueError(
+                    f"Unsupported inference publisher ros2_data_type: {pub_cfg.ros2_data_type}"
+                )
             publisher.publish(ros_msg)
 
         except Exception as e:
