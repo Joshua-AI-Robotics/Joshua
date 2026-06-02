@@ -2,7 +2,6 @@ syntax = "proto3";
 
 import "robot/action/proto/action.proto";
 import "robot/perception/proto/perception.proto";
-import "ros2/proto/bridge.proto";
 import "ros2/proto/trajectory.proto";
 
 package config;
@@ -11,5 +10,4 @@ message Robot {
   robot.action.Action actions = 1;
   robot.perception.Perception perceptions = 2;
   ros2.trajectory.Trajectories trajectories = 3;
-  ros2.bridge.Bridges bridges = 4;
 }

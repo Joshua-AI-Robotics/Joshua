@@ -50,26 +50,6 @@ proto_library(
     ],
 )
 
-proto_library(
-    name = "bridge_proto",
-    srcs = ["bridge.proto"],
-    deps = [
-        ":node_proto",
-    ],
-)
-
-py_proto_library(
-    name = "bridge_py_proto",
-    visibility = ["//visibility:public"],
-    deps = [":bridge_proto"],
-)
-
-cc_proto_library(
-    name = "bridge_cc_proto",
-    visibility = ["//visibility:public"],
-    deps = [":bridge_proto"],
-)
-
 py_proto_library(
     name = "trajectory_py_proto",
     visibility = ["//visibility:public"],

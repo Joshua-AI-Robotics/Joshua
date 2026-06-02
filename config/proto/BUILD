@@ -22,7 +22,6 @@ proto_library(
     deps = [
         "//robot/action/proto:action_proto",
         "//robot/perception/proto:perception_proto",
-        "//ros2/proto:bridge_proto",
         "//ros2/proto:trajectory_proto",
     ],
 )

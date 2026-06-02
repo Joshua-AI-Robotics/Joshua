@@ -1,13 +1,17 @@
 import sys
-from typing import Any, List, NamedTuple, Union
+import time
+from typing import Any, List, NamedTuple, Optional, Union
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float32, UInt8MultiArray
 
 from ai.models import model_registry
 from ai.proto import ai_model_pb2
 from config.proto import config_pb2
+from robot.action.proto import action_packet_pb2
 from ros2 import node_runner as node_runner_py
+from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.qos_setting import create_qos_setting
 
@@ -178,23 +182,84 @@ class Inference(Node):
 
         return _callback
 
+    def _to_action_packet(
+        self, output_value: Any
+    ) -> Optional[action_packet_pb2.ActionPacket]:
+        """Normalize model output to ActionPacket (default inference payload)."""
+        if isinstance(output_value, action_packet_pb2.ActionPacket):
+            return output_value
+
+        if isinstance(output_value, (int, float)):
+            packet = action_packet_pb2.ActionPacket()
+            packet.position = float(output_value)
+            packet.timestamp_ns = time.time_ns()
+            return packet
+
+        if isinstance(output_value, UInt8MultiArray):
+            packet = action_packet_pb2.ActionPacket()
+            if packet.ParseFromString(bytes(output_value.data)):
+                return packet
+            return None
+
+        if isinstance(output_value, (bytes, bytearray)):
+            packet = action_packet_pb2.ActionPacket()
+            if packet.ParseFromString(bytes(output_value)):
+                return packet
+            return None
+
+        return None
+
+    def _encode_action_packet(
+        self, packet: action_packet_pb2.ActionPacket, ros2_data_type: int
+    ) -> Any:
+        """Encode ActionPacket for the configured ROS2 publisher type."""
+        if ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
+            msg = UInt8MultiArray()
+            msg.data = packet.SerializeToString()
+            return msg
+
+        if ros2_data_type == ros2_data_type_pb2.FLOAT32:
+            msg = Float32()
+            which = packet.WhichOneof("action_type")
+            if which == "position":
+                msg.data = packet.position
+            elif which == "speed":
+                msg.data = packet.speed
+            elif which == "torque":
+                msg.data = packet.torque
+            elif which == "dc":
+                msg.data = packet.dc
+            else:
+                raise ValueError(
+                    f"ActionPacket has no scalar action_type for FLOAT32 publish "
+                    f"(action_type={which!r})."
+                )
+            return msg
+
+        raise ValueError(
+            f"Unsupported inference publisher ros2_data_type: {ros2_data_type}"
+        )
+
     def _publish_output(self, publisher_index: int, output_value: Any) -> None:
-        """Publish the messages from publishers."""
+        """Publish model output as ActionPacket on the configured ROS topic."""
         try:
             publisher_instance = self.publisher_list[publisher_index]
             publisher = publisher_instance.instance
-            msg_type = publisher_instance.msg_type
+            pub_cfg = self.single_model_config.node.publishers[publisher_index]
 
-            if not isinstance(output_value, msg_type):
-                try:
-                    msg = msg_type()
-                    if hasattr(msg, "data"):
-                        msg.data = output_value
-                        output_value = msg
-                except Exception:
-                    pass
+            packet = self._to_action_packet(output_value)
+            if packet is None:
+                self.get_logger().error(
+                    f"Could not convert output for publisher {publisher_index} to "
+                    f"ActionPacket (type={type(output_value).__name__})."
+                )
+                return
 
-            publisher.publish(output_value)
+            if packet.timestamp_ns == 0:
+                packet.timestamp_ns = time.time_ns()
+
+            ros_msg = self._encode_action_packet(packet, pub_cfg.ros2_data_type)
+            publisher.publish(ros_msg)
 
         except Exception as e:
             self.get_logger().error(

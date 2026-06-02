@@ -5,16 +5,18 @@ from std_msgs.msg import UInt8MultiArray
 from config.proto import config_pb2
 from robot.action.factory import action_factory
 from robot.action.proto import action_packet_pb2, action_pb2
+from robot.perception.proto import perception_packet_pb2
 from ros2.node_runner import run_node
-from ros2.proto import ros2_data_type_pb2
+from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
 
 
 class ActuatorEntry:
-    def __init__(self, topic, interface, data_type):
+    def __init__(self, topic, interface, data_type, payload_type):
         self.topic = topic
         self.interface = interface
         self.data_type = data_type
+        self.payload_type = payload_type
         self.subscription = None
         self.callback = None
 
@@ -47,6 +49,7 @@ class ActionSubscriber(Node):
                         topic=subscription.topic,
                         interface=interface,
                         data_type=data_type,
+                        payload_type=subscription.payload_type,
                     )
                     self._actuators.append(entry)
 
@@ -77,18 +80,40 @@ class ActionSubscriber(Node):
             f"node_id {node_id}!"
         )
 
+    def _parse_action_packet(self, entry: ActuatorEntry, data: bytes):
+        if entry.payload_type in (
+            node_pb2.PAYLOAD_TYPE_UNSPECIFIED,
+            node_pb2.PAYLOAD_TYPE_ACTION_PACKET,
+        ):
+            packet = action_packet_pb2.ActionPacket()
+            packet.ParseFromString(data)
+            return packet
+
+        if entry.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
+            perception = perception_packet_pb2.PerceptionPacket()
+            perception.ParseFromString(data)
+            if not perception.HasField("position"):
+                raise ValueError("PerceptionPacket has no position field")
+            packet = action_packet_pb2.ActionPacket()
+            packet.position = float(perception.position.position)
+            if perception.HasField("timestamp_ns"):
+                packet.timestamp_ns = perception.timestamp_ns
+            return packet
+
+        raise ValueError(f"Unsupported payload_type {entry.payload_type}")
+
     def _make_uint8_multi_array_callback(self, entry: ActuatorEntry):
-        """Callback for UINT8_MULTI_ARRAY topics carrying binary ActionPacket."""
+        """Callback for UINT8_MULTI_ARRAY topics carrying ActionPacket or PerceptionPacket."""
 
         def callback(msg: UInt8MultiArray):
-            packet = action_packet_pb2.ActionPacket()
             try:
-                packet.ParseFromString(bytes(msg.data))
+                packet = self._parse_action_packet(entry, bytes(msg.data))
             except Exception as exc:
                 self.get_logger().error(
-                    f"Failed to parse binary ActionPacket for '{entry.topic}': {exc}"
+                    f"Failed to parse subscription payload for '{entry.topic}': {exc}"
                 )
                 return
+
             try:
                 entry.interface.set_action(packet)
             except Exception as exc:

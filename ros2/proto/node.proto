@@ -7,7 +7,6 @@ import "ros2/proto/ros2_data_type.proto";
 // Enum values here must match with the file name under ros2/
 // (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
 // This is used to resolve the native binary path.
-// Last Added: SIGNAL_BRIDGE.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -18,7 +17,6 @@ enum NodeType {
   LIDAR_PUBLISHER = 6;
   DATA_SUBSCRIBER = 7;
   TRAJECTORY_PUBLISHER = 8;
-  SIGNAL_BRIDGE = 9;
 }
 
 enum QosReliabilityPolicy {
@@ -42,6 +40,13 @@ enum QosLivelinessPolicy {
       1;  // Liveliness must be explicitly asserted via an API call.
 }
 
+// Serialized protobuf type on a UINT8_MULTI_ARRAY topic.
+enum PayloadType {
+  PAYLOAD_TYPE_UNSPECIFIED = 0;  // ActionPacket
+  PAYLOAD_TYPE_ACTION_PACKET = 1;
+  PAYLOAD_TYPE_PERCEPTION_PACKET = 2;
+}
+
 message QosSetting {
   QosReliabilityPolicy reliability_policy = 1;
   QosDurabilityPolicy durability_policy = 2;
@@ -57,11 +62,13 @@ message Publisher {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;
+  PayloadType payload_type = 4;
 }
 
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
+  PayloadType payload_type = 3;
 }
 
 message Node {

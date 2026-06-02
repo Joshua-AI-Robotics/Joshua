@@ -18,18 +18,23 @@ class RandomNoise(ModelBase):
         self._mutex = threading.Lock()
 
     def _validate_config(self) -> None:
-        """
-        Validate the model specific configuration.
-        """
-        if self._model_config.noise_low >= self._model_config.noise_high:
+        """Validate the model specific configuration."""
+        if self._model_config.output_size == 0:
+            raise ValueError("output_size must be greater than 0")
+
+        if len(self._model_config.output_ranges) != self._model_config.output_size:
             raise ValueError(
-                f"Noise low ({self._model_config.noise_low}) must be less than noise high ({self._model_config.noise_high})"
+                f"output_ranges length ({len(self._model_config.output_ranges)}) must "
+                f"match output_size ({self._model_config.output_size})"
             )
 
-    # TODO: Here handles the mapping of input and output.
-    # This might not be the model specific but config & robot specific.
-    # We should add mapping or move this logics to somewhere else
-    # for the model to be more generic in nature.
+        for index, output_range in enumerate(self._model_config.output_ranges):
+            if output_range.low >= output_range.high:
+                raise ValueError(
+                    f"output_ranges[{index}]: low ({output_range.low}) must be less "
+                    f"than high ({output_range.high})"
+                )
+
     def handle_input(
         self,
         subscription_index: int,
@@ -43,95 +48,39 @@ class RandomNoise(ModelBase):
         3. Postprocess
         4. Publish
         """
-        # 1. Preprocess
         processed_data = self.preprocess_input(subscription_index, data)
 
         with self._mutex:
             if subscription_index >= self._num_subscriptions:
                 return
 
-            # Store the processed input data
             self._input_buffer[subscription_index].append(processed_data)
 
-            # Only run inference if the input buffer has size of 30. (This is ramdon behavior for now.)
             if len(self._input_buffer[subscription_index]) == 30:
-                # 2. Inference
                 outputs = self.inference(self._input_buffer[subscription_index])
-
-                # 3. Postprocess
                 final_outputs = self.postprocess_output(outputs)
 
-                # 4. Publish
                 for publisher_index in range(self._num_publishers):
                     publish_callback(publisher_index, final_outputs[publisher_index])
 
-                # Reset the input buffer
                 self._input_buffer[subscription_index] = []
 
     def preprocess_input(self, subscription_index: int, data: Any) -> Any:
-        """
-        Preprocess a single input. For RandomNoise, we just pass it through.
-        """
+        """Preprocess a single input. For RandomNoise, we just pass it through."""
         return data
 
     def postprocess_output(self, output_data: List[Any]) -> List[Any]:
-        """
-        Postprocess outputs. For RandomNoise, we just pass it through.
-        """
+        """Postprocess outputs. For RandomNoise, we just pass it through."""
         return output_data
 
     def inference(self, input_data: List[Any]) -> List[Any]:
-        """
-        Run inference on the input data and return the output data.
-        """
-
-        # Return random action values.
-        # In this example, return random action with different range of noise
-        # per publisher.
-        # TODO: This is non-model specific but config & robot specific.
-        # We should add mapping or move this logics to somewhere else
-        # for the model to be more generic in nature.
+        """Return random positions within each configured output range."""
         output_data = []
         for publisher_index in range(self._num_publishers):
-            if publisher_index == 2:
-                output_data.append(
-                    random.uniform(
-                        self._model_config.noise_low * 2,
-                        self._model_config.noise_high * 2,
-                    )
-                )
-            elif publisher_index == 3:
-                output_data.append(
-                    random.uniform(
-                        self._model_config.noise_low * 2,
-                        self._model_config.noise_high * 2,
-                    )
-                )
-            elif publisher_index == 4:
-                output_data.append(
-                    random.uniform(
-                        self._model_config.noise_low * 10,
-                        self._model_config.noise_high * 10,
-                    )
-                )
-            elif publisher_index == 5:
-                output_data.append(
-                    random.uniform(
-                        self._model_config.noise_low * 10,
-                        self._model_config.noise_high * 10,
-                    )
-                )
-            else:
-                output_data.append(
-                    random.uniform(
-                        self._model_config.noise_low, self._model_config.noise_high
-                    )
-                )
-
+            output_range = self._model_config.output_ranges[publisher_index]
+            output_data.append(random.uniform(output_range.low, output_range.high))
         return output_data
 
     def forward(self, input_data: List[Any]) -> List[Any]:
-        """
-        Training forward pass. Not implemented for RandomNoise.
-        """
+        """Training forward pass. Not implemented for RandomNoise."""
         return []

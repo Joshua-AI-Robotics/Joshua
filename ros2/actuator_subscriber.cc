@@ -7,7 +7,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/proto/node.pb.h"
 #include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
@@ -19,9 +21,39 @@ class ActionSubscriber : public rclcpp::Node {
   struct Actuator {
     std::string topic;
     std::unique_ptr<robot::action::ActionInterface> interface;
+    ros2::node::PayloadType payload_type;
     SubscriptionVariant subscription;
     robot::action::ActionPacket reusable_packet;
   };
+
+  static bool ParseSubscriptionPayload(const Actuator& actuator,
+                                       const std_msgs::msg::UInt8MultiArray& msg,
+                                       robot::action::ActionPacket& packet) {
+    const auto* data = msg.data.data();
+    const int size = static_cast<int>(msg.data.size());
+    switch (actuator.payload_type) {
+      case ros2::node::PAYLOAD_TYPE_UNSPECIFIED:
+      case ros2::node::PAYLOAD_TYPE_ACTION_PACKET:
+        return packet.ParseFromArray(data, size);
+      case ros2::node::PAYLOAD_TYPE_PERCEPTION_PACKET: {
+        robot::perception::PerceptionPacket perception;
+        if (!perception.ParseFromArray(data, size)) {
+          return false;
+        }
+        if (!perception.has_position()) {
+          return false;
+        }
+        packet.Clear();
+        packet.set_position(perception.position().position());
+        if (perception.timestamp_ns() != 0) {
+          packet.set_timestamp_ns(perception.timestamp_ns());
+        }
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
 
  public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
@@ -42,8 +74,10 @@ class ActionSubscriber : public rclcpp::Node {
         }
 
         for (const auto& subscription : single_action.node().subscriptions()) {
-          Actuator& actuator = actuators_.emplace_back(
-              Actuator{.topic = subscription.topic(), .interface = std::move(interface.value())});
+          Actuator& actuator =
+              actuators_.emplace_back(Actuator{.topic = subscription.topic(),
+                                               .interface = std::move(interface.value()),
+                                               .payload_type = subscription.payload_type()});
 
           actuator.reusable_packet.Clear();
           actuator.reusable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
@@ -62,10 +96,9 @@ class ActionSubscriber : public rclcpp::Node {
                 ros2_utils::CreateQosSetting(qos_setting),
                 [this, &actuator](const std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
                   actuator.reusable_packet.Clear();
-                  if (!actuator.reusable_packet.ParseFromArray(
-                          msg->data.data(), static_cast<int>(msg->data.size()))) {
+                  if (!ParseSubscriptionPayload(actuator, *msg, actuator.reusable_packet)) {
                     RCLCPP_ERROR(this->get_logger(),
-                                 "Failed to parse binary ActionPacket for '%s'!",
+                                 "Failed to parse subscription payload for '%s'!",
                                  actuator.topic.c_str());
                     return;
                   }
