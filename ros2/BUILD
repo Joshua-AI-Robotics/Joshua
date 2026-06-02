@@ -58,6 +58,7 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
         "//ros2:ros2_type_resolver",
         "//ros2:node_runner_py",
         "//ros2/proto:ros2_data_type_py_proto",
@@ -255,6 +256,7 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
         "//ros2:node_runner_py",
         "//ros2/proto:node_py_proto",
         "//ros2/proto:ros2_data_type_py_proto",

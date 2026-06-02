@@ -10,6 +10,7 @@ from std_msgs.msg import Float32, String, UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
+from robot.perception.proto import perception_packet_pb2
 from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.qos_setting import create_qos_setting
@@ -25,6 +26,7 @@ _DATA_TYPE_TO_MSG = {
 class TopicPub:
     publisher: object
     data_type: int
+    payload_type: int
 
 
 @dataclass
@@ -63,9 +65,12 @@ class TrajectoryPublisher(Node):
                 qos_setting = single_trajectory.node.qos_setting
                 trajectory = single_trajectory.trajectory
 
-                pub_data_types: Dict[str, int] = {}
+                pub_cfgs: Dict[str, tuple[int, int]] = {}
                 for pub_cfg in single_trajectory.node.publishers:
-                    pub_data_types[pub_cfg.topic] = pub_cfg.ros2_data_type
+                    pub_cfgs[pub_cfg.topic] = (
+                        pub_cfg.ros2_data_type,
+                        pub_cfg.payload_type,
+                    )
 
                 for waypoint in trajectory.waypoints:
                     self._waypoints.append(
@@ -77,8 +82,12 @@ class TrajectoryPublisher(Node):
                     )
 
                     if waypoint.topic not in self._topic_pubs:
-                        data_type = pub_data_types.get(
-                            waypoint.topic, ros2_data_type_pb2.FLOAT32
+                        data_type, payload_type = pub_cfgs.get(
+                            waypoint.topic,
+                            (
+                                ros2_data_type_pb2.FLOAT32,
+                                node_pb2.PAYLOAD_TYPE_ACTION_PACKET,
+                            ),
                         )
                         msg_cls = _DATA_TYPE_TO_MSG.get(data_type, Float32)
                         pub = self.create_publisher(
@@ -89,6 +98,7 @@ class TrajectoryPublisher(Node):
                         self._topic_pubs[waypoint.topic] = TopicPub(
                             publisher=pub,
                             data_type=data_type,
+                            payload_type=payload_type,
                         )
 
         if not self._waypoints:
@@ -137,7 +147,26 @@ class TrajectoryPublisher(Node):
             )
         elif topic_pub.data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
             msg = UInt8MultiArray()
-            msg.data = list(waypoint.action.SerializeToString())
+            if topic_pub.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
+                which = waypoint.action.WhichOneof("action_type")
+                if which == "position":
+                    position = waypoint.action.position
+                elif which == "complex" and waypoint.action.complex.HasField(
+                    "position"
+                ):
+                    position = waypoint.action.complex.position
+                else:
+                    raise ValueError(
+                        "PerceptionPacket payload requires ActionPacket.position "
+                        "(or complex.position)."
+                    )
+
+                perception = perception_packet_pb2.PerceptionPacket()
+                perception.position.position = float(position)
+                msg.data = list(perception.SerializeToString())
+            else:
+                # ACTION_PACKET or UNSPECIFIED.
+                msg.data = list(waypoint.action.SerializeToString())
             topic_pub.publisher.publish(msg)
             action_type = waypoint.action.WhichOneof("action_type") or "none"
             self.get_logger().debug(

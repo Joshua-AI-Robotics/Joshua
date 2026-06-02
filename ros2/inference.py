@@ -10,6 +10,8 @@ from ai.models import model_registry
 from ai.proto import ai_model_pb2
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
+from robot.perception.proto import perception_packet_pb2
+from ros2.proto import node_pb2
 from ros2 import node_runner as node_runner_py
 from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
@@ -250,7 +252,38 @@ class Inference(Node):
 
             if pub_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
                 ros_msg = UInt8MultiArray()
-                ros_msg.data = packet.SerializeToString()
+                if pub_cfg.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
+                    which = packet.WhichOneof("action_type")
+                    if which == "position":
+                        position = packet.position
+                    elif which == "complex" and packet.complex.HasField("position"):
+                        position = packet.complex.position
+                    else:
+                        raise ValueError(
+                            "PerceptionPacket payload requires ActionPacket.position "
+                            "(or complex.position)."
+                        )
+
+                    # PerceptionPacket carries raw operational units. If the model produced
+                    # normalized output, map it to the actuator limits for this topic.
+                    if packet.normalized:
+                        limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
+                        if limits is None:
+                            raise ValueError(
+                                f"normalized position output requires actuator limits for topic '{pub_cfg.topic}'"
+                            )
+                        position = self._map_normalized_to_limits(
+                            position, limits[0], limits[1]
+                        )
+
+                    perception = perception_packet_pb2.PerceptionPacket()
+                    perception.position.position = float(position)
+                    if packet.timestamp_ns != 0:
+                        perception.timestamp_ns = packet.timestamp_ns
+                    ros_msg.data = list(perception.SerializeToString())
+                else:
+                    # ACTION_PACKET or UNSPECIFIED.
+                    ros_msg.data = list(packet.SerializeToString())
             elif pub_cfg.ros2_data_type == ros2_data_type_pb2.FLOAT32:
                 ros_msg = Float32()
                 which = packet.WhichOneof("action_type")
