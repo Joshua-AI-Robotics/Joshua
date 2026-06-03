@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import base64
 import time
 from dataclasses import dataclass
 from typing import Dict, List
 
 from rclpy.node import Node
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Float32
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
@@ -14,11 +13,6 @@ from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.packet_parser import extract_scalar_from_action
 from ros2.utils.qos_setting import create_qos_setting
-
-_DATA_TYPE_TO_MSG = {
-    ros2_data_type_pb2.FLOAT32: Float32,
-    ros2_data_type_pb2.STRING: String,
-}
 
 
 @dataclass
@@ -68,9 +62,16 @@ class TrajectoryPublisher(Node):
                             waypoint.topic,
                             ros2_data_type_pb2.FLOAT32,
                         )
-                        msg_cls = _DATA_TYPE_TO_MSG.get(data_type, Float32)
+                        if data_type != ros2_data_type_pb2.FLOAT32:
+                            self.get_logger().error(
+                                "Unsupported publisher ros2_data_type %s for topic '%s'. "
+                                "Only FLOAT32 is supported.",
+                                str(data_type),
+                                waypoint.topic,
+                            )
+                            continue
                         pub = self.create_publisher(
-                            msg_cls,
+                            Float32,
                             waypoint.topic,
                             create_qos_setting(qos_setting),
                         )
@@ -112,31 +113,12 @@ class TrajectoryPublisher(Node):
         if topic_pub is None:
             return
 
-        if topic_pub.data_type == ros2_data_type_pb2.STRING:
-            msg = String()
-            msg.data = base64.b64encode(waypoint.action.SerializeToString()).decode(
-                "ascii"
-            )
-            topic_pub.publisher.publish(msg)
-            action_type = waypoint.action.WhichOneof("action_type") or "none"
-            self.get_logger().debug(
-                f"[t={waypoint.timestamp_sec:.3f}s] "
-                f"{waypoint.topic} -> ActionPacket({action_type})"
-            )
-            return
-
-        if topic_pub.data_type != ros2_data_type_pb2.FLOAT32:
-            self.get_logger().warning(
-                f"[t={waypoint.timestamp_sec:.3f}s] "
-                f"Unsupported ros2_data_type for topic {waypoint.topic}, skipping"
-            )
-            return
-
         value = extract_scalar_from_action(waypoint.action)
         if value is None:
+            which = waypoint.action.WhichOneof("action_type") or "none"
             self.get_logger().warning(
                 f"[t={waypoint.timestamp_sec:.3f}s] "
-                f"Unsupported action type for Float32 topic "
+                f"Unsupported action type '{which}' for Float32 topic "
                 f"{waypoint.topic}, skipping"
             )
             return
@@ -144,7 +126,7 @@ class TrajectoryPublisher(Node):
         msg.data = value
         topic_pub.publisher.publish(msg)
         self.get_logger().debug(
-            f"[t={waypoint.timestamp_sec:.3f}s] " f"{waypoint.topic} -> {value}"
+            f"[t={waypoint.timestamp_sec:.3f}s] {waypoint.topic} -> {value}"
         )
 
     def _run_trajectory_loop(self) -> None:

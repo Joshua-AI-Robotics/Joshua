@@ -1,5 +1,3 @@
-# TODO(hmoon): Teleop needs action_bridge: leader encoder Float32 -> follower actuator
-# ActionPacket (encoder-to-actuator mapping is hardware-specific). Not implemented.
 general{
   operation_mode: MODE_TELEOPERATE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
