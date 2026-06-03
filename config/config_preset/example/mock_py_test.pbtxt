@@ -12,8 +12,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_1"
+          ros2_data_type: FLOAT32
+          topic: "mock_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -53,10 +54,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "mock_encoder_1"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER

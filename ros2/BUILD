@@ -315,7 +315,6 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//ros2:node_runner",
-        "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",

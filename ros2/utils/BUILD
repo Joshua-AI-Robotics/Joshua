@@ -73,6 +73,7 @@ cc_library(
         "//robot/perception/proto:perception_packet_cc_proto",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
     ],
 )
 

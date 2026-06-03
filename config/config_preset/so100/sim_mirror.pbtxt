@@ -12,10 +12,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_1"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -44,10 +43,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_2"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -76,10 +74,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_3"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -108,10 +105,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_4"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -140,10 +136,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_5"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -172,10 +167,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_6"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -204,11 +198,11 @@ simulation {
   model_path: "simulation/models/so_arm100_scene.xml"
   mode: MODE_MIRROR
   mirror {
-    topic_mappings { topic: "sts3215_encoder_1"  ros2_data_type: UINT8_MULTI_ARRAY  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_2"  ros2_data_type: UINT8_MULTI_ARRAY  offset: -1.57}
-    topic_mappings { topic: "sts3215_encoder_3"  ros2_data_type: UINT8_MULTI_ARRAY  offset: 1.5708 }
-    topic_mappings { topic: "sts3215_encoder_4"  ros2_data_type: UINT8_MULTI_ARRAY  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_5"  ros2_data_type: UINT8_MULTI_ARRAY  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_6"  ros2_data_type: UINT8_MULTI_ARRAY  offset: 1.37 }
+    topic_mappings { topic: "sts3215_encoder_1"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_2"  ros2_data_type: FLOAT32  offset: -1.57}
+    topic_mappings { topic: "sts3215_encoder_3"  ros2_data_type: FLOAT32  offset: 1.5708 }
+    topic_mappings { topic: "sts3215_encoder_4"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_5"  ros2_data_type: FLOAT32  offset: 0 }
+    topic_mappings { topic: "sts3215_encoder_6"  ros2_data_type: FLOAT32  offset: 1.37 }
   }
 }

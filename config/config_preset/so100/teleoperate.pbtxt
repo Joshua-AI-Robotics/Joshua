@@ -1,4 +1,5 @@
-# TODO(hmoon): Need to bridge action packet and perception packet.
+# TODO(hmoon): Teleop needs action_bridge: leader encoder Float32 -> follower actuator
+# ActionPacket (encoder-to-actuator mapping is hardware-specific). Not implemented.
 general{
   operation_mode: MODE_TELEOPERATE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
@@ -13,9 +14,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_1_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -49,9 +50,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_2_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_2/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -85,9 +86,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_3_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_3/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -121,9 +122,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_4_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_4/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -157,9 +158,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_5_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_5/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -193,9 +194,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "sts3215_encoder_6_state"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_6/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -232,10 +233,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_1_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -264,10 +264,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_2_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -297,10 +296,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_3_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -330,10 +328,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_4_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -363,10 +360,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_5_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -395,10 +391,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_6_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER

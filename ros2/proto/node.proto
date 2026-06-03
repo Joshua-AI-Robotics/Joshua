@@ -40,16 +40,6 @@ enum QosLivelinessPolicy {
       1;  // Liveliness must be explicitly asserted via an API call.
 }
 
-// Serialized protobuf type on UINT8_MULTI_ARRAY topics.
-// UNSPECIFIED defaults by publisher node: perception publishers -> PerceptionPacket,
-// action/inference/trajectory publishers -> ActionPacket.
-// Actuator subscriptions accept ActionPacket only (not PerceptionPacket).
-enum PayloadType {
-  PAYLOAD_TYPE_UNSPECIFIED = 0;
-  PAYLOAD_TYPE_ACTION_PACKET = 1;
-  PAYLOAD_TYPE_PERCEPTION_PACKET = 2;
-}
-
 message QosSetting {
   QosReliabilityPolicy reliability_policy = 1;
   QosDurabilityPolicy durability_policy = 2;
@@ -65,13 +55,12 @@ message Publisher {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;
-  PayloadType payload_type = 4;
 }
 
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
-  PayloadType payload_type = 3;
+  bool normalized = 3;
 }
 
 message Node {

@@ -1,13 +1,11 @@
-"""Centralized ActionPacket and PerceptionPacket parse/field-access helpers.
+"""Centralized ActionPacket and PerceptionPacket field-access helpers.
 
 See ros2/utils/packet_parser.md for usage and proto change checklist.
 """
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
-from google.protobuf.message import DecodeError
+from typing import Optional
 
 from robot.action.proto import action_packet_pb2
 from robot.perception.proto import perception_packet_pb2
@@ -24,6 +22,15 @@ ACTION_SCALAR_ONEOF_FIELDS = (
     "torque",
     "dc",
 )
+# Last path segment of /<device_id>/<action_type> Float32 actuator topics.
+# Must stay in sync with ACTION_SCALAR_ONEOF_FIELDS and C++ kActionTopicSuffixes.
+# See ros2/utils/packet_parser.md — contract tests fail if proto/registries drift.
+ACTION_TOPIC_SUFFIX_TO_FIELD = {
+    "position": "position",
+    "torque": "torque",
+    "speed": "speed",
+    "dc": "dc",
+}
 PERCEPTION_DATA_TYPE_FIELDS = (
     "image",
     "position",
@@ -33,35 +40,45 @@ PERCEPTION_DATA_TYPE_FIELDS = (
 
 
 class PacketParseError(ValueError):
-    """Raised when protobuf bytes cannot be parsed or required fields are missing."""
+    """Raised when topic parsing or required proto fields are missing."""
 
 
-def parse_action_packet(data: bytes) -> action_packet_pb2.ActionPacket:
+def parse_action_type_from_topic(topic: str) -> str:
+    """Return ActionPacket oneof field name from /<device_id>/<action_type> topic."""
+    suffix = topic.rstrip("/").rsplit("/", 1)[-1].lower()
+    field = ACTION_TOPIC_SUFFIX_TO_FIELD.get(suffix)
+    if field is None:
+        allowed = ", ".join(sorted(ACTION_TOPIC_SUFFIX_TO_FIELD))
+        raise PacketParseError(
+            f"Unknown action_type '{suffix}' in topic '{topic}' "
+            f"(expected suffix: {allowed})"
+        )
+    return field
+
+
+def device_id_from_topic(topic: str) -> str:
+    """Return device_id segment from /<device_id>/<action_type> topic."""
+    parts = topic.strip("/").split("/")
+    if len(parts) < 2:
+        raise PacketParseError(
+            f"Actuator topic '{topic}' must be /<device_id>/<action_type>"
+        )
+    return parts[-2]
+
+
+def action_packet_from_float(
+    value: float,
+    topic: str,
+    *,
+    normalized: bool = False,
+) -> action_packet_pb2.ActionPacket:
+    """Build ActionPacket from a Float32 actuator command topic and value."""
+    field = parse_action_type_from_topic(topic)
     packet = action_packet_pb2.ActionPacket()
-    try:
-        packet.ParseFromString(data)
-    except DecodeError as exc:
-        raise PacketParseError("Failed to parse ActionPacket") from exc
+    if field == "position":
+        packet.normalized = normalized
+    setattr(packet, field, float(value))
     return packet
-
-
-def parse_perception_packet(data: bytes) -> perception_packet_pb2.PerceptionPacket:
-    packet = perception_packet_pb2.PerceptionPacket()
-    try:
-        packet.ParseFromString(data)
-    except DecodeError as exc:
-        raise PacketParseError("Failed to parse PerceptionPacket") from exc
-    return packet
-
-
-def serialize_action_packet(packet: action_packet_pb2.ActionPacket) -> bytes:
-    return packet.SerializeToString()
-
-
-def serialize_perception_packet(
-    packet: perception_packet_pb2.PerceptionPacket,
-) -> bytes:
-    return packet.SerializeToString()
 
 
 def map_normalized_position(value: float, lower: float, upper: float) -> float:
@@ -133,26 +150,6 @@ def extract_scalar_from_action(
     return float(getattr(packet, which))
 
 
-def action_to_perception_position_packet(
-    action: action_packet_pb2.ActionPacket,
-    *,
-    limits: Optional[Tuple[float, float]] = None,
-) -> perception_packet_pb2.PerceptionPacket:
-    position = extract_position_from_action(action)
-    if action.normalized:
-        if limits is None:
-            raise PacketParseError(
-                "normalized ActionPacket requires limits for PerceptionPacket conversion"
-            )
-        position = denormalize_position_value(position, limits[0], limits[1])
-
-    perception = perception_packet_pb2.PerceptionPacket()
-    perception.position.position = float(position)
-    if action.timestamp_ns != 0:
-        perception.timestamp_ns = action.timestamp_ns
-    return perception
-
-
 def require_perception_position(
     packet: perception_packet_pb2.PerceptionPacket,
 ) -> float:
@@ -191,9 +188,3 @@ _PERCEPTION_REQUIRE_FIELD_BY_NAME = {
     "sensor": require_perception_sensor,
     "point_cloud": require_perception_point_cloud,
 }
-
-
-def perception_data_kind(
-    packet: perception_packet_pb2.PerceptionPacket,
-) -> Optional[str]:
-    return packet.WhichOneof("data_type")

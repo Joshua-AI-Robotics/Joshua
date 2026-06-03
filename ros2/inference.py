@@ -4,23 +4,18 @@ from typing import Any, List, NamedTuple, Optional, Union
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32, UInt8MultiArray
+from std_msgs.msg import Float32
 
 from ai.models import model_registry
 from ai.proto import ai_model_pb2
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
 from ros2 import node_runner as node_runner_py
-from ros2.proto import node_pb2, ros2_data_type_pb2
+from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.packet_parser import (
-    PacketParseError,
-    action_to_perception_position_packet,
     denormalize_position_value,
     extract_scalar_from_action,
-    parse_action_packet,
-    serialize_action_packet,
-    serialize_perception_packet,
 )
 from ros2.utils.qos_setting import create_qos_setting
 
@@ -204,18 +199,6 @@ class Inference(Node):
             packet.timestamp_ns = time.time_ns()
             return packet
 
-        if isinstance(output_value, UInt8MultiArray):
-            try:
-                return parse_action_packet(bytes(output_value.data))
-            except PacketParseError:
-                return None
-
-        if isinstance(output_value, (bytes, bytearray)):
-            try:
-                return parse_action_packet(bytes(output_value))
-            except PacketParseError:
-                return None
-
         return None
 
     def _lookup_operational_limits_by_topic(
@@ -251,39 +234,28 @@ class Inference(Node):
             if packet.timestamp_ns == 0:
                 packet.timestamp_ns = time.time_ns()
 
-            if pub_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                ros_msg = UInt8MultiArray()
-                if pub_cfg.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-                    limits = None
-                    if packet.normalized:
-                        limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
-                    perception = action_to_perception_position_packet(
-                        packet, limits=limits
-                    )
-                    ros_msg.data = list(serialize_perception_packet(perception))
-                else:
-                    ros_msg.data = list(serialize_action_packet(packet))
-            elif pub_cfg.ros2_data_type == ros2_data_type_pb2.FLOAT32:
-                ros_msg = Float32()
-                which = packet.WhichOneof("action_type")
-                value = extract_scalar_from_action(packet)
-                if value is None:
-                    raise ValueError(
-                        f"ActionPacket has no scalar action_type for FLOAT32 publish "
-                        f"(action_type={which!r})."
-                    )
-                if which == "position" and packet.normalized:
-                    limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
-                    if limits is None:
-                        raise ValueError(
-                            f"normalized position output requires actuator limits for topic '{pub_cfg.topic}'"
-                        )
-                    value = denormalize_position_value(value, limits[0], limits[1])
-                ros_msg.data = value
-            else:
+            if pub_cfg.ros2_data_type != ros2_data_type_pb2.FLOAT32:
                 raise ValueError(
-                    f"Unsupported inference publisher ros2_data_type: {pub_cfg.ros2_data_type}"
+                    f"Unsupported inference publisher ros2_data_type: {pub_cfg.ros2_data_type}. "
+                    "Only FLOAT32 is supported."
                 )
+
+            ros_msg = Float32()
+            which = packet.WhichOneof("action_type")
+            value = extract_scalar_from_action(packet)
+            if value is None:
+                raise ValueError(
+                    f"ActionPacket has no scalar action_type for FLOAT32 publish "
+                    f"(action_type={which!r})."
+                )
+            if which == "position" and packet.normalized:
+                limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
+                if limits is None:
+                    raise ValueError(
+                        f"normalized position output requires actuator limits for topic '{pub_cfg.topic}'"
+                    )
+                value = denormalize_position_value(value, limits[0], limits[1])
+            ros_msg.data = value
             publisher.publish(ros_msg)
 
         except Exception as e:

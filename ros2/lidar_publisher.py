@@ -6,18 +6,14 @@ from typing import List
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
-from std_msgs.msg import Header, UInt8MultiArray
+from std_msgs.msg import Header
 
 from config.proto import config_pb2
 from robot.perception.factory import perception_factory
 from robot.perception.proto import perception_pb2
 from ros2.node_runner import run_node
-from ros2.proto import node_pb2, ros2_data_type_pb2
-from ros2.utils.packet_parser import (
-    PacketParseError,
-    require_perception_point_cloud,
-    serialize_perception_packet,
-)
+from ros2.proto import ros2_data_type_pb2
+from ros2.utils.packet_parser import PacketParseError, require_perception_point_cloud
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -28,8 +24,6 @@ class LidarEntry:
     publisher: object
     timer: object
     frame_id: str
-    ros2_data_type: int
-    payload_type: int
 
 
 class LidarPublisher(Node):
@@ -57,40 +51,19 @@ class LidarPublisher(Node):
                 continue
 
             for publisher_cfg in single_perception.node.publishers:
-                payload_type = publisher_cfg.payload_type
-                if payload_type == node_pb2.PAYLOAD_TYPE_UNSPECIFIED:
-                    payload_type = node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET
-                if payload_type == node_pb2.PAYLOAD_TYPE_ACTION_PACKET:
-                    self.get_logger().error(
-                        f"Lidar publisher '{publisher_cfg.topic}' cannot use "
-                        "PAYLOAD_TYPE_ACTION_PACKET."
-                    )
-                    continue
-                if publisher_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                    if payload_type != node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-                        self.get_logger().error(
-                            f"Lidar publisher '{publisher_cfg.topic}' requires "
-                            "PAYLOAD_TYPE_PERCEPTION_PACKET for UINT8_MULTI_ARRAY."
-                        )
-                        continue
-                elif publisher_cfg.ros2_data_type != ros2_data_type_pb2.POINTCLOUD2:
+                if publisher_cfg.ros2_data_type != ros2_data_type_pb2.POINTCLOUD2:
                     self.get_logger().error(
                         f"Unsupported ros2_data_type {publisher_cfg.ros2_data_type} "
-                        f"for lidar '{publisher_cfg.topic}'."
+                        f"for lidar '{publisher_cfg.topic}'. Only POINTCLOUD2 is supported."
                     )
                     continue
-
-                if publisher_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                    msg_type = UInt8MultiArray
-                else:
-                    msg_type = PointCloud2
 
                 self._lidars.append(
                     LidarEntry(
                         topic=publisher_cfg.topic,
                         interface=interface,
                         publisher=self.create_publisher(
-                            msg_type,
+                            PointCloud2,
                             publisher_cfg.topic,
                             create_qos_setting(qos_setting),
                         ),
@@ -99,8 +72,6 @@ class LidarPublisher(Node):
                             self._publish_lidar_data,
                         ),
                         frame_id=lidar_proto.lidar_name or "lidar_frame",
-                        ros2_data_type=publisher_cfg.ros2_data_type,
-                        payload_type=payload_type,
                     )
                 )
 
@@ -140,12 +111,6 @@ class LidarPublisher(Node):
                     self.get_logger().warning(
                         f"LiDAR '{lidar.topic}' packet has no point cloud!"
                     )
-                    continue
-
-                if lidar.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                    msg = UInt8MultiArray()
-                    msg.data = list(serialize_perception_packet(packet))
-                    lidar.publisher.publish(msg)
                     continue
 
                 num_points = len(cloud.x)

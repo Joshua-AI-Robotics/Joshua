@@ -16,7 +16,6 @@ general{
             ros2_data_type: POINTCLOUD2
             topic: "lds01_lidar_1"
             publish_rate_hz: 3
-            payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
           }
         }
         perception_type: LIDAR

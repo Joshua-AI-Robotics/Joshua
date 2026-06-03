@@ -12,10 +12,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_1_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -44,10 +43,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_2_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -76,10 +74,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_3_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -108,10 +105,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_4_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -140,10 +136,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_5_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER
@@ -172,10 +167,9 @@ robot {
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
+          ros2_data_type: FLOAT32
           topic: "sts3215_encoder_6_state"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: ENCODER

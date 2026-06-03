@@ -8,18 +8,17 @@ from ros2.utils.packet_parser import (
     _PERCEPTION_REQUIRE_FIELD_BY_NAME,
     ACTION_POSITION_FIELD_PATHS,
     ACTION_SCALAR_ONEOF_FIELDS,
+    ACTION_TOPIC_SUFFIX_TO_FIELD,
     PERCEPTION_DATA_TYPE_FIELDS,
     PacketParseError,
-    action_to_perception_position_packet,
+    action_packet_from_float,
     denormalize_action_packet,
     denormalize_position_value,
+    device_id_from_topic,
     extract_position_from_action,
     extract_scalar_from_action,
-    parse_action_packet,
-    parse_perception_packet,
+    parse_action_type_from_topic,
     require_perception_position,
-    serialize_action_packet,
-    serialize_perception_packet,
 )
 
 _TYPE_FLOAT = descriptor.FieldDescriptor.TYPE_FLOAT
@@ -65,23 +64,6 @@ def _make_action_with_position_path(
 
 
 class PacketParserTest(unittest.TestCase):
-    def test_parse_action_packet_rejects_invalid_bytes(self):
-        with self.assertRaises(PacketParseError):
-            parse_action_packet(b"not-a-proto")
-
-    def test_parse_perception_packet_rejects_invalid_bytes(self):
-        with self.assertRaises(PacketParseError):
-            parse_perception_packet(b"not-a-proto")
-
-    def test_round_trip_action_packet(self):
-        packet = action_packet_pb2.ActionPacket()
-        packet.position = 42.0
-        packet.timestamp_ns = 123
-        data = serialize_action_packet(packet)
-        parsed = parse_action_packet(data)
-        self.assertEqual(parsed.position, 42.0)
-        self.assertEqual(parsed.timestamp_ns, 123)
-
     def test_denormalize_top_level_position(self):
         packet = action_packet_pb2.ActionPacket()
         packet.normalized = True
@@ -106,21 +88,6 @@ class PacketParserTest(unittest.TestCase):
         packet.speed = 3.5
         self.assertAlmostEqual(extract_scalar_from_action(packet), 3.5)
 
-    def test_action_to_perception_position_packet(self):
-        action = action_packet_pb2.ActionPacket()
-        action.position = 1.0
-        action.timestamp_ns = 999
-        perception = action_to_perception_position_packet(action)
-        self.assertAlmostEqual(perception.position.position, 1.0)
-        self.assertEqual(perception.timestamp_ns, 999)
-
-    def test_action_to_perception_with_normalized_limits(self):
-        action = action_packet_pb2.ActionPacket()
-        action.normalized = True
-        action.position = 1.0
-        perception = action_to_perception_position_packet(action, limits=(100.0, 200.0))
-        self.assertAlmostEqual(perception.position.position, 200.0)
-
     def test_require_perception_position(self):
         packet = perception_packet_pb2.PerceptionPacket()
         packet.position.position = 7.5
@@ -131,15 +98,34 @@ class PacketParserTest(unittest.TestCase):
         with self.assertRaises(PacketParseError):
             require_perception_position(packet)
 
-    def test_perception_round_trip(self):
-        packet = perception_packet_pb2.PerceptionPacket()
-        packet.position.position = 3.0
-        data = serialize_perception_packet(packet)
-        parsed = parse_perception_packet(data)
-        self.assertAlmostEqual(parsed.position.position, 3.0)
-
     def test_denormalize_position_value_clamps(self):
         self.assertAlmostEqual(denormalize_position_value(2.0, 0.0, 10.0), 10.0)
+
+    def test_parse_action_type_from_topic(self):
+        self.assertEqual(
+            parse_action_type_from_topic("sts_motor_1/position"), "position"
+        )
+        self.assertEqual(parse_action_type_from_topic("/servo/dc"), "dc")
+
+    def test_parse_action_type_from_topic_rejects_unknown(self):
+        with self.assertRaises(PacketParseError):
+            parse_action_type_from_topic("sts_motor_1/unknown")
+
+    def test_device_id_from_topic(self):
+        self.assertEqual(device_id_from_topic("sts_motor_1/position"), "sts_motor_1")
+        self.assertEqual(
+            device_id_from_topic("/so100/sts_motor_1/position"), "sts_motor_1"
+        )
+
+    def test_action_packet_from_float_position_normalized(self):
+        packet = action_packet_from_float(0.0, "arm/position", normalized=True)
+        self.assertTrue(packet.normalized)
+        self.assertAlmostEqual(packet.position, 0.0)
+
+    def test_action_packet_from_float_dc(self):
+        packet = action_packet_from_float(10.0, "motor/dc")
+        self.assertAlmostEqual(packet.dc, 10.0)
+        self.assertFalse(packet.normalized)
 
 
 class PacketParserProtoContractTest(unittest.TestCase):
@@ -156,6 +142,15 @@ class PacketParserProtoContractTest(unittest.TestCase):
             set(ACTION_SCALAR_ONEOF_FIELDS),
             _discover_action_type_float_fields(),
         )
+
+    def test_action_topic_suffix_registry_matches_scalar_registry(self):
+        """Topic suffix allowlist must cover every scalar wire command."""
+        self.assertEqual(
+            set(ACTION_TOPIC_SUFFIX_TO_FIELD.keys()),
+            set(ACTION_SCALAR_ONEOF_FIELDS),
+        )
+        for suffix, field in ACTION_TOPIC_SUFFIX_TO_FIELD.items():
+            self.assertEqual(suffix, field)
 
     def test_perception_data_type_registry_matches_proto(self):
         self.assertEqual(

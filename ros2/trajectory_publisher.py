@@ -6,25 +6,18 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from rclpy.node import Node
-from std_msgs.msg import Float32, String, UInt8MultiArray
+from std_msgs.msg import Float32, String
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
 from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
-from ros2.utils.packet_parser import (
-    PacketParseError,
-    action_to_perception_position_packet,
-    extract_scalar_from_action,
-    serialize_action_packet,
-    serialize_perception_packet,
-)
+from ros2.utils.packet_parser import extract_scalar_from_action
 from ros2.utils.qos_setting import create_qos_setting
 
 _DATA_TYPE_TO_MSG = {
     ros2_data_type_pb2.FLOAT32: Float32,
     ros2_data_type_pb2.STRING: String,
-    ros2_data_type_pb2.UINT8_MULTI_ARRAY: UInt8MultiArray,
 }
 
 
@@ -32,7 +25,6 @@ _DATA_TYPE_TO_MSG = {
 class TopicPub:
     publisher: object
     data_type: int
-    payload_type: int
 
 
 @dataclass
@@ -58,12 +50,9 @@ class TrajectoryPublisher(Node):
                 qos_setting = single_trajectory.node.qos_setting
                 trajectory = single_trajectory.trajectory
 
-                pub_cfgs: Dict[str, tuple[int, int]] = {}
+                pub_cfgs: Dict[str, int] = {}
                 for pub_cfg in single_trajectory.node.publishers:
-                    pub_cfgs[pub_cfg.topic] = (
-                        pub_cfg.ros2_data_type,
-                        pub_cfg.payload_type,
-                    )
+                    pub_cfgs[pub_cfg.topic] = pub_cfg.ros2_data_type
 
                 for waypoint in trajectory.waypoints:
                     self._waypoints.append(
@@ -75,12 +64,9 @@ class TrajectoryPublisher(Node):
                     )
 
                     if waypoint.topic not in self._topic_pubs:
-                        data_type, payload_type = pub_cfgs.get(
+                        data_type = pub_cfgs.get(
                             waypoint.topic,
-                            (
-                                ros2_data_type_pb2.FLOAT32,
-                                node_pb2.PAYLOAD_TYPE_ACTION_PACKET,
-                            ),
+                            ros2_data_type_pb2.FLOAT32,
                         )
                         msg_cls = _DATA_TYPE_TO_MSG.get(data_type, Float32)
                         pub = self.create_publisher(
@@ -91,7 +77,6 @@ class TrajectoryPublisher(Node):
                         self._topic_pubs[waypoint.topic] = TopicPub(
                             publisher=pub,
                             data_type=data_type,
-                            payload_type=payload_type,
                         )
 
         if not self._waypoints:
@@ -138,41 +123,29 @@ class TrajectoryPublisher(Node):
                 f"[t={waypoint.timestamp_sec:.3f}s] "
                 f"{waypoint.topic} -> ActionPacket({action_type})"
             )
-        elif topic_pub.data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-            msg = UInt8MultiArray()
-            try:
-                if topic_pub.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-                    perception = action_to_perception_position_packet(waypoint.action)
-                    msg.data = list(serialize_perception_packet(perception))
-                else:
-                    msg.data = list(serialize_action_packet(waypoint.action))
-            except PacketParseError as exc:
-                self.get_logger().warning(
-                    f"[t={waypoint.timestamp_sec:.3f}s] "
-                    f"Failed to serialize waypoint for topic {waypoint.topic}: {exc}"
-                )
-                return
-            topic_pub.publisher.publish(msg)
-            action_type = waypoint.action.WhichOneof("action_type") or "none"
-            self.get_logger().debug(
+            return
+
+        if topic_pub.data_type != ros2_data_type_pb2.FLOAT32:
+            self.get_logger().warning(
                 f"[t={waypoint.timestamp_sec:.3f}s] "
-                f"{waypoint.topic} -> ActionPacket bytes ({action_type})"
+                f"Unsupported ros2_data_type for topic {waypoint.topic}, skipping"
             )
-        else:
-            value = extract_scalar_from_action(waypoint.action)
-            if value is None:
-                self.get_logger().warning(
-                    f"[t={waypoint.timestamp_sec:.3f}s] "
-                    f"Unsupported action type for Float32 topic "
-                    f"{waypoint.topic}, skipping"
-                )
-                return
-            msg = Float32()
-            msg.data = value
-            topic_pub.publisher.publish(msg)
-            self.get_logger().debug(
-                f"[t={waypoint.timestamp_sec:.3f}s] " f"{waypoint.topic} -> {value}"
+            return
+
+        value = extract_scalar_from_action(waypoint.action)
+        if value is None:
+            self.get_logger().warning(
+                f"[t={waypoint.timestamp_sec:.3f}s] "
+                f"Unsupported action type for Float32 topic "
+                f"{waypoint.topic}, skipping"
             )
+            return
+        msg = Float32()
+        msg.data = value
+        topic_pub.publisher.publish(msg)
+        self.get_logger().debug(
+            f"[t={waypoint.timestamp_sec:.3f}s] " f"{waypoint.topic} -> {value}"
+        )
 
     def _run_trajectory_loop(self) -> None:
         self._loop_timer.cancel()

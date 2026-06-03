@@ -12,9 +12,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_1"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -48,9 +48,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_2"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_2/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -84,9 +84,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_3"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_3/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -120,9 +120,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_4"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_4/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -156,9 +156,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_5"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_5/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -192,9 +192,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_6"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_6/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -234,7 +234,6 @@ robot {
           ros2_data_type: IMAGE
           topic: "camera_1"
           publish_rate_hz: 30
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: CAMERA
@@ -268,34 +267,28 @@ ai {
           topic: "camera_1"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_1"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_1/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_2"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_2/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_3"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_3/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_4"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_4/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_5"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_5/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_6"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_6/position"
         }
       }
 

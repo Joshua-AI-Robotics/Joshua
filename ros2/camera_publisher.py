@@ -3,21 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from std_msgs.msg import UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.perception.factory import perception_factory
 from robot.perception.proto import perception_pb2
 from ros2.node_runner import run_node
-from ros2.proto import node_pb2, ros2_data_type_pb2
-from ros2.utils.packet_parser import (
-    PacketParseError,
-    require_perception_image,
-    serialize_perception_packet,
-)
+from ros2.proto import ros2_data_type_pb2
+from ros2.utils.packet_parser import PacketParseError, require_perception_image
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -27,8 +21,6 @@ class CameraEntry:
     interface: object
     publisher: object
     timer: object
-    ros2_data_type: int
-    payload_type: int
 
 
 class CameraPublisher(Node):
@@ -57,40 +49,19 @@ class CameraPublisher(Node):
                 continue
 
             for publisher_cfg in single_perception.node.publishers:
-                payload_type = publisher_cfg.payload_type
-                if payload_type == node_pb2.PAYLOAD_TYPE_UNSPECIFIED:
-                    payload_type = node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET
-                if payload_type == node_pb2.PAYLOAD_TYPE_ACTION_PACKET:
-                    self.get_logger().error(
-                        f"Camera publisher '{publisher_cfg.topic}' cannot use "
-                        "PAYLOAD_TYPE_ACTION_PACKET."
-                    )
-                    continue
-                if publisher_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                    if payload_type != node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-                        self.get_logger().error(
-                            f"Camera publisher '{publisher_cfg.topic}' requires "
-                            "PAYLOAD_TYPE_PERCEPTION_PACKET for UINT8_MULTI_ARRAY."
-                        )
-                        continue
-                elif publisher_cfg.ros2_data_type != ros2_data_type_pb2.IMAGE:
+                if publisher_cfg.ros2_data_type != ros2_data_type_pb2.IMAGE:
                     self.get_logger().error(
                         f"Unsupported ros2_data_type {publisher_cfg.ros2_data_type} "
-                        f"for camera '{publisher_cfg.topic}'."
+                        f"for camera '{publisher_cfg.topic}'. Only IMAGE is supported."
                     )
                     continue
-
-                if publisher_cfg.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                    msg_type = UInt8MultiArray
-                else:
-                    msg_type = Image
 
                 self._cameras.append(
                     CameraEntry(
                         topic=publisher_cfg.topic,
                         interface=interface,
                         publisher=self.create_publisher(
-                            msg_type,
+                            Image,
                             publisher_cfg.topic,
                             create_qos_setting(qos_setting),
                         ),
@@ -98,8 +69,6 @@ class CameraPublisher(Node):
                             1.0 / max(1, publisher_cfg.publish_rate_hz),
                             self._publish_camera_data,
                         ),
-                        ros2_data_type=publisher_cfg.ros2_data_type,
-                        payload_type=payload_type,
                     )
                 )
 
@@ -131,19 +100,6 @@ class CameraPublisher(Node):
                 self.get_logger().warning(
                     f"Failed to get data from camera '{camera.topic}': {exc}"
                 )
-                continue
-
-            if camera.ros2_data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
-                try:
-                    require_perception_image(packet)
-                except PacketParseError:
-                    self.get_logger().warning(
-                        f"Failed to get image data from camera '{camera.topic}'!"
-                    )
-                    continue
-                msg = UInt8MultiArray()
-                msg.data = list(serialize_perception_packet(packet))
-                camera.publisher.publish(msg)
                 continue
 
             try:

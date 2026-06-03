@@ -4,7 +4,7 @@
 #   bazel run //launcher:joshua_main -- \
 #     --config=config/config_preset/so100/so100_arm_trajectory_example.pbtxt
 #
-# Topics use serialized ActionPacket bytes (UINT8_MULTI_ARRAY). Positions are raw
+# Topics use Float32 on /<device_id>/position. Positions are raw
 # servo ticks: first all joints to span midpoint, then coordinated poses inside
 # the ±10% band (20% of operational span), with all motors moving together.
 
@@ -23,9 +23,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_1"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -59,9 +59,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_2"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_2/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -95,9 +95,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_3"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_3/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -131,9 +131,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_4"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_4/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -167,9 +167,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_5"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_5/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -203,9 +203,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_6"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_6/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -242,76 +242,70 @@ robot {
         node_type: TRAJECTORY_PUBLISHER
         qos_setting { depth: 10 }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_1"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_1/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_2"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_2/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_3"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_3/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_4"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_4/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_5"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_5/position"
         }
         publishers {
-          ros2_data_type: UINT8_MULTI_ARRAY
-          topic: "mock_action_6"
-          payload_type: PAYLOAD_TYPE_ACTION_PACKET
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_6/position"
         }
       }
       trajectory {
         # Midpoint of each joint's operational span (raw ticks).
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_1" action { position: 2004.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_2" action { position: 2006.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_3" action { position: 1907.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_4" action { position: 1896.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_5" action { position: 1929.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "mock_action_6" action { position: 2515.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_1/position" action { position: 2004.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_2/position" action { position: 2006.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_3/position" action { position: 1907.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_4/position" action { position: 1896.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_5/position" action { position: 1929.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_6/position" action { position: 2515.0 } }
 
         # Pose A: all joints move together within ±10% band (20% total span).
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_1" action { position: 2210.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_2" action { position: 1776.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_3" action { position: 2128.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_4" action { position: 1650.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_5" action { position: 2134.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "mock_action_6" action { position: 2371.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_1/position" action { position: 2210.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_2/position" action { position: 1776.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_3/position" action { position: 2128.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_4/position" action { position: 1650.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_5/position" action { position: 2134.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_6/position" action { position: 2371.0 } }
 
         # Pose B: simultaneous opposite corners in band.
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_1" action { position: 1797.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_2" action { position: 2236.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_3" action { position: 1685.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_4" action { position: 2142.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_5" action { position: 1723.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "mock_action_6" action { position: 2659.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_1/position" action { position: 1797.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_2/position" action { position: 2236.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_3/position" action { position: 1685.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_4/position" action { position: 2142.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_5/position" action { position: 1723.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_6/position" action { position: 2659.0 } }
 
         # Pose C: mixed offsets, all joints at once.
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_1" action { position: 2100.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_2" action { position: 1850.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_3" action { position: 2050.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_4" action { position: 1800.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_5" action { position: 2080.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "mock_action_6" action { position: 2450.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_1/position" action { position: 2100.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_2/position" action { position: 1850.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_3/position" action { position: 2050.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_4/position" action { position: 1800.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_5/position" action { position: 2080.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_6/position" action { position: 2450.0 } }
 
         # Return to midpoint together.
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_1" action { position: 2004.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_2" action { position: 2006.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_3" action { position: 1907.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_4" action { position: 1896.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_5" action { position: 1929.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "mock_action_6" action { position: 2515.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_1/position" action { position: 2004.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_2/position" action { position: 2006.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_3/position" action { position: 1907.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_4/position" action { position: 1896.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_5/position" action { position: 1929.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_6/position" action { position: 2515.0 } }
       }
     }
   }
