@@ -28,7 +28,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 1
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
@@ -64,7 +64,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 2
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
@@ -100,7 +100,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 3
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
@@ -136,7 +136,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 4
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
@@ -172,7 +172,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 5
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
@@ -208,7 +208,7 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 6
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
