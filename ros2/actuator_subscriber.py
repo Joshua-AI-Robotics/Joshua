@@ -4,23 +4,15 @@ from std_msgs.msg import UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.action.factory import action_factory
-from robot.action.proto import action_packet_pb2, action_pb2
-from robot.perception.proto import perception_packet_pb2
+from robot.action.proto import action_pb2
 from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
+from ros2.utils.packet_parser import (
+    PacketParseError,
+    denormalize_action_packet,
+    parse_action_packet,
+)
 from ros2.utils.qos_setting import create_qos_setting
-
-
-def _map_normalized_position(value: float, lower: float, upper: float) -> float:
-    """Map normalized [-1, 1] to raw ticks in [lower, upper]."""
-    normalized = max(-1.0, min(1.0, float(value)))
-    return lower + (normalized + 1.0) * (upper - lower) / 2.0
-
-
-def _denormalize_position_value(value: float, lower: float, upper: float) -> float:
-    """Map normalized position to raw ticks and clamp to operational limits."""
-    position = _map_normalized_position(value, lower, upper)
-    return max(lower, min(upper, position))
 
 
 class ActuatorEntry:
@@ -58,11 +50,18 @@ class ActionSubscriber(Node):
 
                 for subscription in single_action.node.subscriptions:
                     data_type = subscription.ros2_data_type
+                    payload_type = subscription.payload_type
+                    if payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
+                        self.get_logger().error(
+                            f"Actuator subscription '{subscription.topic}' cannot use "
+                            "PAYLOAD_TYPE_PERCEPTION_PACKET."
+                        )
+                        continue
                     entry = ActuatorEntry(
                         topic=subscription.topic,
                         interface=interface,
                         data_type=data_type,
-                        payload_type=subscription.payload_type,
+                        payload_type=payload_type,
                         limits=(
                             actuator_proto.operational_lower_limit,
                             actuator_proto.operational_upper_limit,
@@ -97,57 +96,19 @@ class ActionSubscriber(Node):
             f"node_id {node_id}!"
         )
 
-    def _parse_action_packet(self, entry: ActuatorEntry, data: bytes):
-        if entry.payload_type in (
-            node_pb2.PAYLOAD_TYPE_UNSPECIFIED,
-            node_pb2.PAYLOAD_TYPE_ACTION_PACKET,
-        ):
-            packet = action_packet_pb2.ActionPacket()
-            # TODO: check ParseFromString return value; reject corrupt payloads.
-            packet.ParseFromString(data)
-            return packet
-
-        if entry.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-            perception = perception_packet_pb2.PerceptionPacket()
-            # TODO: check ParseFromString return value; reject corrupt payloads.
-            perception.ParseFromString(data)
-            if not perception.HasField("position"):
-                raise ValueError("PerceptionPacket has no position field")
-            packet = action_packet_pb2.ActionPacket()
-            packet.position = float(perception.position.position)
-            if perception.HasField("timestamp_ns"):
-                packet.timestamp_ns = perception.timestamp_ns
-            return packet
-
-        raise ValueError(f"Unsupported payload_type {entry.payload_type}")
-
-    def _prepare_action_packet(self, entry: ActuatorEntry, packet):
-        if not packet.normalized:
-            return packet
-        lower, upper = entry.limits
-        if packet.HasField("position"):
-            packet.position = _denormalize_position_value(packet.position, lower, upper)
-        if packet.HasField("complex") and packet.complex.HasField("position"):
-            packet.complex.position = _denormalize_position_value(
-                packet.complex.position, lower, upper
-            )
-        return packet
-
     def _make_uint8_multi_array_callback(self, entry: ActuatorEntry):
-        """Callback for UINT8_MULTI_ARRAY topics carrying ActionPacket or PerceptionPacket."""
+        """Callback for UINT8_MULTI_ARRAY topics carrying ActionPacket."""
 
         def callback(msg: UInt8MultiArray):
             try:
-                packet = self._parse_action_packet(entry, bytes(msg.data))
-            except Exception as exc:
+                packet = parse_action_packet(bytes(msg.data))
+                lower, upper = entry.limits
+                packet = denormalize_action_packet(packet, lower, upper)
+                entry.interface.set_action(packet)
+            except PacketParseError as exc:
                 self.get_logger().error(
                     f"Failed to parse subscription payload for '{entry.topic}': {exc}"
                 )
-                return
-
-            try:
-                packet = self._prepare_action_packet(entry, packet)
-                entry.interface.set_action(packet)
             except Exception as exc:
                 self.get_logger().error(
                     f"Failed to set action for actuator '{entry.topic}': {exc}"

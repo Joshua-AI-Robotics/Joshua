@@ -10,9 +10,15 @@ from std_msgs.msg import Float32, String, UInt8MultiArray
 
 from config.proto import config_pb2
 from robot.action.proto import action_packet_pb2
-from robot.perception.proto import perception_packet_pb2
 from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
+from ros2.utils.packet_parser import (
+    PacketParseError,
+    action_to_perception_position_packet,
+    extract_scalar_from_action,
+    serialize_action_packet,
+    serialize_perception_packet,
+)
 from ros2.utils.qos_setting import create_qos_setting
 
 _DATA_TYPE_TO_MSG = {
@@ -34,19 +40,6 @@ class TrajectoryWaypointEntry:
     timestamp_sec: float
     topic: str
     action: action_packet_pb2.ActionPacket
-
-
-def _extract_float_value(action: action_packet_pb2.ActionPacket) -> float | None:
-    which = action.WhichOneof("action_type")
-    if which == "position":
-        return action.position
-    if which == "speed":
-        return action.speed
-    if which == "torque":
-        return action.torque
-    if which == "dc":
-        return action.dc
-    return None
 
 
 class TrajectoryPublisher(Node):
@@ -147,26 +140,18 @@ class TrajectoryPublisher(Node):
             )
         elif topic_pub.data_type == ros2_data_type_pb2.UINT8_MULTI_ARRAY:
             msg = UInt8MultiArray()
-            if topic_pub.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
-                which = waypoint.action.WhichOneof("action_type")
-                if which == "position":
-                    position = waypoint.action.position
-                elif which == "complex" and waypoint.action.complex.HasField(
-                    "position"
-                ):
-                    position = waypoint.action.complex.position
+            try:
+                if topic_pub.payload_type == node_pb2.PAYLOAD_TYPE_PERCEPTION_PACKET:
+                    perception = action_to_perception_position_packet(waypoint.action)
+                    msg.data = list(serialize_perception_packet(perception))
                 else:
-                    raise ValueError(
-                        "PerceptionPacket payload requires ActionPacket.position "
-                        "(or complex.position)."
-                    )
-
-                perception = perception_packet_pb2.PerceptionPacket()
-                perception.position.position = float(position)
-                msg.data = list(perception.SerializeToString())
-            else:
-                # ACTION_PACKET or UNSPECIFIED.
-                msg.data = list(waypoint.action.SerializeToString())
+                    msg.data = list(serialize_action_packet(waypoint.action))
+            except PacketParseError as exc:
+                self.get_logger().warning(
+                    f"[t={waypoint.timestamp_sec:.3f}s] "
+                    f"Failed to serialize waypoint for topic {waypoint.topic}: {exc}"
+                )
+                return
             topic_pub.publisher.publish(msg)
             action_type = waypoint.action.WhichOneof("action_type") or "none"
             self.get_logger().debug(
@@ -174,7 +159,7 @@ class TrajectoryPublisher(Node):
                 f"{waypoint.topic} -> ActionPacket bytes ({action_type})"
             )
         else:
-            value = _extract_float_value(waypoint.action)
+            value = extract_scalar_from_action(waypoint.action)
             if value is None:
                 self.get_logger().warning(
                     f"[t={waypoint.timestamp_sec:.3f}s] "

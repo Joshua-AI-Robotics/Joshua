@@ -10,56 +10,115 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/proto/node.pb.h"
+#include "ros2/proto/ros2_data_type.pb.h"
+#include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
+#include "std_msgs/msg/u_int8_multi_array.hpp"
+
+namespace {
+
+ros2::node::PayloadType EffectivePayloadType(const ros2::node::PayloadType payload_type) {
+  if (payload_type == ros2::node::PAYLOAD_TYPE_UNSPECIFIED) {
+    return ros2::node::PAYLOAD_TYPE_PERCEPTION_PACKET;
+  }
+  return payload_type;
+}
+
+bool ValidatePerceptionPublisher(const ros2::data_type::Ros2DataType ros2_data_type,
+                                 const ros2::node::PayloadType payload_type) {
+  const auto resolved = EffectivePayloadType(payload_type);
+  if (resolved == ros2::node::PAYLOAD_TYPE_ACTION_PACKET) {
+    return false;
+  }
+  if (ros2_data_type == ros2::data_type::UINT8_MULTI_ARRAY) {
+    return resolved == ros2::node::PAYLOAD_TYPE_PERCEPTION_PACKET;
+  }
+  if (ros2_data_type == ros2::data_type::POINTCLOUD2) {
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
 
 class LidarPublisher : public rclcpp::Node {
  private:
   struct Lidar {
     std::string topic;
-    std::unique_ptr<robot::perception::PerceptionInterface> interface;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher;
+    std::shared_ptr<robot::perception::PerceptionInterface> interface;
+    rclcpp::PublisherBase::SharedPtr publisher;
     rclcpp::TimerBase::SharedPtr timer;
     std::string frame_id;
-    float publish_rate_hz;
+    ros2::data_type::Ros2DataType ros2_data_type;
+    ros2::node::PayloadType payload_type;
   };
 
  public:
   LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (single_perception.perception_type() == robot::perception::PerceptionType::LIDAR &&
-          static_cast<int>(single_perception.node().id()) == node_id) {
-        const auto& lidar_proto = single_perception.lidar();
-        const auto& qos_setting = single_perception.node().qos_setting();
-        // First, create the interface and check if it's valid.
-        auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
-        if (!interface.ok()) {
+      if (single_perception.perception_type() != robot::perception::PerceptionType::LIDAR ||
+          static_cast<int>(single_perception.node().id()) != node_id) {
+        continue;
+      }
+
+      const auto& lidar_proto = single_perception.lidar();
+      const auto& qos_setting = single_perception.node().qos_setting();
+
+      auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
+      if (!interface.ok()) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Failed to create perception interface for lidar '%s'. Check hardware "
+                     "connection or permissions.",
+                     lidar_proto.lidar_name().c_str());
+        continue;
+      }
+
+      auto shared_interface =
+          std::shared_ptr<robot::perception::PerceptionInterface>(std::move(interface.value()));
+
+      for (const auto& publisher : single_perception.node().publishers()) {
+        if (!ValidatePerceptionPublisher(publisher.ros2_data_type(), publisher.payload_type())) {
           RCLCPP_ERROR(this->get_logger(),
-                       "Failed to create perception interface for lidar '%s'. Check hardware "
-                       "connection or permissions.",
-                       lidar_proto.lidar_name().c_str());
-          continue;  // Skip this lidar if initialization failed.
+                       "Invalid publisher config for lidar topic '%s' "
+                       "(ros2_data_type=%d, payload_type=%d).",
+                       publisher.topic().c_str(),
+                       static_cast<int>(publisher.ros2_data_type()),
+                       static_cast<int>(publisher.payload_type()));
+          continue;
         }
 
-        for (const auto& publisher : single_perception.node().publishers()) {
-          lidars_.emplace_back(Lidar{
-              .topic = publisher.topic(),
-              .interface = std::move(interface.value()),
-              .publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-                  publisher.topic(), ros2_utils::CreateQosSetting(qos_setting)),
-              .timer = this->create_wall_timer(
-                  std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
-                  std::bind(&LidarPublisher::publish_lidar_data, this)),
-          });
+        Lidar lidar_entry{
+            .topic = publisher.topic(),
+            .interface = shared_interface,
+            .frame_id = lidar_proto.lidar_name().empty() ? "lidar_frame" : lidar_proto.lidar_name(),
+            .ros2_data_type = publisher.ros2_data_type(),
+            .payload_type = publisher.payload_type()};
+
+        const auto qos = ros2_utils::CreateQosSetting(qos_setting);
+        if (publisher.ros2_data_type() == ros2::data_type::UINT8_MULTI_ARRAY) {
+          lidar_entry.publisher =
+              this->create_publisher<std_msgs::msg::UInt8MultiArray>(publisher.topic(), qos);
+        } else {
+          lidar_entry.publisher =
+              this->create_publisher<sensor_msgs::msg::PointCloud2>(publisher.topic(), qos);
         }
-        RCLCPP_INFO(this->get_logger(),
-                    "Found lidar '%s' in configuration for node_id %d. Publishing on %zu topics",
-                    lidar_proto.lidar_name().c_str(),
-                    node_id,
-                    single_perception.node().publishers().size());
+
+        lidar_entry.timer =
+            this->create_wall_timer(std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
+                                    [this]() { publish_lidar_data(); });
+
+        lidars_.emplace_back(std::move(lidar_entry));
       }
+
+      RCLCPP_INFO(this->get_logger(),
+                  "Found lidar '%s' in configuration for node_id %d. Publishing on %zu topics",
+                  lidar_proto.lidar_name().c_str(),
+                  node_id,
+                  single_perception.node().publishers().size());
     }
 
     if (lidars_.empty()) {
@@ -90,11 +149,28 @@ class LidarPublisher : public rclcpp::Node {
           continue;
         }
 
-        if (!packet.value().has_point_cloud()) {
-          RCLCPP_WARN(
-              this->get_logger(), "LiDAR '%s' packet has no point cloud!", lidar.topic.c_str());
+        const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
+        if (!cloud_status.ok()) {
+          RCLCPP_WARN(this->get_logger(),
+                      "LiDAR '%s' packet has no point cloud: %s",
+                      lidar.topic.c_str(),
+                      cloud_status.message().data());
           continue;
         }
+
+        if (lidar.ros2_data_type == ros2::data_type::UINT8_MULTI_ARRAY) {
+          const auto serialized = ros2_utils::SerializePerceptionPacket(packet.value());
+          auto message = std_msgs::msg::UInt8MultiArray();
+          message.data.assign(serialized.begin(), serialized.end());
+
+          auto pub = std::dynamic_pointer_cast<rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>>(
+              lidar.publisher);
+          if (pub) {
+            pub->publish(message);
+          }
+          continue;
+        }
+
         const auto& cloud = packet.value().point_cloud();
         const int num_points = cloud.x_size();
         if (num_points == 0) {
@@ -131,7 +207,6 @@ class LidarPublisher : public rclcpp::Node {
         sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
         sensor_msgs::PointCloud2Iterator<float> iter_i(cloud_msg, "intensity");
 
-        // Ensure attribute array sizes are consistent
         const int nx = cloud.x_size();
         const int ny = cloud.y_size();
         const int nz = cloud.z_size();
@@ -144,7 +219,11 @@ class LidarPublisher : public rclcpp::Node {
           *iter_i = (i < ni) ? cloud.intensity(i) : 0.0f;
         }
 
-        lidar.publisher->publish(cloud_msg);
+        auto pub = std::dynamic_pointer_cast<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>>(
+            lidar.publisher);
+        if (pub) {
+          pub->publish(cloud_msg);
+        }
       }
     } catch (const std::exception& e) {
       RCLCPP_ERROR(this->get_logger(), "Error publishing lidar data: %s", e.what());
@@ -155,7 +234,5 @@ class LidarPublisher : public rclcpp::Node {
 };
 
 int main(int argc, char* argv[]) {
-  // For test run:
-  // bazel run ros2:lidar_publisher -- test_lidar 1 config/config_preset/example/lds01_lidar.pbtxt
   return ros2_utils::RunNode<LidarPublisher>(argc, argv, "lidar_publisher");
 }

@@ -15,7 +15,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_1_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR
@@ -51,7 +51,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_2_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR
@@ -87,7 +87,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_3_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR
@@ -123,7 +123,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_4_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR
@@ -159,7 +159,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_5_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR
@@ -195,7 +195,7 @@ robot {
         subscriptions {
           ros2_data_type: UINT8_MULTI_ARRAY
           topic: "sts3215_encoder_6_state"
-          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
+          payload_type: PAYLOAD_TYPE_ACTION_PACKET
         }
       }
       action_type: ACTUATOR

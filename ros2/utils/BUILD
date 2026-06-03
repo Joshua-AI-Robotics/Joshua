@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -62,4 +62,35 @@ py_library(
         # rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
     ] + requirement("PyYAML"),
+)
+
+cc_library(
+    name = "packet_parser",
+    srcs = ["packet_parser.cc"],
+    hdrs = ["packet_parser.h"],
+    deps = [
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/perception/proto:perception_packet_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+py_library(
+    name = "packet_parser_py",
+    srcs = ["packet_parser.py"],
+    deps = [
+        "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
+    ] + requirement("protobuf"),
+)
+
+py_test(
+    name = "packet_parser_test",
+    srcs = ["packet_parser_test.py"],
+    deps = [
+        ":packet_parser_py",
+        "//robot/action/proto:action_packet_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
+    ] + requirement("protobuf"),
 )

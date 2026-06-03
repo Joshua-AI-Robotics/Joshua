@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <chrono>
 #include <list>
 #include <thread>
@@ -8,9 +7,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
-#include "robot/perception/proto/perception_packet.pb.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/node.pb.h"
+#include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
@@ -27,55 +26,6 @@ class ActionSubscriber : public rclcpp::Node {
     SubscriptionVariant subscription;
     robot::action::ActionPacket reusable_packet;
   };
-
-  static float MapNormalizedPosition(const float value, const float lower, const float upper) {
-    const float normalized = std::max(-1.0f, std::min(1.0f, value));
-    return lower + (normalized + 1.0f) * (upper - lower) / 2.0f;
-  }
-
-  static void PrepareActionPacket(const Actuator& actuator, robot::action::ActionPacket& packet) {
-    if (!packet.normalized()) {
-      return;
-    }
-    const auto [lower, upper] = actuator.limits;
-    if (packet.has_position()) {
-      const float position = MapNormalizedPosition(packet.position(), lower, upper);
-      packet.set_position(std::max(lower, std::min(upper, position)));
-    }
-    if (packet.has_complex() && packet.complex().has_position()) {
-      const float position = MapNormalizedPosition(packet.complex().position(), lower, upper);
-      packet.mutable_complex()->set_position(std::max(lower, std::min(upper, position)));
-    }
-  }
-
-  static bool ParseSubscriptionPayload(const Actuator& actuator,
-                                       const std_msgs::msg::UInt8MultiArray& msg,
-                                       robot::action::ActionPacket& packet) {
-    const auto* data = msg.data.data();
-    const int size = static_cast<int>(msg.data.size());
-    switch (actuator.payload_type) {
-      case ros2::node::PAYLOAD_TYPE_UNSPECIFIED:
-      case ros2::node::PAYLOAD_TYPE_ACTION_PACKET:
-        return packet.ParseFromArray(data, size);
-      case ros2::node::PAYLOAD_TYPE_PERCEPTION_PACKET: {
-        robot::perception::PerceptionPacket perception;
-        if (!perception.ParseFromArray(data, size)) {
-          return false;
-        }
-        if (!perception.has_position()) {
-          return false;
-        }
-        packet.Clear();
-        packet.set_position(perception.position().position());
-        if (perception.timestamp_ns() != 0) {
-          packet.set_timestamp_ns(perception.timestamp_ns());
-        }
-        return true;
-      }
-      default:
-        return false;
-    }
-  }
 
  public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
@@ -98,6 +48,13 @@ class ActionSubscriber : public rclcpp::Node {
         // TODO: std::move(interface) runs per subscription; share one driver when an actuator
         // has multiple subscriptions (second subscription currently gets a null unique_ptr).
         for (const auto& subscription : single_action.node().subscriptions()) {
+          if (subscription.payload_type() == ros2::node::PAYLOAD_TYPE_PERCEPTION_PACKET) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Actuator subscription '%s' cannot use PAYLOAD_TYPE_PERCEPTION_PACKET.",
+                         subscription.topic().c_str());
+            continue;
+          }
+
           Actuator& actuator =
               actuators_.emplace_back(Actuator{.topic = subscription.topic(),
                                                .interface = std::move(interface.value()),
@@ -121,14 +78,17 @@ class ActionSubscriber : public rclcpp::Node {
                 actuator.topic,
                 ros2_utils::CreateQosSetting(qos_setting),
                 [this, &actuator](const std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
-                  actuator.reusable_packet.Clear();
-                  if (!ParseSubscriptionPayload(actuator, *msg, actuator.reusable_packet)) {
+                  auto parsed = ros2_utils::ParseActionPacket(msg->data);
+                  if (!parsed.ok()) {
                     RCLCPP_ERROR(this->get_logger(),
-                                 "Failed to parse subscription payload for '%s'!",
-                                 actuator.topic.c_str());
+                                 "Failed to parse subscription payload for '%s': %s",
+                                 actuator.topic.c_str(),
+                                 parsed.status().message().data());
                     return;
                   }
-                  PrepareActionPacket(actuator, actuator.reusable_packet);
+                  actuator.reusable_packet = parsed.value();
+                  const auto [lower, upper] = actuator.limits;
+                  ros2_utils::DenormalizeActionPacket(actuator.reusable_packet, lower, upper);
                   if (!actuator.interface->SetAction(actuator.reusable_packet).ok()) {
                     RCLCPP_ERROR(this->get_logger(),
                                  "Failed to set action for actuator '%s'!",

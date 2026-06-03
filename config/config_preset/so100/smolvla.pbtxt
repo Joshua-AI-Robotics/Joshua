@@ -234,6 +234,7 @@ robot {
           ros2_data_type: IMAGE
           topic: "camera_1"
           publish_rate_hz: 30
+          payload_type: PAYLOAD_TYPE_PERCEPTION_PACKET
         }
       }
       perception_type: CAMERA
