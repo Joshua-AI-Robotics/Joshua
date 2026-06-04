@@ -284,3 +284,9 @@ The Docker build process:
 3. Serves the application using nginx
 
 The build context is set to the project root, so the schema generator can access proto files in `config/`, `robot/`, and `ai/` directories.
+
+## License
+
+Joshua is licensed under the [Apache License, Version 2.0](LICENSE). See
+[NOTICE](NOTICE) for attribution and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+for dependencies (including Qt6 under LGPL-3.0).
