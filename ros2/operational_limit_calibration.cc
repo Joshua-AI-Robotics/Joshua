@@ -38,8 +38,9 @@ class OperationalLimitCalibration : public rclcpp::Node {
         operational_limit.publish_topic = node.publishers(i).topic();
 
         auto callback = [this, &operational_limit](const std_msgs::msg::Float32::SharedPtr msg) {
-          operational_limit.max_value = std::max(operational_limit.max_value, msg->data);
-          operational_limit.min_value = std::min(operational_limit.min_value, msg->data);
+          const float value = msg->data;
+          operational_limit.max_value = std::max(operational_limit.max_value, value);
+          operational_limit.min_value = std::min(operational_limit.min_value, value);
 
           std_msgs::msg::Float32MultiArray msg_array;
           msg_array.data.push_back(operational_limit.min_value);

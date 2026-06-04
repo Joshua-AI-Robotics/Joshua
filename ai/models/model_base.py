@@ -75,7 +75,9 @@ class ModelBase(ABC):
         Args:
             subscription_index: Index of the ros2 subscriptions list.
             data: The received data (ROS message or value) from the subscription.
-            publish_callback: Callback to publish results to ros2 publisher. Expects List[Any].
+            publish_callback: Callback to publish results to ros2 publisher.
+                Pass ActionPacket, a scalar position, or serialized ActionPacket bytes;
+                inference normalizes all outputs to ActionPacket before publishing.
         """
         pass
 

@@ -1,14 +1,22 @@
 import sys
-from typing import Any, List, NamedTuple, Union
+import time
+from typing import Any, List, NamedTuple, Optional, Union
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float32
 
 from ai.models import model_registry
 from ai.proto import ai_model_pb2
 from config.proto import config_pb2
+from robot.action.proto import action_packet_pb2
 from ros2 import node_runner as node_runner_py
+from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
+from ros2.utils.packet_parser import (
+    denormalize_position_value,
+    extract_scalar_from_action,
+)
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -178,23 +186,77 @@ class Inference(Node):
 
         return _callback
 
+    def _to_action_packet(
+        self, output_value: Any
+    ) -> Optional[action_packet_pb2.ActionPacket]:
+        """Normalize model output to ActionPacket (default inference payload)."""
+        if isinstance(output_value, action_packet_pb2.ActionPacket):
+            return output_value
+
+        if isinstance(output_value, (int, float)):
+            packet = action_packet_pb2.ActionPacket()
+            packet.position = float(output_value)
+            packet.timestamp_ns = time.time_ns()
+            return packet
+
+        return None
+
+    def _lookup_operational_limits_by_topic(
+        self, topic: str
+    ) -> tuple[float, float] | None:
+        for single_action in self.config.robot.actions.single_actions:
+            if single_action.action_type != single_action.ACTUATOR:
+                continue
+            for subscription in single_action.node.subscriptions:
+                if subscription.topic == topic:
+                    actuator = single_action.actuator
+                    return (
+                        float(actuator.operational_lower_limit),
+                        float(actuator.operational_upper_limit),
+                    )
+        return None
+
     def _publish_output(self, publisher_index: int, output_value: Any) -> None:
-        """Publish the messages from publishers."""
+        """Publish model output as ActionPacket on the configured ROS topic."""
         try:
             publisher_instance = self.publisher_list[publisher_index]
             publisher = publisher_instance.instance
-            msg_type = publisher_instance.msg_type
+            pub_cfg = self.single_model_config.node.publishers[publisher_index]
 
-            if not isinstance(output_value, msg_type):
-                try:
-                    msg = msg_type()
-                    if hasattr(msg, "data"):
-                        msg.data = output_value
-                        output_value = msg
-                except Exception:
-                    pass
+            packet = self._to_action_packet(output_value)
+            if packet is None:
+                self.get_logger().error(
+                    f"Could not convert output for publisher {publisher_index} to "
+                    f"ActionPacket (type={type(output_value).__name__})."
+                )
+                return
 
-            publisher.publish(output_value)
+            if packet.timestamp_ns == 0:
+                packet.timestamp_ns = time.time_ns()
+
+            if pub_cfg.ros2_data_type != ros2_data_type_pb2.FLOAT32:
+                raise ValueError(
+                    f"Unsupported inference publisher ros2_data_type: {pub_cfg.ros2_data_type}. "
+                    "Only FLOAT32 is supported."
+                )
+
+            ros_msg = Float32()
+            which = packet.WhichOneof("action_type")
+            value = extract_scalar_from_action(packet)
+            if value is None:
+                raise ValueError(
+                    f"ActionPacket has no scalar action_type for FLOAT32 publish "
+                    f"(action_type={which!r})."
+                )
+            if which == "position" and packet.normalized:
+                limits = self._lookup_operational_limits_by_topic(pub_cfg.topic)
+                if limits is None:
+                    raise ValueError(
+                        f"normalized position output requires actuator limits for topic '{pub_cfg.topic}'"
+                    )
+                value = denormalize_position_value(value, limits[0], limits[1])
+            ros_msg.data = value
+            publisher.publish(ros_msg)
 
         except Exception as e:
             self.get_logger().error(

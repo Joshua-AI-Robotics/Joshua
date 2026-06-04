@@ -1,5 +1,5 @@
 general{
-  operation_mode: MODE_TELEOPERATE
+  operation_mode: MODE_INFERENCE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
   name: "so100"
   id: 1
@@ -13,12 +13,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1"
+          topic: "sts_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_1"
+        actuator_name: "sts_motor_1"
         id: 1
         actuator_type: STS3215_SERVO
         comm {
@@ -30,14 +31,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
+               physical_upper_limit: 4095
         operational_lower_limit: 973
         operational_upper_limit: 3034
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 1
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 500
           idle_position: 2070
         }
       }
@@ -49,12 +49,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2"
+          topic: "sts_motor_2/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_2"
+        actuator_name: "sts_motor_2"
         id: 2
         actuator_type: STS3215_SERVO
         comm {
@@ -66,14 +67,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
+               physical_upper_limit: 4095
         operational_lower_limit: 858
         operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 2
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 500
           idle_position: 847
         }
       }
@@ -85,12 +85,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3"
+          topic: "sts_motor_3/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_3"
+        actuator_name: "sts_motor_3"
         id: 3
         actuator_type: STS3215_SERVO
         comm {
@@ -102,14 +103,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
+                physical_upper_limit: 4095
         operational_lower_limit: 798
         operational_upper_limit: 3015
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 3
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 500
           idle_position: 3011
         }
       }
@@ -121,12 +121,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4"
+          topic: "sts_motor_4/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_4"
+        actuator_name: "sts_motor_4"
         id: 4
         actuator_type: STS3215_SERVO
         comm {
@@ -138,14 +139,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
-        operational_lower_limit: 640
+               physical_upper_limit: 4095
+        operational_lower_limit: 668
         operational_upper_limit: 3124
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 4
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 500
           idle_position: 655
         }
       }
@@ -157,12 +157,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5"
+          topic: "sts_motor_5/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_5"
+        actuator_name: "sts_motor_5"
         id: 5
         actuator_type: STS3215_SERVO
         comm {
@@ -174,14 +175,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
+               physical_upper_limit: 4095
         operational_lower_limit: 902
         operational_upper_limit: 2955
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 5
           move_time_in_ms: 40
-          move_speed: 3000
+          move_speed: 1000
           idle_position: 1838
         }
       }
@@ -193,12 +193,13 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6"
+          topic: "sts_motor_6/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
       actuator {
-        actuator_name: "sts3215_servo_6"
+        actuator_name: "sts_motor_6"
         id: 6
         actuator_type: STS3215_SERVO
         comm {
@@ -210,14 +211,13 @@ robot {
           }
         }
         physical_lower_limit: 0
-        physical_upper_limit: 4095
+               physical_upper_limit: 4095
         operational_lower_limit: 1795
         operational_upper_limit: 3235
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
         sts3215_config {
           servo_id: 6
           move_time_in_ms: 40
-          move_speed: 2200
+          move_speed: 1000
           idle_position: 1806
         }
       }
@@ -228,11 +228,36 @@ robot {
     single_perceptions {
       node {
         id: 2
+        node_type: CAMERA_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+          publish_rate_hz: 30
+        }
+      }
+      perception_type: CAMERA
+      camera {
+        camera_name: "webcam"
+        id: 1
+        camera_type: OPENCV
+        comm{}
+        opencv_config {
+          id: 0
+          width: 640
+          height: 480
+          fps: 30
+        }
+      }
+    }
+    single_perceptions {
+      node {
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1"
+          topic: "sts3215_encoder_1_state"
           publish_rate_hz: 30
         }
       }
@@ -245,13 +270,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 1
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1147
-        operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 973
+        operational_upper_limit: 3034
         sts3215_encoder_config {
           servo_id: 1
         }
@@ -259,12 +283,12 @@ robot {
     }
     single_perceptions {
       node {
-        id: 2
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2"
+          topic: "sts3215_encoder_2_state"
           publish_rate_hz: 30
         }
       }
@@ -277,27 +301,25 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 2
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1670
-        operational_upper_limit: 3986
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 858
+        operational_upper_limit: 3154
         sts3215_encoder_config {
           servo_id: 2
-
         }
       }
     }
     single_perceptions {
-        node {
-        id: 2
+      node {
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3"
+          topic: "sts3215_encoder_3_state"
           publish_rate_hz: 30
         }
       }
@@ -310,27 +332,25 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 3
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 910
-        operational_upper_limit: 3113
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 798
+        operational_upper_limit: 3015
         sts3215_encoder_config {
           servo_id: 3
-
         }
       }
     }
     single_perceptions {
       node {
-        id: 2
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4"
+          topic: "sts3215_encoder_4_state"
           publish_rate_hz: 30
         }
       }
@@ -343,27 +363,25 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 4
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 20
-        operational_upper_limit: 2407
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 640
+        operational_upper_limit: 3124
         sts3215_encoder_config {
           servo_id: 4
-
         }
       }
     }
     single_perceptions {
       node {
-        id: 2
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5"
+          topic: "sts3215_encoder_5_state"
           publish_rate_hz: 30
         }
       }
@@ -376,13 +394,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 5
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1730
-        operational_upper_limit: 3811
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 902
+        operational_upper_limit: 2955
         sts3215_encoder_config {
           servo_id: 5
         }
@@ -390,12 +407,12 @@ robot {
     }
     single_perceptions {
       node {
-        id: 2
+        id: 3
         node_type: ENCODER_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6"
+          topic: "sts3215_encoder_6_state"
           publish_rate_hz: 30
         }
       }
@@ -408,13 +425,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 6
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 2028
-        operational_upper_limit: 3100
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 1795
+        operational_upper_limit: 3235
         sts3215_encoder_config {
           servo_id: 6
         }
@@ -422,3 +438,53 @@ robot {
     }
   }
 }
+
+ai {
+  models {
+    single_models {
+      model_type: SMOLVLA
+      # Specify the path to your pretrained SmolVLA model checkpoint
+      # Example: "/home/user/.cache/huggingface/hub/models--lerobot--smolvla_base"
+      pretrained_model_hf_path: "lerobot/smolvla_base"
+      pretrained_model_local_path: "/home/hmoon/models--lerobot--smolvla_base/snapshots/4d2f2b37fa245361ef1efe6d91ce96b8bd4af511"
+      node {
+        id: 4
+        node_type: INFERENCE
+        qos_setting {}
+        subscriptions {
+          ros2_data_type: IMAGE
+          topic: "camera_1"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_1/position"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_2/position"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_3/position"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_4/position"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_5/position"
+        }
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts_motor_6/position"
+        }
+      }
+
+      smolvla_config {
+        model_name: "HuggingFaceM4/SmolVLM-Instruct"
+      }
+    }
+  }
+}
+

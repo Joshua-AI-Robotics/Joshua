@@ -1,5 +1,5 @@
 general{
-  operation_mode: MODE_CALIBRATION
+  operation_mode: MODE_TELEOPERATE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
   name: "so100"
   id: 1
@@ -13,7 +13,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1"
+          topic: "sts3215_encoder_1_state"
           publish_rate_hz: 30
         }
       }
@@ -26,13 +26,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 1
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 973
-        operational_upper_limit: 3034
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 1147
+        operational_upper_limit: 3154
         sts3215_encoder_config {
           servo_id: 1
         }
@@ -45,7 +44,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2"
+          topic: "sts3215_encoder_2_state"
           publish_rate_hz: 30
         }
       }
@@ -58,13 +57,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 2
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 858
-        operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 1670
+        operational_upper_limit: 3986
         sts3215_encoder_config {
           servo_id: 2
         }
@@ -77,7 +75,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3"
+          topic: "sts3215_encoder_3_state"
           publish_rate_hz: 30
         }
       }
@@ -90,13 +88,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 3
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 798
-        operational_upper_limit: 3015
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 910
+        operational_upper_limit: 3113
         sts3215_encoder_config {
           servo_id: 3
         }
@@ -109,7 +106,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4"
+          topic: "sts3215_encoder_4_state"
           publish_rate_hz: 30
         }
       }
@@ -122,13 +119,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 4
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 668
-        operational_upper_limit: 3124
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 0
+        operational_upper_limit: 2407
         sts3215_encoder_config {
           servo_id: 4
         }
@@ -141,7 +137,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5"
+          topic: "sts3215_encoder_5_state"
           publish_rate_hz: 30
         }
       }
@@ -154,13 +150,12 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 5
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 902
-        operational_upper_limit: 2955
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 1730
+        operational_upper_limit: 3811
         sts3215_encoder_config {
           servo_id: 5
         }
@@ -173,7 +168,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6"
+          topic: "sts3215_encoder_6_state"
           publish_rate_hz: 30
         }
       }
@@ -186,53 +181,16 @@ robot {
           comm_type: SERIAL
           serial_config {
             id: 6
-            port: "/dev/ttyACM1"
+            port: "/dev/ttyACM0"
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1795
-        operational_upper_limit: 3235
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
+        operational_lower_limit: 2028
+        operational_upper_limit: 3100
         sts3215_encoder_config {
           servo_id: 6
         }
       }
     }
-
-  }
-}
-
-calibration {
-  single_calibrations {
-    node {
-      id: 2
-      node_type: OPERATIONAL_LIMIT_CALIBRATION
-      qos_setting {}
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_1"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_2"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_3"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_4"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_5"
-      }
-      subscriptions {
-        ros2_data_type: FLOAT32
-        topic: "sts3215_encoder_6"
-      }
-    }
-    calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
   }
 }

@@ -127,10 +127,14 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
       case robot::action::ActionPacket::kComplex: {
         const auto& complex_action = action_packet.complex();
 
-        // Validate at least one field is set
+        if (complex_action.has_dc()) {
+          LOG(WARNING) << "dc is not supported on STS3215, ignoring";
+        }
+
+        // Validate at least one supported field is set
         if (!complex_action.has_position() && !complex_action.has_speed() &&
             !complex_action.has_torque()) {
-          LOG(WARNING) << "Complex action has no fields set";
+          LOG(WARNING) << "Complex action has no supported fields set";
           break;
         }
 
@@ -207,6 +211,10 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         }
         break;
       }
+
+      case robot::action::ActionPacket::kDc:
+        LOG(WARNING) << "dc is not supported on STS3215, ignoring";
+        break;
 
       case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
       default:

@@ -7,7 +7,6 @@ import "ros2/proto/ros2_data_type.proto";
 // Enum values here must match with the file name under ros2/
 // (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
 // This is used to resolve the native binary path.
-// Last Added: TRAJECTORY_PUBLISHER.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -61,6 +60,7 @@ message Publisher {
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
+  bool normalized = 3;
 }
 
 message Node {

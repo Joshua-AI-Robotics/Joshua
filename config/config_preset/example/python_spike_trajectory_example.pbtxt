@@ -1,3 +1,6 @@
+# Spike trajectory: trajectory_publisher + actuator_subscriber.
+# Topics use Float32 on /<device_id>/<action_type> (dc on A/B, position on C).
+
 general {
   operation_mode: MODE_INFERENCE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
@@ -13,8 +16,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: STRING
-          topic: "spike/motor_A/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_A/dc"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -34,7 +38,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
@@ -43,8 +46,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: STRING
-          topic: "spike/motor_B/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_B/dc"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -64,7 +68,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
     single_actions {
@@ -73,8 +76,9 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: STRING
-          topic: "spike/motor_C/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_C/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -94,7 +98,6 @@ robot {
         physical_upper_limit: 360
         operational_lower_limit: -360
         operational_upper_limit: 360
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
       }
     }
   }
@@ -106,26 +109,26 @@ robot {
         node_type: TRAJECTORY_PUBLISHER
         qos_setting { depth: 10 }
         publishers {
-          ros2_data_type: STRING
-          topic: "spike/motor_A/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_A/dc"
         }
         publishers {
-          ros2_data_type: STRING
-          topic: "spike/motor_B/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_B/dc"
         }
         publishers {
-          ros2_data_type: STRING
-          topic: "spike/motor_C/command"
+          ros2_data_type: FLOAT32
+          topic: "spike_motor_C/position"
         }
       }
       trajectory {
-        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_A/command"  action { dc: -30 } }
-        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_B/command"  action { dc: 30 } }
-        waypoints { timestamp_sec: 0.000000  topic: "spike/motor_C/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 2.000000  topic: "spike/motor_C/command"  action { position: -30 } }
-        waypoints { timestamp_sec: 4.000000  topic: "spike/motor_C/command"  action { position: 0 } }
-        waypoints { timestamp_sec: 6.000000  topic: "spike/motor_C/command"  action { position: -30 } }
-        waypoints { timestamp_sec: 10.000000  topic: "spike/motor_C/command"  action { position: 0 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike_motor_A/dc"  action { dc: -30 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike_motor_B/dc"  action { dc: 30 } }
+        waypoints { timestamp_sec: 0.000000  topic: "spike_motor_C/position"  action { position: 0 } }
+        waypoints { timestamp_sec: 2.000000  topic: "spike_motor_C/position"  action { position: -30 } }
+        waypoints { timestamp_sec: 4.000000  topic: "spike_motor_C/position"  action { position: 0 } }
+        waypoints { timestamp_sec: 6.000000  topic: "spike_motor_C/position"  action { position: -30 } }
+        waypoints { timestamp_sec: 10.000000  topic: "spike_motor_C/position"  action { position: 0 } }
       }
     }
   }

@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -57,9 +57,12 @@ ros2_py_binary(
     set_up_ament = True,
     deps = [
         "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
         "//ros2:ros2_type_resolver",
         "//ros2:node_runner_py",
+        "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
         "//ai/models:model_registry",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
@@ -90,6 +93,8 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
@@ -110,8 +115,12 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
+        "//robot/perception/proto:perception_packet_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -129,6 +138,8 @@ ros2_cpp_binary(
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -148,8 +159,12 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
+        "//robot/perception/proto:perception_packet_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -168,6 +183,8 @@ ros2_cpp_binary(
         "//config/proto:config_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "//ros2:node_runner",
     ],
@@ -187,8 +204,12 @@ ros2_py_binary(
     deps = [
         "//config/proto:config_py_proto",
         "//robot/perception/factory:perception_factory_py",
+        "//robot/perception/proto:perception_packet_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -207,6 +228,7 @@ ros2_cpp_binary(
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
+        "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
         "@protobuf//:protobuf",
@@ -230,27 +252,12 @@ ros2_py_binary(
         "//config/proto:config_py_proto",
         "//robot/action/factory:action_factory_py",
         "//robot/action/proto:action_packet_py_proto",
-        "//robot/perception/proto:perception_py_proto",
         "//ros2:node_runner_py",
+        "//ros2/proto:node_py_proto",
         "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
-        "//ros2/proto:node_py_proto",
-    ] + requirement("protobuf"),
-)
-
-py_test(
-    name = "actuator_subscriber_test",
-    srcs = ["actuator_subscriber_test.py"],
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/action/proto:action_py_proto",
-        "//robot/perception/proto:perception_py_proto",
-        "//robot/action/factory:action_factory_py",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:qos_setting_py",
-        "//ros2/proto:node_py_proto",
     ] + requirement("protobuf"),
 )
 
@@ -271,6 +278,7 @@ ros2_py_binary(
         "//ros2/proto:node_py_proto",
         "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )

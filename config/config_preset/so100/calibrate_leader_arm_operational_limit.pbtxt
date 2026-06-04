@@ -1,5 +1,5 @@
-general {
-  operation_mode: MODE_SIMULATION
+general{
+  operation_mode: MODE_CALIBRATION
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
   name: "so100"
   id: 1
@@ -30,9 +30,8 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1147
-        operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 973
+        operational_upper_limit: 3034
         sts3215_encoder_config {
           servo_id: 1
         }
@@ -62,9 +61,8 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1670
-        operational_upper_limit: 3986
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 858
+        operational_upper_limit: 3154
         sts3215_encoder_config {
           servo_id: 2
         }
@@ -94,9 +92,8 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 910
-        operational_upper_limit: 3113
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 798
+        operational_upper_limit: 3015
         sts3215_encoder_config {
           servo_id: 3
         }
@@ -126,9 +123,8 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 0
-        operational_upper_limit: 2407
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 668
+        operational_upper_limit: 3124
         sts3215_encoder_config {
           servo_id: 4
         }
@@ -158,9 +154,8 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 1730
-        operational_upper_limit: 3811
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 902
+        operational_upper_limit: 2955
         sts3215_encoder_config {
           servo_id: 5
         }
@@ -190,25 +185,48 @@ robot {
             baudrate: 1000000
           }
         }
-        operational_lower_limit: 2028
-        operational_upper_limit: 3100
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_RADIAN
+        operational_lower_limit: 1795
+        operational_upper_limit: 3235
         sts3215_encoder_config {
           servo_id: 6
         }
       }
     }
+
   }
 }
-simulation {
-  model_path: "simulation/models/so_arm100_scene.xml"
-  mode: MODE_MIRROR
-  mirror {
-    topic_mappings { topic: "sts3215_encoder_1"  ros2_data_type: FLOAT32  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_2"  ros2_data_type: FLOAT32  offset: -1.57}
-    topic_mappings { topic: "sts3215_encoder_3"  ros2_data_type: FLOAT32  offset: 1.5708 }
-    topic_mappings { topic: "sts3215_encoder_4"  ros2_data_type: FLOAT32  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_5"  ros2_data_type: FLOAT32  offset: 0 }
-    topic_mappings { topic: "sts3215_encoder_6"  ros2_data_type: FLOAT32  offset: 1.37 }
+
+calibration {
+  single_calibrations {
+    node {
+      id: 2
+      node_type: OPERATIONAL_LIMIT_CALIBRATION
+      qos_setting {}
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_1"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_2"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_3"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_4"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_5"
+      }
+      subscriptions {
+        ros2_data_type: FLOAT32
+        topic: "sts3215_encoder_6"
+      }
+    }
+    calibration_mode: CALIBRATION_MODE_OPERATIONAL_LIMIT
   }
 }

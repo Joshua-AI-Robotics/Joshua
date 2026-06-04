@@ -13,7 +13,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_1"
+          topic: "sts_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -33,7 +34,6 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 973
         operational_upper_limit: 3034
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 1
           move_time_in_ms: 40
@@ -49,7 +49,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_2"
+          topic: "sts_motor_2/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -69,7 +70,6 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 858
         operational_upper_limit: 3154
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 2
           move_time_in_ms: 40
@@ -85,7 +85,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_3"
+          topic: "sts_motor_3/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -102,10 +103,9 @@ robot {
           }
         }
         physical_lower_limit: 0
-         physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 798
         operational_upper_limit: 3015
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 3
           move_time_in_ms: 40
@@ -121,7 +121,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_4"
+          topic: "sts_motor_4/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -141,7 +142,6 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 668
         operational_upper_limit: 3124
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 4
           move_time_in_ms: 40
@@ -157,7 +157,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_5"
+          topic: "sts_motor_5/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -177,7 +178,6 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 902
         operational_upper_limit: 2955
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 5
           move_time_in_ms: 40
@@ -193,7 +193,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_6"
+          topic: "sts_motor_6/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -213,7 +214,6 @@ robot {
         physical_upper_limit: 4095
         operational_lower_limit: 1795
         operational_upper_limit: 3235
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         sts3215_config {
           servo_id: 6
           move_time_in_ms: 40
@@ -251,6 +251,7 @@ robot {
       }
     }
   }
+
 }
 
 ai {
@@ -267,41 +268,40 @@ ai {
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_1"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_1/position"
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_2"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_2/position"
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_3"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_3/position"
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_4"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_4/position"
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_5"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_5/position"
         }
         publishers {
           ros2_data_type: FLOAT32
-          topic: "mock_action_6"
-          # Publish rate is determined by the model.
+          topic: "sts_motor_6/position"
         }
       }
 
       random_noise_config {
         input_size: 1 # TODO: Try with camera image size.
         output_size: 6
-        noise_low: -0.05
-        noise_high: 0.05
+        # Operational midpoint ± 10% of each joint's operational span.
+        output_ranges { low: 1797 high: 2210 }
+        output_ranges { low: 1776 high: 2236 }
+        output_ranges { low: 1685 high: 2128 }
+        output_ranges { low: 1650 high: 2142 }
+        output_ranges { low: 1723 high: 2134 }
+        output_ranges { low: 2371 high: 2659 }
       }
     }
   }

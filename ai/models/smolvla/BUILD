@@ -21,6 +21,7 @@ py_library(
     srcs = ["smolvla.py"],
     deps = [
         "//ai/models:model_base",
+        "//robot/action/proto:action_packet_py_proto",
         ":smolvla_config_py_proto",
         "//ros2:image_converter",
         requirement("numpy"),

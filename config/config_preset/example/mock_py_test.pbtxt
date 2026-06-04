@@ -13,7 +13,8 @@ robot {
         qos_setting {}
         subscriptions {
           ros2_data_type: FLOAT32
-          topic: "mock_action_1"
+          topic: "mock_motor_1/position"
+          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -21,7 +22,6 @@ robot {
         actuator_name: "mock_motor_1"
         id: 1
         actuator_type: MOCK_MOTOR
-        encoder_data_mode: ENCODER_DATA_MODE_NORMALIZED_MINUS_ONE_TO_ONE
         mock_motor_config {
           motor_id: 1
         }
@@ -64,7 +64,6 @@ robot {
         encoder_name: "mock_encoder_1"
         id: 1
         encoder_type: MOCK_ENCODER
-        encoder_data_mode: ENCODER_DATA_MODE_RAW
         comm{}
       }
     }

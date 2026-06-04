@@ -26,6 +26,9 @@ message ActionPacket {
   string action_id = 1;
   int64 timestamp_ns = 2;
 
+  // If true, position is in [-1, 1] and mapped to operational limits at the actuator.
+  bool normalized = 9;
+
   oneof action_type {
     float position = 3;         // Simple position command
     float torque = 4;           // Torque setting (e.g. servo torque enable/disable)

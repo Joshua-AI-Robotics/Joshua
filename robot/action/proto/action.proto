@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 import "robot/comm/proto/comm.proto";
-import "robot/perception/proto/perception.proto";
 import "ros2/proto/node.proto";
 
 package robot.action;
@@ -27,8 +26,6 @@ message Actuator {
   float physical_upper_limit = 6;  // TODO: Move this to physical layout.
   float operational_lower_limit = 7;
   float operational_upper_limit = 8;
-  robot.perception.EncoderDataMode encoder_data_mode =
-      9;  // How the actuator data is processed for action.
   oneof action_config {
     Sts3215Config sts3215_config = 11;
     MockMotorConfig mock_motor_config = 12;
