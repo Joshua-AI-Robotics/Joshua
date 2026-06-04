@@ -1,6 +1,7 @@
 {
   "name": "joshua-control-panel-ui",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "generate-schema": "node scripts/generate-proto-schema.js",
