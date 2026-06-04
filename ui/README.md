@@ -11,6 +11,16 @@ Modern web-based UI for the Joshua robot control system, built with React, Tailw
 - **ShadCN UI** - Component library (Radix UI + Tailwind)
 - **React Router** - Client-side routing
 
+## Running with Docker
+
+From the repo root, build and serve the UI with Docker Compose v2:
+
+```bash
+docker compose up --build
+```
+
+See [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md#web-ui-with-docker) for prerequisites, dev compose overrides, and details.
+
 ## Getting Started
 
 ### Install Dependencies
