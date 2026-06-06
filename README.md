@@ -2,7 +2,7 @@
 
 **A modular framework for robotic AI systems**
 
-Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; Qt6 and React control panels let you configure, launch, and monitor the system.
+Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
 
 ![Project Joshua core concept](assets/images/project_joshua_diagram_napkin.png)
 
@@ -37,10 +37,9 @@ Install options (macOS, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
 | Simulation and RL | [ai/train/README.md](ai/train/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
-| Qt control panel | [joshua_control_panel/README.md](joshua_control_panel/README.md) |
 
 ## License
 
 Joshua is licensed under the [Apache License, Version 2.0](LICENSE). See
 [NOTICE](NOTICE) for attribution and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-for dependencies (including Qt6 under LGPL-3.0).
+for dependencies.

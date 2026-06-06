@@ -1,6 +1,6 @@
 # Architecture
 
-Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the Qt6 and React control panels.
+Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the React web control panel.
 
 ![Project Joshua core concept](../assets/images/project_joshua_diagram_napkin.png)
 

@@ -87,7 +87,7 @@ ui/
 
 ## Next Steps
 
-1. Implement protobuf-driven config editor (similar to Qt version)
+1. Implement protobuf-driven config editor
 2. Add ROS2 WebSocket integration for monitoring
 3. Implement calibration interface
 4. Add real-time status updates

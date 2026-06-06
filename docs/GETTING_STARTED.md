@@ -167,9 +167,6 @@ The image builds the React app, generates protobuf schema from repo protos, and 
 
 For local npm development, see [ui/README.md](../ui/README.md).
 
-## Control panels
+## Web control panel
 
-| UI | Guide |
-|----|--------|
-| Qt6 desktop panel | [joshua_control_panel/README.md](../joshua_control_panel/README.md) |
-| React web panel | [ui/README.md](../ui/README.md) |
+See [ui/README.md](../ui/README.md) for local npm development and UI features.
