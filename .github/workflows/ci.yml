@@ -52,7 +52,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools \
             libopencv-dev \
             libevdev-dev
 

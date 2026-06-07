@@ -76,17 +76,6 @@ RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# ============================================
-# Install Qt6 development packages
-# ============================================
-RUN apt-get update && apt-get install -y \
-    qt6-base-dev \
-    qt6-base-dev-tools \
-    qt6-tools-dev \
-    qt6-tools-dev-tools \
-    && rm -rf /var/lib/apt/lists/*
-
 # ============================================
 # Install libevdev for input device support (Xbox controller)
 # ============================================

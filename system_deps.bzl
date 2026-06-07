@@ -174,62 +174,6 @@ cc_library(
     includes = ["usr/include/libevdev-1.0"],
     linkopts = ["-levdev"],
 )
-
-# Qt6 C++ libraries
-cc_library(
-    name = "qt6_core",
-    hdrs = glob([
-        "usr/include/x86_64-linux-gnu/qt6/**",
-    ], allow_empty = True),
-    includes = [
-        "usr/include/x86_64-linux-gnu/qt6",
-        "usr/include/x86_64-linux-gnu/qt6/QtCore",
-    ],
-    linkopts = ["-lQt6Core"],
-)
-
-cc_library(
-    name = "qt6_gui",
-    hdrs = glob([
-        "usr/include/x86_64-linux-gnu/qt6/**",
-    ], allow_empty = True),
-    includes = [
-        "usr/include/x86_64-linux-gnu/qt6",
-        "usr/include/x86_64-linux-gnu/qt6/QtGui",
-        "usr/include/x86_64-linux-gnu/qt6/QtCore",
-    ],
-    linkopts = ["-lQt6Gui"],
-    deps = [":qt6_core"],
-)
-
-cc_library(
-    name = "qt6_widgets",
-    hdrs = glob([
-        "usr/include/x86_64-linux-gnu/qt6/**",
-    ], allow_empty = True),
-    includes = [
-        "usr/include/x86_64-linux-gnu/qt6",
-        "usr/include/x86_64-linux-gnu/qt6/QtWidgets",
-        "usr/include/x86_64-linux-gnu/qt6/QtGui",
-        "usr/include/x86_64-linux-gnu/qt6/QtCore",
-    ],
-    linkopts = ["-lQt6Widgets"],
-    deps = [":qt6_gui"],
-)
-
-# Convenience target for all Qt6 libraries
-cc_library(
-    name = "qt6",
-    deps = [":qt6_core", ":qt6_gui", ":qt6_widgets"],
-)
-
-# Qt6 MOC tool
-cc_binary(
-    name = "qt6_moc",
-    srcs = [],
-    data = ["usr/bin/moc"],
-    visibility = ["//visibility:public"],
-)
 """
     # Create symlinks (delete first if they exist)
     ctx.delete("usr")

@@ -371,7 +371,6 @@ if [ "$ENV_MODE" == "dev" ]; then
     install_docker
     install_bazel
     install_dev_tools
-    install_qt6_placeholder() { echo "Qt6 placeholder"; } # TODO remove
 fi
 
 echo -e "${GREEN}========================================${NC}"
