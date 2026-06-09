@@ -1,6 +1,7 @@
+# Keep in sync with VERSION (single source of truth).
 module(
     name = "project_joshua",
-    version = "0.1.0",
+    version = "0.2.3",
 )
 
 bazel_dep(name = "rules_cc", version = "0.1.1")

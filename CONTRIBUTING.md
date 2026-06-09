@@ -182,6 +182,14 @@ These areas affect many presets and downstream nodes:
 - **Top-level protos** (`config.proto`, `robot.proto`, `ai.proto`) — may require node generator and preset updates
 - **Breaking preset moves** — update docs and any referenced paths in README / GETTING_STARTED
 
+## Releases and versioning
+
+- **Single source of truth:** [`VERSION`](VERSION)
+- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md) — add entries under `[Unreleased]` with each user-facing change
+- **SemVer:** `0.x.y` while the API is pre-1.0; breaking changes may land in minor releases
+- **Tags:** `vX.Y.Z` on `develop` when cutting a release (for example `v0.1.0`)
+- Keep [`MODULE.bazel`](MODULE.bazel) `version` and [`ui/package.json`](ui/package.json) in sync with `VERSION`
+
 ## Review process
 
 - A maintainer will review PRs for correctness, test coverage, and fit with the config-driven architecture.

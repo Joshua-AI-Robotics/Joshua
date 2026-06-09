@@ -8,8 +8,9 @@ commits unless tagged as a release.
 
 | Version / branch | Supported          |
 |------------------|--------------------|
-| `develop`        | Yes                |
-| Other branches   | Best effort only   |
+| Latest release ([`VERSION`](VERSION)) | Yes |
+| `develop`        | Yes (active development) |
+| Older tagged releases | Best effort only |
 | Untagged commits | No                 |
 
 ## Reporting a vulnerability

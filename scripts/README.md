@@ -46,7 +46,7 @@ This is the main entry point for building the project for cross-platform and mul
 3. **Architecture Handling:**
    - **x86 on x86:** Runs natively in the container.
    - **ARM64 on x86:** Uses QEMU emulation (via Docker) to build ARM64 binaries on your PC.
-4. **Artifact Management:** Copies the built binaries out of the container to `dist/u{OS}/{CPU}/`.
+4. **Artifact Management:** Copies the built binaries out of the container to `dist/u{OS}/{CPU}/`, with tarball names suffixed by the repo [`VERSION`](../VERSION) and target platform (e.g. `joshua_main_pkg-0.2.3-u22-x86.tar.gz`). The package includes `VERSION` and the `joshua_main` binary supports `--version`.
 
 **Key Flags:**
 - `--os`: `u22` (default) or `u24`.

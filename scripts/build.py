@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-# This script is used to build the Joshua Project targets in the Docker environment for cross-compilation and multi-arch support.
+# Build Joshua targets in Docker for cross-compilation and multi-arch support.
 # Example usage: ./scripts/build.py //launcher:joshua_main_pkg --os=u22 --cpu=arm64
 
 import argparse
 import os
 import subprocess
 import sys
+
+
+def read_version() -> str:
+    version_path = os.path.join(os.path.dirname(__file__), "..", "VERSION")
+    with open(version_path, encoding="utf-8") as f:
+        return f.read().strip()
 
 
 def main():
@@ -41,26 +47,32 @@ def main():
     # Determine Docker Service and Bazel Configs
     # On x86 host, building for arm64 will use the arm64 container via QEMU (Emulation).
     service_suffix = "-arm64" if target_cpu == "arm64" else ""
-    
+
     # Select Bazel config based on target architecture
-    # Note: We use 'arm64-base' for emulation builds, not 'arm64-ros2' which requires cross-compilation sysroot
+    # Use 'arm64-base' for emulation; 'arm64-ros2' needs a cross-compilation sysroot.
     config_cpu = "arm64-base" if target_cpu == "arm64" else "x86-base"
-    
+
     bazel_configs = [f"--config={target_os}", f"--config={config_cpu}"]
 
     # Explicitly set Python version for u24 (Jazzy) builds
     if target_os == "u24":
         # Force rules_python to select the 3.12 toolchain
-        bazel_configs.append("--@rules_python//python/config_settings:python_version=3.12")
+        bazel_configs.append(
+            "--@rules_python//python/config_settings:python_version=3.12"
+        )
     else:
         # Default to 3.10 for u22
-        bazel_configs.append("--@rules_python//python/config_settings:python_version=3.10")
+        bazel_configs.append(
+            "--@rules_python//python/config_settings:python_version=3.10"
+        )
 
     service_name = f"joshua-{target_os}{service_suffix}"
-    
+
     # Construct Bazel flags
     bazel_flags = " ".join(bazel_configs + bazel_args)
 
+    version = read_version()
+    print(f"📌 Joshua version: {version}")
     print(f"🚀 Container Service: {service_name}")
     print(f"🎯 Target: {bazel_flags}")
     if target_cpu == "arm64":
@@ -68,8 +80,8 @@ def main():
 
     # Ensure container_build.sh is executable
     if os.path.exists("scripts/container_build.sh"):
-         # Make script executable by everyone (755) to ensure container user can run it
-         os.chmod("scripts/container_build.sh", 0o755)
+        # Make script executable by everyone (755) to ensure container user can run it
+        os.chmod("scripts/container_build.sh", 0o755)
 
     # Docker Command
     # We mount the script and run it inside the container
@@ -82,8 +94,8 @@ def main():
         "/workspace/scripts/container_build.sh",
         target_os,
         target_cpu,
-        bazel_args[0], # Pass the target label separately for cquery
-        *bazel_configs, # Pass configs
+        bazel_args[0],  # Pass the target label separately for cquery
+        *bazel_configs,  # Pass configs
     ]
     # Add remaining bazel args (like --compilation_mode=dbg)
     docker_cmd.extend(bazel_args[1:])
@@ -91,7 +103,10 @@ def main():
     try:
         subprocess.check_call(docker_cmd)
         print("-" * 60)
-        print(f"✨ Done! Check 'dist/{target_os}/{target_cpu}' for your build artifacts.")
+        print(
+            f"✨ Done! Check 'dist/{target_os}/{target_cpu}' "
+            f"for versioned build artifacts (e.g. joshua_main_pkg-{version}-*.tar.gz)."
+        )
 
     except subprocess.CalledProcessError as e:
         print(f"❌ Build failed with exit code {e.returncode}")

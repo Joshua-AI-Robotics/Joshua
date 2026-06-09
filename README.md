@@ -2,6 +2,8 @@
 
 **A modular framework for robotic AI systems**
 
+**Version:** see [`VERSION`](VERSION) · [Changelog](CHANGELOG.md)
+
 Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
 
 ![Project Joshua core concept](assets/images/joshua_summary.png)
@@ -44,7 +46,7 @@ For development, use `bazel run` as above. To produce a packaged, deployable bui
 | `--os` | `u22` (22.04 / Humble), `u24` (24.04 / Jazzy) | `u22` |
 | `--cpu` | `x86`, `arm64` | `x86` |
 
-Output: `dist/u22/x86/joshua_main_pkg.tar.gz` (paths vary by flags). Extract and run on a target machine with the matching Ubuntu/ROS stack. Full details: [scripts/README.md](scripts/README.md).
+Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`VERSION`](VERSION); paths vary by flags). The archive includes a `VERSION` file and `joshua_main --version` reports the same value. Extract and run on a target machine with the matching Ubuntu/ROS stack. Full details: [scripts/README.md](scripts/README.md).
 
 ## Documentation
 
@@ -57,6 +59,7 @@ Output: `dist/u22/x86/joshua_main_pkg.tar.gz` (paths vary by flags). Extract and
 | Simulation and RL | [ai/train/README.md](ai/train/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
 | Security | [SECURITY.md](SECURITY.md) |
 
 ## License
