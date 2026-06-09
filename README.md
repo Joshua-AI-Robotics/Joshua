@@ -4,7 +4,7 @@
 
 Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
 
-![Project Joshua core concept](assets/images/project_joshua_diagram_napkin.png)
+![Project Joshua core concept](assets/images/joshua_summary.png)
 
 One config file is the source of truth—for example [`config/config_preset/so100/so100_teleoperate.pbtxt`](config/config_preset/so100/so100_teleoperate.pbtxt) defines the full SO100 teleop setup. See [Architecture](docs/ARCHITECTURE.md) for how config, protobuf packets, and ROS 2 fit together.
 
