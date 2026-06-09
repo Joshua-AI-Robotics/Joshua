@@ -144,11 +144,12 @@ After `setup.sh --env=dev`, pre-commit runs on **pre-push**:
 | Python | `black`, `isort`, `flake8` |
 | YAML | syntax validation |
 
-Manual check or auto-fix changed files:
+Manual check or auto-fix files changed since your branch diverged from `develop`:
 
 ```bash
-./hooks/lint_check.sh          # check
-./hooks/lint_check.sh --fix    # format changed files vs develop
+./hooks/lint_check.sh              # check changed files (quiet by default)
+./hooks/lint_check.sh --fix        # auto-fix changed files
+./hooks/lint_check.sh --verbose    # show summary and per-file fix output
 ```
 
 Bazel `BUILD` / `BUILD.bazel` files should be kept tidy with `buildifier` when you edit them.

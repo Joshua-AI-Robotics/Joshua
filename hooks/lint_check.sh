@@ -42,68 +42,103 @@ else
   PY_ISORT=""
 fi
 
-# Check if we're in fix mode (when called with --fix)
 FIX_MODE=false
-if [ "${1:-}" = "--fix" ]; then
-  FIX_MODE=true
-  shift  # Remove --fix from arguments
-fi
+QUIET=true
 
-# If no files provided, get relevant files
-if [ $# -eq 0 ]; then
-  if [ "$FIX_MODE" = true ]; then
-    # In fix mode, target changes from the merge base with develop (commits, staged, unstaged) and untracked files
-    TARGET_BRANCH="origin/develop"
-    # Fallback to local develop if origin/develop is missing
-    if ! git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1; then
-      TARGET_BRANCH="develop"
-    fi
-    
-    # Find the common ancestor (merge base) between HEAD and the target branch
-    MERGE_BASE=$(git merge-base HEAD "$TARGET_BRANCH")
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --fix)
+      FIX_MODE=true
+      shift
+      ;;
+    --quiet | -q)
+      QUIET=true
+      shift
+      ;;
+    --verbose | -v)
+      QUIET=false
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
-    mapfile -d '' FILES < <( (
-      git diff --name-only -z "$MERGE_BASE" -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
-      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'
-    ) | sort -zu )
-  else
-    # In check mode, check all files
-    mapfile -d '' FILES < <( (
-      git ls-files -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py'; \
-      git ls-files --others --exclude-standard -z -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.proto' '*.yaml' '*.yml' '*.py' \
-    ) | sort -zu )
+LINT_GLOBS=(
+  '*.c' '*.cc' '*.cpp' '*.cxx'
+  '*.h' '*.hh' '*.hpp' '*.hxx'
+  '*.proto' '*.yaml' '*.yml' '*.py'
+)
+
+log() {
+  if [ "$QUIET" = false ]; then
+    echo "$@"
   fi
+}
+
+log_fix() {
+  log "$@"
+  FIXED_COUNT=$((FIXED_COUNT + 1))
+}
+
+collect_files_since_develop() {
+  local target_branch="origin/develop"
+  if ! git rev-parse --verify "$target_branch" >/dev/null 2>&1; then
+    target_branch="develop"
+  fi
+  if ! git rev-parse --verify "$target_branch" >/dev/null 2>&1; then
+    echo "Could not find develop or origin/develop for diff base." >&2
+    return 1
+  fi
+
+  local merge_base
+  merge_base=$(git merge-base HEAD "$target_branch")
+
+  mapfile -d '' FILES < <( (
+    git diff --name-only -z "$merge_base" -- "${LINT_GLOBS[@]}"
+    git ls-files --others --exclude-standard -z -- "${LINT_GLOBS[@]}"
+  ) | sort -zu )
+}
+
+# If no files provided, lint only changes since the branch diverged from develop.
+if [ $# -eq 0 ]; then
+  collect_files_since_develop
 else
   FILES=("$@")
 fi
 
 if [ ${#FILES[@]} -eq 0 ]; then
-  echo "No relevant files found to check."
+  log "No relevant changed files found to check."
   exit 0
 fi
 
-if [ "$FIX_MODE" = true ]; then
-  echo "Checking ${#FILES[@]} files for issues to fix..."
-else
-  echo "Checking ${#FILES[@]} files for linting issues..."
-fi
+log "Checking ${#FILES[@]} changed file(s) since develop..."
 
 fail=0
+FIXED_COUNT=0
 
 for f in "${FILES[@]}"; do
   # Skip non-existent files
   [ -f "$f" ] || continue
-  
-  # Skip directories and non-existent
+
   case "$f" in
-    bazel-*/*|external/*) continue ;;
+    bazel-*/* | external/*) continue ;;
   esac
-  
+
   # Only check text files
   if ! grep -Iq . "$f" 2>/dev/null; then
     continue
   fi
-  
+
   # YAML validation
   if [[ "$f" =~ \.(yaml|yml)$ ]]; then
     if ! python3 -c "import yaml; yaml.safe_load_all(open('$f'))" >/dev/null 2>&1; then
@@ -111,42 +146,40 @@ for f in "${FILES[@]}"; do
       fail=1
     fi
   fi
-  
+
   # C/C++/Proto clang-format check/fix
   if [[ "$f" =~ \.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto)$ ]]; then
     if [ "$FIX_MODE" = true ]; then
-      # Fix formatting
       if ! clang-format --dry-run --Werror "$f" >/dev/null 2>&1; then
         clang-format -i "$f"
-        echo "Fixed clang-format issues in $f"
+        log_fix "Fixed clang-format issues in $f"
       fi
     else
-      # Check formatting
       if ! clang-format --dry-run --Werror "$f" >/dev/null 2>&1; then
         echo "clang-format issues in $f (run hooks/lint_check.sh --fix to update)" >&2
         fail=1
       fi
     fi
   fi
-  
+
   # Python lint/format
   if [[ "$f" =~ \.py$ ]]; then
     if [ "$FIX_MODE" = true ]; then
-      # Apply import sorting first
       if [ -n "$PY_ISORT" ]; then
-        $PY_ISORT --profile black "$f" >/dev/null 2>&1 || true
-        echo "Sorted imports with isort in $f"
+        if ! $PY_ISORT --profile black --check-only "$f" >/dev/null 2>&1; then
+          $PY_ISORT --profile black "$f" >/dev/null 2>&1 || true
+          log_fix "Fixed isort issues in $f"
+        fi
       fi
-      # Format with black
       if [ -n "$PY_BLACK" ]; then
-        $PY_BLACK -q "$f" >/dev/null 2>&1 || true
-        echo "Formatted with black in $f"
+        if ! $PY_BLACK --check "$f" >/dev/null 2>&1; then
+          $PY_BLACK -q "$f" >/dev/null 2>&1 || true
+          log_fix "Fixed black formatting in $f"
+        fi
       else
         echo "black not found; skipping auto-format for $f" >&2
       fi
-      # Lint with flake8
       if [ -n "$PY_FLAKE8" ]; then
-        # Black compatibility: max-line-length 88, ignore E203 (whitespace before :)
         if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
           echo "flake8 issues in $f" >&2
           fail=1
@@ -155,16 +188,14 @@ for f in "${FILES[@]}"; do
         echo "flake8 not found; skipping lint for $f" >&2
       fi
     else
-      # Check formatting with black
       if [ -n "$PY_BLACK" ]; then
-        if ! $PY_BLACK --check --diff "$f" >/dev/null 2>&1; then
+        if ! $PY_BLACK --check "$f" >/dev/null 2>&1; then
           echo "black formatting issues in $f (run hooks/lint_check.sh --fix to update)" >&2
           fail=1
         fi
       else
         echo "black not found; skipping format check for $f" >&2
       fi
-      # Lint with flake8
       if [ -n "$PY_FLAKE8" ]; then
         if ! $PY_FLAKE8 --max-line-length=88 --extend-ignore=E203 "$f" >/dev/null 2>&1; then
           echo "flake8 issues in $f" >&2
@@ -175,35 +206,28 @@ for f in "${FILES[@]}"; do
       fi
     fi
   fi
-  
+
   # Trailing whitespace check/fix
   if grep -nP "\s+$" "$f" >/dev/null 2>&1; then
     if [ "$FIX_MODE" = true ]; then
-      # Fix trailing whitespace
       sed -i 's/[[:space:]]*$//' "$f"
-      echo "Fixed trailing whitespace in $f"
+      log_fix "Fixed trailing whitespace in $f"
     else
-      # Check trailing whitespace
       echo "trailing whitespace in $f" >&2
       fail=1
     fi
   fi
-  
+
   # EOF newline check/fix (only if non-empty)
   if [ -s "$f" ]; then
     last_char=$(tail -c 1 "$f" 2>/dev/null || true)
-    # If tail returns nothing (shouldn't for non-empty), skip
-    if [ -n "$last_char" ]; then
-      if [ "$last_char" != $'\n' ]; then
-        if [ "$FIX_MODE" = true ]; then
-          # Fix EOF newline
-          echo "" >> "$f"
-          echo "Fixed missing newline at EOF in $f"
-        else
-          # Check EOF newline
-          echo "missing newline at EOF in $f" >&2
-          fail=1
-        fi
+    if [ -n "$last_char" ] && [ "$last_char" != $'\n' ]; then
+      if [ "$FIX_MODE" = true ]; then
+        echo "" >>"$f"
+        log_fix "Fixed missing newline at EOF in $f"
+      else
+        echo "missing newline at EOF in $f" >&2
+        fail=1
       fi
     fi
   fi
@@ -211,9 +235,13 @@ done
 
 if [ "$fail" -eq 0 ]; then
   if [ "$FIX_MODE" = true ]; then
-    echo "All files are properly formatted."
+    if [ "$FIXED_COUNT" -gt 0 ]; then
+      log "Fixed issues in $FIXED_COUNT file(s)."
+    else
+      log "No formatting changes needed."
+    fi
   else
-    echo "All files passed linting checks."
+    log "All changed files passed linting checks."
   fi
 fi
 

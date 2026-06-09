@@ -5,9 +5,8 @@ repos:
         name: Lint & Format Checks
         entry: hooks/lint_check.sh
         language: system
-        files: "\\.(c|cc|cpp|cxx|h|hh|hpp|hxx|proto|yaml|yml)$"
         stages: [pre-push]
-        pass_filenames: true
+        pass_filenames: false
 
   # Custom hooks (run after linting)
   - repo: local
