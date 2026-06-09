@@ -25,7 +25,7 @@ sudo ./scripts/setup.sh --env=dev
 bazel run launcher:joshua_main
 ```
 
-Install options (macOS, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Joshua targets **Ubuntu Linux**; macOS is not supported.
 
 ## Documentation
 
@@ -37,6 +37,8 @@ Install options (macOS, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
 | Simulation and RL | [ai/train/README.md](ai/train/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Security | [SECURITY.md](SECURITY.md) |
 
 ## License
 

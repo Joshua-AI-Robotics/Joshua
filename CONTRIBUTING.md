@@ -11,6 +11,7 @@ Thank you for your interest in [Joshua](https://github.com/Joshua-AI-Robotics/Jo
 You do not need to write code to help:
 
 - **Report bugs** — [open an issue](https://github.com/Joshua-AI-Robotics/Joshua/issues/new/choose) with steps to reproduce, environment details, and logs.
+- **Report security issues** — follow [SECURITY.md](SECURITY.md); do not use public issues.
 - **Suggest features** — describe the problem, your proposed approach, and which robot or preset it affects.
 - **Improve docs** — README, `docs/`, preset comments, and module READMEs are always welcome.
 - **Submit code** — follow the workflow below.
@@ -36,7 +37,7 @@ Inside the container:
 bazel run launcher:joshua_main
 ```
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for macOS, ARM64, and ROS Jazzy images.
+See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for ARM64 and ROS Jazzy Docker images. Development is supported on **Ubuntu Linux** only; macOS is not supported.
 
 ### Native Ubuntu 22.04
 
@@ -190,8 +191,10 @@ These areas affect many presets and downstream nodes:
 
 - **Docs index:** [docs/README.md](docs/README.md)
 - **Issues:** [github.com/Joshua-AI-Robotics/Joshua/issues](https://github.com/Joshua-AI-Robotics/Joshua/issues)
+- **Security:** [SECURITY.md](SECURITY.md)
 - **Website:** [joshua-ai-robotics.org](https://joshua-ai-robotics.org/)
 
 ## Code of conduct
 
-Be respectful and constructive. We are building tools for real robots and real collaborators — assume good intent, give actionable feedback, and keep discussions technical and inclusive.
+All participants are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+Be respectful and constructive — we are building tools for real robots and real collaborators.
