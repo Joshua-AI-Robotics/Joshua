@@ -27,6 +27,25 @@ bazel run launcher:joshua_main
 
 Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Joshua targets **Ubuntu Linux**; macOS is not supported.
 
+## Build deployable binaries
+
+For development, use `bazel run` as above. To produce a packaged, deployable build (launcher binary, presets, and runtime files), use [`scripts/build.py`](scripts/build.py). It runs Bazel inside the matching Docker image and copies artifacts to `dist/<os>/<cpu>/`.
+
+```bash
+# Ubuntu 22.04 (Humble), x86_64 — default
+./scripts/build.py //launcher:joshua_main_pkg
+
+# Ubuntu 24.04 (Jazzy), ARM64 (e.g. Jetson; uses emulation on x86 hosts)
+./scripts/build.py //launcher:joshua_main_pkg --os=u24 --cpu=arm64
+```
+
+| Flag | Values | Default |
+|------|--------|---------|
+| `--os` | `u22` (22.04 / Humble), `u24` (24.04 / Jazzy) | `u22` |
+| `--cpu` | `x86`, `arm64` | `x86` |
+
+Output: `dist/u22/x86/joshua_main_pkg.tar.gz` (paths vary by flags). Extract and run on a target machine with the matching Ubuntu/ROS stack. Full details: [scripts/README.md](scripts/README.md).
+
 ## Documentation
 
 | Topic | Guide |
