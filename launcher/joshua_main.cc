@@ -5,12 +5,14 @@
 #include "launcher/simulation_launcher.h"
 #include "launcher/training_launcher.h"
 #include "node_generator/node_generator.h"
+#include "version.h"
 
 DEFINE_string(config,
               "config/config_preset/so100/so100_teleoperate.pbtxt",
               "Path to the robot config file");
 
 int main(int argc, char* argv[]) {
+  gflags::SetVersionString(JOSHUA_VERSION);
   google::InitGoogleLogging(argv[0]);
   FLAGS_logtostderr = 1;
   gflags::ParseCommandLineFlags(&argc, &argv, true);

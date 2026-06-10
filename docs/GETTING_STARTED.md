@@ -4,7 +4,9 @@ This guide covers installation, your first run, and common entry points. For bui
 
 ## Prerequisites
 
-- **Docker path:** Ubuntu or macOS (Apple Silicon), with [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+Joshua supports **Ubuntu Linux** only. macOS is not supported (native or via Docker).
+
+- **Docker path:** Ubuntu 22.04 or 24.04 LTS, with Docker installed (see [Docker development environment](#docker-development-environment)).
 - **Native path:** Ubuntu 22.04 LTS (see [Native installation](#native-installation)).
 
 ## Docker development environment
@@ -19,14 +21,11 @@ Pick the image that matches your host OS and target ROS distribution:
 
 | Host | ROS | Build command |
 |------|-----|---------------|
-| Linux | Humble (22.04) | `docker compose build joshua-u22` |
-| Linux (ARM64) | Humble (22.04) | `docker compose build joshua-u22-arm64` |
-| Linux | Jazzy (24.04) | `docker compose build joshua-u24` |
-| macOS Apple Silicon | Humble (22.04, arm64) | `docker compose build joshua-mac-u22-arm64` |
+| Ubuntu (x86_64) | Humble (22.04) | `docker compose build joshua-u22` |
+| Ubuntu (ARM64) | Humble (22.04) | `docker compose build joshua-u22-arm64` |
+| Ubuntu (x86_64) | Jazzy (24.04) | `docker compose build joshua-u24` |
 
-ARM64 variants exist for `joshua-u24` as well.
-
-**macOS notes:** Docker images for Mac support arm64 builds only. Serial ports are mocked by default; for real serial ports, see comments in `docker-compose.yml`.
+ARM64 variants exist for `joshua-u24` as well (e.g. Jetson).
 
 ### Run an interactive shell
 
@@ -36,9 +35,6 @@ docker compose run joshua-u22
 
 # Ubuntu 24.04 + ROS 2 Jazzy
 docker compose run joshua-u24
-
-# macOS Apple Silicon
-docker compose run joshua-mac-u22-arm64
 ```
 
 Type `exit` to leave the shell. To resume a stopped container:

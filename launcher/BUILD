@@ -1,6 +1,26 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
+genrule(
+    name = "version_h",
+    srcs = ["//:VERSION"],
+    outs = ["version.h"],
+    cmd = """VERSION=$$(tr -d '\\n\\r' < '$(location //:VERSION)'); \
+cat > '$@' <<EOF
+#ifndef JOSHUA_LAUNCHER_VERSION_H_
+#define JOSHUA_LAUNCHER_VERSION_H_
+#define JOSHUA_VERSION "$$VERSION"
+#endif
+EOF""",
+)
+
+cc_library(
+    name = "version",
+    hdrs = [":version_h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "simulation_launcher",
     srcs = ["simulation_launcher.cc"],
@@ -48,6 +68,7 @@ cc_binary(
     deps = [
         ":simulation_launcher",
         ":training_launcher",
+        ":version",
         "//config:config_utils",
         "//node_generator",
         "@gflags",
@@ -60,6 +81,7 @@ pkg_tar(
     name = "joshua_main_pkg",
     srcs = [
         ":joshua_main",
+        "//:VERSION",
         "//config/config_preset:config_presets",
         "//ros2:ros2_node_wrapper.sh",
     ],

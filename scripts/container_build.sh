@@ -32,6 +32,11 @@ fi
 DEST_DIR="/workspace/dist/$TARGET_OS/$TARGET_ARCH"
 mkdir -p "$DEST_DIR"
 
+JOSHUA_VERSION=""
+if [ -f /workspace/VERSION ]; then
+    JOSHUA_VERSION=$(tr -d '\n\r' < /workspace/VERSION)
+fi
+
 # 3. Copy artifacts
 # Convert newline-separated list to array to handle multiple outputs
 mapfile -t FILE_LIST <<< "$OUTPUTS"
@@ -44,14 +49,19 @@ for FILE_PATH in "${FILE_LIST[@]}"; do
         # Filter out obvious non-final artifacts if needed (optional)
         # For now, we copy everything produced by the target
         
-        echo "📦 Copying $BASENAME..."
-        cp -f "$FILE_PATH" "$DEST_DIR/$BASENAME"
-        
+        DEST_NAME="$BASENAME"
+        if [ -n "$JOSHUA_VERSION" ] && [[ "$BASENAME" == *.tar.gz ]]; then
+            DEST_NAME="${BASENAME%.tar.gz}-${JOSHUA_VERSION}-${TARGET_OS}-${TARGET_ARCH}.tar.gz"
+        fi
+
+        echo "📦 Copying $BASENAME -> $DEST_NAME..."
+        cp -f "$FILE_PATH" "$DEST_DIR/$DEST_NAME"
+
         # Fix permissions (match the mounted workspace owner, usually 1000:1000)
         # We assume the /workspace folder ownership is the target UID/GID
         REF_FILE="/workspace/scripts/build.py"
         if [ -f "$REF_FILE" ]; then
-            chown --reference="$REF_FILE" "$DEST_DIR/$BASENAME"
+            chown --reference="$REF_FILE" "$DEST_DIR/$DEST_NAME"
         fi
         
         FOUND_ANY=true

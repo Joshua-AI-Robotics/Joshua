@@ -1,3 +1,5 @@
+exports_files(["VERSION"])
+
 platform(
     name = "jetson_orin_nano",
     constraint_values = [
