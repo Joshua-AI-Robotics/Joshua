@@ -70,12 +70,40 @@ This script is mounted into the Docker container by `build.py`. It executes the 
 
 ---
 
+## 4. Development & Testing Helpers
+
+### `docker_entrypoint.sh`
+Entrypoint used by the macOS-oriented Docker service (`joshua-mac-u22-arm64`). When `ENABLE_MOCK_SERIAL_PORTS=true`, it creates mock serial ports (via `create_mock_serial_ports.sh`) before dropping into a shell or running the given command.
+
+### `create_mock_serial_ports.sh`
+Creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`. Useful for running the stack in containers or machines without physical serial devices.
+
+```bash
+./scripts/create_mock_serial_ports.sh --background
+```
+
+### `pybricks_spike_bridge.py`
+A Pybricks (MicroPython) program that runs **on a LEGO SPIKE Prime hub** and bridges line-based `SET`/`GET` motor commands over stdin/stdout. Deploy it via the Pybricks app or `pybricksdev`. See [docs/pybricks_test.md](../docs/pybricks_test.md).
+
+### `spike_wave_publisher.py`
+A small ROS 2 node that publishes a sine wave (`std_msgs/Float32`) to a motor command topic (default `spike/motor_A/command`) for testing the SPIKE motor pipeline end to end.
+
+```bash
+python3 scripts/spike_wave_publisher.py --topic spike/motor_A/command --hz 20
+```
+
+---
+
 ## Directory Structure
 
 ```text
 scripts/
-├── build.py             # Main build entry point (Host side)
-├── container_build.sh   # Internal build logic (Container side)
-├── setup.sh             # System dependency installer
-└── README.md            # This file
+├── build.py                     # Main build entry point (Host side)
+├── container_build.sh           # Internal build logic (Container side)
+├── setup.sh                     # System dependency installer
+├── docker_entrypoint.sh         # Container entrypoint (mock serial setup)
+├── create_mock_serial_ports.sh  # Mock serial ports via socat
+├── pybricks_spike_bridge.py     # SPIKE Prime hub-side bridge program
+├── spike_wave_publisher.py      # ROS 2 sine-wave test publisher
+└── README.md                    # This file
 ```

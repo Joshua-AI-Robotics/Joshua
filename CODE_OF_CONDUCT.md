@@ -64,8 +64,11 @@ Examples of representing our community include:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers responsible for enforcement at
-**[INSERT CONTACT METHOD]**.
+reported privately to the project maintainers via
+[GitHub private reporting](https://github.com/Joshua-AI-Robotics/Joshua/security/advisories/new)
+or by opening a confidential request through the repository's
+[issue tracker](https://github.com/Joshua-AI-Robotics/Joshua/issues) asking a
+maintainer to contact you.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

@@ -129,7 +129,7 @@ To exercise the full stack manually:
 
 ```bash
 bazel run launcher:joshua_main
-bazel run //launcher:joshua_main -- --config config/config_preset/so100/so100_teleoperate.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/so100/teleoperate.pbtxt
 ```
 
 Preset-specific flows: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).

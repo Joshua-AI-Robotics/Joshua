@@ -31,10 +31,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/zenoh/, ''),
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.log('Proxy error:', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Proxying request:', req.method, req.url);
+            console.error('Zenoh proxy error:', err);
           });
         },
       },
@@ -44,10 +41,6 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     chunkSizeWarningLimit: 1000,
-  },
-  // Optimize dependencies - exclude large JSON from pre-bundling
-  optimizeDeps: {
-    exclude: ['../generated/proto-schema.json'],
   },
 })
 

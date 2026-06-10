@@ -10,9 +10,29 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- (nothing yet)
+- Launcher default `--config` and all docs now point to the renamed preset
+  `config/config_preset/so100/teleoperate.pbtxt` (old `so100_teleoperate.pbtxt`
+  references were broken since the 0.2.2 rename)
+- `docs/ARCHITECTURE.md` diagram updated to `joshua_summary.png` (old image was removed)
+- Docs preset table and `simulation/main.py` docstring corrected to the actual
+  `so100/sim_interactive.pbtxt` / `sim_mirror.pbtxt` filenames
+- Docker docs now include the required Compose `--profile` flags for ARM64, Jazzy,
+  and the web UI (`production` profile) services
+
+### Removed
+
+- Orphaned `issac_sim/` directory (typo-named, unreferenced legacy USD asset)
+- Empty `.gitmodules` and an accidentally committed `__pycache__` bytecode file
+- Debug `console.log` noise from the web UI hooks and Vite proxy config
+
+### Changed
+
+- `.gitignore` covers `.venv/`, `node_modules/`, and common Python tooling caches
+- `scripts/README.md` documents all helper scripts (mock serial ports, Docker
+  entrypoint, SPIKE bridge and wave publisher); docs index links Pybricks guides
+- Code of Conduct now lists a concrete private reporting channel
 
 ## [0.2.3] - 2026-06-08
 

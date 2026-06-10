@@ -22,7 +22,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold">Joshua Control Panel</h1>
-              <span className="text-sm text-muted-foreground">v0.1.0</span>
+              <span className="text-sm text-muted-foreground">v0.2.3</span>
             </div>
           </div>
         </div>

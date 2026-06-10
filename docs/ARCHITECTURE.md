@@ -2,9 +2,9 @@
 
 Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the React web control panel.
 
-![Project Joshua core concept](../assets/images/project_joshua_diagram_napkin.png)
+![Project Joshua core concept](../assets/images/joshua_summary.png)
 
-A representative preset: [`config/config_preset/so100/so100_teleoperate.pbtxt`](../config/config_preset/so100/so100_teleoperate.pbtxt).
+A representative preset: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt).
 
 ## Configuration layer (Protobuf)
 

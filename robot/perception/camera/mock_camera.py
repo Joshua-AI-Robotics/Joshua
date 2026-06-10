@@ -5,8 +5,6 @@ import time
 from robot.perception.interfaces.camera_interface import CameraInterface
 from robot.perception.proto import perception_packet_pb2, perception_pb2
 
-# import glog
-
 
 class MockCamera(CameraInterface):
     """Mock camera for Python pipeline testing."""
@@ -14,7 +12,6 @@ class MockCamera(CameraInterface):
     def __init__(self, camera_config: perception_pb2.Camera) -> None:
         self._config = camera_config
         self._initialized = False
-        # glog.info(f"MockCamera initialized with config: {camera_config}")
 
     def init(self) -> None:
         self._initialized = True
@@ -50,7 +47,6 @@ class MockCamera(CameraInterface):
         # Solid-color BGR test pattern (blue-ish)
         pixel = bytes([255, 0, 0])
         image.data = pixel * (width * height)
-        # glog.info(f"MockCamera returned packet: {packet}")
         return packet
 
     def teardown(self) -> None:

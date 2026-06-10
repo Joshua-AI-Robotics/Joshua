@@ -26,10 +26,17 @@ MODULE.bazel.lock
 
 # Python virtual environment
 /venv/
+.venv/
 
-# Python bytecode
+# Python bytecode and tooling caches
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node.js
+node_modules/
 
 # MuJoCo logs
 MUJOCO_LOG.TXT

@@ -2,10 +2,10 @@
 
 Usage (unified config -- launched from joshua_main or standalone):
     bazel run //launcher:joshua_main -- \
-        --config config/config_preset/so100/so_arm100_sim_interactive.pbtxt
+        --config config/config_preset/so100/sim_interactive.pbtxt
 
     bazel run //simulation:simulation -- \
-        --config config/config_preset/so100/so_arm100_sim_mirror.pbtxt --mode interactive
+        --config config/config_preset/so100/sim_mirror.pbtxt --mode interactive
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.
 Training workflows (RL, imitation, eval) use ai/train/trainer.py instead.

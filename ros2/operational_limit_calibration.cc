@@ -9,7 +9,6 @@
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 
-// TODO: Maybe rename to operational_limit_calibration.
 class OperationalLimitCalibration : public rclcpp::Node {
  private:
   struct OperationalLimit {
