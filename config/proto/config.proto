@@ -12,7 +12,6 @@ message General {
     MODE_INVALID = 0;
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
-    MODE_TRAINING = 3;
     MODE_CALIBRATION = 4;
     MODE_TEST = 5;
     MODE_DATA_STORE = 6;

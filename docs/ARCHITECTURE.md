@@ -57,6 +57,7 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
-- [ai/train/README.md](../ai/train/README.md) — data collection, training, sim backends
+- [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
+- [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
 - [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
 - [node_generator/README.md](../node_generator/README.md) — node generation from config

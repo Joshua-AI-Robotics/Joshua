@@ -16,30 +16,3 @@ py_binary(
     srcs = ["data_load.py"],
     deps = requirement("datasets") + requirement("glog") + requirement("python-gflags"),
 )
-
-py_library(
-    name = "isaac_launcher",
-    srcs = ["isaac_launcher.py"],
-    data = [
-        "isaac_runner.py",
-        "//simulation:sim_models",
-    ] + glob(["isaac_lab/**/*.py"]) + glob(["trajectory_export/**/*.py"]),
-    deps = [
-        "//ai/proto:training_py_proto",
-    ] + requirement("glog") + requirement("protobuf"),
-)
-
-py_binary(
-    name = "trainer",
-    srcs = ["trainer.py"],
-    data = [
-        "//simulation:sim_models",
-        "//simulation:sim_trajectories",
-        "//config/config_preset:config_presets",
-    ],
-    deps = [
-        ":isaac_launcher",
-        "//ai/proto:training_py_proto",
-        "//config/proto:config_py_proto",
-    ] + requirement("python-gflags") + requirement("glog") + requirement("protobuf"),
-)

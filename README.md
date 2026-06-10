@@ -56,7 +56,7 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | All docs index | [docs/README.md](docs/README.md) |
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
-| Simulation and RL | [ai/train/README.md](ai/train/README.md) |
+| Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](simulation/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |

@@ -64,55 +64,26 @@ Torso spawns at z = 0.50 m.
 USD Asset
 ---------
 
-`simulation/models/ant_isaac.usda`
+`simulation/models/ant/ant_isaac.usda` (the MuJoCo model is
+`simulation/models/ant/ant.xml`)
 
 Config Presets
 --------------
 
-| Preset | Algorithm | Purpose |
-|--------|-----------|---------|
-| `ant_train_isaac_full_rsl_rl.pbtxt` | RSL-RL | Training (1000 iter) |
-| `ant_train_isaac_full_skrl.pbtxt`   | skrl   | Training (1000 iter) |
-| `ant_eval_isaac_full_rsl_rl.pbtxt`  | RSL-RL | Evaluation |
-| `ant_eval_isaac_full_skrl.pbtxt`    | skrl   | Evaluation |
-| `ant_trajectory_export_rsl_rl.pbtxt` | RSL-RL | Export trained policy as constant trajectory |
-| `ant_trajectory_export_skrl.pbtxt`   | skrl   | Export trained policy as constant trajectory |
+| Preset | Backend | Purpose |
+|--------|---------|---------|
+| `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
+| `ant_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
 
 Quick Start
 -----------
 
 ```bash
-# Train with RSL-RL
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant/ant_train_isaac_full_rsl_rl.pbtxt
+# MuJoCo interactive viewer
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_sim_interactive.pbtxt
 
-# Train with skrl
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
-
-# Evaluate (update checkpoint_path in the pbtxt first)
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant/ant_eval_isaac_full_rsl_rl.pbtxt
-
-# Export trained policy as a constant trajectory
-# (outputs .pbtxt trajectory files + .npy for MuJoCo verification)
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant/ant_trajectory_export_rsl_rl.pbtxt
-
-# Export with skrl checkpoint
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/ant/ant_trajectory_export_skrl.pbtxt
+# Isaac Sim viewer (see simulation/README.md for prerequisites)
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/ant/ant_sim_isaac.pbtxt
 ```
-
-Reward Structure
-----------------
-
-| Term              | Weight  | Notes |
-|-------------------|---------|-------|
-| progress          | +1.0    | Forward distance toward target |
-| alive             | +0.5    | Constant while not terminated |
-| upright           | +0.1    | Bonus when torso Z-up > 0.93 |
-| move_to_target    | +0.5    | Bonus when heading aligns > 0.8 |
-| action_l2         | -0.005  | Penalizes large actions |
-| energy            | -0.05   | Power consumption penalty |
-| joint_pos_limits  | -0.1    | Penalty near joint limits |

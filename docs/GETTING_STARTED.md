@@ -86,9 +86,9 @@ Calibrate operational limits for your servo motors before running.
 bazel run launcher:joshua_main
 ```
 
-## Simulation and RL (overview)
+## Simulation (overview)
 
-All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full pipeline docs: [ai/train/README.md](../ai/train/README.md).
+All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full simulation docs: [simulation/README.md](../simulation/README.md).
 
 **MuJoCo interactive viewer:**
 
@@ -96,13 +96,13 @@ All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. F
 bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
-**Isaac Lab** (requires Isaac Lab installed):
+**Isaac Sim viewer** (requires Isaac Lab installed):
 
 ```bash
 export ISAAC_LAB_PATH=~/IsaacLab
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_isaac.pbtxt
 ```
 
 ### Preset reference
@@ -110,14 +110,9 @@ bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_
 | Config | Backend | What it does |
 |--------|---------|-------------|
 | `ant/ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant/ant_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train Ant (skrl PPO) |
-| `ant/ant_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train Ant (RSL-RL PPO) |
-| `ant/ant_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate Ant (skrl) |
-| `ant/ant_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate Ant (RSL-RL) |
-| `trileg/trileg_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train 3-legged robot (skrl) |
-| `trileg/trileg_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train 3-legged robot (RSL-RL) |
-| `trileg/trileg_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (skrl) |
-| `trileg/trileg_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (RSL-RL) |
+| `ant/ant_sim_isaac.pbtxt` | Isaac Sim | Ant in the Isaac Sim viewer |
+| `trileg/trileg_sim_isaac.pbtxt` | Isaac Sim | 3-legged LEGO walker in Isaac Sim |
+| `bileg/bileg_sim_isaac.pbtxt` | Isaac Sim | 2-legged LEGO walker in Isaac Sim |
 | `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 | `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 

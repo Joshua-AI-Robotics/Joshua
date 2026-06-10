@@ -63,89 +63,28 @@ shins angle downward to contact the ground, supporting the torso.
 USD Asset
 ---------
 
-`simulation/models/trileg_isaac.usda`
+`simulation/models/trileg/trileg_isaac.usda`
 
 Config Presets
 --------------
 
-| Preset | Algorithm | Purpose |
-|--------|-----------|---------|
-| `trileg_train_isaac_full_rsl_rl.pbtxt` | RSL-RL | Training (1500 iter) |
-| `trileg_train_isaac_full_skrl.pbtxt`   | skrl   | Training (1500 iter) |
-| `trileg_eval_isaac_full_rsl_rl.pbtxt`  | RSL-RL | Evaluation |
-| `trileg_eval_isaac_full_skrl.pbtxt`    | skrl   | Evaluation |
-| `trileg_trajectory_export_rsl_rl.pbtxt` | RSL-RL | Export trained policy as constant trajectory |
-| `trileg_trajectory_export_skrl.pbtxt`   | skrl   | Export trained policy as constant trajectory |
+| Preset | Backend | Purpose |
+|--------|---------|---------|
+| `trileg_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
 
 Quick Start
 -----------
 
 ```bash
-# Train with RSL-RL
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg/trileg_train_isaac_full_rsl_rl.pbtxt
-
-# Train with skrl
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg/trileg_train_isaac_full_skrl.pbtxt
-
-# Evaluate (update checkpoint_path in the pbtxt first)
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg/trileg_eval_isaac_full_rsl_rl.pbtxt
-
-# Export trained policy as a constant trajectory
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg/trileg_trajectory_export_rsl_rl.pbtxt
-
-# Export with skrl checkpoint
-bazel run //ai/train:trainer -- \
-    --config config/config_preset/trileg/trileg_trajectory_export_skrl.pbtxt
+# Isaac Sim viewer (see simulation/README.md for prerequisites)
+bazel run //launcher:joshua_main -- \
+    --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
 ```
-
-Reward Structure
-----------------
-
-| Term              | Weight  | Notes |
-|-------------------|---------|-------|
-| progress          | +1.5    | Forward distance toward target |
-| alive             | +0.2    | Constant while not terminated |
-| upright           | +0.3    | Bonus when torso Z-up > 0.93 |
-| move_to_target    | +0.5    | Bonus when heading aligns > 0.8 |
-| lin_vel_z         | -0.5    | Strongly penalizes vertical bouncing / hopping |
-| ang_vel_xy        | -0.2    | Penalizes body roll/pitch rate |
-| flat_orientation  | -0.5    | Strongly penalizes tilting (prevents one-leg hopping) |
-| action_rate       | -0.05   | Penalizes rapid action changes |
-| joint_vel         | -0.005  | Penalizes high joint velocities |
-| action_l2         | -0.01   | Penalizes large actions |
-| energy            | -0.05   | Power consumption (gear_ratio 1.0) |
-| joint_pos_limits  | -0.1    | Penalty near joint limits (gear_ratio 1.0) |
 
 Physics Tuning
 --------------
 
 | Parameter          | Value | Purpose |
 |--------------------|-------|---------|
-| actuator_damping   | 10.0  | Physical resistance to fast joint movement |
-| action_scale       | 3.0   | Max torque multiplier (limits peak force) |
+| actuator_damping   | 15.0  | Physical resistance to fast joint movement |
 | actuator_stiffness | 0.0   | Pure torque control (no position PD) |
-
-Design Notes
-------------
-
-The reward structure is tuned to prevent the robot from discovering
-degenerate gaits (hopping on one leg, spinning). Key design choices:
-
-- **Strong anti-hop penalties**: `lin_vel_z` and `flat_orientation`
-  at -0.5 make jumping and tilting very costly, forcing the robot to
-  keep all three legs grounded.
-
-- **Moderate speed incentive**: `progress` at 1.5 (not 2.0+)
-  prevents the robot from sacrificing stability for forward speed.
-
-- **Joint speed limiting**: `joint_vel` at -0.005 combined with
-  `actuator_damping: 10.0` and `action_scale: 3.0` physically
-  limits how fast the legs can move, producing smoother gaits.
-
-- **Gear ratio 1.0**: The `energy` and `joint_pos_limits` terms use
-  `gear_ratio: 1.0` instead of the humanoid default to avoid
-  over-penalizing the smaller actuators.

@@ -3,7 +3,6 @@
 
 #include "config/config_utils.h"
 #include "launcher/simulation_launcher.h"
-#include "launcher/training_launcher.h"
 #include "node_generator/node_generator.h"
 #include "version.h"
 
@@ -28,10 +27,6 @@ int main(int argc, char* argv[]) {
 
   if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
     return launcher::RunSimulation(FLAGS_config, config);
-  }
-
-  if (config.general().operation_mode() == config::General::MODE_TRAINING) {
-    return launcher::RunTraining(FLAGS_config, config);
   }
 
   try {
