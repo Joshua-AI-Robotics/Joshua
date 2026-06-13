@@ -4,10 +4,10 @@ general {
   name: "so100"
 }
 simulation {
-  model_path: "simulation/models/so_arm100_scene.xml"
+  model_path: "simulation/models/so_arm100/so_arm100_scene.xml"
   mode: MODE_PASSIVE
   passive {
-    trajectory_path: "simulation/trajectories/example_trajectory.csv"
+    trajectory_path: "simulation/models/so_arm100/trajectories/example_trajectory.csv"
     speed: 1.0
   }
 }

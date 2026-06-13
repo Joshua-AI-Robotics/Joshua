@@ -12,6 +12,34 @@ enum SimulationMode {
   MODE_OFFSCREEN = 4;
 }
 
+enum SimulatorBackend {
+  // Unset is treated as MuJoCo for backward compatibility.
+  SIM_BACKEND_INVALID = 0;
+  SIM_BACKEND_MUJOCO = 1;
+  SIM_BACKEND_ISAAC_SIM = 2;
+}
+
+// Isaac Sim viewer configuration. Requires Isaac Lab installed on the
+// machine (set ISAAC_LAB_PATH or ISAAC_LAB_PYTHON); the simulation runs
+// in Isaac Lab's own Python environment as a subprocess.
+message IsaacSimConfig {
+  // USD file under simulation/models/ (e.g. "ant_isaac.usda").
+  string usd_filename = 1;
+  // Initial root position of the robot.
+  double init_pos_x = 2;
+  double init_pos_y = 3;
+  double init_pos_z = 4;
+  // Initial joint positions, keyed by joint-name regex pattern.
+  map<string, double> init_joint_pos = 5;
+  // Joint drive parameters (0 = pure torque control).
+  double actuator_stiffness = 6;
+  double actuator_damping = 7;
+  // Physics timestep in seconds. 0 = default (1/120 s).
+  float sim_dt = 8;
+  // Run without the viewer window (default false = show viewer).
+  bool headless = 9;
+}
+
 message TopicMapping {
   string topic = 1;
   ros2.data_type.Ros2DataType ros2_data_type = 2;
@@ -43,4 +71,8 @@ message SimulationConfig {
   PassiveConfig passive = 3;
   MirrorConfig mirror = 4;
   OffscreenConfig offscreen = 5;
+  // Which simulator to launch. Defaults to MuJoCo when unset.
+  SimulatorBackend backend = 6;
+  // Isaac Sim settings, used when backend is SIM_BACKEND_ISAAC_SIM.
+  IsaacSimConfig isaac = 7;
 }

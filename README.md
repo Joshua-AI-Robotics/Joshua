@@ -8,7 +8,7 @@ Joshua turns a single protobuf config into a running robot stack on ROS 2: hardw
 
 ![Project Joshua core concept](assets/images/joshua_summary.png)
 
-One config file is the source of truth—for example [`config/config_preset/so100/so100_teleoperate.pbtxt`](config/config_preset/so100/so100_teleoperate.pbtxt) defines the full SO100 teleop setup. See [Architecture](docs/ARCHITECTURE.md) for how config, protobuf packets, and ROS 2 fit together.
+One config file is the source of truth—for example [`config/config_preset/so100/teleoperate.pbtxt`](config/config_preset/so100/teleoperate.pbtxt) defines the full SO100 teleop setup. See [Architecture](docs/ARCHITECTURE.md) for how config, protobuf packets, and ROS 2 fit together.
 
 ## Quick start
 
@@ -56,7 +56,7 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | All docs index | [docs/README.md](docs/README.md) |
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
-| Simulation and RL | [ai/train/README.md](ai/train/README.md) |
+| Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](simulation/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |

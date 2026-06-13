@@ -12,7 +12,46 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
-- (nothing yet)
+- Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
+  new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
+  `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
+- `simulation/README.md` covering the MuJoCo modes and the Isaac Sim backend
+
+### Fixed
+
+- Launcher default `--config` and all docs now point to the renamed preset
+  `config/config_preset/so100/teleoperate.pbtxt` (old `so100_teleoperate.pbtxt`
+  references were broken since the 0.2.2 rename)
+- `docs/ARCHITECTURE.md` diagram updated to `joshua_summary.png` (old image was removed)
+- Docs preset table and `simulation/main.py` docstring corrected to the actual
+  `so100/sim_interactive.pbtxt` / `sim_mirror.pbtxt` filenames
+- Docker docs now include the required Compose `--profile` flags for ARM64, Jazzy,
+  and the web UI (`production` profile) services
+
+### Removed
+
+- RL training pipeline (`ai/train` trainer, Isaac Lab task/env builders,
+  trajectory export, `training.proto`, `training_launcher.cc`, the
+  `MODE_TRAINING` operation mode, and all 19 train/eval/export presets).
+  Isaac Sim remains available as a simulation backend
+- Unused RL-era pip dependencies (`jax[cuda12]`, `flax`, `optax`,
+  `stable-baselines3`, `mujoco-mjx`, direct `gymnasium`) -- nothing in the
+  codebase imported them; `requirements.lock` shrinks by ~140 lines
+- Orphaned `isaac_sim/` directory (typo-named, unreferenced legacy USD asset)
+- Empty `.gitmodules` and an accidentally committed `__pycache__` bytecode file
+- Debug `console.log` noise from the web UI hooks and Vite proxy config
+
+### Changed
+
+- `simulation/` restructured: backend code now lives in symmetric
+  `simulation/mujoco/` (engine + modes) and `simulation/isaac/`
+  (launcher + viewer) packages, and `simulation/models/` is organized
+  one directory per robot (`so_arm100/`, `ant/`, `trileg/`, `bileg/`);
+  preset `model_path`/`usd_filename` values updated accordingly
+- `.gitignore` covers `.venv/`, `node_modules/`, and common Python tooling caches
+- `scripts/README.md` documents all helper scripts (mock serial ports, Docker
+  entrypoint, SPIKE bridge and wave publisher); docs index links Pybricks guides
+- Code of Conduct now lists a concrete private reporting channel
 
 ## [0.2.3] - 2026-06-08
 

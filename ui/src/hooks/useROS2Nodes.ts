@@ -23,8 +23,6 @@ export function useROS2Nodes(bridgeUrl?: string) {
   const nodes = useMemo(() => {
     const nodeMap = new Map<string, ROS2Node>()
 
-    console.log('Parsing ROS2 nodes from events:', { eventCount: events.length })
-
     events.forEach((event: ZenohEvent) => {
       try {
         // Parse the Zenoh key to extract node information
@@ -47,7 +45,6 @@ export function useROS2Nodes(bridgeUrl?: string) {
             lastSeen: event.timestamp,
             heartbeat: event.timestamp,
           })
-          console.log('Parsed node:', { key, nodeName, actualNodeName, namespace })
         } else {
           // Fallback: try to parse from value or extract from key
           const value = event.value
@@ -60,9 +57,6 @@ export function useROS2Nodes(bridgeUrl?: string) {
               lastSeen: event.timestamp,
               heartbeat: event.timestamp,
             })
-            console.log('Parsed node (fallback):', { key, nodeName })
-          } else {
-            console.warn('Failed to parse node - no match and no value:', { key, value: event.value })
           }
         }
       } catch (err) {
@@ -80,7 +74,6 @@ export function useROS2Nodes(bridgeUrl?: string) {
       // If namespaces are equal, sort by name
       return a.name.localeCompare(b.name)
     })
-    console.log('Parsed nodes result:', { count: nodeArray.length, nodes: nodeArray })
     return nodeArray
   }, [events])
 

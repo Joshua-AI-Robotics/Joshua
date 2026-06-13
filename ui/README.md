@@ -13,10 +13,16 @@ Modern web-based UI for the Joshua robot control system, built with React, Tailw
 
 ## Running with Docker
 
-From the repo root, build and serve the UI with Docker Compose v2:
+From the repo root, build and serve the UI with Docker Compose v2 (the `joshua-ui` service is gated behind the `production` profile):
 
 ```bash
-docker compose up --build
+docker compose --profile production up --build joshua-ui
+```
+
+For development with hot reload, use the dev override instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
 ```
 
 See [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md#web-ui-with-docker) for prerequisites, dev compose overrides, and details.

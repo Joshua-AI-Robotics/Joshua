@@ -64,9 +64,7 @@ export function useZenohSSE(
     // Remove leading slash from path if present to avoid double slashes
     const cleanPath = path.startsWith('/') ? path.slice(1) : path
     const restUrl = `${baseUrl}/${cleanPath}`
-    
-    console.log('Starting Zenoh polling:', { restUrl, useProxy, bridgeUrl, path, pollInterval })
-    
+
     // Function to fetch and update data
     const fetchData = async () => {
       try {
@@ -110,11 +108,6 @@ export function useZenohSSE(
               )
               
               if (trulyNewEvents.length > 0) {
-                console.log('New events from poll:', { 
-                  count: trulyNewEvents.length, 
-                  path,
-                  totalEvents: prev.length + trulyNewEvents.length
-                })
                 // Prepend new events (newest first)
                 return [...trulyNewEvents, ...prev]
               }
@@ -127,12 +120,7 @@ export function useZenohSSE(
                 const updated = newEvents.find((e) => e.key === prevEvent.key)
                 return updated || prevEvent
               })
-              
-              console.log('Data updated:', { 
-                newCount: newEventsToAdd.length,
-                updatedCount: newEvents.length - newEventsToAdd.length,
-                path
-              })
+
               return [...updatedEvents, ...newEventsToAdd]
             }
           })

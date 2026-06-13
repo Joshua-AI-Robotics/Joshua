@@ -1,0 +1,30 @@
+# Trileg robot (3-legged LEGO walker) in the Isaac Sim viewer.
+#
+# Requires Isaac Lab installed on the machine:
+#   export ISAAC_LAB_PATH=~/IsaacLab
+#   export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
+#
+# Launch:
+#   bazel run //launcher:joshua_main -- \
+#     --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
+
+general {
+  operation_mode: MODE_SIMULATION
+  name: "trileg"
+}
+simulation {
+  backend: SIM_BACKEND_ISAAC_SIM
+  isaac {
+    usd_filename: "trileg/trileg_isaac.usda"
+    init_pos_z: 0.45
+    init_joint_pos {
+      key: "yaw_.*"
+      value: 0.0
+    }
+    init_joint_pos {
+      key: "pitch_.*"
+      value: 0.9
+    }
+    actuator_damping: 15.0
+  }
+}

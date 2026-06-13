@@ -2,7 +2,7 @@
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \
-#     --config=config/config_preset/so100/so100_arm_trajectory_example.pbtxt
+#     --config=config/config_preset/so100/trajectory_example.pbtxt
 #
 # Topics use Float32 on /<device_id>/position. Positions are raw
 # servo ticks: first all joints to span midpoint, then coordinated poses inside

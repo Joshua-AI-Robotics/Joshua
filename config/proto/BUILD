@@ -32,7 +32,6 @@ proto_library(
     deps = [
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
-        "//ai/proto:training_proto",
     ],
     visibility = ["//visibility:public"],
 )

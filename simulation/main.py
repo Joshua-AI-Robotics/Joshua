@@ -1,27 +1,45 @@
-"""MuJoCo simulation entry point (visualization modes only).
+"""Simulation entry point (MuJoCo and Isaac Sim backends).
 
 Usage (unified config -- launched from joshua_main or standalone):
     bazel run //launcher:joshua_main -- \
-        --config config/config_preset/so100/so_arm100_sim_interactive.pbtxt
+        --config config/config_preset/so100/sim_interactive.pbtxt
 
     bazel run //simulation:simulation -- \
-        --config config/config_preset/so100/so_arm100_sim_mirror.pbtxt --mode interactive
+        --config config/config_preset/so100/sim_mirror.pbtxt --mode interactive
+
+    # Isaac Sim viewer (requires Isaac Lab installed; see simulation/README.md)
+    bazel run //launcher:joshua_main -- \
+        --config config/config_preset/ant/ant_sim_isaac.pbtxt
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.
-Training workflows (RL, imitation, eval) use ai/train/trainer.py instead.
 """
 
+import os
 import sys
-from typing import Optional, Tuple
 
-import gflags
-import glog
-from google.protobuf import text_format
+# Python prepends the script's own directory (simulation/) to sys.path,
+# which makes the local mujoco/ backend package shadow the pip-installed
+# mujoco engine. Drop that entry -- every import in this project is
+# absolute from the workspace root. realpath() is needed because under
+# Bazel the script is a symlink into the source tree.
+_SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.getcwd()) != _SCRIPT_DIR]
 
-from config.proto import config_pb2
-from simulation.modes import interactive, mirror, offscreen, passive
-from simulation.mujoco_engine import MuJoCoEngine
-from simulation.proto import simulation_pb2
+from typing import Optional, Tuple  # noqa: E402
+
+import gflags  # noqa: E402
+import glog  # noqa: E402
+from google.protobuf import text_format  # noqa: E402
+
+from config.proto import config_pb2  # noqa: E402
+from simulation.mujoco.engine import MuJoCoEngine  # noqa: E402
+from simulation.mujoco.modes import (  # noqa: E402
+    interactive,
+    mirror,
+    offscreen,
+    passive,
+)
+from simulation.proto import simulation_pb2  # noqa: E402
 
 FLAGS = gflags.FLAGS
 
@@ -89,6 +107,13 @@ def main(argv):
         sys.exit(1)
 
     config, _ = _load_config(FLAGS.config)
+
+    if config.backend == simulation_pb2.SIM_BACKEND_ISAAC_SIM:
+        from simulation.isaac import launcher as isaac_launcher
+
+        glog.info(f"Config: {FLAGS.config}")
+        glog.info(f"  backend: ISAAC_SIM, usd: {config.isaac.usd_filename}")
+        sys.exit(isaac_launcher.launch(config.isaac))
 
     if FLAGS.mode:
         override = FLAGS.mode.lower()

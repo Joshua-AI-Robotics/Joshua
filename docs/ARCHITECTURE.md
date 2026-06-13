@@ -2,9 +2,9 @@
 
 Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the React web control panel.
 
-![Project Joshua core concept](../assets/images/project_joshua_diagram_napkin.png)
+![Project Joshua core concept](../assets/images/joshua_summary.png)
 
-A representative preset: [`config/config_preset/so100/so100_teleoperate.pbtxt`](../config/config_preset/so100/so100_teleoperate.pbtxt).
+A representative preset: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt).
 
 ## Configuration layer (Protobuf)
 
@@ -57,6 +57,7 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
-- [ai/train/README.md](../ai/train/README.md) — data collection, training, sim backends
+- [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
+- [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
 - [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
 - [node_generator/README.md](../node_generator/README.md) — node generation from config

@@ -22,10 +22,10 @@ Pick the image that matches your host OS and target ROS distribution:
 | Host | ROS | Build command |
 |------|-----|---------------|
 | Ubuntu (x86_64) | Humble (22.04) | `docker compose build joshua-u22` |
-| Ubuntu (ARM64) | Humble (22.04) | `docker compose build joshua-u22-arm64` |
-| Ubuntu (x86_64) | Jazzy (24.04) | `docker compose build joshua-u24` |
+| Ubuntu (ARM64) | Humble (22.04) | `docker compose --profile arm64 build joshua-u22-arm64` |
+| Ubuntu (x86_64) | Jazzy (24.04) | `docker compose --profile u24 build joshua-u24` |
 
-ARM64 variants exist for `joshua-u24` as well (e.g. Jetson).
+The ARM64 and Jazzy services are gated behind Compose profiles (`arm64`, `u24`), so the `--profile` flag is required when building them. An ARM64 variant exists for `joshua-u24` as well (e.g. Jetson): `docker compose --profile arm64 build joshua-u24-arm64`.
 
 ### Run an interactive shell
 
@@ -71,14 +71,14 @@ bazel run launcher:joshua_main
 Pass a preset config when needed:
 
 ```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/so100/so100_teleoperate.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/so100/teleoperate.pbtxt
 ```
 
 ## Example: SO100 teleoperation
 
 This preset runs SO100 in teleoperation mode (follower and lead arm per config):
 
-- Config: [`config/config_preset/so100/so100_teleoperate.pbtxt`](../config/config_preset/so100/so100_teleoperate.pbtxt)
+- Config: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt)
 
 Calibrate operational limits for your servo motors before running.
 
@@ -86,9 +86,9 @@ Calibrate operational limits for your servo motors before running.
 bazel run launcher:joshua_main
 ```
 
-## Simulation and RL (overview)
+## Simulation (overview)
 
-All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full pipeline docs: [ai/train/README.md](../ai/train/README.md).
+All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full simulation docs: [simulation/README.md](../simulation/README.md).
 
 **MuJoCo interactive viewer:**
 
@@ -96,19 +96,13 @@ All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. F
 bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
-**MJX training (GPU, JAX):**
-
-```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_mjx.pbtxt
-```
-
-**Isaac Lab** (requires Isaac Lab installed):
+**Isaac Sim viewer** (requires Isaac Lab installed):
 
 ```bash
 export ISAAC_LAB_PATH=~/IsaacLab
 export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
 
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_isaac_full_skrl.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_isaac.pbtxt
 ```
 
 ### Preset reference
@@ -116,16 +110,11 @@ bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_train_
 | Config | Backend | What it does |
 |--------|---------|-------------|
 | `ant/ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant/ant_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train Ant (skrl PPO) |
-| `ant/ant_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train Ant (RSL-RL PPO) |
-| `ant/ant_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate Ant (skrl) |
-| `ant/ant_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate Ant (RSL-RL) |
-| `trileg/trileg_train_isaac_full_skrl.pbtxt` | Isaac Sim | Train 3-legged robot (skrl) |
-| `trileg/trileg_train_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Train 3-legged robot (RSL-RL) |
-| `trileg/trileg_eval_isaac_full_skrl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (skrl) |
-| `trileg/trileg_eval_isaac_full_rsl_rl.pbtxt` | Isaac Sim | Evaluate 3-legged robot (RSL-RL) |
-| `so100/so100_teleoperate.pbtxt` | Hardware | SO100 teleoperation |
-| `so100/so_arm100_sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
+| `ant/ant_sim_isaac.pbtxt` | Isaac Sim | Ant in the Isaac Sim viewer |
+| `trileg/trileg_sim_isaac.pbtxt` | Isaac Sim | 3-legged LEGO walker in Isaac Sim |
+| `bileg/bileg_sim_isaac.pbtxt` | Isaac Sim | 2-legged LEGO walker in Isaac Sim |
+| `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
+| `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
 ## Web UI with Docker
 
@@ -144,18 +133,22 @@ docker compose version
 
 ### Build and run
 
-```bash
-docker compose up --build
-docker compose up -d --build   # detached
-docker compose logs -f
-docker compose down
-```
-
-**Development** (Zenoh bridge and demo nodes):
+The UI service is gated behind the `production` Compose profile:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose --profile production up --build joshua-ui
+docker compose --profile production up -d --build joshua-ui   # detached
+docker compose logs -f joshua-ui
+docker compose --profile production down
 ```
+
+**Development** (UI with hot reload and Zenoh bridge; add `ros2-demo-nodes` for demo traffic):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+```
+
+Do not start `joshua-ui` and `joshua-ui-dev` at the same time (both use port 3000).
 
 Open [http://localhost:3000](http://localhost:3000).
 
