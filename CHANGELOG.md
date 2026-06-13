@@ -37,7 +37,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - Unused RL-era pip dependencies (`jax[cuda12]`, `flax`, `optax`,
   `stable-baselines3`, `mujoco-mjx`, direct `gymnasium`) -- nothing in the
   codebase imported them; `requirements.lock` shrinks by ~140 lines
-- Orphaned `issac_sim/` directory (typo-named, unreferenced legacy USD asset)
+- Orphaned `isaac_sim/` directory (typo-named, unreferenced legacy USD asset)
 - Empty `.gitmodules` and an accidentally committed `__pycache__` bytecode file
 - Debug `console.log` noise from the web UI hooks and Vite proxy config
 
