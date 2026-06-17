@@ -17,13 +17,14 @@ py_proto_library(
 )
 
 py_library(
-    name = "smolvla",
-    srcs = ["smolvla.py"],
+    name = "adapter",
+    srcs = ["adapter.py"],
     deps = [
-        "//ai/models:model_base",
-        "//robot/action/proto:action_packet_py_proto",
-        ":smolvla_config_py_proto",
-        "//ros2:image_converter",
+        "//ai/proto:ai_model_py_proto",
+        "//ai/runtime:adapter",
+        "//ai/runtime:types",
+        "//config/proto:config_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
         requirement("numpy"),
         requirement("scipy"),
         requirement("protobuf"),

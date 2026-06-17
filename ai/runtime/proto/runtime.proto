@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package ai.runtime;
+
+// Logical role of a subscription/publisher channel, derived from the
+// channel's ros2.data_type.Ros2DataType so adapters can reason about
+// inputs without depending on ROS enums.
+enum ChannelRole {
+  UNKNOWN = 0;
+  IMAGE = 1;
+  SCALAR = 2;
+}
+
+// How the host drives an adapter.
+enum TriggerMode {
+  // The adapter is invoked on every decoded observation and decides
+  // internally when to emit actions (buffering/sync lives in the adapter).
+  EVENT = 0;
+  // The host additionally calls on_tick at a fixed rate (tick_hz) for
+  // deterministic control loops.
+  TICK = 1;
+}
+
+// Static schema/timing contract an adapter declares for host validation.
+// The host checks this against the node config at startup and fails fast
+// on mismatch (missing subscriptions/publishers, bad tick rate).
+message AdapterSpec {
+  TriggerMode trigger_mode = 1;
+  float tick_hz = 2;
+  uint32 min_subscriptions = 3;
+  uint32 min_publishers = 4;
+}

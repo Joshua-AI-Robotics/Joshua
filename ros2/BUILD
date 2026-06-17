@@ -56,15 +56,10 @@ ros2_py_binary(
     main = "inference.py",
     set_up_ament = True,
     deps = [
+        "//ai/runtime:host",
         "//config/proto:config_py_proto",
-        "//robot/action/proto:action_packet_py_proto",
-        "//ros2:ros2_type_resolver",
         "//ros2:node_runner_py",
-        "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-        "//ai/models:model_registry",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
     visibility = ["//visibility:public"],
     # Note: rclpy is provided by system Python when ROS2 is sourced

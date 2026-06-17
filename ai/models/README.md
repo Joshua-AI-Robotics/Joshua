@@ -1,88 +1,51 @@
-# Model Registry
+# Models (inference plug-ins)
 
-The Model Registry (`model_registry.py`) is the central place where AI model implementations are mapped to their configuration enums. This allows the inference system to dynamically instantiate the correct model class based on the configuration provided.
+Each model is a **self-contained plug-in** in its own directory holding
+both its config schema and its adapter implementation. The model-agnostic
+engine lives in [`ai/runtime`](../runtime); this package is the set of
+plug-ins plus the single registry that wires them in.
 
-## How it Works
+## Layout
 
-The `MODEL_REGISTRY` dictionary maps a `ModelType` enum value (defined in `ai/proto/ai_model.proto`) to a Python class that inherits from `ModelBase`.
-
-When the inference node starts, it looks up the `model_type` from the configuration in this registry to find the corresponding class to instantiate.
-
-## How to Add a New Model
-
-To add a new AI model to the system, follow these steps:
-
-### 1. Create the Model Class
-
-Create a new directory for your model (e.g., `ai/models/my_new_model/`) and implement your model class inheriting from `ModelBase`.
-
-```python
-from ai.models.model_base import ModelBase
-
-class MyNewModel(ModelBase):
-    def __init__(self, config):
-        super().__init__(config)
-        # Your initialization here
-
-    def handle_input(self, subscription_index, data, publish_callback):
-        # Your logic here
-        pass
-    
-    # Implement other abstract methods...
+```text
+ai/models/
+  registry.py            # ModelType -> adapter wiring (the one aggregation point)
+  smolvla/
+    smolvla_config.proto # config schema
+    adapter.py           # SmolVlaAdapter
+    BUILD                # proto targets + adapter py_library (heavy deps)
+  random_noise/
+    random_noise_config.proto
+    adapter.py           # RandomNoiseAdapter
+    BUILD
 ```
 
-### 2. Update Protocol Buffers
+| Concern | Location |
+| --- | --- |
+| Model selection enum | `ai/proto/ai_model.proto` (`ModelType`) + `SingleModel` oneof |
+| Per-model config message | `ai/models/<model>/<model>_config.proto` |
+| Per-model adapter | `ai/models/<model>/adapter.py` |
+| Registry (wiring) | `ai/models/registry.py` |
+| Engine (host, contracts) | `ai/runtime/` |
 
-Modify `ai/proto/ai_model.proto` to register your new model type.
+## How to add a model
 
-1.  Add a new enum value to `ModelType`:
-    ```protobuf
-    enum ModelType {
-      // ...
-      MY_NEW_MODEL = 2;
-    }
-    ```
+Adding a model touches only this package and the `ai_model.proto` catalog —
+never the engine. In short:
 
-2.  Add your model's specific configuration message (if any) to the `oneof model_config` in `SingleModel`:
-    ```protobuf
-    message SingleModel {
-      // ...
-      oneof model_config {
-        RandomNoiseConfig random_noise_config = 6;
-        MyNewModelConfig my_new_model_config = 7;
-      }
-    }
-    ```
+1. Create `ai/models/<model>/` with `<model>_config.proto` + `adapter.py` +
+   `BUILD`.
+2. Register it in the catalog: new `ModelType` value and `oneof` field in
+   `ai/proto/ai_model.proto` (+ proto dep in `ai/proto/BUILD`).
+3. Wire it into `ai/models/registry.py` (lazy loader + `ADAPTER_LOADERS`)
+   and add the dep in `ai/models/BUILD`.
+4. Add an `ai.models.single_models` entry in a config preset.
 
-### 3. Register the Model
+`//ros2:inference` then picks it up transitively via the host.
 
-Update `ai/models/model_registry.py` to include your new model.
-
-1.  Import your model class:
-    ```python
-    from ai.models.my_new_model.my_new_model import MyNewModel
-    ```
-
-2.  Add it to the `MODEL_REGISTRY`:
-    ```python
-    MODEL_REGISTRY: Dict[int, Type[ModelBase]] = {
-        ai_model_pb2.ModelType.RANDOM_NOISE: RandomNoise,
-        ai_model_pb2.ModelType.MY_NEW_MODEL: MyNewModel,
-    }
-    ```
-
-### 4. Update Build Dependencies
-
-Finally, ensure the build system knows about the dependency. Update `ai/models/BUILD`:
-
-```python
-py_library(
-    name = "model_registry",
-    srcs = ["model_registry.py"],
-    deps = [
-        # ... other deps ...
-        "//ai/models/my_new_model:my_new_model",  # Add your model target here
-    ],
-)
-```
-
+> **Full walkthrough:** [`ADDING_AN_ADAPTER.md`](ADDING_AN_ADAPTER.md) — an
+> extremely detailed, from-scratch guide with the complete adapter
+> contract, the host lifecycle/call order, trigger modes, a full worked
+> example (a `TICK`-mode EMA smoother), publishing/normalization
+> semantics, threading notes, unit-testing without ROS, common pitfalls,
+> and a final checklist.
