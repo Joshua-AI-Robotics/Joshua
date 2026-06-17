@@ -6,6 +6,7 @@
 | Config, protos, data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | AI pipeline architecture RFC | [AI_PIPELINE_RFC.md](AI_PIPELINE_RFC.md) |
 | AI pipeline phase-1 implementation plan | [AI_PIPELINE_PHASE1_TASKS.md](AI_PIPELINE_PHASE1_TASKS.md) |
+| Training architecture RFC (IL + sim RL) | [TRAINING_RFC.md](TRAINING_RFC.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
 | Data collection (DataStore) | [ai/train/README.md](../ai/train/README.md) |
