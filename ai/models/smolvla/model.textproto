@@ -1,0 +1,6 @@
+name: "smolvla"
+model_type: SMOLVLA
+entrypoint: "ai.models.smolvla.adapter:SmolVlaAdapter"
+requirements_lock: "ai/models/smolvla/requirements.lock"
+python_version: "3.10"
+isolation: REEXEC

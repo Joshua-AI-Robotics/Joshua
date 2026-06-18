@@ -29,6 +29,7 @@ from ai.runtime.types import (
     TriggerMode,
 )
 from config.proto import config_pb2
+from robot.action.proto import action_pb2
 from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.packet_parser import denormalize_position_value
@@ -60,7 +61,7 @@ class InferenceHost(Node):
         self._spec = self.adapter.spec()
         self._validate_against_spec()
 
-        self._publishers: List[_Publisher] = []
+        self._pub_handles: List[_Publisher] = []
         self._setup_publishers()
 
         self._channels: List[ChannelSpec] = []
@@ -133,7 +134,7 @@ class InferenceHost(Node):
         for publisher in self.single_model_config.node.publishers:
             message_type = resolve_message_class_from_enum(publisher.ros2_data_type)
             instance = self.create_publisher(message_type, publisher.topic, qos_setting)
-            self._publishers.append(
+            self._pub_handles.append(
                 _Publisher(
                     instance=instance,
                     topic=publisher.topic,
@@ -212,12 +213,12 @@ class InferenceHost(Node):
 
     def _publish_one(self, command: ActionCommand) -> None:
         try:
-            if not 0 <= command.publisher_index < len(self._publishers):
+            if not 0 <= command.publisher_index < len(self._pub_handles):
                 raise ValueError(
                     f"publisher_index {command.publisher_index} out of range "
-                    f"(have {len(self._publishers)} publishers)."
+                    f"(have {len(self._pub_handles)} publishers)."
                 )
-            publisher = self._publishers[command.publisher_index]
+            publisher = self._pub_handles[command.publisher_index]
 
             if publisher.ros2_data_type != ros2_data_type_pb2.Ros2DataType.FLOAT32:
                 raise ValueError(
@@ -247,7 +248,7 @@ class InferenceHost(Node):
         self, topic: str
     ) -> Optional[tuple[float, float]]:
         for single_action in self.config.robot.actions.single_actions:
-            if single_action.action_type != single_action.ACTUATOR:
+            if single_action.action_type != action_pb2.ActionType.ACTUATOR:
                 continue
             for subscription in single_action.node.subscriptions:
                 if subscription.topic == topic:

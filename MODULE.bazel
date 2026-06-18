@@ -57,6 +57,24 @@ pip.parse(
 use_repo(pip, "project_joshua_pip_deps")
 use_repo(pip, "project_joshua_pip_deps_312")
 
+# Per-model pip hubs (isolated dependency closures).
+pip.parse(
+    hub_name = "joshua_pip_smolvla",
+    python_version = "3.10",
+    requirements_lock = "//ai/models/smolvla:requirements.lock",
+    timeout = 3600,
+)
+
+pip.parse(
+    hub_name = "joshua_pip_smolvla_312",
+    python_version = "3.12",
+    requirements_lock = "//ai/models/smolvla:requirements_3.12.lock",
+    timeout = 3600,
+)
+
+use_repo(pip, "joshua_pip_smolvla")
+use_repo(pip, "joshua_pip_smolvla_312")
+
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
 ros2_libs = use_repo_rule("//:ros2_deps_from_system.bzl", "ros2_libs_repo")

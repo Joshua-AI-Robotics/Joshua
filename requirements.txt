@@ -1,22 +1,18 @@
-# Note: rclpy is NOT on PyPI - it comes from system ROS2 installation
+# Platform base dependencies (shared: ROS nodes, simulation, training).
+# Model-specific deps (torch, lerobot, transformers, etc.) live in
+# ai/models/<model>/requirements.in.
+#
+# Note: rclpy is NOT on PyPI - it comes from system ROS2 installation.
 # It will be available via PYTHONPATH in .bazelrc
 
-# Project dependencies
 protobuf==5.29.5
 numpy>=2.0.0
-scipy==1.15.3
-torch==2.7.0
-transformers==4.53.2
-accelerate==1.11.0
-opencv-python==4.11.0.86
-Pillow==11.3.0
-pandas==2.2.3
-pyarrow==19.0.1
-lerobot==0.4.1
-num2words==0.5.13
-sympy>=1.13.0
 glog
 mujoco>=3.1.0
 datasets>=2.14.0
+opencv-python==4.11.0.86
+Pillow==11.3.0
+PyYAML
+python-gflags
 setuptools
-tzdata>=2024.1  # Required by pandas 2.2+ (included in both Py3.10 and Py3.12 builds)
+tzdata>=2024.1

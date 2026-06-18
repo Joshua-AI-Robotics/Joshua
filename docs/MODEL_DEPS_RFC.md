@@ -198,13 +198,13 @@ One generic, model-free launcher. At runtime it reads the config, resolves the
 selected model's locked closure to a cached virtualenv, and `exec`s the host
 inside it. No binary per model; models are *data* (adapter + lock + manifest).
 
-**3a. Launcher / bootstrap** (runs in a minimal base interpreter):
+**3a. Inference launcher** (runs in a minimal base interpreter):
 
 ```python
-# ai/runtime/bootstrap.py
+# ai/runtime/inference_launcher.py
 import os, sys
 from ai.runtime.manifest import resolve_model         # reads manifests
-from ai.runtime.envmgr import ensure_model_env
+from ai.runtime.environment_manager import ensure_model_env
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -222,7 +222,7 @@ def main(argv=None):
 **3b. Environment manager** (content-hash cached; uses `uv` for speed):
 
 ```python
-# ai/runtime/envmgr.py
+# ai/runtime/environment_manager.py
 import hashlib, os, subprocess
 from pathlib import Path
 
@@ -260,7 +260,7 @@ Locks remain the source of truth, so prebuilt == reproducible.
 
 **3e. Launcher integration.** Today `ros2/inference.py` calls
 `node_runner.run_node(InferenceHost, ...)`. Under Option 3, `ros2/inference.py`
-becomes the thin `bootstrap.main`, and a new `ai/runtime/host_main.py` is the
+becomes the thin `inference_launcher.main`, and a new `ai/runtime/host_main.py` is the
 post-exec entry that constructs `InferenceHost`. The C++ `node_generator` that
 spawns nodes is unchanged — it still launches one `inference` target.
 
@@ -319,7 +319,7 @@ host -> gRPC/ROS2 -> model container (independent deploy, GPU scheduling, scale)
 ## 6. Manifest schema (the declarative source of truth)
 
 A per-model manifest ties everything together and is what the registry,
-bootstrap, env manager, and prebuild step all read. Proposed proto:
+inference launcher, environment manager, and prebuild step all read. Proposed proto:
 
 ```proto
 // ai/runtime/proto/model_manifest.proto
@@ -385,7 +385,7 @@ re-exec machinery.
 - **Phase 1:** Land the `ModelManifest` proto + generate the registry from it.
   Pure seam work; no behavior change.
 - **Phase 2 (when a 2nd genuinely-conflicting model arrives):** Implement
-  Option 3 — `bootstrap.py`, `envmgr.py`, `host_main.py`, `tools/lock_model.sh`,
+  Option 3 — `inference_launcher.py`, `environment_manager.py`, `host_main.py`, `tools/lock_model.sh`,
   CI prebuild. Migrate per-model pins out of the global lock into per-model
   locks.
 - **Phase 3 (if/when needed):** Option 4 for a cross-Python model; Option 5

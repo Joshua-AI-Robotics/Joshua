@@ -22,6 +22,25 @@ py_library(
 )
 
 py_library(
+    name = "manifest",
+    srcs = ["manifest.py"],
+    deps = [
+        ":adapter",
+        "//ai/proto:ai_model_py_proto",
+        "//ai/runtime/proto:model_manifest_py_proto",
+    ] + requirement("protobuf"),
+)
+
+py_library(
+    name = "environment_manager",
+    srcs = ["environment_manager.py"],
+    deps = [
+        ":manifest",
+        "//ai/runtime/proto:model_manifest_py_proto",
+    ],
+)
+
+py_library(
     name = "observation_codec",
     srcs = ["observation_codec.py"],
     deps = [
@@ -41,9 +60,37 @@ py_library(
         "//ai/models:registry",
         "//ai/proto:ai_model_py_proto",
         "//config/proto:config_py_proto",
+        "//robot/action/proto:action_py_proto",
         "//ros2:ros2_type_resolver",
         "//ros2/proto:ros2_data_type_py_proto",
         "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
+    ] + requirement("protobuf"),
+)
+
+py_library(
+    name = "host_main",
+    srcs = ["host_main.py"],
+    deps = [
+        ":host",
+        "//ros2/utils:ros_python_paths_py",
+        "//ros2:node_runner_py",
+    ],
+)
+
+py_library(
+    name = "inference_launcher",
+    srcs = ["inference_launcher.py"],
+    data = [
+        "//ai/models:sources",
+        "//ai/models:manifests",
+        "//ai/models/smolvla:requirements.lock",
+    ],
+    deps = [
+        ":environment_manager",
+        ":host_main",
+        ":manifest",
+        "//ai/runtime/proto:model_manifest_py_proto",
+        "//config/proto:config_py_proto",
     ] + requirement("protobuf"),
 )

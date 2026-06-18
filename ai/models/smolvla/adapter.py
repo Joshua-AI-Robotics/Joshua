@@ -37,7 +37,7 @@ from ros2.proto import ros2_data_type_pb2
 class SmolVlaAdapter(InferenceAdapter):
     """SmolVLA policy adapter for multi-camera manipulation."""
 
-    # TODO(ulee): make this configurable.
+    # TODO(hmoon): make this configurable.
     TASK_DESCRIPTION = (
         "Pick up the white object and place it in the center of the table."
     )

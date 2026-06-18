@@ -5,6 +5,8 @@ load("@rules_python//python:proto.bzl", "py_proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["model.textproto"])
+
 proto_library(
     name = "random_noise_config_proto",
     srcs = ["random_noise_config.proto"],
@@ -19,6 +21,7 @@ py_proto_library(
 py_library(
     name = "adapter",
     srcs = ["adapter.py"],
+    data = ["model.textproto"],
     deps = [
         "//ai/proto:ai_model_py_proto",
         "//ai/runtime:adapter",

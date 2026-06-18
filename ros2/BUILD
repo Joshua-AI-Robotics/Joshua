@@ -27,6 +27,7 @@ py_library(
     deps = [
         "//config/proto:config_py_proto",
         "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:ros_python_paths_py",
         # Note: rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
     ] + requirement("protobuf") + requirement("PyYAML"),
@@ -52,11 +53,15 @@ ros2_py_binary(
     ],
     data = [
         "//config/config_preset:config_presets",
+        "//ai/models:sources",
+        "//ai/models:manifests",
+        "//ai/models/smolvla:requirements.lock",
+        "//ai/runtime:inference_launcher",
     ],
     main = "inference.py",
     set_up_ament = True,
     deps = [
-        "//ai/runtime:host",
+        "//ai/runtime:inference_launcher",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
         "//ros2/proto:trajectory_py_proto",
