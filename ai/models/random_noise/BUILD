@@ -24,8 +24,8 @@ py_library(
     data = ["model.textproto"],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        "//ai/runtime:adapter",
-        "//ai/runtime:types",
+        "//ai/inference:adapter",
+        "//ai/inference:types",
         "//config/proto:config_py_proto",
         requirement("protobuf"),
     ],

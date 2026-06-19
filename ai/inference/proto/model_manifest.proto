@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ai.runtime;
+package ai.inference;
 
 import "ai/proto/ai_model.proto";
 

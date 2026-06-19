@@ -2,12 +2,12 @@
 
 Thin wrapper: resolves the model from config and re-execs into the model's
 isolated environment when required. ROS orchestration lives in
-``ai.runtime.host.InferenceHost``; model behavior lives in adapters.
+``ai.inference.host.InferenceHost``; model behavior lives in adapters.
 """
 
 import sys
 
-from ai.runtime.inference_launcher import main as inference_launcher_main
+from ai.inference.inference_launcher import main as inference_launcher_main
 
 
 def main(argv=None):

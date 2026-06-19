@@ -12,8 +12,8 @@ from typing import List, Optional
 
 from ai.proto.ai_model_pb2 import SingleModel
 
-from ai.runtime.adapter import InferenceAdapter
-from ai.runtime.types import ActionCommand, AdapterSpec, Observation, TriggerMode
+from ai.inference.adapter import InferenceAdapter
+from ai.inference.types import ActionCommand, AdapterSpec, Observation, TriggerMode
 from config.proto import config_pb2
 
 

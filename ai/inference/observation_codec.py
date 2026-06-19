@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.runtime.types import ChannelRole
+from ai.inference.types import ChannelRole
 from ros2.image_converter import ImageConverter
 from ros2.proto import ros2_data_type_pb2
 

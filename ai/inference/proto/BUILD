@@ -4,8 +4,8 @@ load("@rules_python//python:proto.bzl", "py_proto_library")
 package(default_visibility = ["//visibility:public"])
 
 proto_library(
-    name = "runtime_proto",
-    srcs = ["runtime.proto"],
+    name = "inference_proto",
+    srcs = ["inference.proto"],
 )
 
 proto_library(
@@ -15,9 +15,9 @@ proto_library(
 )
 
 py_proto_library(
-    name = "runtime_py_proto",
+    name = "inference_py_proto",
     visibility = ["//visibility:public"],
-    deps = [":runtime_proto"],
+    deps = [":inference_proto"],
 )
 
 py_proto_library(

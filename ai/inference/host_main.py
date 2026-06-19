@@ -9,7 +9,7 @@ from ros2.utils.ros_python_paths import setup_import_paths
 
 setup_import_paths()
 
-from ai.runtime.host import InferenceHost  # noqa: E402
+from ai.inference.host import InferenceHost  # noqa: E402
 from ros2 import node_runner as node_runner_py  # noqa: E402
 
 

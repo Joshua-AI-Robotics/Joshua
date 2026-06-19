@@ -20,8 +20,8 @@ from std_msgs.msg import Float32
 
 from ai.models import registry
 from ai.proto import ai_model_pb2
-from ai.runtime.observation_codec import ObservationCodec
-from ai.runtime.types import (
+from ai.inference.observation_codec import ObservationCodec
+from ai.inference.types import (
     ActionCommand,
     ChannelRole,
     ChannelSpec,

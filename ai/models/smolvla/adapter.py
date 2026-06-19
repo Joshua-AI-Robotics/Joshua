@@ -22,8 +22,8 @@ from ai.proto.ai_model_pb2 import SingleModel
 from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
 
-from ai.runtime.adapter import InferenceAdapter
-from ai.runtime.types import (
+from ai.inference.adapter import InferenceAdapter
+from ai.inference.types import (
     ActionCommand,
     AdapterSpec,
     ChannelRole,

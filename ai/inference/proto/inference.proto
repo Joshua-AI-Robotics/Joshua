@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ai.runtime;
+package ai.inference;
 
 // Logical role of a subscription/publisher channel, derived from the
 // channel's ros2.data_type.Ros2DataType so adapters can reason about

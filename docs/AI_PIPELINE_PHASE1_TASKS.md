@@ -59,10 +59,10 @@ This is an implementation checklist for Phase 1: interfaces, inference modulariz
 ## A3. Define inference adapter contract
 
 **Files**
-- new `ai/runtime/adapter.py`
-- new `ai/runtime/types.py`
-- new `ai/runtime/registry.py`
-- new `ai/runtime/__init__.py`
+- new `ai/inference/adapter.py`
+- new `ai/inference/types.py`
+- new `ai/inference/registry.py`
+- new `ai/inference/__init__.py`
 
 **Tasks**
 - Define `InferenceAdapter` interface:
@@ -85,7 +85,7 @@ This is an implementation checklist for Phase 1: interfaces, inference modulariz
 - `ai/models/model_registry.py` (or bridge registry temporarily)
 - `ai/models/smolvla/smolvla.py`
 - `ai/models/random_noise/random_noise.py`
-- new `ai/runtime/host.py`
+- new `ai/inference/host.py`
 
 **Tasks**
 - Keep `ros2/inference.py` as host shell (node lifecycle, buffering, publish).
@@ -99,7 +99,7 @@ This is an implementation checklist for Phase 1: interfaces, inference modulariz
 ## B2. Add startup schema checks
 
 **Files**
-- `ai/runtime/host.py`
+- `ai/inference/host.py`
 - `ros2/inference.py`
 
 **Tasks**

@@ -52,8 +52,8 @@ binary**, so all their packages land in one runfiles tree and one Python
 interpreter:
 
 ```
-ros2/BUILD: ros2_py_binary(name="inference", deps=["//ai/runtime:host", ...])
-ai/runtime/host.py: from ai.models import registry  ->  imports adapters
+ros2/BUILD: ros2_py_binary(name="inference", deps=["//ai/inference:host", ...])
+ai/inference/host.py: from ai.models import registry  ->  imports adapters
 ```
 
 A Python process can hold exactly **one** version of any package. Even if we
@@ -87,8 +87,8 @@ modular. Joshua already has most of it:
 
 | Layer | What it is | Status |
 |-------|-----------|--------|
-| Adapter contract | ROS-free `InferenceAdapter` (`spec/validate/initialize/on_observation/on_tick/close`) | ✅ exists (`ai/runtime/adapter.py`) |
-| Model-agnostic host | `InferenceHost` owns all ROS, knows no model | ✅ exists (`ai/runtime/host.py`) |
+| Adapter contract | ROS-free `InferenceAdapter` (`spec/validate/initialize/on_observation/on_tick/close`) | ✅ exists (`ai/inference/adapter.py`) |
+| Model-agnostic host | `InferenceHost` owns all ROS, knows no model | ✅ exists (`ai/inference/host.py`) |
 | Registry | `ModelType -> adapter` lazy map | ✅ exists (`ai/models/registry.py`) |
 | **Manifest** | declarative `ModelType -> adapter -> deps -> isolation` | ➕ proposed here |
 
@@ -178,10 +178,10 @@ right binary per config.
 # ai/models/smolvla/BUILD
 ros2_py_binary(
     name = "smolvla_node",
-    srcs = ["//ai/runtime:host_main.py"],
+    srcs = ["//ai/inference:host_main.py"],
     main = "host_main.py",
     set_up_ament = True,
-    deps = [":adapter", "//ai/runtime:host", "//ros2:node_runner_py"],
+    deps = [":adapter", "//ai/inference:host", "//ros2:node_runner_py"],
 )
 ```
 
@@ -201,10 +201,10 @@ inside it. No binary per model; models are *data* (adapter + lock + manifest).
 **3a. Inference launcher** (runs in a minimal base interpreter):
 
 ```python
-# ai/runtime/inference_launcher.py
+# ai/inference/inference_launcher.py
 import os, sys
-from ai.runtime.manifest import resolve_model         # reads manifests
-from ai.runtime.environment_manager import ensure_model_env
+from ai.inference.manifest import resolve_model         # reads manifests
+from ai.inference.environment_manager import ensure_model_env
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -213,16 +213,16 @@ def main(argv=None):
     if model.isolation == "REEXEC" and not _already_in_env(model):
         venv_py = ensure_model_env(model)              # build/cache venv
         os.environ["JOSHUA_MODEL_ENV"] = model.name    # re-entry guard
-        os.execv(venv_py, [venv_py, "-m", "ai.runtime.host_main", *argv])
+        os.execv(venv_py, [venv_py, "-m", "ai.inference.host_main", *argv])
     # else: deps already active -> run the host directly
-    from ai.runtime.host_main import main as host_main
+    from ai.inference.host_main import main as host_main
     return host_main(argv)
 ```
 
 **3b. Environment manager** (content-hash cached; uses `uv` for speed):
 
 ```python
-# ai/runtime/environment_manager.py
+# ai/inference/environment_manager.py
 import hashlib, os, subprocess
 from pathlib import Path
 
@@ -260,7 +260,7 @@ Locks remain the source of truth, so prebuilt == reproducible.
 
 **3e. Launcher integration.** Today `ros2/inference.py` calls
 `node_runner.run_node(InferenceHost, ...)`. Under Option 3, `ros2/inference.py`
-becomes the thin `inference_launcher.main`, and a new `ai/runtime/host_main.py` is the
+becomes the thin `inference_launcher.main`, and a new `ai/inference/host_main.py` is the
 post-exec entry that constructs `InferenceHost`. The C++ `node_generator` that
 spawns nodes is unchanged — it still launches one `inference` target.
 
@@ -282,7 +282,7 @@ a small local IPC.
 
 ```python
 # host side: spawn worker in its venv, speak a tiny framed protocol
-proc = subprocess.Popen([venv_py, "-m", "ai.runtime.worker", model.name],
+proc = subprocess.Popen([venv_py, "-m", "ai.inference.worker", model.name],
                         stdin=PIPE, stdout=PIPE)            # or UNIX socket / shared mem
 # worker side: import adapter, loop: read Observation -> ActionCommand
 ```
@@ -322,9 +322,9 @@ A per-model manifest ties everything together and is what the registry,
 inference launcher, environment manager, and prebuild step all read. Proposed proto:
 
 ```proto
-// ai/runtime/proto/model_manifest.proto
+// ai/inference/proto/model_manifest.proto
 syntax = "proto3";
-package ai.runtime;
+package ai.inference;
 
 import "ai/proto/ai_model.proto";   // ModelType
 

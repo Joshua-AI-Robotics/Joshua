@@ -9,8 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ai.runtime.manifest import repo_root
-from ai.runtime.proto import model_manifest_pb2
+from ai.inference.manifest import repo_root
+from ai.inference.proto import model_manifest_pb2
 
 _MARKER = ".joshua_lock_sha256"
 

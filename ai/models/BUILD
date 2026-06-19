@@ -25,8 +25,8 @@ py_library(
     srcs = ["registry.py"],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        "//ai/runtime:adapter",
-        "//ai/runtime:manifest",
+        "//ai/inference:adapter",
+        "//ai/inference:manifest",
         "//config/proto:config_py_proto",
     ] + requirement("protobuf"),
 )

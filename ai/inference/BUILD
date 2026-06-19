@@ -7,7 +7,7 @@ py_library(
     name = "types",
     srcs = ["types.py"],
     deps = [
-        "//ai/runtime/proto:runtime_py_proto",
+        "//ai/inference/proto:inference_py_proto",
     ] + requirement("protobuf"),
 )
 
@@ -27,7 +27,7 @@ py_library(
     deps = [
         ":adapter",
         "//ai/proto:ai_model_py_proto",
-        "//ai/runtime/proto:model_manifest_py_proto",
+        "//ai/inference/proto:model_manifest_py_proto",
     ] + requirement("protobuf"),
 )
 
@@ -36,7 +36,7 @@ py_library(
     srcs = ["environment_manager.py"],
     deps = [
         ":manifest",
-        "//ai/runtime/proto:model_manifest_py_proto",
+        "//ai/inference/proto:model_manifest_py_proto",
     ],
 )
 
@@ -90,7 +90,7 @@ py_library(
         ":environment_manager",
         ":host_main",
         ":manifest",
-        "//ai/runtime/proto:model_manifest_py_proto",
+        "//ai/inference/proto:model_manifest_py_proto",
         "//config/proto:config_py_proto",
     ] + requirement("protobuf"),
 )

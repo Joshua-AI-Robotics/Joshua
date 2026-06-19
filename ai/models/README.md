@@ -2,7 +2,7 @@
 
 Each model is a **self-contained plug-in** in its own directory holding
 both its config schema and its adapter implementation. The model-agnostic
-engine lives in [`ai/runtime`](../runtime); this package is the set of
+engine lives in [`ai/inference`](../inference); this package is the set of
 plug-ins plus the single registry that wires them in.
 
 ## Layout
@@ -26,7 +26,7 @@ ai/models/
 | Per-model config message | `ai/models/<model>/<model>_config.proto` |
 | Per-model adapter | `ai/models/<model>/adapter.py` |
 | Registry (wiring) | `ai/models/registry.py` |
-| Engine (host, contracts) | `ai/runtime/` |
+| Engine (host, contracts) | `ai/inference/` |
 
 ## How to add a model
 

@@ -46,7 +46,7 @@ Out of scope (future RFCs):
 | --- | --- | --- |
 | Data collection (record ROS topics) | ✅ working | `ai/train/data_store.py` (`DataStore`) |
 | Dataset inspection | ✅ working | `ai/train/data_load.py` |
-| Inference engine (model-agnostic host) | ✅ working | `ai/runtime/` |
+| Inference engine (model-agnostic host) | ✅ working | `ai/inference/` |
 | Per-model inference plug-ins | ✅ working | `ai/models/<model>/adapter.py` |
 | Model catalog enum | ✅ working | `ai/proto/ai_model.proto` (`ModelType`) |
 | Simulation backends (viewer) | ✅ working | `simulation/mujoco/`, `simulation/isaac/` |
@@ -108,7 +108,7 @@ seams; plug-ins fill them:
 
 ```text
 ai/
-  runtime/                    # inference engine (exists, unchanged)
+  inference/                  # inference engine (exists, unchanged)
   models/                     # per-model plug-ins (exists)
     smolvla/
       smolvla_config.proto

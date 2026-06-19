@@ -51,7 +51,7 @@ Framework-agnostic model logic.
 - Owns: checkpoint loading, predict, train_step.
 - Does not own: ROS topics/messages, simulator internals.
 
-### `ai/runtime`
+### `ai/inference`
 
 Inference runtime host and model adapters.
 

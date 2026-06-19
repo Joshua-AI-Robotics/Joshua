@@ -7,7 +7,7 @@ as self-contained plug-ins, wired in by [`ai/models/registry.py`](../models/regi
 ## Architecture
 
 ```
-ai/models/<model>/        ai/runtime/  (this package)
+ai/models/<model>/        ai/inference/  (this package)
   config proto    ─────▶  ai_model.proto oneof
   adapter.py      ─────▶  registry ─▶ InferenceHost
 
@@ -26,14 +26,14 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 | File | Responsibility |
 | --- | --- |
 | `host.py` | `InferenceHost` ROS node: model selection, pub/sub, QoS, decode, dispatch, publish |
-| `proto/runtime.proto` | Schema contracts: `ChannelRole`, `TriggerMode` enums and the `AdapterSpec` message |
+| `proto/inference.proto` | Schema contracts: `ChannelRole`, `TriggerMode` enums and the `AdapterSpec` message |
 | `types.py` | Re-exports the proto contracts and defines runtime dataclasses (`Observation`, `ActionCommand`, `ChannelSpec`) |
 | `adapter.py` | `InferenceAdapter` base class (the plug-in contract) |
 | `observation_codec.py` | Decodes ROS messages into canonical payloads |
 
 > Schema-level contracts (the `ChannelRole`/`TriggerMode` enums and
-> `AdapterSpec`) are defined in `proto/runtime.proto` and re-exported from
-> `types.py`, so adapters still `from ai.runtime.types import ...`.
+> `AdapterSpec`) are defined in `proto/inference.proto` and re-exported from
+> `types.py`, so adapters still `from ai.inference.types import ...`.
 > `Observation`/`ActionCommand`/`ChannelSpec` stay as dataclasses because
 > they carry live numpy/scalar payloads that are not protobuf-serialized.
 

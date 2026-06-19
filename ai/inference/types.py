@@ -6,7 +6,7 @@ only model-specific preprocessing, inference, and postprocessing).
 
 Schema-level contracts (the ``ChannelRole`` and ``TriggerMode`` enums and
 the ``AdapterSpec`` message) are defined in
-``ai/runtime/proto/runtime.proto`` and re-exported here so call sites have
+``ai/inference/proto/inference.proto`` and re-exported here so call sites have
 a single import surface. The remaining types carry live runtime payloads
 (numpy arrays, scalars) and stay as Python dataclasses since they are not
 serialized and ``Observation.payload`` is not protobuf-representable.
@@ -20,12 +20,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ai.runtime.proto import runtime_pb2
+from ai.inference.proto import inference_pb2
 
 # Re-export proto-defined schema contracts.
-ChannelRole = runtime_pb2.ChannelRole
-TriggerMode = runtime_pb2.TriggerMode
-AdapterSpec = runtime_pb2.AdapterSpec
+ChannelRole = inference_pb2.ChannelRole
+TriggerMode = inference_pb2.TriggerMode
+AdapterSpec = inference_pb2.AdapterSpec
 
 
 def make_adapter_spec(
@@ -33,14 +33,14 @@ def make_adapter_spec(
     tick_hz: float = 0.0,
     min_subscriptions: int = 1,
     min_publishers: int = 1,
-) -> "runtime_pb2.AdapterSpec":
+) -> "inference_pb2.AdapterSpec":
     """Build an ``AdapterSpec`` with the runtime's defaults.
 
     Proto3 scalar defaults are zero, so this helper restores the intended
     defaults (>= 1 subscription/publisher) without each adapter repeating
     them.
     """
-    return runtime_pb2.AdapterSpec(
+    return inference_pb2.AdapterSpec(
         trigger_mode=trigger_mode,
         tick_hz=tick_hz,
         min_subscriptions=min_subscriptions,
@@ -55,7 +55,7 @@ class ChannelSpec:
     index: int
     topic: str
     ros2_data_type: int
-    role: int  # ai.runtime.ChannelRole enum value
+    role: int  # ai.inference.ChannelRole enum value
 
 
 @dataclass(frozen=True)

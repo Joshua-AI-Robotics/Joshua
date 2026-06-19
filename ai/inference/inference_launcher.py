@@ -8,9 +8,9 @@ from typing import List, Optional
 
 from google.protobuf import text_format
 
-from ai.runtime.environment_manager import ensure_model_env
-from ai.runtime.manifest import load_manifest, python_import_paths
-from ai.runtime.proto import model_manifest_pb2
+from ai.inference.environment_manager import ensure_model_env
+from ai.inference.manifest import load_manifest, python_import_paths
+from ai.inference.proto import model_manifest_pb2
 from config.proto import config_pb2
 
 
@@ -64,7 +64,7 @@ def _reexec_into_model_env(
         env["RUNFILES_DIR"] = runfiles
     os.execve(
         venv_py,
-        [venv_py, "-s", "-m", "ai.runtime.host_main", *argv[1:]],
+        [venv_py, "-s", "-m", "ai.inference.host_main", *argv[1:]],
         env,
     )
 
@@ -81,7 +81,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ):
         _reexec_into_model_env(manifest, argv)
 
-    from ai.runtime.host_main import main as host_main
+    from ai.inference.host_main import main as host_main
 
     return host_main(argv)
 

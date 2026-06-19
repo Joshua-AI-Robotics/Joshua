@@ -32,8 +32,8 @@ py_library(
     ],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        "//ai/runtime:adapter",
-        "//ai/runtime:types",
+        "//ai/inference:adapter",
+        "//ai/inference:types",
         "//config/proto:config_py_proto",
         "//ros2/proto:ros2_data_type_py_proto",
     ] + model_requirement("smolvla", "numpy")

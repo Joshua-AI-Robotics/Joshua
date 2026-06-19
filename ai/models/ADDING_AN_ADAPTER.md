@@ -13,7 +13,7 @@ If you only want the 30-second version, see the checklist at the
 
 The inference system has two halves:
 
-- **The engine** (`ai/runtime/`) — a single, model-agnostic ROS2 node
+- **The engine** (`ai/inference/`) — a single, model-agnostic ROS2 node
   (`InferenceHost`). It owns all ROS concerns: subscriptions, publishers,
   QoS, decoding inbound messages, scheduling, denormalizing, and
   publishing. **You never edit this to add a model.**
@@ -23,7 +23,7 @@ The inference system has two halves:
   `ActionCommand` objects.
 
 ```
-ai/models/<your_model>/        ai/runtime/ (engine, untouched)
+ai/models/<your_model>/        ai/inference/ (engine, untouched)
   <your_model>_config.proto ─▶ ai_model.proto oneof
   adapter.py  ──────────────▶ registry ─▶ InferenceHost
 ```
@@ -35,7 +35,7 @@ Your job is to write **one adapter class** + **one config message** and
 
 ## 2. The adapter contract
 
-Your adapter subclasses `ai.runtime.adapter.InferenceAdapter`. Here is the
+Your adapter subclasses `ai.inference.adapter.InferenceAdapter`. Here is the
 full contract — what each method is for, whether it is required, and
 exactly when the host calls it.
 
@@ -71,7 +71,7 @@ self._model_config = single_model.my_model_config  # the oneof field you added
 
 ## 3. The data contracts
 
-Defined in `ai/runtime/proto/runtime.proto` and `ai/runtime/types.py`.
+Defined in `ai/inference/proto/inference.proto` and `ai/inference/types.py`.
 
 ### `Observation` (input to your adapter)
 
@@ -220,8 +220,8 @@ from typing import List, Optional
 
 from ai.proto.ai_model_pb2 import SingleModel
 
-from ai.runtime.adapter import InferenceAdapter
-from ai.runtime.types import (
+from ai.inference.adapter import InferenceAdapter
+from ai.inference.types import (
     ActionCommand,
     AdapterSpec,
     ChannelRole,
@@ -342,8 +342,8 @@ py_library(
     srcs = ["adapter.py"],
     deps = [
         "//ai/proto:ai_model_py_proto",
-        "//ai/runtime:adapter",
-        "//ai/runtime:types",
+        "//ai/inference:adapter",
+        "//ai/inference:types",
         "//config/proto:config_py_proto",
         requirement("protobuf"),
         # + any model-specific requirement("...") deps (torch, etc.)
@@ -478,7 +478,7 @@ a small text proto), instantiate the adapter, and drive it:
 import time
 
 from ai.models.smoother.adapter import SmootherAdapter
-from ai.runtime.types import ChannelRole, Observation
+from ai.inference.types import ChannelRole, Observation
 
 adapter = SmootherAdapter(single_model, config)  # protos built in the test
 adapter.validate()
@@ -532,4 +532,4 @@ No `rclpy`, no running ROS graph.
 - [ ] `bazel build //ros2:inference` passes
 - [ ] `./hooks/lint_check.sh --fix` is clean
 
-The engine (`ai/runtime/`) is never modified.
+The engine (`ai/inference/`) is never modified.

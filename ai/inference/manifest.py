@@ -11,8 +11,8 @@ from typing import Type
 from google.protobuf import text_format
 
 from ai.proto import ai_model_pb2
-from ai.runtime.adapter import InferenceAdapter
-from ai.runtime.proto import model_manifest_pb2
+from ai.inference.adapter import InferenceAdapter
+from ai.inference.proto import model_manifest_pb2
 
 
 def _workspace_candidates() -> list[Path]:
