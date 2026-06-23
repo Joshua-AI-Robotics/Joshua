@@ -1,7 +1,7 @@
 # Training RFC: Modular Imitation Learning + Simulation RL
 
 Status: Draft (design only — no implementation in this document)
-Companion to: [AI_PIPELINE_RFC.md](AI_PIPELINE_RFC.md)
+Companion to: [../ai/README.md](../ai/README.md) (current inference stack)
 
 ## 1. Purpose
 
@@ -17,7 +17,7 @@ supports two tracks behind one consistent framework:
 The design mirrors the inference refactor we already shipped: a
 **model-agnostic engine** plus **per-model plug-ins**, driven by protobuf
 config. It deliberately reconciles with the *as-built* code, which differs
-from the original AI_PIPELINE_RFC sketch (there is no `ai/core`; model
+from an early layered sketch (there is no `ai/core`; model
 logic lives in `ai/models/<model>/`).
 
 For the conceptual background (how IL/RL training works in industry and
@@ -213,12 +213,11 @@ class Environment(ABC):
 
 `simulation/mujoco` implements this in-process; `simulation/isaac`
 implements it via the existing subprocess/IPC pattern (Isaac stays out of
-the Bazel Python process, per AI_PIPELINE_RFC non-goals).
+the Bazel Python process).
 
 ### 6.3 Canonical obs/action contract
 
-Universality requires explicit signal names (already called for in
-AI_PIPELINE_RFC §3). Both datasets and sim envs map to canonical logical
+Universality requires explicit signal names. Both datasets and sim envs map to canonical logical
 names: `observation.images.<cam>`, `observation.state`,
 `action.joint_pos`, `action.gripper`, … Startup validation fails fast on
 missing/mismatched signals so a config error never reaches the train loop.
@@ -283,7 +282,7 @@ message TrainingConfig {
 }
 ```
 
-Per AI_PIPELINE_RFC: keep `training { ... }` separate from
+Keep `training { ... }` separate from
 `simulation { ... }`; do not overload viewer fields with training
 semantics.
 
@@ -324,8 +323,7 @@ bazel run //ai/training:train -- --config=.../ant_ppo.pbtxt
 ### Track B backend swap
 
 Identical trainer/task/policy code; only `RLConfig.backend` and the
-adapter selection change (MuJoCo → Isaac → future MJX), per
-AI_PIPELINE_RFC §C.
+adapter selection change (MuJoCo → Isaac → future MJX).
 
 ## 9. The dataset synchronization layer (foundational)
 
@@ -352,8 +350,8 @@ chunking window, and train/val split strategy.
   (`//ai/training:train`), run directly. This matches how IL jobs run in
   practice and keeps training off the ROS critical path.
 - **Optional launcher path:** reintroduce `MODE_TRAINING` →
-  `RunTraining()` in `joshua_main` for a single consistent entrypoint, per
-  AI_PIPELINE_RFC. Training must not be implicit under inference/simulation
+  `RunTraining()` in `joshua_main` for a single consistent entrypoint.
+  Training must not be implicit under inference/simulation
   modes.
 - **Dependency isolation:** model/algorithm heavy deps (torch, lerobot,
   RL libs) live only in the relevant `BUILD` targets; the engine core
@@ -382,7 +380,7 @@ in parallel.
 - **Sim-to-real gap (Track B).** → Domain randomization knobs in
   `RLConfig`; treat in-sim success as necessary-not-sufficient.
 - **Backend adapter divergence (MuJoCo vs Isaac).** → Contract tests for
-  `simulation/api` spec/step parity (per AI_PIPELINE_RFC risks).
+  `simulation/api` spec/step parity.
 - **Engine bloat.** → Keep `Trainer` services generic; push model/algo
   specifics into plug-ins, mirroring the inference host discipline.
 - **Heavy deps leaking into core.** → Per-plug-in `BUILD` targets + lazy

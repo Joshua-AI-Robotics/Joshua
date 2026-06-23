@@ -4,8 +4,7 @@
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Config, protos, data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| AI pipeline architecture RFC | [AI_PIPELINE_RFC.md](AI_PIPELINE_RFC.md) |
-| AI pipeline phase-1 implementation plan | [AI_PIPELINE_PHASE1_TASKS.md](AI_PIPELINE_PHASE1_TASKS.md) |
+| AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | Training architecture RFC (IL + sim RL) | [TRAINING_RFC.md](TRAINING_RFC.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
