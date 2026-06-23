@@ -11,8 +11,18 @@ CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
   id_ = GetId();
 }
 
+CvCamera::~CvCamera() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+  const absl::Status status = TeardownLocked();
+  if (!status.ok()) {
+    LOG(ERROR) << "CvCamera teardown failed in destructor for " << id_ << ": " << status.message();
+  }
+}
+
 absl::Status CvCamera::Init() {
-  absl::Status status = OpenCamera();
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+
+  absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
     return status;
   }
@@ -51,6 +61,11 @@ absl::Status CvCamera::Init() {
 }
 
 absl::Status CvCamera::Teardown() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+  return TeardownLocked();
+}
+
+absl::Status CvCamera::TeardownLocked() {
   try {
     if (cap_.isOpened()) {
       cap_.release();
@@ -66,9 +81,10 @@ absl::Status CvCamera::Teardown() {
 }
 
 absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+
   try {
-    // Check if camera is still open
-    absl::Status status = OpenCamera();
+    absl::Status status = OpenCameraLocked();
     if (!status.ok()) {
       return status;
     }
@@ -163,7 +179,7 @@ std::string CvCamera::GetId() {
   return id;
 }
 
-absl::Status CvCamera::OpenCamera() {
+absl::Status CvCamera::OpenCameraLocked() {
   absl::Status status;
   
   for (uint8_t i = 0; i < MAX_CAMERA_OPEN_TRIES_; i++) {
