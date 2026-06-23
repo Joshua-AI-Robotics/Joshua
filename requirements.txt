@@ -1,6 +1,6 @@
 # Platform base dependencies (shared: ROS nodes, simulation, training).
-# Model-specific deps (torch, lerobot, transformers, etc.) live in
-# ai/models/<model>/requirements.in.
+# Installed into every model venv before that model's optional requirements.lock.
+# Model-only deps (torch, lerobot, …) live in ai/models/<model>/requirements.in.
 #
 # Note: rclpy is NOT on PyPI - it comes from system ROS2 installation.
 # It will be available via PYTHONPATH in .bazelrc

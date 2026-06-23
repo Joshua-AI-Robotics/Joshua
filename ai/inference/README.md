@@ -25,8 +25,8 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 
 | File | Role |
 | --- | --- |
-| `inference_launcher.py` | Read config → manifest → optional `REEXEC` into model venv |
-| `environment_manager.py` | Create/sync cached venv from per-model lock |
+| `inference_launcher.py` | Read config → manifest → build venv → re-exec |
+| `environment_manager.py` | Sync global base + optional model lock into venv |
 | `host_main.py` | Post-re-exec entry: ROS paths + `InferenceHost` |
 | `host.py` | `InferenceHost` node |
 | `manifest.py` | Load `model.textproto`, resolve workspace paths |
@@ -34,7 +34,7 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 | `types.py` | `Observation`, `ActionCommand`; re-exports proto enums |
 | `observation_codec.py` | ROS message → canonical payloads |
 | `proto/inference.proto` | `ChannelRole`, `TriggerMode`, `AdapterSpec` |
-| `proto/model_manifest.proto` | `ModelManifest`, `Isolation` enum |
+| `proto/model_manifest.proto` | `ModelManifest` (entrypoint, optional lock path) |
 
 ## Trigger modes
 

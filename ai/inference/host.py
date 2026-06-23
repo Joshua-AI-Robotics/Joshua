@@ -18,8 +18,6 @@ from typing import Any, List, NamedTuple, Optional
 from rclpy.node import Node
 from std_msgs.msg import Float32
 
-from ai.models import registry
-from ai.proto import ai_model_pb2
 from ai.inference.observation_codec import ObservationCodec
 from ai.inference.types import (
     ActionCommand,
@@ -28,6 +26,8 @@ from ai.inference.types import (
     Observation,
     TriggerMode,
 )
+from ai.models import registry
+from ai.proto import ai_model_pb2
 from config.proto import config_pb2
 from robot.action.proto import action_pb2
 from ros2.proto import ros2_data_type_pb2

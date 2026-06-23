@@ -76,9 +76,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     model_type = _model_type_for_node(config, node_id)
     manifest = load_manifest(model_type)
 
-    if manifest.isolation == model_manifest_pb2.REEXEC and not _already_in_model_env(
-        manifest.name
-    ):
+    if not _already_in_model_env(manifest.name):
         _reexec_into_model_env(manifest, argv)
 
     from ai.inference.host_main import main as host_main

@@ -55,7 +55,6 @@ ros2_py_binary(
         "//config/config_preset:config_presets",
         "//ai/models:sources",
         "//ai/models:manifests",
-        "//ai/models/smolvla:requirements.lock",
         "//ai/inference:inference_launcher",
     ],
     main = "inference.py",

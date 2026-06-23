@@ -2,4 +2,3 @@ name: "random_noise"
 model_type: RANDOM_NOISE
 entrypoint: "ai.models.random_noise.adapter:RandomNoiseAdapter"
 python_version: "3.10"
-isolation: IN_PROCESS

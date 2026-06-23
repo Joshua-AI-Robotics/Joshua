@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Regenerate per-model requirements.lock files.
+# Regenerate per-model requirements.lock files (model-specific deps only).
+#
+# Model venvs install global requirements.lock + this lock at runtime.
+# Put only packages not already in the repo-root requirements.txt here.
 #
 # Usage: tools/lock_model.sh <model_name>
 # Example: tools/lock_model.sh smolvla

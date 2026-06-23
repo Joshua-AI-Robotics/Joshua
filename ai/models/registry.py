@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Type
 
-from ai.proto import ai_model_pb2
 from ai.inference.adapter import InferenceAdapter
 from ai.inference.manifest import import_entrypoint, load_manifest
+from ai.proto import ai_model_pb2
 from config.proto import config_pb2
 
 

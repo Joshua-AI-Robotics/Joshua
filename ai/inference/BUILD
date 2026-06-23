@@ -82,9 +82,11 @@ py_library(
     name = "inference_launcher",
     srcs = ["inference_launcher.py"],
     data = [
+        "//:requirements.lock",
+        "//:requirements_3.12.lock",
         "//ai/models:sources",
         "//ai/models:manifests",
-        "//ai/models/smolvla:requirements.lock",
+        "//ai/models:locks",
     ],
     deps = [
         ":environment_manager",

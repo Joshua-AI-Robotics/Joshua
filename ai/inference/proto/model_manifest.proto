@@ -4,19 +4,12 @@ package ai.inference;
 
 import "ai/proto/ai_model.proto";
 
-enum Isolation {
-  IN_PROCESS = 0;
-  REEXEC = 1;
-  WORKER = 2;
-  CONTAINER = 3;
-}
-
 message ModelManifest {
   string name = 1;
   ai.models.ModelType model_type = 2;
   string entrypoint = 3;
+  // Optional model-specific lock (relative to repo root). When set, the
+  // model venv installs global requirements.lock first, then this lock.
   string requirements_lock = 4;
   string python_version = 5;
-  Isolation isolation = 6;
-  string container_image = 7;
 }

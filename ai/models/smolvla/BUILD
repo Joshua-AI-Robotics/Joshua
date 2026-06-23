@@ -1,4 +1,5 @@
 load("//ai/models:requirements.bzl", "model_requirement")
+load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_python//python:defs.bzl", "py_library")
 load("@rules_python//python:proto.bzl", "py_proto_library")
@@ -36,16 +37,13 @@ py_library(
         "//ai/inference:types",
         "//config/proto:config_py_proto",
         "//ros2/proto:ros2_data_type_py_proto",
-    ] + model_requirement("smolvla", "numpy")
-    + model_requirement("smolvla", "scipy")
-    + model_requirement("smolvla", "protobuf")
-    + model_requirement("smolvla", "torch")
+        requirement("protobuf"),
+    ] + model_requirement("smolvla", "torch")
     + model_requirement("smolvla", "transformers")
     + model_requirement("smolvla", "lerobot")
     + model_requirement("smolvla", "draccus")
     + model_requirement("smolvla", "num2words")
     + model_requirement("smolvla", "pillow")
-    + model_requirement("smolvla", "opencv-python")
-    + model_requirement("smolvla", "sympy")
-    + model_requirement("smolvla", "glog"),
+    + model_requirement("smolvla", "scipy")
+    + model_requirement("smolvla", "sympy"),
 )

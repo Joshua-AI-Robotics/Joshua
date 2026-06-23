@@ -3,10 +3,9 @@
 One directory per model: config schema, adapter, and manifest. The engine in
 [`ai/inference`](../inference) stays model-free.
 
-For the full **add-a-model workflow** (`IN_PROCESS` vs `REEXEC`, requirements,
-Bazel hubs, filegroups), see [`../README.md`](../README.md). This document
-covers everything in `ai/models/` — layout, adapter contract, worked example,
-and pitfalls.
+For the full **add-a-model workflow** (base + model locks, Bazel hubs),
+see [`../README.md`](../README.md). Model venvs always include the global
+base; optional `requirements_lock` adds model-specific packages.
 
 ## Layout
 
@@ -17,10 +16,10 @@ ai/models/
   <model>/
     <model>_config.proto   # per-model config message
     adapter.py             # InferenceAdapter subclass
-    model.textproto        # entrypoint, isolation, optional lock path
+    model.textproto        # entrypoint; optional model-specific lock
     BUILD                  # proto targets + adapter py_library
-    requirements.in        # (REEXEC only) pip inputs
-    requirements.lock      # (REEXEC only) generated lock
+    requirements.in        # model-only pins (omit if base is enough)
+    requirements.lock      # generated model-specific lock
 ```
 
 | Concern | Location |
@@ -333,9 +332,12 @@ Keep heavy deps (torch, lerobot, …) on the model `adapter` target only.
 name: "smoother"
 model_type: SMOOTHER
 entrypoint: "ai.models.smoother.adapter:SmootherAdapter"
+requirements_lock: "ai/models/smoother/requirements.lock"
 python_version: "3.10"
-isolation: IN_PROCESS
 ```
+
+Add `requirements.in` with model-only deps, run `tools/lock_model.sh smoother`,
+and register the lock in `ai/models/BUILD` `locks` filegroup.
 
 In `ai/models/BUILD`, add to `sources` and `manifests`:
 
@@ -344,7 +346,7 @@ In `ai/models/BUILD`, add to `sources` and `manifests`:
 "//ai/models/smoother:model.textproto",
 ```
 
-Do **not** edit `registry.py`. For `REEXEC` models, follow Path B in
+Do **not** edit `registry.py`. Register pip hubs in `MODULE.bazel` per
 [`../README.md`](../README.md).
 
 ### Step 6 — config preset
@@ -455,12 +457,12 @@ assert commands[0].publisher_index == 0
 
 - [ ] `ai/models/<model>/<model>_config.proto`
 - [ ] `ai/models/<model>/adapter.py` (`spec()`, `on_observation()` minimum)
-- [ ] `ai/models/<model>/model.textproto`
-- [ ] `ai/models/<model>/BUILD`
+- [ ] `ai/models/<model>/model.textproto` (`entrypoint`; optional `requirements_lock`)
+- [ ] `ai/models/<model>/requirements.in` + lock (only when deps exceed the global base)
 - [ ] `ai/proto/ai_model.proto` + `ai/proto/BUILD`
-- [ ] `ai/models/BUILD` — `sources` + `manifests`
+- [ ] `ai/models/BUILD` — `sources`, `manifests`, `locks`
 - [ ] Config preset `single_models` entry
-- [ ] (`REEXEC`) requirements + hub — [`../README.md`](../README.md) Path B
+- [ ] `MODULE.bazel` — `joshua_pip_<model>` hubs (only when the model has a lock)
 - [ ] `bazel build //ros2:inference` and lint clean
 
 The engine (`ai/inference/`) is never modified.

@@ -19,6 +19,14 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "locks",
+    srcs = [
+        "//ai/models/smolvla:requirements.lock",
+        "//ai/models/smolvla:requirements_3.12.lock",
+    ],
+)
+
 # Manifest-driven registry: no BUILD-time deps on individual model adapters.
 py_library(
     name = "registry",
