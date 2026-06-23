@@ -27,6 +27,8 @@ MODULE.bazel.lock
 # Python virtual environment
 /venv/
 .venv/
+.cache/
+
 
 # Python bytecode and tooling caches
 __pycache__/
