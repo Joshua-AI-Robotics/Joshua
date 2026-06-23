@@ -12,33 +12,27 @@ One config file is the source of truth—for example [`config/config_preset/so10
 
 ## Quick start
 
-**Docker (recommended for first try):**
+Joshua is Docker-first. Install Docker host tooling, open either supported ROS environment, then run the launcher through Docker:
 
 ```bash
-docker compose build joshua-u22
-docker compose run joshua-u22
-bazel run launcher:joshua_main
+sudo ./scripts/setup.sh
+make shell-u22      # Ubuntu 22.04 / ROS 2 Humble
+make shell-u24      # Ubuntu 24.04 / ROS 2 Jazzy
+make run-u22
 ```
 
-**Native Ubuntu 22.04:**
-
-```bash
-sudo ./scripts/setup.sh --env=dev
-bazel run launcher:joshua_main
-```
-
-Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Joshua targets **Ubuntu Linux**; macOS is not supported.
+Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint; the host only needs Docker Engine and Docker Compose v2.
 
 ## Build deployable binaries
 
-For development, use `bazel run` as above. To produce a packaged, deployable build (launcher binary, presets, and runtime files), use [`scripts/build.py`](scripts/build.py). It runs Bazel inside the matching Docker image and copies artifacts to `dist/<os>/<cpu>/`.
+For development, use the Make targets above. To produce a packaged, deployable build (launcher binary, presets, and runtime files), use `make build`. It runs Bazel inside the matching Docker image and copies artifacts to `dist/<os>/<cpu>/`.
 
 ```bash
 # Ubuntu 22.04 (Humble), x86_64 — default
-./scripts/build.py //launcher:joshua_main_pkg
+make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg
 
 # Ubuntu 24.04 (Jazzy), ARM64 (e.g. Jetson; uses emulation on x86 hosts)
-./scripts/build.py //launcher:joshua_main_pkg --os=u24 --cpu=arm64
+make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg
 ```
 
 | Flag | Values | Default |

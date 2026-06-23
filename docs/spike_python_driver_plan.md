@@ -34,11 +34,13 @@ Proposed edits
   - `config/config_preset/example/python_spike_actuator_example.pbtxt`
 
 Test commands
-1) Build protos:
-   - `bazel build //robot/action/proto:... //robot/comm/proto:... //config/proto:...`
-2) Validate pbtxt parsing:
-   - `bazel run //utils:config_loader -- config/config_preset/example/python_spike_actuator_example.pbtxt`
-   - If `config_loader` is not available, use your existing config validation command.
+1) Open the Docker shell:
+   - `make shell-u22`
+2) Build protos inside the shell:
+   - `bazel build --config=u22 --config=x86-base //robot/action/proto:... //robot/comm/proto:... //config/proto:...`
+3) Validate pbtxt parsing inside the shell:
+   - `bazel run --config=u22 --config=x86-base //utils:config_loader -- config/config_preset/example/python_spike_actuator_example.pbtxt`
+   - If `config_loader` is not available, use your existing Docker-backed config validation command.
 
 Notes
 - Keep transport config minimal for Phase 1; use whichever fields make implementation

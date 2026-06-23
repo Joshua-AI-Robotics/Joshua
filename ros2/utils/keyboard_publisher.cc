@@ -148,7 +148,7 @@ class KeyboardPublisher : public rclcpp::Node {
 };
 
 // To run:
-// bazel run ros2/utils:keyboard_publisher
+// docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base ros2/utils:keyboard_publisher
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<KeyboardPublisher>();

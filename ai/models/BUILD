@@ -36,5 +36,7 @@ py_library(
         "//ai/inference:adapter",
         "//ai/inference:manifest",
         "//config/proto:config_py_proto",
+        # Add all models here
+        "//ai/models/random_noise",
     ] + requirement("protobuf"),
 )

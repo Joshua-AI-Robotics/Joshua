@@ -12,6 +12,8 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- Docker-first Makefile entrypoints for shells, tests, launcher runs, package builds,
+  UI, and Isaac-backed simulation overlays
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
   new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
   `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
@@ -43,6 +45,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Changed
 
+- Native Ubuntu setup is no longer a supported development entrypoint;
+  `scripts/setup.sh` now bootstraps/checks Docker host tooling only
+- CI now runs Bazel tests through Docker for both Ubuntu 22/Humble and
+  Ubuntu 24/Jazzy
 - `simulation/` restructured: backend code now lives in symmetric
   `simulation/mujoco/` (engine + modes) and `simulation/isaac/`
   (launcher + viewer) packages, and `simulation/models/` is organized

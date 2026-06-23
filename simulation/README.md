@@ -40,13 +40,8 @@ selected via `simulation.mode` in the preset:
 | `MODE_OFFSCREEN` | Headless frame rendering to disk |
 
 ```bash
-# SO-ARM100 interactive viewer
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/so100/sim_interactive.pbtxt
-
-# Ant interactive viewer
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_interactive.pbtxt
+make run-u22 CONFIG=config/config_preset/so100/sim_interactive.pbtxt
+make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
@@ -75,7 +70,7 @@ simulation/isaac/viewer.py     (Isaac Lab venv, py3.11)
 
 ### Prerequisites
 
-1. **Install Isaac Sim** (4.5+ recommended, NVIDIA GPU required):
+1. **Install Isaac Sim** (4.5+ recommended, NVIDIA GPU required) on the host:
    https://docs.isaacsim.omniverse.nvidia.com/latest/installation/index.html
 
 2. **Clone and install Isaac Lab**:
@@ -87,7 +82,7 @@ cd IsaacLab
 ./isaaclab.sh --install
 ```
 
-3. **Set environment variables**:
+3. **Set environment variables** for the Docker-launched Joshua process:
 
 ```bash
 export ISAAC_LAB_PATH=~/IsaacLab
@@ -97,17 +92,13 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python   # optional, overrides isaacl
 ### Running
 
 ```bash
-# Ant
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_isaac.pbtxt
+export ISAAC_LAB_PATH=$HOME/IsaacLab
+export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
+make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
 
-# Trileg (3-legged LEGO walker)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
+make run-isaac-u24 CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt
 
-# Bileg (2-legged LEGO walker)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/bileg/bileg_sim_isaac.pbtxt
+make run-isaac-u24 CONFIG=config/config_preset/bileg/bileg_sim_isaac.pbtxt
 ```
 
 Close the viewer window (or Ctrl+C) to exit.

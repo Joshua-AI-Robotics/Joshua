@@ -17,8 +17,10 @@
 #   docker compose run --rm joshua-u24      # Interactive shell (Ubuntu 24.04 + Jazzy)
 #   docker compose run --rm joshua-mac-u22-arm64  # Interactive shell (Ubuntu 22.04 + Humble, macOS optimized)
 #
-# Run with Bazel target:
-#   docker compose run --rm joshua-u22 bazel run launcher:joshua_main
+# Prefer Makefile entrypoints:
+#   make shell-u22
+#   make shell-u24
+#   make run-u22 CONFIG=config/config_preset/so100/teleoperate.pbtxt
 
 services:
   # ============================================

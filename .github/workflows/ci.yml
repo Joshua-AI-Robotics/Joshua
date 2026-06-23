@@ -5,17 +5,30 @@ on:
     branches: [ develop ]
   workflow_dispatch: {}
 
-# TODO: Move this test to run in a docker image.
 jobs:
-  test:
+  docker-test:
+    name: Docker tests (${{ matrix.os }})
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: u22
+            service: joshua-u22
+            make_target: test-u22
+            profile_args: ""
+          - os: u24
+            service: joshua-u24
+            make_target: test-u24
+            profile_args: "--profile u24"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: false
 
-      - name: Free Disk Space for Unused Packages in Joshua Project
+      - name: Free disk space
         run: |
           echo "Disk space before cleanup:"
           df -h
@@ -31,29 +44,8 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Mount Bazel Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-${{ runner.os }}-
+      - name: Build Docker image
+        run: docker compose ${{ matrix.profile_args }} build ${{ matrix.service }}
 
-      - name: Install Bazelisk
-        run: sudo npm install -g @bazel/bazelisk
-
-      - name: Setup ROS 2
-        uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: humble
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libevdev-dev
-
-      - name: Run Tests
-        run: bazel test //...
+      - name: Run Bazel tests in Docker
+        run: make ${{ matrix.make_target }}

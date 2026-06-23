@@ -21,8 +21,11 @@ __pycache__/
 .eggs/
 *.egg
 .venv/
+.venv-*/
 venv/
 ENV/
+node_modules/
+ui/node_modules/
 
 # OS
 .DS_Store
@@ -34,4 +37,3 @@ Dockerfile
 
 # Documentation images (optional, can be large)
 # assets/images/
-

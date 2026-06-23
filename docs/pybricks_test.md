@@ -8,10 +8,16 @@ It assumes you are in the repo root.
 2. Follow the instructions to flash Pybricks firmware to your Spike hub.
 3. Power‑cycle the hub after flashing.
 
-## 2) Install host dependencies
-Use the system Python used by ROS:
+## 2) Prepare Docker and BLE tooling
+Joshua ROS commands run through Docker. Install/check Docker host tooling first:
+
 ```bash
-source /opt/ros/humble/setup.bash
+sudo ./scripts/setup.sh
+```
+
+Install Pybricks BLE tooling on the host only for flashing/uploading programs to the hub:
+
+```bash
 python3 -m pip install "pybricksdev[usb,ble]"
 ```
 
@@ -35,7 +41,7 @@ Use the printed name as your `hub_id` (example: `Pybricks Hub`).
 ## 4) Quick BLE smoke test (no ROS)
 This uploads a tiny Pybricks program to the hub and sends one angle command.
 ```bash
-bazel run //tools/pybricks:pybricks_ble_smoke -- "Pybricks Hub" A 90
+docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base //tools/pybricks:pybricks_ble_smoke -- "Pybricks Hub" A 90
 ```
 Note: the smoke test tool lives under `tools/pybricks`.
 Expected output includes:
@@ -55,9 +61,7 @@ Wait for upload to finish, then press Ctrl+C to free the BLE connection.
 ## 5) Run the ROS actuator subscriber
 In one terminal:
 ```bash
-conda deactivate
-source /opt/ros/humble/setup.bash
-bazel run //ros2:actuator_subscriber_py -- actuator_subscriber 901 config/config_preset/example/python_spike_actuator_example.pbtxt
+docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base //ros2:actuator_subscriber_py -- actuator_subscriber 901 config/config_preset/example/python_spike_actuator_example.pbtxt
 ```
 You should see:
 ```
@@ -68,9 +72,7 @@ Actuator subscriber node started with 1 actuators for node_id 901!
 ## 6) Send a single ROS command
 In a second terminal:
 ```bash
-conda deactivate
-source /opt/ros/humble/setup.bash
-ros2 topic pub spike/motor_A/command std_msgs/msg/Float32 "{data: 90.0}"
+docker compose run --rm joshua-u22 ros2 topic pub spike/motor_A/command std_msgs/msg/Float32 "{data: 90.0}"
 ```
 The motor should move to 90 degrees.
 
@@ -79,22 +81,17 @@ Use the included script for motor A and motor B (run in two terminals):
 
 Motor A:
 ```bash
-conda deactivate
-source /opt/ros/humble/setup.bash
-/usr/bin/python3 scripts/spike_wave_publisher.py --topic /spike/motor_A/command
+docker compose run --rm joshua-u22 python3 scripts/spike_wave_publisher.py --topic /spike/motor_A/command
 ```
 
 Motor B:
 ```bash
-conda deactivate
-source /opt/ros/humble/setup.bash
-/usr/bin/python3 scripts/spike_wave_publisher.py --topic /spike/motor_B/command --offset 60 --amplitude 30
+docker compose run --rm joshua-u22 python3 scripts/spike_wave_publisher.py --topic /spike/motor_B/command --offset 60 --amplitude 30
 ```
 
 ## Troubleshooting
 - If BLE connect fails: power‑cycle the hub and retry.
-- If you see `ModuleNotFoundError: rclpy._rclpy_pybind11`, you're using conda Python.
-  Use `/usr/bin/python3` after `conda deactivate`.
+- If ROS Python imports fail, make sure you are running the Joshua-side command through the `joshua-u22` Docker service.
 - If the motor doesn't move, double‑check the port (`A/B/C/D`) and hub name.
 
 ### BLE connection fail

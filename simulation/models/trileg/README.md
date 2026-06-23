@@ -76,9 +76,9 @@ Quick Start
 -----------
 
 ```bash
-# Isaac Sim viewer (see simulation/README.md for prerequisites)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
+ISAAC_LAB_PATH=$HOME/IsaacLab \
+ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
+make run-isaac-u24 CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt
 ```
 
 Physics Tuning

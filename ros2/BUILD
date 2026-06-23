@@ -30,6 +30,7 @@ py_library(
         "//ros2/utils:ros_python_paths_py",
         # Note: rclpy is available via system Python installation
         # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
+        # rclpy is provided by the selected Docker image's ROS2 installation.
     ] + requirement("protobuf") + requirement("PyYAML"),
     visibility = ["//visibility:public"],
 )
@@ -66,8 +67,7 @@ ros2_py_binary(
         "//ros2/proto:trajectory_py_proto",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
     visibility = ["//visibility:public"],
-    # Note: rclpy is provided by system Python when ROS2 is sourced
-    # Ensure: source /opt/ros/humble/setup.bash before running
+    # rclpy is provided by the selected Docker image's ROS2 installation.
 )
 
 py_library(

@@ -128,9 +128,8 @@ def main(argv=None):
 
 
 # How to test:
-# On terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_publish.pbtxt
-# On separate terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
+# In separate Docker terminals, run:
+# make run-u22 CONFIG=config/config_preset/example/sample_data_publish.pbtxt
+# make run-u22 CONFIG=config/config_preset/example/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())

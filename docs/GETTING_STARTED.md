@@ -1,161 +1,100 @@
 # Getting Started
 
-This guide covers installation, your first run, and common entry points. For build scripts and cross-platform builds, see [scripts/README.md](../scripts/README.md).
+Joshua is Docker-first. The host machine should provide Docker Engine and Docker Compose v2; ROS2, Bazel, Python dependencies, OpenCV, and build tools live inside the Docker images.
 
-## Prerequisites
+## Host Bootstrap
 
-Joshua supports **Ubuntu Linux** only. macOS is not supported (native or via Docker).
-
-- **Docker path:** Ubuntu 22.04 or 24.04 LTS, with Docker installed (see [Docker development environment](#docker-development-environment)).
-- **Native path:** Ubuntu 22.04 LTS (see [Native installation](#native-installation)).
-
-## Docker development environment
-
-### Linux: GPG credentials (Docker Desktop)
-
-On Linux, Docker Desktop may require GPG key credentials. See [Docker credentials management for Linux](https://docs.docker.com/desktop/setup/sign-in/#credentials-management-for-linux-users).
-
-### Build images
-
-Pick the image that matches your host OS and target ROS distribution:
-
-| Host | ROS | Build command |
-|------|-----|---------------|
-| Ubuntu (x86_64) | Humble (22.04) | `docker compose build joshua-u22` |
-| Ubuntu (ARM64) | Humble (22.04) | `docker compose --profile arm64 build joshua-u22-arm64` |
-| Ubuntu (x86_64) | Jazzy (24.04) | `docker compose --profile u24 build joshua-u24` |
-
-The ARM64 and Jazzy services are gated behind Compose profiles (`arm64`, `u24`), so the `--profile` flag is required when building them. An ARM64 variant exists for `joshua-u24` as well (e.g. Jetson): `docker compose --profile arm64 build joshua-u24-arm64`.
-
-### Run an interactive shell
+Use the bootstrap script only to prepare Docker host tooling:
 
 ```bash
-# Ubuntu 22.04 + ROS 2 Humble
-docker compose run joshua-u22
-
-# Ubuntu 24.04 + ROS 2 Jazzy
-docker compose run joshua-u24
+sudo ./scripts/setup.sh
+make help
 ```
 
-Type `exit` to leave the shell. To resume a stopped container:
+If the script adds your user to the `docker` group, log out and back in before running Docker without `sudo`.
+
+## Docker Environments
+
+Both supported ROS stacks are first-class:
+
+| Stack | Command |
+|------|---------|
+| Ubuntu 22.04 / ROS2 Humble / Python 3.10 | `make shell-u22` |
+| Ubuntu 24.04 / ROS2 Jazzy / Python 3.12 | `make shell-u24` |
+
+Raw Docker Compose services remain available for advanced use, but public workflows should use the Make targets.
+
+## Launcher
+
+Run the default launcher through Docker:
 
 ```bash
-docker container list -a
-docker start -ai <container_name>
-```
-
-Example:
-
-```bash
-docker start -ai joshua-joshua-u22-run-a199afce4b8a
-```
-
-## Native installation
-
-On Ubuntu 22.04 LTS, install dependencies with the setup script:
-
-```bash
-sudo ./scripts/setup.sh --env=dev
-```
-
-See [scripts/README.md](../scripts/README.md) for `runtime` mode, build helpers, and Ubuntu 24.04 / Jazzy support.
-
-## First run: launcher
-
-From the repo root (inside Docker or natively), start the main launcher:
-
-```bash
-bazel run launcher:joshua_main
+make run-u22
+make run-u24
 ```
 
 Pass a preset config when needed:
 
 ```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/so100/teleoperate.pbtxt
+make run-u22 CONFIG=config/config_preset/so100/teleoperate.pbtxt
+make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
-## Example: SO100 teleoperation
+Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.
 
-This preset runs SO100 in teleoperation mode (follower and lead arm per config):
+## Tests and Builds
 
-- Config: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt)
-
-Calibrate operational limits for your servo motors before running.
+Run tests inside Docker:
 
 ```bash
-bazel run launcher:joshua_main
+make test-u22
+make test-u24
 ```
 
-## Simulation (overview)
-
-All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full simulation docs: [simulation/README.md](../simulation/README.md).
-
-**MuJoCo interactive viewer:**
+Build deployable packages inside Docker:
 
 ```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_interactive.pbtxt
+make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg
+make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg
 ```
 
-**Isaac Sim viewer** (requires Isaac Lab installed):
+Artifacts are written under `dist/<os>/<cpu>/`.
+
+## Simulation
+
+MuJoCo simulation runs through the same Docker launcher:
 
 ```bash
-export ISAAC_LAB_PATH=~/IsaacLab
-export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
-
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_isaac.pbtxt
+make run-u22 CONFIG=config/config_preset/so100/sim_interactive.pbtxt
+make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
-### Preset reference
-
-| Config | Backend | What it does |
-|--------|---------|-------------|
-| `ant/ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant/ant_sim_isaac.pbtxt` | Isaac Sim | Ant in the Isaac Sim viewer |
-| `trileg/trileg_sim_isaac.pbtxt` | Isaac Sim | 3-legged LEGO walker in Isaac Sim |
-| `bileg/bileg_sim_isaac.pbtxt` | Isaac Sim | 2-legged LEGO walker in Isaac Sim |
-| `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
-| `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
-
-## Web UI with Docker
-
-The React control panel can be built and served via Docker Compose from the project root.
-
-### Prerequisites
-
-- Docker and **Docker Compose v2** (`docker compose`, not `docker-compose`):
+Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables.
 
 ```bash
-sudo apt install docker.io docker-compose-plugin
-sudo usermod -aG docker $USER
-newgrp docker
-docker compose version
+export ISAAC_LAB_PATH=$HOME/IsaacLab
+export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
+make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
 ```
 
-### Build and run
+## Web UI
 
-The UI service is gated behind the `production` Compose profile:
+Run the production UI:
 
 ```bash
-docker compose --profile production up --build joshua-ui
-docker compose --profile production up -d --build joshua-ui   # detached
-docker compose logs -f joshua-ui
-docker compose --profile production down
+make ui
 ```
 
-**Development** (UI with hot reload and Zenoh bridge; add `ros2-demo-nodes` for demo traffic):
+Run the development UI with the Zenoh bridge:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+make ui-dev
 ```
 
-Do not start `joshua-ui` and `joshua-ui-dev` at the same time (both use port 3000).
+Open `http://localhost:3000`.
 
-Open [http://localhost:3000](http://localhost:3000).
+Stop Docker Compose services:
 
-The image builds the React app, generates protobuf schema from repo protos, and serves via nginx. Build context is the repo root so schemas can read `config/`, `robot/`, and `ai/`.
-
-For local npm development, see [ui/README.md](../ui/README.md).
-
-## Web control panel
-
-See [ui/README.md](../ui/README.md) for local npm development and UI features.
+```bash
+make down
+```

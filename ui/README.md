@@ -11,51 +11,23 @@ Modern web-based UI for the Joshua robot control system, built with React, Tailw
 - **ShadCN UI** - Component library (Radix UI + Tailwind)
 - **React Router** - Client-side routing
 
-## Running with Docker
+## Running
 
-From the repo root, build and serve the UI with Docker Compose v2 (the `joshua-ui` service is gated behind the `production` profile):
-
-```bash
-docker compose --profile production up --build joshua-ui
-```
-
-For development with hot reload, use the dev override instead:
+From the repo root, build and serve the UI through Docker:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+make ui
 ```
 
-See [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md#web-ui-with-docker) for prerequisites, dev compose overrides, and details.
-
-## Getting Started
-
-### Install Dependencies
+For development with hot reload:
 
 ```bash
-npm install
+make ui-dev
 ```
 
-### Development
+Open `http://localhost:3000`. See [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md#web-ui) for Docker host prerequisites and details.
 
-```bash
-npm run dev
-```
-
-The app will be available at `http://localhost:3000`
-
-### Build
-
-```bash
-npm run build
-```
-
-Output will be in the `dist/` directory.
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
+Local host npm is not a supported entrypoint; the UI Dockerfiles install Node dependencies and run Vite/nginx inside containers.
 
 ## Project Structure
 
@@ -98,7 +70,6 @@ ui/
 3. Implement calibration interface
 4. Add real-time status updates
 
-## Integration with Bazel
+## Integration
 
-The UI can be integrated into the Bazel build system. The build output (`dist/`) can be served as static files or integrated with the C++ backend.
-
+The Docker build generates protobuf schema from repo protos before building the React app. The production image serves the built static files with nginx.
