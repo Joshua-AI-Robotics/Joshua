@@ -2,9 +2,8 @@
 
 #include <glog/logging.h>
 
-#include <any>
 #include <cstdint>
-#include <memory>
+#include <mutex>
 #include <opencv2/videoio.hpp>
 #include <string>
 
@@ -19,7 +18,7 @@ namespace robot::perception {
 class CvCamera : public CameraInterface {
  public:
   CvCamera(const robot::perception::Camera& camera_config);
-  ~CvCamera() = default;
+  ~CvCamera() override;
 
   absl::Status Init() override;
   std::string GetId() override;
@@ -29,13 +28,14 @@ class CvCamera : public CameraInterface {
  private:
   const uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
   cv::VideoCapture cap_;
-  cv::Mat last_frame_;
+  mutable std::mutex cap_mutex_;
   std::string id_;
   uint64_t camera_id_;
   robot::perception::OpenCvConfig opencv_config_;
   mutable robot::perception::PerceptionPacket reusable_packet_;  // Pre-allocated packet for reuse
 
-  absl::Status OpenCamera();
+  absl::Status OpenCameraLocked();
+  absl::Status TeardownLocked();
 };
 
 }  // namespace robot::perception

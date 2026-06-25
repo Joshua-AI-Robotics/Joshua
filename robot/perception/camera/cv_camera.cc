@@ -1,10 +1,7 @@
 #include "robot/perception/camera/cv_camera.h"
 
 #include <chrono>
-#include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
-#include <stdexcept>
-#include <vector>
 
 namespace robot::perception {
 
@@ -14,8 +11,18 @@ CvCamera::CvCamera(const robot::perception::Camera& camera_config) {
   id_ = GetId();
 }
 
+CvCamera::~CvCamera() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+  const absl::Status status = TeardownLocked();
+  if (!status.ok()) {
+    LOG(ERROR) << "CvCamera teardown failed in destructor for " << id_ << ": " << status.message();
+  }
+}
+
 absl::Status CvCamera::Init() {
-  absl::Status status = OpenCamera();
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+
+  absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
     return status;
   }
@@ -54,6 +61,11 @@ absl::Status CvCamera::Init() {
 }
 
 absl::Status CvCamera::Teardown() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+  return TeardownLocked();
+}
+
+absl::Status CvCamera::TeardownLocked() {
   try {
     if (cap_.isOpened()) {
       cap_.release();
@@ -69,9 +81,10 @@ absl::Status CvCamera::Teardown() {
 }
 
 absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
+  std::lock_guard<std::mutex> lock(cap_mutex_);
+
   try {
-    // Check if camera is still open
-    absl::Status status = OpenCamera();
+    absl::Status status = OpenCameraLocked();
     if (!status.ok()) {
       return status;
     }
@@ -119,8 +132,11 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     image_data->set_channels(frame.channels());
     image_data->set_encoding("bgr8");  // OpenCV default is BGR
 
-    // Set image data using string assignment to be safe
-    size_t data_size = frame.total() * frame.elemSize();
+    if (!frame.isContinuous()) {
+      frame = frame.clone();
+    }
+
+    const size_t data_size = static_cast<size_t>(frame.total()) * frame.elemSize();
 
     if (data_size == 0) {
       LOG(ERROR) << "Frame data size is 0 for camera " << id_;
@@ -136,9 +152,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
                           "Failed to capture an image from camera with frame data pointer is null");
     }
 
-    // Create a string from the image data and assign it
-    std::string image_string(reinterpret_cast<const char*>(frame.data), data_size);
-    image_data->set_data(image_string);
+    image_data->mutable_data()->assign(reinterpret_cast<const char*>(frame.data), data_size);
 
     VLOG(1) << "Successfully captured frame from camera " << id_ << ": " << frame.cols << "x"
             << frame.rows << " (" << data_size << " bytes)";
@@ -165,7 +179,7 @@ std::string CvCamera::GetId() {
   return id;
 }
 
-absl::Status CvCamera::OpenCamera() {
+absl::Status CvCamera::OpenCameraLocked() {
   absl::Status status;
   
   for (uint8_t i = 0; i < MAX_CAMERA_OPEN_TRIES_; i++) {
@@ -175,8 +189,12 @@ absl::Status CvCamera::OpenCamera() {
     }
     else {
       LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
-      cap_.open(camera_id_, cv::CAP_V4L2);   
-    } 
+      if (cap_.open(camera_id_, cv::CAP_V4L2)) {
+        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 1)) {
+          LOG(ERROR) << "Could not set CAP_PROP_BUFFERSIZE to 1 for camera " << id_;
+        }
+      }
+    }
   }
   if (cap_.isOpened()) {
     status = absl::OkStatus();
