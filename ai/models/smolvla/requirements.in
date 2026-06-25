@@ -1,0 +1,17 @@
+# SmolVLA model-specific deps (global base is requirements.txt / requirements.lock).
+# Regenerate: tools/lock_model.sh smolvla
+#
+# Why these exact versions:
+# - lerobot 0.4.1 caps transformers<5.0.0 and requires num2words>=0.5.14.
+# - transformers 4.x imports PIL.ImagePalette at module load time.
+# - Pillow 11.3.0 (global) stopped eagerly importing ImagePalette; 11.2.1 works.
+
+lerobot==0.4.1
+transformers==4.53.2
+num2words>=0.5.14
+Pillow==11.2.1
+torch==2.7.0
+accelerate==1.11.0
+draccus
+scipy==1.15.3
+sympy>=1.13.0

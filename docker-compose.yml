@@ -46,6 +46,8 @@ services:
     environment:
       - ROS_DISTRO=humble
       - DISPLAY=${DISPLAY:-}
+      # Persist per-model inference venvs on the bind-mounted repo (survives --rm)
+      - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
 
   # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
@@ -69,6 +71,7 @@ services:
     environment:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
+      - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
     profiles:
       - u24  # Only build when explicitly requested
@@ -98,6 +101,7 @@ services:
     environment:
       - ROS_DISTRO=humble
       - DISPLAY=${DISPLAY:-}
+      - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested
@@ -131,6 +135,7 @@ services:
       # Set to "true" to automatically create mock serial ports for development
       # Mock ports allow the application to run without physical serial devices
       - ENABLE_MOCK_SERIAL_PORTS=${ENABLE_MOCK_SERIAL_PORTS:-true}
+      - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     entrypoint: ["/workspace/scripts/docker_entrypoint.sh"]
     working_dir: /workspace
     profiles:
@@ -158,6 +163,7 @@ services:
     environment:
       - ROS_DISTRO=jazzy
       - DISPLAY=${DISPLAY:-}
+      - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested

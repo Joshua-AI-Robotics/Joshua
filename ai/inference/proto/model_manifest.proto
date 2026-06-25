@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package ai.inference;
+
+import "ai/proto/ai_model.proto";
+
+message ModelManifest {
+  string name = 1;
+  ai.models.ModelType model_type = 2;
+  string entrypoint = 3;
+  // Optional model-specific lock (relative to repo root). When set, the
+  // model venv installs global requirements.lock first, then this lock.
+  string requirements_lock = 4;
+  string python_version = 5;
+}

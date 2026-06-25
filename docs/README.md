@@ -4,6 +4,9 @@
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Config, protos, data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
+| System architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Training architecture RFC (IL + sim RL) | [TRAINING_RFC.md](TRAINING_RFC.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
 | Data collection (DataStore) | [ai/train/README.md](../ai/train/README.md) |

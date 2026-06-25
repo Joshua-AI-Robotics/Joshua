@@ -55,6 +55,11 @@ cc_library(
 )
 
 py_library(
+    name = "ros_python_paths_py",
+    srcs = ["ros_python_paths.py"],
+)
+
+py_library(
     name = "qos_setting_py",
     srcs = ["qos_setting.py"],
     deps = [

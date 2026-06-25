@@ -1,4 +1,8 @@
-exports_files(["VERSION"])
+exports_files([
+    "VERSION",
+    "requirements.lock",
+    "requirements_3.12.lock",
+])
 
 platform(
     name = "jetson_orin_nano",

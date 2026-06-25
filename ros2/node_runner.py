@@ -1,18 +1,15 @@
 import sys
 
-# Add system site-packages for ROS2 compatibility
-# This allows Bazel's hermetic Python to find system-installed packages
-# like numpy, which is required by ROS2 sensor_msgs
-sys.path.insert(0, '/opt/ros/humble/lib/python3.10/site-packages')
-sys.path.insert(0, '/opt/ros/humble/local/lib/python3.10/dist-packages')
-sys.path.insert(0, '/usr/lib/python3/dist-packages')
+from ros2.utils.ros_python_paths import setup_import_paths
 
-import rclpy
-from google.protobuf import text_format
-from rclpy.node import Node
+setup_import_paths()
+
+import rclpy  # noqa: E402
+from google.protobuf import text_format  # noqa: E402
+from rclpy.node import Node  # noqa: E402
 
 # Protobuf generated modules
-from config.proto import config_pb2
+from config.proto import config_pb2  # noqa: E402
 
 
 def load_config(config_path: str) -> config_pb2.Config:
@@ -36,11 +33,14 @@ def parse_cli(argv: list[str]) -> tuple[str, int, str]:
     return node_name, node_id, config_path
 
 
-def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = None) -> int:
+def run_node(
+    node_cls: type[Node], logger_name: str, argv: list[str] | None = None
+) -> int:
     """Run an rclpy Node class with CLI args, mirroring C++ node_runner.
 
     Args:
-        node_cls: Subclass of rclpy.node.Node with __init__(node_name, node_id, config)
+        node_cls: Subclass of rclpy.node.Node with __init__(node_name,
+            node_id, config)
         logger_name: Logger name to use for usage/error logging
         argv: Optional argv list; defaults to sys.argv
     """
@@ -69,15 +69,15 @@ def run_node(node_cls: type[Node], logger_name: str, argv: list[str] | None = No
     finally:
         try:
             # Call shutdown method if it exists
-            # Since node_runner is designed to run a single node, we can check the local 'node' variable.
-            node_instance = locals().get('node')
+            # node_runner runs a single node; use the local 'node' variable.
+            node_instance = locals().get("node")
             if node_instance:
-                if hasattr(node_instance, 'shutdown'):
+                if hasattr(node_instance, "shutdown"):
                     node_instance.shutdown()
                 node_instance.destroy_node()
         except Exception as e:
             print(f"Error during node shutdown: {e}")
-        
+
         if rclpy.ok():
             rclpy.shutdown()
 

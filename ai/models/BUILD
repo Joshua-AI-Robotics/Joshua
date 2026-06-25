@@ -1,24 +1,40 @@
-load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
-py_library(
-    name = "model_base",
-    srcs = ["model_base.py"],
-    deps = [
-        "//ai/proto:ai_model_py_proto",
-    ] + requirement("numpy") + requirement("protobuf"),
+filegroup(
+    name = "sources",
+    srcs = glob(["*.py"]) + [
+        "//ai/models/random_noise:adapter",
+        "//ai/models/smolvla:adapter",
+    ],
 )
 
+filegroup(
+    name = "manifests",
+    srcs = [
+        "//ai/models/random_noise:model.textproto",
+        "//ai/models/smolvla:model.textproto",
+    ],
+)
+
+filegroup(
+    name = "locks",
+    srcs = [
+        "//ai/models/smolvla:requirements.lock",
+        "//ai/models/smolvla:requirements_3.12.lock",
+    ],
+)
+
+# Manifest-driven registry: no BUILD-time deps on individual model adapters.
 py_library(
-    name = "model_registry",
-    srcs = ["model_registry.py"],
+    name = "registry",
+    srcs = ["registry.py"],
     deps = [
-        ":model_base",
         "//ai/proto:ai_model_py_proto",
-        # Add all models here
-        "//ai/models/random_noise:random_noise",
-        "//ai/models/smolvla:smolvla",
+        "//ai/inference:adapter",
+        "//ai/inference:manifest",
+        "//config/proto:config_py_proto",
     ] + requirement("protobuf"),
 )
