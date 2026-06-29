@@ -9,18 +9,10 @@ COMPOSE := docker compose
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_ISAAC := docker compose -f docker-compose.yml -f docker-compose.isaac.yml
 
-SERVICE_u22 := joshua-u22
-SERVICE_u24 := joshua-u24
-SERVICE := $(SERVICE_$(OS))
-
-ifeq ($(SERVICE),)
-$(error Unsupported OS "$(OS)". Use OS=u22 or OS=u24)
-endif
-
 .PHONY: help shell-u22 shell-u24 test-u22 test-u24 run-u22 run-u24 run-isaac-u22 run-isaac-u24 build ui ui-dev down compose-config
 
 help:
-	@printf '%s\n' 'Joshua Docker-first entrypoints'
+	@printf '%s\n' 'Joshua Docker-first entrypoints (optional Make shorthand)'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Development shells:'
 	@printf '%s\n' '  make shell-u22                       Open Ubuntu 22.04 / ROS2 Humble shell'
@@ -52,25 +44,25 @@ shell-u24:
 	$(COMPOSE) --profile u24 run --rm joshua-u24
 
 test-u22:
-	$(COMPOSE) run --rm joshua-u22 bash -lc 'tests=$$(bazel query "kind(\".*_test rule\", //...)"); if [[ -z "$$tests" ]]; then echo "No Bazel test targets found."; exit 0; fi; bazel test --config=u22 --config=x86-base --@rules_python//python/config_settings:python_version=3.10 $$tests'
+	$(COMPOSE) run --rm test-u22
 
 test-u24:
-	$(COMPOSE) --profile u24 run --rm joshua-u24 bash -lc 'tests=$$(bazel query "kind(\".*_test rule\", //...)"); if [[ -z "$$tests" ]]; then echo "No Bazel test targets found."; exit 0; fi; bazel test --config=u24 --config=x86-base --@rules_python//python/config_settings:python_version=3.12 $$tests'
+	$(COMPOSE) run --rm test-u24
 
 run-u22:
-	$(COMPOSE) run --rm joshua-u22 bazel run --config=u22 --config=x86-base --@rules_python//python/config_settings:python_version=3.10 //launcher:joshua_main -- $(if $(CONFIG),--config $(CONFIG),)
+	CONFIG="$(CONFIG)" $(COMPOSE) run --rm run-u22
 
 run-u24:
-	$(COMPOSE) --profile u24 run --rm joshua-u24 bazel run --config=u24 --config=x86-base --@rules_python//python/config_settings:python_version=3.12 //launcher:joshua_main -- $(if $(CONFIG),--config $(CONFIG),)
+	CONFIG="$(CONFIG)" $(COMPOSE) run --rm run-u24
 
 run-isaac-u22:
-	$(COMPOSE_ISAAC) run --rm joshua-u22 bazel run --config=u22 --config=x86-base --@rules_python//python/config_settings:python_version=3.10 //launcher:joshua_main -- $(if $(CONFIG),--config $(CONFIG),)
+	CONFIG="$(CONFIG)" $(COMPOSE_ISAAC) run --rm run-u22
 
 run-isaac-u24:
-	$(COMPOSE_ISAAC) --profile u24 run --rm joshua-u24 bazel run --config=u24 --config=x86-base --@rules_python//python/config_settings:python_version=3.12 //launcher:joshua_main -- $(if $(CONFIG),--config $(CONFIG),)
+	CONFIG="$(CONFIG)" $(COMPOSE_ISAAC) run --rm run-u24
 
 build:
-	./scripts/build.py --os=$(OS) --cpu=$(CPU) $(TARGET)
+	TARGET="$(TARGET)" $(COMPOSE) run --rm build-$(OS)-$(CPU)
 
 ui:
 	$(COMPOSE) --profile production up --build joshua-ui
@@ -82,5 +74,6 @@ down:
 	$(COMPOSE_DEV) --profile production --profile u24 --profile arm64 --profile mac down
 
 compose-config:
-	$(COMPOSE) --profile u24 --profile arm64 --profile production config >/dev/null
-	$(COMPOSE_DEV) --profile u24 --profile arm64 --profile production config >/dev/null
+	$(COMPOSE) --profile u24 --profile arm64 --profile production --profile tasks config >/dev/null
+	$(COMPOSE_DEV) --profile u24 --profile arm64 --profile production --profile tasks config >/dev/null
+	$(COMPOSE_ISAAC) --profile u24 --profile arm64 --profile tasks config >/dev/null

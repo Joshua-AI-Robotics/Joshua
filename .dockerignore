@@ -1,5 +1,6 @@
 # Bazel build artifacts
 bazel-*
+dist/
 
 # Git
 .git

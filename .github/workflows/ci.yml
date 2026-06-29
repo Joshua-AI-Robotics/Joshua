@@ -14,13 +14,9 @@ jobs:
       matrix:
         include:
           - os: u22
-            service: joshua-u22
-            make_target: test-u22
-            profile_args: ""
+            service: test-u22
           - os: u24
-            service: joshua-u24
-            make_target: test-u24
-            profile_args: "--profile u24"
+            service: test-u24
 
     steps:
       - name: Checkout
@@ -45,7 +41,7 @@ jobs:
           df -h
 
       - name: Build Docker image
-        run: docker compose ${{ matrix.profile_args }} build ${{ matrix.service }}
+        run: docker compose build ${{ matrix.service }}
 
       - name: Run Bazel tests in Docker
-        run: make ${{ matrix.make_target }}
+        run: docker compose run --rm ${{ matrix.service }}

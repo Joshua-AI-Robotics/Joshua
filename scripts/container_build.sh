@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script is used by the build.py script to build the target in the container.
+# Build a target and copy its artifacts from inside a Joshua container.
 
 set -e
 
@@ -59,7 +59,7 @@ for FILE_PATH in "${FILE_LIST[@]}"; do
 
         # Fix permissions (match the mounted workspace owner, usually 1000:1000)
         # We assume the /workspace folder ownership is the target UID/GID
-        REF_FILE="/workspace/scripts/build.py"
+        REF_FILE="/workspace/VERSION"
         if [ -f "$REF_FILE" ]; then
             chown --reference="$REF_FILE" "$DEST_DIR/$DEST_NAME"
         fi
@@ -73,4 +73,3 @@ if [ "$FOUND_ANY" = true ]; then
 else
     echo "⚠️  Targets were built, but no file artifacts were found to copy."
 fi
-

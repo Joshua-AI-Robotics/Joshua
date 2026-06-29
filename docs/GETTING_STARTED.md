@@ -8,7 +8,7 @@ Use the bootstrap script only to prepare Docker host tooling:
 
 ```bash
 sudo ./scripts/setup.sh
-make help
+docker compose version
 ```
 
 If the script adds your user to the `docker` group, log out and back in before running Docker without `sudo`.
@@ -19,25 +19,25 @@ Both supported ROS stacks are first-class:
 
 | Stack | Command |
 |------|---------|
-| Ubuntu 22.04 / ROS2 Humble / Python 3.10 | `make shell-u22` |
-| Ubuntu 24.04 / ROS2 Jazzy / Python 3.12 | `make shell-u24` |
+| Ubuntu 22.04 / ROS2 Humble / Python 3.10 | `docker compose run --rm joshua-u22` |
+| Ubuntu 24.04 / ROS2 Jazzy / Python 3.12 | `docker compose run --rm joshua-u24` |
 
-Raw Docker Compose services remain available for advanced use, but public workflows should use the Make targets.
+Docker Compose is the canonical interface. The optional Makefile provides shorter aliases; run `make help` to list them.
 
 ## Launcher
 
 Run the default launcher through Docker:
 
 ```bash
-make run-u22
-make run-u24
+docker compose run --rm run-u22
+docker compose run --rm run-u24
 ```
 
 Pass a preset config when needed:
 
 ```bash
-make run-u22 CONFIG=config/config_preset/so100/teleoperate.pbtxt
-make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
+CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
+CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
 ```
 
 Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.
@@ -47,15 +47,15 @@ Hardware runs use the privileged/device access already configured in Docker Comp
 Run tests inside Docker:
 
 ```bash
-make test-u22
-make test-u24
+docker compose run --rm test-u22
+docker compose run --rm test-u24
 ```
 
 Build deployable packages inside Docker:
 
 ```bash
-make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg
-make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 ```
 
 Artifacts are written under `dist/<os>/<cpu>/`.
@@ -65,8 +65,8 @@ Artifacts are written under `dist/<os>/<cpu>/`.
 MuJoCo simulation runs through the same Docker launcher:
 
 ```bash
-make run-u22 CONFIG=config/config_preset/so100/sim_interactive.pbtxt
-make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
+CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
 ```
 
 Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables.
@@ -74,7 +74,8 @@ Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker,
 ```bash
 export ISAAC_LAB_PATH=$HOME/IsaacLab
 export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
-make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
+CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
 ## Web UI
@@ -82,13 +83,14 @@ make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
 Run the production UI:
 
 ```bash
-make ui
+docker compose --profile production up --build joshua-ui
 ```
 
 Run the development UI with the Zenoh bridge:
 
 ```bash
-make ui-dev
+docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+  up zenoh-bridge-ros2dds joshua-ui-dev
 ```
 
 Open `http://localhost:3000`.
@@ -96,5 +98,6 @@ Open `http://localhost:3000`.
 Stop Docker Compose services:
 
 ```bash
-make down
+docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+  --profile production --profile u24 --profile arm64 --profile mac down
 ```

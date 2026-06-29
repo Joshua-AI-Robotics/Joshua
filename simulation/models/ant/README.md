@@ -79,9 +79,10 @@ Quick Start
 -----------
 
 ```bash
-make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
+CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
 
 ISAAC_LAB_PATH=$HOME/IsaacLab \
 ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
-make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
+CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```

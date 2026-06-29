@@ -40,8 +40,8 @@ selected via `simulation.mode` in the preset:
 | `MODE_OFFSCREEN` | Headless frame rendering to disk |
 
 ```bash
-make run-u22 CONFIG=config/config_preset/so100/sim_interactive.pbtxt
-make run-u24 CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
+CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
 ```
 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
@@ -94,11 +94,14 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python   # optional, overrides isaacl
 ```bash
 export ISAAC_LAB_PATH=$HOME/IsaacLab
 export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
-make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
+CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 
-make run-isaac-u24 CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt
+CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 
-make run-isaac-u24 CONFIG=config/config_preset/bileg/bileg_sim_isaac.pbtxt
+CONFIG=config/config_preset/bileg/bileg_sim_isaac.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
 Close the viewer window (or Ctrl+C) to exit.

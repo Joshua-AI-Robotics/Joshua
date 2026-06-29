@@ -35,7 +35,7 @@ Proposed edits
 
 Test commands
 1) Open the Docker shell:
-   - `make shell-u22`
+   - `docker compose run --rm joshua-u22`
 2) Build protos inside the shell:
    - `bazel build --config=u22 --config=x86-base //robot/action/proto:... //robot/comm/proto:... //config/proto:...`
 3) Validate pbtxt parsing inside the shell:

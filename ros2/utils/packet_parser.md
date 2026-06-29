@@ -71,8 +71,8 @@ Contract tests in [`packet_parser_test.py`](packet_parser_test.py) compare these
 Run tests:
 
 ```bash
-make shell-u22
-bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 ---
@@ -94,8 +94,8 @@ Use this checklist any time you edit `action_packet.proto` or `perception_packet
 **Verify:**
 
 ```bash
-make shell-u22
-bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 Expected failing tests if you forget a registry update:
@@ -115,8 +115,8 @@ Expected failing tests if you forget a registry update:
 **Verify:**
 
 ```bash
-make shell-u22
-bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 Expected failing tests if you forget:

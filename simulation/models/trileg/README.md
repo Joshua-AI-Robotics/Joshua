@@ -78,7 +78,8 @@ Quick Start
 ```bash
 ISAAC_LAB_PATH=$HOME/IsaacLab \
 ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
-make run-isaac-u24 CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt
+CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt \
+docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
 Physics Tuning

@@ -26,8 +26,8 @@ Joshua development is Docker-first. The host should provide Docker Engine and Do
 git clone https://github.com/Joshua-AI-Robotics/Joshua.git
 cd Joshua
 sudo ./scripts/setup.sh
-make shell-u22
-make shell-u24
+docker compose run --rm joshua-u22
+docker compose run --rm joshua-u24
 ```
 
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs, simulation, and UI workflows. Native Ubuntu development is not a supported entrypoint.
@@ -94,14 +94,14 @@ Before requesting review:
 GitHub Actions runs Docker-backed tests for Ubuntu 22/Humble and Ubuntu 24/Jazzy on every PR to `develop`.
 
 ```bash
-make test-u22
-make test-u24
+docker compose run --rm test-u22
+docker compose run --rm test-u24
 ```
 
 For targeted work, open the matching Docker shell and run the package you touched inside the container:
 
 ```bash
-make shell-u22
+docker compose run --rm joshua-u22
 bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
@@ -110,8 +110,8 @@ If your change depends on ARM64 hardware or emulation, say so in the PR and desc
 To exercise the full stack manually:
 
 ```bash
-make run-u22
-make run-u24 CONFIG=config/config_preset/so100/teleoperate.pbtxt
+docker compose run --rm run-u22
+CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u24
 ```
 
 Preset-specific flows: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
@@ -129,7 +129,7 @@ Use the Docker shells for style and lint tooling:
 Manual check or auto-fix files changed since your branch diverged from `develop`:
 
 ```bash
-make shell-u22
+docker compose run --rm joshua-u22
 ./hooks/lint_check.sh              # check changed files (quiet by default)
 ./hooks/lint_check.sh --fix        # auto-fix changed files
 ./hooks/lint_check.sh --verbose    # show summary and per-file fix output
@@ -161,7 +161,7 @@ Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how config, protos, 
 
 These areas affect many presets and downstream nodes:
 
-- **`action_packet.proto`** and [`ros2/utils/packet_parser`](ros2/utils/packet_parser.md) — update registries and run `make shell-u22`, then `bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test`
+- **`action_packet.proto`** and [`ros2/utils/packet_parser`](ros2/utils/packet_parser.md) — update registries, open `docker compose run --rm joshua-u22`, then run `bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test`
 - **Top-level protos** (`config.proto`, `robot.proto`, `ai.proto`) — may require node generator and preset updates
 - **Breaking preset moves** — update docs and any referenced paths in README / GETTING_STARTED
 

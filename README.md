@@ -16,29 +16,26 @@ Joshua is Docker-first. Install Docker host tooling, open either supported ROS e
 
 ```bash
 sudo ./scripts/setup.sh
-make shell-u22      # Ubuntu 22.04 / ROS 2 Humble
-make shell-u24      # Ubuntu 24.04 / ROS 2 Jazzy
-make run-u22
+docker compose run --rm joshua-u22      # Ubuntu 22.04 / ROS 2 Humble
+docker compose run --rm joshua-u24      # Ubuntu 24.04 / ROS 2 Jazzy
+docker compose run --rm run-u22
 ```
 
-Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint; the host only needs Docker Engine and Docker Compose v2.
+Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint; the host only needs Docker Engine and Docker Compose v2. The Makefile provides optional shorthand for the Compose commands.
 
 ## Build deployable binaries
 
-For development, use the Make targets above. To produce a packaged, deployable build (launcher binary, presets, and runtime files), use `make build`. It runs Bazel inside the matching Docker image and copies artifacts to `dist/<os>/<cpu>/`.
+Use the matching one-shot Compose service to produce a packaged, deployable build. It runs Bazel inside Docker and copies artifacts to `dist/<os>/<cpu>/`.
 
 ```bash
-# Ubuntu 22.04 (Humble), x86_64 — default
-make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg
+# Ubuntu 22.04 (Humble), x86_64
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
 
 # Ubuntu 24.04 (Jazzy), ARM64 (e.g. Jetson; uses emulation on x86 hosts)
-make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 ```
 
-| Flag | Values | Default |
-|------|--------|---------|
-| `--os` | `u22` (22.04 / Humble), `u24` (24.04 / Jazzy) | `u22` |
-| `--cpu` | `x86`, `arm64` | `x86` |
+Build services follow `build-<os>-<cpu>` and support `u22` or `u24` with `x86` or `arm64`. `TARGET` defaults to `//launcher:joshua_main_pkg`.
 
 Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`VERSION`](VERSION); paths vary by flags). The archive includes a `VERSION` file and `joshua_main --version` reports the same value. Extract and run on a target machine with the matching Ubuntu/ROS stack. Full details: [scripts/README.md](scripts/README.md).
 

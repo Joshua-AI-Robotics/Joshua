@@ -17,10 +17,12 @@
 #   docker compose run --rm joshua-u24      # Interactive shell (Ubuntu 24.04 + Jazzy)
 #   docker compose run --rm joshua-mac-u22-arm64  # Interactive shell (Ubuntu 22.04 + Humble, macOS optimized)
 #
-# Prefer Makefile entrypoints:
-#   make shell-u22
-#   make shell-u24
-#   make run-u22 CONFIG=config/config_preset/so100/teleoperate.pbtxt
+# Canonical task entrypoints:
+#   docker compose run --rm test-u22
+#   CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
+#   TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+#
+# The Makefile provides optional shorthand for these commands.
 
 services:
   # ============================================
@@ -77,6 +79,96 @@ services:
     working_dir: /workspace
     profiles:
       - u24  # Only build when explicitly requested
+
+  # ============================================
+  # One-shot development tasks
+  # ============================================
+
+  test-u22:
+    extends:
+      service: joshua-u22
+    container_name: joshua-test-u22
+    command:
+      - bash
+      - -lc
+      - >-
+        tests=$$(bazel query 'kind(".*_test rule", //...)');
+        if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
+        bazel test --config=u22 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.10 $$tests
+    profiles: [tasks]
+
+  test-u24:
+    extends:
+      service: joshua-u24
+    container_name: joshua-test-u24
+    command:
+      - bash
+      - -lc
+      - >-
+        tests=$$(bazel query 'kind(".*_test rule", //...)');
+        if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
+        bazel test --config=u24 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.12 $$tests
+    profiles: [tasks]
+
+  run-u22:
+    extends:
+      service: joshua-u22
+    container_name: joshua-run-u22
+    environment:
+      - CONFIG=${CONFIG:-}
+    command:
+      - bash
+      - -lc
+      - >-
+        bazel run --config=u22 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.10
+        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+    profiles: [tasks]
+
+  run-u24:
+    extends:
+      service: joshua-u24
+    container_name: joshua-run-u24
+    environment:
+      - CONFIG=${CONFIG:-}
+    command:
+      - bash
+      - -lc
+      - >-
+        bazel run --config=u24 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.12
+        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+    profiles: [tasks]
+
+  build-u22-x86:
+    extends:
+      service: joshua-u22
+    container_name: joshua-build-u22-x86
+    command:
+      - /workspace/scripts/container_build.sh
+      - u22
+      - x86
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u22
+      - --config=x86-base
+      - --@rules_python//python/config_settings:python_version=3.10
+    profiles: [tasks]
+
+  build-u24-x86:
+    extends:
+      service: joshua-u24
+    container_name: joshua-build-u24-x86
+    command:
+      - /workspace/scripts/container_build.sh
+      - u24
+      - x86
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u24
+      - --config=x86-base
+      - --@rules_python//python/config_settings:python_version=3.12
+    profiles: [tasks]
 
   # ============================================
   # ARM64 (aarch64) Services
@@ -169,6 +261,34 @@ services:
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested
+
+  build-u22-arm64:
+    extends:
+      service: joshua-u22-arm64
+    container_name: joshua-build-u22-arm64
+    command:
+      - /workspace/scripts/container_build.sh
+      - u22
+      - arm64
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u22
+      - --config=arm64-base
+      - --@rules_python//python/config_settings:python_version=3.10
+    profiles: [tasks]
+
+  build-u24-arm64:
+    extends:
+      service: joshua-u24-arm64
+    container_name: joshua-build-u24-arm64
+    command:
+      - /workspace/scripts/container_build.sh
+      - u24
+      - arm64
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u24
+      - --config=arm64-base
+      - --@rules_python//python/config_settings:python_version=3.12
+    profiles: [tasks]
 
   joshua-ui:
     build:

@@ -1,6 +1,6 @@
 # Scripts
 
-Joshua’s public entrypoints are Docker-first Make targets from the repo root. Scripts in this directory support those targets.
+Joshua's public entrypoints are Docker Compose services from the repo root. The Makefile provides optional shorthand.
 
 ## `setup.sh`
 
@@ -12,18 +12,14 @@ sudo ./scripts/setup.sh
 
 It installs/checks Docker Engine, Docker Compose v2, buildx, and docker group membership. It does not install ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies on the host.
 
-## `build.py`
-
-Implementation detail behind `make build`. It runs Bazel inside the matching Docker service and copies artifacts to `dist/<os>/<cpu>/`.
-
-```bash
-make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg
-make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg
-```
-
 ## `container_build.sh`
 
-Internal script used inside Docker by `build.py`. It runs `bazel build`, finds output artifacts with `bazel cquery`, copies them to `dist/`, and fixes ownership for the mounted workspace.
+Internal script used by the `build-<os>-<cpu>` Compose services. It runs `bazel build`, finds output artifacts with `bazel cquery`, copies them to `dist/`, and fixes ownership for the mounted workspace.
+
+```bash
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
+```
 
 ## Development Helpers
 

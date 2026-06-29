@@ -12,8 +12,8 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
-- Docker-first Makefile entrypoints for shells, tests, launcher runs, package builds,
-  UI, and Isaac-backed simulation overlays
+- Docker Compose task services for shells, tests, launcher runs, package builds,
+  UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
   new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
   `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
@@ -32,6 +32,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Removed
 
+- Host-side `scripts/build.py`; package builds now run through Compose services
 - RL training pipeline (`ai/train` trainer, Isaac Lab task/env builders,
   trajectory export, `training.proto`, `training_launcher.cc`, the
   `MODE_TRAINING` operation mode, and all 19 train/eval/export presets).
@@ -66,7 +67,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - [`VERSION`](VERSION) as single source of truth for releases
 - [`CHANGELOG.md`](CHANGELOG.md) with project history
 - [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
-- README section for deployable binaries via [`scripts/build.py`](scripts/build.py)
+- README section for deployable binaries via `scripts/build.py`
 - Releases and versioning guidance in contributing docs
 
 ### Changed
@@ -123,7 +124,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 ### Added
 
 - React web control panel (`ui/`) ([#29](https://github.com/Joshua-AI-Robotics/Joshua/pull/29))
-- Cross-platform build script [`scripts/build.py`](scripts/build.py) and `joshua_main_pkg` deployable tarball ([#34](https://github.com/Joshua-AI-Robotics/Joshua/pull/34))
+- Cross-platform build script `scripts/build.py` and `joshua_main_pkg` deployable tarball ([#34](https://github.com/Joshua-AI-Robotics/Joshua/pull/34))
 - Data collecting node for dataset capture ([#19](https://github.com/Joshua-AI-Robotics/Joshua/pull/19))
 - Inference base class and refactored inference nodes ([#12](https://github.com/Joshua-AI-Robotics/Joshua/pull/12), [#18](https://github.com/Joshua-AI-Robotics/Joshua/pull/18), [#27](https://github.com/Joshua-AI-Robotics/Joshua/pull/27))
 - Node proto refactor and updated node generator ([#25](https://github.com/Joshua-AI-Robotics/Joshua/pull/25), [#28](https://github.com/Joshua-AI-Robotics/Joshua/pull/28))
