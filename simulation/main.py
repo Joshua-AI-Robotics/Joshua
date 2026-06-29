@@ -1,10 +1,13 @@
 """Simulation entry point (MuJoCo and Isaac Sim backends).
 
 Usage (unified config -- launched from Docker):
-    make run-u22 CONFIG=config/config_preset/so100/sim_interactive.pbtxt
+    CONFIG=config/config_preset/so100/sim_interactive.pbtxt \
+        docker compose run --rm run-u22
 
     # Isaac Sim viewer (requires Isaac Lab installed; see simulation/README.md)
-    make run-isaac-u24 CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt
+    CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+        docker compose -f docker-compose.yml -f docker-compose.isaac.yml \
+        run --rm run-u24
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.
 """

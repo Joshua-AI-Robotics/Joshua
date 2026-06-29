@@ -21,6 +21,8 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- Python 3.12 dependency lock now includes all Bazel-referenced runtime packages,
+  allowing u24 launcher package builds and MuJoCo simulation runs to complete
 - Launcher default `--config` and all docs now point to the renamed preset
   `config/config_preset/so100/teleoperate.pbtxt` (old `so100_teleoperate.pbtxt`
   references were broken since the 0.2.2 rename)

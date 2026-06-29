@@ -62,4 +62,22 @@ if ! grep -Fxq 'dist/' .dockerignore; then
   exit 1
 fi
 
+required_python_packages=$(
+  find . -type f \( -name 'BUILD' -o -name 'BUILD.*' \) \
+    -exec grep -hoE 'requirement\("[^"]+"\)' {} + \
+    | sed -E 's/requirement\("([^"]+)"\)/\1/' \
+    | sort -u
+)
+
+for lockfile in requirements.lock requirements_3.12.lock; do
+  while IFS= read -r package; do
+    normalized_package=${package,,}
+    normalized_package=${normalized_package//_/-}
+    if ! grep -Eiq "^${normalized_package}==" "${lockfile}"; then
+      echo "${lockfile} is missing Bazel requirement: ${package}" >&2
+      exit 1
+    fi
+  done <<<"${required_python_packages}"
+done
+
 echo "Docker entrypoint contract passed."
