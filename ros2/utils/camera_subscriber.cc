@@ -119,7 +119,8 @@ class CameraSubscriber : public rclcpp::Node {
 };
 
 // To run:
-// docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base ros2/utils:camera_subscriber <topic_name>
+// docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base
+// ros2/utils:camera_subscriber <topic_name>
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
 

@@ -1,7 +1,6 @@
 from typing import Callable, Dict, Type
 
 from ai.models.model_base import ModelBase
-
 from ai.models.random_noise.random_noise import RandomNoise
 from ai.proto import ai_model_pb2
 
@@ -30,6 +29,7 @@ def get_model_class(model_type: int) -> Type[ModelBase]:
     if model_type not in MODEL_REGISTRY:
         model_type_name = ai_model_pb2.ModelType.Name(model_type)
         raise ValueError(
-            f"Model type '{model_type_name}' (enum value: {model_type}) is not registered in MODEL_REGISTRY."
+            f"Model type '{model_type_name}' (enum value: {model_type}) "
+            "is not registered in MODEL_REGISTRY."
         )
     return MODEL_REGISTRY[model_type]()
