@@ -14,9 +14,7 @@ from ros2.utils.qos_setting import create_qos_setting
 
 
 class DataSubscriber(Node):
-    def __init__(
-        self, node_name: str, node_id: int, config: config_pb2.Config
-    ):
+    def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
 
         self.data_store = None
@@ -40,9 +38,7 @@ class DataSubscriber(Node):
         )
 
         self.next_episode_index = 0
-        index_file = os.path.join(
-            self.data_store.store_root, ".last_episode_index"
-        )
+        index_file = os.path.join(self.data_store.store_root, ".last_episode_index")
         if os.path.exists(index_file):
             try:
                 with open(index_file, "r") as f:
@@ -62,16 +58,12 @@ class DataSubscriber(Node):
         """
         qos_setting = create_qos_setting(node.qos_setting)
         for subscription in node.subscriptions:
-            message_type = resolve_message_class_from_enum(
-                subscription.ros2_data_type
-            )
+            message_type = resolve_message_class_from_enum(subscription.ros2_data_type)
             self.topic_message_counts[subscription.topic] = 0
             subscription = self.create_subscription(
                 message_type,
                 subscription.topic,
-                functools.partial(
-                    self.subscribe_callback, topic=subscription.topic
-                ),
+                functools.partial(self.subscribe_callback, topic=subscription.topic),
                 qos_setting,
             )
             self.subscription_list.append(subscription)
