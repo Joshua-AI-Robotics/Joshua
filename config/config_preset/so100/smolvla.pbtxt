@@ -483,6 +483,7 @@ ai {
 
       smolvla_config {
         model_name: "HuggingFaceM4/SmolVLM-Instruct"
+        task_description: "Pick up the black object."
       }
     }
   }
