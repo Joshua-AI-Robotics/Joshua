@@ -71,25 +71,47 @@ def _venv_is_ready(venv: Path, fingerprint: str) -> bool:
     )
 
 
+def _pip_build_env() -> dict[str, str]:
+    """Env for pip/uv when building C extensions into model venvs.
+
+    Bazel's hermetic Python is built with clang, so sysconfig defaults to
+    CC=clang. Docker/dev images usually ship gcc (build-essential) only.
+    """
+    env = os.environ.copy()
+    env["CC"] = "gcc"
+    env["CXX"] = "g++"
+    return env
+
+
+def _venv_python_executable(python_version: str) -> str:
+    """System interpreter for venv creation (not Bazel's hermetic Python)."""
+    for candidate in (f"python{python_version}", "python3"):
+        path = shutil.which(candidate)
+        if path:
+            return path
+    return sys.executable
+
+
 def _create_venv(venv: Path, python_version: str) -> Path:
     venv.parent.mkdir(parents=True, exist_ok=True)
+    base_py = _venv_python_executable(python_version)
     if shutil.which("uv"):
         subprocess.check_call(
-            [
-                "uv",
-                "venv",
-                "--python",
-                python_version,
-                str(venv),
-            ]
+            ["uv", "venv", "--python", base_py, str(venv)],
+            env=_pip_build_env(),
         )
     else:
-        subprocess.check_call([sys.executable, "-m", "venv", str(venv)])
+        subprocess.check_call([base_py, "-m", "venv", str(venv)])
     return venv / "bin" / "python"
 
 
 def _pip_install_locks(venv_py: Path, lock_paths: list[Path]) -> None:
     """Install lock files in order so model-specific pins can override the base."""
+    env = _pip_build_env()
+    subprocess.check_call(
+        [str(venv_py), "-m", "pip", "install", "--upgrade", "pip"],
+        env=env,
+    )
     if shutil.which("uv"):
         for lock_path in lock_paths:
             subprocess.check_call(
@@ -101,7 +123,8 @@ def _pip_install_locks(venv_py: Path, lock_paths: list[Path]) -> None:
                     str(venv_py),
                     "-r",
                     str(lock_path),
-                ]
+                ],
+                env=env,
             )
         return
 
@@ -110,7 +133,7 @@ def _pip_install_locks(venv_py: Path, lock_paths: list[Path]) -> None:
         if index == 0:
             cmd.append("--ignore-installed")
         cmd.extend(["-r", str(lock_path)])
-        subprocess.check_call(cmd)
+        subprocess.check_call(cmd, env=env)
 
 
 def _sync_venv(venv_py: Path, base_lock: Path, model_lock: Optional[Path]) -> None:
