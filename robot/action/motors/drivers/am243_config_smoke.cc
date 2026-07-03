@@ -14,11 +14,11 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "config/proto/robot.pb.h"
+#include "config/config_utils.h"
+#include "config/proto/config.pb.h"
 #include "robot/action/motors/drivers/am243_ethercat_driver.h"
 #include "robot/action/motors/drivers/am243_pdo_codec.h"
 #include "robot/action/proto/action_packet.pb.h"
-#include "robot/comm/ethercat/ethercat_status.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
 
@@ -29,13 +29,13 @@ using robot::comm::ethercat::ProcessDataMode;
 using robot::comm::ethercat::SlaveIdentity;
 using robot::comm::ethercat::SoemEthercatTransport;
 
-constexpr float kLowerLimit = -90.0f;
-constexpr float kUpperLimit = 90.0f;
 constexpr size_t kDisplayedCycles = 5;
 
 void PrintUsage(const char* argv0) {
-  std::cerr << "usage: " << argv0 << " <interface> [cycles] [period_us] [slave_index]\n"
-            << "example: " << argv0 << " enp5s0 80 5000 1\n";
+  std::cerr << "usage: " << argv0
+            << " <config_pbtxt> [interface_override] [cycles] [period_us] [slave_index_override]\n"
+            << "example: " << argv0
+            << " config/config_preset/example/am243_ethercat_demo.pbtxt enp5s0 80 5000 1\n";
 }
 
 int ParsePositiveInt(const char* value, int fallback) {
@@ -85,60 +85,78 @@ void PrintSlave(uint16_t index, const SlaveIdentity& slave) {
             << " bits inputs=" << slave.input_size_bits << " bits\n";
 }
 
-robot::action::Actuator MakeActuatorConfig(const std::string& interface_name,
-                                           const PdoRegion& region) {
-  robot::action::Actuator actuator;
-  actuator.set_actuator_name("am243_demo");
-  actuator.set_id(1);
-  actuator.set_actuator_type(robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR);
-  actuator.set_physical_lower_limit(kLowerLimit);
-  actuator.set_physical_upper_limit(kUpperLimit);
-  actuator.set_operational_lower_limit(kLowerLimit);
-  actuator.set_operational_upper_limit(kUpperLimit);
-
-  auto* comm = actuator.mutable_comm();
-  comm->set_comm_type(robot::comm::CommType::ETHERCAT);
-  auto* ethercat_config = comm->mutable_ethercat_config();
-  ethercat_config->set_interface_name(interface_name);
-  ethercat_config->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
-
-  auto* am243_config = actuator.mutable_am243_ethercat_config();
-  am243_config->set_slave_index(region.slave_index);
-  am243_config->set_output_offset_bytes(region.output_offset_bytes);
-  am243_config->set_input_offset_bytes(region.input_offset_bytes);
-  am243_config->set_output_size_bytes(region.output_size_bytes);
-  am243_config->set_input_size_bytes(region.input_size_bytes);
-  am243_config->set_idle_position(0.0f);
-  am243_config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
-  return actuator;
+absl::StatusOr<robot::action::Actuator> FindAm243Actuator(const config::Config& config) {
+  for (const auto& single_action : config.robot().actions().single_actions()) {
+    if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
+        !single_action.has_actuator()) {
+      continue;
+    }
+    const auto& actuator = single_action.actuator();
+    if (actuator.actuator_type() == robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR) {
+      return actuator;
+    }
+  }
+  return absl::Status(absl::StatusCode::kNotFound,
+                      "config does not contain an AM243 EtherCAT actuator");
 }
 
-float PositionForCycle(int cycle) {
+ProcessDataMode ToProcessDataMode(robot::comm::EthercatProcessDataMode mode) {
+  if (mode == robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW) {
+    return ProcessDataMode::kLrw;
+  }
+  return ProcessDataMode::kSplitLrdLwr;
+}
+
+float PositionForCycle(const robot::action::Actuator& actuator, int cycle) {
+  const float lower = actuator.operational_lower_limit();
+  const float upper = actuator.operational_upper_limit();
   const int seed = cycle & 0xff;
-  return kLowerLimit + ((kUpperLimit - kLowerLimit) * static_cast<float>(seed) / 255.0f);
+  return lower + ((upper - lower) * static_cast<float>(seed) / 255.0f);
 }
 
-uint8_t DemoSeedForPosition(float position) {
-  const float normalized = (position - kLowerLimit) / (kUpperLimit - kLowerLimit);
+uint8_t DemoSeedForPosition(const robot::action::Actuator& actuator, float position) {
+  const float lower = actuator.operational_lower_limit();
+  const float upper = actuator.operational_upper_limit();
+  const float normalized = (position - lower) / (upper - lower);
   return static_cast<uint8_t>(std::lround(std::clamp(normalized * 255.0f, 0.0f, 255.0f)));
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 2 || argc > 5) {
+  if (argc < 2 || argc > 6) {
     PrintUsage(argv[0]);
     return 2;
   }
 
-  const std::string interface_name = argv[1];
-  const int cycles = argc >= 3 ? ParsePositiveInt(argv[2], 80) : 80;
-  const int period_us = argc >= 4 ? ParsePositiveInt(argv[3], 5000) : 5000;
-  const uint16_t slave_index = static_cast<uint16_t>(argc >= 5 ? ParsePositiveInt(argv[4], 1) : 1);
+  const std::string config_path = argv[1];
+  const std::string interface_override = argc >= 3 ? argv[2] : "";
+  const int cycles = argc >= 4 ? ParsePositiveInt(argv[3], 80) : 80;
+  const int period_us = argc >= 5 ? ParsePositiveInt(argv[4], 5000) : 5000;
+  const int slave_index_override = argc >= 6 ? ParsePositiveInt(argv[5], 0) : 0;
 
+  absl::StatusOr<config::Config> config_or = config::config_util::LoadConfig(config_path);
+  if (!config_or.ok()) {
+    return Fail(config_or.status());
+  }
+
+  absl::StatusOr<robot::action::Actuator> actuator_or = FindAm243Actuator(*config_or);
+  if (!actuator_or.ok()) {
+    return Fail(actuator_or.status());
+  }
+  robot::action::Actuator actuator = *actuator_or;
+  if (!interface_override.empty() && interface_override != "-") {
+    actuator.mutable_comm()->mutable_ethercat_config()->set_interface_name(interface_override);
+  }
+  if (slave_index_override > 0) {
+    actuator.mutable_am243_ethercat_config()->set_slave_index(
+        static_cast<uint32_t>(slave_index_override));
+  }
+
+  const auto& ethercat_config = actuator.comm().ethercat_config();
   auto transport = std::make_shared<SoemEthercatTransport>();
-  absl::Status status = transport->Init(interface_name, ProcessDataMode::kSplitLrdLwr);
+  absl::Status status = transport->Init(ethercat_config.interface_name(),
+                                        ToProcessDataMode(ethercat_config.process_data_mode()));
   if (!status.ok()) {
     return Fail(status);
   }
@@ -155,6 +173,8 @@ int main(int argc, char** argv) {
     PrintSlave(static_cast<uint16_t>(i + 1), (*slaves_or)[i]);
   }
 
+  const uint16_t slave_index =
+      static_cast<uint16_t>(actuator.am243_ethercat_config().slave_index());
   absl::StatusOr<PdoRegion> region_or = transport->GetPdoRegion(slave_index);
   if (!region_or.ok()) {
     return Fail(region_or.status());
@@ -165,8 +185,7 @@ int main(int argc, char** argv) {
     return Fail(status);
   }
 
-  robot::action::Am243EthercatDriver driver(transport,
-                                            MakeActuatorConfig(interface_name, *region_or));
+  robot::action::Am243EthercatDriver driver(transport, actuator);
   status = driver.Init();
   if (!status.ok()) {
     return Fail(status);
@@ -174,9 +193,9 @@ int main(int argc, char** argv) {
 
   std::deque<std::string> recent_cycles;
   for (int cycle = 0; cycle < cycles; ++cycle) {
-    const float position = PositionForCycle(cycle);
+    const float position = PositionForCycle(actuator, cycle);
     robot::action::ActionPacket packet;
-    packet.set_action_id("am243_driver_smoke");
+    packet.set_action_id("am243_config_smoke");
     packet.set_position(position);
 
     status = driver.SetAction(packet);
@@ -189,7 +208,7 @@ int main(int argc, char** argv) {
       return Fail(inputs_or.status());
     }
     const std::vector<uint8_t> outputs =
-        robot::action::am243::EncodeDemoOutputSeed(DemoSeedForPosition(position));
+        robot::action::am243::EncodeDemoOutputSeed(DemoSeedForPosition(actuator, position));
 
     std::ostringstream cycle_line;
     cycle_line << "cycle=" << cycle << " position=" << position << " O=[" << FormatBytes(outputs)

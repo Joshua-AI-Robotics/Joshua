@@ -158,7 +158,7 @@ TEST(Am243EthercatDriverTest, SetPositionWritesDemoPdoAndExchangesProcessData) {
   EXPECT_TRUE(status.ok()) << status;
   EXPECT_EQ(transport->exchange_process_data_calls_, 1);
   EXPECT_EQ(transport->last_write_region_.slave_index, 2);
-  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputWalk(128));
+  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputSeed(128));
 }
 
 TEST(Am243EthercatDriverTest, SetSpeedWritesRoundedDemoPdoSeed) {
@@ -169,7 +169,7 @@ TEST(Am243EthercatDriverTest, SetSpeedWritesRoundedDemoPdoSeed) {
   auto status = driver.SetSpeed(3.2f);
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputWalk(3));
+  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputSeed(3));
 }
 
 TEST(Am243EthercatDriverTest, CommandReturnsWorkingCountMismatch) {

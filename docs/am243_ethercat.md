@@ -24,7 +24,7 @@ Split LRD/LWR process data works with the current firmware:
 
 - `scripts/run_ethercat_soem_split.sh enp5s0` reaches OPERATIONAL.
 - Expected working count is WKC `3`.
-- PDO walking shows output bytes changing.
+- PDO seed tests show output byte 0 changing.
 - Input byte 0 follows the output seed one cycle behind.
 
 ## Runtime Direction
@@ -82,9 +82,9 @@ docker compose exec joshua-u24 bazel run //robot/comm/ethercat:am243_demo_smoke 
 ```
 
 The tool opens the interface, configures slaves, starts cyclic exchange, writes
-the AM243 demo walking-byte output pattern, and prints the working count plus
-input byte 0. With the current TI demo firmware, expect WKC `3` and input byte 0
-to follow the output seed one cycle behind.
+the AM243 demo seed in output byte 0 with output bytes 1-7 held at zero, and
+prints the working count plus input byte 0. With the current TI demo firmware,
+expect WKC `3` and input byte 0 to follow the output seed one cycle behind.
 
 To test the Joshua actuator-driver path, run:
 
@@ -96,6 +96,16 @@ This uses `Am243EthercatDriver`, sends Joshua `ActionPacket` position commands,
 and exchanges PDOs through the same SOEM transport. With the current TI demo
 firmware, input byte 0 should trail the generated command seed by one cycle.
 
+To test the same path through the checked-in preset config, run:
+
+```bash
+docker compose exec joshua-u24 bazel run //robot/action/motors/drivers:am243_config_smoke -- config/config_preset/example/am243_ethercat_demo.pbtxt enp5s0 80 5000 1
+```
+
+This loads `config/config_preset/example/am243_ethercat_demo.pbtxt`, extracts the
+AM243 actuator config, applies the optional interface and slave-index overrides,
+and then sends the same Joshua `ActionPacket` position commands.
+
 ## Current PDO Codec Scope
 
 The only AM243 PDO byte-level behavior encoded in Joshua today is the validated
@@ -103,7 +113,9 @@ TI simple-demo walk:
 
 - Output PDO size: 8 bytes.
 - Input PDO size: 8 bytes.
-- Output bytes carry a walking pattern based on the command seed.
+- Output byte 0 carries the command seed.
+- Output bytes 1-7 are held at zero because their TI demo contents do not
+  represent Joshua actuator fields.
 - Input byte 0 echoes that seed one cycle later.
 
 This is captured as a demo codec and is available only when

@@ -47,9 +47,28 @@ cc_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":am243_ethercat_driver",
+        ":am243_pdo_codec",
         "//config/proto:robot_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/comm/ethercat:ethercat_status",
+        "//robot/comm/ethercat:ethercat_transport",
+        "//robot/comm/ethercat:soem_ethercat_transport",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_binary(
+    name = "am243_config_smoke",
+    srcs = ["am243_config_smoke.cc"],
+    data = ["//config/config_preset:config_presets"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":am243_ethercat_driver",
+        ":am243_pdo_codec",
+        "//config:config_utils",
+        "//config/proto:config_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
         "//robot/comm/ethercat:ethercat_transport",
         "//robot/comm/ethercat:soem_ethercat_transport",
         "@abseil-cpp//absl/status:status",

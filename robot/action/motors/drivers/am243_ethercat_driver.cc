@@ -190,7 +190,7 @@ absl::Status Am243EthercatDriver::SendDemoPdo(uint8_t seed) {
   }
 
   absl::Status status =
-      ethercat_->WriteOutputs(pdo_region_, robot::action::am243::EncodeDemoOutputWalk(seed));
+      ethercat_->WriteOutputs(pdo_region_, robot::action::am243::EncodeDemoOutputSeed(seed));
   if (!status.ok()) {
     return status;
   }
