@@ -41,6 +41,7 @@ robot {
           output_size_bytes: 8
           input_size_bytes: 8
           idle_position: 0
+          pdo_mapping: AM243_PDO_MAPPING_TI_DEMO
         }
       }
     }

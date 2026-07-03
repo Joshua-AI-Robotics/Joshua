@@ -91,6 +91,7 @@ robot::action::Actuator MakeActuatorConfig(const std::string& interface_name,
   am243_config->set_output_size_bytes(region.output_size_bytes);
   am243_config->set_input_size_bytes(region.input_size_bytes);
   am243_config->set_idle_position(0.0f);
+  am243_config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
   return actuator;
 }
 

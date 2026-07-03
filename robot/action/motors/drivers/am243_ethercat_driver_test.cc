@@ -30,6 +30,7 @@ robot::action::Actuator MakeAm243Actuator() {
   config->set_output_size_bytes(8);
   config->set_input_size_bytes(8);
   config->set_idle_position(0.0f);
+  config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
   return actuator;
 }
 
@@ -63,6 +64,18 @@ TEST(Am243EthercatDriverTest, InitUsesExplicitPdoRegionConfig) {
 
   EXPECT_TRUE(status.ok()) << status;
   EXPECT_EQ(transport->get_pdo_region_calls_, 0);
+}
+
+TEST(Am243EthercatDriverTest, InitRejectsUnspecifiedPdoMapping) {
+  auto transport = std::make_shared<FakeEthercatTransport>();
+  auto actuator = MakeAm243Actuator();
+  actuator.mutable_am243_ethercat_config()->set_pdo_mapping(
+      robot::action::Am243PdoMapping::AM243_PDO_MAPPING_UNSPECIFIED);
+  Am243EthercatDriver driver(transport, actuator);
+
+  auto status = driver.Init();
+
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 TEST(Am243EthercatDriverTest, InitRejectsInvalidExplicitPdoRegionConfig) {

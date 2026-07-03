@@ -56,13 +56,14 @@ AM243 support should fit into Joshua's existing robot architecture:
 - AM243 runtime configs should use `comm_type: ETHERCAT` with
   `ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR` while running the current TI demo
   firmware.
+- AM243 demo configs must set `pdo_mapping: AM243_PDO_MAPPING_TI_DEMO`.
+  This keeps the validated TI demo byte-walk separate from any future actuator
+  firmware PDO contract.
 
 An example config lives at
 `config/config_preset/example/am243_ethercat_demo.pbtxt`. It validates the
 configuration surface. The SOEM-backed EtherCAT transport now has the runtime
-pieces needed for an initial hardware smoke test, but Joshua still needs a small
-board-facing test tool or action-loop entry point before this config is a useful
-manual board test by itself.
+pieces needed for hardware smoke tests.
 
 The first backend skeleton pins upstream SOEM v2.0.0 in Bazel and verifies that
 Joshua can compile the SOEM-backed transport. `Init()` now opens the SOEM master
@@ -73,8 +74,8 @@ SOEM's `blockLRW` path, maps PDO regions, and `Teardown()` closes the socket.
 
 ## Hardware Smoke Test
 
-With the LP-AM243 connected to the Linux EtherCAT NIC, run the demo PDO smoke
-test from the Ubuntu 24.04 + ROS 2 Jazzy container:
+With the LP-AM243 connected to the Linux EtherCAT NIC, run the low-level demo
+PDO smoke test from the Ubuntu 24.04 + ROS 2 Jazzy container:
 
 ```bash
 docker compose exec joshua-u24 bazel run //robot/comm/ethercat:am243_demo_smoke -- enp5s0 20 1
@@ -85,6 +86,16 @@ the AM243 demo seed byte, and prints the working count plus input byte 0. With
 the current TI demo firmware, expect WKC `3` and input byte 0 to follow the
 output seed one cycle behind.
 
+To test the Joshua actuator-driver path, run:
+
+```bash
+docker compose exec joshua-u24 bazel run //robot/action/motors/drivers:am243_driver_smoke -- enp5s0 80 5000 1
+```
+
+This uses `Am243EthercatDriver`, sends Joshua `ActionPacket` position commands,
+and exchanges PDOs through the same SOEM transport. With the current TI demo
+firmware, input byte 0 should trail the generated command seed by one cycle.
+
 ## Current PDO Codec Scope
 
 The only AM243 PDO byte-level behavior encoded in Joshua today is the validated
@@ -92,9 +103,11 @@ TI simple-demo walk:
 
 - Output PDO size: 8 bytes.
 - Input PDO size: 8 bytes.
-- Output byte 0 carries a walking seed.
+- Output bytes carry a walking pattern based on the command seed.
 - Input byte 0 echoes that seed one cycle later.
 
-This is captured as a demo codec, not an actuator command map. Position, speed,
-and torque command encoding should remain unimplemented until the AM243 firmware
-defines a real actuator PDO layout.
+This is captured as a demo codec and is available only when
+`pdo_mapping: AM243_PDO_MAPPING_TI_DEMO` is selected. Position, speed, and torque
+are mapped to a demo seed for smoke testing; this is not the final actuator
+command map. Add a new `Am243PdoMapping` value when AM243 firmware defines a real
+actuator PDO layout.

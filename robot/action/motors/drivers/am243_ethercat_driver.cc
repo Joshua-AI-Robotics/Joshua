@@ -41,6 +41,12 @@ absl::Status Am243EthercatDriver::Init() {
   }
 
   const auto& config = action_config_.am243_ethercat_config();
+  pdo_mapping_ = config.pdo_mapping();
+  if (pdo_mapping_ != robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO) {
+    return absl::Status(absl::StatusCode::kUnimplemented,
+                        "AM243 EtherCAT driver currently supports only the TI demo PDO mapping");
+  }
+
   pdo_region_.slave_index = static_cast<uint16_t>(config.slave_index());
   pdo_region_.output_offset_bytes = config.output_offset_bytes();
   pdo_region_.input_offset_bytes = config.input_offset_bytes();

@@ -40,6 +40,8 @@ class Am243EthercatDriver : public robot::action::ActuatorInterface {
   std::shared_ptr<robot::comm::ethercat::EthercatTransport> ethercat_;
   robot::action::Actuator action_config_;
   robot::comm::ethercat::PdoRegion pdo_region_;
+  robot::action::Am243PdoMapping pdo_mapping_ =
+      robot::action::Am243PdoMapping::AM243_PDO_MAPPING_UNSPECIFIED;
   std::string id_;
   float speed_ = 0.0f;
   float torque_ = 0.0f;

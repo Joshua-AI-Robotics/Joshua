@@ -53,6 +53,12 @@ message SpikeMotorConfig {
   float idle_position = 3;
 }
 
+enum Am243PdoMapping {
+  AM243_PDO_MAPPING_UNSPECIFIED = 0;
+  AM243_PDO_MAPPING_TI_DEMO = 1;
+  AM243_PDO_MAPPING_ACTUATOR_V1 = 2;
+}
+
 message Am243EthercatConfig {
   uint32 slave_index = 1;
   uint32 output_offset_bytes = 2;
@@ -60,6 +66,7 @@ message Am243EthercatConfig {
   uint32 output_size_bytes = 4;
   uint32 input_size_bytes = 5;
   float idle_position = 6;
+  Am243PdoMapping pdo_mapping = 7;
 }
 
 message SingleAction {

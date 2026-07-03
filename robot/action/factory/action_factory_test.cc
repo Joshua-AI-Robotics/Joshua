@@ -32,6 +32,7 @@ robot::action::SingleAction MakeAm243EthercatSingleAction() {
   actuator_config->set_output_size_bytes(8);
   actuator_config->set_input_size_bytes(8);
   actuator_config->set_idle_position(0.0f);
+  actuator_config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
 
   return single_action;
 }
