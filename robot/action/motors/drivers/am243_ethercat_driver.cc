@@ -2,20 +2,15 @@
 
 #include <glog/logging.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <string>
 
+#include "robot/action/motors/drivers/am243_pdo_codec.h"
 #include "robot/comm/ethercat/ethercat_status.h"
 
 namespace robot::action {
-
-namespace {
-
-absl::Status UnimplementedPdoMappingStatus(const std::string& command) {
-  return absl::Status(absl::StatusCode::kUnimplemented,
-                      "AM243 EtherCAT PDO mapping is not implemented for " + command);
-}
-
-}  // namespace
 
 Am243EthercatDriver::Am243EthercatDriver(
     const std::shared_ptr<robot::comm::ethercat::EthercatTransport>& ethercat,
@@ -130,7 +125,7 @@ absl::Status Am243EthercatDriver::SetSpeed(float value) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "AM243 speed must be non-negative");
   }
   speed_ = value;
-  return UnimplementedPdoMappingStatus("speed");
+  return SendDemoPdo(static_cast<uint8_t>(std::clamp(std::lround(value), 0L, 255L)));
 }
 
 absl::Status Am243EthercatDriver::SetPosition(float angle) {
@@ -138,7 +133,13 @@ absl::Status Am243EthercatDriver::SetPosition(float angle) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "AM243 position is outside operational limits");
   }
-  return UnimplementedPdoMappingStatus("position");
+  const float range = operational_upper_limit_ - operational_lower_limit_;
+  if (range <= 0.0f) {
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "AM243 operational position range is invalid");
+  }
+  const float normalized = (angle - operational_lower_limit_) / range;
+  return SendDemoPdo(static_cast<uint8_t>(std::clamp(std::lround(normalized * 255.0f), 0L, 255L)));
 }
 
 absl::Status Am243EthercatDriver::SetTorque(float torque) {
@@ -146,7 +147,7 @@ absl::Status Am243EthercatDriver::SetTorque(float torque) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "AM243 torque must be non-negative");
   }
   torque_ = torque;
-  return UnimplementedPdoMappingStatus("torque");
+  return SendDemoPdo(static_cast<uint8_t>(std::clamp(std::lround(torque * 255.0f), 0L, 255L)));
 }
 
 absl::Status Am243EthercatDriver::SetMiddlePosition() {
@@ -159,16 +160,40 @@ absl::Status Am243EthercatDriver::SetIdlePosition() {
 
 absl::Status Am243EthercatDriver::Teardown() {
   auto idle_status = SetIdlePosition();
-  if (!idle_status.ok() && idle_status.code() != absl::StatusCode::kUnimplemented) {
+  if (!idle_status.ok()) {
     return idle_status;
   }
 
   auto torque_status = SetTorque(0.0f);
-  if (!torque_status.ok() && torque_status.code() != absl::StatusCode::kUnimplemented) {
+  if (!torque_status.ok()) {
     return torque_status;
   }
 
   return absl::OkStatus();
+}
+
+absl::Status Am243EthercatDriver::SendDemoPdo(uint8_t seed) {
+  if (ethercat_ == nullptr) {
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "AM243 EtherCAT driver requires an EtherCAT transport");
+  }
+
+  absl::Status region_status = robot::comm::ethercat::ValidatePdoRegion(pdo_region_);
+  if (!region_status.ok()) {
+    return region_status;
+  }
+
+  absl::Status status =
+      ethercat_->WriteOutputs(pdo_region_, robot::action::am243::EncodeDemoOutputWalk(seed));
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto process_data_or = ethercat_->ExchangeProcessData();
+  if (!process_data_or.ok()) {
+    return process_data_or.status();
+  }
+  return robot::comm::ethercat::ValidateProcessData(*process_data_or);
 }
 
 }  // namespace robot::action

@@ -47,7 +47,7 @@ class FakeEthercatTransport : public EthercatTransport {
   absl::Status WriteOutputs(const PdoRegion& region, const std::vector<uint8_t>& outputs) override {
     last_write_region_ = region;
     last_outputs_ = outputs;
-    return absl::OkStatus();
+    return write_outputs_status_;
   }
 
   absl::StatusOr<std::vector<uint8_t>> ReadInputs(const PdoRegion& region) const override {
@@ -57,6 +57,9 @@ class FakeEthercatTransport : public EthercatTransport {
 
   absl::StatusOr<ProcessData> ExchangeProcessData() override {
     exchange_process_data_calls_++;
+    if (!exchange_process_data_status_.ok()) {
+      return exchange_process_data_status_;
+    }
     return process_data_;
   }
 
@@ -75,6 +78,8 @@ class FakeEthercatTransport : public EthercatTransport {
     return region;
   }();
   absl::Status get_pdo_region_status_ = absl::OkStatus();
+  absl::Status write_outputs_status_ = absl::OkStatus();
+  absl::Status exchange_process_data_status_ = absl::OkStatus();
   std::vector<SlaveIdentity> slaves_;
   std::vector<uint8_t> inputs_;
   ProcessData process_data_;

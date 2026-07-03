@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 
+#include "absl/status/status.h"
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/actuator_interface.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
@@ -34,6 +35,8 @@ class Am243EthercatDriver : public robot::action::ActuatorInterface {
   absl::Status SetIdlePosition() override;
 
  private:
+  absl::Status SendDemoPdo(uint8_t seed);
+
   std::shared_ptr<robot::comm::ethercat::EthercatTransport> ethercat_;
   robot::action::Actuator action_config_;
   robot::comm::ethercat::PdoRegion pdo_region_;

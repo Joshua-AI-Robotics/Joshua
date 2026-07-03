@@ -4,6 +4,7 @@
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
+#include "robot/action/motors/drivers/am243_pdo_codec.h"
 #include "robot/action/proto/action_packet.pb.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
 
@@ -118,7 +119,7 @@ TEST(Am243EthercatDriverTest, InitRejectsInvalidFetchedPdoRegion) {
   EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(Am243EthercatDriverTest, SetCommandsValidateInputsAndReturnUnimplemented) {
+TEST(Am243EthercatDriverTest, SetCommandsValidateInputsAndSendDemoPdos) {
   auto transport = std::make_shared<FakeEthercatTransport>();
   Am243EthercatDriver driver(transport, MakeAm243Actuator());
   ASSERT_TRUE(driver.Init().ok());
@@ -127,9 +128,47 @@ TEST(Am243EthercatDriverTest, SetCommandsValidateInputsAndReturnUnimplemented) {
   EXPECT_EQ(driver.SetTorque(-1.0f).code(), absl::StatusCode::kInvalidArgument);
   EXPECT_EQ(driver.SetPosition(100.0f).code(), absl::StatusCode::kInvalidArgument);
 
-  EXPECT_EQ(driver.SetSpeed(1.0f).code(), absl::StatusCode::kUnimplemented);
-  EXPECT_EQ(driver.SetTorque(1.0f).code(), absl::StatusCode::kUnimplemented);
-  EXPECT_EQ(driver.SetPosition(0.0f).code(), absl::StatusCode::kUnimplemented);
+  EXPECT_TRUE(driver.SetSpeed(1.0f).ok());
+  EXPECT_TRUE(driver.SetTorque(1.0f).ok());
+  EXPECT_TRUE(driver.SetPosition(0.0f).ok());
+}
+
+TEST(Am243EthercatDriverTest, SetPositionWritesDemoPdoAndExchangesProcessData) {
+  auto transport = std::make_shared<FakeEthercatTransport>();
+  transport->process_data_.working_count = 3;
+  transport->process_data_.expected_working_count = 3;
+  Am243EthercatDriver driver(transport, MakeAm243Actuator());
+  ASSERT_TRUE(driver.Init().ok());
+
+  auto status = driver.SetPosition(0.0f);
+
+  EXPECT_TRUE(status.ok()) << status;
+  EXPECT_EQ(transport->exchange_process_data_calls_, 1);
+  EXPECT_EQ(transport->last_write_region_.slave_index, 2);
+  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputWalk(128));
+}
+
+TEST(Am243EthercatDriverTest, SetSpeedWritesRoundedDemoPdoSeed) {
+  auto transport = std::make_shared<FakeEthercatTransport>();
+  Am243EthercatDriver driver(transport, MakeAm243Actuator());
+  ASSERT_TRUE(driver.Init().ok());
+
+  auto status = driver.SetSpeed(3.2f);
+
+  EXPECT_TRUE(status.ok()) << status;
+  EXPECT_EQ(transport->last_outputs_, robot::action::am243::EncodeDemoOutputWalk(3));
+}
+
+TEST(Am243EthercatDriverTest, CommandReturnsWorkingCountMismatch) {
+  auto transport = std::make_shared<FakeEthercatTransport>();
+  transport->process_data_.working_count = 2;
+  transport->process_data_.expected_working_count = 3;
+  Am243EthercatDriver driver(transport, MakeAm243Actuator());
+  ASSERT_TRUE(driver.Init().ok());
+
+  auto status = driver.SetSpeed(1.0f);
+
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnavailable);
 }
 
 TEST(Am243EthercatDriverTest, SetActionRoutesPresetTeardownToHarmlessTeardown) {
