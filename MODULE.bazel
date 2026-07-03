@@ -87,7 +87,10 @@ http_archive(
     name = "soem",
     build_file = "//third_party/soem:BUILD.bazel",
     patch_args = ["-p1"],
-    patches = ["//third_party/soem:ec_options.patch"],
+    patches = [
+        "//third_party/soem:ec_options.patch",
+        "//third_party/soem:linux_socket_init.patch",
+    ],
     sha256 = "1f1f38464c5542d8cd1b1d8f27d9af6422d03b9364a9f31ad66f1919f2898f16",
     strip_prefix = "SOEM-2.0.0",
     urls = ["https://github.com/OpenEtherCATsociety/SOEM/archive/refs/tags/v2.0.0.tar.gz"],

@@ -6,8 +6,11 @@ drivers that consume a transport abstraction.
 
 The public C++ boundary starts at `ethercat_transport.h`.
 `soem_ethercat_transport.*` is the SOEM backend landing pad. Bazel pins and
-builds upstream SOEM through `@soem`, but the transport methods intentionally
-return `kUnimplemented` until the split LRD/LWR runtime implementation is added.
+builds upstream SOEM through `@soem`. The transport now opens and closes the
+SOEM master socket, discovers slaves, forces SOEM's split LRD/LWR path, maps PDO
+regions, exposes cached slave metadata, transitions slaves to OPERATIONAL, and
+exchanges process data. Board-specific smoke tests remain incremental follow-up
+work.
 `ethercat_status.*` contains transport-independent PDO and working-count
 validation helpers.
 

@@ -23,7 +23,7 @@ robot::action::SingleAction MakeAm243EthercatSingleAction() {
   auto* comm = actuator->mutable_comm();
   comm->set_comm_type(robot::comm::CommType::ETHERCAT);
   auto* ethercat_config = comm->mutable_ethercat_config();
-  ethercat_config->set_interface_name("enp5s0");
+  ethercat_config->set_interface_name("joshua-no-such-ethercat-iface0");
   ethercat_config->set_process_data_mode(
       robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
 
@@ -36,10 +36,10 @@ robot::action::SingleAction MakeAm243EthercatSingleAction() {
   return single_action;
 }
 
-TEST(ActionFactoryTest, Am243EthercatActionReachesEthercatFactoryPlaceholder) {
+TEST(ActionFactoryTest, Am243EthercatActionReportsUnavailableForMissingInterface) {
   auto action_or = robot::action::ActionFactory::CreateAction(MakeAm243EthercatSingleAction());
 
-  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kUnavailable);
 }
 
 TEST(ActionFactoryTest, Am243EthercatActionRejectsInvalidEthercatCommConfig) {

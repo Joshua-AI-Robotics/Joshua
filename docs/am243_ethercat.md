@@ -59,13 +59,31 @@ AM243 support should fit into Joshua's existing robot architecture:
 
 An example config lives at
 `config/config_preset/example/am243_ethercat_demo.pbtxt`. It validates the
-configuration surface, but it is not yet runnable against hardware because the
-SOEM-backed EtherCAT transport runtime methods are still unimplemented.
+configuration surface. The SOEM-backed EtherCAT transport now has the runtime
+pieces needed for an initial hardware smoke test, but Joshua still needs a small
+board-facing test tool or action-loop entry point before this config is a useful
+manual board test by itself.
 
 The first backend skeleton pins upstream SOEM v2.0.0 in Bazel and verifies that
-Joshua can compile the SOEM-backed transport. The next implementation step is to
-wire that backend to run split LRD/LWR cyclic PDO exchange and expose
-process-data buffers to actuator drivers.
+Joshua can compile the SOEM-backed transport. `Init()` now opens the SOEM master
+socket in split LRD/LWR mode, `ConfigureSlaves()` discovers slaves, forces
+SOEM's `blockLRW` path, maps PDO regions, and `Teardown()` closes the socket.
+`StartCyclic()` transitions slaves through SAFE-OP to OPERATIONAL, and
+`ExchangeProcessData()` uses SOEM's split LRD/LWR process-data path.
+
+## Hardware Smoke Test
+
+With the LP-AM243 connected to the Linux EtherCAT NIC, run the demo PDO smoke
+test from the Ubuntu 24.04 + ROS 2 Jazzy container:
+
+```bash
+docker compose exec joshua-u24 bazel run //robot/comm/ethercat:am243_demo_smoke -- enp5s0 20 1
+```
+
+The tool opens the interface, configures slaves, starts cyclic exchange, writes
+the AM243 demo seed byte, and prints the working count plus input byte 0. With
+the current TI demo firmware, expect WKC `3` and input byte 0 to follow the
+output seed one cycle behind.
 
 ## Current PDO Codec Scope
 

@@ -11,7 +11,7 @@ robot::comm::Comm MakeEthercatComm() {
   robot::comm::Comm comm;
   comm.set_comm_type(robot::comm::CommType::ETHERCAT);
   auto* config = comm.mutable_ethercat_config();
-  config->set_interface_name("enp5s0");
+  config->set_interface_name("joshua-no-such-ethercat-iface0");
   config->set_process_data_mode(
       robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
   return comm;
@@ -54,10 +54,10 @@ TEST(CommFactoryTest, CreateEthercatTransportRejectsInvalidProcessDataMode) {
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(CommFactoryTest, CreateEthercatTransportReturnsUnimplementedUntilBackendExists) {
+TEST(CommFactoryTest, CreateEthercatTransportReportsUnavailableForMissingInterface) {
   auto transport_or = CommFactory::CreateEthercatTransport(MakeEthercatComm());
 
-  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kUnavailable);
 }
 
 }  // namespace

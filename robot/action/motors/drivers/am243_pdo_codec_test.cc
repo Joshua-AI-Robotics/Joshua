@@ -19,6 +19,15 @@ TEST(Am243PdoCodecTest, EncodeDemoOutputSeedWritesFirstByteOnly) {
   }
 }
 
+TEST(Am243PdoCodecTest, EncodeDemoOutputWalkWritesWalkingBytes) {
+  const auto output_pdo = EncodeDemoOutputWalk(0x5a);
+
+  ASSERT_EQ(output_pdo.size(), kDemoPdoSizeBytes);
+  for (int i = 0; i < kDemoPdoSizeBytes; ++i) {
+    EXPECT_EQ(output_pdo[i], static_cast<uint8_t>(0x5a + i));
+  }
+}
+
 TEST(Am243PdoCodecTest, DecodeDemoInputEchoSeedReadsFirstByte) {
   std::vector<uint8_t> input_pdo(kDemoPdoSizeBytes, 0);
   input_pdo[0] = 0xa5;

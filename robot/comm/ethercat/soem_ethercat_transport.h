@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -10,15 +11,15 @@
 
 namespace robot::comm::ethercat {
 
-// SOEM-backed EtherCAT transport landing pad.
+// SOEM-backed EtherCAT transport.
 //
-// This class intentionally does not link SOEM yet. It preserves the runtime
-// boundary and the current kUnimplemented behavior until the real split LRD/LWR
-// master implementation is added.
+// The transport keeps SOEM types out of public Joshua interfaces. The first
+// runtime slice opens/closes the SOEM master socket; slave configuration and
+// cyclic PDO exchange are added behind this boundary incrementally.
 class SoemEthercatTransport : public EthercatTransport {
  public:
-  SoemEthercatTransport() = default;
-  ~SoemEthercatTransport() override = default;
+  SoemEthercatTransport();
+  ~SoemEthercatTransport() override;
 
   absl::Status Init(const std::string& interface_name, ProcessDataMode process_data_mode) override;
   absl::Status ConfigureSlaves() override;
@@ -34,8 +35,11 @@ class SoemEthercatTransport : public EthercatTransport {
   absl::StatusOr<ProcessData> ExchangeProcessData() override;
 
  private:
+  struct State;
+
   std::string interface_name_;
   ProcessDataMode process_data_mode_ = ProcessDataMode::kSplitLrdLwr;
+  std::unique_ptr<State> state_;
 };
 
 }  // namespace robot::comm::ethercat

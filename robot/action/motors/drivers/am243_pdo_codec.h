@@ -18,6 +18,9 @@ constexpr int kDemoSeedByteOffset = 0;
 // layout.
 std::vector<uint8_t> EncodeDemoOutputSeed(uint8_t seed);
 
+// Encodes the same walking-byte pattern used during AM243 PDO bring-up.
+std::vector<uint8_t> EncodeDemoOutputWalk(uint8_t seed);
+
 // Decodes the currently validated TI EtherCAT simple-demo input PDO echo byte.
 absl::StatusOr<uint8_t> DecodeDemoInputEchoSeed(const std::vector<uint8_t>& input_pdo);
 

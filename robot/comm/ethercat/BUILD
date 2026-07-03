@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "ethercat_transport",
@@ -54,6 +54,20 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@soem",
+    ],
+)
+
+cc_binary(
+    name = "am243_demo_smoke",
+    srcs = ["am243_demo_smoke.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":ethercat_status",
+        ":ethercat_transport",
+        ":soem_ethercat_transport",
+        "//robot/action/motors/drivers:am243_pdo_codec",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
     ],
 )
 
