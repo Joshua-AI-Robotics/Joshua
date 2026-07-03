@@ -65,12 +65,12 @@ An example config lives at
 configuration surface. The SOEM-backed EtherCAT transport now has the runtime
 pieces needed for hardware smoke tests.
 
-The first backend skeleton pins upstream SOEM v2.0.0 in Bazel and verifies that
-Joshua can compile the SOEM-backed transport. `Init()` now opens the SOEM master
-socket in split LRD/LWR mode, `ConfigureSlaves()` discovers slaves, forces
-SOEM's `blockLRW` path, maps PDO regions, and `Teardown()` closes the socket.
-`StartCyclic()` transitions slaves through SAFE-OP to OPERATIONAL, and
-`ExchangeProcessData()` uses SOEM's split LRD/LWR process-data path.
+The backend pins upstream SOEM v2.0.0 in Bazel and builds a SOEM-backed
+transport. `Init()` opens the SOEM master socket in split LRD/LWR mode,
+`ConfigureSlaves()` discovers slaves, forces SOEM's `blockLRW` path, maps PDO
+regions, and `Teardown()` closes the socket. `StartCyclic()` transitions slaves
+through SAFE-OP to OPERATIONAL, and `ExchangeProcessData()` uses SOEM's split
+LRD/LWR process-data path.
 
 ## Hardware Smoke Test
 
@@ -82,9 +82,9 @@ docker compose exec joshua-u24 bazel run //robot/comm/ethercat:am243_demo_smoke 
 ```
 
 The tool opens the interface, configures slaves, starts cyclic exchange, writes
-the AM243 demo seed byte, and prints the working count plus input byte 0. With
-the current TI demo firmware, expect WKC `3` and input byte 0 to follow the
-output seed one cycle behind.
+the AM243 demo walking-byte output pattern, and prints the working count plus
+input byte 0. With the current TI demo firmware, expect WKC `3` and input byte 0
+to follow the output seed one cycle behind.
 
 To test the Joshua actuator-driver path, run:
 

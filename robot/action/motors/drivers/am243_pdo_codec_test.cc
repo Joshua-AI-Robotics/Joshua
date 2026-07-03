@@ -9,16 +9,6 @@
 namespace robot::action::am243 {
 namespace {
 
-TEST(Am243PdoCodecTest, EncodeDemoOutputSeedWritesFirstByteOnly) {
-  const auto output_pdo = EncodeDemoOutputSeed(0x5a);
-
-  ASSERT_EQ(output_pdo.size(), kDemoPdoSizeBytes);
-  EXPECT_EQ(output_pdo[0], 0x5a);
-  for (int i = 1; i < kDemoPdoSizeBytes; ++i) {
-    EXPECT_EQ(output_pdo[i], 0);
-  }
-}
-
 TEST(Am243PdoCodecTest, EncodeDemoOutputWalkWritesWalkingBytes) {
   const auto output_pdo = EncodeDemoOutputWalk(0x5a);
 

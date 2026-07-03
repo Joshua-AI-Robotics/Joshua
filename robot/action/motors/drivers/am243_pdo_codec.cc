@@ -4,12 +4,6 @@
 
 namespace robot::action::am243 {
 
-std::vector<uint8_t> EncodeDemoOutputSeed(uint8_t seed) {
-  std::vector<uint8_t> output_pdo(kDemoPdoSizeBytes, 0);
-  output_pdo[kDemoSeedByteOffset] = seed;
-  return output_pdo;
-}
-
 std::vector<uint8_t> EncodeDemoOutputWalk(uint8_t seed) {
   std::vector<uint8_t> output_pdo(kDemoPdoSizeBytes, 0);
   for (int byte = 0; byte < kDemoPdoSizeBytes; ++byte) {

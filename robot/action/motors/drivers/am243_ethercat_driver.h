@@ -10,11 +10,12 @@
 
 namespace robot::action {
 
-// Actuator driver skeleton for AM243-backed motors reached over EtherCAT PDOs.
+// Actuator driver for AM243-backed motors reached over EtherCAT PDOs.
 //
 // This class owns only the AM243 actuator mapping. Generic EtherCAT discovery,
 // state transitions, cyclic process-data exchange, and the split LRD/LWR policy
-// live under robot/comm/ethercat/.
+// live under robot/comm/ethercat/. The current command encoder supports the TI
+// demo PDO mapping only; real actuator firmware should add a new mapping mode.
 class Am243EthercatDriver : public robot::action::ActuatorInterface {
  public:
   Am243EthercatDriver(const std::shared_ptr<robot::comm::ethercat::EthercatTransport>& ethercat,
