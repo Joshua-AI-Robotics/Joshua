@@ -7,12 +7,14 @@ enum CommType {
   COMM_INVALID = 0;
   SERIAL = 1;
   BLE = 2;
+  ETHERCAT = 3;
 }
 
 message Comm {
   CommType comm_type = 1;
   oneof comm_config {
     SerialConfig serial_config = 2;
+    EthercatConfig ethercat_config = 3;
   }
 }
 
@@ -20,4 +22,15 @@ message SerialConfig {
   uint64 id = 1;
   string port = 2;
   uint64 baudrate = 3;
+}
+
+enum EthercatProcessDataMode {
+  ETHERCAT_PROCESS_DATA_MODE_INVALID = 0;
+  ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR = 1;
+  ETHERCAT_PROCESS_DATA_MODE_LRW = 2;
+}
+
+message EthercatConfig {
+  string interface_name = 1;
+  EthercatProcessDataMode process_data_mode = 2;
 }

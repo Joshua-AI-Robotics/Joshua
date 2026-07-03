@@ -37,6 +37,13 @@ For the current AM243 firmware/demo, the Linux/SOEM master must force split
 LRD/LWR process data cycles. Do not retry LRW unless the board firmware or
 EEPROM/ESI configuration changes.
 
+Joshua enforces this for `AM243_ETHERCAT_ACTUATOR` configs: LRW process-data
+mode is rejected before transport creation.
+
+Generic EtherCAT working-count validation lives in
+`robot/comm/ethercat/ethercat_status.*`; AM243 runs should expect WKC `3` with
+the current split LRD/LWR demo path.
+
 ## Repository Boundaries
 
 AM243 support should fit into Joshua's existing robot architecture:
@@ -46,8 +53,30 @@ AM243 support should fit into Joshua's existing robot architecture:
   `robot/action/motors/drivers/am243_ethercat_driver.*`.
 - Board-management tooling, including UART flashing and debug helpers, should
   stay outside the runtime actuator path.
+- AM243 runtime configs should use `comm_type: ETHERCAT` with
+  `ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR` while running the current TI demo
+  firmware.
 
-The first backend skeleton intentionally does not add a SOEM implementation.
-The next implementation step is to introduce a generic EtherCAT transport API
-that can run split LRD/LWR cyclic PDO exchange and expose process-data buffers
-to actuator drivers.
+An example config lives at
+`config/config_preset/example/am243_ethercat_demo.pbtxt`. It validates the
+configuration surface, but it is not yet runnable against hardware because the
+SOEM-backed EtherCAT transport runtime methods are still unimplemented.
+
+The first backend skeleton pins upstream SOEM v2.0.0 in Bazel and verifies that
+Joshua can compile the SOEM-backed transport. The next implementation step is to
+wire that backend to run split LRD/LWR cyclic PDO exchange and expose
+process-data buffers to actuator drivers.
+
+## Current PDO Codec Scope
+
+The only AM243 PDO byte-level behavior encoded in Joshua today is the validated
+TI simple-demo walk:
+
+- Output PDO size: 8 bytes.
+- Input PDO size: 8 bytes.
+- Output byte 0 carries a walking seed.
+- Input byte 0 echoes that seed one cycle later.
+
+This is captured as a demo codec, not an actuator command map. Position, speed,
+and torque command encoding should remain unimplemented until the AM243 firmware
+defines a real actuator PDO layout.

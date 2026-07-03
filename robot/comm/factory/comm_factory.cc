@@ -3,6 +3,8 @@
 #include <boost/asio.hpp>
 #include <thread>
 
+#include "robot/comm/ethercat/ethercat_transport.h"
+#include "robot/comm/ethercat/soem_ethercat_transport.h"
 #include "robot/comm/serial/serial.h"
 
 namespace robot::comm {
@@ -23,6 +25,20 @@ struct PortResources {
 
 static std::mutex g_serial_mutex;
 static std::map<std::string, std::unique_ptr<PortResources>> g_port_resources;  // keyed by port
+
+absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMode(
+    EthercatProcessDataMode process_data_mode) {
+  switch (process_data_mode) {
+    case EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR:
+      return robot::comm::ethercat::ProcessDataMode::kSplitLrdLwr;
+    case EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW:
+      return robot::comm::ethercat::ProcessDataMode::kLrw;
+    case EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_INVALID:
+    default:
+      return absl::Status(absl::StatusCode::kInvalidArgument,
+                          "EtherCAT config has invalid process data mode");
+  }
+}
 }  // namespace
 
 absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(const robot::comm::Comm& comm) {
@@ -60,5 +76,34 @@ absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(const robot::c
   auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
   serials[baudrate] = serial;
   return serial;
+}
+
+absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>
+CommFactory::CreateEthercatTransport(const robot::comm::Comm& comm) {
+  if (comm.comm_type() != CommType::ETHERCAT) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Comm is not of type ETHERCAT");
+  }
+
+  if (!comm.has_ethercat_config()) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Comm has no EtherCAT config");
+  }
+
+  if (comm.ethercat_config().interface_name().empty()) {
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "EtherCAT config has no interface name");
+  }
+
+  auto process_data_mode_or =
+      ToTransportProcessDataMode(comm.ethercat_config().process_data_mode());
+  if (!process_data_mode_or.ok()) {
+    return process_data_mode_or.status();
+  }
+
+  auto transport = std::make_shared<robot::comm::ethercat::SoemEthercatTransport>();
+  auto status = transport->Init(comm.ethercat_config().interface_name(), *process_data_mode_or);
+  if (!status.ok()) {
+    return status;
+  }
+  return transport;
 }
 }  // namespace robot::comm

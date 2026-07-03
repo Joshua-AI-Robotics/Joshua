@@ -1,0 +1,48 @@
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "am243_ethercat_demo"
+  id: 243
+}
+
+robot {
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "am243_joint_1/position"
+          normalized: false
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "am243_joint_1"
+        id: 1
+        actuator_type: AM243_ETHERCAT_ACTUATOR
+        comm {
+          comm_type: ETHERCAT
+          ethercat_config {
+            interface_name: "enp5s0"
+            process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
+          }
+        }
+        physical_lower_limit: -180
+        physical_upper_limit: 180
+        operational_lower_limit: -90
+        operational_upper_limit: 90
+        am243_ethercat_config {
+          slave_index: 2
+          output_offset_bytes: 0
+          input_offset_bytes: 0
+          output_size_bytes: 8
+          input_size_bytes: 8
+          idle_position: 0
+        }
+      }
+    }
+  }
+}

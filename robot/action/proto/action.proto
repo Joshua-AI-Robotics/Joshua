@@ -15,6 +15,7 @@ enum ActuatorType {
   STS3215_SERVO = 1;
   MOCK_MOTOR = 2;
   SPIKE_MOTOR = 3;
+  AM243_ETHERCAT_ACTUATOR = 4;
 }
 
 message Actuator {
@@ -30,6 +31,7 @@ message Actuator {
     Sts3215Config sts3215_config = 11;
     MockMotorConfig mock_motor_config = 12;
     SpikeMotorConfig spike_motor_config = 13;
+    Am243EthercatConfig am243_ethercat_config = 14;
     // Add other motor type here.
   }
 }
@@ -49,6 +51,15 @@ message SpikeMotorConfig {
   string hub_id = 1;
   string port = 2;
   float idle_position = 3;
+}
+
+message Am243EthercatConfig {
+  uint32 slave_index = 1;
+  uint32 output_offset_bytes = 2;
+  uint32 input_offset_bytes = 3;
+  uint32 output_size_bytes = 4;
+  uint32 input_size_bytes = 5;
+  float idle_position = 6;
 }
 
 message SingleAction {

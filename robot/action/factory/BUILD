@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 cc_library(
@@ -8,11 +8,23 @@ cc_library(
     deps = [
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:action_interface",
+        "//robot/action/motors/drivers:am243_ethercat_driver",
         "//robot/action/motors/drivers:sts3215_driver",
         "//robot/comm/factory:comm_factory",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "action_factory_cc_test",
+    srcs = ["action_factory_test.cc"],
+    deps = [
+        ":action_factory",
+        "//config/proto:robot_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
     ],
 )
 

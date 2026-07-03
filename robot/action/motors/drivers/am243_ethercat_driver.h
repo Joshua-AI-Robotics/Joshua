@@ -1,15 +1,11 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <string>
 
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/actuator_interface.h"
-
-namespace robot::comm::ethercat {
-class EthercatTransport;
-}  // namespace robot::comm::ethercat
+#include "robot/comm/ethercat/ethercat_transport.h"
 
 namespace robot::action {
 
@@ -20,9 +16,8 @@ namespace robot::action {
 // live under robot/comm/ethercat/.
 class Am243EthercatDriver : public robot::action::ActuatorInterface {
  public:
-  Am243EthercatDriver(
-      const std::shared_ptr<robot::comm::ethercat::EthercatTransport>& ethercat,
-      const robot::action::Actuator& action_config);
+  Am243EthercatDriver(const std::shared_ptr<robot::comm::ethercat::EthercatTransport>& ethercat,
+                      const robot::action::Actuator& action_config);
   ~Am243EthercatDriver() override = default;
 
   // ActionInterface methods.
@@ -39,18 +34,12 @@ class Am243EthercatDriver : public robot::action::ActuatorInterface {
   absl::Status SetIdlePosition() override;
 
  private:
-  struct PdoMapping {
-    uint16_t slave_index = 0;
-    uint16_t output_offset_bytes = 0;
-    uint16_t input_offset_bytes = 0;
-    uint16_t output_size_bits = 64;
-    uint16_t input_size_bits = 64;
-  };
-
   std::shared_ptr<robot::comm::ethercat::EthercatTransport> ethercat_;
   robot::action::Actuator action_config_;
-  PdoMapping pdo_mapping_;
+  robot::comm::ethercat::PdoRegion pdo_region_;
   std::string id_;
+  float speed_ = 0.0f;
+  float torque_ = 0.0f;
   float physical_lower_limit_ = 0.0f;
   float physical_upper_limit_ = 0.0f;
   float operational_lower_limit_ = 0.0f;

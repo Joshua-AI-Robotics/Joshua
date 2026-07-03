@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/action_interface.h"
+#include "robot/action/motors/drivers/am243_ethercat_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "utils/status_macros.h"
@@ -24,6 +25,23 @@ class ActionFactory {
             ABSL_ASSIGN_OR_RETURN(auto serial,
                                   robot::comm::CommFactory::CreateSerial(actuator.comm()));
             auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+            ABSL_RETURN_IF_ERROR(driver->Init());
+            return driver;
+          }
+          case robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR: {
+            if (actuator.comm().comm_type() != robot::comm::CommType::ETHERCAT ||
+                !actuator.comm().has_ethercat_config()) {
+              return absl::Status(absl::StatusCode::kInvalidArgument,
+                                  "AM243 EtherCAT actuator requires EtherCAT comm config.");
+            }
+            if (actuator.comm().ethercat_config().process_data_mode() !=
+                robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR) {
+              return absl::Status(absl::StatusCode::kInvalidArgument,
+                                  "AM243 EtherCAT actuator requires split LRD/LWR process data.");
+            }
+            ABSL_ASSIGN_OR_RETURN(
+                auto ethercat, robot::comm::CommFactory::CreateEthercatTransport(actuator.comm()));
+            auto driver = std::make_unique<robot::action::Am243EthercatDriver>(ethercat, actuator);
             ABSL_RETURN_IF_ERROR(driver->Init());
             return driver;
           }
