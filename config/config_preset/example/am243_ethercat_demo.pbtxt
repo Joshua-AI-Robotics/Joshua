@@ -26,7 +26,7 @@ robot {
         comm {
           comm_type: ETHERCAT
           ethercat_config {
-            interface_name: "enp5s0"
+            interface_name: "ethercat0"
             process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
           }
         }
@@ -35,7 +35,7 @@ robot {
         operational_lower_limit: -90
         operational_upper_limit: 90
         am243_ethercat_config {
-          slave_index: 2
+          slave_index: 1
           output_offset_bytes: 0
           input_offset_bytes: 0
           output_size_bytes: 8
