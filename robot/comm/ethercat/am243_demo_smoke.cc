@@ -75,9 +75,9 @@ void ShowRecentCycles(std::deque<std::string>* recent_cycles, const std::string&
 }
 
 void PrintSlave(uint16_t index, const SlaveIdentity& slave) {
-  std::cout << "slave " << index << ": name=\"" << slave.name << "\"" << " man=0x" << std::hex
-            << slave.manufacturer << " id=0x" << slave.product_id << " rev=0x" << slave.revision
-            << std::dec << " outputs=" << slave.output_size_bits
+  std::cout << "slave " << index << ": name=\"" << slave.name << "\""
+            << " man=0x" << std::hex << slave.manufacturer << " id=0x" << slave.product_id
+            << " rev=0x" << slave.revision << std::dec << " outputs=" << slave.output_size_bits
             << " bits inputs=" << slave.input_size_bits << " bits\n";
 }
 

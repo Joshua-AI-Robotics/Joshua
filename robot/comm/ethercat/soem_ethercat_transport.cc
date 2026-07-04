@@ -86,7 +86,8 @@ std::string BuildMappingFailureMessage(ecx_contextt* context, bool zero_identity
     const uint32_t sii_revision =
         etohl(ecx_readeeprom(context, slave_index, ECT_SII_REV, EC_TIMEOUTEEP));
 
-    message << " slave[" << slave_index << "]" << " name=\"" << slave.name << "\""
+    message << " slave[" << slave_index << "]"
+            << " name=\"" << slave.name << "\""
             << " Obits=" << slave.Obits << " Ibits=" << slave.Ibits << " Obytes=" << slave.Obytes
             << " Ibytes=" << slave.Ibytes << " blockLRW=" << static_cast<int>(slave.blockLRW)
             << " configadr=" << Hex16(slave.configadr) << " al_status=" << Hex16(al_status)
