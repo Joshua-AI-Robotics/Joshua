@@ -575,7 +575,123 @@ Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy+
 EasyCAT), they should share one canonical PDO layout so the host codec is
 written once.
 
-### 7.3 Firmware source layout and build variants
+### 7.3 How the codec and protos are shared across boards
+
+Two different artifacts are "shared", in two different ways:
+
+```
+ ① protobuf (.proto files)   → shared across HOST components only (config language)
+ ② wire codec (plain C)      → shared between HOST and every FIRMWARE (byte language)
+```
+
+**Protobuf never crosses the wire to the MCU.** Protobuf is the config
+language — right on Linux, wrong for an ATmega328 (code size, heap, varint
+parsing inside a control loop). The host board class is the translator: it
+reads `Channel.interface_config` (protobuf) and emits `CONFIGURE_CHANNEL`
+frames (C codec). Firmware never links protobuf; the host never touches raw
+frame bytes outside the codec.
+
+```
+                .pbtxt config (protobuf ①)
+                       │  host-only world
+                       ▼
+        Tb6600ArduinoBoard / TeensyEcatBoard / …
+                       │  proto fields → fixed C frames
+                       ▼
+              joshua_proto_v1  (plain C ②)          ◄── THE shared artifact
+                       │  raw bytes on the wire
+                       ▼
+              MCU firmware (compiled with the same joshua_proto_v1)
+```
+
+**② is shared by compiling one source file into every binary that touches
+the wire** — single source, multiple builds:
+
+```
+ firmware/common/joshua_proto_v1.{h,c}      ◄── one source of truth
+        │
+        ├── Bazel cc_library //firmware/common:joshua_proto_v1
+        │         ├─► linked into Tb6600ArduinoBoard   (host, x86)
+        │         └─► linked into TeensyEcatBoard      (host, x86)
+        │
+        ├── PlatformIO lib in firmware/arduino_tb6600/  (AVR build)
+        └── PlatformIO lib in firmware/teensy_ecat/     (ARM build)
+```
+
+For that to work the codec must be lowest-common-denominator C: no malloc,
+no libc beyond `stdint`, explicit little-endian byte packing, pure
+encode/decode functions over caller-provided buffers:
+
+```c
+// firmware/common/joshua_proto_v1.h — sketch
+int jp1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel,
+                          jp1_mode_t mode, float value);   // → frame length or -1
+int jp1_decode(const uint8_t* buf, size_t len, jp1_frame_t* out);  // sync+crc+version
+```
+
+Host and firmware call the *same functions*; N boards diverge only in their
+**backend** (what a decoded command does: step/dir pulses vs PWM vs FOC) and
+their **transport module** (how bytes arrive). Everything between — sync,
+framing, CRC, command IDs, field packing — is one compiled-twice file, which
+is why the host needs zero per-board protocol code for Joshua-firmware
+boards.
+
+Three guards keep the sharing safe:
+
+1. **Same repo, same commit** — host and firmware build from one revision;
+   the codec cannot drift silently.
+2. **`proto_ver` in every frame + IDENTIFY handshake** — a v1 host rejects a
+   stale v2-flashed board at `Init()`, not mid-motion.
+3. **Golden-bytes unit test** — encode each command, assert exact byte
+   sequences on host CI; any wire-format change fails visibly and forces a
+   version bump.
+
+**EtherCAT variant: shared layout instead of shared functions.** Cyclic
+transports exchange a memory image, not frames, so the shared artifact is a
+packed-struct layout definition:
+
+```c
+// firmware/common/joshua_pdo_v1.h — canonical per-channel PDO slots
+typedef struct __attribute__((packed)) {
+  uint8_t  mode;       // jp1_mode_t
+  int32_t  target;     // native units
+  uint16_t sequence;
+} jp1_pdo_out_channel_t;   // host writes, firmware reads
+
+typedef struct __attribute__((packed)) {
+  int32_t  position;
+  int16_t  velocity;
+  uint16_t fault_flags;
+} jp1_pdo_in_channel_t;    // firmware writes, host reads
+```
+
+Every board that adopts this canonical layout (AM243 actuator firmware,
+future Teensy/EasyCAT) is covered by **one** host-side PDO codec — the
+motivation behind open question §12.4. Vendor-controlled protocols are the
+exception and get their own host-side codec each: the TI demo byte-walk
+(`am243_pdo_codec`, kept because we do not control the TI demo firmware) and
+the Feetech register protocol (`Sts3215BusBoard`).
+
+**① is ordinary host-side reuse:** `board.proto` is imported by
+`robot.proto`, compiled once by Bazel, and consumed by every host component
+(`BoardFactory`, `ActionFactory`, validation tests, future Python parity).
+Firmware's only contact with proto-derived data is indirect — the values the
+host copies out of `Channel.interface_config` into `CONFIGURE_CHANNEL`
+frames.
+
+| Artifact | Language | Shared by | Crosses the wire? |
+| --- | --- | --- | --- |
+| `board.proto`, `action.proto` | protobuf | host components only | no — config only |
+| `joshua_proto_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
+| `joshua_pdo_v1.h` | packed C structs | host + all Joshua EtherCAT firmware | **defines** the PDO image |
+| Feetech / TI-demo codecs | C++ host-side only | one vendor board each | speaks the vendor's format |
+
+Rejected alternative: nanopb could put protobuf on the MCU wire, unifying ①
+and ② — not worth it (varint decode in the control loop, nondeterministic
+frame sizes, and EtherCAT needs fixed layouts anyway). Fixed C frames are
+simpler and testable to the byte.
+
+### 7.4 Firmware source layout and build variants
 
 ```
 firmware/
@@ -603,7 +719,7 @@ transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
 
-### 7.4 Flash tooling
+### 7.5 Flash tooling
 
 `tools/flash/` reads the same robot config, resolves each board's needed
 artifact from a firmware manifest, and invokes the right flasher:
@@ -705,7 +821,8 @@ Each phase lands green and independently revertible.
       the old factory arms.
 
 ### Phase 5 — Prove the matrix (first real second board)
-- [ ] Define `joshua_proto_v1` frame codec in `firmware/common/` (C, shared).
+- [ ] Define `joshua_proto_v1` frame codec in `firmware/common/` (C, shared;
+      golden-bytes unit tests on host CI, §7.3).
 - [ ] `firmware/arduino_tb6600/` with serial transport variant;
       `backend_stepdir`.
 - [ ] Host side: `Tb6600ArduinoBoard` + generic `StepperDriver` +
