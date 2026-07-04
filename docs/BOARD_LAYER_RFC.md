@@ -32,7 +32,7 @@ In scope:
   instance caching).
 - Proto schema: top-level `boards`, motor-centric `Actuator`, the two comm
   hops, `FirmwareSpec`.
-- The canonical host↔firmware channel protocol (`joshua_proto_v1`) and the
+- The canonical host↔firmware channel protocol (`joshua_wire_v1`) and the
   cyclic (EtherCAT/PDO) variant.
 - Firmware architecture, build variants, flashing tooling, and the IDENTIFY
   handshake.
@@ -138,7 +138,7 @@ Structural problems this RFC fixes:
       │  Board controller        │                  │
       │  "what runs the loop"    │◄─── shared ───┐  │
       │  Am243Board, TeensyBoard,│     codec     │  │
-      │  Tb6600ArduinoBoard,     │  joshua_proto │  │
+      │  Tb6600ArduinoBoard,     │  joshua_wire  │  │
       │  Sts3215BusBoard         │     _v1       │  │
       └────────────┬─────────────┘               │  │
                    │ Comm handle                 │  │
@@ -156,7 +156,7 @@ Structural problems this RFC fixes:
       │  (compile-time variant)  │               │
       ├──────────────────────────┤               │
       │  protocol codec          │◄──────────────┘
-      │  (same joshua_proto_v1)  │   compiled into BOTH sides
+      │  (same joshua_wire_v1)  │   compiled into BOTH sides
       ├──────────────────────────┤
       │  channel dispatcher      │
       ├──────────────────────────┤
@@ -208,7 +208,7 @@ robot/
     sts3215_bus/        sts3215_bus_board.*  (Feetech register protocol)
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/                                    ── NEW ──
-  common/               joshua_proto_v1.h/.c  (shared with host, same repo)
+  common/               joshua_wire_v1.h/.c  (shared with host, same repo)
   arduino_tb6600/       main.cpp, backends, transports, platformio.ini
   teensy_ecat/          …
 tools/
@@ -338,7 +338,7 @@ where hop 1 and hop 2 are the same wire:
 | Concept | General board | `STS3215_BUS` board |
 | --- | --- | --- |
 | `Board.comm` (hop 1) | serial/UDP/EtherCAT to MCU | the serial bus itself |
-| Firmware protocol codec | `joshua_proto_v1` / PDO layout | Feetech register protocol |
+| Firmware protocol codec | `joshua_wire_v1` / PDO layout | Feetech register protocol |
 | `Channel` (hop 2) | motor slot on the MCU | one servo ID on the bus |
 | IDENTIFY handshake | firmware name + proto version | ping servo ID + read model-number register |
 | `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — vendor firmware |
@@ -550,7 +550,12 @@ Firmware exposes "N channels of given interfaces speaking proto vX" and
 nothing else. No joint names, no limits, no robot identity in the binary.
 **Never generate per-robot firmware builds.**
 
-### 7.2 Canonical channel protocol (`joshua_proto_v1`)
+### 7.2 Canonical channel protocol (`joshua_wire_v1`)
+
+Named "wire" deliberately: in this repo "proto" means protobuf, and this is
+not protobuf — it is a hand-written wire-format library (framing + CRC +
+command encode/decode, in the spirit of MAVLink) that defines the bytes
+exchanged between host and MCU.
 
 One C implementation in `firmware/common/`, compiled into both the host board
 classes and the MCU firmware — same repo, so the two sides cannot drift
@@ -598,19 +603,19 @@ frame bytes outside the codec.
         Tb6600ArduinoBoard / TeensyEcatBoard / …
                        │  proto fields → fixed C frames
                        ▼
-              joshua_proto_v1  (plain C ②)          ◄── THE shared artifact
+              joshua_wire_v1  (plain C ②)          ◄── THE shared artifact
                        │  raw bytes on the wire
                        ▼
-              MCU firmware (compiled with the same joshua_proto_v1)
+              MCU firmware (compiled with the same joshua_wire_v1)
 ```
 
 **② is shared by compiling one source file into every binary that touches
 the wire** — single source, multiple builds:
 
 ```
- firmware/common/joshua_proto_v1.{h,c}      ◄── one source of truth
+ firmware/common/joshua_wire_v1.{h,c}      ◄── one source of truth
         │
-        ├── Bazel cc_library //firmware/common:joshua_proto_v1
+        ├── Bazel cc_library //firmware/common:joshua_wire_v1
         │         ├─► linked into Tb6600ArduinoBoard   (host, x86)
         │         └─► linked into TeensyEcatBoard      (host, x86)
         │
@@ -623,10 +628,10 @@ no libc beyond `stdint`, explicit little-endian byte packing, pure
 encode/decode functions over caller-provided buffers:
 
 ```c
-// firmware/common/joshua_proto_v1.h — sketch
-int jp1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel,
-                          jp1_mode_t mode, float value);   // → frame length or -1
-int jp1_decode(const uint8_t* buf, size_t len, jp1_frame_t* out);  // sync+crc+version
+// firmware/common/joshua_wire_v1.h — sketch
+int jw1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel,
+                          jw1_mode_t mode, float value);   // → frame length or -1
+int jw1_decode(const uint8_t* buf, size_t len, jw1_frame_t* out);  // sync+crc+version
 ```
 
 Host and firmware call the *same functions*; N boards diverge only in their
@@ -653,16 +658,16 @@ packed-struct layout definition:
 ```c
 // firmware/common/joshua_pdo_v1.h — canonical per-channel PDO slots
 typedef struct __attribute__((packed)) {
-  uint8_t  mode;       // jp1_mode_t
+  uint8_t  mode;       // jw1_mode_t
   int32_t  target;     // native units
   uint16_t sequence;
-} jp1_pdo_out_channel_t;   // host writes, firmware reads
+} jw1_pdo_out_channel_t;   // host writes, firmware reads
 
 typedef struct __attribute__((packed)) {
   int32_t  position;
   int16_t  velocity;
   uint16_t fault_flags;
-} jp1_pdo_in_channel_t;    // firmware writes, host reads
+} jw1_pdo_in_channel_t;    // firmware writes, host reads
 ```
 
 Every board that adopts this canonical layout (AM243 actuator firmware,
@@ -682,7 +687,7 @@ frames.
 | Artifact | Language | Shared by | Crosses the wire? |
 | --- | --- | --- | --- |
 | `board.proto`, `action.proto` | protobuf | host components only | no — config only |
-| `joshua_proto_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
+| `joshua_wire_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
 | `joshua_pdo_v1.h` | packed C structs | host + all Joshua EtherCAT firmware | **defines** the PDO image |
 | Feetech / TI-demo codecs | C++ host-side only | one vendor board each | speaks the vendor's format |
 
@@ -696,7 +701,7 @@ simpler and testable to the byte.
 ```
 firmware/
   common/
-    joshua_proto_v1.h/.c        # shared with host
+    joshua_wire_v1.h/.c        # shared with host
   arduino_tb6600/
     main.cpp                    # loop { transport_poll(); dispatch(); step_service(); }
     backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps
@@ -744,7 +749,7 @@ Per-command path, frame-based board:
 ```
  StepperDriver.SetPosition(90°)          host: limits check, deg→steps
    └► channel_->SetTarget(kPosition, 4500)
-        └► joshua_proto_v1 encode → comm_->Send → wire → MCU decode
+        └► joshua_wire_v1 encode → comm_->Send → wire → MCU decode
              └► dispatcher → backend_stepdir pulses TB6600 → motor moves
                   └► ACK frame → Status OK (or timeout → error)
 ```
@@ -821,7 +826,7 @@ Each phase lands green and independently revertible.
       the old factory arms.
 
 ### Phase 5 — Prove the matrix (first real second board)
-- [ ] Define `joshua_proto_v1` frame codec in `firmware/common/` (C, shared;
+- [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3).
 - [ ] `firmware/arduino_tb6600/` with serial transport variant;
       `backend_stepdir`.
