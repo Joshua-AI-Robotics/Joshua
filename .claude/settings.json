@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bazel build:*)",
+      "Bash(bazel test:*)",
+      "Bash(bazel query:*)",
+      "Bash(bazel cquery:*)",
+      "Bash(git status)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(./hooks/lint_check.sh:*)",
+      "Bash(hooks/lint_check.sh:*)",
+      "Bash(buildifier:*)",
+      "Bash(clang-format:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Read(.env*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for f in $CLAUDE_FILE_PATHS; do case \"$f\" in *.c|*.cc|*.cpp|*.h|*.hpp|*.proto) clang-format -i \"$f\" 2>/dev/null || true ;; *.py) black -q \"$f\" 2>/dev/null; isort -q \"$f\" 2>/dev/null ;; BUILD|*/BUILD|*.bazel|*.bzl) buildifier \"$f\" 2>/dev/null || true ;; esac; done; true"
+          }
+        ]
+      }
+    ]
+  }
+}
