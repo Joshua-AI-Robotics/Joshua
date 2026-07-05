@@ -43,7 +43,9 @@ Out of scope (future work):
 - Real AM243 actuator firmware and its final PDO layout (tracked separately;
   see `am243_ethercat.md` — only the TI demo mapping is validated today).
 - Encoder/perception devices behind boards (the same pattern should apply;
-  deferred until an actuator-side board layer exists).
+  deferred until an actuator-side board layer exists). One exception is in
+  scope: `Sts3215Encoder` shares the servo bus with the actuator path, so it
+  is co-migrated in Phase 4 (§5.6) — bus safety cannot be deferred.
 - Motion profiles, coordinated multi-axis trajectories, and real-time
   guarantees of the host cyclic loop.
 - Auto-flashing at runtime (explicitly rejected; see §9).
@@ -67,7 +69,7 @@ config .pbtxt
 | Generic serial transport | ✅ working | `robot/comm/serial/` |
 | Generic EtherCAT transport (SOEM, split LRD/LWR) | ✅ working | `robot/comm/ethercat/` |
 | STS3215 driver (protocol + motor logic fused) | ✅ working | `robot/action/motors/drivers/sts3215_driver.*` |
-| AM243 EtherCAT driver (TI demo PDO only) | ✅ working | `robot/action/motors/drivers/am243_ethercat_driver.*` |
+| AM243 EtherCAT driver (TI demo PDO only) | ⚠️ smoke binaries only | `robot/action/motors/drivers/am243_ethercat_driver.*` |
 | **Board abstraction (shared controller instances)** | ❌ missing | — |
 | **Motor drivers decoupled from transports** | ❌ missing | drivers hold `Serial`/`EthercatTransport` directly |
 | **Canonical host↔MCU channel protocol** | ❌ missing | — |
@@ -90,6 +92,12 @@ Structural problems this RFC fixes:
    `robot/action/motors/drivers/`.
 4. **No firmware/config agreement check.** Nothing stops the host from
    driving a board flashed with the wrong firmware or an old protocol.
+5. **Orphaned bus lifecycle.** `ConfigureSlaves()` / `StartCyclic()` are
+   called only from the smoke binaries' `main()`s. The config-driven path
+   (`.pbtxt → ActionFactory → CommFactory`) stops at `Init()`, so the first
+   `SetPosition` through `actuator_subscriber` fails with "not configured" —
+   the AM243 demo has only ever worked via smoke binaries. Bring-up
+   sequencing has no owner today; the board layer gives it one (§10 Phase 3).
 
 ## 4. Design goals
 
@@ -206,10 +214,14 @@ robot/
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
     tb6600_arduino/     tb6600_arduino_board.*
     sts3215_bus/        sts3215_bus_board.*  (Feetech register protocol)
+    host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
-firmware/                                    ── NEW ──
-  common/               joshua_wire_v1.h/.c  (shared with host, same repo)
-  arduino_tb6600/       main.cpp, backends, transports, platformio.ini
+firmware/
+  common/               joshua_wire_v1.h/.c  (shared with host, same repo) ── NEW ──
+  am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
+                        stays as-is — vendor code never migrates to the
+                        Joshua firmware pattern, §7.3)
+  arduino_tb6600/       main.cpp, backends, transports, platformio.ini ── NEW ──
   teensy_ecat/          …
 tools/
   flash/                config-driven flasher + firmware manifest
@@ -255,9 +267,26 @@ class BoardInterface {
 ```
 
 `BoardFactory::GetOrCreate(board_config)` returns a **cached instance per
-board name** — two actuators on the same board share one instance, one comm
-handle, one cyclic loop. This replaces (and generalizes) the TU-local serial
+board name** — two actuators on the same board share one instance and one
+comm handle. This replaces (and generalizes) the TU-local serial
 `PortResources` cache in `comm_factory.cc`.
+
+Caching by board name is necessary but not sufficient. Some transports are
+**bus-exclusive**: an EtherCAT NIC has exactly one master, and
+`ExchangeProcessData()` moves the whole bus image, not one slave's slice —
+two boards daisy-chained on one NIC are two slaves under one master. So the
+comm layer needs its own cache one level down: `CommFactory` returns the
+same `EthercatTransport` for the same `interface_name` (today it constructs
+a new SOEM master per call, and two `ecx_init()`s on one NIC fight over the
+raw socket). The resource hierarchy:
+
+```
+NIC ─► one master transport ─► one cyclic loop ─► N boards (slaves) ─► M channels each
+```
+
+Serial already follows this pattern (`PortResources` keyed by port);
+EtherCAT gets the equivalent keyed by interface name, and the cyclic loop
+lives with the shared master transport, not the board (§5.7).
 
 Unit convention: the channel speaks the board's native unit (steps, ticks);
 the motor driver owns the degrees↔native conversion because steps/rev,
@@ -350,10 +379,48 @@ channel keyed by `servo_id`. The register-protocol encoding moves out of
 request/response in flight on the half-duplex UART) gets an owner: the
 board's internal bus mutex.
 
+The mutex only works if *all* bus traffic goes through the board.
+`Sts3215Encoder` (perception layer) currently writes raw Feetech frames to
+the same shared `Serial` from encoder-publisher timers; after the port it
+reads through `Sts3215BusBoard` (channels already expose `ReadFeedback()`)
+or, at minimum, takes the board's bus lock — otherwise the half-duplex race
+the mutex exists to prevent returns through the perception side door
+(§10 Phase 4). Today's serial cache is also keyed by port *and* baudrate,
+so two baudrates on one port would open the device twice; one board
+instance per port closes that hole too.
+
+**Host-direct GPIO (Jetson Orin, Pi 5) — the second degenerate case.** Here
+the controller is the host computer itself: a motor wired straight to the
+host's header (STEP/DIR into a TB6600, or PWM, off Jetson Orin / Pi 5 pins)
+has no wire for hop 1 to cross. Hop 1 vanishes and hop 2 executes
+in-process:
+
+| Concept | General board | `HOST_GPIO` board |
+| --- | --- | --- |
+| `Board.comm` (hop 1) | serial/UDP/EtherCAT to MCU | omitted — in-process calls |
+| Firmware protocol codec | `joshua_wire_v1` / PDO layout | none — no wire, no frames |
+| `Channel` (hop 2) | motor slot on the MCU | pin group on the host header |
+| IDENTIFY handshake | firmware name + proto version | probe GPIO chip / claim pins at `Init()` |
+| `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — the "firmware" is this process |
+
+`HostGpioBoard` channels implement `BoardChannel` by driving pins directly
+(libgpiod, hardware PWM peripherals). The motor driver cannot tell the
+difference: the same `StepperDriver` runs over TB6600+Arduino, over
+AM243+EtherCAT, or over bare host pins — that is the whole point of the
+seam. The honest caveat: userspace Linux is a poor step-pulse generator.
+Bit-banging STEP at tens of kHz from a non-RT process jitters badly, so
+realistic backends are hardware PWM channels, the Pi 5's RP1, or a
+kernel/RT helper, with pulse rates capped until one exists (§12.8).
+
 Keeping `board_name` mandatory (rather than optional with an embedded
 `comm{}` fallback) keeps `ActionFactory`, validation, and caching on a single
-code path. Future smart CAN motors follow the same pattern as a `CAN_BUS`
-board.
+code path. The rule generalizes: every motor names a board, and the board
+type says **where the control loop runs** — an external MCU (`AM243`,
+`ARDUINO_TB6600`), the motor's own MCU (`STS3215_BUS`), a vendor hub
+(`SPIKE_HUB_BLE`: the Pybricks hub over BLE), the host itself (`HOST_GPIO`),
+or nowhere (`MOCK`, for tests). "Doesn't need a board" always resolves to
+one of these degenerate cases, never to bypassing the layer. Future smart
+CAN motors follow the same pattern as a `CAN_BUS` board.
 
 ### 5.7 Runtime behavior: frame-based vs cyclic boards
 
@@ -378,8 +445,8 @@ The comm type is chosen **once, in `Board::Init`** (a small switch over
 
 **Cyclic (EtherCAT)** — the master exchanges a fixed process-data image with
 all slaves every cycle regardless of new commands. `SetTarget` performs no
-I/O; it stages the value in the board's output image, and the board's single
-cyclic loop ships it:
+I/O; it stages the value in the board's slice of the bus image, and the bus
+master's single cyclic loop ships it:
 
 ```
  SetTarget(ch0, 4500)      SetTarget(ch1, -200)          (any time, any thread)
@@ -395,8 +462,12 @@ cyclic loop ships it:
    └───────────────────────────────────────┘
 ```
 
-This is why boards must be shared instances: N actuators on one AM243 are N
-channels writing into one image shipped by one loop on one master socket.
+This is why boards must be shared instances — and why the loop belongs to
+the shared master transport, not the board (§5.3): N actuators on one AM243
+are N channels writing into one image, and two AM243s daisy-chained on one
+NIC are two `PdoRegion` slices of the *same* image shipped by the same loop
+on the same master socket. A per-board cyclic loop is impossible on a
+shared bus.
 
 ## 6. Config schema
 
@@ -409,6 +480,9 @@ enum BoardType {
   TEENSY41_ECAT = 2;
   ARDUINO_TB6600 = 3;
   STS3215_BUS = 4;        // smart-servo bus; the "board" is the servo's own MCU
+  SPIKE_HUB_BLE = 5;      // Pybricks hub; vendor firmware over BLE
+  HOST_GPIO = 6;          // no external controller; host pins drive the motor (§5.6)
+  MOCK = 7;               // tests; channels are in-memory fakes
 }
 
 enum ChannelInterface {
@@ -427,6 +501,7 @@ message Channel {
     StepDirConfig step_dir = 10;    // max_pulse_rate_hz, invert_dir, enable_active_low
     ServoBusConfig servo_bus = 11;  // servo_id
     PwmConfig pwm = 12;             // frequency_hz, deadband
+    HostGpioConfig host_gpio = 13;  // gpio chip + pin numbers (HOST_GPIO boards)
   }
 }
 
@@ -440,10 +515,15 @@ message Board {
   string name = 1;                  // referenced by actuators; cache key
   BoardType board_type = 2;
   robot.comm.Comm comm = 3;         // HOP 1: how the PC reaches the controller
+                                    // (omitted for HOST_GPIO / MOCK — no wire)
   repeated Channel channels = 4;    // HOP 2: what each slot drives
   FirmwareSpec firmware = 5;
   oneof board_config {
-    Am243Config am243_config = 10;  // slave_index, pdo_mapping
+    Am243Config am243_config = 10;  // slave_index, pdo_mapping, plus the PDO region
+                                    // override (offsets/sizes) that today's
+                                    // Am243EthercatConfig carries — kept so presets
+                                    // can pin regions instead of trusting
+                                    // GetPdoRegion auto-discovery
   }
 }
 ```
@@ -778,6 +858,7 @@ zero motor-driver changes.
 | STS3215 refactor regresses working so100 robots | Port behind the new layer with byte-identical bus traffic; keep `test_sts3215_encoder.py` and teleop presets as regression gates |
 | AM243 real firmware PDO layout unknown | Demo codec stays isolated behind `Am243PdoMapping` exactly as today; board layer does not depend on the final layout |
 | Small-MCU RAM/flash limits (ATmega328 + W5500) | Codec is dependency-free C; per-variant builds strip unused transports; Teensy/ESP32 as fallback targets |
+| Userspace GPIO step generation jitters (HOST_GPIO) | Restrict backends to hardware PWM / RP1 / kernel helper; cap `max_pulse_rate_hz` in validation until an RT backend exists (§12.8) |
 
 ## 10. Phased rollout (TODO)
 
@@ -791,7 +872,8 @@ Each phase lands green and independently revertible.
       `ActuatorType` board-flavored values and embedded `comm` deprecated
       (still functional).
 - [ ] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
-      until an SBC host needs it.
+      until an SBC host needs it. Note `CommType.BLE` exists with no config
+      message — `BleConfig` lands with the Spike/Python migration (§12.3).
 - [ ] Update `config_preset_validation_test` for both old and new shapes.
 
 ### Phase 2 — Board layer skeleton
@@ -805,15 +887,26 @@ Each phase lands green and independently revertible.
       the board factory.
 
 ### Phase 3 — Port AM243
-- [ ] `robot/board/am243/Am243Board`: absorbs transport creation, split
-      LRD/LWR validation (currently in `ActionFactory`), PDO region mapping,
-      cyclic exchange loop, WKC checks.
+- [ ] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
+      one SOEM master per NIC, mirroring the serial `PortResources` cache
+      (today every call constructs a new master; two `ecx_init()`s on one
+      NIC fight over the raw socket).
+- [ ] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
+      (currently in `ActionFactory`), PDO region mapping, and WKC checks;
+      the cyclic exchange loop lives with the shared master (§5.3/§5.7).
+- [ ] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
+      StartCyclic → verify OPERATIONAL`. Today that sequencing exists only
+      in smoke-binary `main()`s; the config-driven path stops at `Init()`
+      (§3 problem 5).
 - [ ] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
       `AM243_PDO_MAPPING_TI_DEMO` isolation.
 - [ ] Replace `Am243EthercatDriver` with a thin motor driver over
       `BoardChannel` (or fold into a generic joint driver).
 - [ ] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
       to the new path — these are the hardware regression gates.
+- [ ] Prove the config-driven path end to end:
+      `am243_ethercat_demo.pbtxt → actuator_subscriber → Am243Board` drives
+      the TI demo. This path has never worked — only the smoke binaries did.
 - [ ] Update `docs/am243_ethercat.md` boundaries section.
 
 ### Phase 4 — Port STS3215
@@ -821,7 +914,18 @@ Each phase lands green and independently revertible.
       per-port instance, bus mutex, servo-ping IDENTIFY.
 - [ ] Slim `Sts3215Driver` to motor semantics over `BoardChannel`
       (byte-identical bus traffic as acceptance bar).
+- [ ] Route `Sts3215Encoder` (perception) through `Sts3215BusBoard` — or at
+      minimum through the board's bus lock. It currently writes raw Feetech
+      frames to the same shared `Serial` from encoder-publisher timers,
+      which would bypass the new bus mutex (§5.6).
+- [ ] Decide the torque mapping: `Sts3215Driver::SetTorque` writes a torque
+      *enable* register (on/off → really `BoardChannel::Enable/Disable`),
+      while the AM243 driver scales torque as a *target*
+      (`TargetMode::kTorque`). One rule, applied in both drivers (§12.7).
 - [ ] Migrate so100 presets to `boards{}` + `board_name`; keep teleop working.
+- [ ] Migrate `action_factory.py` (MOCK_MOTOR, SPIKE_MOTOR) to `MotorType`
+      *before* removing `ActuatorType` — the Python factory switches on the
+      enum being deleted.
 - [ ] Remove deprecated `ActuatorType` values, embedded `Actuator.comm`, and
       the old factory arms.
 
@@ -853,7 +957,8 @@ Each phase lands green and independently revertible.
   changing only `Board.comm` and reflashing the matching variant — zero host
   code changes.
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
-  layers with unchanged wire behavior.
+  layers with unchanged wire behavior — and the config-driven AM243 path
+  (`.pbtxt → actuator_subscriber`) works end to end for the first time.
 - Two actuators on one board share one board instance, one comm handle, one
   cyclic loop (verified by test).
 - A wrong-firmware or wrong-transport board is rejected at `Init()` with an
@@ -878,7 +983,16 @@ Each phase lands green and independently revertible.
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
    and future Teensy/EasyCAT firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?
-5. **Cyclic loop ownership** — one thread per EtherCAT board vs one shared
-   host real-time loop for all cyclic boards; latency and jitter targets TBD.
+5. **Cyclic loop cadence** — ownership is settled (one loop per NIC, owned
+   by the shared master transport; per-board loops are impossible on a
+   shared bus, §5.3/§5.7). Still open: cycle rate, thread priority, and
+   jitter targets.
 6. **ESTOP semantics** — protocol-level broadcast (all channels, all boards)
    and its guarantees on frame-based vs cyclic transports.
+7. **Torque semantics at the seam** — `TargetMode::kTorque` as a control
+   target vs the STS3215's torque-*enable* register (an on/off that is
+   really `Enable/Disable`); pick one mapping rule before Phase 4 ports the
+   driver.
+8. **HOST_GPIO real-time backend** — which pulse-generation mechanism
+   (hardware PWM, Pi 5 RP1, kernel/RT helper) and the max pulse rate to
+   allow from a non-RT userspace process.
