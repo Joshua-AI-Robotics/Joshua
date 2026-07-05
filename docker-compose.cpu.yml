@@ -1,0 +1,21 @@
+# Explicit CPU fallback for developer shells and launcher services.
+# Use with: docker compose -f docker-compose.yml -f docker-compose.cpu.yml ...
+
+x-no-gpu: &no-gpu
+  deploy:
+    resources:
+      reservations:
+        devices: !reset []
+
+services:
+  joshua-u22:
+    <<: *no-gpu
+
+  joshua-u24:
+    <<: *no-gpu
+
+  run-u22:
+    <<: *no-gpu
+
+  run-u24:
+    <<: *no-gpu

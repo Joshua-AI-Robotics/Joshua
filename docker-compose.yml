@@ -22,7 +22,18 @@
 #   CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
 #   TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
 #
+# Developer shells and launcher tasks request an NVIDIA GPU by default. Use
+# docker-compose.cpu.yml as an explicit fallback on CPU-only hosts.
 # The Makefile provides optional shorthand for these commands.
+
+x-nvidia-gpu: &nvidia-gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
 
 services:
   # ============================================
@@ -31,6 +42,7 @@ services:
 
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 (Production ready)
   joshua-u22:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu22
@@ -57,6 +69,7 @@ services:
   # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
   # Note: Use profile 'u24' to build this service
   joshua-u24:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu24
@@ -87,6 +100,10 @@ services:
   test-u22:
     extends:
       service: joshua-u22
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-test-u22
     command:
       - bash
@@ -101,6 +118,10 @@ services:
   test-u24:
     extends:
       service: joshua-u24
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-test-u24
     command:
       - bash
@@ -145,6 +166,10 @@ services:
   build-u22-x86:
     extends:
       service: joshua-u22
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-build-u22-x86
     command:
       - /workspace/scripts/container_build.sh
@@ -159,6 +184,10 @@ services:
   build-u24-x86:
     extends:
       service: joshua-u24
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-build-u24-x86
     command:
       - /workspace/scripts/container_build.sh

@@ -18,10 +18,36 @@ Joshua is Docker-first. Install Docker host tooling, open either supported ROS e
 sudo ./scripts/setup.sh
 docker compose run --rm joshua-u22      # Ubuntu 22.04 / ROS 2 Humble
 docker compose run --rm joshua-u24      # Ubuntu 24.04 / ROS 2 Jazzy
-docker compose run --rm run-u22
+CONFIG=config/config_preset/so100/random_noise.pbtxt docker compose run --rm run-u22
 ```
 
-Install options (ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint; the host only needs Docker Engine and Docker Compose v2. The Makefile provides optional shorthand for the Compose commands.
+Install options (CPU fallback, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint. The default developer workflow also requires a host NVIDIA driver and NVIDIA Container Toolkit; CPU-only development is explicitly supported. The Makefile provides optional shorthand for the Compose commands.
+
+## GPU-first development
+
+Developer shells and launcher services request an NVIDIA GPU by default. Install the host runtime and verify that Docker can see the GPU:
+
+```bash
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22 nvidia-smi
+```
+
+Run an AI preset:
+
+```bash
+CONFIG=config/config_preset/so100/random_noise.pbtxt \
+  docker compose run --rm run-u22
+```
+
+On a CPU-only host, skip NVIDIA setup and use the CPU override:
+
+```bash
+sudo ./scripts/setup.sh --cpu
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+  run --rm joshua-u22
+```
+
+Tests, package builds, UI services, and CI do not request a GPU. The host provides the NVIDIA driver and NVIDIA Container Toolkit for the default developer workflow. CUDA-enabled PyTorch and related user-space libraries remain inside each model environment; the host CUDA toolkit is not required.
 
 ## Build deployable binaries
 

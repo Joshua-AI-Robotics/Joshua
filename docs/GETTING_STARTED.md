@@ -1,10 +1,10 @@
 # Getting Started
 
-Joshua is Docker-first. The host machine should provide Docker Engine and Docker Compose v2; ROS2, Bazel, Python dependencies, OpenCV, and build tools live inside the Docker images.
+Joshua is Docker-first and GPU-first for development. The host should provide Docker Engine, Docker Compose v2, an NVIDIA driver, and NVIDIA Container Toolkit. CPU-only development uses an explicit fallback. ROS2, Bazel, Python dependencies, CUDA user-space libraries, OpenCV, and build tools live inside Docker.
 
 ## Host Bootstrap
 
-Use the bootstrap script only to prepare Docker host tooling:
+Use the bootstrap script to prepare Docker and NVIDIA host tooling:
 
 ```bash
 sudo ./scripts/setup.sh
@@ -41,6 +41,31 @@ CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --r
 ```
 
 Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.
+
+## GPU and CPU modes
+
+Developer shells and launcher tasks request an NVIDIA GPU by default. Setup validates the host driver and installs NVIDIA Container Toolkit without installing project dependencies or the host CUDA toolkit:
+
+```bash
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22 nvidia-smi
+```
+
+Run AI inference with the normal launcher service:
+
+```bash
+CONFIG=config/config_preset/so100/random_noise.pbtxt docker compose run --rm run-u22
+```
+
+For CPU-only development, skip NVIDIA setup and apply the CPU override:
+
+```bash
+sudo ./scripts/setup.sh --cpu
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+  run --rm joshua-u22
+```
+
+Tests, package builds, UI services, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
 
 ## Tests and Builds
 

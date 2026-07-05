@@ -20,7 +20,7 @@ For open-ended questions or ideas, prefer [GitHub Discussions](https://github.co
 
 ## Development setup
 
-Joshua development is Docker-first. The host should provide Docker Engine and Docker Compose v2; project dependencies live in Docker images.
+Joshua development is Docker-first. Developer shells and launcher tasks use an NVIDIA GPU by default; tests and builds remain GPU-independent. Project dependencies live in Docker images.
 
 ```bash
 git clone https://github.com/Joshua-AI-Robotics/Joshua.git
@@ -30,7 +30,7 @@ docker compose run --rm joshua-u22
 docker compose run --rm joshua-u24
 ```
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs, simulation, and UI workflows. Native Ubuntu development is not a supported entrypoint.
+CPU-only developers should run `sudo ./scripts/setup.sh --cpu` and use the `docker-compose.cpu.yml` override. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs, simulation, and UI workflows. Native Ubuntu development is not a supported entrypoint.
 
 ## Branch and PR workflow
 

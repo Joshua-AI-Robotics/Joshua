@@ -10,7 +10,24 @@ Host bootstrap for Docker only:
 sudo ./scripts/setup.sh
 ```
 
-It installs/checks Docker Engine, Docker Compose v2, buildx, and docker group membership. It does not install ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies on the host.
+It installs/checks Docker Engine, Docker Compose v2, buildx, docker group membership, and NVIDIA Container Toolkit. It requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
+
+Verify the default GPU-enabled developer shell:
+
+```bash
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22 nvidia-smi
+```
+
+For CPU-only development:
+
+```bash
+sudo ./scripts/setup.sh --cpu
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+  run --rm joshua-u22
+```
+
+Default setup validates the host NVIDIA driver, installs NVIDIA Container Toolkit, and configures Docker. CUDA-enabled Python dependencies stay inside model environments.
 
 ## `container_build.sh`
 
