@@ -30,8 +30,8 @@ In scope:
 
 - The `BoardChannel` seam and `robot/board/` layer (interfaces, factory,
   instance caching).
-- Proto schema: top-level `boards`, motor-centric `Actuator`, the two comm
-  hops, `FirmwareSpec`.
+- Proto schema: top-level `boards`, motor-centric `Actuator`, the comm and
+  drive legs, `FirmwareSpec`.
 - The canonical host↔firmware channel protocol (`joshua_wire_v1`) and the
   cyclic (EtherCAT/PDO) variant.
 - Firmware architecture, build variants, flashing tooling, and the IDENTIFY
@@ -326,49 +326,60 @@ class StepperDriver : public ActuatorInterface {
 No comm headers, no board headers, no `#ifdef`s. The factory decides which
 channel implementation gets injected.
 
-### 5.5 The two comm hops
+### 5.5 Comm and drive: the two legs of every command
+
+Every command crosses two very different legs, named by role:
+
+- **Comm** — host↔board communication: how the PC reaches the controller.
+- **Drive** — board→motor actuation: how the controller moves the hardware.
+  ("Drive" as the electronics world uses it — a TB6600 is sold as a stepper
+  *drive*.)
 
 ```
-        HOP 1  "board comm"                    HOP 2  "channel interface"
+        COMM  (host ↔ board)                   DRIVE  (board → motor)
   PC ────────────────────────► MCU ─────────────────────────────► motor hardware
      serial / UDP / EtherCAT        STEP/DIR pulses / PWM / UART
                                     servo bus / CAN / GPIO
      carried by: Comm transport     executed by: firmware motor backend
-     specified in: Board.comm       specified in: Board.channels[i].interface
+     specified in: Board.comm       specified in: Board.channels[i].drive
 ```
 
-Hop 2 splits between flash time and runtime:
+`joshua_wire_v1` lives entirely on the comm leg: comm is how the bytes
+travel, the wire codec is what the bytes mean, and the drive is what the
+board does with them once decoded. The drive leg never carries frames.
+
+The drive leg splits between flash time and runtime:
 
 - **Wiring facts** (which MCU pins drive which TB6600, that a servo bus is on
   UART1) are baked into the firmware variant — they cannot change without a
   soldering iron.
 - **Tunables** (max pulse rate, direction inversion, bus baud, servo ID per
-  channel) live in `Channel.interface_config` and are pushed at `Init()` via
+  channel) live in `Channel.drive_config` and are pushed at `Init()` via
   `CONFIGURE_CHANNEL` protocol commands.
-- The IDENTIFY handshake reports per-channel interfaces ("ch0: STEP_DIR,
+- The IDENTIFY handshake reports per-channel drives ("ch0: STEP_DIR,
   ch2: SERVO_BUS_UART"); `Init` fails fast if config and firmware disagree.
 
-`ChannelInterface` also drives motor↔channel validation in one place:
+`DriveInterface` also anchors motor↔channel validation in one place:
 
 ```cpp
 // ActionFactory, before constructing the driver:
 //   STEPPER_NEMA17 requires STEP_DIR;  STS3215 requires SERVO_BUS_UART;
 //   DC_MOTOR requires PWM_DC.
-ABSL_RETURN_IF_ERROR(ValidateMotorChannel(actuator.motor_type(), channel_cfg.interface()));
+ABSL_RETURN_IF_ERROR(ValidateMotorChannel(actuator.motor_type(), channel_cfg.drive()));
 ```
 
 ### 5.6 Boards without a separate MCU (STS3215 and friends)
 
 "No board" never means bypass the layer — it means **the board is whatever
-controller the wire terminates in.** Each STS3215 contains its own MCU
+controller the comm leg terminates in.** Each STS3215 contains its own MCU
 speaking the Feetech register protocol; the servo bus is the degenerate case
-where hop 1 and hop 2 are the same wire:
+where comm and drive are the same physical link:
 
 | Concept | General board | `STS3215_BUS` board |
 | --- | --- | --- |
-| `Board.comm` (hop 1) | serial/UDP/EtherCAT to MCU | the serial bus itself |
+| `Board.comm` (comm leg) | serial/UDP/EtherCAT to MCU | the serial bus itself |
 | Firmware protocol codec | `joshua_wire_v1` / PDO layout | Feetech register protocol |
-| `Channel` (hop 2) | motor slot on the MCU | one servo ID on the bus |
+| `Channel` (drive leg) | motor slot on the MCU | one servo ID on the bus |
 | IDENTIFY handshake | firmware name + proto version | ping servo ID + read model-number register |
 | `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — vendor firmware |
 
@@ -392,14 +403,14 @@ instance per port closes that hole too.
 **Host-direct GPIO (Jetson Orin, Pi 5) — the second degenerate case.** Here
 the controller is the host computer itself: a motor wired straight to the
 host's header (STEP/DIR into a TB6600, or PWM, off Jetson Orin / Pi 5 pins)
-has no wire for hop 1 to cross. Hop 1 vanishes and hop 2 executes
-in-process:
+has nothing to communicate with. The comm leg vanishes and the drive
+executes in-process:
 
 | Concept | General board | `HOST_GPIO` board |
 | --- | --- | --- |
-| `Board.comm` (hop 1) | serial/UDP/EtherCAT to MCU | omitted — in-process calls |
-| Firmware protocol codec | `joshua_wire_v1` / PDO layout | none — no wire, no frames |
-| `Channel` (hop 2) | motor slot on the MCU | pin group on the host header |
+| `Board.comm` (comm leg) | serial/UDP/EtherCAT to MCU | omitted — in-process calls |
+| Firmware protocol codec | `joshua_wire_v1` / PDO layout | none — no comm leg, no frames |
+| `Channel` (drive leg) | motor slot on the MCU | pin group on the host header |
 | IDENTIFY handshake | firmware name + proto version | probe GPIO chip / claim pins at `Init()` |
 | `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — the "firmware" is this process |
 
@@ -485,9 +496,9 @@ enum BoardType {
   MOCK = 7;               // tests; channels are in-memory fakes
 }
 
-enum ChannelInterface {
-  CHANNEL_INTERFACE_INVALID = 0;
-  STEP_DIR = 1;           // pulse/direction stepper driver (TB6600 …)
+enum DriveInterface {     // the drive leg: how the board moves the motor (§5.5)
+  DRIVE_INVALID = 0;
+  STEP_DIR = 1;           // pulse/direction stepper drive (TB6600 …)
   PWM_DC = 2;
   SERVO_BUS_UART = 3;     // Feetech/Dynamixel-style register bus
   CAN = 4;
@@ -496,8 +507,8 @@ enum ChannelInterface {
 
 message Channel {
   uint32 index = 1;
-  ChannelInterface interface = 2;
-  oneof interface_config {
+  DriveInterface drive = 2;
+  oneof drive_config {
     StepDirConfig step_dir = 10;    // max_pulse_rate_hz, invert_dir, enable_active_low
     ServoBusConfig servo_bus = 11;  // servo_id
     PwmConfig pwm = 12;             // frequency_hz, deadband
@@ -514,9 +525,9 @@ message FirmwareSpec {
 message Board {
   string name = 1;                  // referenced by actuators; cache key
   BoardType board_type = 2;
-  robot.comm.Comm comm = 3;         // HOP 1: how the PC reaches the controller
-                                    // (omitted for HOST_GPIO / MOCK — no wire)
-  repeated Channel channels = 4;    // HOP 2: what each slot drives
+  robot.comm.Comm comm = 3;         // comm leg: how the PC reaches the controller
+                                    // (omitted for HOST_GPIO / MOCK)
+  repeated Channel channels = 4;    // drive leg: what each slot drives
   FirmwareSpec firmware = 5;
   oneof board_config {
     Am243Config am243_config = 10;  // slave_index, pdo_mapping, plus the PDO region
@@ -571,16 +582,16 @@ robot {
     name: "bridge_1"
     board_type: ARDUINO_TB6600
     comm { comm_type: ETHERNET_UDP udp_config { host: "192.168.1.50" port: 5555 } }
-    channels { index: 0 interface: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
-    channels { index: 1 interface: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
+    channels { index: 0 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
+    channels { index: 1 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
     firmware { name: "tb6600-arduino-eth" min_proto_version: 1 }
   }
   boards {
     name: "arm_bus"
     board_type: STS3215_BUS
     comm { comm_type: SERIAL serial_config { port: "/dev/ttyUSB0" baudrate: 1000000 } }
-    channels { index: 0 interface: SERVO_BUS_UART servo_bus { servo_id: 1 } }
-    channels { index: 1 interface: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+    channels { index: 0 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
   }
   actions {
     single_actions {
@@ -609,7 +620,7 @@ robot {
    │             — run tools/flash --board=bridge_1"
    │ 5. push CONFIGURE_CHANNEL tunables
    ▼
- ValidateMotorChannel(motor_type, channel.interface)
+ ValidateMotorChannel(motor_type, channel.drive)
    ▼
  board->OpenChannel(0) → BoardChannel
    ▼
@@ -645,8 +656,8 @@ silently. Frame format:
 [0xA5 sync][len][proto_ver][cmd][channel][payload...][crc16]
 
 cmd: IDENTIFY           → board_type, fw_name, proto_ver, n_channels,
-                          per-channel interface + capability bits
-     CONFIGURE_CHANNEL  → push Channel.interface_config tunables
+                          per-channel drive + capability bits
+     CONFIGURE_CHANNEL  → push Channel.drive_config tunables
      SET_TARGET         → mode(pos/vel/torque) + float32 value
      GET_FEEDBACK       → position, velocity, fault flags
      ENABLE / DISABLE / ESTOP
@@ -672,7 +683,7 @@ Two different artifacts are "shared", in two different ways:
 **Protobuf never crosses the wire to the MCU.** Protobuf is the config
 language — right on Linux, wrong for an ATmega328 (code size, heap, varint
 parsing inside a control loop). The host board class is the translator: it
-reads `Channel.interface_config` (protobuf) and emits `CONFIGURE_CHANNEL`
+reads `Channel.drive_config` (protobuf) and emits `CONFIGURE_CHANNEL`
 frames (C codec). Firmware never links protobuf; the host never touches raw
 frame bytes outside the codec.
 
@@ -761,7 +772,7 @@ the Feetech register protocol (`Sts3215BusBoard`).
 `robot.proto`, compiled once by Bazel, and consumed by every host component
 (`BoardFactory`, `ActionFactory`, validation tests, future Python parity).
 Firmware's only contact with proto-derived data is indirect — the values the
-host copies out of `Channel.interface_config` into `CONFIGURE_CHANNEL`
+host copies out of `Channel.drive_config` into `CONFIGURE_CHANNEL`
 frames.
 
 | Artifact | Language | Shared by | Crosses the wire? |
@@ -866,7 +877,7 @@ Each phase lands green and independently revertible.
 
 ### Phase 1 — Proto groundwork
 - [ ] Add `robot/board/proto/board.proto` (`Board`, `Channel`,
-      `ChannelInterface`, `FirmwareSpec`, `BoardType`).
+      `DriveInterface`, `FirmwareSpec`, `BoardType`).
 - [ ] Add `repeated robot.board.Board boards` to `config/proto/robot.proto`.
 - [ ] Add `MotorType`, `board_name`, `channel` to `Actuator`; mark
       `ActuatorType` board-flavored values and embedded `comm` deprecated
@@ -881,7 +892,7 @@ Each phase lands green and independently revertible.
       `TargetMode`, `ChannelFeedback`.
 - [ ] `robot/board/factory/`: `BoardFactory` with instance cache keyed by
       board name.
-- [ ] `ValidateMotorChannel(motor_type, channel_interface)` compatibility
+- [ ] `ValidateMotorChannel(motor_type, drive)` compatibility
       table + tests.
 - [ ] Move the serial `PortResources` cache out of `comm_factory.cc` behind
       the board factory.
@@ -942,7 +953,7 @@ Each phase lands green and independently revertible.
       transport swap with zero host-code changes.
 
 ### Phase 6 — Firmware tooling & handshake hardening
-- [ ] `IDENTIFY` capability bits + per-channel interface report;
+- [ ] `IDENTIFY` capability bits + per-channel drive report;
       `CONFIGURE_CHANNEL` tunables push.
 - [ ] `FirmwareSpec` verification in every `Board::Init` with actionable
       error text.
