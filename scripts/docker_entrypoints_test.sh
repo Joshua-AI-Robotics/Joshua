@@ -152,4 +152,18 @@ for lockfile in requirements.lock requirements_3.12.lock; do
   done <<<"${required_python_packages}"
 done
 
+for lockfile in \
+  ai/models/smolvla/requirements.lock \
+  ai/models/smolvla/requirements_3.12.lock; do
+  if ! grep -Fq -- '--extra-index-url https://download.pytorch.org/whl/cu128' "${lockfile}"; then
+    echo "${lockfile} must install Blackwell-compatible CUDA 12.8 wheels." >&2
+    exit 1
+  fi
+  if ! grep -Fxq 'torch==2.7.0+cu128' "${lockfile}" ||
+    ! grep -Fxq 'torchvision==0.22.0+cu128' "${lockfile}"; then
+    echo "${lockfile} must pin the PyTorch 2.7 CUDA 12.8 wheel set." >&2
+    exit 1
+  fi
+done
+
 echo "Docker entrypoint contract passed."
