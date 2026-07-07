@@ -50,6 +50,23 @@ Example:
 docker start -ai joshua-joshua-u22-run-a199afce4b8a
 ```
 
+### Keep a development container running
+
+For repeated builds and tests, prefer a persistent container over one-off
+`docker compose run --rm` commands. This keeps the Bazel server and cache warm
+and avoids bind-mount ownership churn from short-lived containers.
+
+```bash
+# Start Ubuntu 24.04 + ROS 2 Jazzy once.
+docker compose --profile u24 up -d joshua-u24
+
+# Run commands in the existing container.
+docker compose exec joshua-u24 bazel test //robot/action/motors/drivers:am243_ethercat_driver_test
+
+# Open an interactive shell in the existing container.
+docker compose exec joshua-u24 bash
+```
+
 ## Native installation
 
 On Ubuntu 22.04 LTS, install dependencies with the setup script:

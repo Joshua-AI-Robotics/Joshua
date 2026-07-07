@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# CCS
+.metadata/
+
+# Build artifacts
+build/
+Debug/
+Release/
+*.out
+*.map
+*.mcelf*
+*.appimage*
+
+# Local third-party scan tooling
+third_party/SOEM-master/
+third_party/SOEM-manual-build/
+third_party/soem-master.zip
+
+# macOS
+.DS_Store
