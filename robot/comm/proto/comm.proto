@@ -8,6 +8,7 @@ enum CommType {
   SERIAL = 1;
   BLE = 2;
   ETHERCAT = 3;
+  ETHERNET_UDP = 4;
 }
 
 message Comm {
@@ -15,6 +16,7 @@ message Comm {
   oneof comm_config {
     SerialConfig serial_config = 2;
     EthercatConfig ethercat_config = 3;
+    UdpConfig udp_config = 4;
   }
 }
 
@@ -22,6 +24,11 @@ message SerialConfig {
   uint64 id = 1;
   string port = 2;
   uint64 baudrate = 3;
+}
+
+message UdpConfig {
+  string host = 1;
+  uint32 port = 2;
 }
 
 enum EthercatProcessDataMode {

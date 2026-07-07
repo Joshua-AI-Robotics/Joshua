@@ -10,6 +10,9 @@ enum ActionType {
   ACTUATOR = 1;
 }
 
+// DEPRECATED: board/transport-flavored actuator types are replaced by
+// MotorType + Actuator.board_name (docs/BOARD_LAYER_RFC.md §6.3). Kept
+// functional during the board layer migration; removed in Phase 4 (§10).
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
@@ -18,15 +21,33 @@ enum ActuatorType {
   AM243_ETHERCAT_ACTUATOR = 4;
 }
 
+// What physically moves, independent of the board that runs its loop and
+// the transport that reaches that board. Values carry a MOTOR_ prefix
+// (unlike the RFC sketch) because proto enum values share the package
+// scope with the deprecated ActuatorType during migration.
+enum MotorType {
+  MOTOR_INVALID = 0;
+  MOTOR_STS3215 = 1;
+  MOTOR_STEPPER_NEMA17 = 2;
+  MOTOR_SPIKE = 3;
+  MOTOR_MOCK = 4;
+}
+
 message Actuator {
   string actuator_name = 1;
   uint64 id = 2;
+  // DEPRECATED: use motor_type + board_name + channel instead. Kept
+  // functional during the board layer migration (docs/BOARD_LAYER_RFC.md §10).
   ActuatorType actuator_type = 3;
+  // DEPRECATED: comm now lives on the referenced robot.board.Board.
   robot.comm.Comm comm = 4;
   float physical_lower_limit = 5;  // TODO: Move this to physical layout.
   float physical_upper_limit = 6;  // TODO: Move this to physical layout.
   float operational_lower_limit = 7;
   float operational_upper_limit = 8;
+  MotorType motor_type = 9;
+  string board_name = 10;  // References a config.Robot.boards entry by name.
+  uint32 channel = 15;     // Channel index on that board.
   oneof action_config {
     Sts3215Config sts3215_config = 11;
     MockMotorConfig mock_motor_config = 12;
