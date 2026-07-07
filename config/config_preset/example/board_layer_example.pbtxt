@@ -13,7 +13,7 @@ general {
 robot {
   boards {
     name: "bridge_1"
-    board_type: ARDUINO_TB6600
+    board_type: ARDUINO_UNO
     comm {
       comm_type: ETHERNET_UDP
       udp_config { host: "192.168.1.50" port: 5555 }
@@ -32,7 +32,7 @@ robot {
   }
   boards {
     name: "arm_bus"
-    board_type: STS3215_BUS
+    board_type: FEETECH_BUS
     comm {
       comm_type: SERIAL
       serial_config { port: "/dev/ttyUSB0" baudrate: 1000000 }

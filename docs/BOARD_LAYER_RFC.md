@@ -147,7 +147,7 @@ Structural problems this RFC fixes:
       │  "what runs the loop"    │◄─── shared ───┐  │
       │  Am243Board, TeensyBoard,│     codec     │  │
       │  Tb6600ArduinoBoard,     │  joshua_wire  │  │
-      │  Sts3215BusBoard         │     _v1       │  │
+      │  FeetechBusBoard         │     _v1       │  │
       └────────────┬─────────────┘               │  │
                    │ Comm handle                 │  │
                    ▼                             │  │
@@ -213,7 +213,7 @@ robot/
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
     tb6600_arduino/     tb6600_arduino_board.*
-    sts3215_bus/        sts3215_bus_board.*  (Feetech register protocol)
+    feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/
@@ -375,7 +375,7 @@ controller the comm leg terminates in.** Each STS3215 contains its own MCU
 speaking the Feetech register protocol; the servo bus is the degenerate case
 where comm and drive are the same physical link:
 
-| Concept | General board | `STS3215_BUS` board |
+| Concept | General board | `FEETECH_BUS` board |
 | --- | --- | --- |
 | `Board.comm` (comm leg) | serial/UDP/EtherCAT to MCU | the serial bus itself |
 | Firmware protocol codec | `joshua_wire_v1` / PDO layout | Feetech register protocol |
@@ -383,7 +383,7 @@ where comm and drive are the same physical link:
 | IDENTIFY handshake | firmware name + proto version | ping servo ID + read model-number register |
 | `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — vendor firmware |
 
-One `Sts3215BusBoard` instance per serial port; each daisy-chained servo is a
+One `FeetechBusBoard` instance per serial port; each daisy-chained servo is a
 channel keyed by `servo_id`. The register-protocol encoding moves out of
 `Sts3215Driver` into this board; the driver shrinks to motor semantics
 (tick↔degree, limits, calibration, idle pose). Bus serialization (one
@@ -393,7 +393,7 @@ board's internal bus mutex.
 The mutex only works if *all* bus traffic goes through the board.
 `Sts3215Encoder` (perception layer) currently writes raw Feetech frames to
 the same shared `Serial` from encoder-publisher timers; after the port it
-reads through `Sts3215BusBoard` (channels already expose `ReadFeedback()`)
+reads through `FeetechBusBoard` (channels already expose `ReadFeedback()`)
 or, at minimum, takes the board's bus lock — otherwise the half-duplex race
 the mutex exists to prevent returns through the perception side door
 (§10 Phase 4). Today's serial cache is also keyed by port *and* baudrate,
@@ -427,7 +427,7 @@ Keeping `board_name` mandatory (rather than optional with an embedded
 `comm{}` fallback) keeps `ActionFactory`, validation, and caching on a single
 code path. The rule generalizes: every motor names a board, and the board
 type says **where the control loop runs** — an external MCU (`AM243`,
-`ARDUINO_TB6600`), the motor's own MCU (`STS3215_BUS`), a vendor hub
+`ARDUINO_UNO`), the motor's own MCU (`FEETECH_BUS`), a vendor hub
 (`SPIKE_HUB_BLE`: the Pybricks hub over BLE), the host itself (`HOST_GPIO`),
 or nowhere (`MOCK`, for tests). "Doesn't need a board" always resolves to
 one of these degenerate cases, never to bypassing the layer. Future smart
@@ -485,12 +485,16 @@ shared bus.
 ### 6.1 `robot/board/proto/board.proto` (new)
 
 ```proto
+// Values name the native controller only — comm peripherals (an EasyCAT
+// shield) belong to Board.comm and drive peripherals (a TB6600 stepper
+// drive) to Channel.drive. Baking a peripheral into the board type would
+// re-conflate the axes this RFC separates.
 enum BoardType {
   BOARD_INVALID = 0;
   AM243 = 1;
-  TEENSY41_ECAT = 2;
-  ARDUINO_TB6600 = 3;
-  STS3215_BUS = 4;        // smart-servo bus; the "board" is the servo's own MCU
+  TEENSY41 = 2;           // comm peripheral (EasyCAT) lives on Board.comm
+  ARDUINO_UNO = 3;        // drive peripheral (TB6600) lives on Channel.drive
+  FEETECH_BUS = 4;        // STS/SCS smart-servo bus; the "board" is the servo's own MCU
   SPIKE_HUB_BLE = 5;      // Pybricks hub; vendor firmware over BLE
   HOST_GPIO = 6;          // no external controller; host pins drive the motor (§5.6)
   MOCK = 7;               // tests; channels are in-memory fakes
@@ -519,7 +523,7 @@ message Channel {
 message FirmwareSpec {
   string name = 1;                  // e.g. "tb6600-arduino-eth"
   uint32 min_proto_version = 2;
-  // Omitted entirely for vendor-firmware boards (STS3215_BUS).
+  // Omitted entirely for vendor-firmware boards (FEETECH_BUS).
 }
 
 message Board {
@@ -580,7 +584,7 @@ kept working but deprecated during migration (§10, Phase 1), then removed.
 robot {
   boards {
     name: "bridge_1"
-    board_type: ARDUINO_TB6600
+    board_type: ARDUINO_UNO
     comm { comm_type: ETHERNET_UDP udp_config { host: "192.168.1.50" port: 5555 } }
     channels { index: 0 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
     channels { index: 1 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
@@ -588,7 +592,7 @@ robot {
   }
   boards {
     name: "arm_bus"
-    board_type: STS3215_BUS
+    board_type: FEETECH_BUS
     comm { comm_type: SERIAL serial_config { port: "/dev/ttyUSB0" baudrate: 1000000 } }
     channels { index: 0 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
@@ -766,7 +770,7 @@ future Teensy/EasyCAT) is covered by **one** host-side PDO codec — the
 motivation behind open question §12.4. Vendor-controlled protocols are the
 exception and get their own host-side codec each: the TI demo byte-walk
 (`am243_pdo_codec`, kept because we do not control the TI demo firmware) and
-the Feetech register protocol (`Sts3215BusBoard`).
+the Feetech register protocol (`FeetechBusBoard`).
 
 **① is ordinary host-side reuse:** `board.proto` is imported by
 `robot.proto`, compiled once by Bazel, and consumed by every host component
@@ -822,7 +826,7 @@ artifact from a firmware manifest, and invokes the right flasher:
 
 ```
 bazel run //tools/flash -- --config=so100/teleop.pbtxt --board=bridge_1
-  → board_type=ARDUINO_TB6600, comm=ETHERNET_UDP → tb6600-arduino-eth-v1
+  → board_type=ARDUINO_UNO, comm=ETHERNET_UDP → tb6600-arduino-eth-v1
   → avrdude -p m328p -c arduino -U flash:w:tb6600-arduino-eth-v1.hex
 ```
 
@@ -921,11 +925,11 @@ Each phase lands green and independently revertible.
 - [ ] Update `docs/am243_ethercat.md` boundaries section.
 
 ### Phase 4 — Port STS3215
-- [ ] `robot/board/sts3215_bus/Sts3215BusBoard`: Feetech register protocol,
+- [ ] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol,
       per-port instance, bus mutex, servo-ping IDENTIFY.
 - [ ] Slim `Sts3215Driver` to motor semantics over `BoardChannel`
       (byte-identical bus traffic as acceptance bar).
-- [ ] Route `Sts3215Encoder` (perception) through `Sts3215BusBoard` — or at
+- [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
       minimum through the board's bus lock. It currently writes raw Feetech
       frames to the same shared `Serial` from encoder-publisher timers,
       which would bypass the new bus mutex (§5.6).

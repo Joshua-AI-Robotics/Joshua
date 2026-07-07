@@ -26,9 +26,9 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::MOCK:
       return std::make_shared<MockBoard>();
     case robot::board::BoardType::AM243:
-    case robot::board::BoardType::STS3215_BUS:
-    case robot::board::BoardType::TEENSY41_ECAT:
-    case robot::board::BoardType::ARDUINO_TB6600:
+    case robot::board::BoardType::FEETECH_BUS:
+    case robot::board::BoardType::TEENSY41:
+    case robot::board::BoardType::ARDUINO_UNO:
     case robot::board::BoardType::SPIKE_HUB_BLE:
     case robot::board::BoardType::HOST_GPIO:
       return absl::UnimplementedError(
