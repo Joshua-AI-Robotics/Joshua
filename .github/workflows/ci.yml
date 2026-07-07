@@ -43,6 +43,18 @@ jobs:
       - name: Install Bazelisk
         run: sudo npm install -g @bazel/bazelisk
 
+      # setup-ros resolves the ros-apt-source release version through an
+      # unauthenticated GitHub API call that gets rate-limited on shared
+      # runners, producing a malformed download URL and a 404 (issue #63).
+      # Pre-installing a pinned ros2-apt-source package makes setup-ros skip
+      # that download entirely.
+      - name: Install ROS 2 apt source (pinned)
+        run: |
+          curl --fail -sSL --retry 3 --retry-delay 2 -o /tmp/ros2-apt-source.deb \
+            "https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.2.0/ros2-apt-source_1.2.0.jammy_all.deb"
+          sudo dpkg -i /tmp/ros2-apt-source.deb
+          sudo apt-get update
+
       - name: Setup ROS 2
         uses: ros-tooling/setup-ros@v0.7
         with:
