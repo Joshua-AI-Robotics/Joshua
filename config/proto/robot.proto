@@ -11,7 +11,5 @@ message Robot {
   robot.action.Action actions = 1;
   robot.perception.Perception perceptions = 2;
   ros2.trajectory.Trajectories trajectories = 3;
-  // Shared board controllers; actuators bind to (board_name, channel).
-  // See docs/BOARD_LAYER_RFC.md.
   repeated robot.board.Board boards = 4;
 }

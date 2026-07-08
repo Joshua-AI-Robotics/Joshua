@@ -16,10 +16,6 @@ general {
 }
 
 robot {
-  # Board-layer shape (docs/BOARD_LAYER_RFC.md): the servos daisy-chain on
-  # one Feetech bus; actuators bind via (board_name, channel), with channel
-  # index = servo_id. The deprecated actuator_type/comm fields below stay
-  # functional until Phase 4 ports the runtime to the board path.
   boards {
     name: "arm_bus"
     board_type: FEETECH_BUS
