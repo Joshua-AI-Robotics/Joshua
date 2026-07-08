@@ -23,11 +23,10 @@ TEST(ValidateMotorChannelTest, StepperRequiresStepDir) {
       absl::StatusCode::kInvalidArgument);
 }
 
-TEST(ValidateMotorChannelTest, GenericJointRequiresPdoJoint) {
-  EXPECT_TRUE(ValidateMotorChannel(MotorType::MOTOR_GENERIC_JOINT, DriveInterface::PDO_JOINT).ok());
-  EXPECT_EQ(
-      ValidateMotorChannel(MotorType::MOTOR_GENERIC_JOINT, DriveInterface::SERVO_BUS_UART).code(),
-      absl::StatusCode::kInvalidArgument);
+TEST(ValidateMotorChannelTest, TiDemoJointRequiresPdoJoint) {
+  EXPECT_TRUE(ValidateMotorChannel(MotorType::MOTOR_TI_DEMO, DriveInterface::PDO_JOINT).ok());
+  EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_TI_DEMO, DriveInterface::SERVO_BUS_UART).code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(ValidateMotorChannelTest, MockMotorAcceptsAnyRealDrive) {

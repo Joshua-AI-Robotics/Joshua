@@ -121,7 +121,7 @@ class ActionFactory {
     ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
 
     switch (actuator.motor_type()) {
-      case robot::action::MotorType::MOTOR_GENERIC_JOINT: {
+      case robot::action::MotorType::MOTOR_TI_DEMO: {
         auto driver = std::make_unique<robot::action::JointDriver>(channel, actuator);
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;

@@ -31,10 +31,13 @@ enum MotorType {
   MOTOR_STEPPER_NEMA17 = 2;
   MOTOR_SPIKE = 3;
   MOTOR_MOCK = 4;
-  // A joint whose closed-loop controller runs on the board; the host only
-  // ships targets into the board's process-data slot (PDO_JOINT). Used for
-  // AM243-backed joints until real actuator firmware names a concrete motor.
-  MOTOR_GENERIC_JOINT = 5;
+  // Placeholder motor for the AM243 TI demo firmware: nothing physical
+  // moves, the host just ships a seed into the demo's PDO slot (PDO_JOINT).
+  // Deliberately narrow — do not bind real joints to it.
+  // TODO: When AM243_PDO_MAPPING_ACTUATOR_V1 lands, add real motor values
+  // (or a firmware-owned-joint value with proper unit config) and retire
+  // this one.
+  MOTOR_TI_DEMO = 5;
 }
 
 message Actuator {

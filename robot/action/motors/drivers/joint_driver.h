@@ -10,7 +10,7 @@
 
 namespace robot::action {
 
-// Actuator driver for MOTOR_GENERIC_JOINT — a joint whose closed-loop
+// Actuator driver for MOTOR_TI_DEMO — a joint whose closed-loop
 // controller runs on the board. The driver owns motor semantics only
 // (limits, idle position, the degrees->native conversion); how a target
 // reaches the controller is the channel's problem

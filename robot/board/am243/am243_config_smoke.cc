@@ -85,12 +85,12 @@ absl::StatusOr<robot::action::SingleAction> FindJointSingleAction(const config::
         !single_action.has_actuator()) {
       continue;
     }
-    if (single_action.actuator().motor_type() == robot::action::MotorType::MOTOR_GENERIC_JOINT) {
+    if (single_action.actuator().motor_type() == robot::action::MotorType::MOTOR_TI_DEMO) {
       return single_action;
     }
   }
   return absl::Status(absl::StatusCode::kNotFound,
-                      "config does not contain a MOTOR_GENERIC_JOINT actuator");
+                      "config does not contain a MOTOR_TI_DEMO actuator");
 }
 
 float PositionForCycle(const robot::action::Actuator& actuator, int cycle) {

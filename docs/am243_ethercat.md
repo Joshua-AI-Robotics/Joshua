@@ -117,7 +117,7 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
   checked.
 - The AM243 PDO byte layout belongs in `robot/board/am243/am243_pdo_codec.*`.
 - Motor semantics belong in `robot/action/motors/drivers/joint_driver.*`
-  (`MOTOR_GENERIC_JOINT`): limits, idle position, and the joint->native
+  (`MOTOR_TI_DEMO`): limits, idle position, and the joint->native
   conversion, over `BoardChannel` with no comm or board headers.
 - Board-management tooling, including UART flashing and debug helpers, should
   stay outside the runtime actuator path.
@@ -130,7 +130,7 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
 An example config lives at
 `config/config_preset/example/am243_ethercat_demo.pbtxt`: a `boards{}` entry
 declares the AM243 slave and its `PDO_JOINT` channel, and the actuator binds
-via `motor_type: MOTOR_GENERIC_JOINT` + `board_name` + `channel`.
+via `motor_type: MOTOR_TI_DEMO` + `board_name` + `channel`.
 
 The backend pins upstream SOEM v2.0.0 in Bazel and builds a SOEM-backed
 transport. `Init()` opens the SOEM master socket in split LRD/LWR mode,

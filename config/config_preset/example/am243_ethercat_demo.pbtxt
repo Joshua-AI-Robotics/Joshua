@@ -42,7 +42,7 @@ robot {
       actuator {
         actuator_name: "am243_joint_1"
         id: 1
-        motor_type: MOTOR_GENERIC_JOINT
+        motor_type: MOTOR_TI_DEMO
         board_name: "am243_1"
         channel: 0
         physical_lower_limit: -180

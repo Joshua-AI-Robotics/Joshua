@@ -819,7 +819,53 @@ transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
 
-### 7.5 Flash tooling
+### 7.5 The channel table: pins are a firmware fact
+
+The artifact that ties §5.5's "wiring facts" to real code is the **channel
+table**: a compiled-in array, one per firmware variant, mapping channel
+index → motor backend + pins + per-channel state:
+
+```c
+// firmware/teensy_servo/channel_table.c — one file per wiring variant
+static ChannelEntry g_channels[] = {
+    {.backend = &backend_pwm, .pin = 9,  .freq_hz = 50},   // channel 0
+    {.backend = &backend_pwm, .pin = 10, .freq_hz = 50},   // channel 1
+    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 2
+};
+```
+
+The dispatcher resolves every incoming `SET_TARGET` through this table:
+channel byte → table entry → backend → pins. Pin numbers therefore appear in
+exactly one place in the entire system. They never cross the wire (frames
+carry channel indexes, not pins) and never appear in host config — the one
+exception is `HOST_GPIO` boards, where no firmware exists and
+`HostGpioConfig` names the host header pins instead.
+
+This makes the channel table a **pinout contract** between the person wiring
+the robot and the person writing config:
+
+1. The firmware variant documents its table ("ch0 = pin 9 PWM, ch2 = pins
+   2/3 STEP_DIR").
+2. Wiring plugs each motor into a contracted pin.
+3. Config binds each actuator to the channel that owns that pin
+   (`board_name` + `channel`), and declares the same drive in the board's
+   `channels{}`.
+
+What is checked vs. trusted: IDENTIFY verifies the *logical* contract —
+firmware name, protocol version, channel count, per-channel drives — so a
+wrong image or a config/firmware drift fails at `Init`. The *physical* end
+(servo plugged into pin 9 but bound to channel 1) is undetectable by
+software; channel↔pin fidelity at the connector is on the human. Prefer
+mnemonic channel assignments to reduce that risk (so100 presets use
+channel index = servo bus ID).
+
+The split also sets change cadences deliberately: rewiring a motor to a
+different pin is a channel-table edit + reflash with the host untouched;
+swapping or retuning a motor is a pbtxt edit with the firmware untouched.
+Config edits (weekly) can never break wiring (once per board revision), and
+vice versa.
+
+### 7.6 Flash tooling
 
 `tools/flash/` reads the same robot config, resolves each board's needed
 artifact from a firmware manifest, and invokes the right flasher:

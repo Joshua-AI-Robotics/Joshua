@@ -7,7 +7,7 @@
 namespace robot::action {
 namespace {
 
-// Board-layer single action: MOTOR_GENERIC_JOINT bound to a MOCK board's
+// Board-layer single action: MOTOR_TI_DEMO bound to a MOCK board's
 // PDO_JOINT channel, so the resolution flow runs without hardware.
 robot::action::SingleAction MakeBoardJointSingleAction() {
   robot::action::SingleAction single_action;
@@ -16,7 +16,7 @@ robot::action::SingleAction MakeBoardJointSingleAction() {
   auto* actuator = single_action.mutable_actuator();
   actuator->set_actuator_name("joint_1");
   actuator->set_id(1);
-  actuator->set_motor_type(robot::action::MotorType::MOTOR_GENERIC_JOINT);
+  actuator->set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
   actuator->set_board_name("mock_board_1");
   actuator->set_channel(0);
   actuator->set_operational_lower_limit(-90.0f);

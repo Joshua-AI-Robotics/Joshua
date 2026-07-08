@@ -102,7 +102,7 @@ robot::action::Actuator MakeActuatorConfig() {
   robot::action::Actuator actuator;
   actuator.set_actuator_name("am243_demo");
   actuator.set_id(1);
-  actuator.set_motor_type(robot::action::MotorType::MOTOR_GENERIC_JOINT);
+  actuator.set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
   actuator.set_board_name("am243_smoke");
   actuator.set_channel(0);
   actuator.set_physical_lower_limit(kLowerLimit);
