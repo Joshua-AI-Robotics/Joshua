@@ -286,7 +286,7 @@ NIC ─► one master transport ─► one cyclic loop ─► N boards (slaves) 
 
 Serial already follows this pattern (`PortResources` keyed by port);
 EtherCAT gets the equivalent keyed by interface name, and the cyclic loop
-lives with the shared master transport, not the board (§5.7).
+lives with the shared master transport, not the board (§5.8).
 
 Unit convention: the channel speaks the board's native unit (steps, ticks);
 the motor driver owns the degrees↔native conversion because steps/rev,
@@ -433,7 +433,97 @@ or nowhere (`MOCK`, for tests). "Doesn't need a board" always resolves to
 one of these degenerate cases, never to bypassing the layer. Future smart
 CAN motors follow the same pattern as a `CAN_BUS` board.
 
-### 5.7 Runtime behavior: frame-based vs cyclic boards
+### 5.7 ROS 2 topic-backed boards
+
+Some "boards" are already complete robot subsystems with their own ROS 2 API:
+TurtleBot 3/OpenCR, TurtleBot 4/iRobot Create 3, Clearpath Jackal/Husky,
+Stretch, and similar vendor-integrated bases. Joshua should still route them
+through the board layer. The board is the subsystem that owns the low-level
+control loop; the transport is ROS 2 topics/services/actions rather than a
+serial frame, EtherCAT PDO image, or GPIO call.
+
+This keeps the same rule as the MCU cases: application code depends on a
+capability (`MobileBase`, `JointGroup`, `ReadableOdometry`), while the board
+adapter hides the vendor API.
+
+| Concept | Joshua-firmware board | ROS 2 topic-backed board |
+| --- | --- | --- |
+| `Board.comm` (comm leg) | serial/UDP/EtherCAT/SPI to firmware | ROS 2 namespace + topic/service/action names |
+| Firmware protocol codec | `joshua_wire_v1` / PDO layout | vendor ROS 2 message contract |
+| `Channel` (drive leg) | motor slot on MCU | subsystem endpoint: base velocity, joint group, gripper |
+| IDENTIFY handshake | firmware name + proto version | discover required ROS 2 graph endpoints and message types |
+| `FirmwareSpec` / flashing | `tools/flash` artifact | omitted — vendor software stack owns deployment |
+
+Example: TurtleBot 4 should not be modeled as two raw wheel motors first.
+The iRobot Create 3 base already owns wheel control, safety, odometry, dock,
+bumper, cliff, and battery behavior. Joshua should model it as a board with
+one mobile-base channel:
+
+```proto
+boards {
+  name: "create3_base"
+  board_type: ROS2_VENDOR_ROBOT
+  comm {
+    comm_type: ROS2
+    ros2_config {
+      namespace: "/"
+      domain_id: 0
+    }
+  }
+  channels {
+    index: 0
+    drive: MOBILE_BASE_VELOCITY
+    ros2_endpoint {
+      command_topic: "/cmd_vel"
+      odometry_topic: "/odom"
+      battery_topic: "/battery_state"
+    }
+  }
+  ros2_vendor_robot_config {
+    vendor: "irobot_create3"
+  }
+}
+actions {
+  single_actions {
+    mobile_base {
+      base_name: "turtlebot4_base"
+      board_name: "create3_base"
+      channel: 0
+      max_linear_velocity_mps: 0.3
+      max_angular_velocity_radps: 1.5
+    }
+  }
+}
+```
+
+For a ROS 2 board, `Board::Init()` does graph-level validation instead of a
+firmware handshake:
+
+1. Resolve the configured namespace and topic/service/action names.
+2. Verify required publishers/subscribers/services/actions appear before a
+   timeout.
+3. Verify message types match the adapter (`geometry_msgs/Twist`,
+   `nav_msgs/Odometry`, `sensor_msgs/BatteryState`, `control_msgs` actions,
+   etc.).
+4. Start subscriptions and keep a latest-feedback cache for
+   `ReadFeedback()`.
+
+`SetTarget()` publishes or calls the vendor API:
+
+```
+ MobileBaseDriver.SetVelocity(vx, wz)
+   └► channel_->SetTarget(kPlanarVelocity, {vx, wz})
+        └► Ros2VendorChannel publishes geometry_msgs/Twist to /cmd_vel
+             └► vendor base controller owns wheel control and safety
+```
+
+This is not a bypass around the board layer. It is the same abstraction with a
+different transport and a vendor-owned control loop. Raw wheel-motor support
+can still be added later for platforms where Joshua owns the motor controller,
+but vendor robot bases should begin at the subsystem boundary the vendor
+already exposes.
+
+### 5.8 Runtime behavior: frame-based vs cyclic boards
 
 Two transport families, hidden below `SetTarget`:
 
@@ -494,6 +584,7 @@ enum BoardType {
   SPIKE_HUB_BLE = 5;      // Pybricks hub; vendor firmware over BLE
   HOST_GPIO = 6;          // no external controller; host pins drive the motor (§5.6)
   MOCK = 7;               // tests; channels are in-memory fakes
+  ROS2_VENDOR_ROBOT = 8;  // vendor subsystem controlled through ROS 2 topics (§5.7)
 }
 
 enum DriveInterface {     // the drive leg: how the board moves the motor (§5.5)
@@ -503,6 +594,8 @@ enum DriveInterface {     // the drive leg: how the board moves the motor (§5.5
   SERVO_BUS_UART = 3;     // Feetech/Dynamixel-style register bus
   CAN = 4;
   PDO_JOINT = 5;          // slot in a cyclic EtherCAT process-data image
+  MOBILE_BASE_VELOCITY = 6;  // planar base velocity endpoint (cmd_vel/odom)
+  JOINT_GROUP = 7;           // vendor joint trajectory/action endpoint
 }
 
 message Channel {
@@ -513,6 +606,7 @@ message Channel {
     ServoBusConfig servo_bus = 11;  // servo_id
     PwmConfig pwm = 12;             // frequency_hz, deadband
     HostGpioConfig host_gpio = 13;  // gpio chip + pin numbers (HOST_GPIO boards)
+    Ros2EndpointConfig ros2_endpoint = 14;  // topic/service/action names (§5.7)
   }
 }
 
@@ -535,6 +629,7 @@ message Board {
                                     // Am243EthercatConfig carries — kept so presets
                                     // can pin regions instead of trusting
                                     // GetPdoRegion auto-discovery
+    Ros2VendorRobotConfig ros2_vendor_robot_config = 11;
   }
 }
 ```
@@ -883,8 +978,10 @@ Each phase lands green and independently revertible.
       `ActuatorType` board-flavored values and embedded `comm` deprecated
       (still functional).
 - [ ] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
-      until an SBC host needs it. Note `CommType.BLE` exists with no config
-      message — `BleConfig` lands with the Spike/Python migration (§12.3).
+      until an SBC host needs it. Add `ROS2` (+ `Ros2Config` with namespace,
+      domain id, and discovery timeout) for vendor topic-backed boards (§5.7).
+      Note `CommType.BLE` exists with no config message — `BleConfig` lands
+      with the Spike/Python migration (§12.3).
 - [ ] Update `config_preset_validation_test` for both old and new shapes.
 
 ### Phase 2 — Board layer skeleton
@@ -904,7 +1001,7 @@ Each phase lands green and independently revertible.
       NIC fight over the raw socket).
 - [ ] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
       (currently in `ActionFactory`), PDO region mapping, and WKC checks;
-      the cyclic exchange loop lives with the shared master (§5.3/§5.7).
+      the cyclic exchange loop lives with the shared master (§5.3/§5.8).
 - [ ] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
       StartCyclic → verify OPERATIONAL`. Today that sequencing exists only
       in smoke-binary `main()`s; the config-driven path stops at `Init()`
@@ -962,6 +1059,19 @@ Each phase lands green and independently revertible.
 - [ ] Docs: firmware contribution guide (how to add a board / a transport
       variant / a backend).
 
+### Phase 7 — ROS 2 vendor robot board
+- [ ] Add `ROS2_VENDOR_ROBOT` board support with graph validation in
+      `Board::Init()` instead of firmware IDENTIFY.
+- [ ] Add `MobileBase` / `DifferentialDriveBase` action shape and
+      `MOBILE_BASE_VELOCITY` channel validation.
+- [ ] Implement a generic `Ros2VendorRobotBoard` that publishes configured
+      command topics and subscribes to configured feedback topics.
+- [ ] Prove with one common platform preset, preferably TurtleBot 3 or
+      TurtleBot 4/Create 3: `.pbtxt → ActionFactory → BoardFactory →
+      /cmd_vel` plus odometry feedback.
+- [ ] Document vendor-specific endpoint presets for TurtleBot, Clearpath
+      Jackal/Husky, Stretch, and similar robots.
+
 ## 11. Acceptance criteria
 
 - A stepper motor moves via TB6600+Arduino over serial **and** over UDP by
@@ -996,7 +1106,7 @@ Each phase lands green and independently revertible.
    ESI/SDO-described dynamic mapping?
 5. **Cyclic loop cadence** — ownership is settled (one loop per NIC, owned
    by the shared master transport; per-board loops are impossible on a
-   shared bus, §5.3/§5.7). Still open: cycle rate, thread priority, and
+   shared bus, §5.3/§5.8). Still open: cycle rate, thread priority, and
    jitter targets.
 6. **ESTOP semantics** — protocol-level broadcast (all channels, all boards)
    and its guarantees on frame-based vs cyclic transports.
