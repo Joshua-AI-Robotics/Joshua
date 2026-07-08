@@ -30,6 +30,8 @@ absl::Status ValidateMotorChannel(robot::action::MotorType motor_type,
       return RequireDrive(motor_type, drive, robot::board::DriveInterface::SERVO_BUS_UART);
     case robot::action::MotorType::MOTOR_STEPPER_NEMA17:
       return RequireDrive(motor_type, drive, robot::board::DriveInterface::STEP_DIR);
+    case robot::action::MotorType::MOTOR_GENERIC_JOINT:
+      return RequireDrive(motor_type, drive, robot::board::DriveInterface::PDO_JOINT);
     case robot::action::MotorType::MOTOR_MOCK:
       // Mock motors accept any real drive; only DRIVE_INVALID is rejected.
       if (drive == robot::board::DriveInterface::DRIVE_INVALID) {

@@ -16,18 +16,19 @@
 #include "absl/status/statusor.h"
 #include "config/config_utils.h"
 #include "config/proto/config.pb.h"
-#include "robot/action/motors/drivers/am243_ethercat_driver.h"
-#include "robot/action/motors/drivers/am243_pdo_codec.h"
+#include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "robot/board/am243/am243_pdo_codec.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
-#include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/factory/comm_factory.h"
+
+// Proves the config-driven AM243 path end to end: pbtxt -> ActionFactory ->
+// BoardFactory -> Am243Board -> shared SOEM master, the same resolution the
+// actuator_subscriber node runs (docs/BOARD_LAYER_RFC.md §6.5).
 
 namespace {
 
 using robot::comm::ethercat::PdoRegion;
-using robot::comm::ethercat::ProcessDataMode;
-using robot::comm::ethercat::SlaveIdentity;
-using robot::comm::ethercat::SoemEthercatTransport;
 
 constexpr size_t kDisplayedCycles = 5;
 
@@ -78,33 +79,18 @@ void ShowRecentCycles(std::deque<std::string>* recent_cycles, const std::string&
   std::cout.flush();
 }
 
-void PrintSlave(uint16_t index, const SlaveIdentity& slave) {
-  std::cout << "slave " << index << ": name=\"" << slave.name << "\" man=0x" << std::hex
-            << slave.manufacturer << " id=0x" << slave.product_id << " rev=0x" << slave.revision
-            << std::dec << " outputs=" << slave.output_size_bits
-            << " bits inputs=" << slave.input_size_bits << " bits\n";
-}
-
-absl::StatusOr<robot::action::Actuator> FindAm243Actuator(const config::Config& config) {
+absl::StatusOr<robot::action::SingleAction> FindJointSingleAction(const config::Config& config) {
   for (const auto& single_action : config.robot().actions().single_actions()) {
     if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
         !single_action.has_actuator()) {
       continue;
     }
-    const auto& actuator = single_action.actuator();
-    if (actuator.actuator_type() == robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR) {
-      return actuator;
+    if (single_action.actuator().motor_type() == robot::action::MotorType::MOTOR_GENERIC_JOINT) {
+      return single_action;
     }
   }
   return absl::Status(absl::StatusCode::kNotFound,
-                      "config does not contain an AM243 EtherCAT actuator");
-}
-
-ProcessDataMode ToProcessDataMode(robot::comm::EthercatProcessDataMode mode) {
-  if (mode == robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW) {
-    return ProcessDataMode::kLrw;
-  }
-  return ProcessDataMode::kSplitLrdLwr;
+                      "config does not contain a MOTOR_GENERIC_JOINT actuator");
 }
 
 float PositionForCycle(const robot::action::Actuator& actuator, int cycle) {
@@ -139,56 +125,51 @@ int main(int argc, char** argv) {
   if (!config_or.ok()) {
     return Fail(config_or.status());
   }
+  config::Config config = *config_or;
 
-  absl::StatusOr<robot::action::Actuator> actuator_or = FindAm243Actuator(*config_or);
-  if (!actuator_or.ok()) {
-    return Fail(actuator_or.status());
+  absl::StatusOr<robot::action::SingleAction> single_action_or = FindJointSingleAction(config);
+  if (!single_action_or.ok()) {
+    return Fail(single_action_or.status());
   }
-  robot::action::Actuator actuator = *actuator_or;
+  const robot::action::Actuator& actuator = single_action_or->actuator();
+
+  auto* boards = config.mutable_robot()->mutable_boards();
+  robot::board::Board* board_config = nullptr;
+  for (auto& board : *boards) {
+    if (board.name() == actuator.board_name()) {
+      board_config = &board;
+      break;
+    }
+  }
+  if (board_config == nullptr) {
+    return Fail(absl::Status(absl::StatusCode::kNotFound,
+                             "config declares no board named " + actuator.board_name()));
+  }
   if (!interface_override.empty() && interface_override != "-") {
-    actuator.mutable_comm()->mutable_ethercat_config()->set_interface_name(interface_override);
+    board_config->mutable_comm()->mutable_ethercat_config()->set_interface_name(interface_override);
   }
   if (slave_index_override > 0) {
-    actuator.mutable_am243_ethercat_config()->set_slave_index(
+    board_config->mutable_am243_config()->set_slave_index(
         static_cast<uint32_t>(slave_index_override));
   }
 
-  const auto& ethercat_config = actuator.comm().ethercat_config();
-  auto transport = std::make_shared<SoemEthercatTransport>();
-  absl::Status status = transport->Init(ethercat_config.interface_name(),
-                                        ToProcessDataMode(ethercat_config.process_data_mode()));
-  if (!status.ok()) {
-    return Fail(status);
+  auto interface_or =
+      robot::action::ActionFactory::CreateAction(*single_action_or, config.robot().boards());
+  if (!interface_or.ok()) {
+    return Fail(interface_or.status());
   }
-  status = transport->ConfigureSlaves();
-  if (!status.ok()) {
-    return Fail(status);
-  }
+  auto driver = std::move(*interface_or);
 
-  absl::StatusOr<std::vector<SlaveIdentity>> slaves_or = transport->GetSlaves();
-  if (!slaves_or.ok()) {
-    return Fail(slaves_or.status());
+  // Same cached master the board opened, for printing raw slave I/O.
+  auto transport_or = robot::comm::CommFactory::CreateEthercatTransport(board_config->comm());
+  if (!transport_or.ok()) {
+    return Fail(transport_or.status());
   }
-  for (size_t i = 0; i < slaves_or->size(); ++i) {
-    PrintSlave(static_cast<uint16_t>(i + 1), (*slaves_or)[i]);
-  }
-
-  const uint16_t slave_index =
-      static_cast<uint16_t>(actuator.am243_ethercat_config().slave_index());
-  absl::StatusOr<PdoRegion> region_or = transport->GetPdoRegion(slave_index);
+  auto region_or =
+      (*transport_or)
+          ->GetPdoRegion(static_cast<uint16_t>(board_config->am243_config().slave_index()));
   if (!region_or.ok()) {
     return Fail(region_or.status());
-  }
-
-  status = transport->StartCyclic();
-  if (!status.ok()) {
-    return Fail(status);
-  }
-
-  robot::action::Am243EthercatDriver driver(transport, actuator);
-  status = driver.Init();
-  if (!status.ok()) {
-    return Fail(status);
   }
 
   std::deque<std::string> recent_cycles;
@@ -198,17 +179,17 @@ int main(int argc, char** argv) {
     packet.set_action_id("am243_config_smoke");
     packet.set_position(position);
 
-    status = driver.SetAction(packet);
+    absl::Status status = driver->SetAction(packet);
     if (!status.ok()) {
       return Fail(status);
     }
 
-    auto inputs_or = transport->ReadInputs(*region_or);
+    auto inputs_or = (*transport_or)->ReadInputs(*region_or);
     if (!inputs_or.ok()) {
       return Fail(inputs_or.status());
     }
     const std::vector<uint8_t> outputs =
-        robot::action::am243::EncodeDemoOutputSeed(DemoSeedForPosition(actuator, position));
+        robot::board::am243::EncodeDemoOutputSeed(DemoSeedForPosition(actuator, position));
 
     std::ostringstream cycle_line;
     cycle_line << "cycle=" << cycle << " position=" << position << " O=[" << FormatBytes(outputs)
@@ -220,15 +201,9 @@ int main(int argc, char** argv) {
     }
   }
 
-  status = driver.Teardown();
-  if (!status.ok()) {
-    return Fail(status);
-  }
-  status = transport->StopCyclic();
-  if (!status.ok()) {
-    return Fail(status);
-  }
-  status = transport->Teardown();
+  robot::action::ActionPacket teardown_packet;
+  teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
+  absl::Status status = driver->SetAction(teardown_packet);
   if (!status.ok()) {
     return Fail(status);
   }

@@ -25,6 +25,7 @@ cc_test(
     srcs = ["comm_factory_test.cc"],
     deps = [
         ":comm_factory",
+        "//robot/comm/ethercat:fake_ethercat_transport",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",

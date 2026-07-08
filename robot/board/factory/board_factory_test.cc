@@ -55,8 +55,8 @@ TEST_F(BoardFactoryTest, InvalidBoardTypeIsRejected) {
 }
 
 TEST_F(BoardFactoryTest, UnportedBoardTypesReportUnimplemented) {
-  robot::board::Board board = MakeMockBoard("am243_1", 1);
-  board.set_board_type(robot::board::BoardType::AM243);
+  robot::board::Board board = MakeMockBoard("arm_bus_1", 1);
+  board.set_board_type(robot::board::BoardType::FEETECH_BUS);
   auto result = BoardFactory::GetOrCreate(board);
   EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
 }

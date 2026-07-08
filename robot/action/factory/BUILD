@@ -8,8 +8,10 @@ cc_library(
     deps = [
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:action_interface",
-        "//robot/action/motors/drivers:am243_ethercat_driver",
+        "//robot/action/motors/drivers:joint_driver",
         "//robot/action/motors/drivers:sts3215_driver",
+        "//robot/board/factory:board_factory",
+        "//robot/board/factory:motor_channel_validation",
         "//robot/comm/factory:comm_factory",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",

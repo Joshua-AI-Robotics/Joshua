@@ -1,8 +1,8 @@
-#include "robot/action/motors/drivers/am243_pdo_codec.h"
+#include "robot/board/am243/am243_pdo_codec.h"
 
 #include "absl/status/status.h"
 
-namespace robot::action::am243 {
+namespace robot::board::am243 {
 
 std::vector<uint8_t> EncodeDemoOutputSeed(uint8_t seed) {
   std::vector<uint8_t> output_pdo(kDemoPdoSizeBytes, 0);
@@ -18,4 +18,4 @@ absl::StatusOr<uint8_t> DecodeDemoInputEchoSeed(const std::vector<uint8_t>& inpu
   return input_pdo[kDemoSeedByteOffset];
 }
 
-}  // namespace robot::action::am243
+}  // namespace robot::board::am243

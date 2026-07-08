@@ -26,6 +26,20 @@ struct PortResources {
 static std::mutex g_serial_mutex;
 static std::map<std::string, std::unique_ptr<PortResources>> g_port_resources;  // keyed by port
 
+// One SOEM master per NIC (docs/BOARD_LAYER_RFC.md §5.3): the cache hands the
+// same transport to every board on the interface, and remembers the mode the
+// master was opened with so a second caller cannot silently flip it.
+struct CachedEthercatTransport {
+  robot::comm::ethercat::ProcessDataMode process_data_mode;
+  std::shared_ptr<robot::comm::ethercat::EthercatTransport> transport;
+};
+
+static std::mutex g_ethercat_mutex;
+static std::map<std::string, CachedEthercatTransport>
+    g_ethercat_transports;  // keyed by interface name
+static std::function<std::shared_ptr<robot::comm::ethercat::EthercatTransport>()>
+    g_ethercat_transport_factory_for_testing;
+
 absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMode(
     EthercatProcessDataMode process_data_mode) {
   switch (process_data_mode) {
@@ -99,11 +113,44 @@ CommFactory::CreateEthercatTransport(const robot::comm::Comm& comm) {
     return process_data_mode_or.status();
   }
 
-  auto transport = std::make_shared<robot::comm::ethercat::SoemEthercatTransport>();
-  auto status = transport->Init(comm.ethercat_config().interface_name(), *process_data_mode_or);
+  const std::string& interface_name = comm.ethercat_config().interface_name();
+
+  std::lock_guard<std::mutex> lock(g_ethercat_mutex);
+  auto it = g_ethercat_transports.find(interface_name);
+  if (it != g_ethercat_transports.end()) {
+    if (it->second.process_data_mode != *process_data_mode_or) {
+      return absl::Status(absl::StatusCode::kInvalidArgument,
+                          "EtherCAT interface " + interface_name +
+                              " is already open with a different process data mode");
+    }
+    return it->second.transport;
+  }
+
+  std::shared_ptr<robot::comm::ethercat::EthercatTransport> transport;
+  if (g_ethercat_transport_factory_for_testing) {
+    transport = g_ethercat_transport_factory_for_testing();
+  } else {
+    transport = std::make_shared<robot::comm::ethercat::SoemEthercatTransport>();
+  }
+  auto status = transport->Init(interface_name, *process_data_mode_or);
   if (!status.ok()) {
     return status;
   }
+  g_ethercat_transports[interface_name] = CachedEthercatTransport{*process_data_mode_or, transport};
   return transport;
+}
+
+void CommFactory::SetEthercatTransportFactoryForTesting(
+    std::function<std::shared_ptr<robot::comm::ethercat::EthercatTransport>()> factory) {
+  std::lock_guard<std::mutex> lock(g_ethercat_mutex);
+  g_ethercat_transport_factory_for_testing = std::move(factory);
+}
+
+void CommFactory::ResetEthercatTransportCacheForTesting() {
+  std::lock_guard<std::mutex> lock(g_ethercat_mutex);
+  for (auto& [interface_name, cached] : g_ethercat_transports) {
+    cached.transport->Teardown().IgnoreError();
+  }
+  g_ethercat_transports.clear();
 }
 }  // namespace robot::comm

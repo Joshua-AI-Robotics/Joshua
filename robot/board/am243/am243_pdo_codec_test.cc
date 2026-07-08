@@ -1,4 +1,4 @@
-#include "robot/action/motors/drivers/am243_pdo_codec.h"
+#include "robot/board/am243/am243_pdo_codec.h"
 
 #include <cstdint>
 #include <vector>
@@ -6,7 +6,7 @@
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
 
-namespace robot::action::am243 {
+namespace robot::board::am243 {
 namespace {
 
 TEST(Am243PdoCodecTest, EncodeDemoOutputSeedWritesFirstByteOnly) {
@@ -36,4 +36,4 @@ TEST(Am243PdoCodecTest, DecodeDemoInputEchoSeedRejectsWrongSize) {
 }
 
 }  // namespace
-}  // namespace robot::action::am243
+}  // namespace robot::board::am243
