@@ -10,6 +10,9 @@ set -e
 
 if [ -n "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
     source "/opt/ros/${ROS_DISTRO}/setup.bash"
+else
+    echo "WARNING: /opt/ros/${ROS_DISTRO:-<ROS_DISTRO unset>}/setup.bash not found;" \
+         "ROS 2 environment NOT sourced. ROS commands will fail with an empty AMENT_PREFIX_PATH." >&2
 fi
 
 # Optionally create mock serial ports (macOS/ARM64 development without

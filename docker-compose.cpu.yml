@@ -19,3 +19,9 @@ services:
 
   run-u24:
     <<: *no-gpu
+
+  joshua-u22-arm64:
+    <<: *no-gpu
+
+  joshua-u24-arm64:
+    <<: *no-gpu

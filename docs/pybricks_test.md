@@ -44,6 +44,14 @@ This uploads a tiny Pybricks program to the hub and sends one angle command.
 docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base //tools/pybricks:pybricks_ble_smoke -- "Pybricks Hub" A 90
 ```
 Note: the smoke test tool lives under `tools/pybricks`.
+
+> **Not yet verified inside Docker.** BLE from a container needs `pybricksdev`
+> in the image and access to the host BlueZ D-Bus socket, neither of which is
+> configured yet. If the command above fails with a BLE-dependency or D-Bus
+> error, there is currently no supported fallback for this smoke test — use the
+> host `pybricksdev` tooling from step 2 to confirm hub connectivity (flash and
+> upload still work from the host), and report the failure. In-Docker BLE
+> support is a known follow-up.
 Expected output includes:
 ```
 READY

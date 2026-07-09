@@ -28,10 +28,11 @@ fi
 default_compose=(
   docker compose
   --profile u24
+  --profile arm64
   --profile tasks
 )
 
-for service in joshua-u22 joshua-u24 run-u22 run-u24; do
+for service in joshua-u22 joshua-u24 joshua-u22-arm64 joshua-u24-arm64 run-u22 run-u24; do
   gpu_service=$("${default_compose[@]}" config "${service}" | sed '/^x-/,$d')
   if ! grep -q 'driver: nvidia' <<<"${gpu_service}" ||
     ! grep -q -- '- gpu' <<<"${gpu_service}"; then
@@ -40,7 +41,7 @@ for service in joshua-u22 joshua-u24 run-u22 run-u24; do
   fi
 done
 
-for service in test-u22 test-u24 build-u22-x86 build-u24-x86; do
+for service in test-u22 test-u24 build-u22-x86 build-u24-x86 build-u22-arm64 build-u24-arm64; do
   cpu_service=$("${default_compose[@]}" config "${service}" | sed '/^x-/,$d')
   if grep -q 'driver: nvidia' <<<"${cpu_service}"; then
     echo "CPU-only Compose service ${service} unexpectedly reserves an NVIDIA GPU." >&2
@@ -58,12 +59,13 @@ cpu_compose=(
   -f docker-compose.yml
   -f docker-compose.cpu.yml
   --profile u24
+  --profile arm64
   --profile tasks
 )
 
 "${cpu_compose[@]}" config >/dev/null
 
-for service in joshua-u22 joshua-u24 run-u22 run-u24; do
+for service in joshua-u22 joshua-u24 joshua-u22-arm64 joshua-u24-arm64 run-u22 run-u24; do
   cpu_service=$("${cpu_compose[@]}" config "${service}" | sed '/^x-/,$d')
   if grep -q 'driver: nvidia' <<<"${cpu_service}"; then
     echo "CPU Compose override did not clear the GPU from ${service}." >&2

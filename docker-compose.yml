@@ -205,7 +205,10 @@ services:
 
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64
   # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
+  # GPU-first like the x86 shells. UNTESTED on ARM64 hardware (no Jetson or
+  # qemu available); Jetson devices may need their own runtime overlay.
   joshua-u22-arm64:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu22
@@ -232,6 +235,7 @@ services:
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64 (macOS optimized)
   # This service includes mock serial port support for development on macOS
   # Note: Use profile 'arm64' or 'mac' to build this service
+  # No GPU reservation: macOS has no NVIDIA container runtime.
   joshua-mac-u22-arm64:
     build:
       context: .
@@ -266,9 +270,12 @@ services:
       - arm64  # Only build when explicitly requested
       - mac    # macOS-specific profile
 
-  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64 (Experimental)
+  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64
   # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
+  # GPU-first like the x86 shells. UNTESTED on ARM64 hardware (no Jetson or
+  # qemu available); Jetson devices may need their own runtime overlay.
   joshua-u24-arm64:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu24
@@ -295,6 +302,10 @@ services:
   build-u22-arm64:
     extends:
       service: joshua-u22-arm64
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-build-u22-arm64
     command:
       - /workspace/scripts/container_build.sh
@@ -309,6 +320,10 @@ services:
   build-u24-arm64:
     extends:
       service: joshua-u24-arm64
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
     container_name: joshua-build-u24-arm64
     command:
       - /workspace/scripts/container_build.sh
