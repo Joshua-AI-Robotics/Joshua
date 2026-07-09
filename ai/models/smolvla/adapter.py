@@ -37,11 +37,6 @@ from ros2.proto import ros2_data_type_pb2
 class SmolVlaAdapter(InferenceAdapter):
     """SmolVLA policy adapter for multi-camera manipulation."""
 
-    # TODO(hmoon): make this configurable.
-    TASK_DESCRIPTION = (
-        "Pick up the white object and place it in the center of the table."
-    )
-
     STATE_HISTORY_LEN = 10
     STATE_DIM = 6
 
@@ -59,7 +54,7 @@ class SmolVlaAdapter(InferenceAdapter):
         self.preprocessor = None
         self.postprocessor = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.task_description = self.TASK_DESCRIPTION
+        self.task_description = self._model_config.task_description.strip()
 
     def spec(self) -> AdapterSpec:
         return AdapterSpec(
@@ -75,7 +70,9 @@ class SmolVlaAdapter(InferenceAdapter):
         ):
             raise ValueError("SmolVLA adapter requires a pretrained model path.")
         if not self.task_description:
-            raise ValueError("SmolVLA adapter requires a task description.")
+            raise ValueError(
+                "SmolVLA adapter requires smolvla_config.task_description."
+            )
 
     def initialize(self) -> None:
         self._initialize_camera_keys()

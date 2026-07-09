@@ -4,4 +4,6 @@ package ai.models;
 
 message SmolVLAConfig {
   string model_name = 1;
+  // Natural-language instruction passed to the VLA at inference time.
+  string task_description = 2;
 }

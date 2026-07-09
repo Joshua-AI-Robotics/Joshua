@@ -1,0 +1,44 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "soem",
+    srcs = glob(
+        [
+            "osal/linux/osal.c",
+            "oshw/linux/nicdrv.c",
+            "oshw/linux/oshw.c",
+            "src/ec_base.c",
+            "src/ec_coe.c",
+            "src/ec_config.c",
+            "src/ec_dc.c",
+            "src/ec_eoe.c",
+            "src/ec_foe.c",
+            "src/ec_main.c",
+            "src/ec_print.c",
+            "src/ec_soe.c",
+        ],
+        allow_empty = True,
+    ),
+    hdrs = glob(
+        [
+            "include/soem/*.h",
+            "osal/*.h",
+            "osal/linux/*.h",
+            "oshw/linux/*.h",
+        ],
+        allow_empty = True,
+    ),
+    copts = ["-x c"],
+    includes = [
+        "include",
+        "osal",
+        "osal/linux",
+        "oshw/linux",
+    ],
+    linkopts = [
+        "-pthread",
+        "-lrt",
+    ],
+)

@@ -1,0 +1,5 @@
+pyserial
+pyelftools
+construct
+tqdm
+xmodem
