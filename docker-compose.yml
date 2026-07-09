@@ -259,7 +259,8 @@ services:
       # Mock ports allow the application to run without physical serial devices
       - ENABLE_MOCK_SERIAL_PORTS=${ENABLE_MOCK_SERIAL_PORTS:-true}
       - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
-    entrypoint: ["/workspace/scripts/docker_entrypoint.sh"]
+    # No entrypoint override: the image entrypoint sources ROS2 and honors
+    # ENABLE_MOCK_SERIAL_PORTS.
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested

@@ -40,7 +40,7 @@ TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 
 ## Development Helpers
 
-`docker_entrypoint.sh` creates mock serial ports when `ENABLE_MOCK_SERIAL_PORTS=true`, then starts the requested command or shell.
+The container entrypoint ([docker/entrypoint.sh](../docker/entrypoint.sh), baked into the images) sources the ROS2 environment for every container command, creates mock serial ports when `ENABLE_MOCK_SERIAL_PORTS=true`, then starts the requested command or shell.
 
 `create_mock_serial_ports.sh` creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`. Use it from inside the relevant Docker service when testing without physical serial devices.
 

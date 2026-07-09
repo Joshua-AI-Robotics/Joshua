@@ -93,6 +93,28 @@ if ! grep -q 'ISAAC_LAB_PATH' <<<"${isaac_run}"; then
   exit 1
 fi
 
+if [[ ! -f docker/entrypoint.sh ]]; then
+  echo "Missing docker/entrypoint.sh." >&2
+  exit 1
+fi
+
+if ! grep -q 'source "/opt/ros/${ROS_DISTRO}/setup.bash"' docker/entrypoint.sh; then
+  echo "docker/entrypoint.sh must source the ROS2 environment." >&2
+  exit 1
+fi
+
+for dockerfile in dockerfiles/Dockerfile.ubuntu22 dockerfiles/Dockerfile.ubuntu24; do
+  if ! grep -q 'ENTRYPOINT \["/usr/local/bin/joshua-entrypoint.sh"\]' "${dockerfile}"; then
+    echo "${dockerfile} must use the ROS-sourcing entrypoint." >&2
+    exit 1
+  fi
+done
+
+if grep -q '^\s*entrypoint:' docker-compose*.yml; then
+  echo "Compose services must not override the image entrypoint (it sources ROS2)." >&2
+  exit 1
+fi
+
 if grep -q 'bazel ' Makefile; then
   echo "Makefile must only alias Compose services; found an embedded Bazel command." >&2
   exit 1
