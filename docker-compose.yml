@@ -66,7 +66,7 @@ services:
       - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
 
-  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
+  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12
   # Note: Use profile 'u24' to build this service
   joshua-u24:
     <<: *nvidia-gpu

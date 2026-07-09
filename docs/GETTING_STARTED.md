@@ -34,8 +34,10 @@ and avoids bind-mount ownership churn from short-lived containers.
 # Start Ubuntu 24.04 + ROS 2 Jazzy once.
 docker compose --profile u24 up -d joshua-u24
 
-# Run commands in the existing container.
-docker compose exec joshua-u24 bazel test //robot/action/motors/drivers:am243_ethercat_driver_test
+# Run commands in the existing container (Bazel needs the matching configs).
+docker compose exec joshua-u24 bazel test --config=u24 --config=x86-base \
+  --@rules_python//python/config_settings:python_version=3.12 \
+  //robot/action/motors/drivers:am243_ethercat_driver_test
 
 # Open an interactive shell in the existing container.
 docker compose exec joshua-u24 bash

@@ -6,6 +6,18 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  entrypoint-contract:
+    name: Docker entrypoint contract
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Check Docker-first invariants
+        run: ./scripts/docker_entrypoints_test.sh
+
   docker-test:
     name: Docker tests (${{ matrix.os }})
     runs-on: ubuntu-22.04

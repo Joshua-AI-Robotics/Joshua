@@ -4,8 +4,15 @@ OS ?= u22
 CPU ?= x86
 TARGET ?= //launcher:joshua_main_pkg
 CONFIG ?=
+# Set CPU_ONLY=1 to apply the explicit CPU fallback (docker-compose.cpu.yml)
+# so shells and launcher runs stop requesting an NVIDIA GPU.
+CPU_ONLY ?=
 
+ifeq ($(CPU_ONLY),1)
+COMPOSE := docker compose -f docker-compose.yml -f docker-compose.cpu.yml
+else
 COMPOSE := docker compose
+endif
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_ISAAC := docker compose -f docker-compose.yml -f docker-compose.isaac.yml
 
@@ -23,6 +30,7 @@ help:
 	@printf '%s\n' '  make test-u24                        Run discovered Bazel tests in u24 container'
 	@printf '%s\n' '  make run-u22 CONFIG=path/to.pbtxt     Run joshua_main in u22 container'
 	@printf '%s\n' '  make run-u24 CONFIG=path/to.pbtxt     Run joshua_main in u24 container'
+	@printf '%s\n' '  make run-u22 CPU_ONLY=1 CONFIG=...    Shell/test/run targets without GPU (not Isaac; Isaac Sim requires NVIDIA)'
 	@printf '%s\n' '  make run-isaac-u24 CONFIG=path.pbtxt  Run Isaac preset with mounted Isaac Lab paths'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Build artifacts:'
