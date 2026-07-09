@@ -1,27 +1,44 @@
 # Explicit CPU fallback for developer shells and launcher services.
 # Use with: docker compose -f docker-compose.yml -f docker-compose.cpu.yml ...
-
-x-no-gpu: &no-gpu
-  deploy:
-    resources:
-      reservations:
-        devices: !reset []
+#
+# The `!reset []` is written inline per service (not via a YAML anchor):
+# older Compose v2 releases drop the !reset tag when it passes through an
+# anchor/merge key, leaving the GPU reservation in place. CI runs such a
+# version; scripts/docker_entrypoints_test.sh guards this contract.
 
 services:
   joshua-u22:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
 
   joshua-u24:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
 
   run-u22:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
 
   run-u24:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
 
   joshua-u22-arm64:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
 
   joshua-u24-arm64:
-    <<: *no-gpu
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
