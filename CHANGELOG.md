@@ -21,6 +21,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- Docker images now source the ROS 2 environment through a shared entrypoint
+  ([docker/entrypoint.sh](docker/entrypoint.sh)), so non-interactive task
+  commands (e.g. `docker compose run --rm run-u22`) no longer fail with an
+  empty `AMENT_PREFIX_PATH` / `librcl_action.so` import error
 - Launcher default `--config` and all docs now point to the renamed preset
   `config/config_preset/so100/teleoperate.pbtxt` (old `so100_teleoperate.pbtxt`
   references were broken since the 0.2.2 rename)
