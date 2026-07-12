@@ -1,3 +1,4 @@
+# TODO(hmoon): Update perception layer with the board too.
 general{
   operation_mode: MODE_TELEOPERATE
   robot_type: ROBOT_TYPE_MANIPULATOR_ARM
@@ -5,6 +6,22 @@ general{
   id: 1
 }
 robot {
+  boards {
+    name: "arm_bus"
+    board_type: FEETECH_BUS
+    comm {
+      comm_type: SERIAL
+      serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
+    }
+  
+  channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+  channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+  channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
+  channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
+  channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
+  channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
+  }
+
   perceptions {
     single_perceptions {
       node {

@@ -1,0 +1,96 @@
+# Example of the board-layer config shape (docs/BOARD_LAYER_RFC.md §6.4):
+# boards are shared, first-class objects; actuators bind to
+# (board_name, channel) instead of embedding comm. Parse-validated by
+# config_preset_validation_test; the runtime path lands with the board
+# layer rollout phases.
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "board_layer_example"
+  id: 900
+}
+
+robot {
+  boards {
+    name: "bridge_1"
+    board_type: ARDUINO_UNO
+    comm {
+      comm_type: ETHERNET_UDP
+      udp_config { host: "192.168.1.50" port: 5555 }
+    }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir { max_pulse_rate_hz: 20000 }
+    }
+    channels {
+      index: 1
+      drive: STEP_DIR
+      step_dir { max_pulse_rate_hz: 20000 }
+    }
+    firmware { name: "tb6600-arduino-eth" min_proto_version: 1 }
+  }
+  boards {
+    name: "arm_bus"
+    board_type: FEETECH_BUS
+    comm {
+      comm_type: SERIAL
+      serial_config { port: "/dev/ttyUSB0" baudrate: 1000000 }
+    }
+    channels {
+      index: 0
+      drive: SERVO_BUS_UART
+      servo_bus { servo_id: 1 }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "bridge_joint_1/position"
+          normalized: false
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "bridge_joint_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "bridge_1"
+        channel: 0
+        physical_lower_limit: -180
+        physical_upper_limit: 180
+        operational_lower_limit: -90
+        operational_upper_limit: 90
+      }
+    }
+    single_actions {
+      node {
+        id: 2
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "arm_joint_1/position"
+          normalized: false
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "arm_joint_1"
+        id: 2
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 0
+        physical_lower_limit: -180
+        physical_upper_limit: 180
+        operational_lower_limit: -90
+        operational_upper_limit: 90
+      }
+    }
+  }
+}

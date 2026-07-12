@@ -21,6 +21,7 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/action/proto:action_proto",
+        "//robot/board/proto:board_proto",
         "//robot/perception/proto:perception_proto",
         "//ros2/proto:trajectory_proto",
     ],

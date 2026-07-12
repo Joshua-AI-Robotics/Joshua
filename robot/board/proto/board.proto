@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+import "robot/comm/proto/comm.proto";
+
+package robot.board;
+
+// The controller that runs the low-level motor loop. The board type says
+// where that loop runs: an external MCU, the motor's own MCU (FEETECH_BUS),
+// a vendor hub, the host itself (HOST_GPIO), or nowhere (MOCK).
+// Values name the native controller only — comm peripherals (e.g. an
+// EasyCAT shield) belong to Board.comm and drive peripherals (e.g. a
+// TB6600 stepper drive) to Channel.drive, never to the board type.
+// See docs/BOARD_LAYER_RFC.md §5.6 and §6.1.
+enum BoardType {
+  BOARD_INVALID = 0;
+  AM243 = 1;
+  TEENSY41 = 2;
+  ARDUINO_UNO = 3;
+  FEETECH_BUS = 4;    // STS/SCS smart-servo register bus; the "board" is the
+                      // servo's own MCU.
+  SPIKE_HUB_BLE = 5;  // Pybricks hub; vendor firmware over BLE.
+  HOST_GPIO = 6;      // No external controller; host pins drive the motor.
+  MOCK = 7;           // Tests; channels are in-memory fakes.
+}
+
+// The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
+enum DriveInterface {
+  DRIVE_INVALID = 0;
+  STEP_DIR = 1;  // Pulse/direction stepper drive (TB6600, ...).
+  PWM_DC = 2;
+  SERVO_BUS_UART = 3;  // Feetech/Dynamixel-style register bus.
+  CAN = 4;
+  PDO_JOINT = 5;  // Slot in a cyclic EtherCAT process-data image.
+}
+
+message StepDirConfig {
+  uint32 max_pulse_rate_hz = 1;
+  bool invert_dir = 2;
+  bool enable_active_low = 3;
+}
+
+message ServoBusConfig {
+  uint32 servo_id = 1;
+}
+
+message PwmConfig {
+  uint32 frequency_hz = 1;
+  float deadband = 2;
+}
+
+message HostGpioConfig {
+  string gpio_chip = 1;      // e.g. "/dev/gpiochip0"
+  repeated uint32 pins = 2;  // Pin group on the host header.
+}
+
+// One motor slot on one board. Wiring facts are baked into the firmware
+// variant; the tunables below are pushed at Init() via CONFIGURE_CHANNEL.
+message Channel {
+  uint32 index = 1;
+  DriveInterface drive = 2;
+  oneof drive_config {
+    StepDirConfig step_dir = 10;
+    ServoBusConfig servo_bus = 11;
+    PwmConfig pwm = 12;
+    HostGpioConfig host_gpio = 13;  // HOST_GPIO boards only.
+  }
+}
+
+// Which firmware the host expects on the board; verified against the
+// IDENTIFY handshake at Init(). Omitted entirely for vendor-firmware
+// boards (FEETECH_BUS, SPIKE_HUB_BLE) and for HOST_GPIO / MOCK.
+message FirmwareSpec {
+  string name = 1;  // e.g. "tb6600-arduino-eth"
+  uint32 min_proto_version = 2;
+}
+
+// Future home of the AM243 PDO mapping selector; mirrors
+// robot.action.Am243PdoMapping until the deprecated actuator-embedded
+// config is removed in Phase 4 (docs/BOARD_LAYER_RFC.md §10).
+enum Am243PdoMapping {
+  AM243_PDO_MAPPING_UNSPECIFIED = 0;
+  AM243_PDO_MAPPING_TI_DEMO = 1;
+  AM243_PDO_MAPPING_ACTUATOR_V1 = 2;
+}
+
+message Am243Config {
+  uint32 slave_index = 1;
+  Am243PdoMapping pdo_mapping = 2;
+  // PDO region override (offsets/sizes) so presets can pin regions instead
+  // of trusting GetPdoRegion auto-discovery.
+  uint32 output_offset_bytes = 3;
+  uint32 input_offset_bytes = 4;
+  uint32 output_size_bytes = 5;
+  uint32 input_size_bytes = 6;
+}
+
+message Board {
+  string name = 1;  // Referenced by actuators; cache key.
+  BoardType board_type = 2;
+  robot.comm.Comm comm = 3;       // Comm leg: how the PC reaches the controller
+                                  // (omitted for HOST_GPIO / MOCK).
+  repeated Channel channels = 4;  // Drive leg: what each slot drives.
+  FirmwareSpec firmware = 5;
+  oneof board_config {
+    Am243Config am243_config = 10;
+  }
+}
