@@ -185,30 +185,17 @@ bool IsExecutableAvailable(const std::string& exec_name) {
   return false;
 }
 
-// TODO(hmoon): Board-layer migration (docs/BOARD_LAYER_RFC.md §10) — mirrors
-// ActionFactory's dual routing. Legacy actuators set actuator_type (e.g.
-// STS3215_SERVO -> C++). New actuators leave actuator_type unset
-// (ACTUATOR_INVALID, proto default 0) and set motor_type + board_name +
-// channel; only MOTOR_TI_DEMO is on the C++ board path today. Add MOTOR_STS3215
-// when Phase 4 ports STS3215. Remove actuator_type branches once migration ends.
+// C++ actuator drivers are selected by motor_type on the board-layer path
+// (docs/BOARD_LAYER_RFC.md §6.5). MOCK_MOTOR and SPIKE_MOTOR use the Python
+// factory (robot/action/factory/action_factory.py).
 bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_action) {
   if (single_action.action_type() != robot::action::ActionType::ACTUATOR) {
     return false;
   }
-  const auto& actuator = single_action.actuator();
-  switch (actuator.actuator_type()) {
-    case robot::action::ActuatorType::ACTUATOR_INVALID:
-      // Board-layer path (docs/BOARD_LAYER_RFC.md §6.5).
-      switch (actuator.motor_type()) {
-        case robot::action::MotorType::MOTOR_TI_DEMO:
-          return true;
-        default:
-          return false;
-      }
-    case robot::action::ActuatorType::STS3215_SERVO:
+  switch (single_action.actuator().motor_type()) {
+    case robot::action::MotorType::MOTOR_TI_DEMO:
+    case robot::action::MotorType::MOTOR_STS3215:
       return true;
-    case robot::action::ActuatorType::MOCK_MOTOR:
-      return false;
     default:
       return false;
   }

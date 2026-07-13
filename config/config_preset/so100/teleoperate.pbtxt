@@ -35,18 +35,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_1"
         id: 1
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 1
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 1
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 973
@@ -74,18 +65,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_2"
         id: 2
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 2
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 2
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 858
@@ -113,18 +95,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_3"
         id: 3
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 3
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 3
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 798
@@ -152,18 +125,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_4"
         id: 4
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 4
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 4
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 640
@@ -191,18 +155,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_5"
         id: 5
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 5
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 5
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 902
@@ -230,18 +185,9 @@ robot {
       actuator {
         actuator_name: "sts3215_servo_6"
         id: 6
-        actuator_type: STS3215_SERVO
         motor_type: MOTOR_STS3215
         board_name: "arm_bus"
         channel: 6
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 6
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 1795
@@ -273,14 +219,6 @@ robot {
         encoder_name: "sts3215_encoder_1"
         id: 1
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 1
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 1147
         operational_upper_limit: 3154
         sts3215_encoder_config {
@@ -304,14 +242,6 @@ robot {
         encoder_name: "sts3215_encoder_2"
         id: 2
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 2
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 1670
         operational_upper_limit: 3986
         sts3215_encoder_config {
@@ -336,14 +266,6 @@ robot {
         encoder_name: "sts3215_encoder_3"
         id: 3
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 3
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 910
         operational_upper_limit: 3113
         sts3215_encoder_config {
@@ -368,14 +290,6 @@ robot {
         encoder_name: "sts3215_encoder_4"
         id: 4
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 4
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 20
         operational_upper_limit: 2407
         sts3215_encoder_config {
@@ -400,14 +314,6 @@ robot {
         encoder_name: "sts3215_encoder_5"
         id: 5
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 5
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 1730
         operational_upper_limit: 3811
         sts3215_encoder_config {
@@ -431,14 +337,6 @@ robot {
         encoder_name: "sts3215_encoder_6"
         id: 6
         encoder_type: STS3215_ENCODER
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 6
-            port: "/dev/ttyACM1"
-            baudrate: 1000000
-          }
-        }
         operational_lower_limit: 2028
         operational_upper_limit: 3100
         sts3215_encoder_config {

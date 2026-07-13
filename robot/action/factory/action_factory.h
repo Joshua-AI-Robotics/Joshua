@@ -17,59 +17,22 @@
 namespace robot::action {
 class ActionFactory {
  public:
-  // Board-layer path (docs/BOARD_LAYER_RFC.md §6.5): actuators that leave
-  // the deprecated actuator_type unset resolve board_name against `boards`,
-  // validate motor_type against the channel's drive, and get a motor driver
-  // over the opened BoardChannel. Actuators that still set actuator_type
-  // take the legacy path until Phase 4 ports them.
-  //
-  // TODO(hmoon): Board-layer migration (docs/BOARD_LAYER_RFC.md §10) — the
-  // actuator_type switch below is temporary. ACTUATOR_INVALID (proto default 0)
-  // does NOT mean "broken"; it means "use motor_type + board_name + channel" via
-  // CreateBoardActuator. AM243 (Phase 3 done): legacy AM243_ETHERCAT_ACTUATOR is
-  // blocked; use MOTOR_TI_DEMO + boards{} instead. STS3215 (Phase 4 pending):
-  // legacy STS3215_SERVO still works; board-layer MOTOR_STS3215 is not wired yet.
-  // Delete this switch once all presets migrate and ActuatorType is removed.
+  // Board-layer factory (docs/BOARD_LAYER_RFC.md §6.5): every actuator resolves
+  // board_name against `boards`, validates motor_type against the channel's
+  // drive, and constructs a motor driver. Callers must pass config.robot().boards()
+  // (see ros2/actuator_subscriber.cc).
   static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(
       const robot::action::SingleAction& single_action,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
     switch (single_action.action_type()) {
-      case robot::action::ActionType::ACTUATOR: {
-        const auto& actuator = single_action.actuator();
-        switch (actuator.actuator_type()) {
-          case robot::action::ActuatorType::ACTUATOR_INVALID:
-            return CreateBoardActuator(actuator, boards);
-          case robot::action::ActuatorType::STS3215_SERVO: {
-            ABSL_ASSIGN_OR_RETURN(auto serial,
-                                  robot::comm::CommFactory::CreateSerial(actuator.comm()));
-            auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
-            ABSL_RETURN_IF_ERROR(driver->Init());
-            return driver;
-          }
-          case robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR:
-            return absl::Status(
-                absl::StatusCode::kInvalidArgument,
-                "AM243 actuators moved to the board layer: declare a boards{} entry and set "
-                "motor_type/board_name/channel instead of actuator_type "
-                "(docs/BOARD_LAYER_RFC.md §10 Phase 3).");
-          default:
-            return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid actuator type.");
-        }
-      }
+      case robot::action::ActionType::ACTUATOR:
+        return CreateBoardActuator(single_action.actuator(), boards);
       // TODO: Add other action types here when they are implemented
       // case robot::action::ActionType::GRIPPER:
       // case robot::action::ActionType::END_EFFECTOR:
       default:
         return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid action type.");
     }
-  }
-
-  // Legacy entry point for callers without a boards list; board-layer
-  // actuators fail with NotFound here.
-  static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(
-      const robot::action::SingleAction& single_action) {
-    static const google::protobuf::RepeatedPtrField<robot::board::Board> kNoBoards;
-    return CreateAction(single_action, kNoBoards);
   }
 
   ~ActionFactory() = default;
@@ -80,19 +43,21 @@ class ActionFactory {
 
  private:
   // Resolution flow per docs/BOARD_LAYER_RFC.md §6.5: board_name -> Board
-  // config -> BoardFactory (cached instance) -> ValidateMotorChannel ->
-  // OpenChannel -> motor driver.
-  //
-  // TODO(hmoon): New-path factory only — reached when actuator_type is unset
-  // (ACTUATOR_INVALID). motor_type selects the driver (e.g. MOTOR_TI_DEMO ->
-  // TiDemoDriver for AM243 TI demo). More motor types land in later phases.
+  // config -> ValidateMotorChannel -> motor driver (via BoardChannel or, for
+  // MOTOR_STS3215 until Phase 4, board comm + Sts3215Driver).
   static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateBoardActuator(
       const robot::action::Actuator& actuator,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+    if (actuator.actuator_type() != robot::action::ActuatorType::ACTUATOR_INVALID) {
+      return absl::Status(
+          absl::StatusCode::kInvalidArgument,
+          "Actuator '" + actuator.actuator_name() +
+              "' sets deprecated actuator_type; omit it and set motor_type + board_name + "
+              "channel (docs/BOARD_LAYER_RFC.md §6.3).");
+    }
     if (actuator.motor_type() == robot::action::MotorType::MOTOR_INVALID) {
       return absl::Status(absl::StatusCode::kInvalidArgument,
-                          "Actuator '" + actuator.actuator_name() +
-                              "' sets neither actuator_type (deprecated) nor motor_type.");
+                          "Actuator '" + actuator.actuator_name() + "' has no motor_type.");
     }
     if (actuator.board_name().empty()) {
       return absl::Status(absl::StatusCode::kInvalidArgument,
@@ -129,17 +94,25 @@ class ActionFactory {
     ABSL_RETURN_IF_ERROR(
         robot::board::ValidateMotorChannel(actuator.motor_type(), channel_config->drive()));
 
-    ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
-    ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
-
     switch (actuator.motor_type()) {
       case robot::action::MotorType::MOTOR_TI_DEMO: {
+        ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
+        ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
         auto driver = std::make_unique<robot::action::TiDemoDriver>(channel, actuator);
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }
-      // MOTOR_STS3215 is ported in Phase 4, MOTOR_STEPPER_NEMA17 in Phase 5;
-      // MOTOR_SPIKE and MOTOR_MOCK live on the Python factory
+      case robot::action::MotorType::MOTOR_STS3215: {
+        // Transitional until FeetechBusBoard (docs/BOARD_LAYER_RFC.md §10 Phase 4):
+        // comm lives on boards{}, but the driver is still the legacy register
+        // protocol implementation over serial.
+        ABSL_ASSIGN_OR_RETURN(auto serial,
+                              robot::comm::CommFactory::CreateSerial(board_config->comm()));
+        auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+        ABSL_RETURN_IF_ERROR(driver->Init());
+        return driver;
+      }
+      // MOTOR_STEPPER_NEMA17 in Phase 5; MOTOR_SPIKE and MOTOR_MOCK on Python
       // (docs/BOARD_LAYER_RFC.md §10).
       default:
         return absl::Status(absl::StatusCode::kUnimplemented,

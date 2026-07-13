@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "config/proto/robot.pb.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
 
 namespace robot::action {
@@ -93,23 +94,21 @@ TEST_F(ActionFactoryBoardPathTest, RejectsMotorOnIncompatibleDrive) {
   EXPECT_EQ(action_or.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(ActionFactoryBoardPathTest, LegacyEntryPointReportsMissingBoards) {
-  auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardJointSingleAction());
-
-  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kNotFound);
-}
-
-TEST(ActionFactoryTest, DeprecatedAm243ActuatorTypePointsAtBoardMigration) {
+TEST(ActionFactoryTest, RejectsDeprecatedActuatorType) {
   robot::action::SingleAction single_action;
   single_action.set_action_type(robot::action::ActionType::ACTUATOR);
   auto* actuator = single_action.mutable_actuator();
-  actuator->set_actuator_name("am243_joint_1");
+  actuator->set_actuator_name("legacy_joint_1");
   actuator->set_actuator_type(robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR);
+  actuator->set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
+  actuator->set_board_name("am243_1");
+  actuator->set_channel(0);
 
-  auto action_or = robot::action::ActionFactory::CreateAction(single_action);
+  auto action_or = robot::action::ActionFactory::CreateAction(
+      single_action, google::protobuf::RepeatedPtrField<robot::board::Board>{});
 
   EXPECT_EQ(action_or.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_NE(action_or.status().message().find("board"), std::string::npos);
+  EXPECT_NE(action_or.status().message().find("deprecated actuator_type"), std::string::npos);
 }
 
 }  // namespace
