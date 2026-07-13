@@ -42,10 +42,12 @@ Out of scope (future work):
 
 - Real AM243 actuator firmware and its final PDO layout (tracked separately;
   see `am243_ethercat.md` — only the TI demo mapping is validated today).
-- Encoder/perception devices behind boards (the same pattern should apply;
-  deferred until an actuator-side board layer exists). One exception is in
-  scope: `Sts3215Encoder` shares the servo bus with the actuator path, so it
-  is co-migrated in Phase 4 (§5.6) — bus safety cannot be deferred.
+- **Full** perception-layer migration — designed in §6.6–§6.8 with **optional**
+  board binding (§6.6.1): driver-direct for standalone cameras/lidars;
+  `board_name` + `channel` only when the sensor shares a `Board` with
+  actuators. Scheduled in §10 Phase 6. **Partial** migration is in scope
+  earlier: `Sts3215Encoder` shares the Feetech servo bus with actuators, so
+  it is co-migrated in Phase 4 (§5.6) — bus safety cannot be deferred.
 - Motion profiles, coordinated multi-axis trajectories, and real-time
   guarantees of the host cyclic loop.
 - Auto-flashing at runtime (explicitly rejected; see §9).
@@ -103,8 +105,11 @@ Structural problems this RFC fixes:
 
 - One file per motor type, one per board, one per transport — never one per
   combination.
-- Boards are first-class, **shared** config objects; actuators bind to
-  `(board_name, channel)`.
+- Boards are first-class, **shared** config objects. **Actuators** always bind
+  to `(board_name, channel)` — board binding is mandatory (§6.3). **Board-backed
+  perceptions** use the same binding when they share a `Board` resource (§6.6);
+  standalone sensors (cameras, most lidars) stay **driver-direct** with no
+  `board_name` (§6.6.1).
 - All robot-specific meaning (joint mapping, limits, motor params) lives in
   host `.pbtxt` config — never in firmware. Flash once per wiring change;
   reconfigure freely without reflashing.
@@ -641,6 +646,225 @@ robot {
  StepperDriver(channel, actuator_config) → registered as the ROS 2 actuator
 ```
 
+### 6.6 `robot/perception/proto/perception.proto` — unified factory, optional board binding
+
+The action layer migration (§6.3) decouples **what is sensed** from **which
+board/transport reaches it**. Perceptions use the **same factory architecture**
+as actuators (`PerceptionFactory` + optional `boards{}` resolution), but
+**board binding is optional** for sensors — unlike actuators, where it is
+always required (§6.6.1).
+
+**Today** (`robot/perception/factory/perception_factory.h`):
+
+```
+config .pbtxt
+   └─ Encoder { encoder_type, comm{...}, sts3215_encoder_config{...} }
+        │
+   PerceptionFactory  (no boards{} argument)
+        │  switch on EncoderType → picks driver, calls CommFactory
+        └─ Sts3215Encoder  ←─ Serial  (CommFactory::CreateSerial(encoder.comm))
+```
+
+`ros2/encoder_publisher.cc` calls `PerceptionFactory::CreatePerception` with
+no `boards` list. Presets such as
+`config/config_preset/so100/encoder_publish.pbtxt` may declare `boards{}` for
+the actuator path but encoders still embed per-device `comm {}` — port and
+baudrate are duplicated and the encoder bypasses any future board bus mutex
+(§5.6).
+
+**Target shape** (mirrors §6.3; names are illustrative until Phase 6 lands):
+
+```proto
+enum SensorType {                 // replaces board/transport-flavored EncoderType
+  SENSOR_INVALID = 0;
+  SENSOR_STS3215_ENCODER = 1;
+  SENSOR_LDS01_LIDAR = 2;
+  // SENSOR_OPENCV for host-local cameras, or omit board_name when N/A
+}
+
+message Encoder {
+  string encoder_name = 1;
+  uint64 id = 2;
+  SensorType sensor_type = 3;
+  string board_name = 4;          // optional — set when board-backed (§6.6.1)
+  uint32 channel = 5;             // required when board_name is set
+  float operational_lower_limit = 6;
+  float operational_upper_limit = 7;
+  // sensor-specific config (sts3215_encoder_config, …)
+  // DEPRECATED during migration: EncoderType encoder_type, robot.comm.Comm comm
+}
+
+message Camera {
+  string camera_name = 1;
+  uint64 id = 2;
+  SensorType sensor_type = 3;     // e.g. SENSOR_OPENCV
+  // board_name / channel omitted — driver-direct (§6.6.1)
+  oneof camera_config { OpenCvConfig opencv_config = 6; }
+}
+```
+
+`EncoderType::STS3215_ENCODER`, `LidarType::LDS01`, and embedded `Comm` on
+board-backed sensors are kept working but deprecated during migration (§10,
+Phase 6), then removed. `SensorType` values carry a `SENSOR_` prefix for the
+same proto-scope reason as `MotorType` (§6.3).
+
+### 6.6.1 When perceptions skip the board layer
+
+**Rule:** board binding is **mandatory for actuators**, **optional for
+perceptions**. Use the board path only when the sensor shares a `Board`
+resource with actuators or reads through an MCU channel contract. Do **not**
+invent placeholder `boards{}` entries (e.g. `board_type: NONE`) just to keep
+config symmetric — that adds noise without runtime benefit.
+
+**Decision guide:**
+
+| Question | If yes → | If no → |
+| --- | --- | --- |
+| Does the sensor share a half-duplex bus with actuators? | `board_name` + `channel` | driver-direct |
+| Does feedback come from an EtherCAT/CAN PDO slot shared with motors? | `board_name` + `channel` | driver-direct |
+| Does an MCU aggregate several sensor channels behind one comm leg? | `board_name` + `channel` | driver-direct |
+| Is it a standalone smart peripheral (USB camera, Ethernet lidar)? | driver-direct | — |
+
+**Automotive vs humanoid / manipulator robotics** — the same rule applies;
+only the wiring mix changes:
+
+| Domain | Typical driver-direct (no board) | Typical board-backed |
+| --- | --- | --- |
+| Automotive (Thor / central compute) | GMSL/Ethernet cameras, radar, spinning lidar stream to SoC | Wheel/joint feedback on vehicle fieldbus when co-scheduled with actuators |
+| Humanoid head / torso | USB/GMSL cameras, IMU on SBC, Ethernet lidar on base | Rare on head sensors; more common on arm/hand fieldbuses |
+| Low-cost arm (so100) | — (no standalone head sensors in preset) | Feetech encoders + servos on **one** UART → `arm_bus` |
+
+In all cases the main compute **can** process cameras and lidars directly —
+no Joshua `Board` is required when the sensor firmware (or kernel driver)
+owns the link and nothing else contends for it. The board layer exists for
+**shared-controller** I/O, not for every sensor on the robot.
+
+**Factory resolution** — one entry point, two paths (mirrors how degenerate
+boards like `FEETECH_BUS` collapse comm+drive without a separate MCU):
+
+```
+ PerceptionFactory::CreatePerception(perception, boards)
+        │
+        ├─ board_name set?
+        │     └─ board path: lookup boards{} → BoardFactory → OpenChannel
+        │        → ReadFeedback()  (Sts3215Encoder on Feetech, future PDO encoders)
+        │
+        └─ board_name empty?
+              └─ driver-direct: CvCamera, Ethernet lidar SDK, mock drivers
+                 (device path / IP in sensor-specific config, not boards{})
+```
+
+**Explicit non-goals:**
+
+- Do not route OpenCV/V4L2 cameras through `boards{}` unless a future board
+  type genuinely mediates the link.
+- Do not keep a wholly separate perception stack with no board path — encoders
+  on shared buses must reuse the same `BoardFactory` cache and mutex as
+  actuators (§5.6).
+
+**Sensor attach summary:**
+
+| Sensor | Board layer? | Rationale |
+| --- | --- | --- |
+| OpenCV / V4L2 camera | **No** — driver-direct | Host-local device; `opencv_config` holds device path |
+| Ethernet lidar (Velodyne, Ouster, …) | **No** — driver-direct | Smart peripheral; vendor protocol to SoC |
+| Mock encoder / mock lidar (Python) | N/A | Test doubles stay on the Python factory |
+| `Sts3215Encoder` on Feetech bus | **Yes** — required | Shares half-duplex serial with actuators (§5.6) |
+| `Lds01Driver` over dedicated USB serial | **Optional** | Board-backed when port/cache/mutex must match actuators; driver-direct acceptable on an exclusive port until Phase 6 |
+
+> **TODO(hmoon):** Perception is behind the action layer in the rollout.
+> Phase 4 co-migrates only `Sts3215Encoder` onto the actuator's
+> `FeetechBusBoard` (bus lock / `ReadFeedback()`). Phase 6 unifies
+> `PerceptionFactory` with the optional-board model above — not a forced
+> board binding for every sensor. Until then, encoder presets on shared buses
+> keep embedded `comm {}` even when `boards{}` is already present for
+> actuators.
+
+### 6.7 Example presets — board-backed encoder vs driver-direct camera
+
+Actuators and encoders on the same daisy chain reference the **same**
+`boards{}` entry; transport is declared once on the board. A head camera on
+the same robot omits `board_name` entirely:
+
+```proto
+robot {
+  boards {
+    name: "arm_bus"
+    board_type: FEETECH_BUS
+    comm { comm_type: SERIAL serial_config { port: "/dev/ttyACM0" baudrate: 1000000 } }
+    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+  }
+  actions {
+    single_actions {
+      actuator {
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"       # mandatory for actuators
+        channel: 1
+        sts3215_config { servo_id: 1 ... }
+      }
+    }
+  }
+  perceptions {
+    single_perceptions {
+      encoder {
+        encoder_name: "sts3215_encoder_1"
+        sensor_type: SENSOR_STS3215_ENCODER
+        board_name: "arm_bus"       # required — shares UART with actuators
+        channel: 1
+        operational_lower_limit: 1147
+        operational_upper_limit: 3154
+      }
+    }
+    single_perceptions {
+      camera {
+        camera_name: "head_rgb"
+        sensor_type: SENSOR_OPENCV
+        # no board_name — driver-direct to host (§6.6.1)
+        opencv_config { id: 0 width: 1920 height: 1080 fps: 30 fourcc: "MJPG" }
+      }
+    }
+  }
+}
+```
+
+Dual-port robots (leader on `/dev/ttyACM1`, follower on `/dev/ttyACM0`) use
+two `boards{}` entries (`leader_bus`, `follower_bus`); actuators and
+encoders on each arm set `board_name` accordingly. `serial_config.id` on the
+old embedded `comm {}` is config bookkeeping only — the runtime keys serial
+ports by `(port, baudrate)` today.
+
+### 6.8 Perception startup resolution flow
+
+```
+ PerceptionFactory::CreatePerception(perception, boards)
+        │
+        ├─ board_name empty?  ──► driver-direct path
+        │       CvCamera / vendor lidar driver / Python mocks
+        │       (device path or IP in sensor-specific config)
+        │
+        └─ board_name set?  ──► board-backed path
+                │ 1. look up Board config (same boards{} as actuators)
+                ▼
+            BoardFactory::GetOrCreate(name)   ── cached with actuators
+                │ 2. reuse board instance + bus mutex
+                ▼
+            ValidateSensorChannel(sensor_type, channel.drive)
+                ▼
+            board->OpenChannel(n) → BoardChannel
+                ▼
+            Sts3215Encoder(channel, config)  via ReadFeedback()
+```
+
+**Transitional Phase 4** (before §6.6 proto lands): `Sts3215Encoder` may
+attach through the board's bus lock while still using the legacy register-read
+implementation — the requirement is that **no** perception code opens a
+second `Serial` on a port the board already owns.
+
+**Open design** (§12.2): for cyclic boards (EtherCAT/AM243), should encoder
+publishers poll `ReadFeedback()` on each timer tick, or subscribe to a
+latest-feedback cache updated by the board cyclic loop?
+
 ## 7. Firmware architecture
 
 ### 7.1 The rule that holds everything together
@@ -927,6 +1151,7 @@ zero motor-driver changes.
 | Codec drift between host and firmware | One shared C source in-repo; proto_ver in every frame; handshake rejects version mismatch |
 | ACK round-trip too slow on chatty buses | Frame protocol allows fire-and-forget mode per command class later; measure first |
 | STS3215 refactor regresses working so100 robots | Port behind the new layer with byte-identical bus traffic; keep `test_sts3215_encoder.py` and teleop presets as regression gates |
+| Encoder/actuator bus race on shared Feetech UART | Phase 4 routes `Sts3215Encoder` through `FeetechBusBoard` (§5.6, §6.8); Phase 6 removes per-encoder `comm {}` from presets |
 | AM243 real firmware PDO layout unknown | Demo codec stays isolated behind `Am243PdoMapping` exactly as today; board layer does not depend on the final layout |
 | Small-MCU RAM/flash limits (ATmega328 + W5500) | Codec is dependency-free C; per-variant builds strip unused transports; Teensy/ESP32 as fallback targets |
 | Userspace GPIO step generation jitters (HOST_GPIO) | Restrict backends to hardware PWM / RP1 / kernel helper; cap `max_pulse_rate_hz` in validation until an RT backend exists (§12.8) |
@@ -981,25 +1206,34 @@ Each phase lands green and independently revertible.
       the TI demo. This path has never worked — only the smoke binaries did.
 - [ ] Update `docs/am243_ethercat.md` boundaries section.
 
-### Phase 4 — Port STS3215
+### Phase 4 — Port STS3215 (actuators + encoder co-migration)
+
+**Actuators:**
 - [ ] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol,
       per-port instance, bus mutex, servo-ping IDENTIFY.
 - [ ] Slim `Sts3215Driver` to motor semantics over `BoardChannel`
       (byte-identical bus traffic as acceptance bar).
-- [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
-      minimum through the board's bus lock. It currently writes raw Feetech
-      frames to the same shared `Serial` from encoder-publisher timers,
-      which would bypass the new bus mutex (§5.6).
 - [ ] Decide the torque mapping: `Sts3215Driver::SetTorque` writes a torque
       *enable* register (on/off → really `BoardChannel::Enable/Disable`),
       while the AM243 driver scales torque as a *target*
       (`TargetMode::kTorque`). One rule, applied in both drivers (§12.7).
-- [ ] Migrate so100 presets to `boards{}` + `board_name`; keep teleop working.
+- [x] Migrate so100 **actuator** presets to `boards{}` + `board_name` (no
+      per-actuator `comm {}`); keep teleop working.
+- [x] Remove deprecated C++ `ActionFactory` `actuator_type` arms; route all
+      actuators through `motor_type` + `board_name` + `channel`.
 - [ ] Migrate `action_factory.py` (MOCK_MOTOR, SPIKE_MOTOR) to `MotorType`
       *before* removing `ActuatorType` — the Python factory switches on the
       enum being deleted.
-- [ ] Remove deprecated `ActuatorType` values, embedded `Actuator.comm`, and
-      the old factory arms.
+- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
+      from proto once Python paths migrate.
+
+**Perception (partial — bus safety only; full migration is Phase 6):**
+- [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
+      minimum through the board's bus lock. It currently writes raw Feetech
+      frames to the same shared `Serial` from encoder-publisher timers,
+      which would bypass the new bus mutex (§5.6, §6.8).
+- [ ] Regression: `encoder_publish` + teleop on so100 with actuators and
+      encoders on the same port — no half-duplex bus collisions.
 
 ### Phase 5 — Prove the matrix (first real second board)
 - [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
@@ -1013,7 +1247,52 @@ Each phase lands green and independently revertible.
 - [ ] Add the UDP (W5500) firmware variant + `UdpTransport` to demonstrate a
       transport swap with zero host-code changes.
 
-### Phase 6 — Firmware tooling & handshake hardening
+### Phase 6 — Perception layer parity
+
+Unified `PerceptionFactory` with **optional** board binding (§6.6.1) — same
+architecture as actuators, but only board-backed sensors set `board_name`.
+Lands after Phase 4 `FeetechBusBoard` exists so encoder co-migration can be
+completed cleanly, not just bus-locked.
+
+**Proto & validation:**
+- [ ] Add `SensorType`, optional `board_name` + `channel` to `Encoder` (and
+      `Lidar` where board-backed); mark `EncoderType` / embedded `comm`
+      deprecated on board-backed sensors only.
+- [ ] Validation: `board_name` required when sensor shares a bus with
+      actuators; forbidden empty `board_name` on Feetech/EtherCAT encoders;
+      `board_name` omitted for driver-direct cameras.
+- [ ] Add `ValidateSensorChannel(sensor_type, drive)` (+ tests), called only
+      on the board-backed path; mirrors `ValidateMotorChannel`.
+- [ ] Update `config_preset_validation_test` for both old and new perception
+      shapes during transition.
+
+**Runtime:**
+- [ ] `PerceptionFactory::CreatePerception(single_perception, boards)` —
+      fork: `board_name` set → board path; empty → driver-direct (§6.8).
+- [ ] Update `ros2/encoder_publisher.cc` (and `lidar_publisher.cc` when
+      applicable) to pass `config.robot().boards()`.
+- [ ] Slim `Sts3215Encoder` to sensor semantics over `BoardChannel`
+      (`ReadFeedback()`); retire direct `Serial` ownership on shared buses.
+- [ ] Route `Lds01Driver` through a board when the lidar shares a transport
+      that needs instance caching (optional if deferred; exclusive port may
+      stay driver-direct per §6.6.1).
+
+**Presets & node generation:**
+- [ ] Migrate so100 **board-backed** perception presets (`encoder_publish`,
+      `sim_mirror`, `calibrate_leader_arm_operational_limit`, …): remove
+      per-encoder `comm {}`; bind via `board_name` + `channel`.
+- [ ] Leave camera / Ethernet-lidar presets driver-direct (no `boards{}`
+      entry required).
+- [ ] Update `node_generator` `IsCppDriverAvailableForPerception` to select
+      backend from `sensor_type` and whether the board-backed path applies,
+      not legacy `encoder_type` alone.
+
+**Explicit non-goals for this phase:**
+- OpenCV cameras stay driver-direct unless a future board type needs them.
+- Python mock perception drivers stay on `perception_factory.py`.
+- No placeholder `board_type: NONE` or other fake boards for symmetry.
+
+### Phase 7 — Firmware tooling & handshake hardening
 - [ ] `IDENTIFY` capability bits + per-channel drive report;
       `CONFIGURE_CHANNEL` tunables push.
 - [ ] `FirmwareSpec` verification in every `Board::Init` with actionable
@@ -1038,6 +1317,11 @@ Each phase lands green and independently revertible.
 - Adding a hypothetical new board requires: one board class, one firmware
   target, config — and **zero** changes to motor drivers or comm transports
   (demonstrated in review by the Phase 5 diff shape).
+- Board-backed encoders on a shared bus (so100 Feetech) use the same board
+  instance and bus mutex as actuators on that port — no duplicate `Serial`
+  opens; `encoder_publish` + teleop regression passes (§6.8, Phase 6).
+- Driver-direct cameras and Ethernet lidars work without any `boards{}` entry;
+  `PerceptionFactory` takes the empty-`board_name` path (§6.6.1).
 
 ## 12. Open questions
 
@@ -1054,7 +1338,8 @@ Each phase lands green and independently revertible.
 2. **Feedback pull vs push** — `ReadFeedback()` polling is fine for
    frame-based boards; should cyclic boards also expose a subscription/latest
    cache for encoder publishers, and does the perception layer read through
-   the same board instance?
+   the same board instance? See §6.8; decide before Phase 6 freezes
+   `PerceptionFactory`.
 3. **Python parity** — `action_factory.py` / `comm_factory.py` mirror the C++
    factories today; does the board layer need a Python implementation for the
    Pybricks/mock paths, or do those stay driver-direct until needed?
