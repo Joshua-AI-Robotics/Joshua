@@ -22,6 +22,14 @@ class ActionFactory {
   // validate motor_type against the channel's drive, and get a motor driver
   // over the opened BoardChannel. Actuators that still set actuator_type
   // take the legacy path until Phase 4 ports them.
+  //
+  // TODO(hmoon): Board-layer migration (docs/BOARD_LAYER_RFC.md §10) — the
+  // actuator_type switch below is temporary. ACTUATOR_INVALID (proto default 0)
+  // does NOT mean "broken"; it means "use motor_type + board_name + channel" via
+  // CreateBoardActuator. AM243 (Phase 3 done): legacy AM243_ETHERCAT_ACTUATOR is
+  // blocked; use MOTOR_TI_DEMO + boards{} instead. STS3215 (Phase 4 pending):
+  // legacy STS3215_SERVO still works; board-layer MOTOR_STS3215 is not wired yet.
+  // Delete this switch once all presets migrate and ActuatorType is removed.
   static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateAction(
       const robot::action::SingleAction& single_action,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
@@ -74,6 +82,10 @@ class ActionFactory {
   // Resolution flow per docs/BOARD_LAYER_RFC.md §6.5: board_name -> Board
   // config -> BoardFactory (cached instance) -> ValidateMotorChannel ->
   // OpenChannel -> motor driver.
+  //
+  // TODO(hmoon): New-path factory only — reached when actuator_type is unset
+  // (ACTUATOR_INVALID). motor_type selects the driver (e.g. MOTOR_TI_DEMO ->
+  // TiDemoDriver for AM243 TI demo). More motor types land in later phases.
   static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateBoardActuator(
       const robot::action::Actuator& actuator,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {

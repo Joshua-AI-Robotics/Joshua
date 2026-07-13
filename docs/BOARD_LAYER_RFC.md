@@ -578,6 +578,16 @@ message Actuator {
 `ActuatorType::AM243_ETHERCAT_ACTUATOR` and the embedded `Comm` field are
 kept working but deprecated during migration (§10, Phase 1), then removed.
 
+> **TODO(hmoon):** During migration the runtime carries **two config shapes**
+> in parallel. **Legacy:** `actuator_type` + embedded `comm{}` (e.g.
+> `STS3215_SERVO` — still live until Phase 4). **New:** leave `actuator_type`
+> unset (proto default `ACTUATOR_INVALID` = 0 — *not* "broken"; it means "use
+> the board layer") and set `motor_type` + `board_name` + `channel` with
+> transport on `boards{}` (e.g. AM243 → `MOTOR_TI_DEMO` → `TiDemoDriver`,
+> Phase 3 done). `ActionFactory` and `node_generator` both branch on this;
+> see `robot/action/factory/action_factory.h` and
+> `node_generator/node_generator.cc`.
+
 ### 6.4 Example preset
 
 ```proto

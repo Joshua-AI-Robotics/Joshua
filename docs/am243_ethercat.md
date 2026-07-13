@@ -132,6 +132,14 @@ An example config lives at
 declares the AM243 slave and its `PDO_JOINT` channel, and the actuator binds
 via `motor_type: MOTOR_TI_DEMO` + `board_name` + `channel`.
 
+> **TODO(hmoon):** This preset uses the **new** board-layer shape, not the
+> deprecated `actuator_type: AM243_ETHERCAT_ACTUATOR` path (blocked in
+> `ActionFactory`). `actuator_type` is left unset (`ACTUATOR_INVALID`); routing
+> is by `motor_type: MOTOR_TI_DEMO` → `TiDemoDriver` over `Am243Board`. The
+> temporary `am243_ethercat_config { idle_position }` block is a Phase-4 bridge
+> until idle position moves to a motor-level config. See
+> `docs/BOARD_LAYER_RFC.md` §10 for the full migration timeline.
+
 The backend pins upstream SOEM v2.0.0 in Bazel and builds a SOEM-backed
 transport. `Init()` opens the SOEM master socket in split LRD/LWR mode,
 `ConfigureSlaves()` discovers slaves, forces SOEM's `blockLRW` path, maps PDO
