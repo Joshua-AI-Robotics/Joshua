@@ -1,4 +1,4 @@
-#include "robot/action/motors/drivers/joint_driver.h"
+#include "robot/action/motors/drivers/ti_demo_driver.h"
 
 #include <memory>
 #include <vector>
@@ -54,24 +54,24 @@ robot::action::Actuator MakeJointActuator() {
   return actuator;
 }
 
-TEST(JointDriverTest, InitRejectsNullChannel) {
-  JointDriver driver(nullptr, MakeJointActuator());
+TEST(TiDemoDriverTest, InitRejectsNullChannel) {
+  TiDemoDriver driver(nullptr, MakeJointActuator());
 
   EXPECT_EQ(driver.Init().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(JointDriverTest, InitEnablesChannel) {
+TEST(TiDemoDriverTest, InitEnablesChannel) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
 
   ASSERT_TRUE(driver.Init().ok());
 
   EXPECT_EQ(channel->enable_calls_, 1);
 }
 
-TEST(JointDriverTest, SetCommandsValidateInputs) {
+TEST(TiDemoDriverTest, SetCommandsValidateInputs) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   EXPECT_EQ(driver.SetSpeed(-1.0f).code(), absl::StatusCode::kInvalidArgument);
@@ -81,9 +81,9 @@ TEST(JointDriverTest, SetCommandsValidateInputs) {
   EXPECT_EQ(channel->set_target_calls_, 0);
 }
 
-TEST(JointDriverTest, SetPositionSendsNormalizedNativeTarget) {
+TEST(TiDemoDriverTest, SetPositionSendsNormalizedNativeTarget) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   ASSERT_TRUE(driver.SetPosition(0.0f).ok());
@@ -94,9 +94,9 @@ TEST(JointDriverTest, SetPositionSendsNormalizedNativeTarget) {
   EXPECT_FLOAT_EQ(channel->last_value_, 127.5f);
 }
 
-TEST(JointDriverTest, SetSpeedPassesNativeValueThrough) {
+TEST(TiDemoDriverTest, SetSpeedPassesNativeValueThrough) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   ASSERT_TRUE(driver.SetSpeed(3.2f).ok());
@@ -105,9 +105,9 @@ TEST(JointDriverTest, SetSpeedPassesNativeValueThrough) {
   EXPECT_FLOAT_EQ(channel->last_value_, 3.2f);
 }
 
-TEST(JointDriverTest, SetTorqueScalesToNativeFullScale) {
+TEST(TiDemoDriverTest, SetTorqueScalesToNativeFullScale) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   ASSERT_TRUE(driver.SetTorque(1.0f).ok());
@@ -116,9 +116,9 @@ TEST(JointDriverTest, SetTorqueScalesToNativeFullScale) {
   EXPECT_FLOAT_EQ(channel->last_value_, 255.0f);
 }
 
-TEST(JointDriverTest, SetActionRoutesPresetTeardownToHarmlessTeardown) {
+TEST(TiDemoDriverTest, SetActionRoutesPresetTeardownToHarmlessTeardown) {
   auto channel = std::make_shared<RecordingChannel>();
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   robot::action::ActionPacket packet;
@@ -127,10 +127,10 @@ TEST(JointDriverTest, SetActionRoutesPresetTeardownToHarmlessTeardown) {
   EXPECT_TRUE(driver.SetAction(packet).ok());
 }
 
-TEST(JointDriverTest, SetActionSurfacesChannelFailure) {
+TEST(TiDemoDriverTest, SetActionSurfacesChannelFailure) {
   auto channel = std::make_shared<RecordingChannel>();
   channel->set_target_status_ = absl::Status(absl::StatusCode::kUnavailable, "WKC mismatch");
-  JointDriver driver(channel, MakeJointActuator());
+  TiDemoDriver driver(channel, MakeJointActuator());
   ASSERT_TRUE(driver.Init().ok());
 
   robot::action::ActionPacket packet;

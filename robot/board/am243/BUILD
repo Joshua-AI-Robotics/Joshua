@@ -38,7 +38,7 @@ cc_binary(
         ":am243_board",
         ":am243_pdo_codec",
         "//config/proto:robot_cc_proto",
-        "//robot/action/motors/drivers:joint_driver",
+        "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/proto:board_cc_proto",

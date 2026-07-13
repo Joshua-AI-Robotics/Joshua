@@ -42,14 +42,14 @@ class ActionFactoryBoardPathTest : public ::testing::Test {
   }
 };
 
-TEST_F(ActionFactoryBoardPathTest, CreatesJointDriverOverMockBoardChannel) {
+TEST_F(ActionFactoryBoardPathTest, CreatesTiDemoDriverOverMockBoardChannel) {
   auto robot_config = MakeRobotWithMockBoard();
 
   auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardJointSingleAction(),
                                                               robot_config.boards());
 
   ASSERT_TRUE(action_or.ok()) << action_or.status();
-  EXPECT_EQ((*action_or)->GetId(), "joint_driver_joint_1");
+  EXPECT_EQ((*action_or)->GetId(), "ti_demo_driver_joint_1");
 }
 
 TEST_F(ActionFactoryBoardPathTest, RejectsActuatorWithoutMotorType) {

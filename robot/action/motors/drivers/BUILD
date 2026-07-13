@@ -15,9 +15,9 @@ cc_library(
 )
 
 cc_library(
-    name = "joint_driver",
-    srcs = ["joint_driver.cc"],
-    hdrs = ["joint_driver.h"],
+    name = "ti_demo_driver",
+    srcs = ["ti_demo_driver.cc"],
+    hdrs = ["ti_demo_driver.h"],
     visibility = ["//visibility:public"],
     deps = [
         "//config/proto:robot_cc_proto",
@@ -29,10 +29,10 @@ cc_library(
 )
 
 cc_test(
-    name = "joint_driver_test",
-    srcs = ["joint_driver_test.cc"],
+    name = "ti_demo_driver_test",
+    srcs = ["ti_demo_driver_test.cc"],
     deps = [
-        ":joint_driver",
+        ":ti_demo_driver",
         "//config/proto:robot_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/board/interfaces:board_interfaces",

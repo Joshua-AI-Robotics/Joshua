@@ -1,4 +1,4 @@
-#include "robot/action/motors/drivers/joint_driver.h"
+#include "robot/action/motors/drivers/ti_demo_driver.h"
 
 #include <glog/logging.h>
 
@@ -8,15 +8,17 @@ namespace robot::action {
 
 namespace {
 
-// Full-scale of the channel's native position/torque range in counts. This
-// matches the AM243 TI demo seed byte (0-255); it becomes actuator config
-// when real actuator firmware defines joint units.
+// Full-scale of the channel's native position/torque range in counts,
+// matching the AM243 TI demo seed byte (0-255). For firmware-owned joints
+// the native unit is a firmware fact, so the generic driver that replaces
+// this one should obtain it from the channel/board contract (e.g. channel
+// metadata or ACTUATOR_V1 unit config), not a hardcoded constant.
 constexpr float kNativeFullScale = 255.0f;
 
 }  // namespace
 
-JointDriver::JointDriver(std::shared_ptr<robot::board::BoardChannel> channel,
-                         const robot::action::Actuator& action_config)
+TiDemoDriver::TiDemoDriver(std::shared_ptr<robot::board::BoardChannel> channel,
+                           const robot::action::Actuator& action_config)
     : channel_(std::move(channel)), action_config_(action_config) {
   operational_lower_limit_ = action_config.operational_lower_limit();
   operational_upper_limit_ = action_config.operational_upper_limit();
@@ -29,25 +31,25 @@ JointDriver::JointDriver(std::shared_ptr<robot::board::BoardChannel> channel,
   }
 
   id_ = GetId();
-  LOG(INFO) << "JointDriver actuator ID: " << action_config_.id() << " initialized";
+  LOG(INFO) << "TiDemoDriver actuator ID: " << action_config_.id() << " initialized";
 }
 
-absl::Status JointDriver::Init() {
+absl::Status TiDemoDriver::Init() {
   if (channel_ == nullptr) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
-                        "Joint driver requires a board channel");
+                        "TI demo driver requires a board channel");
   }
   return channel_->Enable();
 }
 
-std::string JointDriver::GetId() {
+std::string TiDemoDriver::GetId() {
   if (!action_config_.actuator_name().empty()) {
-    return "joint_driver_" + action_config_.actuator_name();
+    return "ti_demo_driver_" + action_config_.actuator_name();
   }
-  return "joint_driver_" + std::to_string(action_config_.id());
+  return "ti_demo_driver_" + std::to_string(action_config_.id());
 }
 
-absl::Status JointDriver::SetAction(const robot::action::ActionPacket& action_packet) {
+absl::Status TiDemoDriver::SetAction(const robot::action::ActionPacket& action_packet) {
   switch (action_packet.action_type_case()) {
     case robot::action::ActionPacket::kPreset:
       switch (action_packet.preset()) {
@@ -102,14 +104,14 @@ absl::Status JointDriver::SetAction(const robot::action::ActionPacket& action_pa
   }
 }
 
-absl::Status JointDriver::SetSpeed(float value) {
+absl::Status TiDemoDriver::SetSpeed(float value) {
   if (value < 0.0f) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Joint speed must be non-negative");
   }
   return channel_->SetTarget(robot::board::TargetMode::kVelocity, value);
 }
 
-absl::Status JointDriver::SetPosition(float angle) {
+absl::Status TiDemoDriver::SetPosition(float angle) {
   if (angle < operational_lower_limit_ || angle > operational_upper_limit_) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Joint position is outside operational limits");
@@ -123,22 +125,22 @@ absl::Status JointDriver::SetPosition(float angle) {
   return channel_->SetTarget(robot::board::TargetMode::kPosition, normalized * kNativeFullScale);
 }
 
-absl::Status JointDriver::SetTorque(float torque) {
+absl::Status TiDemoDriver::SetTorque(float torque) {
   if (torque < 0.0f) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Joint torque must be non-negative");
   }
   return channel_->SetTarget(robot::board::TargetMode::kTorque, torque * kNativeFullScale);
 }
 
-absl::Status JointDriver::SetMiddlePosition() {
+absl::Status TiDemoDriver::SetMiddlePosition() {
   return SetPosition((operational_lower_limit_ + operational_upper_limit_) / 2.0f);
 }
 
-absl::Status JointDriver::SetIdlePosition() {
+absl::Status TiDemoDriver::SetIdlePosition() {
   return SetPosition(idle_position_);
 }
 
-absl::Status JointDriver::Teardown() {
+absl::Status TiDemoDriver::Teardown() {
   auto idle_status = SetIdlePosition();
   if (!idle_status.ok()) {
     return idle_status;

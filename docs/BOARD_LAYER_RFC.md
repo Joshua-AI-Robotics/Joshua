@@ -962,7 +962,8 @@ Each phase lands green and independently revertible.
 - [ ] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
       `AM243_PDO_MAPPING_TI_DEMO` isolation.
 - [ ] Replace `Am243EthercatDriver` with a thin motor driver over
-      `BoardChannel` (or fold into a generic joint driver).
+      `BoardChannel` (`TiDemoDriver` — deliberately demo-scoped, not the
+      generic joint driver; it retires with `MOTOR_TI_DEMO`).
 - [ ] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
       to the new path — these are the hardware regression gates.
 - [ ] Prove the config-driven path end to end:
@@ -1033,7 +1034,13 @@ Each phase lands green and independently revertible.
 1. **Units at the seam** — native units (steps/ticks) with conversion in the
    motor driver (current proposal), or SI at the seam with per-channel scale
    pushed via `CONFIGURE_CHANNEL`? Decide before Phase 2 freezes
-   `BoardChannel`.
+   `BoardChannel`. One refinement is already clear: for *firmware-owned*
+   joints the native unit is a firmware fact the host has no motor model
+   for, so the eventual generic joint driver (the `ACTUATOR_V1`-era
+   replacement for the demo-scoped `TiDemoDriver`) should obtain its scale
+   from the channel/board contract — channel metadata or unit config —
+   rather than hardcoding a full-scale constant the way `TiDemoDriver`
+   hardcodes the TI demo's 0-255 seed byte.
 2. **Feedback pull vs push** — `ReadFeedback()` polling is fine for
    frame-based boards; should cyclic boards also expose a subscription/latest
    cache for encoder publishers, and does the perception layer read through

@@ -7,8 +7,8 @@
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/action_interface.h"
-#include "robot/action/motors/drivers/joint_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
+#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/motor_channel_validation.h"
 #include "robot/comm/factory/comm_factory.h"
@@ -122,7 +122,7 @@ class ActionFactory {
 
     switch (actuator.motor_type()) {
       case robot::action::MotorType::MOTOR_TI_DEMO: {
-        auto driver = std::make_unique<robot::action::JointDriver>(channel, actuator);
+        auto driver = std::make_unique<robot::action::TiDemoDriver>(channel, actuator);
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }

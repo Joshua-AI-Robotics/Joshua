@@ -15,7 +15,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
-#include "robot/action/motors/drivers/joint_driver.h"
+#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/action/proto/action_packet.pb.h"
 #include "robot/board/am243/am243_board.h"
 #include "robot/board/am243/am243_pdo_codec.h"
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
     return Fail(region_or.status());
   }
 
-  robot::action::JointDriver driver(*channel_or, MakeActuatorConfig());
+  robot::action::TiDemoDriver driver(*channel_or, MakeActuatorConfig());
   status = driver.Init();
   if (!status.ok()) {
     return Fail(status);

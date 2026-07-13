@@ -10,17 +10,19 @@
 
 namespace robot::action {
 
-// Actuator driver for MOTOR_TI_DEMO — a joint whose closed-loop
-// controller runs on the board. The driver owns motor semantics only
-// (limits, idle position, the degrees->native conversion); how a target
-// reaches the controller is the channel's problem
-// (docs/BOARD_LAYER_RFC.md §5.4). Replaces Am243EthercatDriver with
-// byte-identical bus traffic on the AM243 TI demo path.
-class JointDriver : public robot::action::ActuatorInterface {
+// Actuator driver for MOTOR_TI_DEMO, the AM243 TI demo placeholder: it
+// owns joint semantics (limits, idle position, degrees->native
+// conversion) and hands the channel a demo seed value; how the target
+// reaches the board is the channel's problem (docs/BOARD_LAYER_RFC.md
+// §5.4). Replaces Am243EthercatDriver with byte-identical bus traffic.
+// Deliberately narrow — retires with MOTOR_TI_DEMO. The eventual generic
+// firmware-owned-joint driver should read its native units from the
+// channel/board contract instead of this file's hardcoded full scale.
+class TiDemoDriver : public robot::action::ActuatorInterface {
  public:
-  JointDriver(std::shared_ptr<robot::board::BoardChannel> channel,
-              const robot::action::Actuator& action_config);
-  ~JointDriver() override = default;
+  TiDemoDriver(std::shared_ptr<robot::board::BoardChannel> channel,
+               const robot::action::Actuator& action_config);
+  ~TiDemoDriver() override = default;
 
   // ActionInterface methods.
   absl::Status Init() override;

@@ -116,7 +116,7 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
   region, and hands out `BoardChannel`s; every exchange is working-count
   checked.
 - The AM243 PDO byte layout belongs in `robot/board/am243/am243_pdo_codec.*`.
-- Motor semantics belong in `robot/action/motors/drivers/joint_driver.*`
+- Motor semantics belong in `robot/action/motors/drivers/ti_demo_driver.*`
   (`MOTOR_TI_DEMO`): limits, idle position, and the joint->native
   conversion, over `BoardChannel` with no comm or board headers.
 - Board-management tooling, including UART flashing and debug helpers, should
@@ -160,7 +160,7 @@ docker compose exec joshua-u24 bazel run //robot/board/am243:am243_driver_smoke 
 ```
 
 This brings up `Am243Board` (which owns the SOEM lifecycle), opens its
-`PDO_JOINT` channel, and drives it with `JointDriver` `ActionPacket` position
+`PDO_JOINT` channel, and drives it with `TiDemoDriver` `ActionPacket` position
 commands. With the current TI demo firmware, input byte 0 should trail the
 generated command seed by one cycle.
 
