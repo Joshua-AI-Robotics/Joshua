@@ -13,6 +13,8 @@ namespace {
 // the native unit is a firmware fact, so the generic driver that replaces
 // this one should obtain it from the channel/board contract (e.g. channel
 // metadata or ACTUATOR_V1 unit config), not a hardcoded constant.
+// TODO(piscesgh): Move this scale into the channel/board contract when
+// the ACTUATOR_V1 generic joint driver replaces TiDemoDriver.
 constexpr float kNativeFullScale = 255.0f;
 
 }  // namespace

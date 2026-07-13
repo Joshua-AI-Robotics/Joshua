@@ -15,9 +15,11 @@ namespace robot::action {
 // conversion) and hands the channel a demo seed value; how the target
 // reaches the board is the channel's problem (docs/BOARD_LAYER_RFC.md
 // §5.4). Replaces Am243EthercatDriver with byte-identical bus traffic.
-// Deliberately narrow — retires with MOTOR_TI_DEMO. The eventual generic
-// firmware-owned-joint driver should read its native units from the
-// channel/board contract instead of this file's hardcoded full scale.
+// Deliberately narrow — retires with MOTOR_TI_DEMO.
+// TODO(piscesgh): When AM243_PDO_MAPPING_ACTUATOR_V1 lands, replace this
+// with a generic firmware-owned-joint driver that reads its native units
+// from the channel/board contract (RFC §12.1) instead of this file's
+// hardcoded full scale, and retire it together with MOTOR_TI_DEMO.
 class TiDemoDriver : public robot::action::ActuatorInterface {
  public:
   TiDemoDriver(std::shared_ptr<robot::board::BoardChannel> channel,
