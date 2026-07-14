@@ -47,6 +47,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   `so100/sim_interactive.pbtxt` / `sim_mirror.pbtxt` filenames
 - Docker docs now include the required Compose `--profile` flags for ARM64, Jazzy,
   and the web UI (`production` profile) services
+- `scripts/setup.sh` now removes conflicting Ubuntu-archive Docker packages
+  (`docker.io`, `docker-compose`, `docker-compose-v2`, etc.) before installing
+  the docker.com packages, so hosts with stock Ubuntu Docker already installed
+  no longer hit a `dpkg` "trying to overwrite" error on `docker-compose-plugin`
 
 ### Removed
 

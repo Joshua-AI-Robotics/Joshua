@@ -49,6 +49,15 @@ fi
 echo -e "${GREEN}=== Joshua Docker host bootstrap ===${NC}"
 echo -e "${BLUE}Installing Docker Engine, Compose v2, and buildx if needed...${NC}"
 
+# Ubuntu's archive ships its own Docker/Compose packages (docker.io,
+# docker-compose, docker-compose-v2, ...) that conflict with the docker.com
+# packages installed below -- e.g. docker-compose-plugin and docker-compose-v2
+# both ship /usr/libexec/docker/cli-plugins/docker-compose, so dpkg refuses to
+# unpack docker-compose-plugin while the Ubuntu package is present. Remove the
+# conflicting Ubuntu-archive packages first (no-op if they aren't installed).
+CONFLICTING_PACKAGES=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
+apt-get remove -y "${CONFLICTING_PACKAGES[@]}" || true
+
 DOCKER_SOURCES=/etc/apt/sources.list.d/docker.sources
 LEGACY_DOCKER_LIST=/etc/apt/sources.list.d/docker.list
 DOCKER_REPOSITORY=https://download.docker.com/linux/ubuntu
