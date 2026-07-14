@@ -95,6 +95,18 @@ if ! grep -q 'ISAAC_LAB_PATH' <<<"${isaac_run}"; then
   exit 1
 fi
 
+# Task commands must fail fast with a rebuild hint when run against a stale
+# image that predates the ROS-sourcing entrypoint.
+for service in test-u22 test-u24 run-u22 run-u24; do
+  task_cmd=$("${default_compose[@]}" config "${service}")
+  for needle in 'AMENT_PREFIX_PATH' 'ROS 2 environment is missing' 'docker compose build joshua-' 'exit 1'; do
+    if ! grep -qF "${needle}" <<<"${task_cmd}"; then
+      echo "Task service ${service} is missing the stale-image ROS guard (no '${needle}')." >&2
+      exit 1
+    fi
+  done
+done
+
 if [[ ! -f docker/entrypoint.sh ]]; then
   echo "Missing docker/entrypoint.sh." >&2
   exit 1

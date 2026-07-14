@@ -109,6 +109,11 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u22
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
         tests=$$(bazel query 'kind(".*_test rule", //...)');
         if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
         bazel test --config=u22 --config=x86-base
@@ -127,6 +132,11 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u24
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
         tests=$$(bazel query 'kind(".*_test rule", //...)');
         if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
         bazel test --config=u24 --config=x86-base
@@ -143,6 +153,11 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u22
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
         bazel run --config=u22 --config=x86-base
         --@rules_python//python/config_settings:python_version=3.10
         //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
@@ -158,6 +173,11 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u24
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
         bazel run --config=u24 --config=x86-base
         --@rules_python//python/config_settings:python_version=3.12
         //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}

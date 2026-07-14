@@ -24,6 +24,12 @@ Both supported ROS stacks are first-class:
 
 Docker Compose is the canonical interface. The optional Makefile provides shorter aliases; run `make help` to list them.
 
+**After pulling changes** that touch `dockerfiles/`, `docker/`, or the requirements lockfiles, rebuild before running tasks — `docker compose run` does not rebuild on older Compose versions, and a stale image can be missing fixes that live in the image itself:
+
+```bash
+docker compose build joshua-u22   # and joshua-u24 if you use it
+```
+
 ### Keep a development container running
 
 For repeated builds and tests, prefer a persistent container over one-off
