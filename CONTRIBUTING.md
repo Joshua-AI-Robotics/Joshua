@@ -51,6 +51,8 @@ sudo ./scripts/setup.sh --env=dev
 
 More detail: [scripts/README.md](scripts/README.md).
 
+If you develop with an AI coding agent (Claude Code, Copilot, Codex, …), the canonical agent instructions live in [AGENTS.md](AGENTS.md); launch your agent from the repository root so it picks the file up.
+
 ## Branch and PR workflow
 
 This project uses **pull requests into `develop`**. Recent history follows this pattern:

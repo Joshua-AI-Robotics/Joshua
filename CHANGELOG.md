@@ -16,6 +16,11 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
   `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
 - `simulation/README.md` covering the MuJoCo modes and the Isaac Sim backend
+- [AGENTS.md](AGENTS.md) canonical instructions for AI coding agents
+  (open [agents.md](https://agents.md/) standard), with pointer bridges for
+  tools that do not read it natively: Claude Code (`CLAUDE.md`), Gemini CLI
+  (`GEMINI.md`), and Copilot IDE surfaces
+  (`.github/copilot-instructions.md`)
 
 ### Fixed
 
