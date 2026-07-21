@@ -9,8 +9,23 @@ cc_library(
     deps = [
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:actuator_interface",
-        "//robot/comm/serial",
+        "//robot/board/interfaces:board_interfaces",
         "//utils:status_macros",
+        "@abseil-cpp//absl/status:status",
+        "@glog",
+    ],
+)
+
+cc_test(
+    name = "sts3215_driver_test",
+    srcs = ["sts3215_driver_test.cc"],
+    deps = [
+        ":sts3215_driver",
+        "//config/proto:robot_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
     ],
 )
 

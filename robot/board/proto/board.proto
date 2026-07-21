@@ -41,6 +41,10 @@ message StepDirConfig {
 
 message ServoBusConfig {
   uint32 servo_id = 1;
+  // Feetech "Moving Time" register value (ms), pushed once as a
+  // CONFIGURE_CHANNEL tunable at board Init and bundled into every goal
+  // position write thereafter (docs/BOARD_LAYER_RFC.md §10 Phase 4).
+  uint32 move_time_ms = 2;
 }
 
 message PwmConfig {

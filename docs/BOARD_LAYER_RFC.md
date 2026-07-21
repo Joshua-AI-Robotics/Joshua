@@ -1151,7 +1151,7 @@ zero motor-driver changes.
 | Codec drift between host and firmware | One shared C source in-repo; proto_ver in every frame; handshake rejects version mismatch |
 | ACK round-trip too slow on chatty buses | Frame protocol allows fire-and-forget mode per command class later; measure first |
 | STS3215 refactor regresses working so100 robots | Port behind the new layer with byte-identical bus traffic; keep `test_sts3215_encoder.py` and teleop presets as regression gates |
-| Encoder/actuator bus race on shared Feetech UART | Phase 4 routes `Sts3215Encoder` through `FeetechBusBoard` (§5.6, §6.8); Phase 6 removes per-encoder `comm {}` from presets |
+| Encoder/actuator bus race on shared Feetech UART | Still open after Phase 4: `FeetechBusBoard` lands with its own bus mutex, but `Sts3215Encoder` does not yet route through it (needs `PerceptionFactory` to take `boards`, §10 Phase 6); Phase 6 removes per-encoder `comm {}` from presets |
 | AM243 real firmware PDO layout unknown | Demo codec stays isolated behind `Am243PdoMapping` exactly as today; board layer does not depend on the final layout |
 | Small-MCU RAM/flash limits (ATmega328 + W5500) | Codec is dependency-free C; per-variant builds strip unused transports; Teensy/ESP32 as fallback targets |
 | Userspace GPIO step generation jitters (HOST_GPIO) | Restrict backends to hardware PWM / RP1 / kernel helper; cap `max_pulse_rate_hz` in validation until an RT backend exists (§12.8) |
@@ -1209,31 +1209,63 @@ Each phase lands green and independently revertible.
 ### Phase 4 — Port STS3215 (actuators + encoder co-migration)
 
 **Actuators:**
-- [ ] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol,
-      per-port instance, bus mutex, servo-ping IDENTIFY.
-- [ ] Slim `Sts3215Driver` to motor semantics over `BoardChannel`
-      (byte-identical bus traffic as acceptance bar).
-- [ ] Decide the torque mapping: `Sts3215Driver::SetTorque` writes a torque
-      *enable* register (on/off → really `BoardChannel::Enable/Disable`),
-      while the AM243 driver scales torque as a *target*
-      (`TargetMode::kTorque`). One rule, applied in both drivers (§12.7).
+- [x] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol
+      (`feetech_protocol.h`, pure/unit-tested), one instance per board name
+      (via `BoardFactory`'s existing name cache — a config that opens two
+      `FEETECH_BUS` boards on the same port is a config error, same as
+      today's serial `PortResources` cache), bus mutex, servo-ping +
+      model-number-read IDENTIFY. Register addresses match the public
+      STS3215 memory map; unverified against real hardware on this branch
+      (no LP servo bus wired up here — same caveat as PR #67's pending
+      AM243 hardware smoke run).
+- [x] Slim `Sts3215Driver` to motor semantics over `BoardChannel`. Every
+      write (torque enable, the bundled position+time+speed burst, present-
+      position read) is byte-identical to the pre-board-layer driver's wire
+      traffic for the same inputs (verified in `feetech_protocol_test.cc`
+      against hand-computed legacy checksums). The bundled burst is built by
+      the channel from a driver-staged speed (`SetTarget(kVelocity, ...)`,
+      mirrors the old driver's SetSpeed, which also only updated local state
+      with no immediate write) plus a board-config move-time tunable
+      (`ServoBusConfig.move_time_ms`, pushed once at `Init()`, matching the
+      `Channel` proto's own CONFIGURE_CHANNEL framing) — two `SetTarget`
+      calls instead of one API bundling all three fields, since
+      `BoardChannel::SetTarget` is single-value, but the same bytes land on
+      the wire.
+- [x] Decide the torque mapping (docs/BOARD_LAYER_RFC.md §12.7, resolved in
+      `robot/board/interfaces/board_channel.h`): `Enable`/`Disable` is the
+      on/off gate for boards whose torque is fundamentally a binary enable
+      register; `TargetMode::kTorque` is reserved for boards with a genuine
+      continuous torque target. `Sts3215Driver::SetTorque` now calls
+      `Enable()`/`Disable()`. The AM243 TI demo firmware has neither a real
+      enable register nor a real continuous torque target — it stays on its
+      existing target-scaled placeholder, documented in
+      `Am243DemoChannel`, and is expected to retire with `MOTOR_TI_DEMO`
+      rather than adopt the new rule.
 - [x] Migrate so100 **actuator** presets to `boards{}` + `board_name` (no
       per-actuator `comm {}`); keep teleop working.
 - [x] Remove deprecated C++ `ActionFactory` `actuator_type` arms; route all
       actuators through `motor_type` + `board_name` + `channel`.
 - [ ] Migrate `action_factory.py` (MOCK_MOTOR, SPIKE_MOTOR) to `MotorType`
       *before* removing `ActuatorType` — the Python factory switches on the
-      enum being deleted.
+      enum being deleted. Not started: no C++ board-layer dependency, so
+      it's scoped as its own follow-up rather than folded into the STS3215
+      board port.
 - [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto once Python paths migrate.
+      from proto once Python paths migrate. Blocked on the item above.
 
 **Perception (partial — bus safety only; full migration is Phase 6):**
 - [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
       minimum through the board's bus lock. It currently writes raw Feetech
       frames to the same shared `Serial` from encoder-publisher timers,
-      which would bypass the new bus mutex (§5.6, §6.8).
+      which would bypass the new bus mutex (§5.6, §6.8). **Not done in the
+      FeetechBusBoard port**: doing this properly needs `PerceptionFactory`
+      to receive `boards` (the same signature change §10 Phase 6 already
+      lists as its own deliverable), not just a `Sts3215Encoder` constructor
+      swap — so it's left for Phase 6 rather than half-done here. The known
+      bus-race risk in the table above (§9) is unchanged by this PR.
 - [ ] Regression: `encoder_publish` + teleop on so100 with actuators and
-      encoders on the same port — no half-duplex bus collisions.
+      encoders on the same port — no half-duplex bus collisions. Blocked on
+      the item above.
 
 ### Phase 5 — Prove the matrix (first real second board)
 - [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
