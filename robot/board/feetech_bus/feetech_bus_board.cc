@@ -25,8 +25,8 @@ struct FeetechBusSharedState {
 
 namespace {
 
-std::function<absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>>(
-    const robot::comm::Comm&)>&
+std::function<
+    absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>>(const robot::comm::Comm&)>&
 SerialTransportFactoryForTesting() {
   static std::function<absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>>(
       const robot::comm::Comm&)>
@@ -41,7 +41,8 @@ SerialTransportFactoryForTesting() {
 // Sts3215Driver's SetSpeed, which also only updated local state).
 class FeetechBusChannel : public BoardChannel {
  public:
-  FeetechBusChannel(std::shared_ptr<FeetechBusSharedState> state, uint8_t servo_id,
+  FeetechBusChannel(std::shared_ptr<FeetechBusSharedState> state,
+                    uint8_t servo_id,
                     uint16_t move_time_ms)
       : state_(std::move(state)), servo_id_(servo_id), move_time_ms_(move_time_ms) {}
 
@@ -71,8 +72,7 @@ class FeetechBusChannel : public BoardChannel {
         auto speed_bytes = feetech::EncodeUint16Le(staged_speed);
         data.insert(data.end(), time_bytes.begin(), time_bytes.end());
         data.insert(data.end(), speed_bytes.begin(), speed_bytes.end());
-        const auto packet =
-            feetech::BuildWritePacket(servo_id_, feetech::kRegGoalPosition, data);
+        const auto packet = feetech::BuildWritePacket(servo_id_, feetech::kRegGoalPosition, data);
         std::lock_guard<std::mutex> bus_lock(state_->bus_mutex);
         return state_->transport->Write(packet);
       }
@@ -92,13 +92,16 @@ class FeetechBusChannel : public BoardChannel {
     {
       std::lock_guard<std::mutex> lock(state_->bus_mutex);
       ABSL_ASSIGN_OR_RETURN(
-          response, state_->transport->AtomicRead(request, feetech::kStatusPacketOverheadBytes + 2));
+          response,
+          state_->transport->AtomicRead(request, feetech::kStatusPacketOverheadBytes + 2));
     }
     ABSL_ASSIGN_OR_RETURN(auto params, feetech::ParseStatusPacket(response, servo_id_));
     if (params.size() != 2) {
-      return absl::InternalError(
-          absl::StrCat("Servo ", static_cast<int>(servo_id_), " present-position read returned ",
-                       params.size(), " bytes, expected 2."));
+      return absl::InternalError(absl::StrCat("Servo ",
+                                              static_cast<int>(servo_id_),
+                                              " present-position read returned ",
+                                              params.size(),
+                                              " bytes, expected 2."));
     }
     ChannelFeedback feedback;
     feedback.position = static_cast<float>(feetech::DecodeUint16Le(params[0], params[1]));
@@ -148,9 +151,11 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
                                                      " must use the SERVO_BUS_UART drive."));
     }
     if (!channel.has_servo_bus() || channel.servo_bus().servo_id() == 0) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "FEETECH_BUS board '", config.name(), "' channel ", channel.index(),
-          " has no servo_bus.servo_id."));
+      return absl::InvalidArgumentError(absl::StrCat("FEETECH_BUS board '",
+                                                     config.name(),
+                                                     "' channel ",
+                                                     channel.index(),
+                                                     " has no servo_bus.servo_id."));
     }
     if (!seen_servo_ids.insert(channel.servo_bus().servo_id()).second) {
       return absl::InvalidArgumentError(absl::StrCat("FEETECH_BUS board '",
@@ -168,8 +173,9 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
 // against an expected value (no verified reference on this branch); a
 // response that fails to parse means the servo did not answer at all, which
 // is what this handshake exists to catch.
-absl::Status IdentifyServo(FeetechBusSharedState& state, const std::string& board_name,
-                          uint8_t servo_id) {
+absl::Status IdentifyServo(FeetechBusSharedState& state,
+                           const std::string& board_name,
+                           uint8_t servo_id) {
   std::lock_guard<std::mutex> lock(state.bus_mutex);
 
   const auto ping = feetech::BuildPingPacket(servo_id);
@@ -257,8 +263,7 @@ absl::Status FeetechBusBoard::Teardown() {
 
 void FeetechBusBoard::SetSerialTransportFactoryForTesting(
     std::function<absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>>(
-        const robot::comm::Comm&)>
-        factory) {
+        const robot::comm::Comm&)> factory) {
   SerialTransportFactoryForTesting() = std::move(factory);
 }
 

@@ -31,7 +31,8 @@ absl::Status Sts3215Driver::Init() {
   // (which initialized the same value locally and could not fail). Ignored
   // on error: a channel that rejects this pre-torque-enable write still
   // works correctly once the first explicit SetSpeed() call lands.
-  channel_->SetTarget(robot::board::TargetMode::kVelocity, action_config_.sts3215_config().move_speed())
+  channel_
+      ->SetTarget(robot::board::TargetMode::kVelocity, action_config_.sts3215_config().move_speed())
       .IgnoreError();
   return absl::OkStatus();
 }
@@ -92,8 +93,8 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
       return absl::OkStatus();
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
-      LOG(WARNING) << "No action type set in STS3215 ActionPacket [ID: " << action_packet.action_id()
-                   << "]";
+      LOG(WARNING) << "No action type set in STS3215 ActionPacket [ID: "
+                   << action_packet.action_id() << "]";
       return absl::OkStatus();
   }
 }

@@ -36,8 +36,9 @@ std::vector<uint8_t> BuildReadPacket(uint8_t servo_id, uint8_t address, uint8_t 
 // `address`. Multi-byte registers are little-endian, matching the STS3215
 // wire format (e.g. goal position + moving time + moving speed bundled into
 // one 6-byte burst starting at kRegGoalPosition).
-std::vector<uint8_t> BuildWritePacket(uint8_t servo_id, uint8_t address,
-                                     const std::vector<uint8_t>& data);
+std::vector<uint8_t> BuildWritePacket(uint8_t servo_id,
+                                      uint8_t address,
+                                      const std::vector<uint8_t>& data);
 
 // Validates header, servo id, checksum, and error byte on a status/response
 // packet, returning the parameter bytes (everything between the error byte

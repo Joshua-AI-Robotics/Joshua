@@ -18,7 +18,8 @@ using robot::comm::FakeSerialTransport;
 // parameter bytes and error byte, matching the checksum arithmetic in
 // feetech_protocol.cc. Test-only: production code never builds responses,
 // only requests.
-std::vector<uint8_t> MakeStatusResponse(uint8_t servo_id, uint8_t error,
+std::vector<uint8_t> MakeStatusResponse(uint8_t servo_id,
+                                        uint8_t error,
                                         const std::vector<uint8_t>& params) {
   const uint8_t length = static_cast<uint8_t>(params.size() + 2);
   std::vector<uint8_t> frame_from_id = {servo_id, length, error};
@@ -55,7 +56,8 @@ class FeetechBusBoardTest : public ::testing::Test {
   void SetUp() override {
     transport_ = std::make_shared<FakeSerialTransport>();
     FeetechBusBoard::SetSerialTransportFactoryForTesting(
-        [this](const robot::comm::Comm&) -> absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>> {
+        [this](const robot::comm::Comm&)
+            -> absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>> {
           return transport_;
         });
   }
@@ -130,7 +132,7 @@ TEST_F(FeetechBusBoardTest, OpenChannelEnableWritesTorqueEnableRegister) {
   ASSERT_TRUE((*channel)->Enable().ok());
 
   EXPECT_EQ(transport_->last_written_,
-           (std::vector<uint8_t>{0xFF, 0xFF, 0x05, 0x04, 0x03, 0x28, 0x01, 0xCA}));
+            (std::vector<uint8_t>{0xFF, 0xFF, 0x05, 0x04, 0x03, 0x28, 0x01, 0xCA}));
 }
 
 TEST_F(FeetechBusBoardTest, SetTargetPositionBundlesStagedSpeedAndConfiguredMoveTime) {
@@ -162,7 +164,7 @@ TEST_F(FeetechBusBoardTest, SetTargetTorqueIsUnimplemented) {
   ASSERT_TRUE(channel.ok());
 
   EXPECT_EQ((*channel)->SetTarget(TargetMode::kTorque, 1.0f).code(),
-           absl::StatusCode::kUnimplemented);
+            absl::StatusCode::kUnimplemented);
 }
 
 TEST_F(FeetechBusBoardTest, ReadFeedbackDecodesPresentPosition) {

@@ -19,7 +19,8 @@ uint8_t ComputeChecksum(const std::vector<uint8_t>& frame_from_id) {
   return static_cast<uint8_t>(~sum & 0xFF);
 }
 
-std::vector<uint8_t> AssemblePacket(uint8_t servo_id, uint8_t instruction,
+std::vector<uint8_t> AssemblePacket(uint8_t servo_id,
+                                    uint8_t instruction,
                                     const std::vector<uint8_t>& params) {
   const uint8_t length = static_cast<uint8_t>(params.size() + 2);
   std::vector<uint8_t> frame_from_id = {servo_id, length, instruction};
@@ -42,8 +43,9 @@ std::vector<uint8_t> BuildReadPacket(uint8_t servo_id, uint8_t address, uint8_t 
   return AssemblePacket(servo_id, kInstrRead, {address, length});
 }
 
-std::vector<uint8_t> BuildWritePacket(uint8_t servo_id, uint8_t address,
-                                     const std::vector<uint8_t>& data) {
+std::vector<uint8_t> BuildWritePacket(uint8_t servo_id,
+                                      uint8_t address,
+                                      const std::vector<uint8_t>& data) {
   std::vector<uint8_t> params = {address};
   params.insert(params.end(), data.begin(), data.end());
   return AssemblePacket(servo_id, kInstrWrite, params);
@@ -59,8 +61,10 @@ absl::StatusOr<std::vector<uint8_t>> ParseStatusPacket(const std::vector<uint8_t
   }
   if (response[2] != expected_servo_id) {
     return absl::InternalError(absl::StrCat("Feetech response is from servo ",
-                                            static_cast<int>(response[2]), ", expected ",
-                                            static_cast<int>(expected_servo_id), "."));
+                                            static_cast<int>(response[2]),
+                                            ", expected ",
+                                            static_cast<int>(expected_servo_id),
+                                            "."));
   }
   const uint8_t length = response[3];
   if (length < 2) {
@@ -68,9 +72,11 @@ absl::StatusOr<std::vector<uint8_t>> ParseStatusPacket(const std::vector<uint8_t
   }
   const size_t expected_size = 4 + static_cast<size_t>(length);
   if (response.size() != expected_size) {
-    return absl::InternalError(absl::StrCat("Feetech response size ", response.size(),
+    return absl::InternalError(absl::StrCat("Feetech response size ",
+                                            response.size(),
                                             " does not match its length field (expected ",
-                                            expected_size, ")."));
+                                            expected_size,
+                                            ")."));
   }
 
   const std::vector<uint8_t> frame_from_id(response.begin() + 2, response.end() - 1);
@@ -82,8 +88,8 @@ absl::StatusOr<std::vector<uint8_t>> ParseStatusPacket(const std::vector<uint8_t
 
   const uint8_t error = response[4];
   if (error != 0) {
-    return absl::InternalError(
-        absl::StrCat("Servo ", static_cast<int>(expected_servo_id), " reported error byte ", error, "."));
+    return absl::InternalError(absl::StrCat(
+        "Servo ", static_cast<int>(expected_servo_id), " reported error byte ", error, "."));
   }
 
   return std::vector<uint8_t>(response.begin() + 5, response.end() - 1);

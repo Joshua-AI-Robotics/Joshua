@@ -22,7 +22,7 @@ class SerialTransport {
   virtual absl::Status Write(const std::vector<uint8_t>& data) = 0;
   // Atomic Write-then-Read operation to prevent bus collisions.
   virtual absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
-                                                           size_t expected_response_size) = 0;
+                                                          size_t expected_response_size) = 0;
 };
 
 class Serial : public SerialTransport {

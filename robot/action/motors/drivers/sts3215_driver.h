@@ -20,7 +20,7 @@ namespace robot::action {
 class Sts3215Driver : public robot::action::ActuatorInterface {
  public:
   Sts3215Driver(std::shared_ptr<robot::board::BoardChannel> channel,
-               const robot::action::Actuator& action_config);
+                const robot::action::Actuator& action_config);
   ~Sts3215Driver() override = default;
 
   // ActionInterface methods.
