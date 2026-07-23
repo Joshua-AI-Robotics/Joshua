@@ -12,12 +12,12 @@ robot {
       comm_type: SERIAL
       serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
     }
-    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 move_time_ms: 40 } }
-    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 move_time_ms: 40 } }
-    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 move_time_ms: 40 } }
-    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 move_time_ms: 40 } }
-    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 move_time_ms: 40 } }
-    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 move_time_ms: 40 } }
+    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
+    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
+    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
+    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
   }
   actions {
     single_actions {
@@ -44,7 +44,6 @@ robot {
         operational_upper_limit: 3034
         sts3215_config {
           servo_id: 1
-          move_time_in_ms: 40
           move_speed: 3000
           idle_position: 2070
         }
@@ -74,7 +73,6 @@ robot {
         operational_upper_limit: 3154
         sts3215_config {
           servo_id: 2
-          move_time_in_ms: 40
           move_speed: 3000
           idle_position: 847
         }
@@ -104,7 +102,6 @@ robot {
         operational_upper_limit: 3015
         sts3215_config {
           servo_id: 3
-          move_time_in_ms: 40
           move_speed: 3000
           idle_position: 3011
         }
@@ -134,7 +131,6 @@ robot {
         operational_upper_limit: 3124
         sts3215_config {
           servo_id: 4
-          move_time_in_ms: 40
           move_speed: 3000
           idle_position: 655
         }
@@ -164,7 +160,6 @@ robot {
         operational_upper_limit: 2955
         sts3215_config {
           servo_id: 5
-          move_time_in_ms: 40
           move_speed: 3000
           idle_position: 1838
         }
@@ -194,7 +189,6 @@ robot {
         operational_upper_limit: 3235
         sts3215_config {
           servo_id: 6
-          move_time_in_ms: 40
           move_speed: 2200
           idle_position: 1806
         }

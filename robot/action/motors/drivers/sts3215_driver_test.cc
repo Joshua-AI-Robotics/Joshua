@@ -51,7 +51,6 @@ robot::action::Actuator MakeServoActuator() {
   actuator.set_operational_upper_limit(3034.0f);
   auto* sts_config = actuator.mutable_sts3215_config();
   sts_config->set_servo_id(1);
-  sts_config->set_move_time_in_ms(40);
   sts_config->set_move_speed(3000);
   // Deliberately just outside the operational range, matching a real so100
   // preset (servo_2's idle_position sits below its operational_lower_limit)

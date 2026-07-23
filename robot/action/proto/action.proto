@@ -66,7 +66,6 @@ message Actuator {
 
 message Sts3215Config {
   uint64 servo_id = 1;
-  uint32 move_time_in_ms = 2;
   uint32 move_speed = 3;
   float idle_position = 4;
 }
