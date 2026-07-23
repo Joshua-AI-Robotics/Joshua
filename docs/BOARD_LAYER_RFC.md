@@ -10,7 +10,7 @@ Make the actuator stack fully configurable across three independent axes:
 - **Motor** — what physically moves (STS3215 servo, NEMA17 stepper, Spike
   motor, future BLDC).
 - **Board** — the controller that runs the low-level motor loop (AM243,
-  Teensy, Arduino + TB6600, or the MCU inside a smart servo).
+  Teensy, Arduino, or the MCU inside a smart servo).
 - **Transport** — how the host reaches that controller (serial, EtherCAT,
   Ethernet/UDP, SPI, BLE).
 
@@ -80,9 +80,10 @@ config .pbtxt
 
 Structural problems this RFC fixes:
 
-1. **Combinatorial explosion.** A stepper on TB6600+Arduino over serial, the
-   same stepper on AM243 over EtherCAT, and a servo on Teensy+EasyCAT would
-   each need a new `ActuatorType`, driver class, and factory arm —
+1. **Combinatorial explosion.** A stepper (driving a TB6600) on Arduino over
+   serial, the same stepper on AM243 over EtherCAT, and a servo on Teensy
+   over EtherCAT would each need a new `ActuatorType`, driver class, and
+   factory arm —
    N_motors × N_boards × N_transports enum values. The layered design is
    additive: N_motors + N_boards + N_transports files.
 2. **No shared board instances.** `ActionFactory` creates one
@@ -138,9 +139,9 @@ Structural problems this RFC fixes:
                               │                     │ picks artifact by
                               ▼                     │ (board_type, transport)
       ═══════════ HOST ═══════════                  ▼
-      ┌──────────────────────────┐          tb6600-arduino-eth-v1.hex
+      ┌──────────────────────────┐          arduino-eth-v1.hex
       │  Motor driver            │          am243-ethercat-joshua-v1.bin
-      │  "what moves"            │          teensy-ecat-joshua-v1.hex
+      │  "what moves"            │          teensy-ethercat-joshua-v1.hex
       │  StepperDriver,          │                  │
       │  Sts3215Driver           │                  │ avrdude / uniflash /
       └────────────┬─────────────┘                  │ teensy_loader_cli
@@ -151,7 +152,7 @@ Structural problems this RFC fixes:
       │  Board controller        │                  │
       │  "what runs the loop"    │◄─── shared ───┐  │
       │  Am243Board, TeensyBoard,│     codec     │  │
-      │  Tb6600ArduinoBoard,     │  joshua_wire  │  │
+      │  ArduinoBoard,           │  joshua_wire  │  │
       │  FeetechBusBoard         │     _v1       │  │
       └────────────┬─────────────┘               │  │
                    │ Comm handle                 │  │
@@ -194,8 +195,7 @@ Composition, not multiplication:
                  StepperDriver            ◄── written ONCE
                 /      |       \
                ▼       ▼        ▼
-   Tb6600Arduino    Am243Board   TeensyEcatBoard     ◄── one per board
-       Board            |             |
+   ArduinoBoard     Am243Board   TeensyBoard          ◄── one per board
       /      \          |             |
      ▼        ▼         ▼             ▼
   Serial  UdpTransport  EthercatTransport            ◄── one per transport
@@ -217,7 +217,10 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    tb6600_arduino/     tb6600_arduino_board.*
+    arduino/            arduino_board.*  (MCU only; drive peripherals like a
+                        TB6600 are a Channel.drive fact, never in this name)
+    teensy/             teensy_board.*  (MCU only; a comm peripheral like an
+                        EasyCAT shield is a Board.comm fact, never in this name)
     feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
@@ -226,8 +229,8 @@ firmware/
   am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
                         stays as-is — vendor code never migrates to the
                         Joshua firmware pattern, §7.3)
-  arduino_tb6600/       main.cpp, backends, transports, platformio.ini ── NEW ──
-  teensy_ecat/          …
+  arduino/              main.cpp, backends, transports, platformio.ini ── NEW ──
+  teensy/               …
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
@@ -421,8 +424,8 @@ executes in-process:
 
 `HostGpioBoard` channels implement `BoardChannel` by driving pins directly
 (libgpiod, hardware PWM peripherals). The motor driver cannot tell the
-difference: the same `StepperDriver` runs over TB6600+Arduino, over
-AM243+EtherCAT, or over bare host pins — that is the whole point of the
+difference: the same `StepperDriver` runs over Arduino (driving a TB6600),
+over AM243+EtherCAT, or over bare host pins — that is the whole point of the
 seam. The honest caveat: userspace Linux is a poor step-pulse generator.
 Bit-banging STEP at tens of kHz from a non-RT process jitters badly, so
 realistic backends are hardware PWM channels, the Pi 5's RP1, or a
@@ -526,7 +529,7 @@ message Channel {
 }
 
 message FirmwareSpec {
-  string name = 1;                  // e.g. "tb6600-arduino-eth"
+  string name = 1;                  // e.g. "arduino-eth"
   uint32 min_proto_version = 2;
   // Omitted entirely for vendor-firmware boards (FEETECH_BUS).
 }
@@ -603,7 +606,7 @@ robot {
     comm { comm_type: ETHERNET_UDP udp_config { host: "192.168.1.50" port: 5555 } }
     channels { index: 0 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
     channels { index: 1 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
-    firmware { name: "tb6600-arduino-eth" min_proto_version: 1 }
+    firmware { name: "arduino-eth" min_proto_version: 1 }
   }
   boards {
     name: "arm_bus"
@@ -632,10 +635,10 @@ robot {
  BoardFactory::GetOrCreate("bridge_1")     ── cached: later actuators on the
    │ 2. CommFactory opens Board.comm          same board reuse this instance
    │ 3. IDENTIFY handshake ────────────► firmware replies:
-   │                                      "tb6600-arduino-eth, proto v1,
+   │                                      "arduino-eth, proto v1,
    │                                       ch0: STEP_DIR, ch1: STEP_DIR"
    │ 4. matches firmware{} + channels{}?  ✔
-   │        ✘ → "board reports tb6600-arduino-serial-v1 but config expects eth
+   │        ✘ → "board reports arduino-serial-v1 but config expects eth
    │             — run tools/flash --board=bridge_1"
    │ 5. push CONFIGURE_CHANNEL tunables
    ▼
@@ -905,9 +908,9 @@ The frame is transport-agnostic: identical bytes over serial, UDP, or SPI.
 EtherCAT is the one exception — cyclic PDO images instead of request/response
 frames — so EtherCAT boards use a PDO codec that maps the same logical fields
 (target mode/value per channel, feedback per channel) into the image layout.
-Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy+
-EasyCAT), they should share one canonical PDO layout so the host codec is
-written once.
+Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy),
+they should share one canonical PDO layout so the host codec is written
+once.
 
 ### 7.3 How the codec and protos are shared across boards
 
@@ -929,7 +932,7 @@ frame bytes outside the codec.
                 .pbtxt config (protobuf ①)
                        │  host-only world
                        ▼
-        Tb6600ArduinoBoard / TeensyEcatBoard / …
+        ArduinoBoard / TeensyBoard / …
                        │  proto fields → fixed C frames
                        ▼
               joshua_wire_v1  (plain C ②)          ◄── THE shared artifact
@@ -945,11 +948,11 @@ the wire** — single source, multiple builds:
  firmware/common/joshua_wire_v1.{h,c}      ◄── one source of truth
         │
         ├── Bazel cc_library //firmware/common:joshua_wire_v1
-        │         ├─► linked into Tb6600ArduinoBoard   (host, x86)
-        │         └─► linked into TeensyEcatBoard      (host, x86)
+        │         ├─► linked into ArduinoBoard   (host, x86)
+        │         └─► linked into TeensyBoard    (host, x86)
         │
-        ├── PlatformIO lib in firmware/arduino_tb6600/  (AVR build)
-        └── PlatformIO lib in firmware/teensy_ecat/     (ARM build)
+        ├── PlatformIO lib in firmware/arduino/  (AVR build)
+        └── PlatformIO lib in firmware/teensy/    (ARM build)
 ```
 
 For that to work the codec must be lowest-common-denominator C: no malloc,
@@ -1000,7 +1003,7 @@ typedef struct __attribute__((packed)) {
 ```
 
 Every board that adopts this canonical layout (AM243 actuator firmware,
-future Teensy/EasyCAT) is covered by **one** host-side PDO codec — the
+future Teensy EtherCAT firmware) is covered by **one** host-side PDO codec — the
 motivation behind open question §12.4. Vendor-controlled protocols are the
 exception and get their own host-side codec each: the TI demo byte-walk
 (`am243_pdo_codec`, kept because we do not control the TI demo firmware) and
@@ -1031,9 +1034,11 @@ simpler and testable to the byte.
 firmware/
   common/
     joshua_wire_v1.h/.c        # shared with host
-  arduino_tb6600/
+  arduino/
     main.cpp                    # loop { transport_poll(); dispatch(); step_service(); }
-    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps
+    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps (drives a
+                                 # TB6600 or any other STEP/DIR stepper driver —
+                                 # the firmware toggles two pins, never names the chip)
     transport_serial.cpp
     transport_w5500.cpp         # Ethernet shield (UDP)
     transport_spi_slave.cpp
@@ -1042,13 +1047,13 @@ firmware/
 
 ```ini
 ; one env per wiring variant → one artifact each
-[env:tb6600-serial]     build_flags = -DJOSHUA_TRANSPORT_SERIAL
-[env:tb6600-eth-w5500]  build_flags = -DJOSHUA_TRANSPORT_W5500
-[env:tb6600-spi]        build_flags = -DJOSHUA_TRANSPORT_SPI_SLAVE
+[env:arduino-serial]     build_flags = -DJOSHUA_TRANSPORT_SERIAL
+[env:arduino-eth-w5500]  build_flags = -DJOSHUA_TRANSPORT_W5500
+[env:arduino-spi]        build_flags = -DJOSHUA_TRANSPORT_SPI_SLAVE
 ```
 
 Transport is a **compile-time variant**, producing unambiguous artifacts
-(`tb6600-arduino-eth-v1.hex`). Prefer variants over a fat binary with runtime
+(`arduino-eth-v1.hex`). Prefer variants over a fat binary with runtime
 transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
@@ -1060,7 +1065,7 @@ table**: a compiled-in array, one per firmware variant, mapping channel
 index → motor backend + pins + per-channel state:
 
 ```c
-// firmware/arduino_tb6600/channel_table.c — one file per wiring variant
+// firmware/arduino/channel_table.c — one file per wiring variant
 static ChannelEntry g_channels[] = {
     {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 0
     {.backend = &backend_stepdir, .step_pin = 4, .dir_pin = 5},  // channel 1
@@ -1105,8 +1110,8 @@ artifact from a firmware manifest, and invokes the right flasher:
 
 ```
 bazel run //tools/flash -- --config=so100/teleop.pbtxt --board=bridge_1
-  → board_type=ARDUINO_UNO, comm=ETHERNET_UDP → tb6600-arduino-eth-v1
-  → avrdude -p m328p -c arduino -U flash:w:tb6600-arduino-eth-v1.hex
+  → board_type=ARDUINO_UNO, comm=ETHERNET_UDP → arduino-eth-v1
+  → avrdude -p m328p -c arduino -U flash:w:arduino-eth-v1.hex
 ```
 
 Manifest maps `(board_type, transport) → artifact + flash method` (avrdude
@@ -1138,7 +1143,7 @@ Per-command path, cyclic board (EtherCAT/AM243):
 
 Transport swap (serial → UDP on the same Arduino): edit `Board.comm`, flash
 the matching firmware variant once, run. Zero host code changes. Board swap
-(TB6600+Arduino → AM243 for the same stepper): edit `boards{}` + `board_name`,
+(Arduino → AM243 for the same stepper): edit `boards{}` + `board_name`,
 zero motor-driver changes.
 
 ## 9. Risks & mitigations
@@ -1269,9 +1274,9 @@ Each phase lands green and independently revertible.
 ### Phase 5 — Prove the matrix (first real second board)
 - [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3).
-- [ ] `firmware/arduino_tb6600/` with serial transport variant;
+- [ ] `firmware/arduino/` with serial transport variant;
       `backend_stepdir`.
-- [ ] Host side: `Tb6600ArduinoBoard` + generic `StepperDriver` +
+- [ ] Host side: `ArduinoBoard` + generic `StepperDriver` +
       `FrameTransport` seam on `Serial`.
 - [ ] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
       Arduino → TB6600 → stepper moves.
@@ -1335,9 +1340,9 @@ completed cleanly, not just bus-locked.
 
 ## 11. Acceptance criteria
 
-- A stepper motor moves via TB6600+Arduino over serial **and** over UDP by
-  changing only `Board.comm` and reflashing the matching variant — zero host
-  code changes.
+- A stepper motor moves via Arduino (driving a TB6600) over serial **and**
+  over UDP by changing only `Board.comm` and reflashing the matching
+  variant — zero host code changes.
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.
@@ -1375,7 +1380,7 @@ completed cleanly, not just bus-locked.
    factories today; does the board layer need a Python implementation for the
    Pybricks/mock paths, or do those stay driver-direct until needed?
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
-   and future Teensy/EasyCAT firmware: fixed 8-byte-per-channel slots, or
+   and future Teensy firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?
 5. **Cyclic loop cadence** — ownership is settled (one loop per NIC, owned
    by the shared master transport; per-board loops are impossible on a
