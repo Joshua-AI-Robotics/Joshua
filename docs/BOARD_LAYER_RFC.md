@@ -1060,11 +1060,10 @@ table**: a compiled-in array, one per firmware variant, mapping channel
 index → motor backend + pins + per-channel state:
 
 ```c
-// firmware/teensy_servo/channel_table.c — one file per wiring variant
+// firmware/arduino_tb6600/channel_table.c — one file per wiring variant
 static ChannelEntry g_channels[] = {
-    {.backend = &backend_pwm, .pin = 9,  .freq_hz = 50},   // channel 0
-    {.backend = &backend_pwm, .pin = 10, .freq_hz = 50},   // channel 1
-    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 2
+    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 0
+    {.backend = &backend_stepdir, .step_pin = 4, .dir_pin = 5},  // channel 1
 };
 ```
 
