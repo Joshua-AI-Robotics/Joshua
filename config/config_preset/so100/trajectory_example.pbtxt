@@ -56,7 +56,6 @@ robot {
         sts3215_config {
           servo_id: 1
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 2070
         }
       }
@@ -86,7 +85,6 @@ robot {
         sts3215_config {
           servo_id: 2
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 847
         }
       }
@@ -116,7 +114,6 @@ robot {
         sts3215_config {
           servo_id: 3
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 3011
         }
       }
@@ -146,7 +143,6 @@ robot {
         sts3215_config {
           servo_id: 4
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 655
         }
       }
@@ -176,7 +172,6 @@ robot {
         sts3215_config {
           servo_id: 5
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 1838
         }
       }
@@ -206,7 +201,6 @@ robot {
         sts3215_config {
           servo_id: 6
           move_time_in_ms: 40
-          move_speed: 1000
           idle_position: 1806
         }
       }
