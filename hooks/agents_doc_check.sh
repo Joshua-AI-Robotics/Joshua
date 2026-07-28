@@ -16,13 +16,32 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-FILES=(
+# Bridges and the RFC are fixed and must exist.
+REQUIRED=(
   AGENTS.md
   CLAUDE.md
   GEMINI.md
   .github/copilot-instructions.md
   docs/AGENTS_RFC.md
 )
+
+# Nested per-directory AGENTS.md files are discovered, not listed, so adding one
+# (see docs/AGENTS_RFC.md §7) does not require editing this script.
+discover_nested() {
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    # -co --exclude-standard also catches a nested file you have created but
+    # not yet staged, so the check is useful before `git add`, not just in CI.
+    git ls-files -co --exclude-standard -- '*/AGENTS.md'
+  else
+    find . -mindepth 2 -name AGENTS.md -not -path './.git/*' \
+      -not -path './.venv*' -not -path './bazel-*' -printf '%P\n' 2>/dev/null
+  fi
+}
+
+FILES=("${REQUIRED[@]}")
+while IFS= read -r nested; do
+  [[ -n "$nested" ]] && FILES+=("$nested")
+done < <(discover_nested)
 
 status=0
 
