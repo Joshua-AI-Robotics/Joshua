@@ -16,28 +16,16 @@ Left alone, that produces N copies of the same rules, drifting apart, with no
 one file anyone trusts.
 
 This RFC defines the contract: **one canonical `AGENTS.md`, thin pointer
-bridges for tools that cannot read it, and nothing else.** It then proposes
-what that file should grow into, and — equally important — what it must not.
+bridges for tools that cannot read it, and nothing else.** It records what
+that file should grow into, and — equally important — what it must not.
 
-## 2. Scope
+It covers the canonical-file-plus-bridges pattern, what belongs in `AGENTS.md`
+versus `CONTRIBUTING.md` versus subsystem docs, hardware-safety instructions,
+multi-agent conventions, nested per-directory files (§7), and a rot guard.
+Rejected directions are in §6. Nothing here requires a subsystem to adopt a
+nested `AGENTS.md` today.
 
-In scope:
-
-- The canonical-file-plus-bridges pattern and the rule that bridges never
-  contain rules.
-- What belongs in `AGENTS.md` versus `CONTRIBUTING.md` versus subsystem docs.
-- Hardware-safety instructions, since this repo moves physical robots.
-- Multi-agent working conventions (attribution, branch ownership).
-- A narrowly scoped CI guard against documentation rot.
-
-Out of scope (deliberately, see §7):
-
-- Per-tool rule files beyond the three bridges that exist today.
-- Encoding process policy (review requirements, PR stacking mechanics) into
-  prompt files rather than CI and templates.
-- Nested per-directory `AGENTS.md` files — evaluated and deferred in §8.
-
-## 3. Where Joshua is today
+## 2. Where Joshua is today
 
 After [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69):
 
@@ -68,7 +56,7 @@ Observed practice that this RFC codifies rather than invents:
 Structural problems this RFC addresses:
 
 1. **Hardware instructions were absent.** `AGENTS.md` described test and lint
-   but never said that `joshua_main` against a non-`sim` preset moves real
+   but never said that `joshua_main` can open real serial buses and move real
    motors. An agent asked to "verify the change" had no reason not to.
 2. **Bridges are only as strong as their weakest reader.** A pointer file is
    inert text for surfaces that do not dereference links.
@@ -77,7 +65,7 @@ Structural problems this RFC addresses:
 4. **Agent ownership is ambiguous.** `codex/docker-first-entrypoints` names a
    tool; every other branch names a person.
 
-## 4. Design goals
+## 3. Design goals
 
 - **One canonical file.** Rules live in `AGENTS.md`. Bridges route to it and
   contain no workflow or safety rules of their own — routing text only.
@@ -92,46 +80,33 @@ Structural problems this RFC addresses:
 - **Thin beats complete.** Every line is loaded into every agent's context on
   every task. Length dilutes the rules that matter.
 
-## 5. Adopted: hardware safety and attribution
+## 4. Adopted: hardware safety and attribution
 
-Landed in [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69).
+Landed in [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69). The
+rules themselves live in [AGENTS.md](../AGENTS.md) and are deliberately not
+restated here. What follows is only the reasoning behind them, which has no
+home in an instruction file.
 
-### 5.1 Hardware safety
+**Why the safety rule is turn-scoped.** "Require a human present" fails against
+an autonomous agent: it cannot verify presence and will assume it. Scoping
+consent to the current turn is checkable — the agent either was just asked or
+was not.
 
-`AGENTS.md` now opens with a hardware-safety section, before any workflow
-instructions:
+**Why it is not keyed to filenames.** An earlier draft treated any preset
+without `sim` in its name as dangerous. The launcher branches on
+`general.operation_mode`, not the name, and the categories cross:
+`so100/sim_mirror.pbtxt` is `MODE_SIMULATION` yet opens `/dev/ttyACM1`, while
+`example/mock_py_test.pbtxt` is `MODE_INFERENCE` yet drives only `MOCK_*`
+components. The heuristic was therefore wrong in the *unsafe* direction — it
+labelled a real-serial-device preset as the safe default. Agents are told to
+read the preset instead.
 
-- Filenames are explicitly *not* the safety signal. The launcher branches on
-  `general.operation_mode`, and the two categories cross: `so100/sim_mirror.pbtxt`
-  is `MODE_SIMULATION` but opens `/dev/ttyACM1`, while
-  `example/mock_py_test.pbtxt` is `MODE_INFERENCE` and drives only `MOCK_*`
-  components. Agents are told to read the preset — `operation_mode`, device
-  paths, component types — before running it.
-- Running a preset that declares real hardware, and flashing firmware, require
-  the user to ask **in the current turn** and confirm the hardware is set up. A
-  standing "verify your work" instruction is explicitly not that confirmation.
-- Tests and config validation are the default verification path; they touch no
-  hardware.
-- Firmware is never flashed automatically, consistent with
-  [firmware/README.md](../firmware/README.md).
+**Why attribution is two bullets, not a section.** Process rules that hooks and
+CI do not enforce are frequently ignored, and every line costs context on every
+invocation. Branch naming stays operator-owned (`<github-username>/<topic>`)
+because an agent-named branch obscures who is accountable and who reviews it.
 
-Two phrasings here are deliberate. "Require a human present" fails against an
-autonomous agent, which cannot verify presence and will assume it. And an
-earlier draft keyed the rule to `sim` in the filename — a heuristic that is
-wrong in the *unsafe* direction, since a simulation preset can still open a
-real serial device.
-
-### 5.2 Agent attribution and branch ownership
-
-- Branches are named `<github-username>/<topic>` — for the **operator**, not
-  the agent. An agent-named branch obscures who is accountable for it and who
-  reviews it.
-- Agent-assisted commits carry a `Co-Authored-By:` trailer naming the model.
-
-Two bullets, not a section. Process rules that are not enforced by hooks or CI
-are frequently ignored, and every line costs context on every invocation.
-
-## 6. Proposed: rot guard
+## 5. Proposed: rot guard
 
 `AGENTS.md` is accurate today only because it was verified by hand. Nothing
 catches a renamed doc tomorrow, and a confidently wrong instruction file is
@@ -156,7 +131,7 @@ Compose services and Bazel targets could later be validated with
 `docker compose config --services` and `bazel query`, but only against an
 explicit allowlist in the guard, never by scraping the Markdown.
 
-## 7. Rejected alternatives
+## 6. Rejected alternatives
 
 **Per-tool rule files** (`.cursorrules`, `.windsurfrules`). Cursor and Windsurf
 read `AGENTS.md` natively. Each additional file is a new copy to drift.
@@ -173,36 +148,73 @@ unenforced process text, and it costs context on every task.
 
 **Symlinking bridges to `AGENTS.md`.** Would expose full rule text to surfaces
 that do not dereference links (notably Copilot inline completion). Left open —
-see §9.
+see §8.
 
-## 8. Deferred: nested `AGENTS.md`
+## 7. Nested `AGENTS.md` for subsystems
 
 The [agents.md](https://agents.md/) standard supports per-directory files,
-loaded automatically, closest-file-wins. That is a stronger mechanism than the
-current "Read before you edit" prose, which an agent may skip and which
-silently no-ops where a directory has no README.
+loaded automatically, **closest-file-wins**. This is an endorsed pattern for
+Joshua. None are required today; add one when a subsystem earns it.
 
-Deferred anyway, because the cost lands where the benefit is smallest:
+### 7.1 Why it does not compete with `README.md`
 
-- Subsystems that most need guidance (`ai/`, `ros2/`, `firmware/`,
-  `simulation/`) **already have substantial READMEs** — `ai/README.md` is 193
-  lines. A nested `AGENTS.md` beside it creates two documentation trees for one
-  subsystem, and the next refactor updates only one.
-- Subsystems with **no** README (`robot/`, `config/`, `tools/`) need
-  documentation for humans too. A README serves both audiences; an
-  `AGENTS.md` serves only agents and leaves humans with nothing.
-- Local files that restate global rules go stale invisibly: a
-  `firmware/AGENTS.md` copy of the flashing rule would survive a change to the
-  root rule, and agents editing only `firmware/` would follow the stale copy.
+The standard is explicit that the two are complementary, not alternatives:
+`README.md` is for humans — quick starts, project description, contribution
+guidance — while `AGENTS.md` carries *"the extra, sometimes detailed context
+coding agents need: build steps, tests, and conventions that might clutter a
+README or aren't relevant to human contributors."*
 
-**Instead:** write `robot/README.md`, `config/README.md`, and `tools/README.md`,
-and add them to the root routing rule as part of the same change (§10, Phase
-2). Revisit nested
-`AGENTS.md` only for guidance that is genuinely agent-specific and has no place
-in a human-facing README, and if adopted, restrict nested files to local
-deltas plus an explicit "also follow the root `AGENTS.md`".
+So this is a **separation by audience, not duplication**. `ai/README.md`
+illustrates the seam already: "Inference architecture" is narrative a human
+wants, while "Adding a model", "Checklist", and "Bazel vs runtime deps" are
+procedures and rules an agent executes. Roughly half that file is nested-
+`AGENTS.md` material sitting in a human doc.
 
-## 9. Open questions
+Renaming READMEs to `AGENTS.md` is **not** the answer: GitHub renders
+`README.md` on the directory page and does not render `AGENTS.md`, so humans
+would lose the front door, and agents would swallow narrative prose they do not
+need.
+
+### 7.2 When a subsystem earns one
+
+Add `<dir>/AGENTS.md` when the directory has agent-operational content that
+either clutters the README or has no place in it:
+
+- Build or test invocations specific to that subsystem.
+- Conventions with a failure mode — "never do X here", ordering requirements,
+  generated files that must not be hand-edited.
+- Hardware, safety, or bring-up constraints local to that directory.
+
+Do **not** add one merely to have one. A directory with no docs at all needs a
+`README.md` first (§9, Phase 2) — that serves both audiences and is the larger
+gap.
+
+### 7.3 How to write one
+
+Precedence is the hazard: the closest file wins, so a nested file that restates
+a global rule will silently outlive a change to the root. Two rules keep that
+safe:
+
+1. **Local deltas only.** State what is true *here* and not elsewhere. Never
+   copy a root rule — especially not the hardware-safety rules, which must have
+   exactly one source.
+2. **Defer upward explicitly.** Open with a line pointing at the root file, so
+   an agent that loads only the nested file still knows the global rules apply.
+
+```markdown
+# AGENTS.md — <subsystem>
+
+Also follow the root [AGENTS.md](../AGENTS.md); this file adds only what is
+specific to `<subsystem>/`.
+
+- <local rule>
+- <local build/test invocation>
+```
+
+Keep them short. A nested file that grows past a screen is usually a README
+trying to escape.
+
+## 8. Open questions
 
 1. **Copilot bridge fidelity.** Cross-model review split on whether
    `.github/copilot-instructions.md` should become a git symlink to
@@ -214,13 +226,14 @@ deltas plus an explicit "also follow the root `AGENTS.md`".
 2. **Should cross-model review become repo policy?** It has caught real defects
    (this document was revised substantially by it), but mandating it in CI is a
    heavier commitment than one contributor's local habit.
-3. **When does a subsystem earn agent-specific instructions?** §8 defers nested
-   files; the trigger for revisiting should be a concrete case where the
-   guidance cannot live in a README.
+3. **Will paired `README.md` + `AGENTS.md` actually stay in sync?** §7 keeps
+   nested files to local deltas precisely because paired docs drift in practice.
+   The first subsystem to adopt one is the test; if it drifts within a release,
+   the guidance in §7.3 is not strong enough.
 4. **Does the rot guard belong on every PR or on a schedule?** Per-PR catches
    breakage immediately but adds a required check to unrelated work.
 
-## 10. Phased rollout
+## 9. Phased rollout
 
 ### Phase 1 — Safety and attribution (landed, PR #69)
 - [x] Hardware-safety section in `AGENTS.md`.
@@ -237,19 +250,16 @@ deltas plus an explicit "also follow the root `AGENTS.md`".
 ### Phase 3 — Rot guard
 - [ ] CI job validating explicit Markdown link targets in `AGENTS.md` and
       bridges.
-- [ ] Decide per-PR versus scheduled (§9.4).
+- [ ] Decide per-PR versus scheduled (§8.4).
 
-### Phase 4 — Revisit
-- [ ] Resolve the Copilot symlink question (§9.1) with evidence, not opinion.
-- [ ] Re-evaluate nested `AGENTS.md` if a concrete agent-specific need appears.
+### Phase 4 — Nested files, as needed
+- [ ] Add `<dir>/AGENTS.md` per §7.2 when a subsystem earns one. No schedule —
+      this is demand-driven, not a migration.
+- [ ] Resolve the Copilot symlink question (§8.1) with evidence, not opinion.
 
-## 11. Acceptance criteria
+## 10. Acceptance criteria
 
-- Every rule an agent follows is traceable to exactly one file; bridges contain
-  no rules.
-- A fresh agent, launched from the repo root with no prior context, will not
-  run a hardware-moving command without the user asking in that turn.
-- A renamed or deleted doc referenced by `AGENTS.md` fails CI rather than
-  silently misleading agents.
-- Adding support for a new agent tool requires at most one new pointer file and
-  zero changes to the rules themselves.
+- A fresh agent, launched from the repo root with no prior context, will not run
+  a hardware-touching command without the user asking in that turn.
+- Every rule is traceable to exactly one file; supporting a new agent tool takes
+  one pointer file and zero rule changes.
