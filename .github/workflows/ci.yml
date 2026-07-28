@@ -7,6 +7,18 @@ on:
 
 # TODO: Move this test to run in a docker image.
 jobs:
+  agent-docs:
+    name: Agent instruction links
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify AGENTS.md link targets resolve
+        run: ./hooks/agents_doc_check.sh
+
   test:
     runs-on: ubuntu-22.04
     steps:

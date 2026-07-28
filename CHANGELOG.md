@@ -21,6 +21,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   tools that do not read it natively: Claude Code (`CLAUDE.md`), Gemini CLI
   (`GEMINI.md`), and Copilot IDE surfaces
   (`.github/copilot-instructions.md`)
+- `robot/README.md`, `config/README.md`, and `tools/README.md`, covering the
+  three subsystems that previously had no documentation
+- `hooks/agents_doc_check.sh` and an `agent-docs` CI job, failing the build when
+  a Markdown link in the agent instruction files stops resolving
 
 ### Fixed
 

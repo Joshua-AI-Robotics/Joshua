@@ -106,26 +106,20 @@ CI do not enforce are frequently ignored, and every line costs context on every
 invocation. Branch naming stays operator-owned (`<github-username>/<topic>`)
 because an agent-named branch obscures who is accountable and who reviews it.
 
-## 5. Proposed: rot guard
+## 5. Rot guard
 
-`AGENTS.md` is accurate today only because it was verified by hand. Nothing
-catches a renamed doc tomorrow, and a confidently wrong instruction file is
-worse than none — an agent will follow it.
+`AGENTS.md` routes agents to other docs, so a renamed target turns it into a
+confidently wrong instruction file — worse than none, because an agent will
+follow it. `hooks/agents_doc_check.sh` runs in CI on every PR and fails if any
+Markdown link target in the instruction files no longer resolves.
 
-Proposal: a CI job that verifies **only explicit Markdown link targets** in
-`AGENTS.md` and its bridges resolve.
-
-```bash
-# for each Markdown link target in AGENTS.md, GEMINI.md, CLAUDE.md:
-#   assert the referenced file exists
-```
-
-Deliberately **not** checked: paths and commands mentioned in prose or code
-blocks. Documentation legitimately references things that do not exist yet —
-`tools/flash/` appears in [firmware/README.md](../firmware/README.md) and
-[BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) as planned work. A guard that greps
-for paths would fail on placeholders (`<github-username>/<topic>`), future
-work, and illustrative examples, and would be disabled within a month.
+Scope is deliberately narrow: **explicit Markdown link targets only.** Paths
+and commands in prose or code blocks are not checked, because docs
+legitimately reference planned work — `tools/flash/` appears in
+[firmware/README.md](../firmware/README.md) and
+[BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) — and placeholders like
+`<github-username>/<topic>`. A guard that scraped paths would fail on those and
+be disabled within a month.
 
 Compose services and Bazel targets could later be validated with
 `docker compose config --services` and `bazel query`, but only against an
@@ -186,8 +180,7 @@ either clutters the README or has no place in it:
 - Hardware, safety, or bring-up constraints local to that directory.
 
 Do **not** add one merely to have one. A directory with no docs at all needs a
-`README.md` first (§9, Phase 2) — that serves both audiences and is the larger
-gap.
+`README.md` first — that serves both audiences and is the larger gap.
 
 ### 7.3 How to write one
 
@@ -230,32 +223,26 @@ trying to escape.
    nested files to local deltas precisely because paired docs drift in practice.
    The first subsystem to adopt one is the test; if it drifts within a release,
    the guidance in §7.3 is not strong enough.
-4. **Does the rot guard belong on every PR or on a schedule?** Per-PR catches
-   breakage immediately but adds a required check to unrelated work.
+## 9. Status
 
-## 9. Phased rollout
+Landed in [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69):
 
-### Phase 1 — Safety and attribution (landed, PR #69)
-- [x] Hardware-safety section in `AGENTS.md`.
-- [x] Operator-owned branch naming and `Co-Authored-By` conventions.
-- [x] `GEMINI.md` bridge closing the Gemini CLI gap.
+- [x] Canonical `AGENTS.md` and the three pointer bridges (§2).
+- [x] Hardware-safety rules and attribution conventions (§4).
+- [x] `README.md` for `robot/`, `config/`, and `tools/` — the three directories
+      that had docs for neither audience — and all of them added to the root
+      "Read before you edit" list.
+- [x] `hooks/agents_doc_check.sh`, run per-PR by the `agent-docs` CI job (§5).
 
-### Phase 2 — Subsystem documentation
-- [ ] `robot/README.md`, `config/README.md`, `tools/README.md`, matching the
-      house style of `robot/comm/ethercat/README.md` (Responsibilities /
-      Non-Goals).
-- [ ] Confirm the root "Read before you edit" list covers every directory that
-      now has a README.
+Demand-driven, no schedule:
 
-### Phase 3 — Rot guard
-- [ ] CI job validating explicit Markdown link targets in `AGENTS.md` and
-      bridges.
-- [ ] Decide per-PR versus scheduled (§8.4).
-
-### Phase 4 — Nested files, as needed
-- [ ] Add `<dir>/AGENTS.md` per §7.2 when a subsystem earns one. No schedule —
-      this is demand-driven, not a migration.
-- [ ] Resolve the Copilot symlink question (§8.1) with evidence, not opinion.
+- [ ] `<dir>/AGENTS.md` where a subsystem earns one (§7.2).
+- [ ] Resolve the Copilot bridge question (§8.1) with evidence.
+- [ ] **Enforce** the hardware rule rather than stating it. §3 prefers
+      enforcement to exhortation, and §4 is currently exhortation: nothing
+      blocks a hardware-touching command, and no agent's compliance has been
+      measured. A pre-execution guard — the shape of `scripts/push-gate.sh` —
+      would close the gap this RFC otherwise only documents.
 
 ## 10. Acceptance criteria
 
@@ -263,3 +250,4 @@ trying to escape.
   a hardware-touching command without the user asking in that turn.
 - Every rule is traceable to exactly one file; supporting a new agent tool takes
   one pointer file and zero rule changes.
+- A renamed doc referenced by an instruction file fails CI.
