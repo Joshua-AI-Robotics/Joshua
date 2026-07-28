@@ -6,6 +6,21 @@ Bazel. Human-facing docs live in [README.md](README.md) and
 [docs/](docs/README.md); this file is the entry point for coding agents. Launch
 agents from the repository root so this file is picked up.
 
+## Hardware safety — read this first
+
+Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
+<preset>` **moves real motors** whenever the preset targets hardware — that is
+every preset without `sim` in its filename (`teleoperate.pbtxt`,
+`encoder_publish.pbtxt`, `calibrate_*.pbtxt`, …).
+
+- **Do not run hardware-moving or firmware-flashing commands unless the user
+  asks for it in the current turn and confirms the hardware is set up.** A past
+  instruction to "verify the change" is not that confirmation.
+- Verify with tests, a `*_sim*.pbtxt` preset, or config validation instead.
+  Simulation is the default; hardware is opt-in per request.
+- Firmware is never flashed automatically. Flashing is a deliberate,
+  human-initiated operation — see [firmware/README.md](firmware/README.md).
+
 ## Development environment
 
 Two supported paths — [CONTRIBUTING.md](CONTRIBUTING.md) is authoritative.
@@ -67,7 +82,10 @@ Covers `clang-format` (C/C++/proto) and `black`/`isort`/`flake8` (Python). After
 ## Conventions
 
 - All PRs target the **`develop`** branch.
-- Branch naming: `<github-username>/<topic>` (e.g. `djkim/initialize-web-app`).
+- Branch naming: `<github-username>/<topic>` (e.g. `djkim/initialize-web-app`) —
+  branches are named for the **operator**, not the agent, so ownership and
+  review routing stay with a person.
+- Agent-assisted commits carry a `Co-Authored-By:` trailer naming the model.
 - Record user-facing changes in [CHANGELOG.md](CHANGELOG.md).
 - The protobuf config is the single source of truth for a robot setup; don't
   duplicate configuration into code.
