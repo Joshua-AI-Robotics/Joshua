@@ -9,15 +9,21 @@ agents from the repository root so this file is picked up.
 ## Hardware safety — read this first
 
 Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
-<preset>` **moves real motors** whenever the preset targets hardware — that is
-every preset without `sim` in its filename (`teleoperate.pbtxt`,
-`encoder_publish.pbtxt`, `calibrate_*.pbtxt`, …).
+<preset>` can open real serial buses and move real motors.
 
-- **Do not run hardware-moving or firmware-flashing commands unless the user
-  asks for it in the current turn and confirms the hardware is set up.** A past
-  instruction to "verify the change" is not that confirmation.
-- Verify with tests, a `*_sim*.pbtxt` preset, or config validation instead.
-  Simulation is the default; hardware is opt-in per request.
+**The filename does not tell you whether a preset is safe.** The launcher
+branches on `general.operation_mode`, not the name — and a `MODE_SIMULATION`
+preset may still declare real devices (`so100/sim_mirror.pbtxt` opens
+`/dev/ttyACM1`), while `example/mock_py_test.pbtxt` is `MODE_INFERENCE` yet
+drives only `MOCK_*` components.
+
+- **Read the preset before running it.** Check `operation_mode`, the device
+  paths (`/dev/tty*`, network interfaces), and whether components are `MOCK_*`.
+- **Do not run a preset that declares real hardware, and do not flash firmware,
+  unless the user asks in the current turn and confirms the hardware is set
+  up.** A past instruction to "verify the change" is not that confirmation.
+- Prefer `bazel test //...` and config validation for verification — they touch
+  no hardware.
 - Firmware is never flashed automatically. Flashing is a deliberate,
   human-initiated operation — see [firmware/README.md](firmware/README.md).
 
