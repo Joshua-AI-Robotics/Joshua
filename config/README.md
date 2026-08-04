@@ -9,9 +9,9 @@ it. If a value describes a particular robot, it belongs here, not in code.
 bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_passive.pbtxt
 ```
 
-> Presets drive **real hardware** unless they are simulation-only. Read the
-> preset before running it — see the hardware-safety section of
-> [AGENTS.md](../AGENTS.md).
+> A preset may drive **real hardware** whatever it is named and whatever
+> `operation_mode` it declares. Read the preset before running it — see the
+> hardware-safety section of [AGENTS.md](../AGENTS.md).
 
 ## Layout
 
