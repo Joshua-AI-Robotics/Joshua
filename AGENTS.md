@@ -101,9 +101,13 @@ Covers `clang-format` (C/C++/proto) and `black`/`isort`/`flake8` (Python). After
 Links are not loaded automatically — actually open these files when the work
 touches their area:
 
-- **Any subsystem** (`ai/`, `robot/`, `config/`, `ros2/`, `simulation/`, `ui/`,
-  `firmware/`, `scripts/`, `tools/`, `node_generator/`,
-  `robot/comm/ethercat/`): read that directory's `README.md` first.
+- **Any subsystem**: read that directory's README first —
+  [ai/](ai/README.md), [robot/](robot/README.md), [config/](config/README.md),
+  [ros2/](ros2/README.md), [simulation/](simulation/README.md),
+  [ui/](ui/README.md), [firmware/](firmware/README.md),
+  [scripts/](scripts/README.md), [tools/](tools/README.md),
+  [node_generator/](node_generator/README.md),
+  [robot/comm/ethercat/](robot/comm/ethercat/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of
   [CONTRIBUTING.md](CONTRIBUTING.md).
