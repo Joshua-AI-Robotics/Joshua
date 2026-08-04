@@ -1,0 +1,7 @@
+{
+  "name": "joshua_wire_v1",
+  "version": "1.0.0",
+  "description": "Joshua's shared host<->firmware wire frame codec (docs/BOARD_LAYER_RFC.md §7.2/§7.3). One source, compiled into both host boards (Bazel cc_library, see BUILD) and every Joshua-firmware image (PlatformIO lib, see firmware/teensy/41/platformio.ini) so the two sides cannot drift silently.",
+  "frameworks": "*",
+  "platforms": "*"
+}

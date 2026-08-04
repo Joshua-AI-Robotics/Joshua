@@ -60,8 +60,19 @@ message Actuator {
     MockMotorConfig mock_motor_config = 12;
     SpikeMotorConfig spike_motor_config = 13;
     Am243EthercatConfig am243_ethercat_config = 14;
+    StepperConfig stepper_config = 16;
     // Add other motor type here.
   }
+}
+
+message StepperConfig {
+  // Motor's native steps/degree at the motor shaft, pre-gearbox (e.g. a
+  // 1.8-degree NEMA17 at 1/16 microstepping is 200*16/360).
+  float steps_per_degree = 1;
+  // Output:motor ratio; DegreesToSteps(angle) = angle * steps_per_degree *
+  // gear_ratio. 1.0 for a direct-drive joint.
+  float gear_ratio = 2;
+  float idle_position = 3;  // Degrees, matching SetPosition's unit.
 }
 
 message Sts3215Config {

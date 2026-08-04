@@ -9,6 +9,7 @@
 #include "robot/board/am243/am243_board.h"
 #include "robot/board/feetech_bus/feetech_bus_board.h"
 #include "robot/board/mock/mock_board.h"
+#include "robot/board/teensy/teensy_board.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -32,6 +33,7 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::FEETECH_BUS:
       return std::make_shared<FeetechBusBoard>();
     case robot::board::BoardType::TEENSY41:
+      return std::make_shared<TeensyBoard>();
     case robot::board::BoardType::ARDUINO_UNO:
     case robot::board::BoardType::SPIKE_HUB_BLE:
     case robot::board::BoardType::HOST_GPIO:

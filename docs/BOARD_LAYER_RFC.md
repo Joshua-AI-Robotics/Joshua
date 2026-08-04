@@ -218,22 +218,39 @@ robot/
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
     arduino/            arduino_board.*  (MCU only; drive peripherals like a
-                        TB6600 are a Channel.drive fact, never in this name)
+                        TB6600 are a Channel.drive fact, never in this name;
+                        future — not yet built, §10 Phase 5)
     teensy/             teensy_board.*  (MCU only; a comm peripheral like an
-                        EasyCAT shield is a Board.comm fact, never in this name)
+                        EasyCAT shield is a Board.comm fact, never in this
+                        name) ── NEW, §10 Phase 5 ──
     feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
+    frame/              frame_transport.h, serial_frame_transport.*  (the
+                        FrameTransport seam every frame-based
+                        Joshua-firmware board depends on, not a concrete
+                        transport — §7.3) ── NEW, §10 Phase 5 ──
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/
-  common/               joshua_wire_v1.h/.c  (shared with host, same repo) ── NEW ──
+  common/               joshua_wire_v1.h/.c  (shared with host, same repo;
+                        Bazel cc_library + PlatformIO lib, §7.3) ── NEW ──
   am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
                         stays as-is — vendor code never migrates to the
                         Joshua firmware pattern, §7.3)
-  arduino/              main.cpp, backends, transports, platformio.ini ── NEW ──
-  teensy/               …
+  teensy/41/            main.cpp, channel_table.c, backend_stepdir.*,
+                        transport_serial.*, platformio.ini ── NEW, §10 Phase 5 ──
+  arduino/              main.cpp, backends, transports, platformio.ini
+                        (future — not yet built, §10 Phase 5)
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
+
+Directory name convention: the host-side directory matches the board type
+alone (`teensy/`, not `teensy41/`) since `TeensyBoard`'s C++ is
+model-agnostic — it only speaks `joshua_wire_v1` over a `FrameTransport`.
+The firmware-side directory is per exact chip (`teensy/41/`) since that's
+where a model actually matters (pin count, peripherals, toolchain target);
+a future Teensy model would add `firmware/teensy/40/` reusing the same
+host class.
 
 ### 5.3 Contracts (interfaces)
 
@@ -1378,16 +1395,48 @@ Each phase lands green and independently revertible.
       the item above.
 
 ### Phase 5 — Prove the matrix (first real second board)
-- [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
-      golden-bytes unit tests on host CI, §7.3).
-- [ ] `firmware/arduino/` with serial transport variant;
-      `backend_stepdir`.
-- [ ] Host side: `ArduinoBoard` + generic `StepperDriver` +
-      `FrameTransport` seam on `Serial`.
+
+First real second board is **Teensy 4.1**, not the placeholder Arduino
+this section originally sketched — chosen because real Teensy 4.1 + TB6600
+hardware exists to bring this up on, whereas the Arduino sketch was
+speculative. The architecture is identical either way (§7.1–§7.5 make no
+Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
+real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
+`FrameTransport` seam, new firmware image and host board class — not
+retired by this choice. An **ESP32** board is a candidate third matrix
+member for the same reason (hardware on hand), tracked as a follow-up, not
+started in this phase: it would most likely land as a Wi-Fi/UDP transport
+variant on the existing `UdpTransport` seam below rather than a new drive
+backend, since the interesting new proof there is the transport swap, not
+another STEP_DIR implementation.
+
+- [x] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
+      golden-bytes unit tests on host CI, §7.3). Every response has a
+      fixed size for a given `proto_ver` (`JW1_*_RESPONSE_PAYLOAD_LEN` in
+      `joshua_wire_v1.h`) — including `IDENTIFY`, whose `channel_drives`
+      array is always transmitted at `JW1_MAX_CHANNELS` and padded with
+      `JW1_DRIVE_INVALID` — so a host built on a fixed-size-read transport
+      (`robot::comm::SerialTransport::AtomicRead`) never needs an
+      incremental header-then-body read.
+- [x] `firmware/teensy/41/` with the serial (native USB) transport variant;
+      `backend_stepdir` (no acceleration ramp yet — constant rate capped
+      by `max_pulse_rate_hz`; ramping is unstarted follow-up work once
+      there's hardware to tune it against).
+- [x] Host side: `TeensyBoard` (`robot/board/teensy/`) + generic
+      `StepperDriver` (`robot/action/motors/drivers/`) + `FrameTransport`
+      seam (`robot/board/frame/`, `SerialFrameTransport` on
+      `robot::comm::SerialTransport`).
 - [ ] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
-      Arduino → TB6600 → stepper moves.
+      Teensy → TB6600 → stepper moves. Not done — proven in software only
+      so far (`teensy_board_test.cc` against a `FakeFrameTransport`,
+      `joshua_wire_v1_test.cc` golden bytes); the firmware itself
+      (`firmware/teensy/41/`) has not been built, flashed, or run against
+      real hardware — see `firmware/teensy/41/docs/bringup.md`'s status
+      checklist. Same caveat Phase 3/4 shipped with for AM243/Feetech.
 - [ ] Add the UDP (W5500) firmware variant + `UdpTransport` to demonstrate a
-      transport swap with zero host-code changes.
+      transport swap with zero host-code changes. Not started — the
+      `FrameTransport` seam above is exactly what makes this swap
+      zero-host-code-change once attempted (§7.3, §7.4).
 
 ### Phase 6 — Perception layer parity
 
@@ -1494,9 +1543,12 @@ debt gets paid off, not carried indefinitely.
 
 ## 11. Acceptance criteria
 
-- A stepper motor moves via Arduino (driving a TB6600) over serial **and**
+- A stepper motor moves via Teensy 4.1 (driving a TB6600) over serial **and**
   over UDP by changing only `Board.comm` and reflashing the matching
-  variant — zero host code changes.
+  variant — zero host code changes. (Serial: implemented, §10 Phase 5.
+  UDP variant: not started, same phase — Arduino is the same proof once
+  built, sharing the identical `joshua_wire_v1`/`StepperDriver`/
+  `FrameTransport` seams.)
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.
