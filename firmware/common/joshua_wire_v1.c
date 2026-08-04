@@ -1,4 +1,8 @@
-#include "firmware/common/joshua_wire_v1.h"
+// Same-directory quote-include, not a repo-root-relative Bazel-style path:
+// PlatformIO's library builder (firmware/teensy/41/platformio.ini) resolves
+// includes relative to this library's own directory, unlike Bazel's
+// workspace-rooted include paths (docs/BOARD_LAYER_RFC.md §7.3).
+#include "joshua_wire_v1.h"
 
 #include <string.h>
 

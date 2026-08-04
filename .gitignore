@@ -48,5 +48,8 @@ ui/public/proto-schema*
 # Build output
 dist/
 
+# PlatformIO firmware build output (firmware/teensy/41/, etc.)
+.pio/
+
 # Ignore MAC OS files
 .DS_Store

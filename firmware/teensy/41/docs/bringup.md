@@ -2,17 +2,47 @@
 
 ## Status
 
-- ⬜ PlatformIO installed
-- ⬜ Firmware built
-- ⬜ Firmware flashed
-- ⬜ USB serial enumerates (`/dev/ttyACM*`)
-- ⬜ IDENTIFY handshake verified against host `TeensyBoard::Init()`
-- ⬜ Stepper moves under `launcher:joshua_main` with
-  `config/config_preset/example/teensy_stepper_demo.pbtxt`
+- [x] PlatformIO installed
+- [x] Firmware built
+- [x] Firmware flashed
+- [x] USB serial enumerates (`/dev/ttyACM*`)
+- [x] IDENTIFY handshake verified against host `TeensyBoard::Init()` (real
+      board, real firmware — `board_id=TEENSY41`, `fw_name="teensy-stepdir"`,
+      `n_channels=1`, `channel_drives[0]=STEP_DIR`)
+- [x] Full command path verified end to end under `launcher:joshua_main`
+      with `config/config_preset/example/teensy_stepper_demo.pbtxt`: a
+      `ros2 topic pub` of `10.0` (degrees) to `/teensy_stepper_1/position`
+      produced 89 real STEP pulses on pin 2 (DIR on pin 3), confirmed via
+      an independent `GET_FEEDBACK` query returning `position=89.0`
+      (`round(10.0 * 8.888889 steps/degree) = 89`).
+- ⬜ Physical stepper rotation visually confirmed with a TB6600 + motor
+      wired per the diagram below — GPIO pulses are verified, motor
+      response is not (no TB6600 wired for this verification pass).
 
-Nothing below this line has been run against real hardware yet — this
-firmware and its host counterpart (`robot/board/teensy/teensy_board.*`) are
-verified today only by host-side unit tests
+Three real bugs were found and fixed getting this far, listed here since
+they'll bite the next person bringing up a second board the same way:
+
+1. `platformio.ini` had `platform = teensyduino` — the correct PlatformIO
+   registry name is `platform = teensy`.
+2. `joshua_wire_v1.c`'s self-include was the Bazel-style
+   `#include "firmware/common/joshua_wire_v1.h"`; PlatformIO's library
+   builder resolves includes relative to the library's own directory, so
+   it must be `#include "joshua_wire_v1.h"`.
+3. `firmware/common/library.json` needed a `srcFilter` excluding
+   `*_test.cc` — without it PlatformIO tries to compile the host-only
+   gtest file into the firmware image.
+4. Separately, `node_generator/node_generator.cc`'s
+   `IsCppDriverAvailableForAction` didn't list `MOTOR_STEPPER_NEMA17`, so
+   the launcher silently routed the actuator to the Python backend
+   (`action_factory.py`, which doesn't know the motor type) instead of the
+   C++ one this PR built. Fixed by adding the case.
+5. On Linux, flashing needs `/etc/udev/rules.d/00-teensy.rules` (from
+   pjrc.com) installed, and `upload_protocol = teensy-cli` set in
+   `platformio.ini` — the default `teensy-gui` tries to launch a GUI
+   Teensy Loader app that isn't installed on a headless dev machine.
+
+This firmware and its host counterpart (`robot/board/teensy/teensy_board.*`)
+are now verified both by host-side unit tests
 (`bazel test //robot/board/teensy:teensy_board_test
 //firmware/common:joshua_wire_v1_test`), which exercise the exact wire
 bytes this firmware encodes/decodes but not the MCU itself.
@@ -66,17 +96,33 @@ the `teensy41-serial` environment.
 
 ## Flash
 
-Plug the Teensy in over USB, then:
+On Linux, one-time setup so a non-root user can write to the Teensy's USB
+bootloader device:
+
+```bash
+cd /tmp
+wget https://www.pjrc.com/teensy/00-teensy.rules
+sudo cp 00-teensy.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+`platformio.ini` already sets `upload_protocol = teensy-cli` — the default
+`teensy-gui` launches a GUI Teensy Loader app that isn't installed on a
+headless machine.
+
+Plug the Teensy in over USB (a brand-new/blank board boots straight into
+HalfKay bootloader mode — `lsusb` shows "Teensy Halfkay Bootloader" — which
+is expected and exactly what needs flashing), then:
 
 ```bash
 pio run --target upload
 ```
 
-PlatformIO's Teensy platform drives `teensy_loader_cli` (or prompts you to
-press the Teensy's physical reset button on first flash — the bootloader
-button on the board, not a software step) to upload over USB. No boot-mode
-DIP switches or separate debug probe needed — Teensy reflashes over the
-same USB port it runs on.
+No boot-mode DIP switches or separate debug probe needed — Teensy reflashes
+over the same USB port it runs on. After a successful flash it reboots into
+the application and enumerates as a CDC serial device (`/dev/ttyACM*`,
+`lsusb` now shows "Teensyduino Serial").
 
 ## Verify the board enumerates
 
@@ -103,7 +149,21 @@ bazel run //launcher:joshua_main -- \
 protocol version, and that channel 0 reports `STEP_DIR`) then pushes
 `CONFIGURE_CHANNEL`. A mismatch here (wrong image flashed, wrong port, bad
 wiring) fails at `Init()` with an actionable error — see
-`robot/board/teensy/teensy_board.cc`'s `IdentifyAndValidate`.
+`robot/board/teensy/teensy_board.cc`'s `IdentifyAndValidate`. **Verified
+against real hardware** — look for `StepperDriver actuator ID: ... initialized`
+in the log with no preceding `ERROR`.
+
+Then drive it:
+
+```bash
+source /opt/ros/humble/setup.bash   # or your ROS 2 distro
+ros2 topic pub --once /teensy_stepper_1/position std_msgs/msg/Float32 "data: 10.0"
+```
+
+**Verified against real hardware** — this produced 89 real STEP pulses
+(pin 2, DIR on pin 3), confirmed both by no `ERROR` in the launcher log and
+by independently querying `GET_FEEDBACK` over the wire and reading back
+`position=89.0` steps.
 
 ## Known gaps to close before trusting this near real hardware
 
@@ -114,5 +174,9 @@ wiring) fails at `Init()` with an actionable error — see
 - `GET_FEEDBACK`'s `velocity` field is the last commanded target when in
   velocity mode, not a measurement — this firmware has no encoder.
 - Serial read timeouts (`kByteTimeoutMs` in `transport_serial.cpp`, the
-  AtomicRead timeouts in `robot/comm/serial/serial.cc`) are unverified
-  guesses; may need tuning once real USB round-trip latency is measured.
+  `AtomicRead` timeouts in `robot/comm/serial/serial.cc`) worked at
+  115200 baud over real USB for IDENTIFY/CONFIGURE_CHANNEL/SET_TARGET/
+  GET_FEEDBACK round trips in this verification pass; not stress-tested
+  under load or at higher command rates.
+- No TB6600 was wired for this verification pass — GPIO pulses are
+  confirmed via `GET_FEEDBACK`, actual motor rotation is not yet observed.

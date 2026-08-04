@@ -39,9 +39,11 @@ verification against the host `am243_config_smoke`-style flow.
 
 ## Status
 
-Implemented and unit-tested on the host side (`teensy_board_test.cc`,
-`joshua_wire_v1_test.cc` golden-bytes tests) against the exact same wire
-bytes this firmware encodes/decodes. **Not yet flashed or run on real
-Teensy 4.1 hardware from this branch** — no PlatformIO toolchain on the
-machine this was authored on. Verify end to end before trusting it near a
-real TB6600 at any meaningful current.
+Implemented, unit-tested on the host side (`teensy_board_test.cc`,
+`joshua_wire_v1_test.cc` golden-bytes tests), and **verified against real
+Teensy 4.1 hardware**: built, flashed, IDENTIFY handshake round-tripped
+correctly, and a real `ros2 topic pub` position command produced real STEP
+pulses on the configured pins, confirmed via an independent `GET_FEEDBACK`
+query. See `docs/bringup.md`'s status checklist for exactly what's
+verified vs. still open (notably: no TB6600 was wired for this pass, so
+GPIO pulses are confirmed but actual motor rotation is not yet observed).
