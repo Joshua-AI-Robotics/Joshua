@@ -184,9 +184,13 @@ Do **not** add one merely to have one. A directory with no docs at all needs a
 
 ### 7.3 How to write one
 
-Precedence is the hazard: the closest file wins, so a nested file that restates
-a global rule will silently outlive a change to the root. Two rules keep that
-safe:
+Files **concatenate from the root down**; they do not replace each other. Both
+ecosystems agree on this — the agents.md hierarchy merges with later files
+winning on conflicts, and Claude Code states that discovered files "are
+concatenated into context rather than overriding each other." So a root rule
+still applies inside a subsystem. The hazard is narrower than
+whole-file precedence: only a nested rule that *contradicts* a root rule
+silently wins. Two rules keep that safe:
 
 1. **Local deltas only.** State what is true *here* and not elsewhere. Never
    copy a root rule — especially not the hardware-safety rules, which must have
@@ -204,8 +208,53 @@ specific to `<subsystem>/`.
 - <local build/test invocation>
 ```
 
+Adjust the `../` to the directory's depth — `robot/comm/ethercat/AGENTS.md`
+needs `../../../AGENTS.md`. `hooks/agents_doc_check.sh` fails on a wrong one.
+
 Keep them short. A nested file that grows past a screen is usually a README
 trying to escape.
+
+### 7.4 Safety rules never move into a nested file
+
+§7.3 rule 1 forbids copying the hardware-safety rules downward. There is a
+mechanical reason beyond single-sourcing: **a root instruction file survives
+context compaction and a nested one does not.** Claude Code re-injects the
+project-root file after `/compact`, while nested files "are not re-injected
+automatically; they reload the next time Claude reads a file in that
+subdirectory."
+
+A long session that compacts mid-task therefore keeps the root rules and drops
+the nested ones until the next read in that directory. For conventions that is
+a small loss. For "do not run a preset that opens a real serial bus" it is the
+window in which the accident happens. Hardware safety stays in the root
+`AGENTS.md`, permanently, whatever else nests.
+
+### 7.5 Every nested `AGENTS.md` needs a `CLAUDE.md` beside it
+
+Claude Code does not read `AGENTS.md` at any level, and it is the agent that
+writes most of this repository. The root bridge does not cover subdirectories,
+so a bare `robot/AGENTS.md` would be invisible to it while Codex, Cursor, and
+Antigravity read it — a silent two-tier split, worst in exactly the subsystems
+that earn a nested file.
+
+So a nested `AGENTS.md` is always a pair:
+
+```bash
+printf '@AGENTS.md\n' > robot/CLAUDE.md
+```
+
+`@` imports resolve relative to the importing file, so `robot/CLAUDE.md` picks
+up `robot/AGENTS.md`. `hooks/agents_doc_check.sh` fails when the bridge is
+missing, so the pair cannot drift apart.
+
+No nested `GEMINI.md` or Copilot bridge. Gemini reads nested files already, and
+Copilot's path-scoped instructions (`.github/instructions/*.instructions.md`
+with an `applyTo:` glob) would cover the whole tree from one central directory
+if it ever becomes worth doing — neither needs a file per subsystem.
+
+This is the pattern Datadog's frontend team landed on for the same problem,
+after finding that nested files alone "only work when users edit specific
+sub-folders."
 
 ## 8. Open questions
 
@@ -236,7 +285,8 @@ Landed in [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69):
 
 Demand-driven, no schedule:
 
-- [ ] `<dir>/AGENTS.md` where a subsystem earns one (§7.2).
+- [ ] `<dir>/AGENTS.md` where a subsystem earns one (§7.2), paired with the
+      `CLAUDE.md` bridge the guard requires (§7.5).
 - [ ] Resolve the Copilot bridge question (§8.1) with evidence.
 - [ ] **Enforce** the hardware rule rather than stating it. §3 prefers
       enforcement to exhortation, and §4 is currently exhortation: nothing

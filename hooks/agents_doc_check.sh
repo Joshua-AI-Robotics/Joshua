@@ -39,11 +39,25 @@ discover_nested() {
 }
 
 FILES=("${REQUIRED[@]}")
+NESTED=()
 while IFS= read -r nested; do
-  [[ -n "$nested" ]] && FILES+=("$nested")
+  [[ -n "$nested" ]] && FILES+=("$nested") && NESTED+=("$nested")
 done < <(discover_nested)
 
 status=0
+
+# Claude Code reads CLAUDE.md, never AGENTS.md, at any level — and the root
+# bridge does not cover subdirectories. Without a sibling bridge a nested file
+# is invisible to it while other agents read it. See docs/AGENTS_RFC.md §7.5.
+for nested in "${NESTED[@]}"; do
+  bridge="$(dirname "$nested")/CLAUDE.md"
+  if [[ ! -f "$bridge" ]]; then
+    echo "MISSING BRIDGE: $nested has no $bridge" >&2
+    echo "  Claude Code cannot see $nested without it. Create it with:" >&2
+    echo "    printf '@AGENTS.md\\n' > $bridge" >&2
+    status=1
+  fi
+done
 
 for f in "${FILES[@]}"; do
   if [[ ! -f "$f" ]]; then
@@ -73,10 +87,10 @@ for f in "${FILES[@]}"; do
 done
 
 if [[ $status -eq 0 ]]; then
-  echo "agent docs OK: all Markdown link targets resolve"
+  echo "agent docs OK: link targets resolve and every nested AGENTS.md is bridged"
 else
   echo "" >&2
-  echo "Fix the links above, or update hooks/agents_doc_check.sh if a file moved." >&2
+  echo "Fix the problems above, or update hooks/agents_doc_check.sh if a file moved." >&2
 fi
 
 exit $status
