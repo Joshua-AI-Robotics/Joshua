@@ -16,6 +16,14 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Drop fenced blocks, then inline code spans. Claude Code's import parser skips
+# both, so an @import shown as an example is documentation, not a live import.
+# sed alone cannot do this: it is line-based and a fence spans lines.
+strip_code() {
+  awk '/^[[:space:]]*```/ { fenced = !fenced; next } !fenced' "$1" |
+    sed 's/`[^`]*`//g'
+}
+
 # Bridges and the RFC are fixed and must exist.
 REQUIRED=(
   AGENTS.md
@@ -63,10 +71,9 @@ for nested in "${NESTED[@]:+${NESTED[@]}}"; do
     continue
   fi
 
-  # Strip code spans first: `@AGENTS.md` in backticks is documentation, not an
-  # import, and Claude Code's own parser skips those too.
-  if ! sed 's/`[^`]*`//g' "$bridge" |
-       grep -qE '(^|[[:space:]])@AGENTS\.md([[:space:]]|$)'; then
+  # `@./AGENTS.md` resolves to the same sibling file, so accept either spelling.
+  if ! strip_code "$bridge" |
+       grep -qE '(^|[[:space:]])@(\./)?AGENTS\.md([[:space:]]|$)'; then
     echo "INERT BRIDGE: $bridge does not import @AGENTS.md" >&2
     echo "  It must contain the import, or $nested never reaches Claude Code." >&2
     status=1
@@ -114,10 +121,32 @@ for f in "${FILES[@]}"; do
       echo "BROKEN IMPORT: $f -> @$target" >&2
       status=1
     fi
-  done < <(sed 's/`[^`]*`//g' "$f" |
+  done < <(strip_code "$f" |
            grep -oE '(^|[[:space:]])@[^[:space:]]+\.md' |
            sed -E 's/^[[:space:]]*@//')
 done
+
+# Gemini reads AGENTS.md only because .gemini/settings.json says to. The key
+# moved from a flat `contextFileName` to a nested `context.fileName` in the
+# 2025-09-17 settings migration, and a stale key fails silently — Gemini just
+# falls back to GEMINI.md. Check the shape so that cannot recur unnoticed.
+GEMINI_SETTINGS=".gemini/settings.json"
+if [[ ! -f "$GEMINI_SETTINGS" ]]; then
+  echo "MISSING: $GEMINI_SETTINGS — Gemini would not read AGENTS.md" >&2
+  status=1
+elif command -v python3 >/dev/null 2>&1; then
+  if ! python3 -c '
+import json, sys
+with open(".gemini/settings.json") as fh:
+    names = json.load(fh).get("context", {}).get("fileName", [])
+sys.exit(0 if "AGENTS.md" in ([names] if isinstance(names, str) else names) else 1)
+' 2>/dev/null; then
+    echo "BAD CONFIG: $GEMINI_SETTINGS does not set context.fileName to include AGENTS.md" >&2
+    echo '  Expected: {"context": {"fileName": ["AGENTS.md"]}}' >&2
+    echo "  A flat \"contextFileName\" key is the pre-migration spelling and is ignored." >&2
+    status=1
+  fi
+fi
 
 if [[ $status -eq 0 ]]; then
   echo "agent docs OK: link targets resolve and every nested AGENTS.md is bridged"

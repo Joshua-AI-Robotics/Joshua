@@ -27,7 +27,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   a Markdown link or `@`-import in the agent instruction files stops resolving,
   or when a nested `AGENTS.md` lacks a `CLAUDE.md` bridge that actually imports
   it
-- `.gemini/settings.json` setting `contextFileName`, so Gemini CLI reads
+- `.gemini/settings.json` setting `context.fileName`, so Gemini CLI reads
   `AGENTS.md` natively at every level instead of only the root `GEMINI.md`
 
 ### Fixed

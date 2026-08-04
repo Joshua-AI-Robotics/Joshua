@@ -32,7 +32,8 @@ After [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69):
 ```
 AGENTS.md                          canonical — every rule lives here
 ├── CLAUDE.md                      "@AGENTS.md"        (Claude Code)
-├── GEMINI.md                      pointer + import    (Gemini CLI)
+├── .gemini/settings.json          context.fileName    (Gemini CLI)
+├── GEMINI.md                      pointer + import    (Gemini fallback)
 └── .github/copilot-instructions.md  pointer           (Copilot IDE chat)
 ```
 
@@ -42,7 +43,7 @@ AGENTS.md                          canonical — every rule lives here
 | Copilot coding agent / CLI / VS Code | ✅ | native |
 | Antigravity (v1.20.3+) | ✅ | native |
 | Claude Code | ❌ (Anthropic: not planned) | `CLAUDE.md` |
-| Gemini CLI | ✅ via `contextFileName` in `.gemini/settings.json` | that setting, plus `GEMINI.md` as fallback |
+| Gemini CLI | ✅ via `context.fileName` in `.gemini/settings.json` | that setting, plus `GEMINI.md` as fallback |
 | Copilot IDE-chat surfaces | ❌ | `.github/copilot-instructions.md` |
 
 Observed practice that this RFC codifies rather than invents:
@@ -110,16 +111,27 @@ because an agent-named branch obscures who is accountable and who reviews it.
 
 `AGENTS.md` routes agents to other docs, so a renamed target turns it into a
 confidently wrong instruction file — worse than none, because an agent will
-follow it. `hooks/agents_doc_check.sh` runs in CI on every PR and fails if any
-Markdown link target in the instruction files no longer resolves.
+follow it. `hooks/agents_doc_check.sh` runs in CI on every PR and fails on any
+routing that has stopped working:
 
-Scope is deliberately narrow: **explicit Markdown link targets only.** Paths
-and commands in prose or code blocks are not checked, because docs
+- A Markdown link target that no longer resolves.
+- An `@`-import target that no longer resolves. The bridges are nothing but
+  imports, so a typo in one is as silent as a broken link.
+- A nested `AGENTS.md` with no sibling `CLAUDE.md`, or with one that does not
+  actually import it (§7.5). Presence is not enough — an empty bridge, or one
+  carrying its own rules, leaves the nested file unread.
+- `.gemini/settings.json` not naming `AGENTS.md` under `context.fileName`.
+  That key is how Gemini sees `AGENTS.md` at all, and a stale spelling fails
+  silently by falling back to `GEMINI.md`.
+
+Scope stays deliberately narrow: **declared targets only** — links, imports,
+and config keys. Paths and commands in prose are not checked, because docs
 legitimately reference planned work — `tools/flash/` appears in
 [firmware/README.md](../firmware/README.md) and
 [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) — and placeholders like
 `<github-username>/<topic>`. A guard that scraped paths would fail on those and
-be disabled within a month.
+be disabled within a month. Fenced blocks and code spans are stripped before
+any of this, so an example import stays an example.
 
 Compose services and Bazel targets could later be validated with
 `docker compose config --services` and `bazel query`, but only against an
@@ -256,11 +268,25 @@ No nested `GEMINI.md` or Copilot bridge, but for different reasons.
 
 Gemini reads *nested* files, not nested `AGENTS.md` — by default it looks only
 for `GEMINI.md`, so a bridge per subsystem would be the same multiplication one
-level down. Instead `.gemini/settings.json` sets `contextFileName` to
-`["AGENTS.md", "GEMINI.md"]`, which makes Gemini read `AGENTS.md` natively at
-every level, root and nested, from one committed file. That is strictly better
-than the root `GEMINI.md` bridge, which stays only as a fallback for a Gemini
-surface that ignores the setting.
+level down. Instead `.gemini/settings.json` sets `context.fileName` to
+`["AGENTS.md"]`, so `AGENTS.md` becomes the file Gemini looks for wherever it
+looks, from one committed file rather than one per subsystem. The key is
+nested; the flat `contextFileName` spelling predates the September 2025
+settings migration and is silently ignored, so
+`hooks/agents_doc_check.sh` asserts the shape.
+
+`GEMINI.md` is deliberately *not* in that list. It stays as a fallback for a
+Gemini surface that ignores `settings.json`, and its `@AGENTS.md` import serves
+that case; listing both would make a settings-honouring Gemini load `AGENTS.md`
+directly and then again through the import.
+
+One caveat, unresolved: Gemini's discovery walks *upward* from the working
+directory through ancestors, where Claude Code also descends on demand into
+subdirectories it reads. So nested coverage for Gemini depends on where the
+agent was launched — full when started inside the subsystem, not guaranteed
+from the repository root. This is why §7.4 keeps safety at the root, and why
+the first subsystem to adopt a nested file should verify Gemini's behaviour
+rather than assume it.
 
 Copilot needs nothing yet. If it ever does, its path-scoped instructions
 (`.github/instructions/*.instructions.md` with an `applyTo:` glob) cover the
