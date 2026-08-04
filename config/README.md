@@ -49,5 +49,9 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
 2. Change the schema in `proto/` only if the field genuinely does not exist —
    a new preset should rarely need one.
 3. If a change is user-facing, record it in [CHANGELOG.md](../CHANGELOG.md).
-4. Prefer a `*_sim*.pbtxt` variant for anything you intend to run repeatedly
-   during development.
+4. For anything you intend to run repeatedly during development, pick a preset
+   you have read and confirmed declares no real devices — no `/dev/tty*` ports
+   or network interfaces, and `MOCK_*` or simulation components throughout. The
+   filename is not that confirmation: `so100/sim_mirror.pbtxt` is
+   `MODE_SIMULATION` and still opens `/dev/ttyACM1`. See the hardware-safety
+   section of [AGENTS.md](../AGENTS.md).
