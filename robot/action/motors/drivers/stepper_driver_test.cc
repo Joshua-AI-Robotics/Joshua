@@ -98,14 +98,30 @@ TEST(StepperDriverTest, SetSpeedConvertsDegreesToSteps) {
   EXPECT_FLOAT_EQ(channel->last_value_, 80.0f);
 }
 
+TEST(StepperDriverTest, InitAutoEnablesChannel) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+
+  ASSERT_TRUE(driver.Init().ok());
+
+  // Unlike Sts3215Driver, Init() auto-enables: a TB6600's ENA pin has no
+  // real safety case for withholding it the way a servo's torque-enable
+  // register does (docs from real hardware testing — a demo preset
+  // driving position over a single Float32 topic has no path to send an
+  // explicit enable command first).
+  EXPECT_EQ(channel->enable_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 0);
+}
+
 TEST(StepperDriverTest, SetTorquePositiveEnablesChannel) {
   auto channel = std::make_shared<RecordingChannel>();
   StepperDriver driver(channel, MakeStepperActuator());
   ASSERT_TRUE(driver.Init().ok());
+  const int enable_calls_after_init = channel->enable_calls_;
 
   ASSERT_TRUE(driver.SetTorque(1.0f).ok());
 
-  EXPECT_EQ(channel->enable_calls_, 1);
+  EXPECT_EQ(channel->enable_calls_, enable_calls_after_init + 1);
   EXPECT_EQ(channel->disable_calls_, 0);
 }
 
@@ -113,11 +129,12 @@ TEST(StepperDriverTest, SetTorqueZeroDisablesChannel) {
   auto channel = std::make_shared<RecordingChannel>();
   StepperDriver driver(channel, MakeStepperActuator());
   ASSERT_TRUE(driver.Init().ok());
+  const int enable_calls_after_init = channel->enable_calls_;
 
   ASSERT_TRUE(driver.SetTorque(0.0f).ok());
 
   EXPECT_EQ(channel->disable_calls_, 1);
-  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->enable_calls_, enable_calls_after_init);
 }
 
 TEST(StepperDriverTest, SetIdlePositionBypassesOperationalLimits) {

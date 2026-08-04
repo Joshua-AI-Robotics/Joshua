@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "teensy_board",
@@ -17,6 +17,17 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_binary(
+    name = "teensy_driver_smoke",
+    srcs = ["teensy_driver_smoke.cc"],
+    deps = [
+        ":teensy_board",
+        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/proto:comm_cc_proto",
+        "@glog",
     ],
 )
 

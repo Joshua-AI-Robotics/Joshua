@@ -18,7 +18,13 @@ void Pulse(ChannelState* channel, bool dir_positive) {
   const bool dir_pin_level = channel->config.invert_dir ? !dir_positive : dir_positive;
   digitalWrite(channel->pins.dir_pin, dir_pin_level ? HIGH : LOW);
   digitalWriteFast(channel->pins.step_pin, HIGH);
-  delayMicroseconds(2);  // TB6600 minimum pulse width is well under this.
+  // 20us, not 2us: Teensy 4.1 drives 3.3V logic into a TB6600 opto-isolated
+  // input commonly spec'd for 5V. A too-short HIGH time may not give the
+  // opto's LED enough time to fully turn on at reduced drive current —
+  // widened after a real hardware pass where the firmware/wire protocol
+  // and the TB6600's ENA gating were confirmed correct (position tracked
+  // exactly as commanded) but the motor still didn't respond.
+  delayMicroseconds(20);
   digitalWriteFast(channel->pins.step_pin, LOW);
   channel->position_steps += dir_positive ? 1 : -1;
   channel->last_step_us = micros();

@@ -1427,23 +1427,26 @@ another STEP_DIR implementation.
       seam (`robot/board/frame/`, `SerialFrameTransport` on
       `robot::comm::SerialTransport`).
 - [x] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
-      Teensy verified on real hardware — built, flashed, IDENTIFY
-      round-tripped, and a real `ros2 topic pub` position command produced
-      89 real STEP pulses, confirmed via an independent `GET_FEEDBACK`
-      query (`firmware/teensy/41/docs/bringup.md`'s status checklist has
-      the full trace). The one unverified leg is Teensy → TB6600 → stepper
-      moves — no TB6600 was wired for this pass, so GPIO pulses are
-      confirmed but physical motor rotation is not. Getting this far
-      surfaced and fixed real bugs the software-only pass couldn't catch:
-      `platformio.ini`'s platform name (`teensyduino` doesn't exist in the
-      registry, it's `teensy`), `joshua_wire_v1.c`'s self-include (Bazel's
-      workspace-rooted path vs. PlatformIO's library-relative resolution),
-      a missing `srcFilter` in `library.json` that let PlatformIO try to
-      compile the host-only gtest file into the firmware image, and
+      Teensy → TB6600 → **stepper physically rotates**, verified on real
+      hardware through the actual production path (`launcher:joshua_main`
+      + `ros2 topic pub`, not just raw protocol scripts). Full trace,
+      wiring diagram, and DIP switch settings in
+      `firmware/teensy/41/docs/bringup.md`. Getting here surfaced and
+      fixed real bugs no software-only pass could catch — build/flash
+      tooling (`platformio.ini`'s platform name, a Bazel-vs-PlatformIO
+      include-path mismatch, a missing `library.json` `srcFilter`,
       `node_generator.cc`'s `IsCppDriverAvailableForAction` missing
-      `MOTOR_STEPPER_NEMA17` (silently routed to the Python backend, which
-      doesn't know the motor type, instead of the C++ path this phase
-      built).
+      `MOTOR_STEPPER_NEMA17`), a stale incremental PlatformIO build that
+      silently bypassed the firmware's enable-gate, `StepperDriver::Init()`
+      never calling `Enable()` (fixed by auto-enabling, matching
+      `TiDemoDriver` rather than `Sts3215Driver`, since an open-loop
+      stepper's `ENA` pin has no safety case for withholding it), a
+      board-specific TB6600 DIP switch layout that didn't match the
+      assumed "standard" table, and — the actual root cause of "clicks/
+      locks but never rotates" — `ENA-`/`PUL-`/`DIR-` needing to be wired
+      to Teensy GND for the opto-isolated inputs to work at all. See the
+      bring-up log for the full debugging methodology, worth reusing on
+      the next board.
 - [ ] Add the UDP (W5500) firmware variant + `UdpTransport` to demonstrate a
       transport swap with zero host-code changes. Not started — the
       `FrameTransport` seam above is exactly what makes this swap
@@ -1556,12 +1559,10 @@ debt gets paid off, not carried indefinitely.
 
 - A stepper motor moves via Teensy 4.1 (driving a TB6600) over serial **and**
   over UDP by changing only `Board.comm` and reflashing the matching
-  variant — zero host code changes. (Serial: verified on real hardware
-  through the wire protocol and GPIO pulse generation, §10 Phase 5 — the
-  one unverified leg is a TB6600 + motor actually wired up and observed
-  turning. UDP variant: not started, same phase — Arduino is the same
-  proof once built, sharing the identical `joshua_wire_v1`/`StepperDriver`/
-  `FrameTransport` seams.)
+  variant — zero host code changes. (Serial: **fully verified on real
+  hardware, including physical rotation**, §10 Phase 5. UDP variant: not
+  started, same phase — Arduino is the same proof once built, sharing the
+  identical `joshua_wire_v1`/`StepperDriver`/`FrameTransport` seams.)
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.
