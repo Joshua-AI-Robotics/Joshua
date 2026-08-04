@@ -1,11 +1,15 @@
-# Teensy 4.1 STEP/DIR Bring-up Notes
+# Teensy 4.1 STEP/DIR Bring-up Log
+
+For "how do I flash this," see `../README.md` — it follows the repo's
+`firmware/FLASHING_TEMPLATE.md` structure and is the up-to-date how-to.
+This file is the detailed bring-up record: the full wiring diagram, the
+exact verification trace from the first real hardware run, the bugs that
+run surfaced, and open gaps — kept here rather than in the README so the
+README stays a clean how-to and this stays the historical/detailed record.
 
 ## Status
 
-- [x] PlatformIO installed
-- [x] Firmware built
-- [x] Firmware flashed
-- [x] USB serial enumerates (`/dev/ttyACM*`)
+- [x] PlatformIO installed, firmware built and flashed, board enumerates
 - [x] IDENTIFY handshake verified against host `TeensyBoard::Init()` (real
       board, real firmware — `board_id=TEENSY41`, `fw_name="teensy-stepdir"`,
       `n_channels=1`, `channel_drives[0]=STEP_DIR`)
@@ -14,13 +18,16 @@
       `ros2 topic pub` of `10.0` (degrees) to `/teensy_stepper_1/position`
       produced 89 real STEP pulses on pin 2 (DIR on pin 3), confirmed via
       an independent `GET_FEEDBACK` query returning `position=89.0`
-      (`round(10.0 * 8.888889 steps/degree) = 89`).
+      (`round(10.0 * 8.888889 steps/degree) = 89`)
 - ⬜ Physical stepper rotation visually confirmed with a TB6600 + motor
       wired per the diagram below — GPIO pulses are verified, motor
-      response is not (no TB6600 wired for this verification pass).
+      response is not (no TB6600 wired for this verification pass)
 
-Three real bugs were found and fixed getting this far, listed here since
-they'll bite the next person bringing up a second board the same way:
+## Bugs found and fixed getting this far
+
+Real hardware surfaced bugs a software-only pass (unit tests, golden
+bytes) couldn't catch. Listed here since they'll bite the next person
+bringing up a second board the same way:
 
 1. `platformio.ini` had `platform = teensyduino` — the correct PlatformIO
    registry name is `platform = teensy`.
@@ -40,12 +47,6 @@ they'll bite the next person bringing up a second board the same way:
    pjrc.com) installed, and `upload_protocol = teensy-cli` set in
    `platformio.ini` — the default `teensy-gui` tries to launch a GUI
    Teensy Loader app that isn't installed on a headless dev machine.
-
-This firmware and its host counterpart (`robot/board/teensy/teensy_board.*`)
-are now verified both by host-side unit tests
-(`bazel test //robot/board/teensy:teensy_board_test
-//firmware/common:joshua_wire_v1_test`), which exercise the exact wire
-bytes this firmware encodes/decodes but not the MCU itself.
 
 ## Hardware
 
@@ -75,95 +76,42 @@ To add a second channel, add an entry to `g_channels[]` in
 `channels { index: 1 ... }` block in the host config. No other firmware or
 host code changes needed.
 
-## Install PlatformIO
+## Verifying the raw wire protocol (bypassing the host stack)
 
-```bash
-python3 -m pip install --user platformio
-# or: pipx install platformio
-pio --version
+Useful for isolating "is it the firmware/wire protocol" from "is it the
+host C++ stack" when debugging. Independently confirms the frame codec
+against real firmware without going through `TeensyBoard`/Bazel at all:
+
+```python
+import serial, time, struct
+
+def crc16_ccitt_false(data: bytes) -> int:
+    crc = 0xFFFF
+    for b in data:
+        crc ^= (b << 8)
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if (crc & 0x8000) else (crc << 1) & 0xFFFF
+    return crc
+
+def build_frame(cmd, channel, payload=b""):
+    body = bytes([1, cmd, channel]) + payload
+    crc = crc16_ccitt_false(body)
+    return bytes([0xA5, len(body)]) + body + crc.to_bytes(2, 'little')
+
+port = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+time.sleep(0.3)
+port.reset_input_buffer()
+
+# GET_FEEDBACK, channel 0 (cmd=0x04)
+port.write(build_frame(0x04, 0))
+resp = port.read(17)  # JW1_FRAME_LEN(JW1_FEEDBACK_RESPONSE_PAYLOAD_LEN) = 17
+position, velocity = struct.unpack('<ff', resp[5:13])
+fault_flags = struct.unpack('<H', resp[13:15])[0]
+print(f"position={position} steps, velocity={velocity}, fault_flags={fault_flags}")
 ```
 
-## Build
-
-```bash
-cd firmware/teensy/41
-pio run
-```
-
-This pulls `firmware/common/joshua_wire_v1.{h,c}` in via `platformio.ini`'s
-`symlink://../../common` and compiles it alongside `src/*.cpp`/`*.c` for
-the `teensy41-serial` environment.
-
-## Flash
-
-On Linux, one-time setup so a non-root user can write to the Teensy's USB
-bootloader device:
-
-```bash
-cd /tmp
-wget https://www.pjrc.com/teensy/00-teensy.rules
-sudo cp 00-teensy.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-`platformio.ini` already sets `upload_protocol = teensy-cli` — the default
-`teensy-gui` launches a GUI Teensy Loader app that isn't installed on a
-headless machine.
-
-Plug the Teensy in over USB (a brand-new/blank board boots straight into
-HalfKay bootloader mode — `lsusb` shows "Teensy Halfkay Bootloader" — which
-is expected and exactly what needs flashing), then:
-
-```bash
-pio run --target upload
-```
-
-No boot-mode DIP switches or separate debug probe needed — Teensy reflashes
-over the same USB port it runs on. After a successful flash it reboots into
-the application and enumerates as a CDC serial device (`/dev/ttyACM*`,
-`lsusb` now shows "Teensyduino Serial").
-
-## Verify the board enumerates
-
-```bash
-ls /dev/ttyACM*
-```
-
-The Teensy's native USB shows up as a CDC serial device, same class as the
-XDS110 debug probes elsewhere in this repo — should appear within a couple
-seconds of flashing or power-up.
-
-## Verify the wire protocol against real firmware
-
-Once flashed, the cleanest first check is the host's own `TeensyBoard::Init()`
-path via the launcher with the example preset (adjust `port` in the preset
-to match your `/dev/ttyACM*`):
-
-```bash
-bazel run //launcher:joshua_main -- \
-  --config=config/config_preset/example/teensy_stepper_demo.pbtxt
-```
-
-`TeensyBoard::Init()` runs IDENTIFY (checks `fw_name == "teensy-stepdir"`,
-protocol version, and that channel 0 reports `STEP_DIR`) then pushes
-`CONFIGURE_CHANNEL`. A mismatch here (wrong image flashed, wrong port, bad
-wiring) fails at `Init()` with an actionable error — see
-`robot/board/teensy/teensy_board.cc`'s `IdentifyAndValidate`. **Verified
-against real hardware** — look for `StepperDriver actuator ID: ... initialized`
-in the log with no preceding `ERROR`.
-
-Then drive it:
-
-```bash
-source /opt/ros/humble/setup.bash   # or your ROS 2 distro
-ros2 topic pub --once /teensy_stepper_1/position std_msgs/msg/Float32 "data: 10.0"
-```
-
-**Verified against real hardware** — this produced 89 real STEP pulses
-(pin 2, DIR on pin 3), confirmed both by no `ERROR` in the launcher log and
-by independently querying `GET_FEEDBACK` over the wire and reading back
-`position=89.0` steps.
+This is exactly how the "89 real STEP pulses" result in Status above was
+independently confirmed, separate from the launcher's log output.
 
 ## Known gaps to close before trusting this near real hardware
 
