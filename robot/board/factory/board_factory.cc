@@ -6,6 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "robot/board/am243/am243_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "utils/status_macros.h"
 
@@ -26,6 +27,7 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::MOCK:
       return std::make_shared<MockBoard>();
     case robot::board::BoardType::AM243:
+      return std::make_shared<Am243Board>();
     case robot::board::BoardType::FEETECH_BUS:
     case robot::board::BoardType::TEENSY41:
     case robot::board::BoardType::ARDUINO_UNO:

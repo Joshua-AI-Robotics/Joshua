@@ -5,7 +5,7 @@
 
 #include "absl/status/statusor.h"
 
-namespace robot::action::am243 {
+namespace robot::board::am243 {
 
 constexpr int kDemoPdoSizeBytes = 8;
 constexpr int kDemoSeedByteOffset = 0;
@@ -20,4 +20,4 @@ std::vector<uint8_t> EncodeDemoOutputSeed(uint8_t seed);
 // Decodes the currently validated TI EtherCAT simple-demo input PDO echo byte.
 absl::StatusOr<uint8_t> DecodeDemoInputEchoSeed(const std::vector<uint8_t>& input_pdo);
 
-}  // namespace robot::action::am243
+}  // namespace robot::board::am243

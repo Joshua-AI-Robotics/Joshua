@@ -61,7 +61,7 @@ and avoids bind-mount ownership churn from short-lived containers.
 docker compose --profile u24 up -d joshua-u24
 
 # Run commands in the existing container.
-docker compose exec joshua-u24 bazel test //robot/action/motors/drivers:am243_ethercat_driver_test
+docker compose exec joshua-u24 bazel test //robot/board/am243:am243_board_test
 
 # Open an interactive shell in the existing container.
 docker compose exec joshua-u24 bash

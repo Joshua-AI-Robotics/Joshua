@@ -185,15 +185,17 @@ bool IsExecutableAvailable(const std::string& exec_name) {
   return false;
 }
 
+// C++ actuator drivers are selected by motor_type on the board-layer path
+// (docs/BOARD_LAYER_RFC.md §6.5). MOCK_MOTOR and SPIKE_MOTOR use the Python
+// factory (robot/action/factory/action_factory.py).
 bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_action) {
   if (single_action.action_type() != robot::action::ActionType::ACTUATOR) {
     return false;
   }
-  switch (single_action.actuator().actuator_type()) {
-    case robot::action::ActuatorType::STS3215_SERVO:
+  switch (single_action.actuator().motor_type()) {
+    case robot::action::MotorType::MOTOR_TI_DEMO:
+    case robot::action::MotorType::MOTOR_STS3215:
       return true;
-    case robot::action::ActuatorType::MOCK_MOTOR:
-      return false;
     default:
       return false;
   }

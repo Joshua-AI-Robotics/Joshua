@@ -6,6 +6,26 @@ general {
 }
 
 robot {
+  # Board-layer shape (docs/BOARD_LAYER_RFC.md §6.5): the AM243 is one
+  # EtherCAT slave under the NIC's shared SOEM master; the actuator binds
+  # via (board_name, channel). PDO offsets/sizes are omitted so the board
+  # resolves the region from slave discovery; set them to pin a region.
+  boards {
+    name: "am243_1"
+    board_type: AM243
+    comm {
+      comm_type: ETHERCAT
+      ethercat_config {
+        interface_name: "ethercat0"
+        process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
+      }
+    }
+    channels { index: 0 drive: PDO_JOINT }
+    am243_config {
+      slave_index: 1
+      pdo_mapping: AM243_PDO_MAPPING_TI_DEMO
+    }
+  }
   actions {
     single_actions {
       node {
@@ -22,26 +42,18 @@ robot {
       actuator {
         actuator_name: "am243_joint_1"
         id: 1
-        actuator_type: AM243_ETHERCAT_ACTUATOR
-        comm {
-          comm_type: ETHERCAT
-          ethercat_config {
-            interface_name: "ethercat0"
-            process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
-          }
-        }
+        # Board-layer AM243: actuator_type unset -> ActionFactory ->
+        # Am243Board -> TiDemoDriver (docs/BOARD_LAYER_RFC.md §10 Phase 3).
+        motor_type: MOTOR_TI_DEMO
+        board_name: "am243_1"
+        channel: 0
         physical_lower_limit: -180
         physical_upper_limit: 180
         operational_lower_limit: -90
         operational_upper_limit: 90
+        # Bridge until idle_position moves to a motor-level config (Phase 4).
         am243_ethercat_config {
-          slave_index: 1
-          output_offset_bytes: 0
-          input_offset_bytes: 0
-          output_size_bytes: 8
-          input_size_bytes: 8
           idle_position: 0
-          pdo_mapping: AM243_PDO_MAPPING_TI_DEMO
         }
       }
     }

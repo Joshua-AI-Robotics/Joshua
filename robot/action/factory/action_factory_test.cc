@@ -2,69 +2,113 @@
 
 #include "absl/status/status.h"
 #include "config/proto/robot.pb.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
 
 namespace robot::action {
 namespace {
 
-robot::action::SingleAction MakeAm243EthercatSingleAction() {
+// Board-layer single action: MOTOR_TI_DEMO bound to a MOCK board's
+// PDO_JOINT channel, so the resolution flow runs without hardware.
+robot::action::SingleAction MakeBoardJointSingleAction() {
   robot::action::SingleAction single_action;
   single_action.set_action_type(robot::action::ActionType::ACTUATOR);
 
   auto* actuator = single_action.mutable_actuator();
-  actuator->set_actuator_name("am243_joint_1");
+  actuator->set_actuator_name("joint_1");
   actuator->set_id(1);
-  actuator->set_actuator_type(robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR);
-  actuator->set_physical_lower_limit(-180.0f);
-  actuator->set_physical_upper_limit(180.0f);
+  actuator->set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
+  actuator->set_board_name("mock_board_1");
+  actuator->set_channel(0);
   actuator->set_operational_lower_limit(-90.0f);
   actuator->set_operational_upper_limit(90.0f);
-
-  auto* comm = actuator->mutable_comm();
-  comm->set_comm_type(robot::comm::CommType::ETHERCAT);
-  auto* ethercat_config = comm->mutable_ethercat_config();
-  ethercat_config->set_interface_name("joshua-no-such-ethercat-iface0");
-  ethercat_config->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
-
-  auto* actuator_config = actuator->mutable_am243_ethercat_config();
-  actuator_config->set_slave_index(2);
-  actuator_config->set_output_size_bytes(8);
-  actuator_config->set_input_size_bytes(8);
-  actuator_config->set_idle_position(0.0f);
-  actuator_config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
-
   return single_action;
 }
 
-TEST(ActionFactoryTest, Am243EthercatActionReportsUnavailableForMissingInterface) {
-  auto action_or = robot::action::ActionFactory::CreateAction(MakeAm243EthercatSingleAction());
-
-  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kUnavailable);
+config::Robot MakeRobotWithMockBoard() {
+  config::Robot robot_config;
+  auto* board = robot_config.add_boards();
+  board->set_name("mock_board_1");
+  board->set_board_type(robot::board::BoardType::MOCK);
+  auto* channel = board->add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::DriveInterface::PDO_JOINT);
+  return robot_config;
 }
 
-TEST(ActionFactoryTest, Am243EthercatActionRejectsInvalidEthercatCommConfig) {
-  auto single_action = MakeAm243EthercatSingleAction();
-  single_action.mutable_actuator()
-      ->mutable_comm()
-      ->mutable_ethercat_config()
-      ->clear_interface_name();
+class ActionFactoryBoardPathTest : public ::testing::Test {
+ protected:
+  void TearDown() override {
+    robot::board::BoardFactory::ResetForTesting();
+  }
+};
 
-  auto action_or = robot::action::ActionFactory::CreateAction(single_action);
+TEST_F(ActionFactoryBoardPathTest, CreatesTiDemoDriverOverMockBoardChannel) {
+  auto robot_config = MakeRobotWithMockBoard();
+
+  auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardJointSingleAction(),
+                                                              robot_config.boards());
+
+  ASSERT_TRUE(action_or.ok()) << action_or.status();
+  EXPECT_EQ((*action_or)->GetId(), "ti_demo_driver_joint_1");
+}
+
+TEST_F(ActionFactoryBoardPathTest, RejectsActuatorWithoutMotorType) {
+  auto robot_config = MakeRobotWithMockBoard();
+  auto single_action = MakeBoardJointSingleAction();
+  single_action.mutable_actuator()->set_motor_type(robot::action::MotorType::MOTOR_INVALID);
+
+  auto action_or = robot::action::ActionFactory::CreateAction(single_action, robot_config.boards());
 
   EXPECT_EQ(action_or.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(ActionFactoryTest, Am243EthercatActionRejectsLrwProcessDataMode) {
-  auto single_action = MakeAm243EthercatSingleAction();
-  single_action.mutable_actuator()
-      ->mutable_comm()
-      ->mutable_ethercat_config()
-      ->set_process_data_mode(robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW);
+TEST_F(ActionFactoryBoardPathTest, ReportsUnknownBoardName) {
+  auto robot_config = MakeRobotWithMockBoard();
+  auto single_action = MakeBoardJointSingleAction();
+  single_action.mutable_actuator()->set_board_name("no_such_board");
 
-  auto action_or = robot::action::ActionFactory::CreateAction(single_action);
+  auto action_or = robot::action::ActionFactory::CreateAction(single_action, robot_config.boards());
+
+  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kNotFound);
+}
+
+TEST_F(ActionFactoryBoardPathTest, ReportsUndeclaredChannel) {
+  auto robot_config = MakeRobotWithMockBoard();
+  auto single_action = MakeBoardJointSingleAction();
+  single_action.mutable_actuator()->set_channel(5);
+
+  auto action_or = robot::action::ActionFactory::CreateAction(single_action, robot_config.boards());
+
+  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kNotFound);
+}
+
+TEST_F(ActionFactoryBoardPathTest, RejectsMotorOnIncompatibleDrive) {
+  auto robot_config = MakeRobotWithMockBoard();
+  robot_config.mutable_boards(0)->mutable_channels(0)->set_drive(
+      robot::board::DriveInterface::STEP_DIR);
+
+  auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardJointSingleAction(),
+                                                              robot_config.boards());
 
   EXPECT_EQ(action_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ActionFactoryTest, RejectsDeprecatedActuatorType) {
+  robot::action::SingleAction single_action;
+  single_action.set_action_type(robot::action::ActionType::ACTUATOR);
+  auto* actuator = single_action.mutable_actuator();
+  actuator->set_actuator_name("legacy_joint_1");
+  actuator->set_actuator_type(robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR);
+  actuator->set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
+  actuator->set_board_name("am243_1");
+  actuator->set_channel(0);
+
+  auto action_or = robot::action::ActionFactory::CreateAction(
+      single_action, google::protobuf::RepeatedPtrField<robot::board::Board>{});
+
+  EXPECT_EQ(action_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(action_or.status().message().find("deprecated actuator_type"), std::string::npos);
 }
 
 }  // namespace

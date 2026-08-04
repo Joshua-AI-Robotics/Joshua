@@ -10,7 +10,7 @@ builds upstream SOEM through `@soem`. The transport now opens and closes the
 SOEM master socket, discovers slaves, forces SOEM's split LRD/LWR path, maps PDO
 regions, exposes cached slave metadata, transitions slaves to OPERATIONAL, and
 exchanges process data. Board-facing smoke tests live in
-`am243_demo_smoke.cc` and `robot/action/motors/drivers/am243_driver_smoke.cc`.
+`am243_demo_smoke.cc` and `robot/board/am243/am243_driver_smoke.cc`.
 `ethercat_status.*` contains transport-independent PDO and working-count
 validation helpers.
 

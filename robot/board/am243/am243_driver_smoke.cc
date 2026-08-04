@@ -15,19 +15,17 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
-#include "robot/action/motors/drivers/am243_ethercat_driver.h"
-#include "robot/action/motors/drivers/am243_pdo_codec.h"
+#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/action/proto/action_packet.pb.h"
-#include "robot/comm/ethercat/ethercat_status.h"
+#include "robot/board/am243/am243_board.h"
+#include "robot/board/am243/am243_pdo_codec.h"
+#include "robot/board/proto/board.pb.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
-#include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/factory/comm_factory.h"
 
 namespace {
 
 using robot::comm::ethercat::PdoRegion;
-using robot::comm::ethercat::ProcessDataMode;
-using robot::comm::ethercat::SlaveIdentity;
-using robot::comm::ethercat::SoemEthercatTransport;
 
 constexpr float kLowerLimit = -90.0f;
 constexpr float kUpperLimit = 90.0f;
@@ -78,39 +76,39 @@ void ShowRecentCycles(std::deque<std::string>* recent_cycles, const std::string&
   std::cout.flush();
 }
 
-void PrintSlave(uint16_t index, const SlaveIdentity& slave) {
-  std::cout << "slave " << index << ": name=\"" << slave.name << "\" man=0x" << std::hex
-            << slave.manufacturer << " id=0x" << slave.product_id << " rev=0x" << slave.revision
-            << std::dec << " outputs=" << slave.output_size_bits
-            << " bits inputs=" << slave.input_size_bits << " bits\n";
-}
+robot::board::Board MakeBoardConfig(const std::string& interface_name, uint16_t slave_index) {
+  robot::board::Board board;
+  board.set_name("am243_smoke");
+  board.set_board_type(robot::board::BoardType::AM243);
 
-robot::action::Actuator MakeActuatorConfig(const std::string& interface_name,
-                                           const PdoRegion& region) {
-  robot::action::Actuator actuator;
-  actuator.set_actuator_name("am243_demo");
-  actuator.set_id(1);
-  actuator.set_actuator_type(robot::action::ActuatorType::AM243_ETHERCAT_ACTUATOR);
-  actuator.set_physical_lower_limit(kLowerLimit);
-  actuator.set_physical_upper_limit(kUpperLimit);
-  actuator.set_operational_lower_limit(kLowerLimit);
-  actuator.set_operational_upper_limit(kUpperLimit);
-
-  auto* comm = actuator.mutable_comm();
+  auto* comm = board.mutable_comm();
   comm->set_comm_type(robot::comm::CommType::ETHERCAT);
   auto* ethercat_config = comm->mutable_ethercat_config();
   ethercat_config->set_interface_name(interface_name);
   ethercat_config->set_process_data_mode(
       robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
 
-  auto* am243_config = actuator.mutable_am243_ethercat_config();
-  am243_config->set_slave_index(region.slave_index);
-  am243_config->set_output_offset_bytes(region.output_offset_bytes);
-  am243_config->set_input_offset_bytes(region.input_offset_bytes);
-  am243_config->set_output_size_bytes(region.output_size_bytes);
-  am243_config->set_input_size_bytes(region.input_size_bytes);
-  am243_config->set_idle_position(0.0f);
-  am243_config->set_pdo_mapping(robot::action::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
+  auto* channel = board.add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::DriveInterface::PDO_JOINT);
+
+  auto* am243_config = board.mutable_am243_config();
+  am243_config->set_slave_index(slave_index);
+  am243_config->set_pdo_mapping(robot::board::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
+  return board;
+}
+
+robot::action::Actuator MakeActuatorConfig() {
+  robot::action::Actuator actuator;
+  actuator.set_actuator_name("am243_demo");
+  actuator.set_id(1);
+  actuator.set_motor_type(robot::action::MotorType::MOTOR_TI_DEMO);
+  actuator.set_board_name("am243_smoke");
+  actuator.set_channel(0);
+  actuator.set_physical_lower_limit(kLowerLimit);
+  actuator.set_physical_upper_limit(kUpperLimit);
+  actuator.set_operational_lower_limit(kLowerLimit);
+  actuator.set_operational_upper_limit(kUpperLimit);
   return actuator;
 }
 
@@ -137,36 +135,33 @@ int main(int argc, char** argv) {
   const int period_us = argc >= 4 ? ParsePositiveInt(argv[3], 5000) : 5000;
   const uint16_t slave_index = static_cast<uint16_t>(argc >= 5 ? ParsePositiveInt(argv[4], 1) : 1);
 
-  auto transport = std::make_shared<SoemEthercatTransport>();
-  absl::Status status = transport->Init(interface_name, ProcessDataMode::kSplitLrdLwr);
-  if (!status.ok()) {
-    return Fail(status);
-  }
-  status = transport->ConfigureSlaves();
+  const robot::board::Board board_config = MakeBoardConfig(interface_name, slave_index);
+
+  // Board init owns the full SOEM bring-up: open master, ConfigureSlaves,
+  // StartCyclic, verify OPERATIONAL, resolve the PDO region.
+  robot::board::Am243Board board;
+  absl::Status status = board.Init(board_config);
   if (!status.ok()) {
     return Fail(status);
   }
 
-  absl::StatusOr<std::vector<SlaveIdentity>> slaves_or = transport->GetSlaves();
-  if (!slaves_or.ok()) {
-    return Fail(slaves_or.status());
-  }
-  for (size_t i = 0; i < slaves_or->size(); ++i) {
-    PrintSlave(static_cast<uint16_t>(i + 1), (*slaves_or)[i]);
+  auto channel_or = board.OpenChannel(0);
+  if (!channel_or.ok()) {
+    return Fail(channel_or.status());
   }
 
-  absl::StatusOr<PdoRegion> region_or = transport->GetPdoRegion(slave_index);
+  // The CommFactory cache hands back the same master the board opened, so
+  // the smoke can print the raw slave I/O next to the driver commands.
+  auto transport_or = robot::comm::CommFactory::CreateEthercatTransport(board_config.comm());
+  if (!transport_or.ok()) {
+    return Fail(transport_or.status());
+  }
+  auto region_or = (*transport_or)->GetPdoRegion(slave_index);
   if (!region_or.ok()) {
     return Fail(region_or.status());
   }
 
-  status = transport->StartCyclic();
-  if (!status.ok()) {
-    return Fail(status);
-  }
-
-  robot::action::Am243EthercatDriver driver(transport,
-                                            MakeActuatorConfig(interface_name, *region_or));
+  robot::action::TiDemoDriver driver(*channel_or, MakeActuatorConfig());
   status = driver.Init();
   if (!status.ok()) {
     return Fail(status);
@@ -184,12 +179,12 @@ int main(int argc, char** argv) {
       return Fail(status);
     }
 
-    auto inputs_or = transport->ReadInputs(*region_or);
+    auto inputs_or = (*transport_or)->ReadInputs(*region_or);
     if (!inputs_or.ok()) {
       return Fail(inputs_or.status());
     }
     const std::vector<uint8_t> outputs =
-        robot::action::am243::EncodeDemoOutputSeed(DemoSeedForPosition(position));
+        robot::board::am243::EncodeDemoOutputSeed(DemoSeedForPosition(position));
 
     std::ostringstream cycle_line;
     cycle_line << "cycle=" << cycle << " position=" << position << " O=[" << FormatBytes(outputs)
@@ -205,11 +200,7 @@ int main(int argc, char** argv) {
   if (!status.ok()) {
     return Fail(status);
   }
-  status = transport->StopCyclic();
-  if (!status.ok()) {
-    return Fail(status);
-  }
-  status = transport->Teardown();
+  status = board.Teardown();
   if (!status.ok()) {
     return Fail(status);
   }

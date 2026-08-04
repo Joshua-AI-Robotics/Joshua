@@ -11,16 +11,16 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "robot/action/motors/drivers/am243_pdo_codec.h"
+#include "robot/board/am243/am243_pdo_codec.h"
 #include "robot/comm/ethercat/ethercat_status.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
 
 namespace {
 
-using robot::action::am243::DecodeDemoInputEchoSeed;
-using robot::action::am243::EncodeDemoOutputSeed;
-using robot::action::am243::kDemoPdoSizeBytes;
+using robot::board::am243::DecodeDemoInputEchoSeed;
+using robot::board::am243::EncodeDemoOutputSeed;
+using robot::board::am243::kDemoPdoSizeBytes;
 using robot::comm::ethercat::PdoRegion;
 using robot::comm::ethercat::ProcessDataMode;
 using robot::comm::ethercat::SlaveIdentity;

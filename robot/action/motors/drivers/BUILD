@@ -15,85 +15,27 @@ cc_library(
 )
 
 cc_library(
-    name = "am243_ethercat_driver",
-    srcs = ["am243_ethercat_driver.cc"],
-    hdrs = ["am243_ethercat_driver.h"],
+    name = "ti_demo_driver",
+    srcs = ["ti_demo_driver.cc"],
+    hdrs = ["ti_demo_driver.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":am243_pdo_codec",
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:actuator_interface",
-        "//robot/comm/ethercat:ethercat_status",
-        "//robot/comm/ethercat:ethercat_transport",
+        "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
         "@glog",
     ],
 )
 
-cc_library(
-    name = "am243_pdo_codec",
-    srcs = ["am243_pdo_codec.cc"],
-    hdrs = ["am243_pdo_codec.h"],
-    visibility = ["//visibility:public"],
+cc_test(
+    name = "ti_demo_driver_test",
+    srcs = ["ti_demo_driver_test.cc"],
     deps = [
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_binary(
-    name = "am243_driver_smoke",
-    srcs = ["am243_driver_smoke.cc"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":am243_ethercat_driver",
-        ":am243_pdo_codec",
+        ":ti_demo_driver",
         "//config/proto:robot_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
-        "//robot/comm/ethercat:ethercat_status",
-        "//robot/comm/ethercat:ethercat_transport",
-        "//robot/comm/ethercat:soem_ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_binary(
-    name = "am243_config_smoke",
-    srcs = ["am243_config_smoke.cc"],
-    data = ["//config/config_preset:config_presets"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":am243_ethercat_driver",
-        ":am243_pdo_codec",
-        "//config:config_utils",
-        "//config/proto:config_cc_proto",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//robot/comm/ethercat:ethercat_transport",
-        "//robot/comm/ethercat:soem_ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_test(
-    name = "am243_ethercat_driver_test",
-    srcs = ["am243_ethercat_driver_test.cc"],
-    deps = [
-        ":am243_ethercat_driver",
-        "//config/proto:robot_cc_proto",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//robot/comm/ethercat:fake_ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "am243_pdo_codec_test",
-    srcs = ["am243_pdo_codec_test.cc"],
-    deps = [
-        ":am243_pdo_codec",
+        "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

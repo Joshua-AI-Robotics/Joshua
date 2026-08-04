@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -17,8 +18,21 @@ namespace robot::comm {
 class CommFactory {
  public:
   static absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::Comm& comm);
+  // Returns a cached instance per interface name — an EtherCAT NIC has
+  // exactly one master, and two ecx_init()s on one NIC fight over the raw
+  // socket (docs/BOARD_LAYER_RFC.md §5.3). The first call for an interface
+  // opens the SOEM master; later calls return the same transport and fail
+  // if they request a different process-data mode.
   static absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>
   CreateEthercatTransport(const robot::comm::Comm& comm);
+
+  // Replaces the SOEM transport constructor so cache semantics are testable
+  // without a NIC. Pass nullptr to restore the default. For tests.
+  static void SetEthercatTransportFactoryForTesting(
+      std::function<std::shared_ptr<robot::comm::ethercat::EthercatTransport>()> factory);
+
+  // Tears down and forgets every cached EtherCAT transport. For tests.
+  static void ResetEthercatTransportCacheForTesting();
 
   ~CommFactory() = default;
   CommFactory(const CommFactory&) = delete;
