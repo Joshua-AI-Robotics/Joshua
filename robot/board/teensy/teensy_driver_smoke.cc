@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
   channel->set_drive(robot::board::DriveInterface::STEP_DIR);
   channel->mutable_step_dir()->set_max_pulse_rate_hz(4000);
   channel->mutable_step_dir()->set_enable_active_low(true);
+  channel->mutable_step_dir()->set_step_pin(2);
+  channel->mutable_step_dir()->set_dir_pin(3);
+  channel->mutable_step_dir()->set_enable_pin(4);
 
   robot::board::TeensyBoard board;
   auto init_status = board.Init(config);

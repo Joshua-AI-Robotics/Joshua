@@ -31,8 +31,19 @@ through the actual production path (`launcher:joshua_main` +
 Getting from "commands accepted, GPIO pulses confirmed via
 `GET_FEEDBACK`" to "motor actually turns" took a real, multi-stage
 debugging session — see the two sections below. Skip to
-[Wiring](#wiring-matches-srcchannel_tablec-channel-0) for the diagram
+[Wiring](#wiring-matches-the-example-presets-channel-0) for the diagram
 that reflects the final, working state.
+
+**Architecture note, after initial verification**: pin numbers
+(`step_pin`/`dir_pin`/`enable_pin`) moved from a hardcoded
+`channel_table.c` array to host config (`StepDirConfig`, pushed via
+`CONFIGURE_CHANNEL` at runtime) — see `docs/BOARD_LAYER_RFC.md` §7.5's
+revised text for the reasoning. **Re-verified against real hardware after
+this change**: rebuilt, reflashed, `TeensyBoard::Init()` succeeded with
+the new pin-carrying `CONFIGURE_CHANNEL` payload, and a `ros2 topic pub`
+of `45.0` degrees rotated the motor again through the same wiring —
+confirming the CONFIGURE_CHANNEL-carried pins are correctly applied by
+`StepDirConfigure()` at runtime, not just accepted.
 
 ## Bugs found and fixed getting this far
 
@@ -161,7 +172,13 @@ bazel run //robot/board/teensy:teensy_driver_smoke -- /dev/ttyACM0
   regulation if you see weak/stalling behavior, though it wasn't needed
   here once the wiring above was fixed.
 
-## Wiring (matches `src/channel_table.c`, channel 0)
+## Wiring (matches the example preset's `channel 0`)
+
+**Pin numbers are host-configured**, not baked into firmware
+(`docs/BOARD_LAYER_RFC.md` §7.5, revised) — the diagram below matches
+`config/config_preset/example/teensy_stepper_demo.pbtxt`'s `step_dir {
+step_pin: 2 dir_pin: 3 enable_pin: 4 }`, not a hardcoded C file. If you
+rewire to different pins, edit the pbtxt, not `channel_table.c`.
 
 ```
 Teensy 4.1 pin 2  ──► TB6600 PUL+   (STEP)
@@ -190,10 +207,12 @@ signal-side ground (`PUL-`/`DIR-`/`ENA-`) ties to the Teensy. Keeping the
 power and signal grounds separate is the point of the opto-isolated
 inputs.
 
-To add a second channel, add an entry to `g_channels[]` in
-`src/channel_table.c` with a free set of pins, then declare a second
-`channels { index: 1 ... }` block in the host config. No other firmware or
-host code changes needed.
+To add a second channel: add a channel *slot* in `channel_table.c`
+(`ChannelState g_channels[2];` — this part is still compile-time, since
+channel *count* is reported by `IDENTIFY`), reflash, then declare a
+second `channels { index: 1 step_dir { step_pin: ... dir_pin: ...
+enable_pin: ... } }` block in the host config with whatever free pins
+it's actually wired to. No other firmware changes.
 
 ## Verifying the raw wire protocol (bypassing the host stack)
 

@@ -118,10 +118,13 @@ int jw1_encode_configure_channel_step_dir(uint8_t* buf,
                                           size_t cap,
                                           uint8_t channel,
                                           const jw1_configure_step_dir_t* config) {
-  uint8_t payload[6];
+  uint8_t payload[9];
   jw1_put_u32le(payload, config->max_pulse_rate_hz);
   payload[4] = config->invert_dir ? 1 : 0;
   payload[5] = config->enable_active_low ? 1 : 0;
+  payload[6] = config->step_pin;
+  payload[7] = config->dir_pin;
+  payload[8] = config->enable_pin;
   return jw1_encode_frame(buf, cap, JW1_CMD_CONFIGURE_CHANNEL, channel, payload, sizeof(payload));
 }
 
@@ -233,11 +236,14 @@ int jw1_decode_set_target(const jw1_frame_t* frame, jw1_set_target_t* out) {
 }
 
 int jw1_decode_configure_channel_step_dir(const jw1_frame_t* frame, jw1_configure_step_dir_t* out) {
-  if (frame->cmd != JW1_CMD_CONFIGURE_CHANNEL || frame->payload_len != 6) {
+  if (frame->cmd != JW1_CMD_CONFIGURE_CHANNEL || frame->payload_len != 9) {
     return -1;
   }
   out->max_pulse_rate_hz = jw1_get_u32le(frame->payload);
   out->invert_dir = frame->payload[4];
   out->enable_active_low = frame->payload[5];
+  out->step_pin = frame->payload[6];
+  out->dir_pin = frame->payload[7];
+  out->enable_pin = frame->payload[8];
   return 0;
 }

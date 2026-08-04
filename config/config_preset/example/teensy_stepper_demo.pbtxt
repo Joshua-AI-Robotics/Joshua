@@ -40,6 +40,13 @@ robot {
         max_pulse_rate_hz: 4000
         invert_dir: false
         enable_active_low: true
+        # GPIO pins on the Teensy 4.1, matching whatever the board is
+        # physically wired to (docs/BOARD_LAYER_RFC.md §7.5, revised —
+        # pins are host-configured, not baked into the firmware image).
+        # See firmware/teensy/41/docs/bringup.md for the wiring diagram.
+        step_pin: 2
+        dir_pin: 3
+        enable_pin: 4
       }
     }
   }

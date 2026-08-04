@@ -17,7 +17,9 @@ firmware/arduino/
   platformio.ini
   src/
     main.cpp
-    channel_table.c        THE pinout contract, this board's own pin numbers
+    channel_table.c        channel *count* only — pins are host-configured,
+                           not here (docs/BOARD_LAYER_RFC.md §7.5, revised;
+                           see firmware/teensy/41/ for the pattern to copy)
     channel_table.h
     backend_stepdir.{h,cpp}
     transport_serial.{h,cpp}
@@ -64,8 +66,9 @@ should apply: enumeration, then IDENTIFY via `TeensyBoard`-equivalent
 
 ## Wiring / Pinout
 
-TODO — will live in `src/channel_table.c` once written, per
-`docs/BOARD_LAYER_RFC.md` §7.5.
+TODO — will be host-configured via `StepDirConfig.step_pin`/`dir_pin`/
+`enable_pin` in the pbtxt (same as Teensy), not hardcoded in
+`channel_table.c`, per `docs/BOARD_LAYER_RFC.md` §7.5 (revised).
 
 ## Known gaps / Troubleshooting
 

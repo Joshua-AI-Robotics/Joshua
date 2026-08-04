@@ -1,22 +1,21 @@
-// firmware/teensy/41/src/channel_table.c — one file per wiring variant
-// (docs/BOARD_LAYER_RFC.md §7.5). This variant: a single TB6600 stepper
-// drive on channel 0.
+// firmware/teensy/41/src/channel_table.c — declares how many STEP_DIR
+// channel slots this firmware image exposes (docs/BOARD_LAYER_RFC.md
+// §7.4). This variant: one channel slot.
 //
-// Wiring:
-//   Teensy 4.1 pin 2  -> TB6600 PUL+ (STEP)
-//   Teensy 4.1 pin 3  -> TB6600 DIR+ (DIR)
-//   Teensy 4.1 pin 4  -> TB6600 ENA+ (ENABLE)
-//   Teensy 4.1 GND    -> TB6600 PUL-/DIR-/ENA- (common ground)
-// See docs/bringup.md for the full wiring diagram and TB6600 DIP switch
-// settings.
+// Pin numbers are NOT declared here — they're host-configured via
+// StepDirConfig.step_pin/dir_pin/enable_pin in the board's pbtxt, pushed
+// to this exact channel at Init() via CONFIGURE_CHANNEL
+// (docs/BOARD_LAYER_RFC.md §7.5, revised). See the example preset
+// (config/config_preset/example/teensy_stepper_demo.pbtxt) for the pin
+// values currently wired on the reference bring-up, and
+// docs/bringup.md for the full wiring diagram.
 //
-// To wire a second TB6600 for channel 1, add an entry here (pick unused
-// pins) and reflash — no host-side code changes; the host declares
-// channel 1 in its config and IDENTIFY reports it automatically.
+// To add a second channel slot, add an entry here and reflash — no other
+// firmware changes; the host then declares a second `channels { index: 1
+// step_dir { step_pin: ... dir_pin: ... enable_pin: ... } }` block in its
+// config, on whatever free pins it's actually wired to.
 #include "channel_table.h"
 
-ChannelState g_channels[] = {
-    {.pins = {.step_pin = 2, .dir_pin = 3, .enable_pin = 4}},  // channel 0
-};
+ChannelState g_channels[1];
 
 const uint8_t g_num_channels = sizeof(g_channels) / sizeof(g_channels[0]);

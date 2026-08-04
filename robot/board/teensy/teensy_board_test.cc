@@ -62,6 +62,9 @@ robot::board::Board MakeTeensyBoard() {
   channel->mutable_step_dir()->set_max_pulse_rate_hz(20000);
   channel->mutable_step_dir()->set_invert_dir(false);
   channel->mutable_step_dir()->set_enable_active_low(true);
+  channel->mutable_step_dir()->set_step_pin(2);
+  channel->mutable_step_dir()->set_dir_pin(3);
+  channel->mutable_step_dir()->set_enable_pin(4);
   return board;
 }
 
@@ -118,6 +121,14 @@ TEST_F(TeensyBoardTest, InitRejectsMissingFirmwareSpec) {
 TEST_F(TeensyBoardTest, InitRejectsNonStepDirDrive) {
   auto config = MakeTeensyBoard();
   config.mutable_channels(0)->set_drive(robot::board::DriveInterface::SERVO_BUS_UART);
+  TeensyBoard board;
+
+  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(TeensyBoardTest, InitRejectsPinOutOfMcuRange) {
+  auto config = MakeTeensyBoard();
+  config.mutable_channels(0)->mutable_step_dir()->set_step_pin(300);  // Doesn't fit uint8_t.
   TeensyBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);

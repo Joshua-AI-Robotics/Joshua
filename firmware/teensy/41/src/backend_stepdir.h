@@ -10,7 +10,16 @@
 extern "C" {
 #endif
 
+// State-only — no pin numbers known yet, so no GPIO calls here. Pins are
+// host-configured (docs/BOARD_LAYER_RFC.md §7.5, revised); see
+// StepDirConfigure.
 void StepDirInit(ChannelState* channel);
+
+// Applies the pin assignment and tunables from a CONFIGURE_CHANNEL command:
+// pinMode()s step_pin/dir_pin/enable_pin for the first time (idempotent if
+// called again), then disables the channel as a safe default until an
+// explicit Enable() arrives. Enable()/SetTarget() are no-ops before this
+// has run at least once (see pins_configured in channel_table.h).
 void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config);
 void StepDirEnable(ChannelState* channel);
 void StepDirDisable(ChannelState* channel);

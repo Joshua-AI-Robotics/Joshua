@@ -16,8 +16,8 @@ unsigned long MinPulseIntervalUs(const ChannelState& channel) {
 
 void Pulse(ChannelState* channel, bool dir_positive) {
   const bool dir_pin_level = channel->config.invert_dir ? !dir_positive : dir_positive;
-  digitalWrite(channel->pins.dir_pin, dir_pin_level ? HIGH : LOW);
-  digitalWriteFast(channel->pins.step_pin, HIGH);
+  digitalWrite(channel->config.dir_pin, dir_pin_level ? HIGH : LOW);
+  digitalWriteFast(channel->config.step_pin, HIGH);
   // 20us, not 2us: Teensy 4.1 drives 3.3V logic into a TB6600 opto-isolated
   // input commonly spec'd for 5V. A too-short HIGH time may not give the
   // opto's LED enough time to fully turn on at reduced drive current —
@@ -25,7 +25,7 @@ void Pulse(ChannelState* channel, bool dir_positive) {
   // and the TB6600's ENA gating were confirmed correct (position tracked
   // exactly as commanded) but the motor still didn't respond.
   delayMicroseconds(20);
-  digitalWriteFast(channel->pins.step_pin, LOW);
+  digitalWriteFast(channel->config.step_pin, LOW);
   channel->position_steps += dir_positive ? 1 : -1;
   channel->last_step_us = micros();
 }
@@ -33,28 +33,37 @@ void Pulse(ChannelState* channel, bool dir_positive) {
 }  // namespace
 
 void StepDirInit(ChannelState* channel) {
-  pinMode(channel->pins.step_pin, OUTPUT);
-  pinMode(channel->pins.dir_pin, OUTPUT);
-  pinMode(channel->pins.enable_pin, OUTPUT);
-  digitalWrite(channel->pins.step_pin, LOW);
-  digitalWrite(channel->pins.dir_pin, LOW);
-  StepDirDisable(channel);
+  channel->pins_configured = false;
+  channel->enabled = false;
 }
 
 void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config) {
   channel->config = *config;
+  pinMode(channel->config.step_pin, OUTPUT);
+  pinMode(channel->config.dir_pin, OUTPUT);
+  pinMode(channel->config.enable_pin, OUTPUT);
+  digitalWrite(channel->config.step_pin, LOW);
+  digitalWrite(channel->config.dir_pin, LOW);
+  channel->pins_configured = true;
+  StepDirDisable(channel);  // Safe default until an explicit Enable() arrives.
 }
 
 void StepDirEnable(ChannelState* channel) {
+  if (!channel->pins_configured) {
+    return;  // No pins to drive yet — wait for CONFIGURE_CHANNEL.
+  }
   const bool active_level = channel->config.enable_active_low ? LOW : HIGH;
-  digitalWrite(channel->pins.enable_pin, active_level);
+  digitalWrite(channel->config.enable_pin, active_level);
   channel->enabled = true;
 }
 
 void StepDirDisable(ChannelState* channel) {
-  const bool inactive_level = channel->config.enable_active_low ? HIGH : LOW;
-  digitalWrite(channel->pins.enable_pin, inactive_level);
   channel->enabled = false;
+  if (!channel->pins_configured) {
+    return;  // No pins to drive yet — nothing to write.
+  }
+  const bool inactive_level = channel->config.enable_active_low ? HIGH : LOW;
+  digitalWrite(channel->config.enable_pin, inactive_level);
 }
 
 void StepDirSetTarget(ChannelState* channel, jw1_mode_t mode, float value) {

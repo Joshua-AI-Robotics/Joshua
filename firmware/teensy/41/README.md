@@ -13,7 +13,9 @@ firmware/teensy/41/
   platformio.ini        one env per wiring variant (today: teensy41-serial)
   src/
     main.cpp             setup()/loop(), command dispatch
-    channel_table.c       THE pinout contract (docs/BOARD_LAYER_RFC.md §7.5)
+    channel_table.c       channel *count* per firmware image (compile-time);
+                          pin numbers are host-configured, not here — see
+                          Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
     backend_stepdir.{h,cpp}   STEP/DIR/ENA pulse generation
     transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
@@ -136,12 +138,18 @@ verify the wire protocol itself, not just "no error."
 
 ## Wiring / Pinout
 
-The pinout contract lives in `src/channel_table.c`, not here — see that
-file for the current channel 0 wiring (STEP/DIR/ENABLE pins) and
-`docs/bringup.md` for the full wiring diagram against a TB6600, including
-the ground-return connection (`ENA-`/`PUL-`/`DIR-` to Teensy GND) that
-caused the most debugging time when it was missing — read that section
-before wiring a second board the same way.
+**Pin numbers are host-configured** (`StepDirConfig.step_pin`/`dir_pin`/
+`enable_pin` in the pbtxt, pushed to firmware via `CONFIGURE_CHANNEL` at
+`Init()`), not hardcoded in `channel_table.c`
+(`docs/BOARD_LAYER_RFC.md` §7.5, revised). See
+`config/config_preset/example/teensy_stepper_demo.pbtxt` for channel 0's
+current wiring (pins 2/3/4), and `docs/bringup.md` for the full wiring
+diagram against a TB6600, including the ground-return connection
+(`ENA-`/`PUL-`/`DIR-` to Teensy GND) that caused the most debugging time
+when it was missing — read that section before wiring a second board the
+same way. `channel_table.c` only declares how many channel *slots* this
+firmware image has — still compile-time, since that's reported by
+`IDENTIFY`.
 
 ## Known gaps / Troubleshooting
 

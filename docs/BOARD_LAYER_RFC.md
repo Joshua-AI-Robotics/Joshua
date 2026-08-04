@@ -1170,50 +1170,80 @@ transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
 
-### 7.5 The channel table: pins are a firmware fact
+### 7.5 The channel table: pins are host-configured
 
-The artifact that ties §5.5's "wiring facts" to real code is the **channel
-table**: a compiled-in array, one per firmware variant, mapping channel
-index → motor backend + pins + per-channel state:
+**Revised from the original design.** This section originally specified
+pin numbers as a compile-time-only fact, baked into a per-firmware-variant
+C array and never expressible in host config (the one stated exception was
+`HOST_GPIO`, which has no separate firmware to bake facts into). Real
+usage on the first Joshua-firmware board (Teensy 4.1, §10 Phase 5)
+surfaced that this made Teensy/Arduino-style boards the *outlier*, not the
+norm: `Am243Config`'s PDO offsets, `ServoBusConfig.servo_id`, and
+`HostGpioConfig.pins` all already put their hardware-addressing fact in
+host config, not firmware. Pins now follow the same pattern — see
+`StepDirConfig` in `robot/board/proto/board.proto`.
+
+The **channel table** now declares only what's genuinely a compile-time
+fact — how many channel slots a firmware image exposes, and (for boards
+with a fixed single backend per image, as today's firmware is) what drive
+type each slot is:
 
 ```c
-// firmware/arduino/channel_table.c — one file per wiring variant
-static ChannelEntry g_channels[] = {
-    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 0
-    {.backend = &backend_stepdir, .step_pin = 4, .dir_pin = 5},  // channel 1
-};
+// firmware/teensy/41/src/channel_table.c
+ChannelState g_channels[1];  // one STEP_DIR channel slot; no pins here
 ```
 
-The dispatcher resolves every incoming `SET_TARGET` through this table:
-channel byte → table entry → backend → pins. Pin numbers therefore appear in
-exactly one place in the entire system. They never cross the wire (frames
-carry channel indexes, not pins) and never appear in host config — the one
-exception is `HOST_GPIO` boards, where no firmware exists and
-`HostGpioConfig` names the host header pins instead.
+Pin numbers are instead a `StepDirConfig` field, pushed to firmware per
+channel via `CONFIGURE_CHANNEL` at `Init()`, applied at runtime
+(`pinMode()` et al. run when the command arrives, not at boot):
 
-This makes the channel table a **pinout contract** between the person wiring
-the robot and the person writing config:
+```proto
+channels {
+  index: 0
+  drive: STEP_DIR
+  step_dir {
+    step_pin: 2
+    dir_pin: 3
+    enable_pin: 4
+    max_pulse_rate_hz: 4000
+  }
+}
+```
 
-1. The firmware variant documents its table ("ch0 = pin 9 PWM, ch2 = pins
-   2/3 STEP_DIR").
-2. Wiring plugs each motor into a contracted pin.
-3. Config binds each actuator to the channel that owns that pin
-   (`board_name` + `channel`), and declares the same drive in the board's
-   `channels{}`.
+A channel rejects `Enable`/`SetTarget` until its first `CONFIGURE_CHANNEL`
+arrives — there's no default pin to fall back on, and no firmware image
+to "just work" without a matching config.
 
-What is checked vs. trusted: IDENTIFY verifies the *logical* contract —
-firmware name, protocol version, channel count, per-channel drives — so a
-wrong image or a config/firmware drift fails at `Init`. The *physical* end
-(servo plugged into pin 9 but bound to channel 1) is undetectable by
-software; channel↔pin fidelity at the connector is on the human. Prefer
-mnemonic channel assignments to reduce that risk (so100 presets use
-channel index = servo bus ID).
+This is still a **pinout contract** between the person wiring the robot
+and the person writing config — the contract just now lives in the proto
+schema and the config file, not a hand-written C array:
 
-The split also sets change cadences deliberately: rewiring a motor to a
-different pin is a channel-table edit + reflash with the host untouched;
-swapping or retuning a motor is a pbtxt edit with the firmware untouched.
-Config edits (weekly) can never break wiring (once per board revision), and
-vice versa.
+1. The firmware variant documents its channel *count* and *drive type*
+   per slot ("1 channel, STEP_DIR") — this part is still compile-time,
+   verified by `IDENTIFY`.
+2. Wiring plugs each motor into whatever pins the person wiring it chooses.
+3. Config declares both the binding (`board_name` + `channel`) *and* the
+   actual pin numbers used, in one place — `channels { index: 0 step_dir {
+   step_pin: 2 ... } }`.
+
+What is checked vs. trusted — narrower than before, but the same
+fundamental limit: `IDENTIFY` still verifies the *logical* contract
+(firmware name, protocol version, channel count, per-channel drive type),
+so a wrong image or a config/firmware drift still fails at `Init`. What it
+still cannot verify is the *physical* end — a servo actually plugged into
+the pin config claims it's plugged into. That was true when pins lived in
+firmware too (a channel-table typo was just as unverifiable as a pbtxt
+typo); moving pins into config doesn't change what's fundamentally
+checkable, it changes *who* can make the mistake and *how expensive* it is
+to fix — a wrong pin number is now a config edit + rerun, not a
+channel-table edit + reflash.
+
+Change cadence, updated: rewiring a motor to a different pin is now a
+**pbtxt edit with the firmware untouched** — the same cadence as retuning a
+motor's speed or direction, since both are `StepDirConfig` fields now.
+What still requires a firmware rebuild + reflash: adding an entirely new
+channel *slot*, or changing which backend (drive type) a slot compiles
+against. The channel table's role shrank to exactly that boundary.
 
 ### 7.6 Flash tooling
 

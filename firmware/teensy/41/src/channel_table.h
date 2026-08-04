@@ -1,9 +1,12 @@
-// The channel table is the pinout contract between the person wiring the
-// robot and the person writing config (docs/BOARD_LAYER_RFC.md §7.5): pin
-// numbers appear in exactly this one file. Rewiring a motor to a different
-// pin is a channel_table.c edit + reflash with the host untouched;
-// retuning a motor (max pulse rate, direction, idle position) is a pbtxt
-// edit with the firmware untouched.
+// The channel table declares how many STEP_DIR channel slots this firmware
+// image exposes (docs/BOARD_LAYER_RFC.md §7.4) — a compile-time fact,
+// reported via IDENTIFY. Pin numbers are NOT declared here: they're
+// host-configured, pushed per channel via CONFIGURE_CHANNEL at Init() and
+// applied at runtime (see StepDirConfigure in backend_stepdir.cpp) — see
+// robot/board/proto/board.proto's StepDirConfig for why pins moved out of
+// the firmware image (docs/BOARD_LAYER_RFC.md §7.5, revised). A channel
+// rejects SetTarget/Enable until its first CONFIGURE_CHANNEL arrives
+// (pins_configured below) — there's no default pin to fall back on.
 #pragma once
 
 #include <stdbool.h>
@@ -16,14 +19,9 @@ extern "C" {
 #endif
 
 typedef struct {
-  uint8_t step_pin;
-  uint8_t dir_pin;
-  uint8_t enable_pin;
-} ChannelPins;
-
-typedef struct {
-  ChannelPins pins;
-  jw1_configure_step_dir_t config;  // Pushed by CONFIGURE_CHANNEL at host Init().
+  jw1_configure_step_dir_t config;  // Pushed by CONFIGURE_CHANNEL at host Init();
+                                    // includes step_pin/dir_pin/enable_pin.
+  bool pins_configured;             // False until the first CONFIGURE_CHANNEL.
   bool enabled;
   jw1_mode_t target_mode;
   float target_value;          // Steps (kPosition) or steps/sec (kVelocity).
@@ -32,8 +30,8 @@ typedef struct {
                                // max_pulse_rate_hz throttling.
 } ChannelState;
 
-// One entry per wiring variant (docs/BOARD_LAYER_RFC.md §7.4); defined in
-// channel_table.c, this variant's pinout contract.
+// One entry per channel slot this firmware image exposes; defined in
+// channel_table.c.
 extern ChannelState g_channels[];
 extern const uint8_t g_num_channels;
 

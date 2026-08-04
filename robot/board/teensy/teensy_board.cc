@@ -153,6 +153,20 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
                                                      channel.index(),
                                                      " must use the STEP_DIR drive."));
     }
+    for (uint32_t pin : {channel.step_dir().step_pin(),
+                         channel.step_dir().dir_pin(),
+                         channel.step_dir().enable_pin()}) {
+      if (pin > 255) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("TEENSY41 board '",
+                         config.name(),
+                         "' channel ",
+                         channel.index(),
+                         " declares a pin number ",
+                         pin,
+                         " that doesn't fit an MCU GPIO pin (max 255)."));
+      }
+    }
     if (channel.index() >= JW1_MAX_CHANNELS) {
       return absl::InvalidArgumentError(absl::StrCat("TEENSY41 board '",
                                                      config.name(),
@@ -250,6 +264,9 @@ absl::Status ConfigureChannel(FrameTransport& transport, const robot::board::Cha
   config.max_pulse_rate_hz = channel.step_dir().max_pulse_rate_hz();
   config.invert_dir = channel.step_dir().invert_dir() ? 1 : 0;
   config.enable_active_low = channel.step_dir().enable_active_low() ? 1 : 0;
+  config.step_pin = static_cast<uint8_t>(channel.step_dir().step_pin());
+  config.dir_pin = static_cast<uint8_t>(channel.step_dir().dir_pin());
+  config.enable_pin = static_cast<uint8_t>(channel.step_dir().enable_pin());
 
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_configure_channel_step_dir(

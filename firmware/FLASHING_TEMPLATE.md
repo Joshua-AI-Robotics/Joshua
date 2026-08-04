@@ -84,8 +84,11 @@ TODO
 ## Wiring / Pinout
 
 Only if this firmware drives external hardware. Point at the actual
-pinout contract (e.g. a channel table file) rather than duplicating pin
-numbers here if that file is the source of truth — one place to update.
+source of truth for pin numbers rather than duplicating them here — one
+place to update. For Joshua-firmware boards this is host config (e.g.
+`StepDirConfig.step_pin`/`dir_pin`/`enable_pin`, pushed to firmware at
+runtime via `CONFIGURE_CHANNEL` — see `docs/BOARD_LAYER_RFC.md` §7.5),
+not a hardcoded firmware file.
 
 TODO
 

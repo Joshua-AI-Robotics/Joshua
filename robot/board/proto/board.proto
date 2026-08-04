@@ -37,6 +37,20 @@ message StepDirConfig {
   uint32 max_pulse_rate_hz = 1;
   bool invert_dir = 2;
   bool enable_active_low = 3;
+  // GPIO pin mapping, pushed to firmware at Init() via CONFIGURE_CHANNEL —
+  // not baked into the firmware image (docs/BOARD_LAYER_RFC.md §7.5,
+  // revised: host-configured pins bring MCU-firmware boards in line with
+  // every other board type, all of which already put their hardware-
+  // addressing fact in config — AM243's PDO offsets, FeetechBusBoard's
+  // servo_id, HostGpioConfig's pins below). Values are MCU pin numbers
+  // (Arduino-style integer pin, e.g. Teensy 4.1's digital pin 2), specific
+  // to the exact firmware image flashed; IDENTIFY still catches a
+  // mismatched firmware/channel-count/drive-type, but cannot verify a pin
+  // number is physically wired the way config claims — that remains on
+  // whoever wires the board.
+  uint32 step_pin = 4;
+  uint32 dir_pin = 5;
+  uint32 enable_pin = 6;
 }
 
 message ServoBusConfig {
@@ -57,8 +71,10 @@ message HostGpioConfig {
   repeated uint32 pins = 2;  // Pin group on the host header.
 }
 
-// One motor slot on one board. Wiring facts are baked into the firmware
-// variant; the tunables below are pushed at Init() via CONFIGURE_CHANNEL.
+// One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
+// pins) and tunables are pushed at Init() via CONFIGURE_CHANNEL — see
+// StepDirConfig for why pins moved out of the firmware image
+// (docs/BOARD_LAYER_RFC.md §7.5).
 message Channel {
   uint32 index = 1;
   DriveInterface drive = 2;
