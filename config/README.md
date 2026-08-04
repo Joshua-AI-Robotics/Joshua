@@ -50,8 +50,8 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
    a new preset should rarely need one.
 3. If a change is user-facing, record it in [CHANGELOG.md](../CHANGELOG.md).
 4. For anything you intend to run repeatedly during development, pick a preset
-   you have read and confirmed declares no real devices — no `/dev/tty*` ports
-   or network interfaces, and `MOCK_*` or simulation components throughout. The
-   filename is not that confirmation: `so100/sim_mirror.pbtxt` is
-   `MODE_SIMULATION` and still opens `/dev/ttyACM1`. See the hardware-safety
-   section of [AGENTS.md](../AGENTS.md).
+   you have read and confirmed declares no real devices. Neither the filename
+   nor `operation_mode: MODE_SIMULATION` is that confirmation — both cross the
+   safe/unsafe boundary in this repo. What counts as safe is defined once, in
+   the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
+   against that list rather than against a copy of it here.
