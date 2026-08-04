@@ -1260,52 +1260,63 @@ zero motor-driver changes.
 Each phase lands green and independently revertible.
 
 ### Phase 1 — Proto groundwork
-- [ ] Add `robot/board/proto/board.proto` (`Board`, `Channel`,
+- [x] Add `robot/board/proto/board.proto` (`Board`, `Channel`,
       `DriveInterface`, `FirmwareSpec`, `BoardType`).
-- [ ] Add `repeated robot.board.Board boards` to `config/proto/robot.proto`.
-- [ ] Add `MotorType`, `board_name`, `channel` to `Actuator`; mark
+- [x] Add `repeated robot.board.Board boards` to `config/proto/robot.proto`.
+- [x] Add `MotorType`, `board_name`, `channel` to `Actuator`; mark
       `ActuatorType` board-flavored values and embedded `comm` deprecated
       (still functional).
-- [ ] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
-      until an SBC host needs it. Add `ROS2` (+ `Ros2Config` with namespace,
-      domain id, and discovery timeout) for vendor topic-backed boards (§5.7).
-      Note `CommType.BLE` exists with no config message — `BleConfig` lands
-      with the Spike/Python migration (§12.3).
-- [ ] Update `config_preset_validation_test` for both old and new shapes.
+- [x] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
+      until an SBC host needs it. `CommType.BLE` exists with no config
+      message, as scoped — `BleConfig` lands with the Spike/Python
+      migration (now §10 Phase 9).
+- [ ] Add `ROS2` (+ `Ros2Config` with namespace, domain id, and discovery
+      timeout) to `comm.proto` for vendor topic-backed boards (§5.7). Not
+      started — needed by §10 Phase 8 (`ROS2_VENDOR_ROBOT`), not before.
+- [x] Update `config_preset_validation_test` for both old and new shapes —
+      the generic all-`.pbtxt` parse test covers both, since old-shape
+      (`actuator_type`) mock/Spike presets and new-shape (`board_name`)
+      presets both exist under `config/config_preset/` today.
 
 ### Phase 2 — Board layer skeleton
-- [ ] `robot/board/interfaces/`: `BoardInterface`, `BoardChannel`,
+- [x] `robot/board/interfaces/`: `BoardInterface`, `BoardChannel`,
       `TargetMode`, `ChannelFeedback`.
-- [ ] `robot/board/factory/`: `BoardFactory` with instance cache keyed by
+- [x] `robot/board/factory/`: `BoardFactory` with instance cache keyed by
       board name.
-- [ ] `ValidateMotorChannel(motor_type, drive)` compatibility
+- [x] `ValidateMotorChannel(motor_type, drive)` compatibility
       table + tests.
 - [ ] Move the serial `PortResources` cache out of `comm_factory.cc` behind
-      the board factory.
+      the board factory. Not done — `PortResources` still lives in
+      `robot/comm/factory/comm_factory.cc`; only the EtherCAT transport
+      cache moved (Phase 3 below).
 
 ### Phase 3 — Port AM243
-- [ ] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
+- [x] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
       one SOEM master per NIC, mirroring the serial `PortResources` cache
       (today every call constructs a new master; two `ecx_init()`s on one
       NIC fight over the raw socket).
-- [ ] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
+- [x] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
       (currently in `ActionFactory`), PDO region mapping, and WKC checks;
       the cyclic exchange loop lives with the shared master (§5.3/§5.8).
-- [ ] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
-      StartCyclic → verify OPERATIONAL`. Today that sequencing exists only
-      in smoke-binary `main()`s; the config-driven path stops at `Init()`
-      (§3 problem 5).
-- [ ] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
+- [x] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
+      StartCyclic → verify OPERATIONAL`, covered by
+      `Am243BoardTest.InitOwnsFullSoemLifecycle`.
+- [x] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
       `AM243_PDO_MAPPING_TI_DEMO` isolation.
-- [ ] Replace `Am243EthercatDriver` with a thin motor driver over
+- [x] Replace `Am243EthercatDriver` with a thin motor driver over
       `BoardChannel` (`TiDemoDriver` — deliberately demo-scoped, not the
       generic joint driver; it retires with `MOTOR_TI_DEMO`).
-- [ ] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
+- [x] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
       to the new path — these are the hardware regression gates.
-- [ ] Prove the config-driven path end to end:
+- [x] Prove the config-driven path end to end:
       `am243_ethercat_demo.pbtxt → actuator_subscriber → Am243Board` drives
-      the TI demo. This path has never worked — only the smoke binaries did.
-- [ ] Update `docs/am243_ethercat.md` boundaries section.
+      the TI demo. `ActionFactory` routes `MOTOR_TI_DEMO` through
+      `BoardFactory → Am243Board → TiDemoDriver` and this is unit-tested
+      (`ActionFactoryBoardPathTest.CreatesTiDemoDriverOverMockBoardChannel`)
+      — same caveat as Phase 4's `FeetechBusBoard`: proven in software over
+      a mock board, not yet run against real LP-AM243 hardware from the
+      config-driven path end to end.
+- [x] Update `docs/am243_ethercat.md` boundaries section.
 
 ### Phase 4 — Port STS3215 (actuators + encoder co-migration)
 
@@ -1346,13 +1357,11 @@ Each phase lands green and independently revertible.
       per-actuator `comm {}`); keep teleop working.
 - [x] Remove deprecated C++ `ActionFactory` `actuator_type` arms; route all
       actuators through `motor_type` + `board_name` + `channel`.
-- [ ] Migrate `action_factory.py` (MOCK_MOTOR, SPIKE_MOTOR) to `MotorType`
-      *before* removing `ActuatorType` — the Python factory switches on the
-      enum being deleted. Not started: no C++ board-layer dependency, so
-      it's scoped as its own follow-up rather than folded into the STS3215
-      board port.
 - [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto once Python paths migrate. Blocked on the item above.
+      from proto once nothing switches on them. Blocked on retiring
+      `action_factory.py`'s `ActuatorType` switch (§10 Phase 9) — Phase 9
+      deletes the Python factory outright once its C++ equivalents exist,
+      rather than porting it to `MotorType` first.
 
 **Perception (partial — bus safety only; full migration is Phase 6):**
 - [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
@@ -1422,7 +1431,8 @@ completed cleanly, not just bus-locked.
 
 **Explicit non-goals for this phase:**
 - OpenCV cameras stay driver-direct unless a future board type needs them.
-- Python mock perception drivers stay on `perception_factory.py`.
+- Python mock perception drivers stay on `perception_factory.py` for this
+  phase; retired in Phase 9 once C++ mock doubles exist.
 - No placeholder `board_type: NONE` or other fake boards for symmetry.
 
 ### Phase 7 — Firmware tooling & handshake hardening
@@ -1435,7 +1445,7 @@ completed cleanly, not just bus-locked.
 - [ ] Docs: firmware contribution guide (how to add a board / a transport
       variant / a backend).
 
-### Phase 7 — ROS 2 vendor robot board
+### Phase 8 — ROS 2 vendor robot board
 - [ ] Add `ROS2_VENDOR_ROBOT` board support with graph validation in
       `Board::Init()` instead of firmware IDENTIFY.
 - [ ] Add `MobileBase` / `DifferentialDriveBase` action shape and
@@ -1447,6 +1457,40 @@ completed cleanly, not just bus-locked.
       /cmd_vel` plus odometry feedback.
 - [ ] Document vendor-specific endpoint presets for TurtleBot, Clearpath
       Jackal/Husky, Stretch, and similar robots.
+
+### Phase 9 — Remove the Python robot-side implementation
+
+Resolves open question §12.3: the board layer replaces the need for a
+parallel Python implementation, rather than growing one. `action_factory.py`,
+`perception_factory.py`, and `comm_factory.py` retire once every path they
+still serve — Pybricks/Spike BLE and the Python mock doubles — has a C++
+board-layer equivalent. Depends on Phase 4 (actuators) and Phase 6
+(perception parity); those phases deliberately leave Pybricks/Spike and
+mocks on Python rather than half-porting them, so this phase is where that
+debt gets paid off, not carried indefinitely.
+
+- [ ] Land a C++ board type for Pybricks/Spike over BLE (`SPIKE_HUB_BLE`,
+      `BleConfig`, §12.3/Phase 3 note) covering what `pybricks_driver.py` /
+      `pybricks_ble_transport.py` do today.
+- [ ] Land C++ mock board/driver/perception doubles to replace
+      `mock_driver.py`, `mock_encoder.py`, `mock_lidar.py`, `mock_camera.py`
+      for any tests that still depend on the Python mocks.
+- [ ] Audit `node_generator` and preset configs for any remaining
+      driver-direct path that only the Python factories serve; migrate or
+      confirm none remain.
+- [ ] Delete `robot/action/factory/action_factory.py`,
+      `robot/action/interfaces/*.py`,
+      `robot/action/motors/drivers/{mock_driver,pybricks_driver}.py`,
+      `robot/perception/factory/perception_factory.py`,
+      `robot/perception/interfaces/*.py`,
+      `robot/perception/{encoder,lidar,camera}/mock_*.py`,
+      `robot/comm/factory/comm_factory.py`, `robot/comm/serial/serial.py`,
+      `robot/comm/pybricks_ble_transport.py`, and their Python tests.
+- [ ] Remove the Python driver path from `node_generator` codegen and from
+      docs (`docs/GETTING_STARTED.md`, `firmware/README.md`) wherever it's
+      still documented as an option.
+- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
+      from proto (unblocks the item deferred in §10 Phase 4).
 
 ## 11. Acceptance criteria
 
@@ -1486,9 +1530,10 @@ completed cleanly, not just bus-locked.
    cache for encoder publishers, and does the perception layer read through
    the same board instance? See §6.8; decide before Phase 6 freezes
    `PerceptionFactory`.
-3. **Python parity** — `action_factory.py` / `comm_factory.py` mirror the C++
-   factories today; does the board layer need a Python implementation for the
-   Pybricks/mock paths, or do those stay driver-direct until needed?
+3. **Python parity — RESOLVED**: no parallel Python board-layer
+   implementation. `action_factory.py` / `perception_factory.py` /
+   `comm_factory.py` retire once C++ equivalents cover the Pybricks/mock
+   paths they still serve (§10 Phase 9).
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
    and future Teensy firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?
