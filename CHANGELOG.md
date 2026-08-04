@@ -24,9 +24,11 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - `robot/README.md`, `config/README.md`, and `tools/README.md`, covering the
   three subsystems that previously had no documentation
 - `hooks/agents_doc_check.sh` and an `agent-docs` CI job, failing the build when
-  a Markdown link in the agent instruction files stops resolving, or when a
-  nested `AGENTS.md` lacks the `CLAUDE.md` bridge that makes it visible to
-  Claude Code
+  a Markdown link or `@`-import in the agent instruction files stops resolving,
+  or when a nested `AGENTS.md` lacks a `CLAUDE.md` bridge that actually imports
+  it
+- `.gemini/settings.json` setting `contextFileName`, so Gemini CLI reads
+  `AGENTS.md` natively at every level instead of only the root `GEMINI.md`
 
 ### Fixed
 

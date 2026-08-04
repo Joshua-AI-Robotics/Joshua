@@ -49,14 +49,30 @@ status=0
 # Claude Code reads CLAUDE.md, never AGENTS.md, at any level — and the root
 # bridge does not cover subdirectories. Without a sibling bridge a nested file
 # is invisible to it while other agents read it. See docs/AGENTS_RFC.md §7.5.
-for nested in "${NESTED[@]}"; do
+#
+# Presence is not enough: an empty bridge, or one carrying its own rules
+# instead of the import, passes a file-exists test while Claude Code still
+# loads nothing. Require the import, and check the bridge's own links too.
+for nested in "${NESTED[@]:+${NESTED[@]}}"; do
   bridge="$(dirname "$nested")/CLAUDE.md"
   if [[ ! -f "$bridge" ]]; then
     echo "MISSING BRIDGE: $nested has no $bridge" >&2
     echo "  Claude Code cannot see $nested without it. Create it with:" >&2
     echo "    printf '@AGENTS.md\\n' > $bridge" >&2
     status=1
+    continue
   fi
+
+  # Strip code spans first: `@AGENTS.md` in backticks is documentation, not an
+  # import, and Claude Code's own parser skips those too.
+  if ! sed 's/`[^`]*`//g' "$bridge" |
+       grep -qE '(^|[[:space:]])@AGENTS\.md([[:space:]]|$)'; then
+    echo "INERT BRIDGE: $bridge does not import @AGENTS.md" >&2
+    echo "  It must contain the import, or $nested never reaches Claude Code." >&2
+    status=1
+  fi
+
+  FILES+=("$bridge")
 done
 
 for f in "${FILES[@]}"; do
@@ -84,6 +100,23 @@ for f in "${FILES[@]}"; do
       status=1
     fi
   done < <(grep -oE '\]\([^)]+\)' "$f" | sed -E 's/^\]\((.*)\)$/\1/')
+
+  # Claude Code @-imports resolve relative to the importing file, so a typo in
+  # one is as silent as a broken link. Code spans are stripped because its own
+  # parser skips them. Absolute and ~ imports are user-scope, not repo docs.
+  while IFS= read -r target; do
+    [[ -z "$target" ]] && continue
+    case "$target" in
+      '~'*|/*) continue ;;
+    esac
+
+    if [[ ! -e "$dir/$target" ]]; then
+      echo "BROKEN IMPORT: $f -> @$target" >&2
+      status=1
+    fi
+  done < <(sed 's/`[^`]*`//g' "$f" |
+           grep -oE '(^|[[:space:]])@[^[:space:]]+\.md' |
+           sed -E 's/^[[:space:]]*@//')
 done
 
 if [[ $status -eq 0 ]]; then

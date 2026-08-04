@@ -42,7 +42,7 @@ AGENTS.md                          canonical — every rule lives here
 | Copilot coding agent / CLI / VS Code | ✅ | native |
 | Antigravity (v1.20.3+) | ✅ | native |
 | Claude Code | ❌ (Anthropic: not planned) | `CLAUDE.md` |
-| Gemini CLI | ⚠️ only if `contextFileName` is set | `GEMINI.md` |
+| Gemini CLI | ✅ via `contextFileName` in `.gemini/settings.json` | that setting, plus `GEMINI.md` as fallback |
 | Copilot IDE-chat surfaces | ❌ | `.github/copilot-instructions.md` |
 
 Observed practice that this RFC codifies rather than invents:
@@ -147,8 +147,9 @@ see §8.
 ## 7. Nested `AGENTS.md` for subsystems
 
 The [agents.md](https://agents.md/) standard supports per-directory files,
-loaded automatically, **closest-file-wins**. This is an endorsed pattern for
-Joshua. None are required today; add one when a subsystem earns it.
+loaded automatically and **merged from the root down** (§7.3). This is an
+endorsed pattern for Joshua. None are required today; add one when a subsystem
+earns it.
 
 ### 7.1 Why it does not compete with `README.md`
 
@@ -184,13 +185,17 @@ Do **not** add one merely to have one. A directory with no docs at all needs a
 
 ### 7.3 How to write one
 
-Files **concatenate from the root down**; they do not replace each other. Both
-ecosystems agree on this — the agents.md hierarchy merges with later files
-winning on conflicts, and Claude Code states that discovered files "are
-concatenated into context rather than overriding each other." So a root rule
-still applies inside a subsystem. The hazard is narrower than
-whole-file precedence: only a nested rule that *contradicts* a root rule
-silently wins. Two rules keep that safe:
+Files **concatenate from the root down**; they do not replace each other. This
+is verified for the two agents that matter most here — Claude Code documents
+that discovered files "are concatenated into context rather than overriding
+each other," and Codex collects every `AGENTS.md` from the repository root down
+to the working directory. The public agents.md wording still says the closest
+file takes precedence, so treat root-down merging as what these implementations
+do, not as a guarantee across every tool.
+
+Either way a root rule is not silently discarded, and the hazard is narrower
+than whole-file precedence: only a nested rule that *contradicts* a root rule
+wins. Two rules keep that safe:
 
 1. **Local deltas only.** State what is true *here* and not elsewhere. Never
    copy a root rule — especially not the hardware-safety rules, which must have
@@ -247,10 +252,19 @@ printf '@AGENTS.md\n' > robot/CLAUDE.md
 up `robot/AGENTS.md`. `hooks/agents_doc_check.sh` fails when the bridge is
 missing, so the pair cannot drift apart.
 
-No nested `GEMINI.md` or Copilot bridge. Gemini reads nested files already, and
-Copilot's path-scoped instructions (`.github/instructions/*.instructions.md`
-with an `applyTo:` glob) would cover the whole tree from one central directory
-if it ever becomes worth doing — neither needs a file per subsystem.
+No nested `GEMINI.md` or Copilot bridge, but for different reasons.
+
+Gemini reads *nested* files, not nested `AGENTS.md` — by default it looks only
+for `GEMINI.md`, so a bridge per subsystem would be the same multiplication one
+level down. Instead `.gemini/settings.json` sets `contextFileName` to
+`["AGENTS.md", "GEMINI.md"]`, which makes Gemini read `AGENTS.md` natively at
+every level, root and nested, from one committed file. That is strictly better
+than the root `GEMINI.md` bridge, which stays only as a fallback for a Gemini
+surface that ignores the setting.
+
+Copilot needs nothing yet. If it ever does, its path-scoped instructions
+(`.github/instructions/*.instructions.md` with an `applyTo:` glob) cover the
+whole tree from one central directory — again no file per subsystem.
 
 This is the pattern Datadog's frontend team landed on for the same problem,
 after finding that nested files alone "only work when users edit specific
