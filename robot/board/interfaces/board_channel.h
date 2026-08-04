@@ -22,6 +22,12 @@ struct ChannelFeedback {
 class BoardChannel {
  public:
   virtual ~BoardChannel() = default;
+  // Torque semantics (docs/BOARD_LAYER_RFC.md §12.7, decided in Phase 4):
+  // Enable/Disable is the on/off gate — use it for any board whose torque
+  // is fundamentally a binary enable register (STS3215's torque-enable
+  // byte). Reserve TargetMode::kTorque for boards with a genuine continuous
+  // torque target; a channel with no such register returns
+  // UnimplementedError from it rather than reinterpreting it as on/off.
   virtual absl::Status Enable() = 0;
   virtual absl::Status Disable() = 0;
   // A board that cannot do a mode returns UnimplementedError from it.

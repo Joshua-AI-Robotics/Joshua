@@ -55,10 +55,20 @@ TEST_F(BoardFactoryTest, InvalidBoardTypeIsRejected) {
 }
 
 TEST_F(BoardFactoryTest, UnportedBoardTypesReportUnimplemented) {
+  robot::board::Board board = MakeMockBoard("bridge_1", 1);
+  board.set_board_type(robot::board::BoardType::ARDUINO_UNO);
+  auto result = BoardFactory::GetOrCreate(board);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+}
+
+TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
+  // FEETECH_BUS is implemented (docs/BOARD_LAYER_RFC.md §10 Phase 4); a
+  // config shaped for MockBoard (STEP_DIR channel, no comm) fails its own
+  // validation rather than falling into UnportedBoardTypesReportUnimplemented.
   robot::board::Board board = MakeMockBoard("arm_bus_1", 1);
   board.set_board_type(robot::board::BoardType::FEETECH_BUS);
   auto result = BoardFactory::GetOrCreate(board);
-  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(BoardFactoryTest, SameNameDifferentTypeIsRejected) {

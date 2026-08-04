@@ -11,7 +11,6 @@
 #include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/motor_channel_validation.h"
-#include "robot/comm/factory/comm_factory.h"
 #include "utils/status_macros.h"
 
 namespace robot::action {
@@ -43,8 +42,8 @@ class ActionFactory {
 
  private:
   // Resolution flow per docs/BOARD_LAYER_RFC.md §6.5: board_name -> Board
-  // config -> ValidateMotorChannel -> motor driver (via BoardChannel or, for
-  // MOTOR_STS3215 until Phase 4, board comm + Sts3215Driver).
+  // config -> ValidateMotorChannel -> BoardFactory -> OpenChannel -> motor
+  // driver.
   static absl::StatusOr<std::unique_ptr<robot::action::ActionInterface>> CreateBoardActuator(
       const robot::action::Actuator& actuator,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
@@ -103,12 +102,9 @@ class ActionFactory {
         return driver;
       }
       case robot::action::MotorType::MOTOR_STS3215: {
-        // Transitional until FeetechBusBoard (docs/BOARD_LAYER_RFC.md §10 Phase 4):
-        // comm lives on boards{}, but the driver is still the legacy register
-        // protocol implementation over serial.
-        ABSL_ASSIGN_OR_RETURN(auto serial,
-                              robot::comm::CommFactory::CreateSerial(board_config->comm()));
-        auto driver = std::make_unique<robot::action::Sts3215Driver>(serial, actuator);
+        ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
+        ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
+        auto driver = std::make_unique<robot::action::Sts3215Driver>(channel, actuator);
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }

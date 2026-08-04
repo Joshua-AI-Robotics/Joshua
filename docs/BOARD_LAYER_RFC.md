@@ -10,7 +10,7 @@ Make the actuator stack fully configurable across three independent axes:
 - **Motor** — what physically moves (STS3215 servo, NEMA17 stepper, Spike
   motor, future BLDC).
 - **Board** — the controller that runs the low-level motor loop (AM243,
-  Teensy, Arduino + TB6600, or the MCU inside a smart servo).
+  Teensy, Arduino, or the MCU inside a smart servo).
 - **Transport** — how the host reaches that controller (serial, EtherCAT,
   Ethernet/UDP, SPI, BLE).
 
@@ -80,9 +80,10 @@ config .pbtxt
 
 Structural problems this RFC fixes:
 
-1. **Combinatorial explosion.** A stepper on TB6600+Arduino over serial, the
-   same stepper on AM243 over EtherCAT, and a servo on Teensy+EasyCAT would
-   each need a new `ActuatorType`, driver class, and factory arm —
+1. **Combinatorial explosion.** A stepper (driving a TB6600) on Arduino over
+   serial, the same stepper on AM243 over EtherCAT, and a servo on Teensy
+   over EtherCAT would each need a new `ActuatorType`, driver class, and
+   factory arm —
    N_motors × N_boards × N_transports enum values. The layered design is
    additive: N_motors + N_boards + N_transports files.
 2. **No shared board instances.** `ActionFactory` creates one
@@ -138,9 +139,9 @@ Structural problems this RFC fixes:
                               │                     │ picks artifact by
                               ▼                     │ (board_type, transport)
       ═══════════ HOST ═══════════                  ▼
-      ┌──────────────────────────┐          tb6600-arduino-eth-v1.hex
+      ┌──────────────────────────┐          arduino-eth-v1.hex
       │  Motor driver            │          am243-ethercat-joshua-v1.bin
-      │  "what moves"            │          teensy-ecat-joshua-v1.hex
+      │  "what moves"            │          teensy-ethercat-joshua-v1.hex
       │  StepperDriver,          │                  │
       │  Sts3215Driver           │                  │ avrdude / uniflash /
       └────────────┬─────────────┘                  │ teensy_loader_cli
@@ -151,7 +152,7 @@ Structural problems this RFC fixes:
       │  Board controller        │                  │
       │  "what runs the loop"    │◄─── shared ───┐  │
       │  Am243Board, TeensyBoard,│     codec     │  │
-      │  Tb6600ArduinoBoard,     │  joshua_wire  │  │
+      │  ArduinoBoard,           │  joshua_wire  │  │
       │  FeetechBusBoard         │     _v1       │  │
       └────────────┬─────────────┘               │  │
                    │ Comm handle                 │  │
@@ -194,8 +195,7 @@ Composition, not multiplication:
                  StepperDriver            ◄── written ONCE
                 /      |       \
                ▼       ▼        ▼
-   Tb6600Arduino    Am243Board   TeensyEcatBoard     ◄── one per board
-       Board            |             |
+   ArduinoBoard     Am243Board   TeensyBoard          ◄── one per board
       /      \          |             |
      ▼        ▼         ▼             ▼
   Serial  UdpTransport  EthercatTransport            ◄── one per transport
@@ -217,7 +217,10 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    tb6600_arduino/     tb6600_arduino_board.*
+    arduino/            arduino_board.*  (MCU only; drive peripherals like a
+                        TB6600 are a Channel.drive fact, never in this name)
+    teensy/             teensy_board.*  (MCU only; a comm peripheral like an
+                        EasyCAT shield is a Board.comm fact, never in this name)
     feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
@@ -226,8 +229,8 @@ firmware/
   am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
                         stays as-is — vendor code never migrates to the
                         Joshua firmware pattern, §7.3)
-  arduino_tb6600/       main.cpp, backends, transports, platformio.ini ── NEW ──
-  teensy_ecat/          …
+  arduino/              main.cpp, backends, transports, platformio.ini ── NEW ──
+  teensy/               …
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
@@ -421,8 +424,8 @@ executes in-process:
 
 `HostGpioBoard` channels implement `BoardChannel` by driving pins directly
 (libgpiod, hardware PWM peripherals). The motor driver cannot tell the
-difference: the same `StepperDriver` runs over TB6600+Arduino, over
-AM243+EtherCAT, or over bare host pins — that is the whole point of the
+difference: the same `StepperDriver` runs over Arduino (driving a TB6600),
+over AM243+EtherCAT, or over bare host pins — that is the whole point of the
 seam. The honest caveat: userspace Linux is a poor step-pulse generator.
 Bit-banging STEP at tens of kHz from a non-RT process jitters badly, so
 realistic backends are hardware PWM channels, the Pi 5's RP1, or a
@@ -620,7 +623,7 @@ message Channel {
 }
 
 message FirmwareSpec {
-  string name = 1;                  // e.g. "tb6600-arduino-eth"
+  string name = 1;                  // e.g. "arduino-eth"
   uint32 min_proto_version = 2;
   // Omitted entirely for vendor-firmware boards (FEETECH_BUS).
 }
@@ -698,7 +701,7 @@ robot {
     comm { comm_type: ETHERNET_UDP udp_config { host: "192.168.1.50" port: 5555 } }
     channels { index: 0 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
     channels { index: 1 drive: STEP_DIR step_dir { max_pulse_rate_hz: 20000 } }
-    firmware { name: "tb6600-arduino-eth" min_proto_version: 1 }
+    firmware { name: "arduino-eth" min_proto_version: 1 }
   }
   boards {
     name: "arm_bus"
@@ -727,10 +730,10 @@ robot {
  BoardFactory::GetOrCreate("bridge_1")     ── cached: later actuators on the
    │ 2. CommFactory opens Board.comm          same board reuse this instance
    │ 3. IDENTIFY handshake ────────────► firmware replies:
-   │                                      "tb6600-arduino-eth, proto v1,
+   │                                      "arduino-eth, proto v1,
    │                                       ch0: STEP_DIR, ch1: STEP_DIR"
    │ 4. matches firmware{} + channels{}?  ✔
-   │        ✘ → "board reports tb6600-arduino-serial-v1 but config expects eth
+   │        ✘ → "board reports arduino-serial-v1 but config expects eth
    │             — run tools/flash --board=bridge_1"
    │ 5. push CONFIGURE_CHANNEL tunables
    ▼
@@ -1000,9 +1003,9 @@ The frame is transport-agnostic: identical bytes over serial, UDP, or SPI.
 EtherCAT is the one exception — cyclic PDO images instead of request/response
 frames — so EtherCAT boards use a PDO codec that maps the same logical fields
 (target mode/value per channel, feedback per channel) into the image layout.
-Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy+
-EasyCAT), they should share one canonical PDO layout so the host codec is
-written once.
+Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy),
+they should share one canonical PDO layout so the host codec is written
+once.
 
 ### 7.3 How the codec and protos are shared across boards
 
@@ -1024,7 +1027,7 @@ frame bytes outside the codec.
                 .pbtxt config (protobuf ①)
                        │  host-only world
                        ▼
-        Tb6600ArduinoBoard / TeensyEcatBoard / …
+        ArduinoBoard / TeensyBoard / …
                        │  proto fields → fixed C frames
                        ▼
               joshua_wire_v1  (plain C ②)          ◄── THE shared artifact
@@ -1040,11 +1043,11 @@ the wire** — single source, multiple builds:
  firmware/common/joshua_wire_v1.{h,c}      ◄── one source of truth
         │
         ├── Bazel cc_library //firmware/common:joshua_wire_v1
-        │         ├─► linked into Tb6600ArduinoBoard   (host, x86)
-        │         └─► linked into TeensyEcatBoard      (host, x86)
+        │         ├─► linked into ArduinoBoard   (host, x86)
+        │         └─► linked into TeensyBoard    (host, x86)
         │
-        ├── PlatformIO lib in firmware/arduino_tb6600/  (AVR build)
-        └── PlatformIO lib in firmware/teensy_ecat/     (ARM build)
+        ├── PlatformIO lib in firmware/arduino/  (AVR build)
+        └── PlatformIO lib in firmware/teensy/    (ARM build)
 ```
 
 For that to work the codec must be lowest-common-denominator C: no malloc,
@@ -1095,7 +1098,7 @@ typedef struct __attribute__((packed)) {
 ```
 
 Every board that adopts this canonical layout (AM243 actuator firmware,
-future Teensy/EasyCAT) is covered by **one** host-side PDO codec — the
+future Teensy EtherCAT firmware) is covered by **one** host-side PDO codec — the
 motivation behind open question §12.4. Vendor-controlled protocols are the
 exception and get their own host-side codec each: the TI demo byte-walk
 (`am243_pdo_codec`, kept because we do not control the TI demo firmware) and
@@ -1126,9 +1129,11 @@ simpler and testable to the byte.
 firmware/
   common/
     joshua_wire_v1.h/.c        # shared with host
-  arduino_tb6600/
+  arduino/
     main.cpp                    # loop { transport_poll(); dispatch(); step_service(); }
-    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps
+    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps (drives a
+                                 # TB6600 or any other STEP/DIR stepper driver —
+                                 # the firmware toggles two pins, never names the chip)
     transport_serial.cpp
     transport_w5500.cpp         # Ethernet shield (UDP)
     transport_spi_slave.cpp
@@ -1137,13 +1142,13 @@ firmware/
 
 ```ini
 ; one env per wiring variant → one artifact each
-[env:tb6600-serial]     build_flags = -DJOSHUA_TRANSPORT_SERIAL
-[env:tb6600-eth-w5500]  build_flags = -DJOSHUA_TRANSPORT_W5500
-[env:tb6600-spi]        build_flags = -DJOSHUA_TRANSPORT_SPI_SLAVE
+[env:arduino-serial]     build_flags = -DJOSHUA_TRANSPORT_SERIAL
+[env:arduino-eth-w5500]  build_flags = -DJOSHUA_TRANSPORT_W5500
+[env:arduino-spi]        build_flags = -DJOSHUA_TRANSPORT_SPI_SLAVE
 ```
 
 Transport is a **compile-time variant**, producing unambiguous artifacts
-(`tb6600-arduino-eth-v1.hex`). Prefer variants over a fat binary with runtime
+(`arduino-eth-v1.hex`). Prefer variants over a fat binary with runtime
 transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
@@ -1155,11 +1160,10 @@ table**: a compiled-in array, one per firmware variant, mapping channel
 index → motor backend + pins + per-channel state:
 
 ```c
-// firmware/teensy_servo/channel_table.c — one file per wiring variant
+// firmware/arduino/channel_table.c — one file per wiring variant
 static ChannelEntry g_channels[] = {
-    {.backend = &backend_pwm, .pin = 9,  .freq_hz = 50},   // channel 0
-    {.backend = &backend_pwm, .pin = 10, .freq_hz = 50},   // channel 1
-    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 2
+    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 0
+    {.backend = &backend_stepdir, .step_pin = 4, .dir_pin = 5},  // channel 1
 };
 ```
 
@@ -1201,8 +1205,8 @@ artifact from a firmware manifest, and invokes the right flasher:
 
 ```
 bazel run //tools/flash -- --config=so100/teleop.pbtxt --board=bridge_1
-  → board_type=ARDUINO_UNO, comm=ETHERNET_UDP → tb6600-arduino-eth-v1
-  → avrdude -p m328p -c arduino -U flash:w:tb6600-arduino-eth-v1.hex
+  → board_type=ARDUINO_UNO, comm=ETHERNET_UDP → arduino-eth-v1
+  → avrdude -p m328p -c arduino -U flash:w:arduino-eth-v1.hex
 ```
 
 Manifest maps `(board_type, transport) → artifact + flash method` (avrdude
@@ -1234,7 +1238,7 @@ Per-command path, cyclic board (EtherCAT/AM243):
 
 Transport swap (serial → UDP on the same Arduino): edit `Board.comm`, flash
 the matching firmware variant once, run. Zero host code changes. Board swap
-(TB6600+Arduino → AM243 for the same stepper): edit `boards{}` + `board_name`,
+(Arduino → AM243 for the same stepper): edit `boards{}` + `board_name`,
 zero motor-driver changes.
 
 ## 9. Risks & mitigations
@@ -1246,7 +1250,7 @@ zero motor-driver changes.
 | Codec drift between host and firmware | One shared C source in-repo; proto_ver in every frame; handshake rejects version mismatch |
 | ACK round-trip too slow on chatty buses | Frame protocol allows fire-and-forget mode per command class later; measure first |
 | STS3215 refactor regresses working so100 robots | Port behind the new layer with byte-identical bus traffic; keep `test_sts3215_encoder.py` and teleop presets as regression gates |
-| Encoder/actuator bus race on shared Feetech UART | Phase 4 routes `Sts3215Encoder` through `FeetechBusBoard` (§5.6, §6.8); Phase 6 removes per-encoder `comm {}` from presets |
+| Encoder/actuator bus race on shared Feetech UART | Still open after Phase 4: `FeetechBusBoard` lands with its own bus mutex, but `Sts3215Encoder` does not yet route through it (needs `PerceptionFactory` to take `boards`, §10 Phase 6); Phase 6 removes per-encoder `comm {}` from presets |
 | AM243 real firmware PDO layout unknown | Demo codec stays isolated behind `Am243PdoMapping` exactly as today; board layer does not depend on the final layout |
 | Small-MCU RAM/flash limits (ATmega328 + W5500) | Codec is dependency-free C; per-variant builds strip unused transports; Teensy/ESP32 as fallback targets |
 | Userspace GPIO step generation jitters (HOST_GPIO) | Restrict backends to hardware PWM / RP1 / kernel helper; cap `max_pulse_rate_hz` in validation until an RT backend exists (§12.8) |
@@ -1256,88 +1260,129 @@ zero motor-driver changes.
 Each phase lands green and independently revertible.
 
 ### Phase 1 — Proto groundwork
-- [ ] Add `robot/board/proto/board.proto` (`Board`, `Channel`,
+- [x] Add `robot/board/proto/board.proto` (`Board`, `Channel`,
       `DriveInterface`, `FirmwareSpec`, `BoardType`).
-- [ ] Add `repeated robot.board.Board boards` to `config/proto/robot.proto`.
-- [ ] Add `MotorType`, `board_name`, `channel` to `Actuator`; mark
+- [x] Add `repeated robot.board.Board boards` to `config/proto/robot.proto`.
+- [x] Add `MotorType`, `board_name`, `channel` to `Actuator`; mark
       `ActuatorType` board-flavored values and embedded `comm` deprecated
       (still functional).
-- [ ] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
-      until an SBC host needs it. Add `ROS2` (+ `Ros2Config` with namespace,
-      domain id, and discovery timeout) for vendor topic-backed boards (§5.7).
-      Note `CommType.BLE` exists with no config message — `BleConfig` lands
-      with the Spike/Python migration (§12.3).
-- [ ] Update `config_preset_validation_test` for both old and new shapes.
+- [x] Extend `comm.proto` with `ETHERNET_UDP` (+ `UdpConfig`); SPI deferred
+      until an SBC host needs it. `CommType.BLE` exists with no config
+      message, as scoped — `BleConfig` lands with the Spike/Python
+      migration (now §10 Phase 9).
+- [ ] Add `ROS2` (+ `Ros2Config` with namespace, domain id, and discovery
+      timeout) to `comm.proto` for vendor topic-backed boards (§5.7). Not
+      started — needed by §10 Phase 8 (`ROS2_VENDOR_ROBOT`), not before.
+- [x] Update `config_preset_validation_test` for both old and new shapes —
+      the generic all-`.pbtxt` parse test covers both, since old-shape
+      (`actuator_type`) mock/Spike presets and new-shape (`board_name`)
+      presets both exist under `config/config_preset/` today.
 
 ### Phase 2 — Board layer skeleton
-- [ ] `robot/board/interfaces/`: `BoardInterface`, `BoardChannel`,
+- [x] `robot/board/interfaces/`: `BoardInterface`, `BoardChannel`,
       `TargetMode`, `ChannelFeedback`.
-- [ ] `robot/board/factory/`: `BoardFactory` with instance cache keyed by
+- [x] `robot/board/factory/`: `BoardFactory` with instance cache keyed by
       board name.
-- [ ] `ValidateMotorChannel(motor_type, drive)` compatibility
+- [x] `ValidateMotorChannel(motor_type, drive)` compatibility
       table + tests.
 - [ ] Move the serial `PortResources` cache out of `comm_factory.cc` behind
-      the board factory.
+      the board factory. Not done — `PortResources` still lives in
+      `robot/comm/factory/comm_factory.cc`; only the EtherCAT transport
+      cache moved (Phase 3 below).
 
 ### Phase 3 — Port AM243
-- [ ] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
+- [x] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
       one SOEM master per NIC, mirroring the serial `PortResources` cache
       (today every call constructs a new master; two `ecx_init()`s on one
       NIC fight over the raw socket).
-- [ ] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
+- [x] `robot/board/am243/Am243Board`: absorbs split LRD/LWR validation
       (currently in `ActionFactory`), PDO region mapping, and WKC checks;
       the cyclic exchange loop lives with the shared master (§5.3/§5.8).
-- [ ] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
-      StartCyclic → verify OPERATIONAL`. Today that sequencing exists only
-      in smoke-binary `main()`s; the config-driven path stops at `Init()`
-      (§3 problem 5).
-- [ ] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
+- [x] Board init owns the full SOEM lifecycle — `Init → ConfigureSlaves →
+      StartCyclic → verify OPERATIONAL`, covered by
+      `Am243BoardTest.InitOwnsFullSoemLifecycle`.
+- [x] Move `am243_pdo_codec.*` to `robot/board/am243/`; keep
       `AM243_PDO_MAPPING_TI_DEMO` isolation.
-- [ ] Replace `Am243EthercatDriver` with a thin motor driver over
+- [x] Replace `Am243EthercatDriver` with a thin motor driver over
       `BoardChannel` (`TiDemoDriver` — deliberately demo-scoped, not the
       generic joint driver; it retires with `MOTOR_TI_DEMO`).
-- [ ] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
+- [x] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
       to the new path — these are the hardware regression gates.
-- [ ] Prove the config-driven path end to end:
+- [x] Prove the config-driven path end to end:
       `am243_ethercat_demo.pbtxt → actuator_subscriber → Am243Board` drives
-      the TI demo. This path has never worked — only the smoke binaries did.
-- [ ] Update `docs/am243_ethercat.md` boundaries section.
+      the TI demo. `ActionFactory` routes `MOTOR_TI_DEMO` through
+      `BoardFactory → Am243Board → TiDemoDriver` and this is unit-tested
+      (`ActionFactoryBoardPathTest.CreatesTiDemoDriverOverMockBoardChannel`)
+      — same caveat as Phase 4's `FeetechBusBoard`: proven in software over
+      a mock board, not yet run against real LP-AM243 hardware from the
+      config-driven path end to end.
+- [x] Update `docs/am243_ethercat.md` boundaries section.
 
 ### Phase 4 — Port STS3215 (actuators + encoder co-migration)
 
 **Actuators:**
-- [ ] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol,
-      per-port instance, bus mutex, servo-ping IDENTIFY.
-- [ ] Slim `Sts3215Driver` to motor semantics over `BoardChannel`
-      (byte-identical bus traffic as acceptance bar).
-- [ ] Decide the torque mapping: `Sts3215Driver::SetTorque` writes a torque
-      *enable* register (on/off → really `BoardChannel::Enable/Disable`),
-      while the AM243 driver scales torque as a *target*
-      (`TargetMode::kTorque`). One rule, applied in both drivers (§12.7).
+- [x] `robot/board/feetech_bus/FeetechBusBoard`: Feetech register protocol
+      (`feetech_protocol.h`, pure/unit-tested), one instance per board name
+      (via `BoardFactory`'s existing name cache — a config that opens two
+      `FEETECH_BUS` boards on the same port is a config error, same as
+      today's serial `PortResources` cache), bus mutex, servo-ping +
+      model-number-read IDENTIFY. Register addresses match the public
+      STS3215 memory map; unverified against real hardware on this branch
+      (no LP servo bus wired up here — same caveat as PR #67's pending
+      AM243 hardware smoke run).
+- [x] Slim `Sts3215Driver` to motor semantics over `BoardChannel`. Every
+      write (torque enable, the bundled position+time+speed burst, present-
+      position read) is byte-identical to the pre-board-layer driver's wire
+      traffic for the same inputs (verified in `feetech_protocol_test.cc`
+      against hand-computed legacy checksums). The bundled burst is built by
+      the channel from a driver-staged speed (`SetTarget(kVelocity, ...)`,
+      mirrors the old driver's SetSpeed, which also only updated local state
+      with no immediate write) plus a board-config move-time tunable
+      (`ServoBusConfig.move_time_ms`, pushed once at `Init()`, matching the
+      `Channel` proto's own CONFIGURE_CHANNEL framing) — two `SetTarget`
+      calls instead of one API bundling all three fields, since
+      `BoardChannel::SetTarget` is single-value, but the same bytes land on
+      the wire.
+- [x] Decide the torque mapping (docs/BOARD_LAYER_RFC.md §12.7, resolved in
+      `robot/board/interfaces/board_channel.h`): `Enable`/`Disable` is the
+      on/off gate for boards whose torque is fundamentally a binary enable
+      register; `TargetMode::kTorque` is reserved for boards with a genuine
+      continuous torque target. `Sts3215Driver::SetTorque` now calls
+      `Enable()`/`Disable()`. The AM243 TI demo firmware has neither a real
+      enable register nor a real continuous torque target — it stays on its
+      existing target-scaled placeholder, documented in
+      `Am243DemoChannel`, and is expected to retire with `MOTOR_TI_DEMO`
+      rather than adopt the new rule.
 - [x] Migrate so100 **actuator** presets to `boards{}` + `board_name` (no
       per-actuator `comm {}`); keep teleop working.
 - [x] Remove deprecated C++ `ActionFactory` `actuator_type` arms; route all
       actuators through `motor_type` + `board_name` + `channel`.
-- [ ] Migrate `action_factory.py` (MOCK_MOTOR, SPIKE_MOTOR) to `MotorType`
-      *before* removing `ActuatorType` — the Python factory switches on the
-      enum being deleted.
 - [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto once Python paths migrate.
+      from proto once nothing switches on them. Blocked on retiring
+      `action_factory.py`'s `ActuatorType` switch (§10 Phase 9) — Phase 9
+      deletes the Python factory outright once its C++ equivalents exist,
+      rather than porting it to `MotorType` first.
 
 **Perception (partial — bus safety only; full migration is Phase 6):**
 - [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
       minimum through the board's bus lock. It currently writes raw Feetech
       frames to the same shared `Serial` from encoder-publisher timers,
-      which would bypass the new bus mutex (§5.6, §6.8).
+      which would bypass the new bus mutex (§5.6, §6.8). **Not done in the
+      FeetechBusBoard port**: doing this properly needs `PerceptionFactory`
+      to receive `boards` (the same signature change §10 Phase 6 already
+      lists as its own deliverable), not just a `Sts3215Encoder` constructor
+      swap — so it's left for Phase 6 rather than half-done here. The known
+      bus-race risk in the table above (§9) is unchanged by this PR.
 - [ ] Regression: `encoder_publish` + teleop on so100 with actuators and
-      encoders on the same port — no half-duplex bus collisions.
+      encoders on the same port — no half-duplex bus collisions. Blocked on
+      the item above.
 
 ### Phase 5 — Prove the matrix (first real second board)
 - [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3).
-- [ ] `firmware/arduino_tb6600/` with serial transport variant;
+- [ ] `firmware/arduino/` with serial transport variant;
       `backend_stepdir`.
-- [ ] Host side: `Tb6600ArduinoBoard` + generic `StepperDriver` +
+- [ ] Host side: `ArduinoBoard` + generic `StepperDriver` +
       `FrameTransport` seam on `Serial`.
 - [ ] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
       Arduino → TB6600 → stepper moves.
@@ -1386,7 +1431,8 @@ completed cleanly, not just bus-locked.
 
 **Explicit non-goals for this phase:**
 - OpenCV cameras stay driver-direct unless a future board type needs them.
-- Python mock perception drivers stay on `perception_factory.py`.
+- Python mock perception drivers stay on `perception_factory.py` for this
+  phase; retired in Phase 9 once C++ mock doubles exist.
 - No placeholder `board_type: NONE` or other fake boards for symmetry.
 
 ### Phase 7 — Firmware tooling & handshake hardening
@@ -1399,7 +1445,7 @@ completed cleanly, not just bus-locked.
 - [ ] Docs: firmware contribution guide (how to add a board / a transport
       variant / a backend).
 
-### Phase 7 — ROS 2 vendor robot board
+### Phase 8 — ROS 2 vendor robot board
 - [ ] Add `ROS2_VENDOR_ROBOT` board support with graph validation in
       `Board::Init()` instead of firmware IDENTIFY.
 - [ ] Add `MobileBase` / `DifferentialDriveBase` action shape and
@@ -1412,11 +1458,45 @@ completed cleanly, not just bus-locked.
 - [ ] Document vendor-specific endpoint presets for TurtleBot, Clearpath
       Jackal/Husky, Stretch, and similar robots.
 
+### Phase 9 — Remove the Python robot-side implementation
+
+Resolves open question §12.3: the board layer replaces the need for a
+parallel Python implementation, rather than growing one. `action_factory.py`,
+`perception_factory.py`, and `comm_factory.py` retire once every path they
+still serve — Pybricks/Spike BLE and the Python mock doubles — has a C++
+board-layer equivalent. Depends on Phase 4 (actuators) and Phase 6
+(perception parity); those phases deliberately leave Pybricks/Spike and
+mocks on Python rather than half-porting them, so this phase is where that
+debt gets paid off, not carried indefinitely.
+
+- [ ] Land a C++ board type for Pybricks/Spike over BLE (`SPIKE_HUB_BLE`,
+      `BleConfig`, §12.3/Phase 3 note) covering what `pybricks_driver.py` /
+      `pybricks_ble_transport.py` do today.
+- [ ] Land C++ mock board/driver/perception doubles to replace
+      `mock_driver.py`, `mock_encoder.py`, `mock_lidar.py`, `mock_camera.py`
+      for any tests that still depend on the Python mocks.
+- [ ] Audit `node_generator` and preset configs for any remaining
+      driver-direct path that only the Python factories serve; migrate or
+      confirm none remain.
+- [ ] Delete `robot/action/factory/action_factory.py`,
+      `robot/action/interfaces/*.py`,
+      `robot/action/motors/drivers/{mock_driver,pybricks_driver}.py`,
+      `robot/perception/factory/perception_factory.py`,
+      `robot/perception/interfaces/*.py`,
+      `robot/perception/{encoder,lidar,camera}/mock_*.py`,
+      `robot/comm/factory/comm_factory.py`, `robot/comm/serial/serial.py`,
+      `robot/comm/pybricks_ble_transport.py`, and their Python tests.
+- [ ] Remove the Python driver path from `node_generator` codegen and from
+      docs (`docs/GETTING_STARTED.md`, `firmware/README.md`) wherever it's
+      still documented as an option.
+- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
+      from proto (unblocks the item deferred in §10 Phase 4).
+
 ## 11. Acceptance criteria
 
-- A stepper motor moves via TB6600+Arduino over serial **and** over UDP by
-  changing only `Board.comm` and reflashing the matching variant — zero host
-  code changes.
+- A stepper motor moves via Arduino (driving a TB6600) over serial **and**
+  over UDP by changing only `Board.comm` and reflashing the matching
+  variant — zero host code changes.
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.
@@ -1450,11 +1530,12 @@ completed cleanly, not just bus-locked.
    cache for encoder publishers, and does the perception layer read through
    the same board instance? See §6.8; decide before Phase 6 freezes
    `PerceptionFactory`.
-3. **Python parity** — `action_factory.py` / `comm_factory.py` mirror the C++
-   factories today; does the board layer need a Python implementation for the
-   Pybricks/mock paths, or do those stay driver-direct until needed?
+3. **Python parity — RESOLVED**: no parallel Python board-layer
+   implementation. `action_factory.py` / `perception_factory.py` /
+   `comm_factory.py` retire once C++ equivalents cover the Pybricks/mock
+   paths they still serve (§10 Phase 9).
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
-   and future Teensy/EasyCAT firmware: fixed 8-byte-per-channel slots, or
+   and future Teensy firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?
 5. **Cyclic loop cadence** — ownership is settled (one loop per NIC, owned
    by the shared master transport; per-board loops are impossible on a
