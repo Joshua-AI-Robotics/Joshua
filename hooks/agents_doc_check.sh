@@ -16,12 +16,50 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Drop fenced blocks, then inline code spans. Claude Code's import parser skips
-# both, so an @import shown as an example is documentation, not a live import.
-# sed alone cannot do this: it is line-based and a fence spans lines.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required by $0" >&2
+  exit 1
+fi
+
+# Drop every Markdown code form before looking for imports. Claude Code's parser
+# skips them, so an @import shown as an example is documentation, not a live
+# import — and treating one as live fails CI on a correct doc.
+#
+# This is python3 rather than sed/awk because the forms do not fit line-based
+# tools: fences open with ``` or ~~~, spans use runs of backticks that must be
+# matched by an equal run, and indented blocks have no delimiter at all.
 strip_code() {
-  awk '/^[[:space:]]*```/ { fenced = !fenced; next } !fenced' "$1" |
-    sed 's/`[^`]*`//g'
+  python3 -c '
+import re, sys
+
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+
+# Claude Code strips block-level HTML comments before injecting the file, so an
+# import inside one never runs. Every bridge here opens with a comment.
+text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+
+lines = text.split("\n")
+out, fence = [], None
+for line in lines:
+    stripped = line.lstrip()
+    marker = re.match(r"(`{3,}|~{3,})", stripped)
+    if fence is None and marker:
+        fence = marker.group(1)[0]
+        continue
+    if fence is not None:
+        if marker and marker.group(1)[0] == fence:
+            fence = None
+        continue
+    if line.startswith("    ") or line.startswith("\t"):
+        continue                      # indented code block
+    out.append(line)
+
+# Runs of backticks close only on an equal-length run, so `` `x` `` is one span.
+# Deliberately not re.S: a span must open and close on one line. An unmatched
+# backtick in prose ("use ` for quoting") would otherwise swallow everything up
+# to the next one, several paragraphs away, and hide a real import.
+print(re.sub(r"(`+)(?:(?!\1).)*?\1", " ", "\n".join(out)))
+' "$1"
 }
 
 # Bridges and the RFC are fixed and must exist.
@@ -106,7 +144,7 @@ for f in "${FILES[@]}"; do
       echo "BROKEN: $f -> $target" >&2
       status=1
     fi
-  done < <(grep -oE '\]\([^)]+\)' "$f" | sed -E 's/^\]\((.*)\)$/\1/')
+  done < <(strip_code "$f" | grep -oE '\]\([^)]+\)' | sed -E 's/^\]\((.*)\)$/\1/')
 
   # Claude Code @-imports resolve relative to the importing file, so a typo in
   # one is as silent as a broken link. Code spans are stripped because its own
