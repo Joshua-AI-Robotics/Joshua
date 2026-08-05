@@ -1,8 +1,7 @@
 # Agent Instructions RFC: One Contract for Many Coding Agents
 
-Status: Draft (design only — no implementation in this document)
-Depends on: [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69),
-which adds the root `AGENTS.md` this document builds on
+Status: Adopted — the contract and its guard are in place; §9 tracks what is
+landed and what remains demand-driven
 Companion to: [CONTRIBUTING.md](../CONTRIBUTING.md) (human contributors),
 [ARCHITECTURE.md](ARCHITECTURE.md)
 
