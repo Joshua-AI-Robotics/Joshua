@@ -15,7 +15,8 @@
 // times, printing every status. A working board/firmware/wiring chain
 // prints "OK" for every line and the motor visibly moves; any failure
 // (wrong firmware, bad wiring, unplugged board) surfaces as a non-OK
-// status with an actionable message from TeensyBoard/TeensyChannel.
+// status with an actionable message from JoshuaWireBoard/JoshuaWireChannel
+// (robot/board/joshua_wire/), which TeensyBoard is a thin subclass of.
 #include <glog/logging.h>
 
 #include <cstdio>

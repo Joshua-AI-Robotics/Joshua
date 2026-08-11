@@ -185,7 +185,14 @@ firmware image has — still compile-time, since that's reported by
 
 ## Related files
 
-- `robot/board/teensy/teensy_board.*` — paired host-side `BoardInterface`
+- `robot/board/teensy/teensy_board.*` — paired host-side board class; a
+  thin `JoshuaWireBoard` subclass supplying only `ExpectedBoardType()`
+  (`TEENSY41`) and `ExpectedWireBoardId()` (`JW1_BOARD_TEENSY41`) —
+  everything else is inherited, see below
+- `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
+  handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
+  joshua_wire_v1 host board (Teensy today, Arduino/ESP32 later) runs
+  through unchanged (docs/BOARD_LAYER_RFC.md §7.3)
 - `robot/board/teensy/teensy_driver_smoke.cc` — board-level smoke test,
   bypasses ActionFactory/ROS entirely (`bazel run
   //robot/board/teensy:teensy_driver_smoke -- /dev/ttyACM0`)

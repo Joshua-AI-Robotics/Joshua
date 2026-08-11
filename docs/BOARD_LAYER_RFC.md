@@ -217,18 +217,25 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    arduino/            arduino_board.*  (MCU only; drive peripherals like a
-                        TB6600 are a Channel.drive fact, never in this name;
-                        future — not yet built, §10 Phase 5)
-    teensy/             teensy_board.*  (MCU only; a comm peripheral like an
-                        EasyCAT shield is a Board.comm fact, never in this
-                        name) ── NEW, §10 Phase 5 ──
+    arduino/            arduino_board.*  (thin JoshuaWireBoard subclass —
+                        two identity hooks, nothing else; MCU only, drive
+                        peripherals like a TB6600 are a Channel.drive fact,
+                        never in this name; future — not yet built, §10
+                        Phase 5)
+    teensy/             teensy_board.*  (thin JoshuaWireBoard subclass —
+                        two identity hooks, nothing else; MCU only, a comm
+                        peripheral like an EasyCAT shield is a Board.comm
+                        fact, never in this name) ── NEW, §10 Phase 5 ──
+    joshua_wire/        joshua_wire_board.*  (shared IDENTIFY handshake +
+                        CONFIGURE_CHANNEL + channel dispatch for every
+                        joshua_wire_v1 MCU board — teensy/ and arduino/
+                        both subclass this rather than reimplementing it;
+                        §7.3, revised) ── NEW, §10 Phase 5 ──
     feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
     frame/              frame_transport.h, serial_frame_transport.*  (the
-                        FrameTransport seam every frame-based
-                        Joshua-firmware board depends on, not a concrete
-                        transport — §7.3) ── NEW, §10 Phase 5 ──
+                        FrameTransport seam JoshuaWireBoard depends on, not
+                        a concrete transport — §7.3) ── NEW, §10 Phase 5 ──
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/
   common/               joshua_wire_v1.h/.c  (shared with host, same repo;
@@ -246,7 +253,9 @@ tools/
 
 Directory name convention: the host-side directory matches the board type
 alone (`teensy/`, not `teensy41/`) since `TeensyBoard`'s C++ is
-model-agnostic — it only speaks `joshua_wire_v1` over a `FrameTransport`.
+model-agnostic — it only speaks `joshua_wire_v1` over a `FrameTransport`,
+and as of the `JoshuaWireBoard` extraction (§7.3) that's now literally true
+of the code, not just true in spirit: `TeensyBoard` itself is two methods.
 The firmware-side directory is per exact chip (`teensy/41/`) since that's
 where a model actually matters (pin count, peripherals, toolchain target);
 a future Teensy model would add `firmware/teensy/40/` reusing the same
@@ -1024,13 +1033,14 @@ Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy),
 they should share one canonical PDO layout so the host codec is written
 once.
 
-### 7.3 How the codec and protos are shared across boards
+### 7.3 How the codec, protos, and host orchestration are shared across boards
 
-Two different artifacts are "shared", in two different ways:
+Three different artifacts are "shared", in three different ways:
 
 ```
  ① protobuf (.proto files)   → shared across HOST components only (config language)
  ② wire codec (plain C)      → shared between HOST and every FIRMWARE (byte language)
+ ③ host orchestration (C++)  → shared across every HOST board class (JoshuaWireBoard)
 ```
 
 **Protobuf never crosses the wire to the MCU.** Protobuf is the config
@@ -1044,7 +1054,10 @@ frame bytes outside the codec.
                 .pbtxt config (protobuf ①)
                        │  host-only world
                        ▼
-        ArduinoBoard / TeensyBoard / …
+        ArduinoBoard / TeensyBoard / …    ◄── two identity hooks each
+                       │  subclasses JoshuaWireBoard  (C++ ③, below)
+                       ▼
+              JoshuaWireBoard  (Init/IDENTIFY/CONFIGURE_CHANNEL/channels)
                        │  proto fields → fixed C frames
                        ▼
               joshua_wire_v1  (plain C ②)          ◄── THE shared artifact
@@ -1128,10 +1141,44 @@ Firmware's only contact with proto-derived data is indirect — the values the
 host copies out of `Channel.drive_config` into `CONFIGURE_CHANNEL`
 frames.
 
+**③ is `JoshuaWireBoard` (`robot/board/joshua_wire/`), an abstract
+`BoardInterface`.** ② means the wire *bytes* can't drift between host and
+firmware; ③ means the host-side *code that drives those bytes* isn't
+reimplemented per board either. Everything in `Init()` — open a transport,
+run the IDENTIFY handshake (board_id, `proto_ver`, per-channel drive all
+cross-checked against config, §7.5), push `CONFIGURE_CHANNEL` for every
+channel — and every channel's `Enable`/`Disable`/`SetTarget`/`ReadFeedback`
+framing, is identical for any board speaking `joshua_wire_v1` over a
+`FrameTransport`. A concrete board (`TeensyBoard` today) subclasses
+`JoshuaWireBoard` and supplies only two facts that actually differ per
+board — `ExpectedBoardType()` (the `robot.board.BoardType` it accepts) and
+`ExpectedWireBoardId()` (the `jw1_board_id_t` IDENTIFY must report) — plus,
+only if a future variant's comm type genuinely differs from plain serial,
+overrides of `ValidateComm`/`CreateProductionTransport` (both already
+virtual, both default to requiring `SERIAL` + `CommFactory::CreateSerial`,
+which is what every board on this class uses today). This is what makes
+`ArduinoBoard` (§10 Phase 5) close to free once `firmware/arduino/`'s
+firmware image exists: the host class is two short methods, not a
+341-line reimplementation of IDENTIFY/CONFIGURE_CHANNEL/channel dispatch —
+see `robot/board/teensy/teensy_board.h` for how small that subclass is in
+practice.
+
+Extracted after `TeensyBoard` first landed, not designed in from the start
+— worth calling out because it's the concrete lesson: the moment a second
+board on the same wire protocol is genuinely imminent (Arduino, tracked in
+this same phase) is the right time to pull the shared 90% out, *before* a
+second hand-written copy exists to un-diverge later. `JoshuaWireBoard`'s
+own tests (`joshua_wire_board_test.cc`) exercise this generic behavior
+through a minimal test-only subclass identifying as `ARDUINO_UNO`, not
+`TEENSY41` — deliberately, so passing tests prove the base actually works
+for a board other than the one it was extracted from, not just that the
+refactor didn't break Teensy.
+
 | Artifact | Language | Shared by | Crosses the wire? |
 | --- | --- | --- | --- |
 | `board.proto`, `action.proto` | protobuf | host components only | no — config only |
 | `joshua_wire_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
+| `joshua_wire_board.{h,cc}` | C++ | every joshua_wire_v1 host board class | no — host-only orchestration |
 | `joshua_pdo_v1.h` | packed C structs | host + all Joshua EtherCAT firmware | **defines** the PDO image |
 | Feetech / TI-demo codecs | C++ host-side only | one vendor board each | speaks the vendor's format |
 
@@ -1460,8 +1507,10 @@ hardware exists to bring this up on, whereas the Arduino sketch was
 speculative. The architecture is identical either way (§7.1–§7.5 make no
 Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
 real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
-`FrameTransport` seam, new firmware image and host board class — not
-retired by this choice. An **ESP32** board is a candidate third matrix
+`FrameTransport` seam, new firmware image, and now (§7.3) a host board
+class that's just two identity methods subclassing `JoshuaWireBoard`
+rather than a from-scratch `BoardInterface` implementation — not retired
+by this choice. An **ESP32** board is a candidate third matrix
 member for the same reason (hardware on hand), tracked as a follow-up, not
 started in this phase: it would most likely land as a Wi-Fi/UDP transport
 variant on the existing `UdpTransport` seam below rather than a new drive
@@ -1484,6 +1533,15 @@ another STEP_DIR implementation.
       `StepperDriver` (`robot/action/motors/drivers/`) + `FrameTransport`
       seam (`robot/board/frame/`, `SerialFrameTransport` on
       `robot::comm::SerialTransport`).
+- [x] `JoshuaWireBoard` (`robot/board/joshua_wire/`, §7.3) extracted from
+      `TeensyBoard` once a second board on this wire protocol (Arduino)
+      was concretely imminent: IDENTIFY handshake, `CONFIGURE_CHANNEL`,
+      and channel dispatch now live once, shared by every joshua_wire_v1
+      board; `TeensyBoard` shrank to two identity hooks
+      (`ExpectedBoardType`/`ExpectedWireBoardId`). Also closed a real gap
+      found reviewing the extraction: IDENTIFY's `board_id` was being
+      decoded and never checked against config — now it is, generically,
+      for every board on this class.
 - [x] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
       Teensy → TB6600 → **stepper physically rotates**, verified on real
       hardware through the actual production path (`launcher:joshua_main`
