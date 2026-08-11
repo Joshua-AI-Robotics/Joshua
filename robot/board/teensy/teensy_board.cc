@@ -225,6 +225,22 @@ absl::Status IdentifyAndValidate(FrameTransport& transport, const robot::board::
     return absl::UnavailableError(
         absl::StrCat("Board '", config.name(), "': malformed IDENTIFY payload."));
   }
+  // board_id mirrors BoardType value-for-value (joshua_wire_v1.h) precisely
+  // so a host can catch "wrong device on this port" — e.g. a stale/
+  // re-enumerated serial path now pointing at a different board type —
+  // instead of silently proceeding as long as channel shapes happen to
+  // match. Unlike firmware.name (docs/BOARD_LAYER_RFC.md §7.5), this is a
+  // real structural fact the wire protocol already carries, not a
+  // free-form label.
+  if (identify.board_id != JW1_BOARD_TEENSY41) {
+    return absl::FailedPreconditionError(absl::StrCat("Board '",
+                                                      config.name(),
+                                                      "': IDENTIFY reports board_id ",
+                                                      static_cast<int>(identify.board_id),
+                                                      ", expected TEENSY41 (",
+                                                      static_cast<int>(JW1_BOARD_TEENSY41),
+                                                      "). Wrong device on this port?"));
+  }
 
   for (const auto& channel : config.channels()) {
     if (channel.index() >= identify.n_channels) {

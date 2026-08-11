@@ -16,12 +16,12 @@ namespace robot::board {
 // BoardType::TEENSY41 — an MCU running Joshua-authored firmware, reached
 // over a joshua_wire_v1 FrameTransport (docs/BOARD_LAYER_RFC.md §7.2/§7.3,
 // §10 Phase 5). Init() opens the transport, runs the IDENTIFY handshake
-// (firmware name, protocol version, per-channel drive all cross-checked
-// against config so a wrong image or a config/firmware drift fails here,
-// not mid-motion — §7.5), then pushes CONFIGURE_CHANNEL for every STEP_DIR
-// channel. Model-specific only in name: the wire protocol and this class
-// are MCU-agnostic, and firmware/teensy/41/ is the one firmware image this
-// board type currently pairs with.
+// (board_id, protocol version, and per-channel drive all cross-checked
+// against config so a wrong device on this port, or a config/firmware
+// drift, fails here, not mid-motion — §7.5), then pushes CONFIGURE_CHANNEL
+// for every STEP_DIR channel. Model-specific only in name: the wire
+// protocol and this class are MCU-agnostic, and firmware/teensy/41/ is the
+// one firmware image this board type currently pairs with.
 class TeensyBoard : public BoardInterface {
  public:
   TeensyBoard() = default;

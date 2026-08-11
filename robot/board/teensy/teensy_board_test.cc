@@ -12,9 +12,10 @@
 namespace robot::board {
 namespace {
 
-std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels) {
+std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
+                                          jw1_board_id_t board_id = JW1_BOARD_TEENSY41) {
   jw1_identify_response_t response{};
-  response.board_id = JW1_BOARD_TEENSY41;
+  response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
     response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
@@ -40,6 +41,22 @@ std::vector<uint8_t> MakeFeedbackResponse(uint8_t channel,
   return std::vector<uint8_t>(buf, buf + len);
 }
 
+void AddStepDirChannel(robot::board::Board* board,
+                       uint32_t index,
+                       uint32_t step_pin,
+                       uint32_t dir_pin,
+                       uint32_t enable_pin) {
+  auto* channel = board->add_channels();
+  channel->set_index(index);
+  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
+  channel->mutable_step_dir()->set_max_pulse_rate_hz(20000);
+  channel->mutable_step_dir()->set_invert_dir(false);
+  channel->mutable_step_dir()->set_enable_active_low(true);
+  channel->mutable_step_dir()->set_step_pin(step_pin);
+  channel->mutable_step_dir()->set_dir_pin(dir_pin);
+  channel->mutable_step_dir()->set_enable_pin(enable_pin);
+}
+
 robot::board::Board MakeTeensyBoard() {
   robot::board::Board board;
   board.set_name("stepper_bus");
@@ -50,15 +67,7 @@ robot::board::Board MakeTeensyBoard() {
   comm->mutable_serial_config()->set_baudrate(115200);
   board.mutable_firmware()->set_min_proto_version(1);
 
-  auto* channel = board.add_channels();
-  channel->set_index(0);
-  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
-  channel->mutable_step_dir()->set_max_pulse_rate_hz(20000);
-  channel->mutable_step_dir()->set_invert_dir(false);
-  channel->mutable_step_dir()->set_enable_active_low(true);
-  channel->mutable_step_dir()->set_step_pin(2);
-  channel->mutable_step_dir()->set_dir_pin(3);
-  channel->mutable_step_dir()->set_enable_pin(4);
+  AddStepDirChannel(&board, /*index=*/0, /*step_pin=*/2, /*dir_pin=*/3, /*enable_pin=*/4);
   return board;
 }
 
@@ -77,10 +86,14 @@ class TeensyBoardTest : public ::testing::Test {
   }
 
   // Init() always does IDENTIFY then one CONFIGURE_CHANNEL per configured
-  // channel; tests that expect Init to succeed must queue both first.
+  // channel (in config.channels() order, i.e. index 0, 1, ...); tests that
+  // expect Init to succeed must queue IDENTIFY plus one CONFIGURE_CHANNEL
+  // reply per channel actually declared in the config passed to Init().
   void QueueSuccessfulInit(uint8_t n_channels = 1) {
     transport_->QueueResponse(MakeIdentifyResponse(n_channels));
-    transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_OK));
+    for (uint8_t i = 0; i < n_channels; i++) {
+      transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, i, JW1_STATUS_OK));
+    }
   }
 
   std::shared_ptr<FakeFrameTransport> transport_;
@@ -94,6 +107,30 @@ TEST_F(TeensyBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
 
   EXPECT_TRUE(status.ok()) << status;
   EXPECT_EQ(transport_->send_calls_, 2);
+}
+
+TEST_F(TeensyBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
+  // Multiple motors on one Teensy: config declares two channels on distinct
+  // pins, Init() must push CONFIGURE_CHANNEL for each in order, and both
+  // channels must be independently addressable afterward.
+  auto config = MakeTeensyBoard();  // Already has channel 0 on pins 2/3/4.
+  AddStepDirChannel(&config, /*index=*/1, /*step_pin=*/5, /*dir_pin=*/6, /*enable_pin=*/7);
+  QueueSuccessfulInit(/*n_channels=*/2);
+  TeensyBoard board;
+
+  auto status = board.Init(config);
+
+  ASSERT_TRUE(status.ok()) << status;
+  EXPECT_EQ(transport_->send_calls_, 3);  // 1 IDENTIFY + 2 CONFIGURE_CHANNEL.
+
+  auto channel0 = board.OpenChannel(0);
+  auto channel1 = board.OpenChannel(1);
+  ASSERT_TRUE(channel0.ok());
+  ASSERT_TRUE(channel1.ok());
+
+  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_ENABLE, 1, JW1_STATUS_OK));
+  EXPECT_TRUE((*channel1)->Enable().ok());
+  EXPECT_EQ(transport_->last_sent_[4], 1);  // Reached the wire as channel 1, not 0.
 }
 
 TEST_F(TeensyBoardTest, InitRejectsWrongBoardType) {
@@ -136,6 +173,17 @@ TEST_F(TeensyBoardTest, InitRejectsDuplicateChannelIndex) {
   TeensyBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(TeensyBoardTest, InitFailsWhenBoardIdMismatches) {
+  // board_id mirrors BoardType value-for-value specifically so Init() can
+  // catch "wrong device on this port" (e.g. a re-enumerated serial path
+  // now pointing at a different board) instead of silently proceeding as
+  // long as channel shapes happen to match (docs/BOARD_LAYER_RFC.md §7.5).
+  transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_ARDUINO_UNO));
+  TeensyBoard board;
+
+  EXPECT_EQ(board.Init(MakeTeensyBoard()).code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(TeensyBoardTest, InitFailsWhenFirmwareReportsFewerChannels) {
