@@ -1227,16 +1227,44 @@ schema and the config file, not a hand-written C array:
    step_pin: 2 ... } }`.
 
 What is checked vs. trusted — narrower than before, but the same
-fundamental limit: `IDENTIFY` still verifies the *logical* contract
-(firmware name, protocol version, channel count, per-channel drive type),
-so a wrong image or a config/firmware drift still fails at `Init`. What it
-still cannot verify is the *physical* end — a servo actually plugged into
-the pin config claims it's plugged into. That was true when pins lived in
+fundamental limit: `IDENTIFY` still verifies the *logical* contract —
+protocol version, and each declared channel's index/drive type against
+what the firmware actually reports (`n_channels` +
+`channel_drives[]`) — so a config/firmware drift (wrong channel count,
+wrong drive type per slot) still fails at `Init`. What `IDENTIFY` still
+cannot verify is the *physical* end — a servo actually plugged into the
+pin config claims it's plugged into. That was true when pins lived in
 firmware too (a channel-table typo was just as unverifiable as a pbtxt
 typo); moving pins into config doesn't change what's fundamentally
 checkable, it changes *who* can make the mistake and *how expensive* it is
 to fix — a wrong pin number is now a config edit + rerun, not a
 channel-table edit + reflash.
+
+**Why there's no `firmware.name` at all.** Early on this repo had exactly
+one Teensy firmware image, so a single hardcoded name
+(`"teensy-stepdir"`) equality-checked against config looked like real
+verification. It doesn't scale: the moment a second firmware variant for
+the same board exists (more channels, a different backend, PWM instead of
+STEP_DIR), each needs its own hand-picked literal, hand-kept in sync
+between the firmware source and every pbtxt that targets it, with no
+registry enforcing uniqueness or meaning. Worse, it duplicates
+`board_type` without adding a principled second axis — it's an arbitrary
+password two files have to agree on, not a description of what the
+firmware can actually do. The capability check above (`n_channels` +
+`channel_drives[]` vs. the config's declared `channels[]`) is the real,
+structural, self-scaling version of "is this the firmware I think it is":
+it validates facts the firmware already reports, generalizes to any
+board/firmware combination with zero per-image coordination, and doesn't
+regress when firmware variants multiply. So `FirmwareSpec.name` was
+removed outright (`reserved 1; reserved "name";` in the proto) rather than
+kept as a dead/advisory field — a field nobody reads or is required to
+populate is worse than no field, since it invites someone to reintroduce
+exactly this non-scaling check later. The wire protocol's IDENTIFY
+response still carries an `fw_name` byte array (`joshua_wire_v1.h`,
+shared by every board on this codec) — Teensy's firmware just leaves it
+zeroed, since removing it from the wire format itself would be a breaking
+change to a codec every future board also speaks, for a field nothing
+reads.
 
 Change cadence, updated: rewiring a motor to a different pin is now a
 **pbtxt edit with the firmware untouched** — the same cadence as retuning a
@@ -1646,3 +1674,19 @@ debt gets paid off, not carried indefinitely.
 8. **HOST_GPIO real-time backend** — which pulse-generation mechanism
    (hardware PWM, Pi 5 RP1, kernel/RT helper) and the max pulse rate to
    allow from a non-RT userspace process.
+9. **TODO: firmware build/flash version control.** `FirmwareSpec` today
+   only carries `min_proto_version` — the wire *protocol* version, which
+   says nothing about which actual build is flashed on a given board.
+   `firmware.name` was deliberately removed rather than kept as a
+   free-form identity check (§7.5), so there is currently no way to ask a
+   live board "which build are you" at all — the class of bug that caused
+   (a stale `.pio` build silently diverging from source, `docs/bringup.md`)
+   has no automated guard today. Proposed direction: an auto-generated
+   build id (`git describe --always --dirty` or short commit SHA) injected
+   at compile time via PlatformIO `build_flags`, reported over `IDENTIFY`
+   in the now-dormant `fw_name` wire slot — **diagnostic-only, never a
+   host-enforced gate**, so it doesn't reintroduce the same non-scaling
+   mistake `firmware.name` was. Undecided: exact injection mechanism, and
+   whether a `tools/flash` wrapper (§6.1's original sketch) should also log
+   what was flashed where/when for fleet-level traceability once more than
+   one physical board exists.

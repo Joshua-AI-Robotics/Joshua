@@ -17,7 +17,11 @@ through the actual production path (`launcher:joshua_main` +
 - [x] PlatformIO installed, firmware built and flashed, board enumerates
 - [x] IDENTIFY handshake verified against host `TeensyBoard::Init()` (real
       board, real firmware — `board_id=TEENSY41`, `fw_name="teensy-stepdir"`,
-      `n_channels=1`, `channel_drives[0]=STEP_DIR`)
+      `n_channels=1`, `channel_drives[0]=STEP_DIR`). Historical: the
+      firmware sent a `fw_name` string at the time and the host checked it;
+      both were later removed as a non-scaling identity check
+      (`docs/BOARD_LAYER_RFC.md` §7.5) — re-running this today will show
+      `fw_name` zeroed and unchecked, which is expected.
 - [x] Wire protocol and GPIO pulse generation verified independently via
       `GET_FEEDBACK` (see the raw-protocol script below) — the firmware's
       internal step counter tracks every commanded move exactly

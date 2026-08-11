@@ -86,12 +86,11 @@ message Channel {
   }
 }
 
-// Which firmware the host expects on the board; verified against the
+// Which firmware the host expects on the board; checked against the
 // IDENTIFY handshake at Init(). Omitted entirely for vendor-firmware
 // boards (FEETECH_BUS, SPIKE_HUB_BLE) and for HOST_GPIO / MOCK.
 message FirmwareSpec {
-  string name = 1;  // e.g. "tb6600-arduino-eth"
-  uint32 min_proto_version = 2;
+  uint32 min_proto_version = 1;
 }
 
 // Future home of the AM243 PDO mapping selector; mirrors

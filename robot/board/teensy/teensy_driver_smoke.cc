@@ -36,7 +36,6 @@ int main(int argc, char** argv) {
   comm->set_comm_type(robot::comm::CommType::SERIAL);
   comm->mutable_serial_config()->set_port(port);
   comm->mutable_serial_config()->set_baudrate(115200);
-  config.mutable_firmware()->set_name("teensy-stepdir");
   config.mutable_firmware()->set_min_proto_version(1);
   auto* channel = config.add_channels();
   channel->set_index(0);

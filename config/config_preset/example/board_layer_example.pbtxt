@@ -28,7 +28,7 @@ robot {
       drive: STEP_DIR
       step_dir { max_pulse_rate_hz: 20000 }
     }
-    firmware { name: "tb6600-arduino-eth" min_proto_version: 1 }
+    firmware { min_proto_version: 1 }
   }
   boards {
     name: "arm_bus"

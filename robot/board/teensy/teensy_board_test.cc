@@ -1,6 +1,5 @@
 #include "robot/board/teensy/teensy_board.h"
 
-#include <cstring>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -13,13 +12,9 @@
 namespace robot::board {
 namespace {
 
-constexpr char kFirmwareName[] = "teensy-stepdir";
-
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels) {
   jw1_identify_response_t response{};
   response.board_id = JW1_BOARD_TEENSY41;
-  std::memset(response.fw_name, 0, sizeof(response.fw_name));
-  std::memcpy(response.fw_name, kFirmwareName, strlen(kFirmwareName));
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
     response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
@@ -53,7 +48,6 @@ robot::board::Board MakeTeensyBoard() {
   comm->set_comm_type(robot::comm::CommType::SERIAL);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
-  board.mutable_firmware()->set_name(kFirmwareName);
   board.mutable_firmware()->set_min_proto_version(1);
 
   auto* channel = board.add_channels();
@@ -142,15 +136,6 @@ TEST_F(TeensyBoardTest, InitRejectsDuplicateChannelIndex) {
   TeensyBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(TeensyBoardTest, InitFailsWhenFirmwareNameMismatches) {
-  transport_->QueueResponse(MakeIdentifyResponse(1));
-  auto config = MakeTeensyBoard();
-  config.mutable_firmware()->set_name("wrong-firmware");
-  TeensyBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(TeensyBoardTest, InitFailsWhenFirmwareReportsFewerChannels) {

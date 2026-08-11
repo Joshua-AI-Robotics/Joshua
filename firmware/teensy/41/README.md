@@ -35,8 +35,9 @@ always build from the exact same two files.
 - [x] Firmware flashed (`pio run --target upload`)
 - [x] Board enumerates (`/dev/ttyACM0`, `lsusb` shows "Teensyduino Serial")
 - [x] IDENTIFY handshake verified against real hardware — returned
-      `board_id=TEENSY41`, `fw_name="teensy-stepdir"`, `n_channels=1`,
-      `channel_drives[0]=STEP_DIR`
+      `board_id=TEENSY41`, `n_channels=1`, `channel_drives[0]=STEP_DIR`
+      (`fw_name` is sent zeroed; no host code reads it — see Wiring /
+      Pinout below and `docs/BOARD_LAYER_RFC.md` §7.5)
 - [x] Full command path verified end to end — a `ros2 topic pub` of 10
       degrees produced 89 real STEP pulses, confirmed via an independent
       `GET_FEEDBACK` query returning `position=89.0`
@@ -176,6 +177,11 @@ firmware image has — still compile-time, since that's reported by
   time on the first bring-up — full story in `docs/bringup.md`.
 - Full troubleshooting/bug list from the first real hardware bring-up is
   in `docs/bringup.md`.
+- **TODO: no build/flash version identifier.** `FirmwareSpec` only carries
+  `min_proto_version` (wire protocol version) — there's no way to ask a
+  live board which actual build/commit is flashed on it. See
+  `docs/BOARD_LAYER_RFC.md` §12 item 9 for the proposed direction
+  (git-derived build id, diagnostic-only, reported over `IDENTIFY`).
 
 ## Related files
 

@@ -30,7 +30,6 @@ robot {
       serial_config { port: "/dev/ttyACM0" baudrate: 115200 }
     }
     firmware {
-      name: "teensy-stepdir"
       min_proto_version: 1
     }
     channels {

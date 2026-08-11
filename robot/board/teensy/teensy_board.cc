@@ -1,6 +1,5 @@
 #include "robot/board/teensy/teensy_board.h"
 
-#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
@@ -128,7 +127,7 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
     return absl::InvalidArgumentError(
         absl::StrCat("TEENSY41 board '", config.name(), "' requires SERIAL comm config."));
   }
-  if (!config.has_firmware() || config.firmware().name().empty()) {
+  if (!config.has_firmware()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "TEENSY41 board '", config.name(), "' requires a firmware{} spec for IDENTIFY."));
   }
@@ -189,10 +188,11 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
   return absl::OkStatus();
 }
 
-// IDENTIFY handshake: firmware name, protocol version, and per-channel
-// drive must all agree with config, or Init() fails now instead of the
-// first SET_TARGET silently landing on the wrong channel
-// (docs/BOARD_LAYER_RFC.md §7.5).
+// IDENTIFY handshake: protocol version and per-channel drive capability
+// must agree with config, or Init() fails now instead of the first
+// SET_TARGET silently landing on the wrong channel. No firmware-name
+// check — a free-form name string isn't a generalizable compatibility
+// check (docs/BOARD_LAYER_RFC.md §7.5); these structural facts are.
 absl::Status IdentifyAndValidate(FrameTransport& transport, const robot::board::Board& config) {
   uint8_t request[JW1_MAX_FRAME_LEN];
   const int request_len = jw1_encode_identify_request(request, sizeof(request));
@@ -224,17 +224,6 @@ absl::Status IdentifyAndValidate(FrameTransport& transport, const robot::board::
   if (jw1_decode_identify_response(&frame, &identify) != 0) {
     return absl::UnavailableError(
         absl::StrCat("Board '", config.name(), "': malformed IDENTIFY payload."));
-  }
-
-  const std::string reported_name(identify.fw_name, strnlen(identify.fw_name, JW1_FW_NAME_LEN));
-  if (reported_name != config.firmware().name()) {
-    return absl::FailedPreconditionError(absl::StrCat("Board '",
-                                                      config.name(),
-                                                      "': flashed firmware reports name '",
-                                                      reported_name,
-                                                      "', but config expects '",
-                                                      config.firmware().name(),
-                                                      "'. Wrong image flashed?"));
   }
 
   for (const auto& channel : config.channels()) {

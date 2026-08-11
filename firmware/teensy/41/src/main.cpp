@@ -13,8 +13,6 @@
 
 namespace {
 
-constexpr char kFirmwareName[] = "teensy-stepdir";
-
 ChannelState* LookupChannel(uint8_t index) {
   if (index >= g_num_channels) {
     return nullptr;
@@ -34,7 +32,9 @@ void HandleIdentify() {
   jw1_identify_response_t response;
   memset(&response, 0, sizeof(response));
   response.board_id = JW1_BOARD_TEENSY41;
-  memcpy(response.fw_name, kFirmwareName, strlen(kFirmwareName));
+  // fw_name intentionally left zeroed: no host code checks it
+  // (docs/BOARD_LAYER_RFC.md §7.5) — proto_ver + per-channel drive type
+  // are the real compatibility gate.
   response.n_channels = g_num_channels;
   for (uint8_t i = 0; i < g_num_channels; i++) {
     response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
