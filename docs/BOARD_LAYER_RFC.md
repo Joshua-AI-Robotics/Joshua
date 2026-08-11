@@ -217,15 +217,16 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    arduino/            arduino_board.*  (thin JoshuaWireBoard subclass —
-                        two identity hooks, nothing else; MCU only, drive
-                        peripherals like a TB6600 are a Channel.drive fact,
-                        never in this name; future — not yet built, §10
-                        Phase 5)
-    teensy/             teensy_board.*  (thin JoshuaWireBoard subclass —
-                        two identity hooks, nothing else; MCU only, a comm
-                        peripheral like an EasyCAT shield is a Board.comm
-                        fact, never in this name) ── NEW, §10 Phase 5 ──
+    arduino/            arduino_board.h  (header-only JoshuaWireBoard
+                        subclass — a one-line constructor passing identity,
+                        nothing else; MCU only, drive peripherals like a
+                        TB6600 are a Channel.drive fact, never in this
+                        name; future — not yet built, §10 Phase 5)
+    teensy/             teensy_board.h  (header-only JoshuaWireBoard
+                        subclass — a one-line constructor passing identity,
+                        nothing else; MCU only, a comm peripheral like an
+                        EasyCAT shield is a Board.comm fact, never in this
+                        name) ── NEW, §10 Phase 5 ──
     joshua_wire/        joshua_wire_board.*  (shared IDENTIFY handshake +
                         CONFIGURE_CHANNEL + channel dispatch for every
                         joshua_wire_v1 MCU board — teensy/ and arduino/
@@ -1161,14 +1162,16 @@ channel — and every channel's `Enable`/`Disable`/`SetTarget`/`ReadFeedback`
 framing, is identical for any board speaking `joshua_wire_v1` over a
 `FrameTransport`. A concrete board (`TeensyBoard` today) subclasses
 `JoshuaWireBoard` and supplies only two facts that actually differ per
-board — `ExpectedBoardType()` (the `robot.board.BoardType` it accepts) and
-`ExpectedWireBoardId()` (the `jw1_board_id_t` IDENTIFY must report) — plus,
-only if a future variant's comm type genuinely differs from plain serial,
-overrides of `ValidateComm`/`CreateProductionTransport` (both already
-virtual, both default to requiring `SERIAL` + `CommFactory::CreateSerial`,
-which is what every board on this class uses today). This is what makes
-`ArduinoBoard` (§10 Phase 5) close to free once `firmware/arduino/`'s
-firmware image exists: the host class is two short methods, not a
+board — the `robot.board.BoardType` it accepts and the `jw1_board_id_t`
+IDENTIFY must report — as **constructor arguments**, not virtual
+overrides: identity is compile-time-known data with no logic behind it,
+so there's nothing for a vtable entry to buy here (unlike
+`ValidateComm`/`CreateProductionTransport`, genuine behavior hooks a
+future board might need to override, which stay virtual with sensible
+`SERIAL`/`CommFactory::CreateSerial` defaults — what every board on this
+class uses today). This is what makes `ArduinoBoard` (§10 Phase 5) close
+to free once `firmware/arduino/`'s firmware image exists: the host class
+is a one-line constructor, not a
 341-line reimplementation of IDENTIFY/CONFIGURE_CHANNEL/channel dispatch —
 see `robot/board/teensy/teensy_board.h` for how small that subclass is in
 practice.
@@ -1581,8 +1584,11 @@ another STEP_DIR implementation.
       `TeensyBoard` once a second board on this wire protocol (Arduino)
       was concretely imminent: IDENTIFY handshake, `CONFIGURE_CHANNEL`,
       and channel dispatch now live once, shared by every joshua_wire_v1
-      board; `TeensyBoard` shrank to two identity hooks
-      (`ExpectedBoardType`/`ExpectedWireBoardId`). Also closed a real gap
+      board; `TeensyBoard` shrank to a one-line constructor passing its
+      identity (`BoardType::TEENSY41`, `JW1_BOARD_TEENSY41`) up to
+      `JoshuaWireBoard` — plain constructor data, not a virtual hook,
+      since there's no behavior behind it for a vtable entry to buy.
+      Also closed a real gap
       found reviewing the extraction: IDENTIFY's `board_id` was being
       decoded and never checked against config — now it is, generically,
       for every board on this class.

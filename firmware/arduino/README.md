@@ -9,11 +9,12 @@ handshake, `CONFIGURE_CHANNEL` push, and channel dispatch were extracted
 into `JoshuaWireBoard` (`robot/board/joshua_wire/`, docs/BOARD_LAYER_RFC.md
 §7.3) specifically so this board wouldn't need to reimplement them —
 `ArduinoBoard` (`robot/board/arduino/`, not yet created) only needs to
-subclass `JoshuaWireBoard` and supply two methods:
-`ExpectedBoardType() → BoardType::ARDUINO_UNO` and
-`ExpectedWireBoardId() → JW1_BOARD_ARDUINO_UNO` (already reserved in
-`joshua_wire_v1.h`). See `robot/board/teensy/teensy_board.h/.cc` for
-exactly how short that subclass is in practice. The firmware side is
+subclass `JoshuaWireBoard` and pass its identity to the constructor:
+`JoshuaWireBoard(BoardType::ARDUINO_UNO, JW1_BOARD_ARDUINO_UNO)`
+(`JW1_BOARD_ARDUINO_UNO` already reserved in `joshua_wire_v1.h`) — plain
+constructor data, not a virtual override, since identity has no behavior
+behind it. See `robot/board/teensy/teensy_board.h` (header-only, no `.cc`
+needed) for exactly how short that subclass is in practice. The firmware side is
 smaller than it looks too: `backend_stepdir.{h,cpp}` (STEP/DIR/ENA pulse
 generation) is shared from `firmware/common/` the same way
 `joshua_wire_v1` is (§7.3 ④) — plain Arduino-framework calls, no
@@ -113,5 +114,6 @@ TODO — will be host-configured via `StepDirConfig.step_pin`/`dir_pin`/
   should subclass (reused as-is, no changes needed)
 - `robot/action/motors/drivers/stepper_driver.*` — the motor driver
   (reused as-is, no changes needed)
-- `robot/board/arduino/arduino_board.*` — TODO, not yet created; should be
-  ~2 methods (see `robot/board/teensy/teensy_board.h/.cc` for the pattern)
+- `robot/board/arduino/arduino_board.h` — TODO, not yet created; should be
+  header-only, a one-line constructor (see `robot/board/teensy/teensy_board.h`
+  for the pattern)

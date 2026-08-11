@@ -4,7 +4,8 @@ Joshua-owned firmware (not a vendor demo) for a Teensy 4.1 driving STEP/DIR
 channels — a TB6600 in the reference wiring, but this firmware only ever
 toggles STEP/DIR/ENA pins; it never names the stepper drive chip
 (docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` over native USB
-serial. Paired host-side class: `robot/board/teensy/teensy_board.*`.
+serial. Paired host-side class: `robot/board/teensy/teensy_board.h`
+(header-only).
 
 ## Layout
 
@@ -221,10 +222,10 @@ they vary (some are current-then-microstep, some the reverse).
 
 ## Related files
 
-- `robot/board/teensy/teensy_board.*` — paired host-side board class; a
-  thin `JoshuaWireBoard` subclass supplying only `ExpectedBoardType()`
-  (`TEENSY41`) and `ExpectedWireBoardId()` (`JW1_BOARD_TEENSY41`) —
-  everything else is inherited, see below
+- `robot/board/teensy/teensy_board.h` — paired host-side board class;
+  header-only, a one-line constructor passing Teensy's identity
+  (`TEENSY41`, `JW1_BOARD_TEENSY41`) up to `JoshuaWireBoard` — everything
+  else is inherited, see below
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
   joshua_wire_v1 host board (Teensy today, Arduino/ESP32 later) runs

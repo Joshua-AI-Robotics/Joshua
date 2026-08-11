@@ -9,12 +9,12 @@
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/proto/comm.pb.h"
 
-// TeensyBoard only supplies two facts to the shared JoshuaWireBoard
-// (ExpectedBoardType/ExpectedWireBoardId) — everything else (IDENTIFY
-// handshake, CONFIGURE_CHANNEL, multi-channel, ENABLE/SET_TARGET/
-// GET_FEEDBACK, ...) is generic protocol orchestration, tested once in
-// robot/board/joshua_wire/joshua_wire_board_test.cc. These tests only
-// prove Teensy's two hooks are wired to the right values.
+// TeensyBoard only supplies two facts to the shared JoshuaWireBoard, as
+// constructor arguments (BoardType::TEENSY41, JW1_BOARD_TEENSY41) —
+// everything else (IDENTIFY handshake, CONFIGURE_CHANNEL, multi-channel,
+// ENABLE/SET_TARGET/GET_FEEDBACK, ...) is generic protocol orchestration,
+// tested once in robot/board/joshua_wire/joshua_wire_board_test.cc. These
+// tests only prove Teensy's identity is wired to the right values.
 namespace robot::board {
 namespace {
 
@@ -93,8 +93,8 @@ TEST_F(TeensyBoardTest, InitRejectsNonTeensyBoardType) {
 }
 
 TEST_F(TeensyBoardTest, InitRejectsNonTeensyWireBoardId) {
-  // Proves ExpectedWireBoardId() is actually wired to JW1_BOARD_TEENSY41,
-  // not left at some default — e.g. a re-enumerated serial path now
+  // Proves TeensyBoard's constructor actually passed JW1_BOARD_TEENSY41
+  // through to JoshuaWireBoard — e.g. a re-enumerated serial path now
   // pointing at an Arduino instead (docs/BOARD_LAYER_RFC.md §7.5).
   transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_ARDUINO_UNO));
   TeensyBoard board;

@@ -34,8 +34,21 @@ namespace robot::board {
 // class (Teensy, Arduino) is a serial FrameTransport speaking STEP_DIR
 // channels, so ValidateComm/CreateProductionTransport below default to
 // exactly that and no subclass has needed to override either yet.
+//
+// Board identity (expected BoardType / jw1_board_id_t) is constructor
+// data, not a virtual hook: unlike ValidateComm/CreateProductionTransport
+// below (genuine behavior a future board might need to override), a
+// board's identity is a compile-time-known constant with no logic behind
+// it, so a subclass just passes it to this constructor — no vtable entry,
+// no per-subclass .cc file needed for something that only ever returns a
+// literal. See robot/board/teensy/teensy_board.h for how small that makes
+// a concrete board.
 class JoshuaWireBoard : public BoardInterface {
  public:
+  JoshuaWireBoard(robot::board::BoardType expected_board_type,
+                  jw1_board_id_t expected_wire_board_id)
+      : expected_board_type_(expected_board_type),
+        expected_wire_board_id_(expected_wire_board_id) {}
   ~JoshuaWireBoard() override = default;
 
   absl::Status Init(const robot::board::Board& config) final;
@@ -54,14 +67,6 @@ class JoshuaWireBoard : public BoardInterface {
           factory);
 
  protected:
-  // The BoardType this concrete board accepts; Init() rejects any other.
-  virtual robot::board::BoardType ExpectedBoardType() const = 0;
-
-  // The jw1_board_id_t IDENTIFY must report; Init() rejects a mismatch —
-  // e.g. a re-enumerated serial path now pointing at a different board
-  // (docs/BOARD_LAYER_RFC.md §7.5).
-  virtual jw1_board_id_t ExpectedWireBoardId() const = 0;
-
   // Checked before any transport is opened. Default requires SERIAL — the
   // only comm type any joshua_wire_v1 board uses today; override if a
   // future variant (e.g. a UDP/W5500 firmware build) needs a different
@@ -76,13 +81,16 @@ class JoshuaWireBoard : public BoardInterface {
       const robot::comm::Comm& comm) const;
 
  private:
-  // These two need ExpectedBoardType()/ExpectedWireBoardId(), so they're
-  // methods (not the free functions in the .cc's anonymous namespace that
-  // everything else is) — everything they check beyond that identity fact
-  // is generic across every joshua_wire_v1 board.
+  // These two need expected_board_type_/expected_wire_board_id_, so
+  // they're methods (not the free functions in the .cc's anonymous
+  // namespace that everything else is) — everything they check beyond
+  // that identity fact is generic across every joshua_wire_v1 board.
   absl::Status ValidateConfig(const robot::board::Board& config) const;
   absl::Status IdentifyAndValidate(FrameTransport& transport,
                                    const robot::board::Board& config) const;
+
+  const robot::board::BoardType expected_board_type_;
+  const jw1_board_id_t expected_wire_board_id_;
 
   bool initialized_ = false;
   robot::board::Board config_;

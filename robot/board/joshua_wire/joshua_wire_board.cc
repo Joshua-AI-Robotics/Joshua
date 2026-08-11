@@ -217,8 +217,8 @@ absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateProductio
 }
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
-  const std::string type_name = robot::board::BoardType_Name(ExpectedBoardType());
-  if (config.board_type() != ExpectedBoardType()) {
+  const std::string type_name = robot::board::BoardType_Name(expected_board_type_);
+  if (config.board_type() != expected_board_type_) {
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not a ", type_name, " board."));
   }
@@ -352,14 +352,13 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
   // re-enumerated serial path now pointing at a different board type —
   // instead of silently proceeding as long as channel shapes happen to
   // match.
-  const jw1_board_id_t expected_board_id = ExpectedWireBoardId();
-  if (identify.board_id != expected_board_id) {
+  if (identify.board_id != expected_wire_board_id_) {
     return absl::FailedPreconditionError(absl::StrCat("Board '",
                                                       config.name(),
                                                       "': IDENTIFY reports board_id ",
                                                       static_cast<int>(identify.board_id),
                                                       ", expected ",
-                                                      static_cast<int>(expected_board_id),
+                                                      static_cast<int>(expected_wire_board_id_),
                                                       ". Wrong device on this port?"));
   }
 

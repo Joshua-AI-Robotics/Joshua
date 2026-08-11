@@ -2,7 +2,6 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "teensy_board",
-    srcs = ["teensy_board.cc"],
     hdrs = ["teensy_board.h"],
     visibility = ["//visibility:public"],
     deps = [

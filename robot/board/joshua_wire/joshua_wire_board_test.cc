@@ -20,13 +20,9 @@ namespace {
 // specific behavior (there is none beyond identity today) belongs in
 // robot/board/teensy/teensy_board_test.cc instead.
 class FakeJoshuaWireBoard : public JoshuaWireBoard {
- protected:
-  robot::board::BoardType ExpectedBoardType() const override {
-    return robot::board::BoardType::ARDUINO_UNO;
-  }
-  jw1_board_id_t ExpectedWireBoardId() const override {
-    return JW1_BOARD_ARDUINO_UNO;
-  }
+ public:
+  FakeJoshuaWireBoard()
+      : JoshuaWireBoard(robot::board::BoardType::ARDUINO_UNO, JW1_BOARD_ARDUINO_UNO) {}
 };
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
