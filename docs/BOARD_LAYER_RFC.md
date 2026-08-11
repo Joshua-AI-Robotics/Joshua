@@ -1562,15 +1562,23 @@ by this choice.
 **ESP32** (hardware on hand) got a first cut for the same reason Teensy
 did: `firmware/esp32/` joins the exact same joshua_wire_v1 family as
 Teensy — plain UART/USB-serial, STEP_DIR, `backend_stepdir.{h,cpp}` reused
-unchanged from `firmware/common/`, `Esp32Board` a one-line constructor
-identical in shape to `TeensyBoard`. This is deliberately the boring,
-immediately-buildable path, not the Wi-Fi/UDP transport-swap proof this
-section originally speculated ESP32 might be for — that variant is still
-real, still tracked, and still needs a `robot::comm::UdpTransport` and a
-`UdpFrameTransport` that don't exist yet (§7's TODOs on `frame_transport.h`
-and `comm_factory.h`), but it's a separate, larger piece of follow-up work
-from "ESP32 exists as a board at all." Not yet flashed or verified on real
-hardware — see `firmware/esp32/README.md`'s Status.
+unchanged from `firmware/common/`, `Esp32Board`'s constructor identical in
+shape to `TeensyBoard`'s. One real difference from Teensy: `Esp32Board`
+overrides `CreateTransport()` to add a ~2s settle delay after opening the
+port, because most ESP32 dev boards (CP2102/CH340 bridge) reset on serial
+open — DTR is wired into EN, the same auto-reset trick `esptool` uses —
+so the first IDENTIFY otherwise races the board's own boot log (see
+`firmware/esp32/README.md`'s Known gaps for the full mechanism). This is
+deliberately the boring, immediately-buildable path, not the Wi-Fi/UDP
+transport-swap proof this section originally speculated ESP32 might be
+for — that variant is still real, still tracked, and still needs a
+`robot::comm::UdpTransport` and a `UdpFrameTransport` that don't exist yet
+(§7's TODOs on `frame_transport.h` and `comm_factory.h`), but it's a
+separate, larger piece of follow-up work from "ESP32 exists as a board at
+all." Flashed and protocol-verified on real hardware (IDENTIFY, ENABLE,
+SET_TARGET all confirmed via `esp32_driver_smoke`) — physical motor
+rotation not yet observed on this board; see `firmware/esp32/README.md`'s
+Status.
 
 - [x] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3). Every response has a

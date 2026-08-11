@@ -45,10 +45,12 @@ proven on Teensy works unchanged here, no ESP32-specific code needed.
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
       reused unchanged
-- ⬜ Firmware flashed
-- ⬜ Board enumerates
-- ⬜ Protocol/handshake verified against the host
-- ⬜ Full command path verified end to end
+- [x] Firmware flashed (`pio run --target upload`, real ESP32-D0WD-V3)
+- [x] Board enumerates (`/dev/ttyUSB0`, CP2102 bridge)
+- [x] Protocol/handshake verified against the host (`esp32_driver_smoke`:
+      IDENTIFY, ENABLE, and 5 alternating SET_TARGETs all `OK`)
+- ⬜ Full command path verified end to end (`joshua_main` + ROS 2 +
+      physical motor rotation — not yet run against real wiring)
 
 ## Prerequisites
 
@@ -190,10 +192,26 @@ MCU — but treat that as a prediction until it's actually been run.
 
 ## Known gaps / Troubleshooting
 
-- Not yet flashed or run against real hardware — everything above the
-  "Verify" section is unverified prediction, carried over from Teensy's
-  bring-up rather than confirmed on this board. Update this section (and
-  Status above) once it has been.
+- **First IDENTIFY after flashing/opening the port fails with "malformed
+  IDENTIFY response"**: expected on most ESP32 dev boards, not a wiring or
+  firmware bug. Opening a serial port on Linux asserts DTR, and the
+  CP2102/CH340 USB-serial bridge most ESP32 boards use routes DTR (and
+  RTS) into an RC circuit on EN/GPIO0 — the same auto-reset-into-bootloader
+  mechanism `esptool.py` itself relies on to flash without a BOOT-button
+  press. So simply *connecting* reboots the board, and a host that sends
+  IDENTIFY immediately races the ESP32's bootloader boot-log output (a
+  different baud rate, reads as noise) and `setup()`. Unlike Teensy 4.1's
+  native-USB CDC, ESP32 has no way around this at the transport level, so
+  `Esp32Board::CreateTransport()` (`robot/board/esp32/esp32_board.cc`)
+  overrides the default to sleep ~2s after opening the port before
+  returning — long enough for boot to finish before the first
+  `AtomicRead` (which already flushes right before writing) sends
+  IDENTIFY. If this still fails on a slower-booting board/variant, that
+  delay is the first thing to increase.
+- Wiring/motion (the "Full command path" status item above) is still
+  unverified against real hardware — the protocol handshake and command
+  dispatch are confirmed, but nobody has wired up a TB6600/motor and
+  watched it turn on this board yet, unlike Teensy's bring-up.
 - `board = esp32dev` in `platformio.ini` targets a generic ESP32 DevKitC-
   class board. If your board is a different variant (S3, C3, S2, an
   ESP32-WROVER module, ...), that one line likely needs to change —
@@ -208,9 +226,11 @@ MCU — but treat that as a prediction until it's actually been run.
 
 ## Related files
 
-- `robot/board/esp32/esp32_board.h` — paired host-side board class;
-  header-only, a one-line constructor supplying `BoardType::ESP32` and
-  `JW1_BOARD_ESP32` to `JoshuaWireBoard` — everything else is inherited
+- `robot/board/esp32/esp32_board.{h,cc}` — paired host-side board class; a
+  one-line constructor supplying `BoardType::ESP32` and `JW1_BOARD_ESP32`
+  to `JoshuaWireBoard`, plus a `CreateTransport()` override for the
+  post-open settle delay (see Known gaps above) — everything else is
+  inherited
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
   joshua_wire_v1 host board (Teensy, ESP32, Arduino later) runs through
