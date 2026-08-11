@@ -76,7 +76,11 @@ class JoshuaWireBoard : public BoardInterface {
 
   // Builds the real (non-test) transport. Default opens
   // CommFactory::CreateSerial + SerialFrameTransport; override alongside
-  // ValidateComm if a future variant's comm type differs.
+  // ValidateComm if a future variant's comm type differs. TODO(docs/
+  // BOARD_LAYER_RFC.md §7.3/§10 Phase 5): a UDP-based board would override
+  // this to build a UdpFrameTransport over CommFactory::CreateUdp instead
+  // — see the TODOs on both of those (robot/board/frame/frame_transport.h,
+  // robot/comm/factory/comm_factory.h) for what's not built yet.
   virtual absl::StatusOr<std::shared_ptr<FrameTransport>> CreateProductionTransport(
       const robot::comm::Comm& comm) const;
 

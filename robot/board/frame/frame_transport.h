@@ -20,6 +20,19 @@ namespace robot::board {
 // (see JW1_*_RESPONSE_PAYLOAD_LEN in firmware/common/joshua_wire_v1.h), so
 // callers always know expected_response_len up front — no incremental
 // header-then-body read is needed at this boundary.
+//
+// Not tied to any particular transport's reliability characteristics:
+// SendAndReceive returning a non-ok Status already models "no response
+// arrived in time" as an expected, first-class outcome (see
+// SerialFrameTransport's timeout handling) — not a guarantee every send
+// gets an answer. This is what makes the interface transport-agnostic:
+// TODO(docs/BOARD_LAYER_RFC.md §7.3/§10 Phase 5) a future
+// UdpFrameTransport (unimplemented — no UDP-based board exists yet) would
+// satisfy this exact contract over CommFactory::CreateUdp (also
+// unimplemented) instead of CreateSerial, with zero changes needed here
+// or in JoshuaWireBoard's IDENTIFY/CONFIGURE_CHANNEL/channel-dispatch
+// logic — only JoshuaWireBoard::CreateProductionTransport() would need a
+// per-board override.
 class FrameTransport {
  public:
   virtual ~FrameTransport() = default;
