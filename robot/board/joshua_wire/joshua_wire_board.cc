@@ -160,6 +160,7 @@ absl::Status ConfigureStepDirChannel(FrameTransport& transport,
   config.step_pin = static_cast<uint8_t>(channel.step_dir().step_pin());
   config.dir_pin = static_cast<uint8_t>(channel.step_dir().dir_pin());
   config.enable_pin = static_cast<uint8_t>(channel.step_dir().enable_pin());
+  config.step_pulse_width_us = static_cast<uint16_t>(channel.step_dir().step_pulse_width_us());
 
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_configure_channel_step_dir(
@@ -271,6 +272,17 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
                          pin,
                          " that doesn't fit an MCU GPIO pin (max 255)."));
       }
+    }
+    if (channel.step_dir().step_pulse_width_us() > 65535) {
+      return absl::InvalidArgumentError(
+          absl::StrCat(type_name,
+                       " board '",
+                       config.name(),
+                       "' channel ",
+                       channel.index(),
+                       " declares step_pulse_width_us ",
+                       channel.step_dir().step_pulse_width_us(),
+                       " that doesn't fit the wire field (max 65535)."));
     }
     if (channel.index() >= JW1_MAX_CHANNELS) {
       return absl::InvalidArgumentError(absl::StrCat(type_name,

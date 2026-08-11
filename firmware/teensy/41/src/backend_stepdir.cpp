@@ -5,6 +5,18 @@
 
 namespace {
 
+// Fallback STEP pulse HIGH width when the host doesn't set
+// step_pulse_width_us (0): conservative for a TB6600's opto-isolated
+// 3.3V-driven input — a too-short HIGH time may not give the opto's LED
+// enough time to fully turn on at reduced drive current, found via a real
+// hardware pass where the firmware/wire protocol and the TB6600's ENA
+// gating were confirmed correct (position tracked exactly as commanded)
+// but the motor still didn't respond with the previous hardcoded 2us. Now
+// host-configurable (StepDirConfig.step_pulse_width_us,
+// docs/BOARD_LAYER_RFC.md §7.5) for a different STEP/DIR driver chip that
+// needs a different minimum HIGH time, without a firmware edit + reflash.
+constexpr unsigned int kDefaultStepPulseWidthUs = 20;
+
 // Minimum microseconds between pulses for the channel's configured
 // max_pulse_rate_hz; 0 (unconfigured) is treated as "not ready to step".
 unsigned long MinPulseIntervalUs(const ChannelState& channel) {
@@ -14,17 +26,16 @@ unsigned long MinPulseIntervalUs(const ChannelState& channel) {
   return 1000000UL / channel.config.max_pulse_rate_hz;
 }
 
+unsigned int StepPulseWidthUs(const ChannelState& channel) {
+  return channel.config.step_pulse_width_us != 0 ? channel.config.step_pulse_width_us
+                                                 : kDefaultStepPulseWidthUs;
+}
+
 void Pulse(ChannelState* channel, bool dir_positive) {
   const bool dir_pin_level = channel->config.invert_dir ? !dir_positive : dir_positive;
   digitalWrite(channel->config.dir_pin, dir_pin_level ? HIGH : LOW);
   digitalWriteFast(channel->config.step_pin, HIGH);
-  // 20us, not 2us: Teensy 4.1 drives 3.3V logic into a TB6600 opto-isolated
-  // input commonly spec'd for 5V. A too-short HIGH time may not give the
-  // opto's LED enough time to fully turn on at reduced drive current —
-  // widened after a real hardware pass where the firmware/wire protocol
-  // and the TB6600's ENA gating were confirmed correct (position tracked
-  // exactly as commanded) but the motor still didn't respond.
-  delayMicroseconds(20);
+  delayMicroseconds(StepPulseWidthUs(*channel));
   digitalWriteFast(channel->config.step_pin, LOW);
   channel->position_steps += dir_positive ? 1 : -1;
   channel->last_step_us = micros();

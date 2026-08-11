@@ -127,13 +127,14 @@ int jw1_encode_configure_channel_step_dir(uint8_t* buf,
   if (config == NULL) {
     return -1;
   }
-  uint8_t payload[9] = {0};
+  uint8_t payload[11] = {0};
   jw1_put_u32le(payload, config->max_pulse_rate_hz);
   payload[4] = config->invert_dir ? 1 : 0;
   payload[5] = config->enable_active_low ? 1 : 0;
   payload[6] = config->step_pin;
   payload[7] = config->dir_pin;
   payload[8] = config->enable_pin;
+  jw1_put_u16le(payload + 9, config->step_pulse_width_us);
   return jw1_encode_frame(buf, cap, JW1_CMD_CONFIGURE_CHANNEL, channel, payload, sizeof(payload));
 }
 
@@ -266,7 +267,7 @@ int jw1_decode_configure_channel_step_dir(const jw1_frame_t* frame, jw1_configur
   if (frame == NULL || out == NULL) {
     return -1;
   }
-  if (frame->cmd != JW1_CMD_CONFIGURE_CHANNEL || frame->payload_len != 9) {
+  if (frame->cmd != JW1_CMD_CONFIGURE_CHANNEL || frame->payload_len != 11) {
     return -1;
   }
   out->max_pulse_rate_hz = jw1_get_u32le(frame->payload);
@@ -275,5 +276,6 @@ int jw1_decode_configure_channel_step_dir(const jw1_frame_t* frame, jw1_configur
   out->step_pin = frame->payload[6];
   out->dir_pin = frame->payload[7];
   out->enable_pin = frame->payload[8];
+  out->step_pulse_width_us = jw1_get_u16le(frame->payload + 9);
   return 0;
 }

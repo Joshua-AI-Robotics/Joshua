@@ -102,7 +102,12 @@ which is the methodology worth reusing on the next board:
    too-short HIGH time may not give the opto's LED enough time to reach
    full brightness at reduced drive current. Kept as a conservative
    improvement even though the actual root cause of "no rotation" turned
-   out to be item 10 below, not pulse width.
+   out to be item 10 below, not pulse width. At the time this was a
+   firmware-hardcoded constant; later host-configured as
+   `StepDirConfig.step_pulse_width_us` (0 falls back to this same 20us
+   default) so a different STEP/DIR driver chip needing a different
+   minimum HIGH time doesn't need a firmware edit
+   (docs/BOARD_LAYER_RFC.md §7.5).
 9. **The TB6600's DIP switch layout is board-specific — don't trust a
    "standard" table.** Initially decoded the switches assuming
    `S1-S3=current, S4-S6=microstep` (common on many clones); the user's

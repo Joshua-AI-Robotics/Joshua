@@ -138,6 +138,10 @@ typedef struct {
   uint8_t step_pin;
   uint8_t dir_pin;
   uint8_t enable_pin;
+  // STEP pulse HIGH width, microseconds. Host-configured, same reasoning
+  // as the pins above. 0 means "use firmware's own default" (see
+  // backend_stepdir.cpp) — not "zero-width pulse".
+  uint16_t step_pulse_width_us;
 } jw1_configure_step_dir_t;
 
 // ---- Generic frame assembly / parsing -------------------------------

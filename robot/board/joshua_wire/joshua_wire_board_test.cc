@@ -190,6 +190,33 @@ TEST_F(JoshuaWireBoardTest, InitRejectsPinOutOfMcuRange) {
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
 }
 
+TEST_F(JoshuaWireBoardTest, InitRejectsStepPulseWidthOutOfWireRange) {
+  auto config = MakeBoardConfig();
+  config.mutable_channels(0)->mutable_step_dir()->set_step_pulse_width_us(
+      70000);  // Doesn't fit uint16_t.
+  FakeJoshuaWireBoard board;
+
+  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(JoshuaWireBoardTest, ConfigureChannelSendsStepPulseWidthOnTheWire) {
+  auto config = MakeBoardConfig();
+  config.mutable_channels(0)->mutable_step_dir()->set_step_pulse_width_us(500);
+  QueueSuccessfulInit();
+  FakeJoshuaWireBoard board;
+
+  ASSERT_TRUE(board.Init(config).ok());
+
+  // CONFIGURE_CHANNEL payload: max_pulse_rate_hz(4) + invert_dir(1) +
+  // enable_active_low(1) + step_pin(1) + dir_pin(1) + enable_pin(1) +
+  // step_pulse_width_us(2, LE) — starts at last_sent_[5].
+  ASSERT_EQ(transport_->sent_.size(), 2u);
+  const auto& configure_frame = transport_->sent_[1];
+  ASSERT_EQ(configure_frame[3], JW1_CMD_CONFIGURE_CHANNEL);
+  EXPECT_EQ(configure_frame[14], 0xf4);  // 500 & 0xFF
+  EXPECT_EQ(configure_frame[15], 0x01);  // 500 >> 8
+}
+
 TEST_F(JoshuaWireBoardTest, InitRejectsDuplicateChannelIndex) {
   auto config = MakeBoardConfig();
   auto* channel = config.add_channels();

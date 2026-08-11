@@ -51,6 +51,15 @@ message StepDirConfig {
   uint32 step_pin = 4;
   uint32 dir_pin = 5;
   uint32 enable_pin = 6;
+  // STEP pulse HIGH width in microseconds. Host-configurable for the same
+  // reason pins are: it's a fact about the specific STEP/DIR driver chip
+  // wired up (an opto-isolated input may need a wider pulse than a direct
+  // logic input), not something the firmware image should hardcode. 0
+  // (the default when unset) falls back to firmware's own default — 20us,
+  // conservative for a TB6600's opto-isolated 3.3V-driven input
+  // (firmware/teensy/41/src/backend_stepdir.cpp) — so existing configs
+  // that don't set this keep working unchanged.
+  uint32 step_pulse_width_us = 7;
 }
 
 message ServoBusConfig {

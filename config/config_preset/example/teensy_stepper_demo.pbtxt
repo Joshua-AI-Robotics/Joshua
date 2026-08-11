@@ -46,6 +46,12 @@ robot {
         step_pin: 2
         dir_pin: 3
         enable_pin: 4
+        # STEP pulse HIGH width, tuned for this TB6600's opto-isolated
+        # 3.3V-driven input (firmware/teensy/41/docs/bringup.md). Left at
+        # firmware's own default (20us) here since that default was
+        # derived from this exact hardware pass; a different STEP/DIR
+        # driver chip would set this instead of needing a firmware edit.
+        step_pulse_width_us: 20
       }
     }
   }

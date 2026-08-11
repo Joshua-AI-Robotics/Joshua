@@ -82,10 +82,11 @@ TEST(JoshuaWireV1Test, EncodeConfigureChannelStepDirMatchesGoldenBytes) {
   config.step_pin = 2;
   config.dir_pin = 3;
   config.enable_pin = 4;
+  config.step_pulse_width_us = 500;
   const int len = jw1_encode_configure_channel_step_dir(buf, sizeof(buf), 0, &config);
-  ASSERT_EQ(len, 16);
+  ASSERT_EQ(len, 18);
   const std::vector<uint8_t> expected = {0xa5,
-                                         0x0c,
+                                         0x0e,
                                          0x01,
                                          0x02,
                                          0x00,
@@ -98,8 +99,10 @@ TEST(JoshuaWireV1Test, EncodeConfigureChannelStepDirMatchesGoldenBytes) {
                                          0x02,
                                          0x03,
                                          0x04,
-                                         0xe4,
-                                         0x39};
+                                         0xf4,
+                                         0x01,
+                                         0x83,
+                                         0xcd};
   EXPECT_EQ(std::vector<uint8_t>(buf, buf + len), expected);
 }
 
