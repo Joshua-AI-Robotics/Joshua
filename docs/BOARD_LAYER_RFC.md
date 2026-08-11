@@ -1166,7 +1166,7 @@ board — the `robot.board.BoardType` it accepts and the `jw1_board_id_t`
 IDENTIFY must report — as **constructor arguments**, not virtual
 overrides: identity is compile-time-known data with no logic behind it,
 so there's nothing for a vtable entry to buy here (unlike
-`ValidateComm`/`CreateProductionTransport`, genuine behavior hooks a
+`ValidateComm`/`CreateTransport`, genuine behavior hooks a
 future board might need to override, which stay virtual with sensible
 `SERIAL`/`CommFactory::CreateSerial` defaults — what every board on this
 class uses today). This is what makes `ArduinoBoard` (§10 Phase 5) close

@@ -210,7 +210,7 @@ absl::Status JoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateProductionTransport(
+absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateTransport(
     const robot::comm::Comm& comm) const {
   ABSL_ASSIGN_OR_RETURN(auto serial, robot::comm::CommFactory::CreateSerial(comm));
   return std::make_shared<SerialFrameTransport>(std::move(serial));
@@ -399,7 +399,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
   if (FrameTransportFactoryForTesting()) {
     ABSL_ASSIGN_OR_RETURN(transport, FrameTransportFactoryForTesting()(config.comm()));
   } else {
-    ABSL_ASSIGN_OR_RETURN(transport, CreateProductionTransport(config.comm()));
+    ABSL_ASSIGN_OR_RETURN(transport, CreateTransport(config.comm()));
   }
 
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*transport, config));

@@ -31,7 +31,7 @@ namespace robot::board {
 // satisfy this exact contract over CommFactory::CreateUdp (also
 // unimplemented) instead of CreateSerial, with zero changes needed here
 // or in JoshuaWireBoard's IDENTIFY/CONFIGURE_CHANNEL/channel-dispatch
-// logic — only JoshuaWireBoard::CreateProductionTransport() would need a
+// logic — only JoshuaWireBoard::CreateTransport() would need a
 // per-board override.
 class FrameTransport {
  public:

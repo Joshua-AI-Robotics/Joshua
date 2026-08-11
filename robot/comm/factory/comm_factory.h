@@ -25,12 +25,13 @@ class CommFactory {
   // (new class, mirrors Serial's interface) for
   // robot::board::UdpFrameTransport (new class, mirrors
   // robot/board/frame/serial_frame_transport.*) to wrap — see
-  // JoshuaWireBoard::CreateProductionTransport()'s doc comment for the
+  // JoshuaWireBoard::CreateTransport()'s doc comment for the
   // rest of the seam this plugs into. Firmware side needs a matching
   // transport_udp.cpp (W5500 or similar), implementing the same
   // TransportInit/TransportReadFrame/TransportWriteFrame shape
   // transport_serial.cpp does today — main.cpp's dispatch loop needs no
   // changes either way, which is the point of this seam.
+
   // Returns a cached instance per interface name — an EtherCAT NIC has
   // exactly one master, and two ecx_init()s on one NIC fight over the raw
   // socket (docs/BOARD_LAYER_RFC.md §5.3). The first call for an interface

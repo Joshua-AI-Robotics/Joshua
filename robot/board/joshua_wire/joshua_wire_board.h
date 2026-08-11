@@ -32,11 +32,11 @@ namespace robot::board {
 // What is NOT generic here, and stays a subclass's problem if it ever
 // needs to differ: nothing today — every current and planned board on this
 // class (Teensy, Arduino) is a serial FrameTransport speaking STEP_DIR
-// channels, so ValidateComm/CreateProductionTransport below default to
+// channels, so ValidateComm/CreateTransport below default to
 // exactly that and no subclass has needed to override either yet.
 //
 // Board identity (expected BoardType / jw1_board_id_t) is constructor
-// data, not a virtual hook: unlike ValidateComm/CreateProductionTransport
+// data, not a virtual hook: unlike ValidateComm/CreateTransport
 // below (genuine behavior a future board might need to override), a
 // board's identity is a compile-time-known constant with no logic behind
 // it, so a subclass just passes it to this constructor — no vtable entry,
@@ -58,7 +58,7 @@ class JoshuaWireBoard : public BoardInterface {
   // Replaces the FrameTransport so the IDENTIFY/CONFIGURE_CHANNEL handshake
   // and channel dispatch are testable without real hardware
   // (docs/BOARD_LAYER_RFC.md §7.3). Pass nullptr to restore each
-  // subclass's real CreateProductionTransport() path. Shared by every
+  // subclass's real CreateTransport() path. Shared by every
   // subclass (one process-wide test seam, reset in TearDown) — safe as
   // long as tests run serially, which is gtest's default and already the
   // pattern this seam has always used.
@@ -81,7 +81,7 @@ class JoshuaWireBoard : public BoardInterface {
   // this to build a UdpFrameTransport over CommFactory::CreateUdp instead
   // — see the TODOs on both of those (robot/board/frame/frame_transport.h,
   // robot/comm/factory/comm_factory.h) for what's not built yet.
-  virtual absl::StatusOr<std::shared_ptr<FrameTransport>> CreateProductionTransport(
+  virtual absl::StatusOr<std::shared_ptr<FrameTransport>> CreateTransport(
       const robot::comm::Comm& comm) const;
 
  private:
