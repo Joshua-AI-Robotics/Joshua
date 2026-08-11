@@ -195,4 +195,48 @@ TEST(JoshuaWireV1Test, EncodeFrameRejectsUndersizedBuffer) {
   EXPECT_EQ(jw1_encode_frame(buf, sizeof(buf), JW1_CMD_ENABLE, 0, nullptr, 0), -1);
 }
 
+TEST(JoshuaWireV1Test, EncodeFrameRejectsNullBuffer) {
+  const uint8_t payload[1] = {0};
+  EXPECT_EQ(jw1_encode_frame(nullptr, JW1_MAX_FRAME_LEN, JW1_CMD_ENABLE, 0, payload, 1), -1);
+}
+
+TEST(JoshuaWireV1Test, EncodeFrameRejectsNullPayloadWithNonzeroLen) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  EXPECT_EQ(jw1_encode_frame(buf, sizeof(buf), JW1_CMD_SET_TARGET, 0, nullptr, 5), -1);
+}
+
+TEST(JoshuaWireV1Test, DecodeFrameRejectsNullPointers) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  jw1_frame_t frame;
+  EXPECT_EQ(jw1_decode_frame(nullptr, sizeof(buf), &frame), -1);
+  EXPECT_EQ(jw1_decode_frame(buf, sizeof(buf), nullptr), -1);
+}
+
+TEST(JoshuaWireV1Test, EncodeConfigureChannelStepDirRejectsNullConfig) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  EXPECT_EQ(jw1_encode_configure_channel_step_dir(buf, sizeof(buf), 0, nullptr), -1);
+}
+
+TEST(JoshuaWireV1Test, EncodeIdentifyResponseRejectsNullResponse) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  EXPECT_EQ(jw1_encode_identify_response(buf, sizeof(buf), nullptr), -1);
+}
+
+TEST(JoshuaWireV1Test, EncodeFeedbackResponseRejectsNullFeedback) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  EXPECT_EQ(jw1_encode_feedback_response(buf, sizeof(buf), 0, nullptr), -1);
+}
+
+TEST(JoshuaWireV1Test, DecodeIdentifyResponseRejectsNullPointers) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  const int len =
+      jw1_encode_frame(buf, sizeof(buf), JW1_CMD_IDENTIFY, JW1_CHANNEL_NONE, nullptr, 0);
+  ASSERT_GT(len, 0);
+  jw1_frame_t frame;
+  ASSERT_EQ(jw1_decode_frame(buf, static_cast<size_t>(len), &frame), 0);
+  jw1_identify_response_t decoded;
+  EXPECT_EQ(jw1_decode_identify_response(nullptr, &decoded), -1);
+  EXPECT_EQ(jw1_decode_identify_response(&frame, nullptr), -1);
+}
+
 }  // namespace

@@ -155,30 +155,68 @@ int jw1_encode_frame(uint8_t* buf,
 // Validates sync/len/crc in `buf` (exactly one frame's worth of bytes —
 // slicing a byte stream into frames is the transport's job, e.g.
 // SerialFrameTransport) and fills `out`. Returns 0 on success, -1 on a
-// framing or CRC error.
+// null `buf`/`out`, or a framing or CRC error.
 int jw1_decode_frame(const uint8_t* buf, size_t len, jw1_frame_t* out);
 
 // ---- Per-command encoders (host and firmware call the same functions) --
+//
+// Every encoder below returns the frame length written into `buf` (>0) on
+// success, or -1 on error: `cap` too small, a null required pointer
+// (`buf`, or a struct-argument pointer such as `config`/`response`/
+// `feedback`), or a size field out of range (documented per-function where
+// it applies). There are no exceptions in this codec by design (see the
+// file header) — -1 is the uniform error signal for both encode and
+// decode, checked the same way a caller already checks `cap`/length.
 
+// IDENTIFY request. No payload.
 int jw1_encode_identify_request(uint8_t* buf, size_t cap);
+
+// CONFIGURE_CHANNEL for a STEP_DIR channel: pushes pin mapping (step/dir/
+// enable) and tunables, host-configured (docs/BOARD_LAYER_RFC.md §7.5).
+// -1 if `config` is null.
 int jw1_encode_configure_channel_step_dir(uint8_t* buf,
                                           size_t cap,
                                           uint8_t channel,
                                           const jw1_configure_step_dir_t* config);
+
+// SET_TARGET: a position/velocity/torque command for one channel.
 int jw1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel, jw1_mode_t mode, float value);
+
+// GET_FEEDBACK request. No payload.
 int jw1_encode_get_feedback_request(uint8_t* buf, size_t cap, uint8_t channel);
+
+// ENABLE: arms one channel's drive output.
 int jw1_encode_enable(uint8_t* buf, size_t cap, uint8_t channel);
+
+// DISABLE: de-energizes one channel's drive output.
 int jw1_encode_disable(uint8_t* buf, size_t cap, uint8_t channel);
+
+// ESTOP: board-scope emergency stop across every channel.
 int jw1_encode_estop(uint8_t* buf, size_t cap);
+
+// Generic OK/ERROR/UNSUPPORTED reply to whichever `cmd` is being answered.
 int jw1_encode_status_response(
     uint8_t* buf, size_t cap, uint8_t cmd, uint8_t channel, jw1_status_t status);
+
+// IDENTIFY reply: board id, channel count, and per-channel drive type (the
+// facts IDENTIFY actually gates Init() on — docs/BOARD_LAYER_RFC.md §7.5).
+// -1 if `response` is null or `response->n_channels` exceeds
+// JW1_MAX_CHANNELS.
 int jw1_encode_identify_response(uint8_t* buf, size_t cap, const jw1_identify_response_t* response);
+
+// GET_FEEDBACK reply: position, velocity, fault flags for one channel.
+// -1 if `feedback` is null.
 int jw1_encode_feedback_response(uint8_t* buf,
                                  size_t cap,
                                  uint8_t channel,
                                  const jw1_feedback_t* feedback);
 
 // ---- Per-command decoders ---------------------------------------------
+//
+// Every decoder below takes an already-`jw1_decode_frame`-decoded `frame`
+// and returns 0 on success, -1 on error: a null `frame`/`out`, `frame->cmd`
+// not matching the command this decoder parses, or `frame->payload_len`
+// not matching that command's fixed payload size.
 
 // Host-side: parse what firmware sent back.
 int jw1_decode_identify_response(const jw1_frame_t* frame, jw1_identify_response_t* out);
