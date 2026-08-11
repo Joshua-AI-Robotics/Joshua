@@ -19,8 +19,6 @@ firmware/teensy/41/
     channel_table.h
     backend_stepdir.{h,cpp}   STEP/DIR/ENA pulse generation
     transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
-  docs/bringup.md        detailed bring-up log: full wiring diagram,
-                         verification trace, bugs found and fixed
 ```
 
 `joshua_wire_v1.{h,c}` itself is not copied here — `platformio.ini` pulls it
@@ -43,10 +41,7 @@ always build from the exact same two files.
       `GET_FEEDBACK` query returning `position=89.0`
 - [x] **Motor physically rotates**, wired to a real TB6600, driven through
       the real production path (`launcher:joshua_main` +
-      `ros2 topic pub`). Getting here took a real debugging session —
-      the wiring, DIP switch, and driver-behavior bugs it surfaced are
-      documented in full in `docs/bringup.md`, worth reading before
-      bringing up a second board.
+      `ros2 topic pub`).
 
 ## Prerequisites
 
@@ -132,25 +127,49 @@ source /opt/ros/humble/setup.bash   # or your ROS 2 distro
 ros2 topic pub --once /teensy_stepper_1/position std_msgs/msg/Float32 "data: 10.0"
 ```
 
-No error in the launcher log means the command reached the firmware. See
-`docs/bringup.md` for how to independently confirm this with a raw
-`GET_FEEDBACK` query (bypassing the host stack entirely) if you want to
-verify the wire protocol itself, not just "no error."
+No error in the launcher log means the command reached the firmware. To
+verify the wire protocol itself independent of the host C++ stack, use
+`teensy_driver_smoke` (see Related files below) rather than the launcher.
 
 ## Wiring / Pinout
 
 **Pin numbers are host-configured** (`StepDirConfig.step_pin`/`dir_pin`/
 `enable_pin` in the pbtxt, pushed to firmware via `CONFIGURE_CHANNEL` at
 `Init()`), not hardcoded in `channel_table.c`
-(`docs/BOARD_LAYER_RFC.md` §7.5, revised). See
-`config/config_preset/example/teensy_stepper_demo.pbtxt` for channel 0's
-current wiring (pins 2/3/4), and `docs/bringup.md` for the full wiring
-diagram against a TB6600, including the ground-return connection
-(`ENA-`/`PUL-`/`DIR-` to Teensy GND) that caused the most debugging time
-when it was missing — read that section before wiring a second board the
-same way. `channel_table.c` only declares how many channel *slots* this
-firmware image has — still compile-time, since that's reported by
-`IDENTIFY`.
+(`docs/BOARD_LAYER_RFC.md` §7.5, revised). `channel_table.c` only declares
+how many channel *slots* this firmware image has — still compile-time,
+since that's reported by `IDENTIFY`.
+
+Reference wiring against a TB6600 (matches
+`config/config_preset/example/teensy_stepper_demo.pbtxt`'s channel 0):
+
+```
+Teensy 4.1 pin 2  ──► TB6600 PUL+   (STEP)
+Teensy 4.1 pin 3  ──► TB6600 DIR+   (DIR)
+Teensy 4.1 pin 4  ──► TB6600 ENA+   (ENABLE)
+Teensy 4.1 GND    ──► TB6600 PUL-, DIR-, ENA-  (ALL THREE)
+
+TB6600 A+/A-, B+/B- ──► motor coil pairs (get these from the motor's
+                        datasheet or a multimeter continuity check, not
+                        wire color — conventions vary by manufacturer)
+TB6600 VCC/GND      ──► bench PSU, sized to the motor's rated current;
+                        set the TB6600's current-limit DIP switches to
+                        match BEFORE powering on. Do not power the motor
+                        from the Teensy's 5V/3.3V rails, and do not tie
+                        Teensy GND to the PSU's power GND — only the
+                        signal-side ground (PUL-/DIR-/ENA-) ties to the
+                        Teensy; that separation is the point of the
+                        opto-isolated inputs.
+```
+
+**The `PUL-`/`DIR-`/`ENA-` ground return is easy to skip and the hardest
+symptom to diagnose**: all three TB6600 control inputs are opto-isolated
+and need a complete circuit, not just the `+` side driven — with `ENA-`
+floating, many TB6600 clones default to always-enabled regardless of what
+the firmware commands, which reads as "ignores Enable/Disable" rather
+than "wiring problem." Get this board's own DIP switch table from its
+printed datasheet/silkscreen rather than assuming a "standard" layout;
+they vary (some are current-then-microstep, some the reverse).
 
 ## Known gaps / Troubleshooting
 
@@ -158,9 +177,15 @@ firmware image has — still compile-time, since that's reported by
   capped by `max_pulse_rate_hz`; tune that value down before attaching a
   real motor, since an abrupt start/stop at a high rate can stall or skid
   a stepper. Ramping is unstarted follow-up work.
-- `max_pulse_rate_hz` (move speed) is a boot-time-only config value, not
-  adjustable per-command through the position topic — see "Tuning
-  `max_pulse_rate_hz`" in `docs/bringup.md`.
+- `max_pulse_rate_hz` (move speed) is a boot-time-only config value pushed
+  once via `CONFIGURE_CHANNEL` at `Init()`, not adjustable per-command
+  through the position topic — to change it, edit the preset's
+  `max_pulse_rate_hz` and restart the launcher. Find your ceiling by
+  increasing gradually and watching/listening for the motor **stalling**
+  (a harsh grinding/skipping sound where it stops actually turning
+  despite commands still being sent) — that point depends on the motor's
+  torque curve, the driver's current setting, and supply voltage, none of
+  which can be predicted from the firmware side.
 - `GET_FEEDBACK`'s `velocity` field is the last commanded target when in
   velocity mode, not a measurement — this firmware has no encoder.
 - If `pio run` fails with `UnknownPackageError` for `teensyduino`, the
@@ -173,10 +198,13 @@ firmware image has — still compile-time, since that's reported by
   `actuator_subscriber` process fighting over the port
   (`ps aux | grep -E "joshua_main|actuator_subscriber" | grep -v grep`
   should show exactly one of each), (2) check `ENA-`/`PUL-`/`DIR-` are
-  actually wired to Teensy GND, not floating. Both cost real debugging
-  time on the first bring-up — full story in `docs/bringup.md`.
-- Full troubleshooting/bug list from the first real hardware bring-up is
-  in `docs/bringup.md`.
+  actually wired to Teensy GND, not floating (see Wiring / Pinout above).
+- If real-hardware behavior contradicts what the source clearly says
+  (e.g. a guard that should prevent something is visibly not preventing
+  it), force a clean rebuild (`rm -rf .pio/build .pio/libdeps && pio run
+  --target upload`) before spending time debugging the "bug" in the
+  source — a stale incremental PlatformIO build silently running old code
+  has caused exactly this before.
 - **TODO: no build/flash version identifier.** `FirmwareSpec` only carries
   `min_proto_version` (wire protocol version) — there's no way to ask a
   live board which actual build/commit is flashed on it. See
@@ -199,5 +227,3 @@ firmware image has — still compile-time, since that's reported by
 - `robot/action/motors/drivers/stepper_driver.*` — paired motor driver
 - `firmware/common/joshua_wire_v1.{h,c}` — the shared wire codec
 - `config/config_preset/example/teensy_stepper_demo.pbtxt` — example preset
-- `docs/bringup.md` — detailed wiring diagram, verification trace, and the
-  bug list from the first real hardware bring-up

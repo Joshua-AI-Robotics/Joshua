@@ -1,8 +1,8 @@
 # Single NEMA17 stepper on a Teensy 4.1 (TB6600 drive) via joshua_wire_v1
 # over native USB serial (docs/BOARD_LAYER_RFC.md §10 Phase 5). Verified
 # end to end on real hardware, including physical motor rotation — see
-# firmware/teensy/41/docs/bringup.md for the wiring diagram, DIP switch
-# settings, and the full debugging trace before wiring a second board.
+# firmware/teensy/41/README.md's Wiring / Pinout section for the wiring
+# diagram and DIP switch notes before wiring a second board.
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \
@@ -11,8 +11,7 @@
 # Topic uses Float32 on /teensy_stepper_1/position, in degrees, valid
 # range [0, 360] (this preset's stepper_config converts to native steps
 # before it reaches the wire). Move speed is fixed by max_pulse_rate_hz
-# below (boot-time only, not adjustable per command) — see
-# "Tuning max_pulse_rate_hz" in docs/bringup.md.
+# below (boot-time only, not adjustable per command).
 
 general {
   operation_mode: MODE_TEST
@@ -42,15 +41,15 @@ robot {
         # GPIO pins on the Teensy 4.1, matching whatever the board is
         # physically wired to (docs/BOARD_LAYER_RFC.md §7.5, revised —
         # pins are host-configured, not baked into the firmware image).
-        # See firmware/teensy/41/docs/bringup.md for the wiring diagram.
+        # See firmware/teensy/41/README.md's Wiring / Pinout section.
         step_pin: 2
         dir_pin: 3
         enable_pin: 4
         # STEP pulse HIGH width, tuned for this TB6600's opto-isolated
-        # 3.3V-driven input (firmware/teensy/41/docs/bringup.md). Left at
-        # firmware's own default (20us) here since that default was
-        # derived from this exact hardware pass; a different STEP/DIR
-        # driver chip would set this instead of needing a firmware edit.
+        # 3.3V-driven input. Left at firmware's own default (20us) here
+        # since that default was derived from this exact hardware; a
+        # different STEP/DIR driver chip would set this instead of
+        # needing a firmware edit.
         step_pulse_width_us: 20
       }
     }

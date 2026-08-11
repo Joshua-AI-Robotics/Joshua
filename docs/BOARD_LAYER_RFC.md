@@ -1545,12 +1545,13 @@ another STEP_DIR implementation.
 - [x] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
       Teensy → TB6600 → **stepper physically rotates**, verified on real
       hardware through the actual production path (`launcher:joshua_main`
-      + `ros2 topic pub`, not just raw protocol scripts). Full trace,
-      wiring diagram, and DIP switch settings in
-      `firmware/teensy/41/docs/bringup.md`. Getting here surfaced and
-      fixed real bugs no software-only pass could catch — build/flash
-      tooling (`platformio.ini`'s platform name, a Bazel-vs-PlatformIO
-      include-path mismatch, a missing `library.json` `srcFilter`,
+      + `ros2 topic pub`, not just raw protocol scripts). Wiring diagram
+      and DIP switch notes folded into
+      `firmware/teensy/41/README.md`'s Wiring / Pinout section. Getting
+      here surfaced and fixed real bugs no software-only pass could catch
+      — build/flash tooling (`platformio.ini`'s platform name, a
+      Bazel-vs-PlatformIO include-path mismatch, a missing
+      `library.json` `srcFilter`,
       `node_generator.cc`'s `IsCppDriverAvailableForAction` missing
       `MOTOR_STEPPER_NEMA17`), a stale incremental PlatformIO build that
       silently bypassed the firmware's enable-gate, `StepperDriver::Init()`
@@ -1738,8 +1739,9 @@ debt gets paid off, not carried indefinitely.
    `firmware.name` was deliberately removed rather than kept as a
    free-form identity check (§7.5), so there is currently no way to ask a
    live board "which build are you" at all — the class of bug that caused
-   (a stale `.pio` build silently diverging from source, `docs/bringup.md`)
-   has no automated guard today. Proposed direction: an auto-generated
+   (a stale `.pio` build silently diverging from source,
+   `firmware/teensy/41/README.md`'s Known gaps section) has no automated
+   guard today. Proposed direction: an auto-generated
    build id (`git describe --always --dirty` or short commit SHA) injected
    at compile time via PlatformIO `build_flags`, reported over `IDENTIFY`
    in the now-dormant `fw_name` wire slot — **diagnostic-only, never a

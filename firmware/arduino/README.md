@@ -32,7 +32,6 @@ firmware/arduino/
     channel_table.h
     backend_stepdir.{h,cpp}
     transport_serial.{h,cpp}
-  docs/bringup.md
 ```
 
 ## Status
