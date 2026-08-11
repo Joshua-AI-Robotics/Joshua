@@ -10,21 +10,29 @@ serial. Paired host-side class: `robot/board/teensy/teensy_board.*`.
 
 ```text
 firmware/teensy/41/
-  platformio.ini        one env per wiring variant (today: teensy41-serial)
+  platformio.ini        one env per wiring variant (today: teensy41-serial);
+                        -I src in build_flags so firmware/common/
+                        libraries (below) can see this project's own
+                        channel_table.h
   src/
     main.cpp             setup()/loop(), command dispatch
     channel_table.c       channel *count* per firmware image (compile-time);
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    backend_stepdir.{h,cpp}   STEP/DIR/ENA pulse generation
     transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
 ```
 
-`joshua_wire_v1.{h,c}` itself is not copied here — `platformio.ini` pulls it
-in directly from `firmware/common/` via `lib_deps = symlink://../../common`,
-so this firmware and the host (`//firmware/common:joshua_wire_v1` in Bazel)
-always build from the exact same two files.
+`joshua_wire_v1.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
+`platformio.ini` pulls them in directly from `firmware/common/` via
+`lib_deps = symlink://../../common` (docs/BOARD_LAYER_RFC.md §7.3, revised):
+`joshua_wire_v1` because host and firmware must agree on the wire format for
+a given commit (`//firmware/common:joshua_wire_v1` in Bazel builds the same
+two files for the host side); `backend_stepdir` because STEP/DIR/ENA pulse
+generation is a physical fact about the driver chip, not an MCU-vendor fact
+— the same `digitalWrite`-based source works unchanged on any
+Arduino-framework board that declares a STEP_DIR channel, so it's shared
+the same way rather than copy-pasted per firmware.
 
 ## Status
 

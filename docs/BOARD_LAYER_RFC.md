@@ -238,15 +238,23 @@ robot/
                         a concrete transport — §7.3) ── NEW, §10 Phase 5 ──
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/
-  common/               joshua_wire_v1.h/.c  (shared with host, same repo;
-                        Bazel cc_library + PlatformIO lib, §7.3) ── NEW ──
+  common/               joshua_wire_v1.h/.c (wire codec: shared with host,
+                        same repo, Bazel cc_library + PlatformIO lib) +
+                        backend_stepdir.h/.cpp (drive backend: shared
+                        across every firmware image with a STEP_DIR
+                        channel — MCU-vendor-agnostic since it's plain
+                        digitalWrite/pinMode, §7.3, revised) ── NEW ──
   am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
                         stays as-is — vendor code never migrates to the
                         Joshua firmware pattern, §7.3)
-  teensy/41/            main.cpp, channel_table.c, backend_stepdir.*,
-                        transport_serial.*, platformio.ini ── NEW, §10 Phase 5 ──
-  arduino/              main.cpp, backends, transports, platformio.ini
-                        (future — not yet built, §10 Phase 5)
+  teensy/41/            main.cpp, channel_table.c, transport_serial.*,
+                        platformio.ini (-I src, so firmware/common/'s
+                        backend_stepdir.cpp can see this project's own
+                        channel_table.h) ── NEW, §10 Phase 5 ──
+  arduino/              main.cpp, channel_table.c, transports,
+                        platformio.ini (backend_stepdir pulled from
+                        firmware/common/, same as Teensy — future, not yet
+                        built, §10 Phase 5)
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
@@ -1033,14 +1041,16 @@ Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy),
 they should share one canonical PDO layout so the host codec is written
 once.
 
-### 7.3 How the codec, protos, and host orchestration are shared across boards
+### 7.3 How the codec, protos, host orchestration, and drive backends are shared
 
-Three different artifacts are "shared", in three different ways:
+Four different artifacts are "shared", in four different ways:
 
 ```
  ① protobuf (.proto files)   → shared across HOST components only (config language)
  ② wire codec (plain C)      → shared between HOST and every FIRMWARE (byte language)
  ③ host orchestration (C++)  → shared across every HOST board class (JoshuaWireBoard)
+ ④ drive backends (C/C++)    → shared across every FIRMWARE with that channel drive
+                               (backend_stepdir.{h,cpp}), never touches the host
 ```
 
 **Protobuf never crosses the wire to the MCU.** Protobuf is the config
@@ -1174,11 +1184,37 @@ through a minimal test-only subclass identifying as `ARDUINO_UNO`, not
 for a board other than the one it was extracted from, not just that the
 refactor didn't break Teensy.
 
+**④ is `backend_stepdir.{h,cpp}` (`firmware/common/`), firmware-only —
+never linked into the host.** Where ② asks "do host and firmware agree on
+the bytes" and ③ asks "does every host board class reimplement the same
+orchestration," ④ asks the mirror question on the firmware side: does
+every firmware image reimplement the same drive-backend logic. It doesn't
+have to, for the same underlying reason ② can be one file for every
+firmware: STEP/DIR/ENA pulse generation is a physical fact about the
+*driver chip* being controlled, not a fact about which MCU is doing the
+controlling — `digitalWrite`/`pinMode`/`delayMicroseconds`/`micros()` are
+standard Arduino-framework calls that behave identically on Teensy, an
+AVR Uno, or an ESP32. (This does **not** generalize to every drive type:
+a PWM backend for real motor-control PWM — center-aligned, complementary
+outputs, hardware dead-time — would need a different implementation per
+vendor's timer peripheral API, so it would be shared as an *interface*
+across firmware, not a single source file, the same way `FrameTransport`
+is shared as an interface with per-transport implementations rather than
+one universal transport. CAN is similar: shared in shape, not in source,
+and not even available on every MCU.) The one place this
+sharing isn't free: `backend_stepdir.h` depends on `ChannelState` from
+`channel_table.h`, which stays per-firmware-image (channel *count* is a
+compile-time, per-image fact, §7.5) — so `platformio.ini` needs an
+explicit `-I src` in `build_flags`, since PlatformIO does not
+automatically expose a project's own `src/` to a `lib_deps` library's
+compilation scope the way it does within the project itself.
+
 | Artifact | Language | Shared by | Crosses the wire? |
 | --- | --- | --- | --- |
 | `board.proto`, `action.proto` | protobuf | host components only | no — config only |
 | `joshua_wire_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
 | `joshua_wire_board.{h,cc}` | C++ | every joshua_wire_v1 host board class | no — host-only orchestration |
+| `backend_stepdir.{h,cpp}` | Arduino-framework C++ | every firmware with a STEP_DIR channel | no — firmware-only, acts on decoded bytes |
 | `joshua_pdo_v1.h` | packed C structs | host + all Joshua EtherCAT firmware | **defines** the PDO image |
 | Feetech / TI-demo codecs | C++ host-side only | one vendor board each | speaks the vendor's format |
 
@@ -1189,15 +1225,23 @@ simpler and testable to the byte.
 
 ### 7.4 Firmware source layout and build variants
 
+**Revised**: `backend_stepdir.cpp` originally shown here under
+`firmware/arduino/` moved to `firmware/common/` once a real second board
+made the sharing concrete (§7.3 ④) — it's pulled in via `lib_deps`
+alongside `joshua_wire_v1`, not copied per firmware. What's still
+genuinely per-firmware is shown below: `main.cpp`'s dispatch loop and the
+transport modules (byte-level I/O is the one thing that's actually
+different per board/variant).
+
 ```
 firmware/
   common/
     joshua_wire_v1.h/.c        # shared with host
+    backend_stepdir.h/.cpp     # shared across every firmware with a STEP_DIR
+                                 # channel — MCU-vendor-agnostic (§7.3 ④)
   arduino/
     main.cpp                    # loop { transport_poll(); dispatch(); step_service(); }
-    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps (drives a
-                                 # TB6600 or any other STEP/DIR stepper driver —
-                                 # the firmware toggles two pins, never names the chip)
+    channel_table.c/.h          # per-firmware-image: channel count, ChannelState shape
     transport_serial.cpp
     transport_w5500.cpp         # Ethernet shield (UDP)
     transport_spi_slave.cpp

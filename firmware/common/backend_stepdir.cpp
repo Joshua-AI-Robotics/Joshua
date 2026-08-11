@@ -34,9 +34,15 @@ unsigned int StepPulseWidthUs(const ChannelState& channel) {
 void Pulse(ChannelState* channel, bool dir_positive) {
   const bool dir_pin_level = channel->config.invert_dir ? !dir_positive : dir_positive;
   digitalWrite(channel->config.dir_pin, dir_pin_level ? HIGH : LOW);
-  digitalWriteFast(channel->config.step_pin, HIGH);
+  // Plain digitalWrite, not Teensyduino's digitalWriteFast: this file is
+  // shared across every Arduino-framework board (docs/BOARD_LAYER_RFC.md
+  // §7.3, revised), and digitalWriteFast isn't universal Arduino-core API
+  // (AVR needs a separate library for it, ESP32 has a different fast-GPIO
+  // mechanism). Costs a little speed on Teensy for portability everywhere
+  // else; StepPulseWidthUs()'s own delay dwarfs the difference regardless.
+  digitalWrite(channel->config.step_pin, HIGH);
   delayMicroseconds(StepPulseWidthUs(*channel));
-  digitalWriteFast(channel->config.step_pin, LOW);
+  digitalWrite(channel->config.step_pin, LOW);
   channel->position_steps += dir_positive ? 1 : -1;
   channel->last_step_us = micros();
 }

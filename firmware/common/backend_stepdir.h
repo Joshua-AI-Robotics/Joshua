@@ -1,6 +1,27 @@
 // STEP/DIR/ENA pulse generation for a channel driving a TB6600 or any other
 // STEP/DIR stepper drive — this file toggles two pins, it never names the
 // chip (docs/BOARD_LAYER_RFC.md §5.2, §7.4).
+//
+// Lives in firmware/common/, not a per-board src/, and is compiled into
+// every firmware image that declares a STEP_DIR channel (docs/
+// BOARD_LAYER_RFC.md §7.3, revised) — the STEP/DIR signaling convention
+// is a physical fact about the driver chip, not an MCU-vendor fact, so
+// unlike a PWM or CAN backend (which would need a different
+// implementation per vendor peripheral API) this one source file works
+// unchanged on any Arduino-framework board. Only plain digitalWrite/
+// pinMode/delayMicroseconds/micros() are used — no Teensy-specific API
+// (see backend_stepdir.cpp's Pulse() for the one place this mattered:
+// digitalWriteFast is a Teensyduino built-in, not universal Arduino-core
+// API).
+//
+// Depends on ChannelState from channel_table.h — that file stays
+// per-firmware-image (channel *count* is a compile-time, per-image fact,
+// docs/BOARD_LAYER_RFC.md §7.5), so this is an implicit structural
+// contract: any firmware wanting this backend must define a
+// channel_table.h whose ChannelState has a `config` field of type
+// jw1_configure_step_dir_t plus the pins_configured/enabled/target_mode/
+// target_value/position_steps/last_step_us fields this file reads and
+// writes. firmware/teensy/41/src/channel_table.h is the reference shape.
 #pragma once
 
 #include "channel_table.h"

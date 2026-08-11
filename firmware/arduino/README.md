@@ -13,9 +13,14 @@ subclass `JoshuaWireBoard` and supply two methods:
 `ExpectedBoardType() → BoardType::ARDUINO_UNO` and
 `ExpectedWireBoardId() → JW1_BOARD_ARDUINO_UNO` (already reserved in
 `joshua_wire_v1.h`). See `robot/board/teensy/teensy_board.h/.cc` for
-exactly how short that subclass is in practice. The real new work here is
-the firmware image, not the host side. Follow `firmware/teensy/41/` as the
-worked example when starting this.
+exactly how short that subclass is in practice. The firmware side is
+smaller than it looks too: `backend_stepdir.{h,cpp}` (STEP/DIR/ENA pulse
+generation) is shared from `firmware/common/` the same way
+`joshua_wire_v1` is (§7.3 ④) — plain Arduino-framework calls, no
+Teensy-specific API, so it needs no changes to work here. The genuinely
+new work is `main.cpp`'s dispatch loop, `channel_table.{h,c}`, and a
+transport module. Follow `firmware/teensy/41/` as the worked example when
+starting this.
 
 ## Layout
 
@@ -23,16 +28,24 @@ TODO — expected to mirror `firmware/teensy/41/`:
 
 ```text
 firmware/arduino/
-  platformio.ini
+  platformio.ini          lib_deps = symlink://../../common (pulls in
+                          joshua_wire_v1 AND backend_stepdir — see below);
+                          needs build_flags = ... -I src, same reason as
+                          firmware/teensy/41/platformio.ini
   src/
     main.cpp
     channel_table.c        channel *count* only — pins are host-configured,
                            not here (docs/BOARD_LAYER_RFC.md §7.5, revised;
                            see firmware/teensy/41/ for the pattern to copy)
     channel_table.h
-    backend_stepdir.{h,cpp}
     transport_serial.{h,cpp}
 ```
+
+`backend_stepdir.{h,cpp}` is **not** created here — it's shared from
+`firmware/common/` (docs/BOARD_LAYER_RFC.md §7.3 ④), since STEP/DIR/ENA
+pulse generation is a fact about the driver chip being controlled, not
+about which MCU is doing the controlling: the same `digitalWrite`-based
+source already used by Teensy works unchanged here too.
 
 ## Status
 
@@ -92,6 +105,9 @@ TODO — will be host-configured via `StepDirConfig.step_pin`/`dir_pin`/
 - `firmware/teensy/41/` — the worked example this board should mirror
 - `firmware/common/joshua_wire_v1.{h,c}` — the shared wire codec (reused
   as-is, no changes needed)
+- `firmware/common/backend_stepdir.{h,cpp}` — the shared STEP/DIR/ENA
+  drive backend (reused as-is, no changes needed — see the note at the
+  top of this file)
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared host-side
   IDENTIFY/CONFIGURE_CHANNEL/channel-dispatch orchestration `ArduinoBoard`
   should subclass (reused as-is, no changes needed)
