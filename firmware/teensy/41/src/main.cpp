@@ -76,7 +76,7 @@ void HandleGetFeedback(const jw1_frame_t& frame) {
     return;
   }
   jw1_feedback_t feedback;
-  feedback.position = static_cast<float>(channel->position_steps);
+  feedback.position = static_cast<float>(channel->step_dir.position_steps);
   // Open-loop: no tachometer. Reports the last commanded velocity target
   // when in velocity mode, 0 otherwise — an approximation, not a
   // measurement.

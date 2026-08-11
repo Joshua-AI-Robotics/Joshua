@@ -8,7 +8,7 @@
 // (docs/BOARD_LAYER_RFC.md §7.5, revised). See the example preset
 // (config/config_preset/example/teensy_stepper_demo.pbtxt) for the pin
 // values currently wired on the reference bring-up, and
-// docs/bringup.md for the full wiring diagram.
+// ../README.md's Wiring / Pinout section for the full wiring diagram.
 //
 // To add a second channel slot, add an entry here and reflash — no other
 // firmware changes; the host then declares a second `channels { index: 1

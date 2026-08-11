@@ -20,67 +20,68 @@ constexpr unsigned int kDefaultStepPulseWidthUs = 20;
 // Minimum microseconds between pulses for the channel's configured
 // max_pulse_rate_hz; 0 (unconfigured) is treated as "not ready to step".
 unsigned long MinPulseIntervalUs(const ChannelState& channel) {
-  if (channel.config.max_pulse_rate_hz == 0) {
+  if (channel.step_dir.config.max_pulse_rate_hz == 0) {
     return 0;
   }
-  return 1000000UL / channel.config.max_pulse_rate_hz;
+  return 1000000UL / channel.step_dir.config.max_pulse_rate_hz;
 }
 
 unsigned int StepPulseWidthUs(const ChannelState& channel) {
-  return channel.config.step_pulse_width_us != 0 ? channel.config.step_pulse_width_us
-                                                 : kDefaultStepPulseWidthUs;
+  return channel.step_dir.config.step_pulse_width_us != 0
+             ? channel.step_dir.config.step_pulse_width_us
+             : kDefaultStepPulseWidthUs;
 }
 
 void Pulse(ChannelState* channel, bool dir_positive) {
-  const bool dir_pin_level = channel->config.invert_dir ? !dir_positive : dir_positive;
-  digitalWrite(channel->config.dir_pin, dir_pin_level ? HIGH : LOW);
+  const bool dir_pin_level = channel->step_dir.config.invert_dir ? !dir_positive : dir_positive;
+  digitalWrite(channel->step_dir.config.dir_pin, dir_pin_level ? HIGH : LOW);
   // Plain digitalWrite, not Teensyduino's digitalWriteFast: this file is
   // shared across every Arduino-framework board (docs/BOARD_LAYER_RFC.md
   // §7.3, revised), and digitalWriteFast isn't universal Arduino-core API
   // (AVR needs a separate library for it, ESP32 has a different fast-GPIO
   // mechanism). Costs a little speed on Teensy for portability everywhere
   // else; StepPulseWidthUs()'s own delay dwarfs the difference regardless.
-  digitalWrite(channel->config.step_pin, HIGH);
+  digitalWrite(channel->step_dir.config.step_pin, HIGH);
   delayMicroseconds(StepPulseWidthUs(*channel));
-  digitalWrite(channel->config.step_pin, LOW);
-  channel->position_steps += dir_positive ? 1 : -1;
-  channel->last_step_us = micros();
+  digitalWrite(channel->step_dir.config.step_pin, LOW);
+  channel->step_dir.position_steps += dir_positive ? 1 : -1;
+  channel->step_dir.last_step_us = micros();
 }
 
 }  // namespace
 
 void StepDirInit(ChannelState* channel) {
-  channel->pins_configured = false;
+  channel->configured = false;
   channel->enabled = false;
 }
 
 void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config) {
-  channel->config = *config;
-  pinMode(channel->config.step_pin, OUTPUT);
-  pinMode(channel->config.dir_pin, OUTPUT);
-  pinMode(channel->config.enable_pin, OUTPUT);
-  digitalWrite(channel->config.step_pin, LOW);
-  digitalWrite(channel->config.dir_pin, LOW);
-  channel->pins_configured = true;
+  channel->step_dir.config = *config;
+  pinMode(channel->step_dir.config.step_pin, OUTPUT);
+  pinMode(channel->step_dir.config.dir_pin, OUTPUT);
+  pinMode(channel->step_dir.config.enable_pin, OUTPUT);
+  digitalWrite(channel->step_dir.config.step_pin, LOW);
+  digitalWrite(channel->step_dir.config.dir_pin, LOW);
+  channel->configured = true;
   StepDirDisable(channel);  // Safe default until an explicit Enable() arrives.
 }
 
 void StepDirEnable(ChannelState* channel) {
-  if (!channel->pins_configured) {
+  if (!channel->configured) {
     return;  // No pins to drive yet — wait for CONFIGURE_CHANNEL.
   }
-  const bool active_level = channel->config.enable_active_low ? LOW : HIGH;
-  digitalWrite(channel->config.enable_pin, active_level);
+  const bool active_level = channel->step_dir.config.enable_active_low ? LOW : HIGH;
+  digitalWrite(channel->step_dir.config.enable_pin, active_level);
   channel->enabled = true;
 }
 
 void StepDirDisable(ChannelState* channel) {
   channel->enabled = false;
-  if (!channel->pins_configured) {
+  if (!channel->configured) {
     return;  // No pins to drive yet — nothing to write.
   }
-  const bool inactive_level = channel->config.enable_active_low ? HIGH : LOW;
-  digitalWrite(channel->config.enable_pin, inactive_level);
+  const bool inactive_level = channel->step_dir.config.enable_active_low ? HIGH : LOW;
+  digitalWrite(channel->step_dir.config.enable_pin, inactive_level);
 }
 
 void StepDirSetTarget(ChannelState* channel, jw1_mode_t mode, float value) {
@@ -96,17 +97,17 @@ void StepDirService(ChannelState* channel) {
   if (min_interval_us == 0) {
     return;  // Not yet configured via CONFIGURE_CHANNEL.
   }
-  if (micros() - channel->last_step_us < min_interval_us) {
+  if (micros() - channel->step_dir.last_step_us < min_interval_us) {
     return;  // Throttled to max_pulse_rate_hz.
   }
 
   switch (channel->target_mode) {
     case JW1_MODE_POSITION: {
       const long target_steps = lroundf(channel->target_value);
-      if (channel->position_steps == target_steps) {
+      if (channel->step_dir.position_steps == target_steps) {
         return;
       }
-      Pulse(channel, target_steps > channel->position_steps);
+      Pulse(channel, target_steps > channel->step_dir.position_steps);
       return;
     }
     case JW1_MODE_VELOCITY: {
