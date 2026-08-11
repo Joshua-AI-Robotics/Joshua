@@ -1555,14 +1555,22 @@ speculative. The architecture is identical either way (§7.1–§7.5 make no
 Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
 real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
 `FrameTransport` seam, new firmware image, and now (§7.3) a host board
-class that's just two identity methods subclassing `JoshuaWireBoard`
+class that's just a one-line constructor subclassing `JoshuaWireBoard`
 rather than a from-scratch `BoardInterface` implementation — not retired
-by this choice. An **ESP32** board is a candidate third matrix
-member for the same reason (hardware on hand), tracked as a follow-up, not
-started in this phase: it would most likely land as a Wi-Fi/UDP transport
-variant on the existing `UdpTransport` seam below rather than a new drive
-backend, since the interesting new proof there is the transport swap, not
-another STEP_DIR implementation.
+by this choice.
+
+**ESP32** (hardware on hand) got a first cut for the same reason Teensy
+did: `firmware/esp32/` joins the exact same joshua_wire_v1 family as
+Teensy — plain UART/USB-serial, STEP_DIR, `backend_stepdir.{h,cpp}` reused
+unchanged from `firmware/common/`, `Esp32Board` a one-line constructor
+identical in shape to `TeensyBoard`. This is deliberately the boring,
+immediately-buildable path, not the Wi-Fi/UDP transport-swap proof this
+section originally speculated ESP32 might be for — that variant is still
+real, still tracked, and still needs a `robot::comm::UdpTransport` and a
+`UdpFrameTransport` that don't exist yet (§7's TODOs on `frame_transport.h`
+and `comm_factory.h`), but it's a separate, larger piece of follow-up work
+from "ESP32 exists as a board at all." Not yet flashed or verified on real
+hardware — see `firmware/esp32/README.md`'s Status.
 
 - [x] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3). Every response has a

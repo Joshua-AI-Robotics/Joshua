@@ -1,0 +1,104 @@
+# Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
+# via joshua_wire_v1 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
+# Phase 5) — same wire protocol and shared drive backend as
+# firmware/teensy/41/, a different firmware image
+# (firmware/esp32/, joins the same joshua_wire_v1 family).
+#
+# NOT YET VERIFIED ON REAL HARDWARE — unlike teensy_stepper_demo.pbtxt,
+# nobody has flashed firmware/esp32/ and confirmed a motor turns with this
+# exact preset yet. Port, pins, and microstepping below are reasonable
+# starting defaults, not confirmed-working values — check them against
+# your actual board and driver before trusting them, and update this
+# comment (and firmware/esp32/README.md) once you have.
+#
+# Launch:
+#   bazel run //launcher:joshua_main -- \
+#     --config=config/config_preset/example/esp32_stepper_demo.pbtxt
+#
+# Topic uses Float32 on /esp32_stepper_1/position, in degrees, valid
+# range [0, 360] (this preset's stepper_config converts to native steps
+# before it reaches the wire). Move speed is fixed by max_pulse_rate_hz
+# below (boot-time only, not adjustable per command).
+
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "esp32_stepper_demo"
+  id: 32
+}
+
+robot {
+  boards {
+    name: "esp32_stepper_bus"
+    board_type: ESP32
+    comm {
+      comm_type: SERIAL
+      # Most ESP32 dev boards enumerate through a USB-to-UART bridge chip
+      # (CP2102/CH340/...), not native USB CDC like Teensy 4.1 — check
+      # `ls /dev/ttyUSB*` (or /dev/ttyACM* if your board does have native
+      # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
+      serial_config { port: "/dev/ttyUSB0" baudrate: 115200 }
+    }
+    firmware {
+      min_proto_version: 1
+    }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir {
+        max_pulse_rate_hz: 4000
+        invert_dir: false
+        enable_active_low: true
+        # GPIO pins on the ESP32, matching whatever the board is physically
+        # wired to (docs/BOARD_LAYER_RFC.md §7.5 — pins are host-configured,
+        # not baked into the firmware image). 25/26/27 are ordinary
+        # general-purpose output pins on a standard ESP32 DevKitC-style
+        # board (not strapping pins, not input-only, not the default
+        # I2C/UART/flash pins) — a reasonable starting choice, not a
+        # requirement; rewire and edit here freely.
+        step_pin: 25
+        dir_pin: 26
+        enable_pin: 27
+        # STEP pulse HIGH width. Left at firmware's own default (20us,
+        # tuned for a TB6600's opto-isolated 3.3V-driven input on the
+        # Teensy bring-up) as a starting point — set this explicitly if
+        # your driver chip needs something different.
+        step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "esp32_stepper_1/position"
+          normalized: false
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "esp32_stepper_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "esp32_stepper_bus"
+        channel: 0
+        physical_lower_limit: 0
+        physical_upper_limit: 360
+        operational_lower_limit: 0
+        operational_upper_limit: 360
+        stepper_config {
+          # 1.8-degree/step NEMA17 at 1/16 microstepping: 200 * 16 / 360.
+          # Must match your driver's actual DIP-switch/microstepping
+          # setting, same as the Teensy preset.
+          steps_per_degree: 8.888889
+          gear_ratio: 1.0
+          idle_position: 0
+        }
+      }
+    }
+  }
+}
