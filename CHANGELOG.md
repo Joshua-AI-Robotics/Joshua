@@ -16,6 +16,19 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
   `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
 - `simulation/README.md` covering the MuJoCo modes and the Isaac Sim backend
+- [AGENTS.md](AGENTS.md) canonical instructions for AI coding agents
+  (open [agents.md](https://agents.md/) standard), with pointer bridges for
+  tools that do not read it natively: Claude Code (`CLAUDE.md`), Gemini CLI
+  (`GEMINI.md`), and Copilot IDE surfaces
+  (`.github/copilot-instructions.md`)
+- `robot/README.md`, `config/README.md`, and `tools/README.md`, covering the
+  three subsystems that previously had no documentation
+- `hooks/agents_doc_check.sh` and an `agent-docs` CI job, failing the build when
+  a Markdown link or `@`-import in the agent instruction files stops resolving,
+  or when a nested `AGENTS.md` lacks a `CLAUDE.md` bridge that actually imports
+  it
+- `.gemini/settings.json` setting `context.fileName`, so Gemini CLI reads
+  `AGENTS.md` natively at every level instead of only the root `GEMINI.md`
 
 ### Fixed
 
