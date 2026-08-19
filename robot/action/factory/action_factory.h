@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/action_interface.h"
+#include "robot/action/motors/drivers/stepper_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
 #include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
@@ -108,8 +109,15 @@ class ActionFactory {
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }
-      // MOTOR_STEPPER_NEMA17 in Phase 5; MOTOR_SPIKE and MOTOR_MOCK on Python
-      // (docs/BOARD_LAYER_RFC.md §10).
+      case robot::action::MotorType::MOTOR_STEPPER_NEMA17: {
+        ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
+        ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
+        auto driver = std::make_unique<robot::action::StepperDriver>(channel, actuator);
+        ABSL_RETURN_IF_ERROR(driver->Init());
+        return driver;
+      }
+      // MOTOR_SPIKE and MOTOR_MOCK stay on the Python driver-direct path
+      // (docs/BOARD_LAYER_RFC.md §10 Phase 9).
       default:
         return absl::Status(absl::StatusCode::kUnimplemented,
                             "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +

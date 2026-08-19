@@ -94,6 +94,47 @@ TEST_F(ActionFactoryBoardPathTest, CreatesSts3215DriverOverMockBoardChannel) {
   EXPECT_EQ((*action_or)->GetId(), "sts3215_driver_servo_1");
 }
 
+// Board-layer single action: MOTOR_STEPPER_NEMA17 bound to a MOCK board's
+// STEP_DIR channel, so the resolution flow runs without hardware
+// (docs/BOARD_LAYER_RFC.md §10 Phase 5).
+robot::action::SingleAction MakeBoardStepperSingleAction() {
+  robot::action::SingleAction single_action;
+  single_action.set_action_type(robot::action::ActionType::ACTUATOR);
+
+  auto* actuator = single_action.mutable_actuator();
+  actuator->set_actuator_name("stepper_1");
+  actuator->set_id(1);
+  actuator->set_motor_type(robot::action::MotorType::MOTOR_STEPPER_NEMA17);
+  actuator->set_board_name("mock_stepper_1");
+  actuator->set_channel(0);
+  actuator->set_operational_lower_limit(-90.0f);
+  actuator->set_operational_upper_limit(90.0f);
+  actuator->mutable_stepper_config()->set_steps_per_degree(200.0f * 16.0f / 360.0f);
+  actuator->mutable_stepper_config()->set_gear_ratio(1.0f);
+  return single_action;
+}
+
+config::Robot MakeRobotWithMockStepperBoard() {
+  config::Robot robot_config;
+  auto* board = robot_config.add_boards();
+  board->set_name("mock_stepper_1");
+  board->set_board_type(robot::board::BoardType::MOCK);
+  auto* channel = board->add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
+  return robot_config;
+}
+
+TEST_F(ActionFactoryBoardPathTest, CreatesStepperDriverOverMockBoardChannel) {
+  auto robot_config = MakeRobotWithMockStepperBoard();
+
+  auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardStepperSingleAction(),
+                                                              robot_config.boards());
+
+  ASSERT_TRUE(action_or.ok()) << action_or.status();
+  EXPECT_EQ((*action_or)->GetId(), "stepper_driver_stepper_1");
+}
+
 TEST_F(ActionFactoryBoardPathTest, RejectsActuatorWithoutMotorType) {
   auto robot_config = MakeRobotWithMockBoard();
   auto single_action = MakeBoardJointSingleAction();

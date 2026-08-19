@@ -217,23 +217,58 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    arduino/            arduino_board.*  (MCU only; drive peripherals like a
-                        TB6600 are a Channel.drive fact, never in this name)
-    teensy/             teensy_board.*  (MCU only; a comm peripheral like an
-                        EasyCAT shield is a Board.comm fact, never in this name)
+    arduino/            arduino_board.h  (header-only JoshuaWireBoard
+                        subclass — a one-line constructor passing identity,
+                        nothing else; MCU only, drive peripherals like a
+                        TB6600 are a Channel.drive fact, never in this
+                        name; future — not yet built, §10 Phase 5)
+    teensy/             teensy_board.h  (header-only JoshuaWireBoard
+                        subclass — a one-line constructor passing identity,
+                        nothing else; MCU only, a comm peripheral like an
+                        EasyCAT shield is a Board.comm fact, never in this
+                        name) ── NEW, §10 Phase 5 ──
+    joshua_wire/        joshua_wire_board.*  (shared IDENTIFY handshake +
+                        CONFIGURE_CHANNEL + channel dispatch for every
+                        joshua_wire_v1 MCU board — teensy/ and arduino/
+                        both subclass this rather than reimplementing it;
+                        §7.3, revised) ── NEW, §10 Phase 5 ──
     feetech_bus/        feetech_bus_board.*  (Feetech register protocol)
     host_gpio/          host_gpio_board.*  (Jetson/Pi pins; no comm, no firmware)
+    frame/              frame_transport.h, serial_frame_transport.*  (the
+                        FrameTransport seam JoshuaWireBoard depends on, not
+                        a concrete transport — §7.3) ── NEW, §10 Phase 5 ──
   comm/                 serial/  ethercat/  udp/  spi/  factory/  (unchanged role)
 firmware/
-  common/               joshua_wire_v1.h/.c  (shared with host, same repo) ── NEW ──
+  common/               joshua_wire_v1.h/.c (wire codec: shared with host,
+                        same repo, Bazel cc_library + PlatformIO lib) +
+                        backend_stepdir.h/.cpp (drive backend: shared
+                        across every firmware image with a STEP_DIR
+                        channel — MCU-vendor-agnostic since it's plain
+                        digitalWrite/pinMode, §7.3, revised) ── NEW ──
   am243/                ti_ethercat_simple_demo_v1/  (existing TI vendor demo;
                         stays as-is — vendor code never migrates to the
                         Joshua firmware pattern, §7.3)
-  arduino/              main.cpp, backends, transports, platformio.ini ── NEW ──
-  teensy/               …
+  teensy/41/            main.cpp, channel_table.c, transport_serial.*,
+                        platformio.ini (-I src, so firmware/common/'s
+                        backend_stepdir.cpp can see this project's own
+                        channel_table.h) ── NEW, §10 Phase 5 ──
+  arduino/              main.cpp, channel_table.c, transports,
+                        platformio.ini (backend_stepdir pulled from
+                        firmware/common/, same as Teensy — future, not yet
+                        built, §10 Phase 5)
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
+
+Directory name convention: the host-side directory matches the board type
+alone (`teensy/`, not `teensy41/`) since `TeensyBoard`'s C++ is
+model-agnostic — it only speaks `joshua_wire_v1` over a `FrameTransport`,
+and as of the `JoshuaWireBoard` extraction (§7.3) that's now literally true
+of the code, not just true in spirit: `TeensyBoard` itself is two methods.
+The firmware-side directory is per exact chip (`teensy/41/`) since that's
+where a model actually matters (pin count, peripherals, toolchain target);
+a future Teensy model would add `firmware/teensy/40/` reusing the same
+host class.
 
 ### 5.3 Contracts (interfaces)
 
@@ -1007,13 +1042,16 @@ Where multiple boards run Joshua firmware over EtherCAT (AM243, Teensy),
 they should share one canonical PDO layout so the host codec is written
 once.
 
-### 7.3 How the codec and protos are shared across boards
+### 7.3 How the codec, protos, host orchestration, and drive backends are shared
 
-Two different artifacts are "shared", in two different ways:
+Four different artifacts are "shared", in four different ways:
 
 ```
  ① protobuf (.proto files)   → shared across HOST components only (config language)
  ② wire codec (plain C)      → shared between HOST and every FIRMWARE (byte language)
+ ③ host orchestration (C++)  → shared across every HOST board class (JoshuaWireBoard)
+ ④ drive backends (C/C++)    → shared across every FIRMWARE with that channel drive
+                               (backend_stepdir.{h,cpp}), never touches the host
 ```
 
 **Protobuf never crosses the wire to the MCU.** Protobuf is the config
@@ -1027,7 +1065,10 @@ frame bytes outside the codec.
                 .pbtxt config (protobuf ①)
                        │  host-only world
                        ▼
-        ArduinoBoard / TeensyBoard / …
+        ArduinoBoard / TeensyBoard / …    ◄── two identity hooks each
+                       │  subclasses JoshuaWireBoard  (C++ ③, below)
+                       ▼
+              JoshuaWireBoard  (Init/IDENTIFY/CONFIGURE_CHANNEL/channels)
                        │  proto fields → fixed C frames
                        ▼
               joshua_wire_v1  (plain C ②)          ◄── THE shared artifact
@@ -1111,10 +1152,72 @@ Firmware's only contact with proto-derived data is indirect — the values the
 host copies out of `Channel.drive_config` into `CONFIGURE_CHANNEL`
 frames.
 
+**③ is `JoshuaWireBoard` (`robot/board/joshua_wire/`), an abstract
+`BoardInterface`.** ② means the wire *bytes* can't drift between host and
+firmware; ③ means the host-side *code that drives those bytes* isn't
+reimplemented per board either. Everything in `Init()` — open a transport,
+run the IDENTIFY handshake (board_id, `proto_ver`, per-channel drive all
+cross-checked against config, §7.5), push `CONFIGURE_CHANNEL` for every
+channel — and every channel's `Enable`/`Disable`/`SetTarget`/`ReadFeedback`
+framing, is identical for any board speaking `joshua_wire_v1` over a
+`FrameTransport`. A concrete board (`TeensyBoard` today) subclasses
+`JoshuaWireBoard` and supplies only two facts that actually differ per
+board — the `robot.board.BoardType` it accepts and the `jw1_board_id_t`
+IDENTIFY must report — as **constructor arguments**, not virtual
+overrides: identity is compile-time-known data with no logic behind it,
+so there's nothing for a vtable entry to buy here (unlike
+`ValidateComm`/`CreateTransport`, genuine behavior hooks a
+future board might need to override, which stay virtual with sensible
+`SERIAL`/`CommFactory::CreateSerial` defaults — what every board on this
+class uses today). This is what makes `ArduinoBoard` (§10 Phase 5) close
+to free once `firmware/arduino/`'s firmware image exists: the host class
+is a one-line constructor, not a
+341-line reimplementation of IDENTIFY/CONFIGURE_CHANNEL/channel dispatch —
+see `robot/board/teensy/teensy_board.h` for how small that subclass is in
+practice.
+
+Extracted after `TeensyBoard` first landed, not designed in from the start
+— worth calling out because it's the concrete lesson: the moment a second
+board on the same wire protocol is genuinely imminent (Arduino, tracked in
+this same phase) is the right time to pull the shared 90% out, *before* a
+second hand-written copy exists to un-diverge later. `JoshuaWireBoard`'s
+own tests (`joshua_wire_board_test.cc`) exercise this generic behavior
+through a minimal test-only subclass identifying as `ARDUINO_UNO`, not
+`TEENSY41` — deliberately, so passing tests prove the base actually works
+for a board other than the one it was extracted from, not just that the
+refactor didn't break Teensy.
+
+**④ is `backend_stepdir.{h,cpp}` (`firmware/common/`), firmware-only —
+never linked into the host.** Where ② asks "do host and firmware agree on
+the bytes" and ③ asks "does every host board class reimplement the same
+orchestration," ④ asks the mirror question on the firmware side: does
+every firmware image reimplement the same drive-backend logic. It doesn't
+have to, for the same underlying reason ② can be one file for every
+firmware: STEP/DIR/ENA pulse generation is a physical fact about the
+*driver chip* being controlled, not a fact about which MCU is doing the
+controlling — `digitalWrite`/`pinMode`/`delayMicroseconds`/`micros()` are
+standard Arduino-framework calls that behave identically on Teensy, an
+AVR Uno, or an ESP32. (This does **not** generalize to every drive type:
+a PWM backend for real motor-control PWM — center-aligned, complementary
+outputs, hardware dead-time — would need a different implementation per
+vendor's timer peripheral API, so it would be shared as an *interface*
+across firmware, not a single source file, the same way `FrameTransport`
+is shared as an interface with per-transport implementations rather than
+one universal transport. CAN is similar: shared in shape, not in source,
+and not even available on every MCU.) The one place this
+sharing isn't free: `backend_stepdir.h` depends on `ChannelState` from
+`channel_table.h`, which stays per-firmware-image (channel *count* is a
+compile-time, per-image fact, §7.5) — so `platformio.ini` needs an
+explicit `-I src` in `build_flags`, since PlatformIO does not
+automatically expose a project's own `src/` to a `lib_deps` library's
+compilation scope the way it does within the project itself.
+
 | Artifact | Language | Shared by | Crosses the wire? |
 | --- | --- | --- | --- |
 | `board.proto`, `action.proto` | protobuf | host components only | no — config only |
 | `joshua_wire_v1.c` | plain C | host boards + all frame-based firmware | **defines** the wire bytes |
+| `joshua_wire_board.{h,cc}` | C++ | every joshua_wire_v1 host board class | no — host-only orchestration |
+| `backend_stepdir.{h,cpp}` | Arduino-framework C++ | every firmware with a STEP_DIR channel | no — firmware-only, acts on decoded bytes |
 | `joshua_pdo_v1.h` | packed C structs | host + all Joshua EtherCAT firmware | **defines** the PDO image |
 | Feetech / TI-demo codecs | C++ host-side only | one vendor board each | speaks the vendor's format |
 
@@ -1125,15 +1228,23 @@ simpler and testable to the byte.
 
 ### 7.4 Firmware source layout and build variants
 
+**Revised**: `backend_stepdir.cpp` originally shown here under
+`firmware/arduino/` moved to `firmware/common/` once a real second board
+made the sharing concrete (§7.3 ④) — it's pulled in via `lib_deps`
+alongside `joshua_wire_v1`, not copied per firmware. What's still
+genuinely per-firmware is shown below: `main.cpp`'s dispatch loop and the
+transport modules (byte-level I/O is the one thing that's actually
+different per board/variant).
+
 ```
 firmware/
   common/
     joshua_wire_v1.h/.c        # shared with host
+    backend_stepdir.h/.cpp     # shared across every firmware with a STEP_DIR
+                                 # channel — MCU-vendor-agnostic (§7.3 ④)
   arduino/
     main.cpp                    # loop { transport_poll(); dispatch(); step_service(); }
-    backend_stepdir.cpp         # STEP/DIR/ENA pulse gen, accel ramps (drives a
-                                 # TB6600 or any other STEP/DIR stepper driver —
-                                 # the firmware toggles two pins, never names the chip)
+    channel_table.c/.h          # per-firmware-image: channel count, ChannelState shape
     transport_serial.cpp
     transport_w5500.cpp         # Ethernet shield (UDP)
     transport_spi_slave.cpp
@@ -1153,50 +1264,108 @@ transport selection: small MCUs lack the flash/RAM for unused stacks, and the
 artifact name states exactly what is on the board. Keep the variant model
 even on large MCUs (AM243) for uniformity.
 
-### 7.5 The channel table: pins are a firmware fact
+### 7.5 The channel table: pins are host-configured
 
-The artifact that ties §5.5's "wiring facts" to real code is the **channel
-table**: a compiled-in array, one per firmware variant, mapping channel
-index → motor backend + pins + per-channel state:
+**Revised from the original design.** This section originally specified
+pin numbers as a compile-time-only fact, baked into a per-firmware-variant
+C array and never expressible in host config (the one stated exception was
+`HOST_GPIO`, which has no separate firmware to bake facts into). Real
+usage on the first Joshua-firmware board (Teensy 4.1, §10 Phase 5)
+surfaced that this made Teensy/Arduino-style boards the *outlier*, not the
+norm: `Am243Config`'s PDO offsets, `ServoBusConfig.servo_id`, and
+`HostGpioConfig.pins` all already put their hardware-addressing fact in
+host config, not firmware. Pins now follow the same pattern — see
+`StepDirConfig` in `robot/board/proto/board.proto`.
+
+The **channel table** now declares only what's genuinely a compile-time
+fact — how many channel slots a firmware image exposes, and (for boards
+with a fixed single backend per image, as today's firmware is) what drive
+type each slot is:
 
 ```c
-// firmware/arduino/channel_table.c — one file per wiring variant
-static ChannelEntry g_channels[] = {
-    {.backend = &backend_stepdir, .step_pin = 2, .dir_pin = 3},  // channel 0
-    {.backend = &backend_stepdir, .step_pin = 4, .dir_pin = 5},  // channel 1
-};
+// firmware/teensy/41/src/channel_table.c
+ChannelState g_channels[1];  // one STEP_DIR channel slot; no pins here
 ```
 
-The dispatcher resolves every incoming `SET_TARGET` through this table:
-channel byte → table entry → backend → pins. Pin numbers therefore appear in
-exactly one place in the entire system. They never cross the wire (frames
-carry channel indexes, not pins) and never appear in host config — the one
-exception is `HOST_GPIO` boards, where no firmware exists and
-`HostGpioConfig` names the host header pins instead.
+Pin numbers are instead a `StepDirConfig` field, pushed to firmware per
+channel via `CONFIGURE_CHANNEL` at `Init()`, applied at runtime
+(`pinMode()` et al. run when the command arrives, not at boot):
 
-This makes the channel table a **pinout contract** between the person wiring
-the robot and the person writing config:
+```proto
+channels {
+  index: 0
+  drive: STEP_DIR
+  step_dir {
+    step_pin: 2
+    dir_pin: 3
+    enable_pin: 4
+    max_pulse_rate_hz: 4000
+  }
+}
+```
 
-1. The firmware variant documents its table ("ch0 = pin 9 PWM, ch2 = pins
-   2/3 STEP_DIR").
-2. Wiring plugs each motor into a contracted pin.
-3. Config binds each actuator to the channel that owns that pin
-   (`board_name` + `channel`), and declares the same drive in the board's
-   `channels{}`.
+A channel rejects `Enable`/`SetTarget` until its first `CONFIGURE_CHANNEL`
+arrives — there's no default pin to fall back on, and no firmware image
+to "just work" without a matching config.
 
-What is checked vs. trusted: IDENTIFY verifies the *logical* contract —
-firmware name, protocol version, channel count, per-channel drives — so a
-wrong image or a config/firmware drift fails at `Init`. The *physical* end
-(servo plugged into pin 9 but bound to channel 1) is undetectable by
-software; channel↔pin fidelity at the connector is on the human. Prefer
-mnemonic channel assignments to reduce that risk (so100 presets use
-channel index = servo bus ID).
+This is still a **pinout contract** between the person wiring the robot
+and the person writing config — the contract just now lives in the proto
+schema and the config file, not a hand-written C array:
 
-The split also sets change cadences deliberately: rewiring a motor to a
-different pin is a channel-table edit + reflash with the host untouched;
-swapping or retuning a motor is a pbtxt edit with the firmware untouched.
-Config edits (weekly) can never break wiring (once per board revision), and
-vice versa.
+1. The firmware variant documents its channel *count* and *drive type*
+   per slot ("1 channel, STEP_DIR") — this part is still compile-time,
+   verified by `IDENTIFY`.
+2. Wiring plugs each motor into whatever pins the person wiring it chooses.
+3. Config declares both the binding (`board_name` + `channel`) *and* the
+   actual pin numbers used, in one place — `channels { index: 0 step_dir {
+   step_pin: 2 ... } }`.
+
+What is checked vs. trusted — narrower than before, but the same
+fundamental limit: `IDENTIFY` still verifies the *logical* contract —
+protocol version, and each declared channel's index/drive type against
+what the firmware actually reports (`n_channels` +
+`channel_drives[]`) — so a config/firmware drift (wrong channel count,
+wrong drive type per slot) still fails at `Init`. What `IDENTIFY` still
+cannot verify is the *physical* end — a servo actually plugged into the
+pin config claims it's plugged into. That was true when pins lived in
+firmware too (a channel-table typo was just as unverifiable as a pbtxt
+typo); moving pins into config doesn't change what's fundamentally
+checkable, it changes *who* can make the mistake and *how expensive* it is
+to fix — a wrong pin number is now a config edit + rerun, not a
+channel-table edit + reflash.
+
+**Why there's no `firmware.name` at all.** Early on this repo had exactly
+one Teensy firmware image, so a single hardcoded name
+(`"teensy-stepdir"`) equality-checked against config looked like real
+verification. It doesn't scale: the moment a second firmware variant for
+the same board exists (more channels, a different backend, PWM instead of
+STEP_DIR), each needs its own hand-picked literal, hand-kept in sync
+between the firmware source and every pbtxt that targets it, with no
+registry enforcing uniqueness or meaning. Worse, it duplicates
+`board_type` without adding a principled second axis — it's an arbitrary
+password two files have to agree on, not a description of what the
+firmware can actually do. The capability check above (`n_channels` +
+`channel_drives[]` vs. the config's declared `channels[]`) is the real,
+structural, self-scaling version of "is this the firmware I think it is":
+it validates facts the firmware already reports, generalizes to any
+board/firmware combination with zero per-image coordination, and doesn't
+regress when firmware variants multiply. So `FirmwareSpec.name` was
+removed outright (`reserved 1; reserved "name";` in the proto) rather than
+kept as a dead/advisory field — a field nobody reads or is required to
+populate is worse than no field, since it invites someone to reintroduce
+exactly this non-scaling check later. The wire protocol's IDENTIFY
+response still carries an `fw_name` byte array (`joshua_wire_v1.h`,
+shared by every board on this codec) — Teensy's firmware just leaves it
+zeroed, since removing it from the wire format itself would be a breaking
+change to a codec every future board also speaks, for a field nothing
+reads.
+
+Change cadence, updated: rewiring a motor to a different pin is now a
+**pbtxt edit with the firmware untouched** — the same cadence as retuning a
+motor's speed or direction, since both are `StepDirConfig` fields now.
+What still requires a firmware rebuild + reflash: adding an entirely new
+channel *slot*, or changing which backend (drive type) a slot compiles
+against. The channel table's role shrank to exactly that boundary.
 
 ### 7.6 Flash tooling
 
@@ -1378,16 +1547,77 @@ Each phase lands green and independently revertible.
       the item above.
 
 ### Phase 5 — Prove the matrix (first real second board)
-- [ ] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
-      golden-bytes unit tests on host CI, §7.3).
-- [ ] `firmware/arduino/` with serial transport variant;
-      `backend_stepdir`.
-- [ ] Host side: `ArduinoBoard` + generic `StepperDriver` +
-      `FrameTransport` seam on `Serial`.
-- [ ] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
-      Arduino → TB6600 → stepper moves.
+
+First real second board is **Teensy 4.1**, not the placeholder Arduino
+this section originally sketched — chosen because real Teensy 4.1 + TB6600
+hardware exists to bring this up on, whereas the Arduino sketch was
+speculative. The architecture is identical either way (§7.1–§7.5 make no
+Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
+real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
+`FrameTransport` seam, new firmware image, and now (§7.3) a host board
+class that's just two identity methods subclassing `JoshuaWireBoard`
+rather than a from-scratch `BoardInterface` implementation — not retired
+by this choice. An **ESP32** board is a candidate third matrix
+member for the same reason (hardware on hand), tracked as a follow-up, not
+started in this phase: it would most likely land as a Wi-Fi/UDP transport
+variant on the existing `UdpTransport` seam below rather than a new drive
+backend, since the interesting new proof there is the transport swap, not
+another STEP_DIR implementation.
+
+- [x] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
+      golden-bytes unit tests on host CI, §7.3). Every response has a
+      fixed size for a given `proto_ver` (`JW1_*_RESPONSE_PAYLOAD_LEN` in
+      `joshua_wire_v1.h`) — including `IDENTIFY`, whose `channel_drives`
+      array is always transmitted at `JW1_MAX_CHANNELS` and padded with
+      `JW1_DRIVE_INVALID` — so a host built on a fixed-size-read transport
+      (`robot::comm::SerialTransport::AtomicRead`) never needs an
+      incremental header-then-body read.
+- [x] `firmware/teensy/41/` with the serial (native USB) transport variant;
+      `backend_stepdir` (no acceleration ramp yet — constant rate capped
+      by `max_pulse_rate_hz`; ramping is unstarted follow-up work once
+      there's hardware to tune it against).
+- [x] Host side: `TeensyBoard` (`robot/board/teensy/`) + generic
+      `StepperDriver` (`robot/action/motors/drivers/`) + `FrameTransport`
+      seam (`robot/board/frame/`, `SerialFrameTransport` on
+      `robot::comm::SerialTransport`).
+- [x] `JoshuaWireBoard` (`robot/board/joshua_wire/`, §7.3) extracted from
+      `TeensyBoard` once a second board on this wire protocol (Arduino)
+      was concretely imminent: IDENTIFY handshake, `CONFIGURE_CHANNEL`,
+      and channel dispatch now live once, shared by every joshua_wire_v1
+      board; `TeensyBoard` shrank to a one-line constructor passing its
+      identity (`BoardType::TEENSY41`, `JW1_BOARD_TEENSY41`) up to
+      `JoshuaWireBoard` — plain constructor data, not a virtual hook,
+      since there's no behavior behind it for a vtable entry to buy.
+      Also closed a real gap
+      found reviewing the extraction: IDENTIFY's `board_id` was being
+      decoded and never checked against config — now it is, generically,
+      for every board on this class.
+- [x] End-to-end smoke: pbtxt → ActionFactory → BoardFactory → frames →
+      Teensy → TB6600 → **stepper physically rotates**, verified on real
+      hardware through the actual production path (`launcher:joshua_main`
+      + `ros2 topic pub`, not just raw protocol scripts). Wiring diagram
+      and DIP switch notes folded into
+      `firmware/teensy/41/README.md`'s Wiring / Pinout section. Getting
+      here surfaced and fixed real bugs no software-only pass could catch
+      — build/flash tooling (`platformio.ini`'s platform name, a
+      Bazel-vs-PlatformIO include-path mismatch, a missing
+      `library.json` `srcFilter`,
+      `node_generator.cc`'s `IsCppDriverAvailableForAction` missing
+      `MOTOR_STEPPER_NEMA17`), a stale incremental PlatformIO build that
+      silently bypassed the firmware's enable-gate, `StepperDriver::Init()`
+      never calling `Enable()` (fixed by auto-enabling, matching
+      `TiDemoDriver` rather than `Sts3215Driver`, since an open-loop
+      stepper's `ENA` pin has no safety case for withholding it), a
+      board-specific TB6600 DIP switch layout that didn't match the
+      assumed "standard" table, and — the actual root cause of "clicks/
+      locks but never rotates" — `ENA-`/`PUL-`/`DIR-` needing to be wired
+      to Teensy GND for the opto-isolated inputs to work at all. See the
+      bring-up log for the full debugging methodology, worth reusing on
+      the next board.
 - [ ] Add the UDP (W5500) firmware variant + `UdpTransport` to demonstrate a
-      transport swap with zero host-code changes.
+      transport swap with zero host-code changes. Not started — the
+      `FrameTransport` seam above is exactly what makes this swap
+      zero-host-code-change once attempted (§7.3, §7.4).
 
 ### Phase 6 — Perception layer parity
 
@@ -1494,9 +1724,12 @@ debt gets paid off, not carried indefinitely.
 
 ## 11. Acceptance criteria
 
-- A stepper motor moves via Arduino (driving a TB6600) over serial **and**
+- A stepper motor moves via Teensy 4.1 (driving a TB6600) over serial **and**
   over UDP by changing only `Board.comm` and reflashing the matching
-  variant — zero host code changes.
+  variant — zero host code changes. (Serial: **fully verified on real
+  hardware, including physical rotation**, §10 Phase 5. UDP variant: not
+  started, same phase — Arduino is the same proof once built, sharing the
+  identical `joshua_wire_v1`/`StepperDriver`/`FrameTransport` seams.)
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.
@@ -1550,3 +1783,20 @@ debt gets paid off, not carried indefinitely.
 8. **HOST_GPIO real-time backend** — which pulse-generation mechanism
    (hardware PWM, Pi 5 RP1, kernel/RT helper) and the max pulse rate to
    allow from a non-RT userspace process.
+9. **TODO: firmware build/flash version control.** `FirmwareSpec` today
+   only carries `min_proto_version` — the wire *protocol* version, which
+   says nothing about which actual build is flashed on a given board.
+   `firmware.name` was deliberately removed rather than kept as a
+   free-form identity check (§7.5), so there is currently no way to ask a
+   live board "which build are you" at all — the class of bug that caused
+   (a stale `.pio` build silently diverging from source,
+   `firmware/teensy/41/README.md`'s Known gaps section) has no automated
+   guard today. Proposed direction: an auto-generated
+   build id (`git describe --always --dirty` or short commit SHA) injected
+   at compile time via PlatformIO `build_flags`, reported over `IDENTIFY`
+   in the now-dormant `fw_name` wire slot — **diagnostic-only, never a
+   host-enforced gate**, so it doesn't reintroduce the same non-scaling
+   mistake `firmware.name` was. Undecided: exact injection mechanism, and
+   whether a `tools/flash` wrapper (§6.1's original sketch) should also log
+   what was flashed where/when for fleet-level traceability once more than
+   one physical board exists.

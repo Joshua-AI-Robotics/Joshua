@@ -37,6 +37,29 @@ message StepDirConfig {
   uint32 max_pulse_rate_hz = 1;
   bool invert_dir = 2;
   bool enable_active_low = 3;
+  // GPIO pin mapping, pushed to firmware at Init() via CONFIGURE_CHANNEL —
+  // not baked into the firmware image (docs/BOARD_LAYER_RFC.md §7.5,
+  // revised: host-configured pins bring MCU-firmware boards in line with
+  // every other board type, all of which already put their hardware-
+  // addressing fact in config — AM243's PDO offsets, FeetechBusBoard's
+  // servo_id, HostGpioConfig's pins below). Values are MCU pin numbers
+  // (Arduino-style integer pin, e.g. Teensy 4.1's digital pin 2), specific
+  // to the exact firmware image flashed; IDENTIFY still catches a
+  // mismatched firmware/channel-count/drive-type, but cannot verify a pin
+  // number is physically wired the way config claims — that remains on
+  // whoever wires the board.
+  uint32 step_pin = 4;
+  uint32 dir_pin = 5;
+  uint32 enable_pin = 6;
+  // STEP pulse HIGH width in microseconds. Host-configurable for the same
+  // reason pins are: it's a fact about the specific STEP/DIR driver chip
+  // wired up (an opto-isolated input may need a wider pulse than a direct
+  // logic input), not something the firmware image should hardcode. 0
+  // (the default when unset) falls back to firmware's own default — 20us,
+  // conservative for a TB6600's opto-isolated 3.3V-driven input
+  // (firmware/teensy/41/src/backend_stepdir.cpp) — so existing configs
+  // that don't set this keep working unchanged.
+  uint32 step_pulse_width_us = 7;
 }
 
 message ServoBusConfig {
@@ -57,8 +80,10 @@ message HostGpioConfig {
   repeated uint32 pins = 2;  // Pin group on the host header.
 }
 
-// One motor slot on one board. Wiring facts are baked into the firmware
-// variant; the tunables below are pushed at Init() via CONFIGURE_CHANNEL.
+// One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
+// pins) and tunables are pushed at Init() via CONFIGURE_CHANNEL — see
+// StepDirConfig for why pins moved out of the firmware image
+// (docs/BOARD_LAYER_RFC.md §7.5).
 message Channel {
   uint32 index = 1;
   DriveInterface drive = 2;
@@ -70,12 +95,11 @@ message Channel {
   }
 }
 
-// Which firmware the host expects on the board; verified against the
+// Which firmware the host expects on the board; checked against the
 // IDENTIFY handshake at Init(). Omitted entirely for vendor-firmware
 // boards (FEETECH_BUS, SPIKE_HUB_BLE) and for HOST_GPIO / MOCK.
 message FirmwareSpec {
-  string name = 1;  // e.g. "tb6600-arduino-eth"
-  uint32 min_proto_version = 2;
+  uint32 min_proto_version = 1;
 }
 
 // Future home of the AM243 PDO mapping selector; mirrors

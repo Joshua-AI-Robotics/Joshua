@@ -195,6 +195,7 @@ bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_act
   switch (single_action.actuator().motor_type()) {
     case robot::action::MotorType::MOTOR_TI_DEMO:
     case robot::action::MotorType::MOTOR_STS3215:
+    case robot::action::MotorType::MOTOR_STEPPER_NEMA17:
       return true;
     default:
       return false;

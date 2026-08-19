@@ -14,22 +14,40 @@ operation that will eventually live behind `tools/flash/` and a firmware
 manifest. Runtime board initialization should detect a mismatch and report the
 firmware/artifact needed to fix it.
 
+## How to flash a board
+
+Every board's README under `firmware/<board>/` (or `firmware/<board>/<version>/`
+for versioned boards) follows the same structure — Prerequisites, Install,
+Build, Flash, Verify, Wiring/Pinout, Known gaps — defined in
+[`FLASHING_TEMPLATE.md`](FLASHING_TEMPLATE.md). Start there for "how do I
+flash board X"; where a board hasn't been brought up yet, its README says
+so explicitly with `TODO` placeholders rather than staying silent.
+
 ## Current Firmware Records
 
-- `am243/ti_ethercat_simple_demo_v1.md`: firmware record for the TI EtherCAT
-  simple demo used to validate the LP-AM243 EtherCAT smoke path.
-- `am243/ti_ethercat_simple_demo_v1/`: checked-in wrapper scripts, setup
-  templates, and bring-up notes for reproducing that board image.
+| Board | Status | README |
+| --- | --- | --- |
+| AM243 (LP-AM243, TI EtherCAT demo) | Hello World + EtherCAT slave demo built, flashed, verified on real hardware. Vendor firmware — metadata only, stays as-is. | [`am243/ti_ethercat_simple_demo_v1/README.md`](am243/ti_ethercat_simple_demo_v1/README.md) |
+| Teensy 4.1 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, verified end to end on real hardware (IDENTIFY handshake + a real motion command produced real STEP pulses). Physical motor rotation not yet observed (no TB6600 wired for that pass). | [`teensy/41/README.md`](teensy/41/README.md) |
+| Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
+| ESP32 | Not started, not even scoped — candidate third matrix member, likely a transport (Wi-Fi/UDP) proof rather than a new drive backend. | [`esp32/README.md`](esp32/README.md) |
 
-## Future Layout
+- `common/joshua_wire_v1.{h,c}`: the shared frame codec between Joshua host
+  boards and Joshua-authored MCU firmware (docs/BOARD_LAYER_RFC.md §7.2/§7.3).
+  Built as a Bazel `cc_library` for the host and as a PlatformIO library
+  (`library.json`) for every firmware target — same two files, two
+  toolchains, one repo commit.
 
-The board-layer RFC proposes this direction:
+## Layout
 
 ```text
 firmware/
-  common/          # shared host/firmware wire and PDO codecs
-  am243/           # AM243 firmware source or metadata
-  arduino_tb6600/  # Joshua-owned small-MCU firmware variants
+  FLASHING_TEMPLATE.md   the section structure every board README follows
+  common/       # shared host/firmware wire codec (joshua_wire_v1)
+  am243/        # vendor TI demo firmware; metadata only, stays as-is
+  teensy/41/    # Joshua-owned firmware for the Teensy 4.1
+  arduino/      # not started — placeholder README only
+  esp32/        # not started — placeholder README only
 ```
 
 Firmware variants should be explicit build artifacts, not runtime-selected
