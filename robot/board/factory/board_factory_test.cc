@@ -71,19 +71,6 @@ TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
   EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(BoardFactoryTest, SpikeHubBleReportsUnimplemented) {
-  // SPIKE_HUB_BLE is a stub — real BLE/Pybricks protocol work is deferred
-  // (docs/BOARD_LAYER_RFC.md §10 Phase 9) — but the switch must still be
-  // complete and fail with UnimplementedError, not silently misroute.
-  robot::board::Board board = MakeMockBoard("hub_1", 1);
-  board.set_board_type(robot::board::BoardType::SPIKE_HUB_BLE);
-  auto result = BoardFactory::GetOrCreate(board);
-  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
-  // Guards against regressing into the shared ARDUINO_UNO/HOST_GPIO
-  // fallthrough, which returns the same code with a different message.
-  EXPECT_NE(result.status().message().find("no native implementation"), std::string::npos);
-}
-
 TEST_F(BoardFactoryTest, SameNameDifferentTypeIsRejected) {
   auto board_a = BoardFactory::GetOrCreate(MakeMockBoard("bridge_1", 1));
   ASSERT_TRUE(board_a.ok()) << board_a.status();

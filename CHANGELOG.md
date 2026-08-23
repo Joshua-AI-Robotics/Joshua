@@ -89,13 +89,15 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Changed
 
-- **`MOTOR_SPIKE` (LEGO SPIKE / Pybricks) no longer works.** Its only
-  implementation was the Python Pybricks driver removed above, and the native
-  `SPIKE_HUB_BLE` board is still a fail-fast stub. Tracked as a regression in
-  [BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9 / §12.3. The
-  hub-side `scripts/pybricks_spike_bridge.py` (MicroPython, runs on the brick)
-  is unaffected, and a SPIKE motor can still be driven by hand via
-  `bazel run //tools/pybricks:pybricks_ble_smoke`
+- **LEGO SPIKE / Pybricks hubs are no longer supported by the launcher.** The
+  Python driver, the `SPIKE_HUB_BLE` stub board, `BoardType::SPIKE_HUB_BLE`,
+  and `MotorType::MOTOR_SPIKE` were all removed (both proto numbers
+  `reserved`); no preset can reach a hub. A motor can still be driven by hand
+  with `bazel run //tools/pybricks:pybricks_ble_smoke`, and the hub-side
+  `scripts/pybricks_spike_bridge.py` (MicroPython, runs on the brick) is
+  unaffected. `ActuatorType::SPIKE_MOTOR` and `SpikeMotorConfig` remain —
+  the bench tool builds its `Actuator` from them. See
+  [BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9
 - The Pybricks bench tooling moved out of `robot/` to `tools/pybricks/`
   (`//robot/action/motors/drivers:pybricks_driver_py` →
   `//tools/pybricks:pybricks_driver`). The `//tools/pybricks:pybricks_ble_smoke`

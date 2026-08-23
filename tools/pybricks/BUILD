@@ -4,8 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 # Host-side Pybricks/SPIKE bring-up tooling. Deliberately NOT under robot/:
 # the Python robot layer was removed in docs/BOARD_LAYER_RFC.md §10 Phase 9
-# and robot/ is C++ only. This is a manual bench aid and the reference for
-# the native SPIKE_HUB_BLE port; nothing on the runtime path depends on it.
+# and robot/ is C++ only. Joshua has no SPIKE board type any more, so this is
+# the only way to drive a hub; nothing on the runtime path depends on it.
 
 py_library(
     name = "pybricks_ble_transport",

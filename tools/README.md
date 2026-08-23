@@ -29,10 +29,12 @@ launcher and ROS 2 nodes never invoke these.
 
   It lives here rather than under `robot/` on purpose. The Python robot layer
   was removed in [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10
-  Phase 9 and `robot/` is C++ only; this is a manual bench aid off the runtime
-  path, and the reference for the native `SPIKE_HUB_BLE` port. `MOTOR_SPIKE`
-  itself is unsupported until that port lands — the launcher cannot drive a
-  SPIKE hub, only this tool can.
+  Phase 9 and `robot/` is C++ only. **This tool is now the only way to drive a
+  SPIKE hub.** The `SPIKE_HUB_BLE` board and the `MOTOR_SPIKE` motor type were
+  both removed, so no preset can reach a hub through the launcher. The
+  `SPIKE_MOTOR` actuator type and `SpikeMotorConfig` remain in
+  `robot/action/proto/action.proto` because this tool builds an `Actuator`
+  message from them.
 
 ## Responsibilities
 

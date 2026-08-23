@@ -16,11 +16,12 @@ enum BoardType {
   AM243 = 1;
   TEENSY41 = 2;
   ARDUINO_UNO = 3;
-  FEETECH_BUS = 4;    // STS/SCS smart-servo register bus; the "board" is the
-                      // servo's own MCU.
-  SPIKE_HUB_BLE = 5;  // Pybricks hub; vendor firmware over BLE.
-  HOST_GPIO = 6;      // No external controller; host pins drive the motor.
-  MOCK = 7;           // Tests; channels are in-memory fakes.
+  FEETECH_BUS = 4;  // STS/SCS smart-servo register bus; the "board" is the
+                    // servo's own MCU.
+  HOST_GPIO = 6;    // No external controller; host pins drive the motor.
+  MOCK = 7;         // Tests; channels are in-memory fakes.
+  reserved 5;       // SPIKE_HUB_BLE: Pybricks board removed; the host-side
+                    // driver lives in tools/pybricks as bench tooling.
 }
 
 // The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
@@ -97,7 +98,7 @@ message Channel {
 
 // Which firmware the host expects on the board; checked against the
 // IDENTIFY handshake at Init(). Omitted entirely for vendor-firmware
-// boards (FEETECH_BUS, SPIKE_HUB_BLE) and for HOST_GPIO / MOCK.
+// boards (FEETECH_BUS) and for HOST_GPIO / MOCK.
 message FirmwareSpec {
   uint32 min_proto_version = 1;
 }

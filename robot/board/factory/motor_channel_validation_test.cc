@@ -29,11 +29,6 @@ TEST(ValidateMotorChannelTest, TiDemoJointRequiresPdoJoint) {
             absl::StatusCode::kInvalidArgument);
 }
 
-TEST(ValidateMotorChannelTest, SpikeIsUnmappedForNow) {
-  EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_SPIKE, DriveInterface::PWM_DC).code(),
-            absl::StatusCode::kUnimplemented);
-}
-
 TEST(ValidateMotorChannelTest, InvalidMotorTypeIsRejected) {
   EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_INVALID, DriveInterface::STEP_DIR).code(),
             absl::StatusCode::kInvalidArgument);

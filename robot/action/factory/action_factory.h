@@ -116,9 +116,9 @@ class ActionFactory {
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }
-      // MOTOR_SPIKE has no driver: the Python Pybricks path was removed in
-      // Phase 9 and the native SPIKE_HUB_BLE board is still a stub
-      // (docs/BOARD_LAYER_RFC.md §10 Phase 9).
+      // No Spike arm: MOTOR_SPIKE and the SPIKE_HUB_BLE board were both
+      // removed (docs/BOARD_LAYER_RFC.md §10 Phase 9). A SPIKE hub is driven
+      // by hand through //tools/pybricks:pybricks_ble_smoke, not from a preset.
       default:
         return absl::Status(absl::StatusCode::kUnimplemented,
                             "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +

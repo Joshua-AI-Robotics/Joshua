@@ -29,7 +29,6 @@ enum MotorType {
   MOTOR_INVALID = 0;
   MOTOR_STS3215 = 1;
   MOTOR_STEPPER_NEMA17 = 2;
-  MOTOR_SPIKE = 3;
   // Placeholder motor for the AM243 TI demo firmware: nothing physical
   // moves, the host just ships a seed into the demo's PDO slot (PDO_JOINT).
   // Deliberately narrow — do not bind real joints to it.
@@ -37,6 +36,9 @@ enum MotorType {
   // (or a firmware-owned-joint value with proper unit config) and retire
   // this one.
   MOTOR_TI_DEMO = 5;
+  reserved 3;  // MOTOR_SPIKE: no board and no driver after SPIKE_HUB_BLE
+               // was removed. ActuatorType.SPIKE_MOTOR + SpikeMotorConfig
+               // stay — tools/pybricks still uses them.
   reserved 4;  // MOTOR_MOCK: mock actuator path removed (RFC §10 Phase 9).
 }
 

@@ -629,6 +629,8 @@ enum BoardType {
   ARDUINO_UNO = 3;        // drive peripheral (TB6600) lives on Channel.drive
   FEETECH_BUS = 4;        // STS/SCS smart-servo bus; the "board" is the servo's own MCU
   SPIKE_HUB_BLE = 5;      // Pybricks hub; vendor firmware over BLE
+                          // (REMOVED in §10 Phase 9 — never implemented; the
+                          //  host-side driver lives in tools/pybricks)
   HOST_GPIO = 6;          // no external controller; host pins drive the motor (§5.6)
   MOCK = 7;               // tests; channels are in-memory fakes
   ROS2_VENDOR_ROBOT = 8;  // vendor subsystem controlled through ROS 2 topics (§5.7)
@@ -1742,27 +1744,33 @@ the two capability regressions that follow (mocks and Spike, below).
   directly.
 
 **Accepted regressions:**
-- `MOTOR_SPIKE` has **no working implementation**. The Python Pybricks
-  driver is gone and the native `SPIKE_HUB_BLE` board
-  (`robot/board/spike_hub_ble/`) is still the fail-fast stub landed
-  earlier: `BoardFactory`'s switch is complete, but the BLE/Pybricks
-  hub-upload protocol is unimplemented. `pybricksdev` (BLE scan/connect via
-  Bleak, MicroPython program upload, line protocol over notify/write) has
-  no C++ equivalent library, and validating a native port needs a physical
-  hub. `python_spike_actuator_example.pbtxt`,
+- **Joshua no longer supports SPIKE hubs at all.** This resolves §12.3 by
+  dropping the capability rather than porting it. The Python Pybricks path
+  went first; then the `SPIKE_HUB_BLE` stub board
+  (`robot/board/spike_hub_ble/`), `BoardType::SPIKE_HUB_BLE`, and
+  `MotorType::MOTOR_SPIKE` were all removed too, since a stub that only ever
+  returned `UnimplementedError` was scaffolding for a port nobody had
+  scheduled. `pybricksdev` (BLE scan/connect via Bleak, MicroPython program
+  upload, line protocol over notify/write) has no C++ equivalent library and
+  validating a native port needs a physical hub, so the port was never
+  cheap. Both proto numbers are `reserved`.
+  `python_spike_actuator_example.pbtxt`,
   `python_spike_trajectory_example.pbtxt`, and `docs/pybricks_test.md`
-  were deleted rather than left as dead config pointing at a removed path.
-  A SPIKE motor can still be driven by hand through
-  `//tools/pybricks:pybricks_ble_smoke`; it just cannot be driven by the
-  launcher from a preset.
+  were deleted rather than left as dead config.
+  A SPIKE motor can still be driven **by hand** through
+  `//tools/pybricks:pybricks_ble_smoke` — that tool is the whole remaining
+  Spike story. `ActuatorType::SPIKE_MOTOR` and `SpikeMotorConfig` stay in
+  `action.proto` because the tool builds an `Actuator` from them; they are
+  bench-tool surface now, not a runtime path.
 - There are no mock actuator or mock perception components any more, so no
   preset can exercise the node graph without real hardware. Config
   validation and `bazel test` remain the hardware-free verification path.
 
 **Still open:**
-- [ ] Land the native `SPIKE_HUB_BLE` board so `MOTOR_SPIKE` works again
-      (§12.3). This is now a regression to fix, not a migration to
-      schedule.
+- [ ] Nothing on the Spike side. Re-adding hub support means re-adding a
+      board type, a motor type, and a native BLE implementation — a new
+      feature, not a pending migration. `tools/pybricks/` is the reference
+      if that is ever picked up.
 - [ ] Phase 6 (perception layer parity) is unaffected and still pending.
       C++ perception already covers `OPENCV`, `STS3215_ENCODER`, and
       `LDS01`; what Phase 6 adds is board binding for perception, not a
@@ -1817,7 +1825,8 @@ the two capability regressions that follow (mocks and Spike, below).
    implementation. §10 Phase 9 deleted `action_factory.py` /
    `perception_factory.py` / `comm_factory.py` and everything under them;
    `robot/` is Python-free. The Pybricks/Spike path was dropped rather than
-   ported and is now a tracked regression against `SPIKE_HUB_BLE` (§12.3).
+   ported, and the `SPIKE_HUB_BLE` board type went with it — Spike support
+   is gone, not deferred. See `tools/pybricks/` for the bench tool.
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
    and future Teensy firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?

@@ -60,11 +60,12 @@ class SpikeMotorSpec:
 class PybricksMotorDriver:
     """Host-side Pybricks/SPIKE motor driver for bench bring-up.
 
-    Not on the runtime path. This lived under robot/ until the Python robot
-    layer was removed (docs/BOARD_LAYER_RFC.md §10 Phase 9); it is kept here
-    as a manual bring-up aid and as the reference for the native
-    SPIKE_HUB_BLE port. It no longer implements ActuatorInterface — that ABC
-    was deleted with the rest of the Python robot layer — but keeps the same
+    Not on the runtime path, and the only way to drive a SPIKE hub. This lived
+    under robot/ until the Python robot layer was removed
+    (docs/BOARD_LAYER_RFC.md §10 Phase 9); the SPIKE_HUB_BLE board type and
+    MOTOR_SPIKE went too, so the launcher cannot reach a hub from a preset.
+    It no longer implements ActuatorInterface — that ABC was deleted with the
+    rest of the Python robot layer — but keeps the same
     init/get_id/set_action/teardown shape.
     """
 
