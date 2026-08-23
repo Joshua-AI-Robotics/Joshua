@@ -31,10 +31,10 @@ launcher and ROS 2 nodes never invoke these.
   was removed in [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10
   Phase 9 and `robot/` is C++ only. **This tool is now the only way to drive a
   SPIKE hub.** The `SPIKE_HUB_BLE` board and the `MOTOR_SPIKE` motor type were
-  both removed, so no preset can reach a hub through the launcher. The
-  `SPIKE_MOTOR` actuator type and `SpikeMotorConfig` remain in
-  `robot/action/proto/action.proto` because this tool builds an `Actuator`
-  message from them.
+  both removed, so no preset can reach a hub through the launcher. Nothing Spike-shaped
+  survives outside this directory: `ActuatorType::SPIKE_MOTOR`,
+  `SpikeMotorConfig`, and `CommType::BLE` are all gone from the robot protos,
+  and the tool configures itself with its own `SpikeMotorSpec` dataclass.
 
 ## Responsibilities
 

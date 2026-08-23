@@ -95,8 +95,11 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   `reserved`); no preset can reach a hub. A motor can still be driven by hand
   with `bazel run //tools/pybricks:pybricks_ble_smoke`, and the hub-side
   `scripts/pybricks_spike_bridge.py` (MicroPython, runs on the brick) is
-  unaffected. `ActuatorType::SPIKE_MOTOR` and `SpikeMotorConfig` remain —
-  the bench tool builds its `Actuator` from them. See
+  unaffected. Nothing Spike-shaped remains outside `tools/pybricks/`:
+  `ActuatorType::SPIKE_MOTOR`, `SpikeMotorConfig`, and `CommType::BLE` (whose
+  only user was the Spike hub) are removed from the robot protos, all
+  `reserved`, and the bench tool configures itself with its own
+  `SpikeMotorSpec` dataclass. See
   [BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9
 - The Pybricks bench tooling moved out of `robot/` to `tools/pybricks/`
   (`//robot/action/motors/drivers:pybricks_driver_py` →

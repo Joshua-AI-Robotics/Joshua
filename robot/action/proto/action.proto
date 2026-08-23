@@ -16,9 +16,9 @@ enum ActionType {
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
-  SPIKE_MOTOR = 3;
   AM243_ETHERCAT_ACTUATOR = 4;
   reserved 2;  // MOCK_MOTOR: mock actuator path removed (RFC §10 Phase 9).
+  reserved 3;  // SPIKE_MOTOR: Spike support removed (RFC §10 Phase 9).
 }
 
 // What physically moves, independent of the board that runs its loop and
@@ -36,9 +36,7 @@ enum MotorType {
   // (or a firmware-owned-joint value with proper unit config) and retire
   // this one.
   MOTOR_TI_DEMO = 5;
-  reserved 3;  // MOTOR_SPIKE: no board and no driver after SPIKE_HUB_BLE
-               // was removed. ActuatorType.SPIKE_MOTOR + SpikeMotorConfig
-               // stay — tools/pybricks still uses them.
+  reserved 3;  // MOTOR_SPIKE: Spike support removed (RFC §10 Phase 9).
   reserved 4;  // MOTOR_MOCK: mock actuator path removed (RFC §10 Phase 9).
 }
 
@@ -58,9 +56,9 @@ message Actuator {
   string board_name = 10;  // References a config.Robot.boards entry by name.
   uint32 channel = 15;     // Channel index on that board.
   reserved 12;             // mock_motor_config: removed (RFC §10 Phase 9).
+  reserved 13;             // spike_motor_config: removed (RFC §10 Phase 9).
   oneof action_config {
     Sts3215Config sts3215_config = 11;
-    SpikeMotorConfig spike_motor_config = 13;
     Am243EthercatConfig am243_ethercat_config = 14;
     StepperConfig stepper_config = 16;
     // Add other motor type here.
@@ -81,12 +79,6 @@ message Sts3215Config {
   uint64 servo_id = 1;
   uint32 move_speed = 3;
   float idle_position = 4;
-}
-
-message SpikeMotorConfig {
-  string hub_id = 1;
-  string port = 2;
-  float idle_position = 3;
 }
 
 enum Am243PdoMapping {

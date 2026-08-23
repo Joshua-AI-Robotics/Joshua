@@ -18,8 +18,6 @@ py_library(
     deps = [
         ":pybricks_ble_transport",
         "//robot/action/proto:action_packet_py_proto",
-        "//robot/action/proto:action_py_proto",
-        "//robot/comm/proto:comm_py_proto",
     ],
 )
 
@@ -29,8 +27,6 @@ py_test(
     deps = [
         ":pybricks_driver",
         "//robot/action/proto:action_packet_py_proto",
-        "//robot/action/proto:action_py_proto",
-        "//robot/comm/proto:comm_py_proto",
     ],
 )
 
@@ -41,7 +37,5 @@ py_binary(
     deps = [
         ":pybricks_driver",
         "//robot/action/proto:action_packet_py_proto",
-        "//robot/action/proto:action_py_proto",
-        "//robot/comm/proto:comm_py_proto",
     ],
 )

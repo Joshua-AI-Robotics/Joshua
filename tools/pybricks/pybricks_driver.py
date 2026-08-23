@@ -4,8 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
-from robot.action.proto import action_packet_pb2, action_pb2
-from robot.comm.proto import comm_pb2
+from robot.action.proto import action_packet_pb2
 
 _log = logging.getLogger(__name__)
 
@@ -50,11 +49,24 @@ class SpikeTransport(Protocol):
 
 @dataclass(frozen=True)
 class SpikeMotorSpec:
-    hub_id: Optional[str]
+    """How to reach one motor on one hub.
+
+    This is the tool's own config surface. It deliberately does not use
+    robot.action.Actuator: SPIKE_MOTOR, SpikeMotorConfig, and CommType.BLE
+    were removed from the robot protos when Spike support was dropped
+    (docs/BOARD_LAYER_RFC.md §10 Phase 9), so nothing Spike-shaped remains
+    outside this directory.
+    """
+
     port: str
-    idle_position: float
-    operational_lower_limit: float
-    operational_upper_limit: float
+    hub_id: Optional[str] = None
+    idle_position: float = 0.0
+    operational_lower_limit: float = 0.0
+    operational_upper_limit: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.port:
+            raise ValueError("SpikeMotorSpec.port must be set (e.g., 'A')")
 
 
 class PybricksMotorDriver:
@@ -71,11 +83,10 @@ class PybricksMotorDriver:
 
     def __init__(
         self,
-        actuator: action_pb2.Actuator,
+        spec: SpikeMotorSpec,
         transport: Optional[SpikeTransport] = None,
     ) -> None:
-        self._actuator = actuator
-        self._spec = self._parse_spec(actuator)
+        self._spec = spec
         self._move_speed: float = _DEFAULT_SPEED
         self._owns_transport = False
         if transport is None:
@@ -252,26 +263,3 @@ class PybricksMotorDriver:
             PybricksBleTransport.release_shared(self._spec.hub_id)
         else:
             self._transport.disconnect(self._spec.hub_id)
-
-    # -- Config parsing -------------------------------------------------------
-
-    @staticmethod
-    def _parse_spec(actuator: action_pb2.Actuator) -> SpikeMotorSpec:
-        if actuator.actuator_type != action_pb2.ActuatorType.SPIKE_MOTOR:
-            raise ValueError("Actuator type must be SPIKE_MOTOR")
-
-        if actuator.comm.comm_type != comm_pb2.BLE:
-            raise ValueError("SPIKE_MOTOR requires comm_type BLE")
-
-        config = actuator.spike_motor_config
-        if not config.port:
-            raise ValueError("SpikeMotorConfig.port must be set (e.g., 'A')")
-
-        hub_id = config.hub_id or None
-        return SpikeMotorSpec(
-            hub_id=hub_id,
-            port=config.port,
-            idle_position=config.idle_position,
-            operational_lower_limit=actuator.operational_lower_limit,
-            operational_upper_limit=actuator.operational_upper_limit,
-        )

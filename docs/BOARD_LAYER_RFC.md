@@ -701,7 +701,7 @@ enum MotorType {                    // replaces board/transport-flavored Actuato
   MOTOR_INVALID = 0;
   STS3215 = 1;
   STEPPER_NEMA17 = 2;
-  SPIKE_MOTOR = 3;
+  SPIKE_MOTOR = 3;        // (REMOVED in §10 Phase 9 along with Spike support)
   MOCK_MOTOR = 4;
 }
 
@@ -1759,9 +1759,12 @@ the two capability regressions that follow (mocks and Spike, below).
   were deleted rather than left as dead config.
   A SPIKE motor can still be driven **by hand** through
   `//tools/pybricks:pybricks_ble_smoke` — that tool is the whole remaining
-  Spike story. `ActuatorType::SPIKE_MOTOR` and `SpikeMotorConfig` stay in
-  `action.proto` because the tool builds an `Actuator` from them; they are
-  bench-tool surface now, not a runtime path.
+  Spike story, and it is self-contained: `ActuatorType::SPIKE_MOTOR`,
+  `SpikeMotorConfig`, and `CommType::BLE` were removed from the robot protos
+  too (all `reserved`), and the tool now configures itself with its own
+  `SpikeMotorSpec` dataclass rather than a `robot.action.Actuator`. It keeps
+  only the generic `ActionPacket` dependency, which is not Spike-specific.
+  `BLE` went because the Spike hub was its sole user.
 - There are no mock actuator or mock perception components any more, so no
   preset can exercise the node graph without real hardware. Config
   validation and `bazel test` remain the hardware-free verification path.
