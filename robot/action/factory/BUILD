@@ -8,6 +8,7 @@ cc_library(
     deps = [
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:action_interface",
+        "//robot/action/motors/drivers:mock_motor_driver",
         "//robot/action/motors/drivers:stepper_driver",
         "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/action/motors/drivers:sts3215_driver",

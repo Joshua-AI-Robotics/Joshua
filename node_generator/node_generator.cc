@@ -186,8 +186,9 @@ bool IsExecutableAvailable(const std::string& exec_name) {
 }
 
 // C++ actuator drivers are selected by motor_type on the board-layer path
-// (docs/BOARD_LAYER_RFC.md §6.5). MOCK_MOTOR and SPIKE_MOTOR use the Python
-// factory (robot/action/factory/action_factory.py).
+// (docs/BOARD_LAYER_RFC.md §6.5). MOTOR_SPIKE stays on the Python factory
+// (robot/action/factory/action_factory.py) pending the SPIKE_HUB_BLE BLE
+// port (docs/BOARD_LAYER_RFC.md §10 Phase 9).
 bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_action) {
   if (single_action.action_type() != robot::action::ActionType::ACTUATOR) {
     return false;
@@ -196,12 +197,17 @@ bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_act
     case robot::action::MotorType::MOTOR_TI_DEMO:
     case robot::action::MotorType::MOTOR_STS3215:
     case robot::action::MotorType::MOTOR_STEPPER_NEMA17:
+    case robot::action::MotorType::MOTOR_MOCK:
       return true;
     default:
       return false;
   }
 }
 
+// TODO(hmoon): Perception stays entirely on the Python factory
+// (robot/perception/factory/perception_factory.py) until
+// docs/BOARD_LAYER_RFC.md §10 Phase 6 (perception layer parity) lands.
+// This switch only covers the C++ types that already exist today.
 bool IsCppDriverAvailableForPerception(
     const robot::perception::SinglePerception& single_perception) {
   switch (single_perception.perception_type()) {
