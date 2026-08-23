@@ -12,8 +12,10 @@ def create_action(single_action: action_pb2.SingleAction) -> ActionInterface:
             driver = PybricksMotorDriver(actuator)
             driver.init()
             return driver
-        # MOCK_MOTOR moved to the board layer (docs/BOARD_LAYER_RFC.md §10
-        # Phase 9): use motor_type: MOTOR_MOCK + board_name instead.
-        raise ValueError("Invalid actuator type")
+        raise ValueError(
+            f"actuator_type {actuator.actuator_type} is not supported by the Python "
+            "factory; MOCK_MOTOR moved to the C++ board layer — use motor_type: "
+            "MOTOR_MOCK + board_name + channel (docs/BOARD_LAYER_RFC.md §10 Phase 9)"
+        )
 
     raise ValueError("Invalid action type")

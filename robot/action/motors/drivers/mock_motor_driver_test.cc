@@ -104,6 +104,16 @@ TEST(MockMotorDriverTest, SetTorqueGatesEnableDisable) {
   EXPECT_EQ(channel->enable_calls_, 2);
 }
 
+TEST(MockMotorDriverTest, SetTorqueRejectsNegativeValue) {
+  auto channel = std::make_shared<RecordingChannel>();
+  MockMotorDriver driver(channel, MakeMockActuator());
+  ASSERT_TRUE(driver.Init().ok());  // 1 enable call already, from Init().
+
+  EXPECT_EQ(driver.SetTorque(-1.0f).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(channel->enable_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 0);
+}
+
 TEST(MockMotorDriverTest, SetActionRoutesMiddlePositionPresetToOperationalMidpoint) {
   auto channel = std::make_shared<RecordingChannel>();
   MockMotorDriver driver(channel, MakeMockActuator());

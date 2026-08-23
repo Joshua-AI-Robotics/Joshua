@@ -15,11 +15,13 @@ namespace robot::action {
 // (docs/BOARD_LAYER_RFC.md §10 Phase 9). Deliberately permissive — no unit
 // conversion, no operational-limit checks on SetPosition/SetSpeed — since
 // its job is to prove the config -> ActionFactory -> BoardFactory ->
-// MockBoard resolution flow works, not to model a real motor. Torque
-// follows the resolved Enable/Disable convention (docs/BOARD_LAYER_RFC.md
-// §12.7), same as StepperDriver/TiDemoDriver. SetIdlePosition is not
-// overridden — MockMotorConfig has no idle-position field, so it falls
-// through to ActuatorInterface's default (log + OkStatus).
+// MockBoard resolution flow works, not to model a real motor. Position and
+// speed are unvalidated, but torque is: it follows the resolved
+// Enable/Disable convention (docs/BOARD_LAYER_RFC.md §12.7), same as
+// StepperDriver/Sts3215Driver — and required here, since MockBoardChannel
+// rejects kTorque targets outright. SetIdlePosition is not overridden —
+// MockMotorConfig has no idle-position field, so it falls through to
+// ActuatorInterface's default (log + OkStatus).
 class MockMotorDriver : public robot::action::ActuatorInterface {
  public:
   MockMotorDriver(std::shared_ptr<robot::board::BoardChannel> channel,

@@ -96,6 +96,10 @@ absl::Status MockMotorDriver::SetPosition(float value) {
 }
 
 absl::Status MockMotorDriver::SetTorque(float torque) {
+  if (torque < 0.0f) {
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "Mock motor torque must be non-negative");
+  }
   if (torque > 0.0f) {
     return channel_->Enable();
   }

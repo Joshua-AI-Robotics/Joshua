@@ -79,6 +79,9 @@ TEST_F(BoardFactoryTest, SpikeHubBleReportsUnimplemented) {
   board.set_board_type(robot::board::BoardType::SPIKE_HUB_BLE);
   auto result = BoardFactory::GetOrCreate(board);
   EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+  // Guards against regressing into the shared ARDUINO_UNO/HOST_GPIO
+  // fallthrough, which returns the same code with a different message.
+  EXPECT_NE(result.status().message().find("no native implementation"), std::string::npos);
 }
 
 TEST_F(BoardFactoryTest, SameNameDifferentTypeIsRejected) {
