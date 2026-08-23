@@ -1,5 +1,4 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 cc_library(
     name = "action_factory",
@@ -8,10 +7,9 @@ cc_library(
     deps = [
         "//config/proto:robot_cc_proto",
         "//robot/action/interfaces:action_interface",
-        "//robot/action/motors/drivers:mock_motor_driver",
         "//robot/action/motors/drivers:stepper_driver",
-        "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/action/motors/drivers:sts3215_driver",
+        "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/board/factory:board_factory",
         "//robot/board/factory:motor_channel_validation",
         "//utils:status_macros",
@@ -28,26 +26,5 @@ cc_test(
         "//config/proto:robot_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
-    ],
-)
-
-py_library(
-    name = "action_factory_py",
-    srcs = ["action_factory.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//robot/action/interfaces:action_interface_py",
-        "//robot/action/motors/drivers:pybricks_driver_py",
-        "//robot/action/proto:action_py_proto",
-    ],
-)
-
-py_test(
-    name = "action_factory_test",
-    srcs = ["action_factory_test.py"],
-    deps = [
-        ":action_factory_py",
-        "//robot/action/proto:action_py_proto",
-        "//robot/comm/proto:comm_py_proto",
     ],
 )

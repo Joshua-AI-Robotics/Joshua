@@ -17,16 +17,6 @@ launcher and ROS 2 nodes never invoke these.
   Background on the per-model dependency scheme is in
   [ai/README.md](../ai/README.md).
 
-- `pybricks/` — a BLE smoke binary for driving a Pybricks hub through
-  `PybricksMotorDriver`. Hardware bring-up aid, not a test.
-
-  ```bash
-  bazel run //tools/pybricks:pybricks_ble_smoke
-  ```
-
-  This talks to a real hub over Bluetooth and moves a real motor. See the
-  hardware-safety section of [AGENTS.md](../AGENTS.md).
-
 ## Responsibilities
 
 - One-off developer and bring-up tasks that do not belong in a build rule.

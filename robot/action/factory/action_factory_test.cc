@@ -135,45 +135,6 @@ TEST_F(ActionFactoryBoardPathTest, CreatesStepperDriverOverMockBoardChannel) {
   EXPECT_EQ((*action_or)->GetId(), "stepper_driver_stepper_1");
 }
 
-// Board-layer single action: MOTOR_MOCK bound to a MOCK board's channel —
-// any non-invalid drive is accepted (docs/BOARD_LAYER_RFC.md §10 Phase 9).
-robot::action::SingleAction MakeBoardMockSingleAction() {
-  robot::action::SingleAction single_action;
-  single_action.set_action_type(robot::action::ActionType::ACTUATOR);
-
-  auto* actuator = single_action.mutable_actuator();
-  actuator->set_actuator_name("mock_motor_1");
-  actuator->set_id(1);
-  actuator->set_motor_type(robot::action::MotorType::MOTOR_MOCK);
-  actuator->set_board_name("mock_actuator_board");
-  actuator->set_channel(0);
-  actuator->set_operational_lower_limit(-90.0f);
-  actuator->set_operational_upper_limit(90.0f);
-  actuator->mutable_mock_motor_config()->set_motor_id(1);
-  return single_action;
-}
-
-config::Robot MakeRobotWithMockActuatorBoard() {
-  config::Robot robot_config;
-  auto* board = robot_config.add_boards();
-  board->set_name("mock_actuator_board");
-  board->set_board_type(robot::board::BoardType::MOCK);
-  auto* channel = board->add_channels();
-  channel->set_index(0);
-  channel->set_drive(robot::board::DriveInterface::PWM_DC);
-  return robot_config;
-}
-
-TEST_F(ActionFactoryBoardPathTest, CreatesMockMotorDriverOverMockBoardChannel) {
-  auto robot_config = MakeRobotWithMockActuatorBoard();
-
-  auto action_or = robot::action::ActionFactory::CreateAction(MakeBoardMockSingleAction(),
-                                                              robot_config.boards());
-
-  ASSERT_TRUE(action_or.ok()) << action_or.status();
-  EXPECT_EQ((*action_or)->GetId(), "mock_motor_driver_mock_motor_1");
-}
-
 TEST_F(ActionFactoryBoardPathTest, RejectsActuatorWithoutMotorType) {
   auto robot_config = MakeRobotWithMockBoard();
   auto single_action = MakeBoardJointSingleAction();

@@ -45,7 +45,7 @@ ros2 topic pub /sts3215_servo_1/position std_msgs/msg/Float32 "{data: 2048.0}"
 | `inference`, `trajectory_publisher` | `extract_scalar_from_action`, `denormalize_position_value` |
 | Encoder / camera / lidar publishers | `require_perception_*` (proto → native ROS) |
 
-**Out of scope:** hardware drivers (`sts3215_driver`, `pybricks_driver`, etc.) still consume fully-formed `ActionPacket` after ROS parsing.
+**Out of scope:** hardware drivers (`sts3215_driver`, `stepper_driver`, etc.) still consume fully-formed `ActionPacket` after ROS parsing.
 
 ## Registries (single source of truth)
 

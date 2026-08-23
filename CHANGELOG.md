@@ -43,6 +43,25 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Removed
 
+- **All Python from the robot layer** (BOARD_LAYER_RFC.md §10 Phase 9):
+  `action_factory.py`, `perception_factory.py`, `comm_factory.py`, the action
+  and perception interface base classes, `pybricks_driver.py`,
+  `pybricks_ble_transport.py`, `serial.py`, and every mock driver. `robot/`
+  is now C++ only
+- Python hardware ROS 2 nodes `actuator_subscriber.py`, `camera_publisher.py`,
+  `encoder_publisher.py`, and `lidar_publisher.py` with their
+  `ros2_py_binary` targets. The identically named C++ binaries are now the
+  only implementations; `node_generator` no longer selects between a C++ and
+  a Python backend, and the C++→Python launch fallback is gone.
+  `trajectory_publisher`, `data_subscriber`, and `inference` stay Python —
+  they have no hardware access
+- Mock components: `MOTOR_MOCK`/`MOCK_MOTOR`/`MockMotorConfig` and
+  `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR` (proto numbers `reserved`), the
+  C++ `MockMotorDriver`, and `example/mock_py_test.pbtxt`. `BoardType::MOCK`
+  is unaffected — it is C++ test infrastructure, not a mock driver
+- `tools/pybricks` BLE smoke binary, the `python_spike_*` presets, and
+  `docs/pybricks_test.md` / `docs/spike_python_driver_plan.md`, all of which
+  documented the removed Python Spike path
 - RL training pipeline (`ai/train` trainer, Isaac Lab task/env builders,
   trajectory export, `training.proto`, `training_launcher.cc`, the
   `MODE_TRAINING` operation mode, and all 19 train/eval/export presets).
@@ -56,6 +75,15 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Changed
 
+- **`MOTOR_SPIKE` (LEGO SPIKE / Pybricks) no longer works.** Its only
+  implementation was the Python Pybricks driver removed above, and the native
+  `SPIKE_HUB_BLE` board is still a fail-fast stub. Tracked as a regression in
+  [BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9 / §12.3. The
+  hub-side `scripts/pybricks_spike_bridge.py` (MicroPython, runs on the brick)
+  is unaffected
+- No preset can exercise the node graph without real hardware any more, since
+  the mock components are gone. `bazel test` and config validation remain the
+  hardware-free verification path
 - `simulation/` restructured: backend code now lives in symmetric
   `simulation/mujoco/` (engine + modes) and `simulation/isaac/`
   (launcher + viewer) packages, and `simulation/models/` is organized
@@ -63,7 +91,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   preset `model_path`/`usd_filename` values updated accordingly
 - `.gitignore` covers `.venv/`, `node_modules/`, and common Python tooling caches
 - `scripts/README.md` documents all helper scripts (mock serial ports, Docker
-  entrypoint, SPIKE bridge and wave publisher); docs index links Pybricks guides
+  entrypoint, SPIKE bridge and wave publisher)
 - Code of Conduct now lists a concrete private reporting channel
 
 ## [0.2.3] - 2026-06-08

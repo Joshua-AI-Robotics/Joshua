@@ -1527,10 +1527,10 @@ Each phase lands green and independently revertible.
 - [x] Remove deprecated C++ `ActionFactory` `actuator_type` arms; route all
       actuators through `motor_type` + `board_name` + `channel`.
 - [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto once nothing switches on them. Blocked on retiring
-      `action_factory.py`'s `ActuatorType` switch (§10 Phase 9) — Phase 9
-      deletes the Python factory outright once its C++ equivalents exist,
-      rather than porting it to `MotorType` first.
+      from proto once nothing switches on them. No longer blocked by
+      `action_factory.py` — §10 Phase 9 deleted the Python factory. The
+      remaining users are the C++ `ActionFactory`'s deprecation check and
+      the AM243 preset.
 
 **Perception (partial — bus safety only; full migration is Phase 6):**
 - [ ] Route `Sts3215Encoder` (perception) through `FeetechBusBoard` — or at
@@ -1661,8 +1661,9 @@ completed cleanly, not just bus-locked.
 
 **Explicit non-goals for this phase:**
 - OpenCV cameras stay driver-direct unless a future board type needs them.
-- Python mock perception drivers stay on `perception_factory.py` for this
-  phase; retired in Phase 9 once C++ mock doubles exist.
+- Python mock perception drivers stayed on `perception_factory.py` for this
+  phase. Phase 9 deleted them outright rather than porting them to C++, so
+  Phase 6 inherits no mock doubles to unify.
 - No placeholder `board_type: NONE` or other fake boards for symmetry.
 
 ### Phase 7 — Firmware tooling & handshake hardening
@@ -1691,70 +1692,73 @@ completed cleanly, not just bus-locked.
 ### Phase 9 — Remove the Python robot-side implementation
 
 Resolves open question §12.3: the board layer replaces the need for a
-parallel Python implementation, rather than growing one. `action_factory.py`,
-`perception_factory.py`, and `comm_factory.py` retire once every path they
-still serve — Pybricks/Spike BLE and the Python mock doubles — has a C++
-board-layer equivalent. Depends on Phase 4 (actuators) and Phase 6
-(perception parity); those phases deliberately leave Pybricks/Spike and
-mocks on Python rather than half-porting them, so this phase is where that
-debt gets paid off, not carried indefinitely.
+parallel Python implementation, rather than growing one. **Done — `robot/`
+contains no Python at all.** Rather than port each remaining Python path to
+C++ first, this phase deleted the Python robot layer outright and accepted
+the two capability regressions that follow (mocks and Spike, below).
 
-**Landed (action/comm side, mock only):**
-- [x] C++ `MockMotorDriver` (`robot/action/motors/drivers/`) replaces
-      `mock_driver.py` for `MOTOR_MOCK`; wired into `ActionFactory` and
-      `node_generator`'s `IsCppDriverAvailableForAction`.
-- [x] Deleted `robot/comm/factory/comm_factory.py` (zero importers — dead
-      code once the Python `MOCK_MOTOR` path was removed) and
-      `robot/action/motors/drivers/mock_driver.py`, plus their `BUILD`
-      targets. `action_factory.py` simplified to only handle
-      `SPIKE_MOTOR`.
-- [x] Migrated `config/config_preset/example/mock_py_test.pbtxt`'s
-      actuator block to `motor_type: MOTOR_MOCK` + `board_name`; its
-      camera/encoder/lidar perception blocks are untouched (see below).
+**Landed:**
+- [x] Deleted every `.py` under `robot/`: `action_factory.py`,
+      `perception_factory.py`, `comm_factory.py`, the action and perception
+      interface base classes, `pybricks_driver.py`,
+      `pybricks_ble_transport.py`, `serial.py`, and the mock drivers
+      (`mock_driver.py`, `mock_camera.py`, `mock_encoder.py`,
+      `mock_lidar.py`), plus every `py_library`/`py_test` target that
+      carried them and the `tools/pybricks` smoke binary.
+- [x] Deleted the Python hardware nodes `ros2/actuator_subscriber.py`,
+      `camera_publisher.py`, `encoder_publisher.py`, and
+      `lidar_publisher.py` with their `ros2_py_binary` targets; the C++
+      binaries of the same names are now the only implementations.
+- [x] Removed backend selection from `node_generator`. `BackendPreference`,
+      `IsCppDriverAvailableForAction`, `IsCppDriverAvailableForPerception`,
+      `DeterminePreferredBackend`, and the C++→Python launch fallback are
+      gone; `ExecNameForNodeType` is a static per-node-type mapping. Node
+      launch no longer inspects motor or perception types at all.
+- [x] Removed the mock actuator path end to end: `MockMotorDriver`,
+      `MOTOR_MOCK`/`MOCK_MOTOR`/`MockMotorConfig`, the `MOTOR_MOCK` arm of
+      `ValidateMotorChannel`, and `example/mock_py_test.pbtxt`. The mock
+      perception types `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR` went with
+      them. All six proto numbers are `reserved`.
 
-**Deliberately deferred — Pybricks/Spike BLE:**
-- [ ] Land a C++ board type for Pybricks/Spike over BLE (`SPIKE_HUB_BLE`,
-      `BleConfig`, §12.3/Phase 3 note) covering what `pybricks_driver.py` /
-      `pybricks_ble_transport.py` do today. **Stub landed**
-      (`robot/board/spike_hub_ble/spike_hub_ble_board.h`): `BoardFactory`'s
-      switch is complete and a `SPIKE_HUB_BLE` board fails fast with
-      `UnimplementedError` pointing at the Python path, but the real
-      BLE/Pybricks-hub-upload protocol is not implemented — `pybricksdev`
-      (BLE scan/connect via Bleak, MicroPython program upload, line
-      protocol over BLE notify/write) has no C++ equivalent library, a
-      native port is genuine protocol work, and it needs a physical
-      Pybricks hub to validate against. `pybricks_driver.py` /
-      `pybricks_ble_transport.py`, `action_interface.py`,
-      `actuator_interface.py`, and `ros2/actuator_subscriber.py` (its
-      Python `py_binary`) all stay in place until this lands.
-- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto (unblocks the item deferred in §10 Phase 4). **Blocked
-      specifically on the item above**: `action_factory.py` still
-      switches on `actuator_type` for `SPIKE_MOTOR`, and
-      `python_spike_actuator_example.pbtxt` still uses the legacy shape —
-      neither can move to `motor_type`/`board_name` until `SPIKE_HUB_BLE`
-      is real.
+**Kept deliberately:**
+- `BoardType::MOCK` (`robot/board/mock/`) is **not** part of the removed
+  mock path — it is C++ test infrastructure that lets `ActionFactory`,
+  `BoardFactory`, and the AM243/Feetech/JoshuaWire board tests exercise
+  *real* drivers with no hardware attached. It stays.
+- `scripts/pybricks_spike_bridge.py` runs on the SPIKE hub in MicroPython,
+  not on the host. It is firmware, not robot-layer code.
+- `ros2/trajectory_publisher.py`, `data_subscriber.py`, and `inference.py`
+  stay Python: they are ROS/AI plumbing with no hardware access and no C++
+  implementation. `node_generator` maps their node types to those targets
+  directly.
 
-**Deliberately deferred — perception (unchanged by this pass):**
-- [ ] Land C++ perception mock doubles (`mock_encoder.py`, `mock_lidar.py`,
-      `mock_camera.py`) and unify `PerceptionFactory` with optional board
-      binding — this is Phase 6 (perception layer parity), which has not
-      started. `perception_factory.py`, the perception interfaces, and
-      `robot/comm/serial/serial.py` (kept alive by
-      `test_sts3215_encoder.py`) are all untouched; see the
-      `TODO(hmoon)` above `IsCppDriverAvailableForPerception` in
-      `node_generator/node_generator.cc` for where this picks back up.
-- [ ] Audit `node_generator` and preset configs for any remaining
-      driver-direct path that only the Python factories serve; migrate or
-      confirm none remain. Not yet done for perception (blocked on Phase
-      6); done for the action side in this pass — `MOTOR_MOCK` is the
-      only motor type this audit found still on Python, and it's now
-      resolved.
-- [ ] Remove the Python driver path from `node_generator` codegen and from
-      docs (`docs/GETTING_STARTED.md`, `firmware/README.md`) wherever it's
-      still documented as an option. Not yet done — perception's Python
-      path and `MOTOR_SPIKE`'s Python path both still need to exist until
-      their respective blockers above clear.
+**Accepted regressions:**
+- `MOTOR_SPIKE` has **no working implementation**. The Python Pybricks
+  driver is gone and the native `SPIKE_HUB_BLE` board
+  (`robot/board/spike_hub_ble/`) is still the fail-fast stub landed
+  earlier: `BoardFactory`'s switch is complete, but the BLE/Pybricks
+  hub-upload protocol is unimplemented. `pybricksdev` (BLE scan/connect via
+  Bleak, MicroPython program upload, line protocol over notify/write) has
+  no C++ equivalent library, and validating a native port needs a physical
+  hub. `python_spike_actuator_example.pbtxt`,
+  `python_spike_trajectory_example.pbtxt`, and `docs/pybricks_test.md`
+  were deleted rather than left as dead config pointing at a removed path.
+- There are no mock actuator or mock perception components any more, so no
+  preset can exercise the node graph without real hardware. Config
+  validation and `bazel test` remain the hardware-free verification path.
+
+**Still open:**
+- [ ] Land the native `SPIKE_HUB_BLE` board so `MOTOR_SPIKE` works again
+      (§12.3). This is now a regression to fix, not a migration to
+      schedule.
+- [ ] Phase 6 (perception layer parity) is unaffected and still pending.
+      C++ perception already covers `OPENCV`, `STS3215_ENCODER`, and
+      `LDS01`; what Phase 6 adds is board binding for perception, not a
+      Python replacement.
+- [ ] Remove the deprecated `ActuatorType` values and embedded
+      `Actuator.comm` from the proto (deferred from §10 Phase 4). No
+      longer blocked by `action_factory.py` — the remaining users are the
+      C++ `ActionFactory`'s deprecation check and the AM243 preset.
 
 ## 11. Acceptance criteria
 
@@ -1797,10 +1801,11 @@ debt gets paid off, not carried indefinitely.
    cache for encoder publishers, and does the perception layer read through
    the same board instance? See §6.8; decide before Phase 6 freezes
    `PerceptionFactory`.
-3. **Python parity — RESOLVED**: no parallel Python board-layer
-   implementation. `action_factory.py` / `perception_factory.py` /
-   `comm_factory.py` retire once C++ equivalents cover the Pybricks/mock
-   paths they still serve (§10 Phase 9).
+3. **Python parity — DONE**: no parallel Python board-layer
+   implementation. §10 Phase 9 deleted `action_factory.py` /
+   `perception_factory.py` / `comm_factory.py` and everything under them;
+   `robot/` is Python-free. The Pybricks/Spike path was dropped rather than
+   ported and is now a tracked regression against `SPIKE_HUB_BLE` (§12.3).
 4. **Canonical EtherCAT PDO layout** — one shared Joshua PDO schema for AM243
    and future Teensy firmware: fixed 8-byte-per-channel slots, or
    ESI/SDO-described dynamic mapping?

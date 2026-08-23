@@ -7,7 +7,6 @@
 #include "absl/status/statusor.h"
 #include "config/proto/robot.pb.h"
 #include "robot/action/interfaces/action_interface.h"
-#include "robot/action/motors/drivers/mock_motor_driver.h"
 #include "robot/action/motors/drivers/stepper_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
 #include "robot/action/motors/drivers/ti_demo_driver.h"
@@ -117,15 +116,9 @@ class ActionFactory {
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }
-      case robot::action::MotorType::MOTOR_MOCK: {
-        ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
-        ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
-        auto driver = std::make_unique<robot::action::MockMotorDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      // MOTOR_SPIKE stays on the Python driver-direct path pending the
-      // SPIKE_HUB_BLE BLE port (docs/BOARD_LAYER_RFC.md §10 Phase 9).
+      // MOTOR_SPIKE has no driver: the Python Pybricks path was removed in
+      // Phase 9 and the native SPIKE_HUB_BLE board is still a stub
+      // (docs/BOARD_LAYER_RFC.md §10 Phase 9).
       default:
         return absl::Status(absl::StatusCode::kUnimplemented,
                             "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +
