@@ -211,22 +211,6 @@ ros2_py_binary(
     ] + requirement("protobuf"),
 )
 
-ros2_cpp_binary(
-    name = "operational_limit_calibration",
-    srcs = ["operational_limit_calibration.cc"],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//ros2:node_runner",
-        "//ros2/utils:qos_setting",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
 genrule(
     name = "ros2_node_wrapper",
     srcs = ["ros2_node_wrapper_template.sh"],

@@ -313,18 +313,6 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     }
   }
 
-  // Calibration
-  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    const uint32_t node_id = single_calibration.node().id();
-    auto [it, inserted] =
-        identified_nodes_.try_emplace(node_id, single_calibration.node().node_type());
-    if (!inserted && it->second != single_calibration.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
-    }
-  }
-
   return absl::OkStatus();
 }
 
@@ -735,10 +723,6 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_trajectory : config_.robot().trajectories().single_trajectories()) {
     ExtractTopicsFromNode(single_trajectory.node(), node_id, publish_topics, subscribe_topics);
-  }
-
-  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    ExtractTopicsFromNode(single_calibration.node(), node_id, publish_topics, subscribe_topics);
   }
 
   return absl::OkStatus();

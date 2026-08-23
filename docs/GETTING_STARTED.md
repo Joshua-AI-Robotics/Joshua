@@ -97,7 +97,9 @@ This preset runs SO100 in teleoperation mode (follower and lead arm per config):
 
 - Config: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt)
 
-Calibrate operational limits for your servo motors before running.
+Set each actuator's `operational_lower_limit` / `operational_upper_limit` in
+the preset before running. (The `MODE_CALIBRATION` node that measured these
+automatically was removed; set them by hand.)
 
 ```bash
 bazel run launcher:joshua_main

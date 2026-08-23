@@ -43,7 +43,6 @@ cc_binary(
         "//ros2:encoder_publisher",
         "//ros2:inference",
         "//ros2:lidar_publisher",
-        "//ros2:operational_limit_calibration",
         "//ros2:trajectory_publisher_py",
         "//simulation",
         "//simulation:sim_models",

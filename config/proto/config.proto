@@ -2,7 +2,6 @@ syntax = "proto3";
 
 import "config/proto/robot.proto";
 import "config/proto/ai.proto";
-import "config/proto/calibration.proto";
 import "simulation/proto/simulation.proto";
 
 package config;
@@ -12,10 +11,10 @@ message General {
     MODE_INVALID = 0;
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
-    MODE_CALIBRATION = 4;
     MODE_TEST = 5;
     MODE_DATA_STORE = 6;
     MODE_SIMULATION = 7;
+    reserved 4;  // MODE_CALIBRATION: calibration subsystem removed.
   }
 
   enum RobotType {
@@ -33,6 +32,6 @@ message Config {
   General general = 1;
   config.Robot robot = 2;
   config.Ai ai = 3;
-  config.Calibration calibration = 4;
   simulation.SimulationConfig simulation = 5;
+  reserved 4;  // calibration: calibration subsystem removed.
 }
