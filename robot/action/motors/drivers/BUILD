@@ -83,6 +83,33 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "mock_motor_driver",
+    srcs = ["mock_motor_driver.cc"],
+    hdrs = ["mock_motor_driver.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config/proto:robot_cc_proto",
+        "//robot/action/interfaces:actuator_interface",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@glog",
+    ],
+)
+
+cc_test(
+    name = "mock_motor_driver_test",
+    srcs = ["mock_motor_driver_test.cc"],
+    deps = [
+        ":mock_motor_driver",
+        "//config/proto:robot_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
+    ],
+)
+
 py_library(
     name = "mock_driver_py",
     srcs = ["mock_driver.py"],
