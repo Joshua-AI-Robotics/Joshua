@@ -58,6 +58,14 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR` (proto numbers `reserved`), the
   C++ `MockMotorDriver`, and `example/mock_py_test.pbtxt`. `BoardType::MOCK`
   is unaffected — it is C++ test infrastructure, not a mock driver
+- The ant, trileg, and bileg simulation presets
+  (`ant_sim_interactive.pbtxt`, `ant_sim_isaac.pbtxt`, `trileg_sim_isaac.pbtxt`,
+  `bileg_sim_isaac.pbtxt`) and `so100/calibrate_leader_arm_operational_limit.pbtxt`.
+  No Isaac Sim or `MODE_CALIBRATION` preset ships any more; the Isaac backend,
+  the calibration node, and the ant/trileg/bileg model assets are all still
+  present, so a preset can be written against them
+- `docs/TRAINING_RFC.md`, which described the RL training pipeline removed
+  earlier in this release
 - The `python_spike_*` presets and `docs/pybricks_test.md` /
   `docs/spike_python_driver_plan.md`, which documented driving a SPIKE hub
   from a preset — no longer possible

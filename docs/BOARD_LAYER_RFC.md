@@ -1651,8 +1651,8 @@ completed cleanly, not just bus-locked.
 
 **Presets & node generation:**
 - [ ] Migrate so100 **board-backed** perception presets (`encoder_publish`,
-      `sim_mirror`, `calibrate_leader_arm_operational_limit`, …): remove
-      per-encoder `comm {}`; bind via `board_name` + `channel`.
+      `sim_mirror`, …): remove per-encoder `comm {}`; bind via `board_name` +
+      `channel`.
 - [ ] Leave camera / Ethernet-lidar presets driver-direct (no `boards{}`
       entry required).
 - [ ] Update `node_generator` `IsCppDriverAvailableForPerception` to select

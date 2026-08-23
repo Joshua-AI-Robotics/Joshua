@@ -14,7 +14,6 @@ the engine never imports model-specific libraries directly.
 **Related docs**
 
 - Model plug-ins (adapter contract, worked example): [`models/README.md`](models/README.md)
-- Training roadmap: [`../docs/TRAINING_RFC.md`](../docs/TRAINING_RFC.md)
 
 ---
 
@@ -189,5 +188,6 @@ lock; model locks hold only model-specific closures.
 Recording demos uses `ai/train/data_store.py` and is independent of the
 inference plug-in system. See [`train/README.md`](train/README.md).
 
-Training (BC, RL) is planned under `ai/data/` and `ai/training/` per
-[`docs/TRAINING_RFC.md`](../docs/TRAINING_RFC.md) — not implemented yet.
+Training (BC, RL) is not implemented. The RL pipeline that once lived here was
+removed (see [`CHANGELOG.md`](../CHANGELOG.md)), and the training RFC that
+described the planned replacement has been retired.

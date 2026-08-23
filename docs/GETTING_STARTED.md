@@ -110,28 +110,22 @@ All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. F
 **MuJoCo interactive viewer:**
 
 ```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_interactive.pbtxt
+bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_interactive.pbtxt
 ```
 
-**Isaac Sim viewer** (requires Isaac Lab installed):
-
-```bash
-export ISAAC_LAB_PATH=~/IsaacLab
-export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python
-
-bazel run //launcher:joshua_main -- --config config/config_preset/ant/ant_sim_isaac.pbtxt
-```
+**Isaac Sim viewer** (requires Isaac Lab installed): the Isaac Sim backend
+(`SIM_BACKEND_ISAAC_SIM`) is supported by `simulation/isaac/`, but **no preset
+ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
+against [simulation/README.md](../simulation/README.md) to use it.
 
 ### Preset reference
 
 | Config | Backend | What it does |
 |--------|---------|-------------|
-| `ant/ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant/ant_sim_isaac.pbtxt` | Isaac Sim | Ant in the Isaac Sim viewer |
-| `trileg/trileg_sim_isaac.pbtxt` | Isaac Sim | 3-legged LEGO walker in Isaac Sim |
-| `bileg/bileg_sim_isaac.pbtxt` | Isaac Sim | 2-legged LEGO walker in Isaac Sim |
+| `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive 3D viewer |
+| `so100/sim_passive.pbtxt` | MuJoCo | SO-ARM100 passive sim |
+| `so100/sim_mirror.pbtxt` | MuJoCo | Sim mirrors a real arm — **opens `/dev/ttyACM1`** |
 | `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
-| `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive sim |
 
 ## Web UI with Docker
 
