@@ -1700,11 +1700,17 @@ the two capability regressions that follow (mocks and Spike, below).
 **Landed:**
 - [x] Deleted every `.py` under `robot/`: `action_factory.py`,
       `perception_factory.py`, `comm_factory.py`, the action and perception
-      interface base classes, `pybricks_driver.py`,
-      `pybricks_ble_transport.py`, `serial.py`, and the mock drivers
+      interface base classes, `serial.py`, and the mock drivers
       (`mock_driver.py`, `mock_camera.py`, `mock_encoder.py`,
       `mock_lidar.py`), plus every `py_library`/`py_test` target that
-      carried them and the `tools/pybricks` smoke binary.
+      carried them.
+- [x] Moved `pybricks_driver.py` and `pybricks_ble_transport.py` out of
+      `robot/` into `tools/pybricks/`, alongside the existing
+      `pybricks_ble_smoke` binary. They are bench tooling, not runtime code:
+      nothing on the launcher's path reaches them, and they are the working
+      reference for the native `SPIKE_HUB_BLE` port. `PybricksMotorDriver`
+      no longer implements `ActuatorInterface` (that ABC went with the rest
+      of the Python robot layer) but keeps the same method shape.
 - [x] Deleted the Python hardware nodes `ros2/actuator_subscriber.py`,
       `camera_publisher.py`, `encoder_publisher.py`, and
       `lidar_publisher.py` with their `ros2_py_binary` targets; the C++
@@ -1727,6 +1733,9 @@ the two capability regressions that follow (mocks and Spike, below).
   *real* drivers with no hardware attached. It stays.
 - `scripts/pybricks_spike_bridge.py` runs on the SPIKE hub in MicroPython,
   not on the host. It is firmware, not robot-layer code.
+- `tools/pybricks/` is developer tooling, off the runtime path. Keeping it
+  costs nothing at runtime and preserves a working Pybricks implementation
+  to port from.
 - `ros2/trajectory_publisher.py`, `data_subscriber.py`, and `inference.py`
   stay Python: they are ROS/AI plumbing with no hardware access and no C++
   implementation. `node_generator` maps their node types to those targets
@@ -1743,6 +1752,9 @@ the two capability regressions that follow (mocks and Spike, below).
   hub. `python_spike_actuator_example.pbtxt`,
   `python_spike_trajectory_example.pbtxt`, and `docs/pybricks_test.md`
   were deleted rather than left as dead config pointing at a removed path.
+  A SPIKE motor can still be driven by hand through
+  `//tools/pybricks:pybricks_ble_smoke`; it just cannot be driven by the
+  launcher from a preset.
 - There are no mock actuator or mock perception components any more, so no
   preset can exercise the node graph without real hardware. Config
   validation and `bazel test` remain the hardware-free verification path.

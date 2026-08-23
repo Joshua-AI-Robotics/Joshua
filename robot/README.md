@@ -31,9 +31,11 @@ migrated — it is still driver-direct (Phase 6). Check
 landed before assuming either way.
 
 **There is no Python in this directory, and none should be added.** The Python
-robot layer (factories, interfaces, mock and Pybricks drivers) was deleted in
-RFC §10 Phase 9; hardware-facing ROS 2 nodes are C++ only, and `node_generator`
-no longer selects between backends.
+robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
+Phase 9, and the Pybricks bench driver moved to
+[tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
+Hardware-facing ROS 2 nodes are C++ only, and `node_generator` no longer
+selects between backends.
 
 ## Responsibilities
 

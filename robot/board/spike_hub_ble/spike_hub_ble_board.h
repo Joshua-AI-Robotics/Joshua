@@ -18,9 +18,11 @@ namespace robot::board {
 // port needs real BlueZ/GATT work plus the Pybricks hub-upload protocol,
 // and a physical hub to validate against — genuine protocol work, not a
 // board-layer wiring exercise like TeensyBoard's one-line constructor.
-// TODO(hmoon): Implement the native BLE port. There is no fallback: the
-// Python Pybricks driver was deleted in §10 Phase 9, so MOTOR_SPIKE has no
-// working implementation at all until this lands. This stub keeps
+// TODO(hmoon): Implement the native BLE port. There is no runtime fallback:
+// the Python robot layer went away in §10 Phase 9, so MOTOR_SPIKE has no
+// working implementation until this lands. Port from tools/pybricks/ —
+// pybricks_driver.py and pybricks_ble_transport.py are kept there as bench
+// tooling precisely to serve as the reference. This stub keeps
 // BoardFactory's switch complete and fails fast if anything points a
 // board_name at a SPIKE_HUB_BLE board.
 class SpikeHubBleBoard : public BoardInterface {
@@ -31,8 +33,9 @@ class SpikeHubBleBoard : public BoardInterface {
     return absl::UnimplementedError(
         absl::StrCat("Board '",
                      config.name(),
-                     "': SPIKE_HUB_BLE has no native implementation yet, and the Python "
-                     "Pybricks path was removed — MOTOR_SPIKE is currently unsupported "
+                     "': SPIKE_HUB_BLE has no native implementation yet, so MOTOR_SPIKE "
+                     "is unsupported from a preset; drive the hub by hand with "
+                     "//tools/pybricks:pybricks_ble_smoke "
                      "(docs/BOARD_LAYER_RFC.md §10 Phase 9)."));
   }
 

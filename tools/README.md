@@ -17,6 +17,23 @@ launcher and ROS 2 nodes never invoke these.
   Background on the per-model dependency scheme is in
   [ai/README.md](../ai/README.md).
 
+- `pybricks/` — host-side Pybricks/SPIKE bring-up tooling: `pybricks_driver.py`,
+  its BLE transport, and a `pybricks_ble_smoke` binary that drives one motor.
+
+  ```bash
+  bazel run //tools/pybricks:pybricks_ble_smoke -- SPIKE A 90
+  ```
+
+  This talks to a real hub over Bluetooth and moves a real motor. See the
+  hardware-safety section of [AGENTS.md](../AGENTS.md).
+
+  It lives here rather than under `robot/` on purpose. The Python robot layer
+  was removed in [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10
+  Phase 9 and `robot/` is C++ only; this is a manual bench aid off the runtime
+  path, and the reference for the native `SPIKE_HUB_BLE` port. `MOTOR_SPIKE`
+  itself is unsupported until that port lands — the launcher cannot drive a
+  SPIKE hub, only this tool can.
+
 ## Responsibilities
 
 - One-off developer and bring-up tasks that do not belong in a build rule.
