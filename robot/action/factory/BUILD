@@ -37,7 +37,6 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/action/interfaces:action_interface_py",
-        "//robot/action/motors/drivers:mock_driver_py",
         "//robot/action/motors/drivers:pybricks_driver_py",
         "//robot/action/proto:action_py_proto",
     ],
@@ -48,7 +47,6 @@ py_test(
     srcs = ["action_factory_test.py"],
     deps = [
         ":action_factory_py",
-        "//robot/action/motors/drivers:mock_driver_py",
         "//robot/action/proto:action_py_proto",
         "//robot/comm/proto:comm_py_proto",
     ],

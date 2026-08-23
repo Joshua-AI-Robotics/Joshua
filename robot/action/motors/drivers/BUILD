@@ -111,17 +111,6 @@ cc_test(
 )
 
 py_library(
-    name = "mock_driver_py",
-    srcs = ["mock_driver.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//robot/action/interfaces:actuator_interface_py",
-        "//robot/action/proto:action_packet_py_proto",
-        "//robot/action/proto:action_py_proto",
-    ],
-)
-
-py_library(
     name = "pybricks_driver_py",
     srcs = ["pybricks_driver.py"],
     visibility = ["//visibility:public"],

@@ -5,6 +5,12 @@ import os
 import threading
 import time
 
+# TODO(hmoon): This file stays alive only for
+# robot/comm/serial/test_sts3215_encoder.py (perception-adjacent). It is
+# otherwise dead on the action/comm side after comm_factory.py's removal
+# (docs/BOARD_LAYER_RFC.md §10 Phase 9). Retire it once RFC §10 Phase 6
+# (perception layer parity) removes that dependency too.
+
 
 class Serial:
     """Thin wrapper around pyserial to mirror the C++ Serial interface."""
