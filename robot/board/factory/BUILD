@@ -12,6 +12,7 @@ cc_library(
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/mock:mock_board",
         "//robot/board/proto:board_cc_proto",
+        "//robot/board/spike_hub_ble:spike_hub_ble_board",
         "//robot/board/teensy:teensy_board",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
