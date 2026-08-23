@@ -1699,28 +1699,62 @@ board-layer equivalent. Depends on Phase 4 (actuators) and Phase 6
 mocks on Python rather than half-porting them, so this phase is where that
 debt gets paid off, not carried indefinitely.
 
+**Landed (action/comm side, mock only):**
+- [x] C++ `MockMotorDriver` (`robot/action/motors/drivers/`) replaces
+      `mock_driver.py` for `MOTOR_MOCK`; wired into `ActionFactory` and
+      `node_generator`'s `IsCppDriverAvailableForAction`.
+- [x] Deleted `robot/comm/factory/comm_factory.py` (zero importers — dead
+      code once the Python `MOCK_MOTOR` path was removed) and
+      `robot/action/motors/drivers/mock_driver.py`, plus their `BUILD`
+      targets. `action_factory.py` simplified to only handle
+      `SPIKE_MOTOR`.
+- [x] Migrated `config/config_preset/example/mock_py_test.pbtxt`'s
+      actuator block to `motor_type: MOTOR_MOCK` + `board_name`; its
+      camera/encoder/lidar perception blocks are untouched (see below).
+
+**Deliberately deferred — Pybricks/Spike BLE:**
 - [ ] Land a C++ board type for Pybricks/Spike over BLE (`SPIKE_HUB_BLE`,
       `BleConfig`, §12.3/Phase 3 note) covering what `pybricks_driver.py` /
-      `pybricks_ble_transport.py` do today.
-- [ ] Land C++ mock board/driver/perception doubles to replace
-      `mock_driver.py`, `mock_encoder.py`, `mock_lidar.py`, `mock_camera.py`
-      for any tests that still depend on the Python mocks.
+      `pybricks_ble_transport.py` do today. **Stub landed**
+      (`robot/board/spike_hub_ble/spike_hub_ble_board.h`): `BoardFactory`'s
+      switch is complete and a `SPIKE_HUB_BLE` board fails fast with
+      `UnimplementedError` pointing at the Python path, but the real
+      BLE/Pybricks-hub-upload protocol is not implemented — `pybricksdev`
+      (BLE scan/connect via Bleak, MicroPython program upload, line
+      protocol over BLE notify/write) has no C++ equivalent library, a
+      native port is genuine protocol work, and it needs a physical
+      Pybricks hub to validate against. `pybricks_driver.py` /
+      `pybricks_ble_transport.py`, `action_interface.py`,
+      `actuator_interface.py`, and `ros2/actuator_subscriber.py` (its
+      Python `py_binary`) all stay in place until this lands.
+- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
+      from proto (unblocks the item deferred in §10 Phase 4). **Blocked
+      specifically on the item above**: `action_factory.py` still
+      switches on `actuator_type` for `SPIKE_MOTOR`, and
+      `python_spike_actuator_example.pbtxt` still uses the legacy shape —
+      neither can move to `motor_type`/`board_name` until `SPIKE_HUB_BLE`
+      is real.
+
+**Deliberately deferred — perception (unchanged by this pass):**
+- [ ] Land C++ perception mock doubles (`mock_encoder.py`, `mock_lidar.py`,
+      `mock_camera.py`) and unify `PerceptionFactory` with optional board
+      binding — this is Phase 6 (perception layer parity), which has not
+      started. `perception_factory.py`, the perception interfaces, and
+      `robot/comm/serial/serial.py` (kept alive by
+      `test_sts3215_encoder.py`) are all untouched; see the
+      `TODO(hmoon)` above `IsCppDriverAvailableForPerception` in
+      `node_generator/node_generator.cc` for where this picks back up.
 - [ ] Audit `node_generator` and preset configs for any remaining
       driver-direct path that only the Python factories serve; migrate or
-      confirm none remain.
-- [ ] Delete `robot/action/factory/action_factory.py`,
-      `robot/action/interfaces/*.py`,
-      `robot/action/motors/drivers/{mock_driver,pybricks_driver}.py`,
-      `robot/perception/factory/perception_factory.py`,
-      `robot/perception/interfaces/*.py`,
-      `robot/perception/{encoder,lidar,camera}/mock_*.py`,
-      `robot/comm/factory/comm_factory.py`, `robot/comm/serial/serial.py`,
-      `robot/comm/pybricks_ble_transport.py`, and their Python tests.
+      confirm none remain. Not yet done for perception (blocked on Phase
+      6); done for the action side in this pass — `MOTOR_MOCK` is the
+      only motor type this audit found still on Python, and it's now
+      resolved.
 - [ ] Remove the Python driver path from `node_generator` codegen and from
       docs (`docs/GETTING_STARTED.md`, `firmware/README.md`) wherever it's
-      still documented as an option.
-- [ ] Remove deprecated `ActuatorType` values and embedded `Actuator.comm`
-      from proto (unblocks the item deferred in §10 Phase 4).
+      still documented as an option. Not yet done — perception's Python
+      path and `MOTOR_SPIKE`'s Python path both still need to exist until
+      their respective blockers above clear.
 
 ## 11. Acceptance criteria
 
