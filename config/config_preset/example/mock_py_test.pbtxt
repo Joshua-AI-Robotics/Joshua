@@ -5,6 +5,14 @@ general{
   id: 1
 }
 robot {
+  boards {
+    name: "mock_actuator_board"
+    board_type: MOCK
+    channels {
+      index: 0
+      drive: PWM_DC
+    }
+  }
   actions {
     single_actions {
       node {
@@ -21,7 +29,9 @@ robot {
       actuator {
         actuator_name: "mock_motor_1"
         id: 1
-        actuator_type: MOCK_MOTOR
+        motor_type: MOTOR_MOCK
+        board_name: "mock_actuator_board"
+        channel: 0
         mock_motor_config {
           motor_id: 1
         }
