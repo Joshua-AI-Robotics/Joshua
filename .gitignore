@@ -48,7 +48,7 @@ ui/public/proto-schema*
 # Build output
 dist/
 
-# PlatformIO firmware build output (firmware/teensy/41/, etc.)
+# PlatformIO firmware build output (firmware/teensy/41/, firmware/arduino/uno/, etc.)
 .pio/
 
 # Ignore MAC OS files

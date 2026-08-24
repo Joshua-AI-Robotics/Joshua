@@ -217,11 +217,11 @@ robot/
     factory/            board_factory.*  (instance cache keyed by board name)
     proto/              board.proto
     am243/              am243_board.*  am243_pdo_codec.*  (moved from motors/drivers)
-    arduino/            arduino_board.h  (header-only JoshuaWireBoard
-                        subclass — a one-line constructor passing identity,
-                        nothing else; MCU only, drive peripherals like a
-                        TB6600 are a Channel.drive fact, never in this
-                        name; future — not yet built, §10 Phase 5)
+    arduino/            arduino_board.h/.cc  (JoshuaWireBoard subclass:
+                        identity constructor plus a DTR-reset settle in
+                        CreateTransport — the one Uno-specific bring-up
+                        fact; MCU only, drive peripherals like a TB6600
+                        are a Channel.drive fact, never in this name)
     teensy/             teensy_board.h  (header-only JoshuaWireBoard
                         subclass — a one-line constructor passing identity,
                         nothing else; MCU only, a comm peripheral like an
@@ -252,10 +252,10 @@ firmware/
                         platformio.ini (-I src, so firmware/common/'s
                         backend_stepdir.cpp can see this project's own
                         channel_table.h) ── NEW, §10 Phase 5 ──
-  arduino/              main.cpp, channel_table.c, transports,
+  arduino/uno/          main.cpp, channel_table.c, transport_serial.*,
                         platformio.ini (backend_stepdir pulled from
-                        firmware/common/, same as Teensy — future, not yet
-                        built, §10 Phase 5)
+                        firmware/common/, same as Teensy — Uno R3 serial
+                        variant; hardware verification still open)
 tools/
   flash/                config-driven flasher + firmware manifest
 ```
@@ -1169,12 +1169,11 @@ so there's nothing for a vtable entry to buy here (unlike
 `ValidateComm`/`CreateTransport`, genuine behavior hooks a
 future board might need to override, which stay virtual with sensible
 `SERIAL`/`CommFactory::CreateSerial` defaults — what every board on this
-class uses today). This is what makes `ArduinoBoard` (§10 Phase 5) close
-to free once `firmware/arduino/`'s firmware image exists: the host class
-is a one-line constructor, not a
-341-line reimplementation of IDENTIFY/CONFIGURE_CHANNEL/channel dispatch —
-see `robot/board/teensy/teensy_board.h` for how small that subclass is in
-practice.
+class uses today). `ArduinoBoard` is that subclass: identity is still a
+one-line constructor, plus a `CreateTransport()` override that waits out
+the Uno's DTR auto-reset — not a reimplementation of IDENTIFY /
+CONFIGURE_CHANNEL / channel dispatch. See
+`robot/board/arduino/arduino_board.h`.
 
 Extracted after `TeensyBoard` first landed, not designed in from the start
 — worth calling out because it's the concrete lesson: the moment a second
@@ -1552,12 +1551,11 @@ First real second board is **Teensy 4.1**, not the placeholder Arduino
 this section originally sketched — chosen because real Teensy 4.1 + TB6600
 hardware exists to bring this up on, whereas the Arduino sketch was
 speculative. The architecture is identical either way (§7.1–§7.5 make no
-Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
-real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
-`FrameTransport` seam, new firmware image, and now (§7.3) a host board
-class that's just two identity methods subclassing `JoshuaWireBoard`
-rather than a from-scratch `BoardInterface` implementation — not retired
-by this choice. An **ESP32** board is a candidate third matrix
+Arduino-specific assumption). `ArduinoBoard` + `firmware/arduino/uno/`
+are now in tree (same `joshua_wire_v1` codec, same `StepperDriver`, same
+`FrameTransport` seam, new AVR firmware image) — host/firmware source is
+written; flashing and physical rotation on a real Uno R3 are still open.
+An **ESP32** board is a candidate third matrix
 member for the same reason (hardware on hand), tracked as a follow-up, not
 started in this phase: it would most likely land as a Wi-Fi/UDP transport
 variant on the existing `UdpTransport` seam below rather than a new drive
@@ -1580,6 +1578,11 @@ another STEP_DIR implementation.
       `StepperDriver` (`robot/action/motors/drivers/`) + `FrameTransport`
       seam (`robot/board/frame/`, `SerialFrameTransport` on
       `robot::comm::SerialTransport`).
+- [x] Host + firmware for Arduino Uno R3: `ArduinoBoard`
+      (`robot/board/arduino/`), `firmware/arduino/uno/` serial variant,
+      example preset `config/config_preset/example/arduino_stepper_demo.pbtxt`.
+      First hardware goal is IDENTIFY-only (USB, no motor). Flash and
+      handshake on a real Uno are still open; motion is deferred.
 - [x] `JoshuaWireBoard` (`robot/board/joshua_wire/`, §7.3) extracted from
       `TeensyBoard` once a second board on this wire protocol (Arduino)
       was concretely imminent: IDENTIFY handshake, `CONFIGURE_CHANNEL`,
@@ -1728,8 +1731,8 @@ debt gets paid off, not carried indefinitely.
   over UDP by changing only `Board.comm` and reflashing the matching
   variant — zero host code changes. (Serial: **fully verified on real
   hardware, including physical rotation**, §10 Phase 5. UDP variant: not
-  started, same phase — Arduino is the same proof once built, sharing the
-  identical `joshua_wire_v1`/`StepperDriver`/`FrameTransport` seams.)
+  started, same phase. Arduino Uno R3 serial is the second MCU on those
+  seams — source in tree, hardware verification still open.)
 - Existing so100 teleoperation and AM243 smoke tests pass through the new
   layers with unchanged wire behavior — and the config-driven AM243 path
   (`.pbtxt → actuator_subscriber`) works end to end for the first time.

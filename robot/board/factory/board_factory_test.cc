@@ -56,9 +56,19 @@ TEST_F(BoardFactoryTest, InvalidBoardTypeIsRejected) {
 
 TEST_F(BoardFactoryTest, UnportedBoardTypesReportUnimplemented) {
   robot::board::Board board = MakeMockBoard("bridge_1", 1);
-  board.set_board_type(robot::board::BoardType::ARDUINO_UNO);
+  board.set_board_type(robot::board::BoardType::SPIKE_HUB_BLE);
   auto result = BoardFactory::GetOrCreate(board);
   EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+}
+
+TEST_F(BoardFactoryTest, ArduinoUnoIsPortedAndRejectsAMockShapedConfig) {
+  // ARDUINO_UNO is implemented; a config shaped for MockBoard (STEP_DIR
+  // channel, no comm) fails JoshuaWireBoard validation rather than
+  // UnportedBoardTypesReportUnimplemented.
+  robot::board::Board board = MakeMockBoard("bridge_1", 1);
+  board.set_board_type(robot::board::BoardType::ARDUINO_UNO);
+  auto result = BoardFactory::GetOrCreate(board);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {

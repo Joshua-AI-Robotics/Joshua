@@ -7,7 +7,8 @@
 // compiled into both the host (as a Bazel cc_library, linked into
 // TeensyBoard/ArduinoBoard) and every Joshua firmware image (as a
 // PlatformIO lib), so the two sides cannot drift silently — see the repo's
-// firmware/common/BUILD and firmware/teensy/41/platformio.ini.
+// firmware/common/BUILD, firmware/teensy/41/platformio.ini, and
+// firmware/arduino/uno/platformio.ini.
 //
 // Frame format:
 //   [0xA5 sync][len][proto_ver][cmd][channel][payload...][crc16 LE]
@@ -15,9 +16,9 @@
 // (i.e. len == 3 + payload_len); crc16 is computed over those same
 // `len` bytes. Total frame size on the wire is therefore len + 4.
 //
-// This header assumes a little-endian target (true for both the Cortex-M7
-// on Teensy 4.1 and the host x86/ARM Linux build) and does not attempt to
-// support big-endian MCUs.
+// This header assumes a little-endian target (true for the Cortex-M7 on
+// Teensy 4.1, the ATmega328P on Uno R3, and the host x86/ARM Linux build)
+// and does not attempt to support big-endian MCUs.
 #pragma once
 
 #include <stddef.h>

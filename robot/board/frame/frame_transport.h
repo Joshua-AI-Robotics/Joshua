@@ -10,7 +10,7 @@ namespace robot::board {
 
 // Byte-level transport boundary for joshua_wire_v1 frame exchange
 // (docs/BOARD_LAYER_RFC.md §7.2/§7.3): frame-based Joshua-firmware boards
-// (TeensyBoard today, ArduinoBoard later) depend on this, not a concrete
+// (TeensyBoard, ArduinoBoard) depend on this, not a concrete
 // transport, so frame dispatch is testable without real hardware. The
 // frame itself is transport-agnostic; SendAndReceive is atomic
 // (Write-then-Read) so another channel's request cannot interleave on a
