@@ -168,7 +168,7 @@ ros2_cpp_binary(
 )
 
 ros2_py_binary(
-    name = "trajectory_publisher_py",
+    name = "trajectory_publisher",
     srcs = [
         "trajectory_publisher.py",
     ],

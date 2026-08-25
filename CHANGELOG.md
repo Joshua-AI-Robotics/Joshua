@@ -13,8 +13,9 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 ### Added
 
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
-  new `simulation/isaac/` launcher + viewer, `IsaacSimConfig` proto, and
-  `ant`/`trileg`/`bileg` `*_sim_isaac.pbtxt` presets ([simulation/README.md](simulation/README.md))
+  new `simulation/isaac/` launcher + viewer, and the `IsaacSimConfig` proto
+  ([simulation/README.md](simulation/README.md)). No Isaac preset ships — the
+  `*_sim_isaac.pbtxt` presets were removed again later in this release
 - `simulation/README.md` covering the MuJoCo modes and the Isaac Sim backend
 - [AGENTS.md](AGENTS.md) canonical instructions for AI coding agents
   (open [agents.md](https://agents.md/) standard), with pointer bridges for
@@ -55,14 +56,14 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   `trajectory_publisher`, `data_subscriber`, and `inference` stay Python —
   they have no hardware access
 - Mock components: `MOTOR_MOCK`/`MOCK_MOTOR`/`MockMotorConfig` and
-  `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR` (proto numbers `reserved`), the
+  `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR`, the
   C++ `MockMotorDriver`, and `example/mock_py_test.pbtxt`. `BoardType::MOCK`
   is unaffected — it is C++ test infrastructure, not a mock driver
 - The operational-limit calibration subsystem:
   `ros2/operational_limit_calibration.cc`, `config/proto/calibration.proto`
   (`Calibration`, `SingleCalibration`, `CalibrationMode`), the
   `Config.calibration` field, `MODE_CALIBRATION`, and the
-  `OPERATIONAL_LIMIT_CALIBRATION` node type — all `reserved` in their protos.
+  `OPERATIONAL_LIMIT_CALIBRATION` node type.
   Set `operational_lower_limit` / `operational_upper_limit` by hand in the
   preset instead
 - The ant, trileg, and bileg simulation presets
@@ -89,16 +90,23 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Changed
 
+- **Breaking (wire format): proto field and enum numbers were compacted.**
+  The numbers freed by the removals above were reused rather than reserved,
+  so this release is not wire-compatible with data serialized by an earlier
+  one. Affects `MotorType`, `ActuatorType`, `Actuator` fields (`channel` and
+  the `action_config` oneof), `BoardType`, `CommType`, `NodeType`,
+  `OperationMode`, and `Config.simulation`. Text-format `.pbtxt` presets are
+  unaffected — they bind by name. Re-generate any stored binary protos
 - **LEGO SPIKE / Pybricks hubs are no longer supported by the launcher.** The
   Python driver, the `SPIKE_HUB_BLE` stub board, `BoardType::SPIKE_HUB_BLE`,
-  and `MotorType::MOTOR_SPIKE` were all removed (both proto numbers
-  `reserved`); no preset can reach a hub. A motor can still be driven by hand
-  with `bazel run //tools/pybricks:pybricks_ble_smoke`, and the hub-side
+  and `MotorType::MOTOR_SPIKE` were all removed; no preset can reach a hub.
+  A motor can still be driven by hand with
+  `bazel run //tools/pybricks:pybricks_ble_smoke`, and the hub-side
   `scripts/pybricks_spike_bridge.py` (MicroPython, runs on the brick) is
   unaffected. Nothing Spike-shaped remains outside `tools/pybricks/`:
   `ActuatorType::SPIKE_MOTOR`, `SpikeMotorConfig`, and `CommType::BLE` (whose
-  only user was the Spike hub) are removed from the robot protos, all
-  `reserved`, and the bench tool configures itself with its own
+  only user was the Spike hub) are removed from the robot protos, and the
+  bench tool configures itself with its own
   `SpikeMotorSpec` dataclass. See
   [BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9
 - The Pybricks bench tooling moved out of `robot/` to `tools/pybricks/`

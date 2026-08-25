@@ -20,10 +20,9 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
   - `config.proto` — `General`, including `operation_mode`, which the launcher
     branches on.
   - `ai.proto` — inference and policy configuration.
-  - `calibration.proto` — per-joint calibration records.
   - `physical_layout.proto` — poses, axes, and frames.
 - `config_preset/<robot>/` — checked-in presets, one per robot and task
-  (`so100/`, `ant/`, `bileg/`, `trileg/`, `example/`).
+  (`so100/`, `example/`).
 - `config_utils.h` — `LoadConfig`, which opens a `.pbtxt` and parses it into a
   `config::Config`. Parsing only; semantic checks happen later, in the
   factories and `node_generator/`.

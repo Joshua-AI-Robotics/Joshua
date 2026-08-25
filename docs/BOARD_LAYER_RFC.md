@@ -1720,13 +1720,18 @@ the two capability regressions that follow (mocks and Spike, below).
 - [x] Removed backend selection from `node_generator`. `BackendPreference`,
       `IsCppDriverAvailableForAction`, `IsCppDriverAvailableForPerception`,
       `DeterminePreferredBackend`, and the C++→Python launch fallback are
-      gone; `ExecNameForNodeType` is a static per-node-type mapping. Node
-      launch no longer inspects motor or perception types at all.
+      gone. Node launch no longer inspects motor or perception types at
+      all: every node's executable is named for its node type. The
+      vestigial `_py` suffix went too — it existed to tell a Python
+      binary apart from a same-named C++ one, and no Python node has a
+      C++ counterpart any more, so `//ros2:trajectory_publisher_py` was
+      renamed `//ros2:trajectory_publisher` to match `inference` and
+      `data_subscriber`.
 - [x] Removed the mock actuator path end to end: `MockMotorDriver`,
       `MOTOR_MOCK`/`MOCK_MOTOR`/`MockMotorConfig`, the `MOTOR_MOCK` arm of
       `ValidateMotorChannel`, and `example/mock_py_test.pbtxt`. The mock
       perception types `MOCK_CAMERA`/`MOCK_ENCODER`/`MOCK_LIDAR` went with
-      them. All six proto numbers are `reserved`.
+      them.
 
 **Kept deliberately:**
 - `BoardType::MOCK` (`robot/board/mock/`) is **not** part of the removed
@@ -1753,7 +1758,7 @@ the two capability regressions that follow (mocks and Spike, below).
   scheduled. `pybricksdev` (BLE scan/connect via Bleak, MicroPython program
   upload, line protocol over notify/write) has no C++ equivalent library and
   validating a native port needs a physical hub, so the port was never
-  cheap. Both proto numbers are `reserved`.
+  cheap.
   `python_spike_actuator_example.pbtxt`,
   `python_spike_trajectory_example.pbtxt`, and `docs/pybricks_test.md`
   were deleted rather than left as dead config.
@@ -1761,7 +1766,7 @@ the two capability regressions that follow (mocks and Spike, below).
   `//tools/pybricks:pybricks_ble_smoke` — that tool is the whole remaining
   Spike story, and it is self-contained: `ActuatorType::SPIKE_MOTOR`,
   `SpikeMotorConfig`, and `CommType::BLE` were removed from the robot protos
-  too (all `reserved`), and the tool now configures itself with its own
+  too, and the tool now configures itself with its own
   `SpikeMotorSpec` dataclass rather than a `robot.action.Actuator`. It keeps
   only the generic `ActionPacket` dependency, which is not Spike-specific.
   `BLE` went because the Spike hub was its sole user.

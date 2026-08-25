@@ -16,9 +16,7 @@ enum ActionType {
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
-  AM243_ETHERCAT_ACTUATOR = 4;
-  reserved 2;  // MOCK_MOTOR: mock actuator path removed (RFC §10 Phase 9).
-  reserved 3;  // SPIKE_MOTOR: Spike support removed (RFC §10 Phase 9).
+  AM243_ETHERCAT_ACTUATOR = 2;
 }
 
 // What physically moves, independent of the board that runs its loop and

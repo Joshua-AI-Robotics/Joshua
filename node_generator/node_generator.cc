@@ -23,7 +23,6 @@ namespace {
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
-constexpr auto kPythonExecSuffix = "_py";
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -33,20 +32,6 @@ std::string NodeTypeToString(const ros2::node::NodeType& type) {
   std::transform(
       name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
   return name;
-}
-
-// Every hardware-facing node (actuator, camera/encoder/lidar publishers) is
-// C++: the Python robot layer was removed in docs/BOARD_LAYER_RFC.md §10
-// Phase 9, so there is nothing to select between. The nodes below have no
-// C++ implementation and are not hardware-facing — INFERENCE and
-// DATA_SUBSCRIBER name their Python targets canonically, TRAJECTORY_PUBLISHER
-// carries the "_py" suffix.
-std::string ExecNameForNodeType(const ros2::node::NodeType node_type) {
-  const std::string node_type_str = NodeTypeToString(node_type);
-  if (node_type == ros2::node::TRAJECTORY_PUBLISHER) {
-    return node_type_str + std::string(kPythonExecSuffix);
-  }
-  return node_type_str;
 }
 
 // Resolve current executable absolute path via /proc/self/exe
@@ -396,11 +381,15 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
     return -1;
   }
 
-  const std::string exec_name = ExecNameForNodeType(node_type);
+  // The executable is named for the node type, C++ and Python alike: the
+  // hardware-facing nodes are C++, and INFERENCE, DATA_SUBSCRIBER, and
+  // TRAJECTORY_PUBLISHER are Python with no C++ counterpart to disambiguate
+  // from. Nothing is selected between, so nothing is suffixed.
+  const std::string& exec_name = node_type_str;
 
   if (!IsExecutableAvailable(exec_name)) {
     LOG(ERROR) << "No executable available for node '" << node_name << "' (type '" << node_type_str
-               << "'); expected '" << exec_name << "'.";
+               << "').";
     return -1;
   }
 
