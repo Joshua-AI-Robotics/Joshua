@@ -1,5 +1,6 @@
 bazel-bin
 bazel-Joshua
+bazel-workspace
 bazel-out
 bazel-testlogs
 .venv
@@ -10,3 +11,5 @@ node_modules
 ui/node_modules
 dist
 output
+.cache
+.claude
