@@ -34,6 +34,8 @@
 # same as the `*` default above. The redundancy is deliberate: it makes an
 # unowned top-level directory visible as a missing line, and gives each
 # subsystem a place to hand ownership to someone else later.
+#
+# Enforced per-PR by hooks/codeowners_check.sh.
 # ---------------------------------------------------------------------------
 /.gemini/                  @hsmoon5458
 /.github/                  @hsmoon5458
@@ -42,7 +44,7 @@
 /config/                   @hsmoon5458
 /dockerfiles/              @hsmoon5458
 /docs/                     @hsmoon5458
-/firmware/                 @hsmoon5458
+/firmware/                 @heostar @hsmoon5458
 /hooks/                    @hsmoon5458
 /launcher/                 @hsmoon5458
 /node_generator/           @hsmoon5458
@@ -52,7 +54,7 @@
 /simulation/               @hsmoon5458
 /third_party/              @hsmoon5458
 /tools/                    @hsmoon5458
-/ui/                       @hsmoon5458
+/ui/                       @donegjookim @hsmoon5458
 /utils/                    @hsmoon5458
 
 # ---------------------------------------------------------------------------
@@ -62,8 +64,8 @@
 # ---------------------------------------------------------------------------
 
 # Board layer — board drivers, frames, and the board factory.
-/robot/board/              @heostar @hsmoon5458
-/docs/BOARD_LAYER_RFC.md   @heostar @hsmoon5458
+/robot/board/              @heostar @piscesgh @hsmoon5458
+/docs/BOARD_LAYER_RFC.md   @heostar @piscesgh @hsmoon5458
 
 # Communication layer — serial and EtherCAT transports and the comm factory.
 /robot/comm/               @piscesgh @hsmoon5458

@@ -211,9 +211,11 @@ These areas affect many presets and downstream nodes:
 
   | Area | Paths | Owners |
   | --- | --- | --- |
-  | Board layer | `robot/board/`, `docs/BOARD_LAYER_RFC.md` | [@heostar](https://github.com/heostar), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Board layer | `robot/board/`, `docs/BOARD_LAYER_RFC.md` | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Communication layer | `robot/comm/` | [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
-  | Everything else | top-level directories and root files | [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Firmware | `firmware/` | [@heostar](https://github.com/heostar), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Web UI | `ui/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Everything else | the remaining top-level directories and root files | [@hsmoon5458](https://github.com/hsmoon5458) |
 
   Two owners on a line means **either** may approve — not that both must. And a
   rule on a subdirectory *replaces* its parent's rule rather than adding to it,
