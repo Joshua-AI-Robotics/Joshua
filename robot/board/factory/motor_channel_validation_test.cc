@@ -29,19 +29,6 @@ TEST(ValidateMotorChannelTest, TiDemoJointRequiresPdoJoint) {
             absl::StatusCode::kInvalidArgument);
 }
 
-TEST(ValidateMotorChannelTest, MockMotorAcceptsAnyRealDrive) {
-  EXPECT_TRUE(ValidateMotorChannel(MotorType::MOTOR_MOCK, DriveInterface::STEP_DIR).ok());
-  EXPECT_TRUE(ValidateMotorChannel(MotorType::MOTOR_MOCK, DriveInterface::PWM_DC).ok());
-  EXPECT_TRUE(ValidateMotorChannel(MotorType::MOTOR_MOCK, DriveInterface::PDO_JOINT).ok());
-  EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_MOCK, DriveInterface::DRIVE_INVALID).code(),
-            absl::StatusCode::kInvalidArgument);
-}
-
-TEST(ValidateMotorChannelTest, SpikeIsUnmappedForNow) {
-  EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_SPIKE, DriveInterface::PWM_DC).code(),
-            absl::StatusCode::kUnimplemented);
-}
-
 TEST(ValidateMotorChannelTest, InvalidMotorTypeIsRejected) {
   EXPECT_EQ(ValidateMotorChannel(MotorType::MOTOR_INVALID, DriveInterface::STEP_DIR).code(),
             absl::StatusCode::kInvalidArgument);

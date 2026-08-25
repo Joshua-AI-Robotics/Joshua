@@ -7,9 +7,8 @@ Usage (unified config -- launched from joshua_main or standalone):
     bazel run //simulation:simulation -- \
         --config config/config_preset/so100/sim_mirror.pbtxt --mode interactive
 
-    # Isaac Sim viewer (requires Isaac Lab installed; see simulation/README.md)
-    bazel run //launcher:joshua_main -- \
-        --config config/config_preset/ant/ant_sim_isaac.pbtxt
+    # Isaac Sim viewer needs a preset with sim_backend: SIM_BACKEND_ISAAC_SIM;
+    # none ships with the repo. See simulation/README.md.
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.
 """

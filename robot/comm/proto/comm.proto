@@ -6,9 +6,8 @@ package robot.comm;
 enum CommType {
   COMM_INVALID = 0;
   SERIAL = 1;
-  BLE = 2;
-  ETHERCAT = 3;
-  ETHERNET_UDP = 4;
+  ETHERCAT = 2;
+  ETHERNET_UDP = 3;
 }
 
 message Comm {

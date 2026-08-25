@@ -1,6 +1,4 @@
-load("//:requirements.bzl", "requirement")
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_python//python:defs.bzl", "py_library")
 
 cc_library(
     name = "cv_camera",
@@ -15,15 +13,4 @@ cc_library(
         "@local_deps//:imgcodecs",
         "@local_deps//:videoio",
     ],
-)
-
-py_library(
-    name = "mock_camera_py",
-    srcs = ["mock_camera.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//robot/perception/interfaces:camera_interface_py",
-        "//robot/perception/proto:perception_packet_py_proto",
-        "//robot/perception/proto:perception_py_proto",
-    ] + requirement("glog"),
 )

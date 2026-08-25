@@ -1,8 +1,0 @@
-general {
-  operation_mode: MODE_SIMULATION
-  name: "ant"
-}
-simulation {
-  model_path: "simulation/models/ant/ant.xml"
-  mode: MODE_INTERACTIVE
-}

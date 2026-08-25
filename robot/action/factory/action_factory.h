@@ -116,8 +116,6 @@ class ActionFactory {
         ABSL_RETURN_IF_ERROR(driver->Init());
         return driver;
       }
-      // MOTOR_SPIKE and MOTOR_MOCK stay on the Python driver-direct path
-      // (docs/BOARD_LAYER_RFC.md §10 Phase 9).
       default:
         return absl::Status(absl::StatusCode::kUnimplemented,
                             "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +
