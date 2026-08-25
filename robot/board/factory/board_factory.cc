@@ -7,6 +7,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "robot/board/am243/am243_board.h"
+#include "robot/board/esp32/esp32_board.h"
 #include "robot/board/feetech_bus/feetech_bus_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
@@ -34,6 +35,8 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
       return std::make_shared<FeetechBusBoard>();
     case robot::board::BoardType::TEENSY41:
       return std::make_shared<TeensyBoard>();
+    case robot::board::BoardType::ESP32:
+      return std::make_shared<Esp32Board>();
     case robot::board::BoardType::ARDUINO_UNO:
     case robot::board::BoardType::SPIKE_HUB_BLE:
     case robot::board::BoardType::HOST_GPIO:

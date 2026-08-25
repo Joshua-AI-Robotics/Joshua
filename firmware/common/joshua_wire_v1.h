@@ -89,6 +89,7 @@ typedef enum {
   JW1_BOARD_INVALID = 0,
   JW1_BOARD_TEENSY41 = 2,
   JW1_BOARD_ARDUINO_UNO = 3,
+  JW1_BOARD_ESP32 = 8,
 } jw1_board_id_t;
 
 typedef enum {

@@ -21,6 +21,8 @@ enum BoardType {
   SPIKE_HUB_BLE = 5;  // Pybricks hub; vendor firmware over BLE.
   HOST_GPIO = 6;      // No external controller; host pins drive the motor.
   MOCK = 7;           // Tests; channels are in-memory fakes.
+  ESP32 = 8;          // MCU running Joshua firmware, same joshua_wire_v1
+                      // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
 }
 
 // The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
