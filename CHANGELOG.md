@@ -15,8 +15,9 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - [`.github/CODEOWNERS`](.github/CODEOWNERS) routing pull-request reviews.
   Every top-level directory has an owner, with dedicated owners for the board
   layer (`robot/board/`, `docs/BOARD_LAYER_RFC.md`), the communication layer
-  (`robot/comm/`), firmware (`firmware/`), and the web UI (`ui/`); @hsmoon5458
-  is co-owner of every path.
+  (`robot/comm/`), firmware (`firmware/`), the web UI (`ui/`), and the Docker
+  images (`dockerfiles/`). `docs/` is owned by every collaborator with write
+  access; @hsmoon5458 is co-owner of every path.
   Owners are auto-requested as reviewers, and their approval becomes required
   once the `develop` ruleset is enforced with "Require review from Code Owners"
   ([CONTRIBUTING.md](CONTRIBUTING.md) "Review process")

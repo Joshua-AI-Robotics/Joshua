@@ -215,6 +215,8 @@ These areas affect many presets and downstream nodes:
   | Communication layer | `robot/comm/` | [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Firmware | `firmware/` | [@heostar](https://github.com/heostar), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Web UI | `ui/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Docker images | `dockerfiles/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Docs | `docs/` (except `docs/BOARD_LAYER_RFC.md`, owned by the board layer) | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) — everyone with write access |
   | Everything else | the remaining top-level directories and root files | [@hsmoon5458](https://github.com/hsmoon5458) |
 
   Two owners on a line means **either** may approve — not that both must. And a
