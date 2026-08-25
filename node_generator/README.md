@@ -22,4 +22,4 @@ The Node Generator is executed from the command line, pointing to a specific con
 
 ### Running the Node Generator
 
-Check the [/launcher/joshua_main.cc](/launcher/joshua_main.cc)
+Check the [launcher/joshua_main.cc](../launcher/joshua_main.cc)

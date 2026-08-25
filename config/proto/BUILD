@@ -9,7 +9,6 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         ":ai_proto",
-        ":calibration_proto",
         ":robot_proto",
         "//simulation/proto:simulation_proto",
     ],
@@ -38,15 +37,6 @@ proto_library(
 )
 
 proto_library(
-    name = "calibration_proto",
-    srcs = ["calibration.proto"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//ros2/proto:node_proto",
-    ],
-)
-
-proto_library(
     name = "physical_layout_proto",
     srcs = ["physical_layout.proto"],
     visibility = ["//visibility:public"],
@@ -69,12 +59,6 @@ cc_proto_library(
     name = "ai_cc_proto",
     visibility = ["//visibility:public"],
     deps = [":ai_proto"],
-)
-
-cc_proto_library(
-    name = "calibration_cc_proto",
-    visibility = ["//visibility:public"],
-    deps = [":calibration_proto"],
 )
 
 cc_proto_library(

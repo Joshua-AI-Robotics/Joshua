@@ -23,12 +23,6 @@ namespace {
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
-constexpr auto kPythonExecSuffix = "_py";
-
-enum class BackendPreference {
-  kCpp,
-  kPython,
-};
 
 std::string NodeTypeToString(const ros2::node::NodeType& type) {
   if (type == ros2::node::NODE_INVALID) {
@@ -38,25 +32,6 @@ std::string NodeTypeToString(const ros2::node::NodeType& type) {
   std::transform(
       name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
   return name;
-}
-
-const char* BackendPreferenceToString(BackendPreference backend) {
-  return backend == BackendPreference::kCpp ? "cpp" : "python";
-}
-
-std::string ExecNameForBackend(const ros2::node::NodeType node_type,
-                               const BackendPreference backend) {
-  const std::string node_type_str = NodeTypeToString(node_type);
-  if (backend == BackendPreference::kCpp) {
-    return node_type_str;
-  }
-  switch (node_type) {
-    case ros2::node::INFERENCE:
-    case ros2::node::DATA_SUBSCRIBER:
-      return node_type_str;  // python target already uses canonical name
-    default:
-      return node_type_str + std::string(kPythonExecSuffix);
-  }
 }
 
 // Resolve current executable absolute path via /proc/self/exe
@@ -183,88 +158,6 @@ bool IsExecutableAvailable(const std::string& exec_name) {
   }
 
   return false;
-}
-
-// C++ actuator drivers are selected by motor_type on the board-layer path
-// (docs/BOARD_LAYER_RFC.md §6.5). MOCK_MOTOR and SPIKE_MOTOR use the Python
-// factory (robot/action/factory/action_factory.py).
-bool IsCppDriverAvailableForAction(const robot::action::SingleAction& single_action) {
-  if (single_action.action_type() != robot::action::ActionType::ACTUATOR) {
-    return false;
-  }
-  switch (single_action.actuator().motor_type()) {
-    case robot::action::MotorType::MOTOR_TI_DEMO:
-    case robot::action::MotorType::MOTOR_STS3215:
-    case robot::action::MotorType::MOTOR_STEPPER_NEMA17:
-      return true;
-    default:
-      return false;
-  }
-}
-
-bool IsCppDriverAvailableForPerception(
-    const robot::perception::SinglePerception& single_perception) {
-  switch (single_perception.perception_type()) {
-    case robot::perception::PerceptionType::CAMERA:
-      return single_perception.camera().camera_type() == robot::perception::CameraType::OPENCV;
-    case robot::perception::PerceptionType::ENCODER: {
-      switch (single_perception.encoder().encoder_type()) {
-        case robot::perception::EncoderType::STS3215_ENCODER:
-          return true;
-        default:
-          return false;
-      }
-    }
-    case robot::perception::PerceptionType::LIDAR: {
-      switch (single_perception.lidar().lidar_type()) {
-        case robot::perception::LidarType::LDS01:
-          return true;
-        default:
-          return false;
-      }
-    }
-    default:
-      return false;
-  }
-}
-
-BackendPreference DeterminePreferredBackend(const ros2::node::NodeType node_type,
-                                            const uint32_t node_id,
-                                            const config::Config& config) {
-  switch (node_type) {
-    case ros2::node::ACTUATOR_SUBSCRIBER: {
-      for (const auto& single_action : config.robot().actions().single_actions()) {
-        if (single_action.node().id() == node_id) {
-          return IsCppDriverAvailableForAction(single_action) ? BackendPreference::kCpp
-                                                              : BackendPreference::kPython;
-        }
-      }
-      LOG(WARNING) << "No action config found for node_id " << node_id
-                   << "; defaulting to C++ backend.";
-      return BackendPreference::kCpp;
-    }
-    case ros2::node::ENCODER_PUBLISHER:
-    case ros2::node::CAMERA_PUBLISHER:
-    case ros2::node::LIDAR_PUBLISHER: {
-      for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-        if (single_perception.node().id() == node_id) {
-          return IsCppDriverAvailableForPerception(single_perception) ? BackendPreference::kCpp
-                                                                      : BackendPreference::kPython;
-        }
-      }
-      LOG(WARNING) << "No perception config found for node_id " << node_id
-                   << "; defaulting to C++ backend.";
-      return BackendPreference::kCpp;
-    }
-    case ros2::node::INFERENCE:
-    case ros2::node::DATA_SUBSCRIBER:
-    case ros2::node::TRAJECTORY_PUBLISHER:
-      return BackendPreference::kPython;
-    case ros2::node::OPERATIONAL_LIMIT_CALIBRATION:
-      return BackendPreference::kCpp;
-    default:
-      return BackendPreference::kCpp;
-  }
 }
 
 void ExtractTopicsFromNode(const ros2::node::Node& node,
@@ -405,18 +298,6 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     }
   }
 
-  // Calibration
-  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    const uint32_t node_id = single_calibration.node().id();
-    auto [it, inserted] =
-        identified_nodes_.try_emplace(node_id, single_calibration.node().node_type());
-    if (!inserted && it->second != single_calibration.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
-    }
-  }
-
   return absl::OkStatus();
 }
 
@@ -500,33 +381,19 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
     return -1;
   }
 
-  BackendPreference preferred_backend = DeterminePreferredBackend(node_type, node_id, config_);
-  std::string exec_name = ExecNameForBackend(node_type, preferred_backend);
+  // The executable is named for the node type, C++ and Python alike: the
+  // hardware-facing nodes are C++, and INFERENCE, DATA_SUBSCRIBER, and
+  // TRAJECTORY_PUBLISHER are Python with no C++ counterpart to disambiguate
+  // from. Nothing is selected between, so nothing is suffixed.
+  const std::string& exec_name = node_type_str;
 
   if (!IsExecutableAvailable(exec_name)) {
-    if (preferred_backend == BackendPreference::kCpp) {
-      const std::string fallback_exec = ExecNameForBackend(node_type, BackendPreference::kPython);
-      if (IsExecutableAvailable(fallback_exec)) {
-        LOG(WARNING) << "Preferred backend '" << BackendPreferenceToString(preferred_backend)
-                     << "' not available for node '" << node_name << "'. Falling back to '"
-                     << BackendPreferenceToString(BackendPreference::kPython) << "'.";
-        preferred_backend = BackendPreference::kPython;
-        exec_name = fallback_exec;
-      } else {
-        LOG(ERROR) << "No executable available for node '" << node_name << "' (type '"
-                   << node_type_str << "'). Checked backends: cpp and python.";
-        return -1;
-      }
-    } else {
-      LOG(ERROR) << "Preferred backend 'python' not available for node '" << node_name
-                 << "' (type '" << node_type_str
-                 << "'). C++ driver not available; not falling back.";
-      return -1;
-    }
+    LOG(ERROR) << "No executable available for node '" << node_name << "' (type '" << node_type_str
+               << "').";
+    return -1;
   }
 
-  LOG(INFO) << "Launching node '" << node_name << "' with backend '"
-            << BackendPreferenceToString(preferred_backend) << "' (exec '" << exec_name << "').";
+  LOG(INFO) << "Launching node '" << node_name << "' (exec '" << exec_name << "').";
 
   std::string exec_path;
   std::vector<std::string> argv_strings;
@@ -845,10 +712,6 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_trajectory : config_.robot().trajectories().single_trajectories()) {
     ExtractTopicsFromNode(single_trajectory.node(), node_id, publish_topics, subscribe_topics);
-  }
-
-  for (const auto& single_calibration : config_.calibration().single_calibrations()) {
-    ExtractTopicsFromNode(single_calibration.node(), node_id, publish_topics, subscribe_topics);
   }
 
   return absl::OkStatus();

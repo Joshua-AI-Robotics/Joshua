@@ -1,8 +1,7 @@
 import unittest
 
-from robot.action.motors.drivers.pybricks_driver import PybricksMotorDriver
-from robot.action.proto import action_packet_pb2, action_pb2
-from robot.comm.proto import comm_pb2
+from robot.action.proto import action_packet_pb2
+from tools.pybricks.pybricks_driver import PybricksMotorDriver, SpikeMotorSpec
 
 
 class FakeTransport:
@@ -26,22 +25,16 @@ class FakeTransport:
 
 class PybricksMotorDriverTest(unittest.TestCase):
     """Unit tests for PybricksMotorDriver using a fake transport (no hardware)."""
-    def _make_actuator(self, hub_id: str = "", port: str = "A"):
-        actuator = action_pb2.Actuator()
-        actuator.actuator_name = "spike_motor_A"
-        actuator.id = 1
-        actuator.actuator_type = action_pb2.ActuatorType.SPIKE_MOTOR
-        actuator.comm.comm_type = comm_pb2.BLE
-        actuator.spike_motor_config.hub_id = hub_id
-        actuator.spike_motor_config.port = port
-        return actuator
 
     def test_init_set_action_teardown(self):
         transport = FakeTransport()
-        actuator = self._make_actuator(hub_id="hub-1", port="A")
-        actuator.operational_lower_limit = 0.0
-        actuator.operational_upper_limit = 180.0
-        driver = PybricksMotorDriver(actuator, transport=transport)
+        spec = SpikeMotorSpec(
+            port="A",
+            hub_id="hub-1",
+            operational_lower_limit=0.0,
+            operational_upper_limit=180.0,
+        )
+        driver = PybricksMotorDriver(spec, transport=transport)
 
         driver.init()
         self.assertEqual(transport.connected, ["hub-1"])
@@ -54,18 +47,15 @@ class PybricksMotorDriverTest(unittest.TestCase):
         driver.teardown()
         self.assertEqual(transport.disconnected, ["hub-1"])
 
-    def test_requires_ble_comm(self):
+    def test_hub_id_defaults_to_none(self):
         transport = FakeTransport()
-        actuator = self._make_actuator()
-        actuator.comm.comm_type = comm_pb2.SERIAL
-        with self.assertRaises(ValueError):
-            PybricksMotorDriver(actuator, transport=transport)
+        driver = PybricksMotorDriver(SpikeMotorSpec(port="A"), transport=transport)
+        driver.init()
+        self.assertEqual(transport.connected, [None])
 
     def test_requires_port(self):
-        transport = FakeTransport()
-        actuator = self._make_actuator(port="")
         with self.assertRaises(ValueError):
-            PybricksMotorDriver(actuator, transport=transport)
+            SpikeMotorSpec(port="")
 
 
 if __name__ == "__main__":

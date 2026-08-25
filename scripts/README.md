@@ -83,7 +83,10 @@ Creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and 
 ```
 
 ### `pybricks_spike_bridge.py`
-A Pybricks (MicroPython) program that runs **on a LEGO SPIKE Prime hub** and bridges line-based `SET`/`GET` motor commands over stdin/stdout. Deploy it via the Pybricks app or `pybricksdev`. See [docs/pybricks_test.md](../docs/pybricks_test.md).
+A Pybricks (MicroPython) program that runs **on a LEGO SPIKE Prime hub** and bridges line-based `SET`/`GET` motor commands over stdin/stdout. Deploy it via the Pybricks app or `pybricksdev`. The host-side driver that drove it now
+lives in [tools/pybricks/](../tools/README.md); Joshua has no board type for a
+SPIKE hub, so the launcher cannot reach one. This script is kept for manual
+hub-side testing.
 
 ### `spike_wave_publisher.py`
 A small ROS 2 node that publishes a sine wave (`std_msgs/Float32`) to a motor command topic (default `spike/motor_A/command`) for testing the SPIKE motor pipeline end to end.

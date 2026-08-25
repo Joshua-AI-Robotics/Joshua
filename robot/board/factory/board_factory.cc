@@ -38,7 +38,6 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::ESP32:
       return std::make_shared<Esp32Board>();
     case robot::board::BoardType::ARDUINO_UNO:
-    case robot::board::BoardType::SPIKE_HUB_BLE:
     case robot::board::BoardType::HOST_GPIO:
       return absl::UnimplementedError(
           absl::StrCat("Board '",

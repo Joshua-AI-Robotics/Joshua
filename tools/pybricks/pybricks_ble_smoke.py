@@ -1,9 +1,8 @@
 import sys
 import time
 
-from robot.action.motors.drivers.pybricks_driver import PybricksMotorDriver
-from robot.action.proto import action_packet_pb2, action_pb2
-from robot.comm.proto import comm_pb2
+from robot.action.proto import action_packet_pb2
+from tools.pybricks.pybricks_driver import PybricksMotorDriver, SpikeMotorSpec
 
 
 def _usage() -> None:
@@ -24,15 +23,12 @@ def main(argv: list[str]) -> int:
         _usage()
         return 2
 
-    actuator = action_pb2.Actuator()
-    actuator.actuator_name = "spike_motor"
-    actuator.id = 1
-    actuator.actuator_type = action_pb2.ActuatorType.SPIKE_MOTOR
-    actuator.comm.comm_type = comm_pb2.BLE
-    actuator.spike_motor_config.hub_id = hub_id if hub_id != "''" else ""
-    actuator.spike_motor_config.port = port
+    spec = SpikeMotorSpec(
+        port=port,
+        hub_id=(hub_id if hub_id and hub_id != "''" else None),
+    )
 
-    driver = PybricksMotorDriver(actuator)
+    driver = PybricksMotorDriver(spec)
     driver.init()
 
     packet = action_packet_pb2.ActionPacket()

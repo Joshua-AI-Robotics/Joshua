@@ -95,11 +95,13 @@ was not.
 **Why it is not keyed to filenames.** An earlier draft treated any preset
 without `sim` in its name as dangerous. The launcher branches on
 `general.operation_mode`, not the name, and the categories cross:
-`so100/sim_mirror.pbtxt` is `MODE_SIMULATION` yet opens `/dev/ttyACM1`, while
-`example/mock_py_test.pbtxt` is `MODE_INFERENCE` yet drives only `MOCK_*`
-components. The heuristic was therefore wrong in the *unsafe* direction — it
-labelled a real-serial-device preset as the safe default. Agents are told to
-read the preset instead.
+`so100/sim_mirror.pbtxt` is `MODE_SIMULATION` yet opens `/dev/ttyACM1`, and
+`example/am243_ethercat_demo.pbtxt` names no `/dev` path yet drives a real
+EtherCAT bus over the `ethercat0` NIC. The heuristic was therefore wrong in the
+*unsafe* direction — it labelled a real-device preset as the safe default.
+Agents are told to read the preset instead. Removing the mock drivers
+([BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) §10 Phase 9) sharpened this: no preset
+is hardware-free at the device level any more.
 
 **Why attribution is two bullets, not a section.** Process rules that hooks and
 CI do not enforce are frequently ignored, and every line costs context on every

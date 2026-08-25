@@ -43,10 +43,6 @@ selected via `simulation.mode` in the preset:
 # SO-ARM100 interactive viewer
 bazel run //launcher:joshua_main -- \
     --config config/config_preset/so100/sim_interactive.pbtxt
-
-# Ant interactive viewer
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_interactive.pbtxt
 ```
 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
@@ -96,18 +92,13 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python   # optional, overrides isaacl
 
 ### Running
 
+**No Isaac Sim preset ships with the repo.** The ant/trileg/bileg Isaac presets
+were removed; the backend and its `IsaacSimConfig` are still supported, so write
+a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and a `usd_filename` pointing
+at a model under [models/](models/), then:
+
 ```bash
-# Ant
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_isaac.pbtxt
-
-# Trileg (3-legged LEGO walker)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
-
-# Bileg (2-legged LEGO walker)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/bileg/bileg_sim_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config <your-preset>.pbtxt
 ```
 
 Close the viewer window (or Ctrl+C) to exit.
