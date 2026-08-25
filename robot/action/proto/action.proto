@@ -16,9 +16,7 @@ enum ActionType {
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
-  MOCK_MOTOR = 2;
-  SPIKE_MOTOR = 3;
-  AM243_ETHERCAT_ACTUATOR = 4;
+  AM243_ETHERCAT_ACTUATOR = 2;
 }
 
 // What physically moves, independent of the board that runs its loop and
@@ -29,15 +27,13 @@ enum MotorType {
   MOTOR_INVALID = 0;
   MOTOR_STS3215 = 1;
   MOTOR_STEPPER_NEMA17 = 2;
-  MOTOR_SPIKE = 3;
-  MOTOR_MOCK = 4;
   // Placeholder motor for the AM243 TI demo firmware: nothing physical
   // moves, the host just ships a seed into the demo's PDO slot (PDO_JOINT).
   // Deliberately narrow — do not bind real joints to it.
   // TODO: When AM243_PDO_MAPPING_ACTUATOR_V1 lands, add real motor values
   // (or a firmware-owned-joint value with proper unit config) and retire
   // this one.
-  MOTOR_TI_DEMO = 5;
+  MOTOR_TI_DEMO = 3;
 }
 
 message Actuator {
@@ -54,13 +50,11 @@ message Actuator {
   float operational_upper_limit = 8;
   MotorType motor_type = 9;
   string board_name = 10;  // References a config.Robot.boards entry by name.
-  uint32 channel = 15;     // Channel index on that board.
+  uint32 channel = 11;     // Channel index on that board.
   oneof action_config {
-    Sts3215Config sts3215_config = 11;
-    MockMotorConfig mock_motor_config = 12;
-    SpikeMotorConfig spike_motor_config = 13;
-    Am243EthercatConfig am243_ethercat_config = 14;
-    StepperConfig stepper_config = 16;
+    Sts3215Config sts3215_config = 12;
+    Am243EthercatConfig am243_ethercat_config = 13;
+    StepperConfig stepper_config = 14;
     // Add other motor type here.
   }
 }
@@ -79,16 +73,6 @@ message Sts3215Config {
   uint64 servo_id = 1;
   uint32 move_speed = 3;
   float idle_position = 4;
-}
-
-message MockMotorConfig {
-  uint64 motor_id = 1;
-}
-
-message SpikeMotorConfig {
-  string hub_id = 1;
-  string port = 2;
-  float idle_position = 3;
 }
 
 enum Am243PdoMapping {

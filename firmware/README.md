@@ -29,9 +29,9 @@ so explicitly with `TODO` placeholders rather than staying silent.
 | --- | --- | --- |
 | AM243 (LP-AM243, TI EtherCAT demo) | Hello World + EtherCAT slave demo built, flashed, verified on real hardware. Vendor firmware — metadata only, stays as-is. | [`am243/ti_ethercat_simple_demo_v1/README.md`](am243/ti_ethercat_simple_demo_v1/README.md) |
 | AM243 (LP-AM243, EtherCAT + `joshua_wire_v1`) | Built, flashed, and verified over both transports. Serial is a motion-safe software channel with no GPIO output. | [`am243/joshua_dual_transport_v1/README.md`](am243/joshua_dual_transport_v1/README.md) |
-| Teensy 4.1 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, verified end to end on real hardware (IDENTIFY handshake + a real motion command produced real STEP pulses). Physical motor rotation not yet observed (no TB6600 wired for that pass). | [`teensy/41/README.md`](teensy/41/README.md) |
+| Teensy 4.1 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, verified end to end on real hardware, including physical motor rotation through the real production path. | [`teensy/41/README.md`](teensy/41/README.md) |
 | Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
-| ESP32 | Not started, not even scoped — candidate third matrix member, likely a transport (Wi-Fi/UDP) proof rather than a new drive backend. | [`esp32/README.md`](esp32/README.md) |
+| ESP32 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, and protocol-verified on real hardware (IDENTIFY/ENABLE/SET_TARGET all confirmed) — joins the same joshua_wire_v1 family as Teensy. Physical motor rotation not yet observed on this board. | [`esp32/README.md`](esp32/README.md) |
 
 - `common/joshua_wire_v1.{h,c}`: the shared frame codec between Joshua host
   boards and Joshua-authored MCU firmware (docs/BOARD_LAYER_RFC.md §7.2/§7.3).
@@ -51,7 +51,7 @@ firmware/
   am243/        # TI demo metadata plus Joshua's dual-transport source overlay
   teensy/41/    # Joshua-owned firmware for the Teensy 4.1
   arduino/      # not started — placeholder README only
-  esp32/        # not started — placeholder README only
+  esp32/        # Joshua-owned firmware for ESP32, flashed & protocol-verified
 ```
 
 Firmware variants should be explicit build artifacts. A board may support more

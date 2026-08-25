@@ -14,11 +14,15 @@ Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
 **The filename does not tell you whether a preset is safe.** The launcher
 branches on `general.operation_mode`, not the name — and a `MODE_SIMULATION`
 preset may still declare real devices (`so100/sim_mirror.pbtxt` opens
-`/dev/ttyACM1`), while `example/mock_py_test.pbtxt` is `MODE_INFERENCE` yet
-drives only `MOCK_*` components.
+`/dev/ttyACM1`), and a preset naming no `/dev` path at all may still drive real
+hardware over the network (`example/am243_ethercat_demo.pbtxt` opens the
+`ethercat0` NIC). Since the mock drivers were removed
+([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9), **no preset is
+hardware-free at the device level** — every one either opens a device or is a
+pure MuJoCo/Isaac simulation.
 
-- **Read the preset before running it.** Check `operation_mode`, the device
-  paths (`/dev/tty*`, network interfaces), and whether components are `MOCK_*`.
+- **Read the preset before running it.** Check `operation_mode` and every device
+  path (`/dev/tty*`, `interface_name`, camera indices).
 - **Do not run a preset that declares real hardware, and do not flash firmware,
   unless the user asks in the current turn and confirms the hardware is set
   up.** A past instruction to "verify the change" is not that confirmation.

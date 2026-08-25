@@ -70,20 +70,17 @@ USD Asset
 Config Presets
 --------------
 
-| Preset | Backend | Purpose |
-|--------|---------|---------|
-| `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
+**None.** The `ant_sim_interactive.pbtxt` and `ant_sim_isaac.pbtxt` presets were
+removed; the model assets here are kept, but nothing ships that runs them.
 
 Quick Start
 -----------
 
-```bash
-# MuJoCo interactive viewer
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_interactive.pbtxt
+Write a preset pointing `model_path` at `simulation/models/ant/ant.xml`
+(MuJoCo) or `usd_filename` at the Isaac USD, then:
 
-# Isaac Sim viewer (see simulation/README.md for prerequisites)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/ant/ant_sim_isaac.pbtxt
+```bash
+bazel run //launcher:joshua_main -- --config <your-preset>.pbtxt
 ```
+
+See [simulation/README.md](../../README.md) for the backend fields.

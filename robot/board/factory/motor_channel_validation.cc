@@ -32,17 +32,6 @@ absl::Status ValidateMotorChannel(robot::action::MotorType motor_type,
       return RequireDrive(motor_type, drive, robot::board::DriveInterface::STEP_DIR);
     case robot::action::MotorType::MOTOR_TI_DEMO:
       return RequireDrive(motor_type, drive, robot::board::DriveInterface::PDO_JOINT);
-    case robot::action::MotorType::MOTOR_MOCK:
-      // Mock motors accept any real drive; only DRIVE_INVALID is rejected.
-      if (drive == robot::board::DriveInterface::DRIVE_INVALID) {
-        return absl::InvalidArgumentError("Mock motor is bound to a channel with DRIVE_INVALID.");
-      }
-      return absl::OkStatus();
-    case robot::action::MotorType::MOTOR_SPIKE:
-      // Spike motors stay on the Python driver-direct path until the
-      // SPIKE_HUB_BLE board lands (docs/BOARD_LAYER_RFC.md §12.3).
-      return absl::UnimplementedError(
-          "MOTOR_SPIKE has no board channel mapping yet; use the Python Pybricks path.");
     case robot::action::MotorType::MOTOR_INVALID:
     default:
       return absl::InvalidArgumentError("Actuator has an invalid motor_type.");

@@ -68,18 +68,20 @@ USD Asset
 Config Presets
 --------------
 
-| Preset | Backend | Purpose |
-|--------|---------|---------|
-| `trileg_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
+**None.** The `trileg_sim_isaac.pbtxt` preset was removed; the model assets here
+are kept, but nothing ships that runs them.
 
 Quick Start
 -----------
 
+Write a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and `usd_filename`
+pointing at `simulation/models/trileg/trileg_isaac.usda`, then:
+
 ```bash
-# Isaac Sim viewer (see simulation/README.md for prerequisites)
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/trileg/trileg_sim_isaac.pbtxt
+bazel run //launcher:joshua_main -- --config <your-preset>.pbtxt
 ```
+
+See [simulation/README.md](../../README.md) for the backend fields.
 
 Physics Tuning
 --------------

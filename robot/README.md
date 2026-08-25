@@ -19,21 +19,23 @@ perception/   what senses     cameras, encoders, lidar
 ```
 
 `board/` is **mid-migration — read this before touching the actuator path.**
-The intended end state is that each layer talks to the one below through an
-interface, never a concrete type: a motor driver holds a `BoardChannel`, not a
-`Serial`, so a motor, a controller board, and a transport can be chosen
-independently in config rather than in code.
+Each layer talks to the one below through an interface, never a concrete type:
+a motor driver holds a `BoardChannel`, not a `Serial`, so a motor, a controller
+board, and a transport can be chosen independently in config rather than in
+code.
 
-That is not yet true. What has landed is the `board/` skeleton —
-`BoardChannel`, `BoardInterface`, the factory with its instance cache and
-motor/channel validation, and a mock. Its only consumers today are its own
-tests. The live actuator path still predates it: `Sts3215Driver` takes a
-`Serial`, `Am243EthercatDriver` takes an `EthercatTransport`, and
-`ActionFactory` builds those transports through `CommFactory` directly.
+The actuator path is there: every `MotorType` `ActionFactory` supports resolves
+`board_name` → `BoardFactory` → `OpenChannel` → driver. Perception has not
+migrated — it is still driver-direct (Phase 6). Check
+[docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10 for which phase has
+landed before assuming either way.
 
-So when you read a motor driver, expect the old wiring. When you write one,
-check [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10 for which phase
-has landed.
+**There is no Python in this directory, and none should be added.** The Python
+robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
+Phase 9, and the Pybricks bench driver moved to
+[tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
+Hardware-facing ROS 2 nodes are C++ only, and `node_generator` no longer
+selects between backends.
 
 ## Responsibilities
 
@@ -41,7 +43,8 @@ has landed.
   `factory/`, which resolves a config actuator to a driver.
 - `board/` — `interfaces/` (`BoardChannel`, `BoardInterface`), `factory/` with
   its per-board instance cache and motor/channel compatibility validation,
-  `proto/`, and `mock/` for tests. Not yet on the runtime path (see above).
+  `proto/`, and `mock/`. `mock/` is C++ test infrastructure: it lets the
+  factory and board tests exercise real drivers with no hardware attached.
 - `comm/` — `serial/` and `ethercat/` transports plus `factory/`. Transports
   move bytes and know nothing about motors.
 - `perception/` — camera, encoder, and lidar drivers behind
