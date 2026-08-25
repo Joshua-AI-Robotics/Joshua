@@ -155,7 +155,7 @@ To test the serial Joshua board path, after confirming compatible firmware,
 the serial device, pins, and motor wiring, run:
 
 ```bash
-docker compose exec joshua-u24 bazel run //robot/board/am243:am243_driver_smoke -- /dev/ttyACM0
+docker compose exec joshua-u24 bazel run //robot/comm/serial:am243_demo_smoke -- /dev/ttyACM0 10 0 250
 ```
 
 This brings up `Am243Board` through the shared serial frame transport, verifies

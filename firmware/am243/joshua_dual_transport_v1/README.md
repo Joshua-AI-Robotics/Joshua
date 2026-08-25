@@ -9,9 +9,9 @@ SDK; it does not modify or vendor the SDK.
 
 - [x] Source overlay and isolated build flow defined
 - [x] Image built successfully
-- [ ] Flashed to LP-AM243
-- [ ] Serial IDENTIFY/CONFIGURE/ENABLE/SET_TARGET/GET_FEEDBACK verified
-- [ ] EtherCAT reaches OPERATIONAL with the serial task active
+- [x] Flashed to LP-AM243
+- [x] Serial IDENTIFY/CONFIGURE/ENABLE/SET_TARGET/GET_FEEDBACK verified
+- [x] EtherCAT reaches OPERATIONAL with the serial task active
 - [ ] Physical motor output implemented
 
 This first milestone is deliberately motion-safe. Serial channel 0 reports
@@ -57,7 +57,20 @@ After an intentional flash, first run the serial protocol smoke without motor
 movement:
 
 ```bash
-bazel run //robot/board/am243:am243_driver_smoke -- /dev/ttyACM0
+bazel run //robot/comm/serial:am243_demo_smoke -- /dev/ttyACM0 10 0 250
+```
+
+Example output from the LP-AM243 dual-transport image:
+
+```text
+serial port=/dev/ttyACM0 baud=115200 protocol=joshua_wire_v1/1
+board id=1 firmware="am243-dual-v1" channels=1
+channel 0 drive=STEP_DIR
+configure channel=0 step=2 dir=3 enable=4: OK
+enable channel=0: OK
+cycle=0 target=500.0 position=500.0 velocity=0.0 faults=0x0000 roundtrip_us=5418
+cycle=1 target=-500.0 position=-500.0 velocity=0.0 faults=0x0000 roundtrip_us=5960
+disable channel=0: OK
 ```
 
 Then separately verify EtherCAT with the retained low-level smoke:

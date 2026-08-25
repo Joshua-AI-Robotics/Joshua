@@ -28,7 +28,7 @@ so explicitly with `TODO` placeholders rather than staying silent.
 | Board | Status | README |
 | --- | --- | --- |
 | AM243 (LP-AM243, TI EtherCAT demo) | Hello World + EtherCAT slave demo built, flashed, verified on real hardware. Vendor firmware — metadata only, stays as-is. | [`am243/ti_ethercat_simple_demo_v1/README.md`](am243/ti_ethercat_simple_demo_v1/README.md) |
-| AM243 (LP-AM243, EtherCAT + `joshua_wire_v1`) | Dual-transport image builds successfully; not flashed. Serial is a motion-safe software channel with no GPIO output. | [`am243/joshua_dual_transport_v1/README.md`](am243/joshua_dual_transport_v1/README.md) |
+| AM243 (LP-AM243, EtherCAT + `joshua_wire_v1`) | Built, flashed, and verified over both transports. Serial is a motion-safe software channel with no GPIO output. | [`am243/joshua_dual_transport_v1/README.md`](am243/joshua_dual_transport_v1/README.md) |
 | Teensy 4.1 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, verified end to end on real hardware (IDENTIFY handshake + a real motion command produced real STEP pulses). Physical motor rotation not yet observed (no TB6600 wired for that pass). | [`teensy/41/README.md`](teensy/41/README.md) |
 | Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
 | ESP32 | Not started, not even scoped — candidate third matrix member, likely a transport (Wi-Fi/UDP) proof rather than a new drive backend. | [`esp32/README.md`](esp32/README.md) |
