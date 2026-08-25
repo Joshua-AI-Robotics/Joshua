@@ -56,6 +56,9 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Removed
 
+- The `sample-check` pre-commit hook, a placeholder that printed
+  "Sample check passed." and exited 0 on every push. `hooks/lint_check.sh` is
+  now the only pre-push hook
 - **All Python from the robot layer** (BOARD_LAYER_RFC.md §10 Phase 9):
   `action_factory.py`, `perception_factory.py`, `comm_factory.py`, the action
   and perception interface base classes, `serial.py`, and every mock driver.

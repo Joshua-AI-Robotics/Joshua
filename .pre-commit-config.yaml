@@ -7,13 +7,3 @@ repos:
         language: system
         stages: [pre-push]
         pass_filenames: false
-
-  # Custom hooks (run after linting)
-  - repo: local
-    hooks:
-      - id: sample-check
-        name: Sample Check
-        entry: hooks/sample_check.py
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
