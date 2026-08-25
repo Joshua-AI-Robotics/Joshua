@@ -88,20 +88,17 @@ Known setup bumps from bring-up:
 
 ## Runtime Direction
 
-Joshua should use EtherCAT PDOs as the runtime actuator path. UART or serial
-links may remain useful for flashing, board management, logs, and debug, but
-they should not become the runtime actuator transport for AM243-backed motors.
+`Am243Board` supports both explicit variants. `comm_type: ETHERCAT` retains the
+TI demo PDO/SOEM path, while `comm_type: SERIAL` uses the same
+`joshua_wire_v1` frame transport as Teensy and other Joshua-firmware boards.
 
 For the current AM243 firmware/demo, the Linux/SOEM master must force split
 LRD/LWR process data cycles. Do not retry LRW unless the board firmware or
 EEPROM/ESI configuration changes.
 
-Joshua enforces this in `Am243Board::Init`: LRW process-data mode is rejected
-before the SOEM bring-up starts.
-
 Generic EtherCAT working-count validation lives in
 `robot/comm/ethercat/ethercat_status.*`; AM243 runs should expect WKC `3` with
-the current split LRD/LWR demo path.
+the current split LRD/LWR low-level demo path.
 
 ## Repository Boundaries
 
@@ -110,35 +107,25 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
 - Generic EtherCAT transport belongs in `robot/comm/ethercat/`. The SOEM
   master is cached per interface name by `robot/comm/factory/comm_factory.*`
   — one master per NIC, shared by every board on that interface.
-- The AM243 board controller belongs in `robot/board/am243/am243_board.*`.
-  Its `Init` owns the full SOEM lifecycle (`ConfigureSlaves` -> `StartCyclic`
-  -> verify OPERATIONAL), enforces split LRD/LWR, resolves the slave's PDO
-  region, and hands out `BoardChannel`s; every exchange is working-count
-  checked.
+- `robot/board/am243/am243_board.*` selects the implementation from
+  `comm_type`: serial delegates to the shared `JoshuaWireBoard`; EtherCAT owns
+  the SOEM lifecycle, PDO region, and working-count checks.
 - The AM243 PDO byte layout belongs in `robot/board/am243/am243_pdo_codec.*`.
-- Motor semantics belong in `robot/action/motors/drivers/ti_demo_driver.*`
-  (`MOTOR_TI_DEMO`): limits, idle position, and the joint->native
-  conversion, over `BoardChannel` with no comm or board headers.
+- Stepper motor semantics belong in
+  `robot/action/motors/drivers/stepper_driver.*`, over `BoardChannel` with no
+  comm or board headers.
 - Board-management tooling, including UART flashing and debug helpers, should
   stay outside the runtime actuator path.
-- AM243 boards use `comm_type: ETHERCAT` with
-  `ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR` while running the current TI demo
-  firmware, and must set `pdo_mapping: AM243_PDO_MAPPING_TI_DEMO`. This keeps
-  the validated TI demo byte-walk separate from any future actuator firmware
-  PDO contract.
+- Config-driven AM243 boards use `comm_type: SERIAL` and require firmware that
+  answers `joshua_wire_v1` IDENTIFY with `JW1_BOARD_AM243`. The vendor TI demo
+  instead uses `comm_type: ETHERCAT` and the TI demo PDO mapping.
 
-An example config lives at
-`config/config_preset/example/am243_ethercat_demo.pbtxt`: a `boards{}` entry
-declares the AM243 slave and its `PDO_JOINT` channel, and the actuator binds
-via `motor_type: MOTOR_TI_DEMO` + `board_name` + `channel`.
+Both examples are retained:
 
-> **TODO(hmoon):** This preset uses the **new** board-layer shape, not the
-> deprecated `actuator_type: AM243_ETHERCAT_ACTUATOR` path (blocked in
-> `ActionFactory`). `actuator_type` is left unset (`ACTUATOR_INVALID`); routing
-> is by `motor_type: MOTOR_TI_DEMO` → `TiDemoDriver` over `Am243Board`. The
-> temporary `am243_ethercat_config { idle_position }` block is a Phase-4 bridge
-> until idle position moves to a motor-level config. See
-> `docs/BOARD_LAYER_RFC.md` §10 for the full migration timeline.
+- `config/config_preset/example/am243_serial_demo.pbtxt` declares a serial
+  `STEP_DIR` channel with `MOTOR_STEPPER_NEMA17`.
+- `config/config_preset/example/am243_ethercat_demo.pbtxt` declares the TI demo
+  `PDO_JOINT` channel with `MOTOR_TI_DEMO`.
 
 The backend pins upstream SOEM v2.0.0 in Bazel and builds a SOEM-backed
 transport. `Init()` opens the SOEM master socket in split LRD/LWR mode,
@@ -161,31 +148,36 @@ the AM243 demo seed in output byte 0 with output bytes 1-7 held at zero, and
 prints the working count plus input byte 0. With the current TI demo firmware,
 expect WKC `3` and input byte 0 to follow the output seed one cycle behind.
 
-To test the Joshua board + driver path, run:
+The low-level tool validates the raw EtherCAT transport and PDO codec. The
+config-driven smoke below exercises the same firmware through `Am243Board`.
+
+To test the serial Joshua board path, after confirming compatible firmware,
+the serial device, pins, and motor wiring, run:
 
 ```bash
-docker compose exec joshua-u24 bazel run //robot/board/am243:am243_driver_smoke -- <ethercat_interface> 80 5000 1
+docker compose exec joshua-u24 bazel run //robot/board/am243:am243_driver_smoke -- /dev/ttyACM0
 ```
 
-This brings up `Am243Board` (which owns the SOEM lifecycle), opens its
-`PDO_JOINT` channel, and drives it with `TiDemoDriver` `ActionPacket` position
-commands. With the current TI demo firmware, input byte 0 should trail the
-generated command seed by one cycle.
+This brings up `Am243Board` through the shared serial frame transport, verifies
+the AM243 identity, configures channel 0, and sends alternating native step
+targets.
 
 To test the full config-driven path — the same resolution the
 actuator_subscriber node runs — use:
 
 ```bash
-docker compose exec joshua-u24 bazel run //robot/board/am243:am243_config_smoke -- config/config_preset/example/am243_ethercat_demo.pbtxt <ethercat_interface> 80 5000 1
+docker compose exec joshua-u24 bazel run //robot/board/am243:am243_config_smoke -- config/config_preset/example/am243_serial_demo.pbtxt /dev/ttyACM0 5
 ```
 
-This loads `config/config_preset/example/am243_ethercat_demo.pbtxt`, applies
-the optional interface and slave-index overrides, resolves the actuator
-through `ActionFactory -> BoardFactory -> Am243Board`, and then sends the same
-Joshua `ActionPacket` position commands.
+This loads the serial preset, applies the optional port override, resolves the
+stepper through `ActionFactory -> BoardFactory -> Am243Board`, and sends Joshua
+`ActionPacket` position commands.
 
-For example, if the EtherCAT NIC is `enp5s0`, use `enp5s0` in place of
-`<ethercat_interface>`.
+Use the EtherCAT preset with the same binary to test that variant:
+
+```bash
+docker compose exec joshua-u24 bazel run //robot/board/am243:am243_config_smoke -- config/config_preset/example/am243_ethercat_demo.pbtxt enp5s0 5
+```
 
 ## Current PDO Codec Scope
 
@@ -199,8 +191,5 @@ TI simple-demo walk:
   represent Joshua actuator fields.
 - Input byte 0 echoes that seed one cycle later.
 
-This is captured as a demo codec and is available only when
-`pdo_mapping: AM243_PDO_MAPPING_TI_DEMO` is selected. Position, speed, and torque
-are mapped to a demo seed for smoke testing; this is not the final actuator
-command map. Add a new `Am243PdoMapping` value when AM243 firmware defines a real
-actuator PDO layout.
+This codec is used by the EtherCAT smoke and EtherCAT `Am243Board` variant. It
+is not part of the serial variant.
