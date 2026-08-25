@@ -17,19 +17,16 @@ enum PerceptionType {
 enum CameraType {
   CAMERA_INVLAID = 0;
   OPENCV = 1;
-  reserved 2;  // MOCK_CAMERA: mock perception drivers removed (RFC §10 Phase 9).
 }
 
 enum EncoderType {
   ENCODER_INVLAID = 0;
   STS3215_ENCODER = 1;
-  reserved 2;  // MOCK_ENCODER: mock perception drivers removed (RFC §10 Phase 9).
 }
 
 enum LidarType {
   LIDAR_INVLAID = 0;
   LDS01 = 1;
-  reserved 2;  // MOCK_LIDAR: mock perception drivers removed (RFC §10 Phase 9).
 }
 
 enum RadarType { RADAR_INVLAID = 0; }

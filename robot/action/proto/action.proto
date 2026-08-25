@@ -35,9 +35,7 @@ enum MotorType {
   // TODO: When AM243_PDO_MAPPING_ACTUATOR_V1 lands, add real motor values
   // (or a firmware-owned-joint value with proper unit config) and retire
   // this one.
-  MOTOR_TI_DEMO = 5;
-  reserved 3;  // MOTOR_SPIKE: Spike support removed (RFC §10 Phase 9).
-  reserved 4;  // MOTOR_MOCK: mock actuator path removed (RFC §10 Phase 9).
+  MOTOR_TI_DEMO = 3;
 }
 
 message Actuator {
@@ -54,13 +52,11 @@ message Actuator {
   float operational_upper_limit = 8;
   MotorType motor_type = 9;
   string board_name = 10;  // References a config.Robot.boards entry by name.
-  uint32 channel = 15;     // Channel index on that board.
-  reserved 12;             // mock_motor_config: removed (RFC §10 Phase 9).
-  reserved 13;             // spike_motor_config: removed (RFC §10 Phase 9).
+  uint32 channel = 11;     // Channel index on that board.
   oneof action_config {
-    Sts3215Config sts3215_config = 11;
-    Am243EthercatConfig am243_ethercat_config = 14;
-    StepperConfig stepper_config = 16;
+    Sts3215Config sts3215_config = 12;
+    Am243EthercatConfig am243_ethercat_config = 13;
+    StepperConfig stepper_config = 14;
     // Add other motor type here.
   }
 }

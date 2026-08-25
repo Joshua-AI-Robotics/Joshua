@@ -18,10 +18,8 @@ enum BoardType {
   ARDUINO_UNO = 3;
   FEETECH_BUS = 4;  // STS/SCS smart-servo register bus; the "board" is the
                     // servo's own MCU.
-  HOST_GPIO = 6;    // No external controller; host pins drive the motor.
-  MOCK = 7;         // Tests; channels are in-memory fakes.
-  reserved 5;       // SPIKE_HUB_BLE: Pybricks board removed; the host-side
-                    // driver lives in tools/pybricks as bench tooling.
+  HOST_GPIO = 5;    // No external controller; host pins drive the motor.
+  MOCK = 6;         // Tests; channels are in-memory fakes.
 }
 
 // The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).

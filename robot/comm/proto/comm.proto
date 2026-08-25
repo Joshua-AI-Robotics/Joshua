@@ -6,10 +6,8 @@ package robot.comm;
 enum CommType {
   COMM_INVALID = 0;
   SERIAL = 1;
-  ETHERCAT = 3;
-  ETHERNET_UDP = 4;
-  reserved 2;  // BLE: only ever used by the Spike hub, removed with it
-               // (docs/BOARD_LAYER_RFC.md §10 Phase 9).
+  ETHERCAT = 2;
+  ETHERNET_UDP = 3;
 }
 
 message Comm {

@@ -11,10 +11,9 @@ message General {
     MODE_INVALID = 0;
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
-    MODE_TEST = 5;
-    MODE_DATA_STORE = 6;
-    MODE_SIMULATION = 7;
-    reserved 4;  // MODE_CALIBRATION: calibration subsystem removed.
+    MODE_TEST = 3;
+    MODE_DATA_STORE = 4;
+    MODE_SIMULATION = 5;
   }
 
   enum RobotType {
@@ -32,6 +31,5 @@ message Config {
   General general = 1;
   config.Robot robot = 2;
   config.Ai ai = 3;
-  simulation.SimulationConfig simulation = 5;
-  reserved 4;  // calibration: calibration subsystem removed.
+  simulation.SimulationConfig simulation = 4;
 }
