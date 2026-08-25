@@ -95,8 +95,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   so this release is not wire-compatible with data serialized by an earlier
   one. Affects `MotorType`, `ActuatorType`, `Actuator` fields (`channel` and
   the `action_config` oneof), `BoardType`, `CommType`, `NodeType`,
-  `OperationMode`, and `Config.simulation`. Text-format `.pbtxt` presets are
-  unaffected — they bind by name. Re-generate any stored binary protos
+  `OperationMode`, and `Config.simulation`. Note `BoardType::ESP32`, which
+  landed on `develop` as `8`, is `7` here — the compaction freed the number.
+  Text-format `.pbtxt` presets are unaffected — they bind by name.
+  Re-generate any stored binary protos
 - **LEGO SPIKE / Pybricks hubs are no longer supported by the launcher.** The
   Python driver, the `SPIKE_HUB_BLE` stub board, `BoardType::SPIKE_HUB_BLE`,
   and `MotorType::MOTOR_SPIKE` were all removed; no preset can reach a hub.

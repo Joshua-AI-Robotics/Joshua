@@ -470,9 +470,8 @@ Keeping `board_name` mandatory (rather than optional with an embedded
 `comm{}` fallback) keeps `ActionFactory`, validation, and caching on a single
 code path. The rule generalizes: every motor names a board, and the board
 type says **where the control loop runs** — an external MCU (`AM243`,
-`ARDUINO_UNO`), the motor's own MCU (`FEETECH_BUS`), a vendor hub
-(`SPIKE_HUB_BLE`: the Pybricks hub over BLE), the host itself (`HOST_GPIO`),
-or nowhere (`MOCK`, for tests). "Doesn't need a board" always resolves to
+`TEENSY41`, `ESP32`, `ARDUINO_UNO`), the motor's own MCU (`FEETECH_BUS`),
+the host itself (`HOST_GPIO`), or nowhere (`MOCK`, for tests). "Doesn't need a board" always resolves to
 one of these degenerate cases, never to bypassing the layer. Future smart
 CAN motors follow the same pattern as a `CAN_BUS` board.
 
@@ -1557,14 +1556,30 @@ speculative. The architecture is identical either way (§7.1–§7.5 make no
 Arduino-specific assumption); `ArduinoBoard`/`firmware/arduino/` remain a
 real future board — same `joshua_wire_v1` codec, same `StepperDriver`, same
 `FrameTransport` seam, new firmware image, and now (§7.3) a host board
-class that's just two identity methods subclassing `JoshuaWireBoard`
+class that's just a one-line constructor subclassing `JoshuaWireBoard`
 rather than a from-scratch `BoardInterface` implementation — not retired
-by this choice. An **ESP32** board is a candidate third matrix
-member for the same reason (hardware on hand), tracked as a follow-up, not
-started in this phase: it would most likely land as a Wi-Fi/UDP transport
-variant on the existing `UdpTransport` seam below rather than a new drive
-backend, since the interesting new proof there is the transport swap, not
-another STEP_DIR implementation.
+by this choice.
+
+**ESP32** (hardware on hand) got a first cut for the same reason Teensy
+did: `firmware/esp32/` joins the exact same joshua_wire_v1 family as
+Teensy — plain UART/USB-serial, STEP_DIR, `backend_stepdir.{h,cpp}` reused
+unchanged from `firmware/common/`, `Esp32Board`'s constructor identical in
+shape to `TeensyBoard`'s. One real difference from Teensy: `Esp32Board`
+overrides `CreateTransport()` to add a ~2s settle delay after opening the
+port, because most ESP32 dev boards (CP2102/CH340 bridge) reset on serial
+open — DTR is wired into EN, the same auto-reset trick `esptool` uses —
+so the first IDENTIFY otherwise races the board's own boot log (see
+`firmware/esp32/README.md`'s Known gaps for the full mechanism). This is
+deliberately the boring, immediately-buildable path, not the Wi-Fi/UDP
+transport-swap proof this section originally speculated ESP32 might be
+for — that variant is still real, still tracked, and still needs a
+`robot::comm::UdpTransport` and a `UdpFrameTransport` that don't exist yet
+(§7's TODOs on `frame_transport.h` and `comm_factory.h`), but it's a
+separate, larger piece of follow-up work from "ESP32 exists as a board at
+all." Flashed and protocol-verified on real hardware (IDENTIFY, ENABLE,
+SET_TARGET all confirmed via `esp32_driver_smoke`) — physical motor
+rotation not yet observed on this board; see `firmware/esp32/README.md`'s
+Status.
 
 - [x] Define `joshua_wire_v1` frame codec in `firmware/common/` (C, shared;
       golden-bytes unit tests on host CI, §7.3). Every response has a

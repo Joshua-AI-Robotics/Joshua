@@ -71,6 +71,16 @@ TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
   EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
+TEST_F(BoardFactoryTest, Esp32IsPortedAndRejectsAMockShapedConfig) {
+  // ESP32 is implemented (same joshua_wire_v1 family as Teensy); a config
+  // shaped for MockBoard (STEP_DIR channel, no comm) fails Esp32Board's own
+  // validation rather than falling into UnportedBoardTypesReportUnimplemented.
+  robot::board::Board board = MakeMockBoard("esp32_bus_1", 1);
+  board.set_board_type(robot::board::BoardType::ESP32);
+  auto result = BoardFactory::GetOrCreate(board);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST_F(BoardFactoryTest, SameNameDifferentTypeIsRejected) {
   auto board_a = BoardFactory::GetOrCreate(MakeMockBoard("bridge_1", 1));
   ASSERT_TRUE(board_a.ok()) << board_a.status();

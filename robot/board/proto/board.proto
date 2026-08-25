@@ -6,7 +6,7 @@ package robot.board;
 
 // The controller that runs the low-level motor loop. The board type says
 // where that loop runs: an external MCU, the motor's own MCU (FEETECH_BUS),
-// a vendor hub, the host itself (HOST_GPIO), or nowhere (MOCK).
+// the host itself (HOST_GPIO), or nowhere (MOCK).
 // Values name the native controller only — comm peripherals (e.g. an
 // EasyCAT shield) belong to Board.comm and drive peripherals (e.g. a
 // TB6600 stepper drive) to Channel.drive, never to the board type.
@@ -20,6 +20,8 @@ enum BoardType {
                     // servo's own MCU.
   HOST_GPIO = 5;    // No external controller; host pins drive the motor.
   MOCK = 6;         // Tests; channels are in-memory fakes.
+  ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire_v1
+                    // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
 }
 
 // The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
