@@ -13,18 +13,22 @@ namespace robot::comm::ethercat {
 class FakeEthercatTransport : public EthercatTransport {
  public:
   absl::Status Init(const std::string& interface_name, ProcessDataMode process_data_mode) override {
+    init_calls_++;
     interface_name_ = interface_name;
     process_data_mode_ = process_data_mode;
-    return absl::OkStatus();
+    return init_status_;
   }
 
   absl::Status ConfigureSlaves() override {
-    return absl::OkStatus();
+    configure_slaves_calls_++;
+    return configure_slaves_status_;
   }
   absl::Status StartCyclic() override {
-    return absl::OkStatus();
+    start_cyclic_calls_++;
+    return start_cyclic_status_;
   }
   absl::Status StopCyclic() override {
+    stop_cyclic_calls_++;
     return absl::OkStatus();
   }
   absl::Status Teardown() override {
@@ -65,7 +69,14 @@ class FakeEthercatTransport : public EthercatTransport {
 
   mutable int get_pdo_region_calls_ = 0;
   mutable uint16_t requested_slave_index_ = 0;
+  int init_calls_ = 0;
+  int configure_slaves_calls_ = 0;
+  int start_cyclic_calls_ = 0;
+  int stop_cyclic_calls_ = 0;
   int exchange_process_data_calls_ = 0;
+  absl::Status init_status_ = absl::OkStatus();
+  absl::Status configure_slaves_status_ = absl::OkStatus();
+  absl::Status start_cyclic_status_ = absl::OkStatus();
   std::string interface_name_;
   ProcessDataMode process_data_mode_ = ProcessDataMode::kSplitLrdLwr;
   PdoRegion pdo_region_ = [] {

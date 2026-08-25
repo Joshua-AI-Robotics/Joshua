@@ -76,6 +76,7 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](simulation/README.md) |
 | Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| AI coding agents | [AGENTS.md](AGENTS.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
 | Security | [SECURITY.md](SECURITY.md) |
 

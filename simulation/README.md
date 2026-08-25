@@ -40,8 +40,8 @@ selected via `simulation.mode` in the preset:
 | `MODE_OFFSCREEN` | Headless frame rendering to disk |
 
 ```bash
+# SO-ARM100 interactive viewer
 CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
-CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
 ```
 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
@@ -91,16 +91,15 @@ export ISAAC_LAB_PYTHON=~/env_isaaclab/bin/python   # optional, overrides isaacl
 
 ### Running
 
+**No Isaac Sim preset ships with the repo.** The ant/trileg/bileg Isaac presets
+were removed; the backend and its `IsaacSimConfig` are still supported, so write
+a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and a `usd_filename` pointing
+at a model under [models/](models/), then:
+
 ```bash
 export ISAAC_LAB_PATH=$HOME/IsaacLab
 export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
-CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
-  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
-
-CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt \
-  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
-
-CONFIG=config/config_preset/bileg/bileg_sim_isaac.pbtxt \
+CONFIG=<your-preset>.pbtxt \
   docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 

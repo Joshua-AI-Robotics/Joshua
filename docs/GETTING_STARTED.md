@@ -43,7 +43,7 @@ docker compose --profile u24 up -d joshua-u24
 # Run commands in the existing container (Bazel needs the matching configs).
 docker compose exec joshua-u24 bazel test --config=u24 --config=x86-base \
   --@rules_python//python/config_settings:python_version=3.12 \
-  //robot/action/motors/drivers:am243_ethercat_driver_test
+  //robot/board/am243:am243_board_test
 
 # Open an interactive shell in the existing container.
 docker compose exec joshua-u24 bash
@@ -62,10 +62,21 @@ Pass a preset config when needed:
 
 ```bash
 CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
-CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u24
 ```
 
+| Config | Backend | What it does |
+|--------|---------|-------------|
+| `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive 3D viewer |
+| `so100/sim_passive.pbtxt` | MuJoCo | SO-ARM100 passive sim |
+| `so100/sim_mirror.pbtxt` | MuJoCo | Sim mirrors a real arm — **opens `/dev/ttyACM1`** |
+| `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
+
 Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.
+
+Set each actuator's `operational_lower_limit` / `operational_upper_limit` in
+the preset before running hardware. (The `MODE_CALIBRATION` node that measured
+these automatically was removed; set them by hand.)
 
 ## GPU and CPU modes
 
@@ -89,6 +100,11 @@ sudo ./scripts/setup.sh --cpu
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
   run --rm joshua-u22
 ```
+
+**Isaac Sim viewer** (requires Isaac Lab installed): the Isaac Sim backend
+(`SIM_BACKEND_ISAAC_SIM`) is supported by `simulation/isaac/`, but **no preset
+ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
+against [simulation/README.md](../simulation/README.md) to use it.
 
 Tests, package builds, UI services, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
 
@@ -116,15 +132,15 @@ MuJoCo simulation runs through the same Docker launcher:
 
 ```bash
 CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
-CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
+CONFIG=config/config_preset/so100/sim_passive.pbtxt docker compose run --rm run-u24
 ```
 
-Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables.
+Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables. **No Isaac preset ships with the repo** — write one against [simulation/README.md](../simulation/README.md) first.
 
 ```bash
 export ISAAC_LAB_PATH=$HOME/IsaacLab
 export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
-CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+CONFIG=<your-isaac-preset>.pbtxt \
   docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 

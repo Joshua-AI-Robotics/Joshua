@@ -1,6 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_cc//cc:defs.bzl", "cc_test")
-load("@rules_python//python:defs.bzl", "py_library")
 
 cc_library(
     name = "comm_factory",
@@ -25,18 +24,9 @@ cc_test(
     srcs = ["comm_factory_test.cc"],
     deps = [
         ":comm_factory",
+        "//robot/comm/ethercat:fake_ethercat_transport",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
-    ],
-)
-
-py_library(
-    name = "comm_factory_py",
-    srcs = ["comm_factory.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//robot/comm/proto:comm_py_proto",
-        "//robot/comm/serial:serial_py",
     ],
 )

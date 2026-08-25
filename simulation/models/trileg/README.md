@@ -68,19 +68,23 @@ USD Asset
 Config Presets
 --------------
 
-| Preset | Backend | Purpose |
-|--------|---------|---------|
-| `trileg_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
+**None.** The `trileg_sim_isaac.pbtxt` preset was removed; the model assets here
+are kept, but nothing ships that runs them.
 
 Quick Start
 -----------
 
+Write a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and `usd_filename`
+pointing at `simulation/models/trileg/trileg_isaac.usda`, then:
+
 ```bash
 ISAAC_LAB_PATH=$HOME/IsaacLab \
 ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
-CONFIG=config/config_preset/trileg/trileg_sim_isaac.pbtxt \
+CONFIG=<your-preset>.pbtxt \
 docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
+
+See [simulation/README.md](../../README.md) for the backend fields.
 
 Physics Tuning
 --------------

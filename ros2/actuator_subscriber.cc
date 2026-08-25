@@ -38,7 +38,8 @@ class ActionSubscriber : public rclcpp::Node {
       const auto& qos_setting = single_action.node().qos_setting();
       const std::string device_id = action_proto.actuator_name();
 
-      auto interface = robot::action::ActionFactory::CreateAction(single_action);
+      auto interface =
+          robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to create action interface for actuator '%s'. Check hardware "

@@ -1,5 +1,4 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_python//python:defs.bzl", "py_library")
 
 cc_library(
     name = "serial",
@@ -14,8 +13,14 @@ cc_library(
     ],
 )
 
-py_library(
-    name = "serial_py",
-    srcs = ["serial.py"],
+cc_library(
+    name = "fake_serial_transport",
+    testonly = True,
+    hdrs = ["fake_serial_transport.h"],
     visibility = ["//visibility:public"],
+    deps = [
+        ":serial",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
 )

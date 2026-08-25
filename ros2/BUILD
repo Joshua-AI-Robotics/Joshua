@@ -24,15 +24,13 @@ py_library(
     srcs = [
         "node_runner.py",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         "//config/proto:config_py_proto",
         "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:ros_python_paths_py",
-        # Note: rclpy is available via system Python installation
-        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
         # rclpy is provided by the selected Docker image's ROS2 installation.
     ] + requirement("protobuf") + requirement("PyYAML"),
-    visibility = ["//visibility:public"],
 )
 
 py_library(
@@ -40,12 +38,11 @@ py_library(
     srcs = [
         "ros2_type_resolver.py",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         "//ros2/proto:ros2_data_type_py_proto",
     ],
-    visibility = ["//visibility:public"],
 )
-
 
 ros2_py_binary(
     name = "inference",
@@ -53,20 +50,20 @@ ros2_py_binary(
         "inference.py",
     ],
     data = [
-        "//config/config_preset:config_presets",
-        "//ai/models:sources",
-        "//ai/models:manifests",
         "//ai/inference:inference_launcher",
+        "//ai/models:manifests",
+        "//ai/models:sources",
+        "//config/config_preset:config_presets",
     ],
     main = "inference.py",
     set_up_ament = True,
+    visibility = ["//visibility:public"],
     deps = [
         "//ai/inference:inference_launcher",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
         "//ros2/proto:trajectory_py_proto",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
-    visibility = ["//visibility:public"],
     # rclpy is provided by the selected Docker image's ROS2 installation.
 )
 
@@ -75,9 +72,9 @@ py_library(
     srcs = [
         "image_converter.py",
     ],
+    visibility = ["//visibility:public"],
     deps = [
     ] + requirement("numpy"),
-    visibility = ["//visibility:public"],
 )
 
 ros2_cpp_binary(
@@ -101,29 +98,6 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_py_binary(
-    name = "camera_publisher_py",
-    srcs = [
-        "camera_publisher.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "camera_publisher.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/perception/factory:perception_factory_py",
-        "//robot/perception/proto:perception_packet_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-    ] + requirement("protobuf"),
-)
-
 ros2_cpp_binary(
     name = "encoder_publisher",
     srcs = ["encoder_publisher.cc"],
@@ -145,72 +119,26 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_py_binary(
-    name = "encoder_publisher_py",
-    srcs = [
-        "encoder_publisher.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "encoder_publisher.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/perception/factory:perception_factory_py",
-        "//robot/perception/proto:perception_packet_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-    ] + requirement("protobuf"),
-)
-
 ros2_cpp_binary(
     name = "lidar_publisher",
     srcs = ["lidar_publisher.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
+    set_up_ament = True,
     deps = [
-        "@ros2_deps//:rclcpp",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "//robot/perception/factory:perception_factory",
         "//config/proto:config_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
+        "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
+        "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
-        "//ros2:node_runner",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
-    set_up_ament = True,
-)
-
-ros2_py_binary(
-    name = "lidar_publisher_py",
-    srcs = [
-        "lidar_publisher.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "lidar_publisher.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/perception/factory:perception_factory_py",
-        "//robot/perception/proto:perception_packet_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-    ] + requirement("protobuf"),
 )
 
 ros2_cpp_binary(
@@ -230,7 +158,7 @@ ros2_cpp_binary(
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
-        "@protobuf//:protobuf",
+        "@protobuf",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
@@ -238,30 +166,7 @@ ros2_cpp_binary(
 )
 
 ros2_py_binary(
-    name = "actuator_subscriber_py",
-    srcs = [
-        "actuator_subscriber.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "actuator_subscriber.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/action/factory:action_factory_py",
-        "//robot/action/proto:action_packet_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-    ] + requirement("protobuf"),
-)
-
-ros2_py_binary(
-    name = "trajectory_publisher_py",
+    name = "trajectory_publisher",
     srcs = [
         "trajectory_publisher.py",
     ],
@@ -302,22 +207,6 @@ ros2_py_binary(
         "//ros2/utils:qos_setting_py",
         # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
     ] + requirement("protobuf"),
-)
-
-ros2_cpp_binary(
-    name = "operational_limit_calibration",
-    srcs = ["operational_limit_calibration.cc"],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//ros2:node_runner",
-        "//ros2/utils:qos_setting",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
 )
 
 genrule(

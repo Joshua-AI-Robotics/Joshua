@@ -1,0 +1,10 @@
+{
+  "name": "joshua_wire_v1",
+  "version": "1.0.0",
+  "description": "Joshua's shared firmware building blocks (docs/BOARD_LAYER_RFC.md §7.2/§7.3, revised): the host<->firmware wire frame codec (joshua_wire_v1.{h,c} - also a Bazel cc_library, see BUILD, so host and firmware build from the exact same source) plus generic drive backends whose implementation is MCU-vendor-agnostic (backend_stepdir.{h,cpp} - plain Arduino-framework digitalWrite/pinMode, no per-vendor peripheral API). Any Joshua firmware image pulls this in via PlatformIO lib_deps.",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcFilter": ["+<*>", "-<*_test.cc>"]
+  }
+}

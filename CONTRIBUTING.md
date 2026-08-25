@@ -32,6 +32,8 @@ docker compose run --rm joshua-u24
 
 CPU-only developers should run `sudo ./scripts/setup.sh --cpu` and use the `docker-compose.cpu.yml` override. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs, simulation, and UI workflows. Native Ubuntu development is not a supported entrypoint.
 
+If you develop with an AI coding agent (Claude Code, Copilot, Codex, …), the canonical agent instructions live in [AGENTS.md](AGENTS.md); launch your agent from the repository root so it picks the file up.
+
 ## Branch and PR workflow
 
 This project uses **pull requests into `develop`**. Recent history follows this pattern:

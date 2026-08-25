@@ -44,7 +44,7 @@ The container entrypoint ([docker/entrypoint.sh](../docker/entrypoint.sh), baked
 
 `create_mock_serial_ports.sh` creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`. Use it from inside the relevant Docker service when testing without physical serial devices.
 
-`pybricks_spike_bridge.py` runs on a LEGO SPIKE Prime hub and bridges line-based motor commands over stdin/stdout.
+`pybricks_spike_bridge.py` runs on a LEGO SPIKE Prime hub and bridges line-based motor commands over stdin/stdout. Deploy it via the Pybricks app or `pybricksdev`. The host-side driver that drove it now lives in [tools/pybricks/](../tools/README.md); Joshua has no board type for a SPIKE hub, so the launcher cannot reach one. This script is kept for manual hub-side testing.
 
 `spike_wave_publisher.py` is a ROS2 test publisher. Run it through Docker:
 

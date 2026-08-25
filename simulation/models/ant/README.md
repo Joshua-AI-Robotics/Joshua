@@ -70,19 +70,23 @@ USD Asset
 Config Presets
 --------------
 
-| Preset | Backend | Purpose |
-|--------|---------|---------|
-| `ant_sim_interactive.pbtxt` | MuJoCo | Interactive 3D viewer |
-| `ant_sim_isaac.pbtxt` | Isaac Sim | Isaac Sim viewer (requires Isaac Lab) |
+**None.** The `ant_sim_interactive.pbtxt` and `ant_sim_isaac.pbtxt` presets were
+removed; the model assets here are kept, but nothing ships that runs them.
 
 Quick Start
 -----------
 
-```bash
-CONFIG=config/config_preset/ant/ant_sim_interactive.pbtxt docker compose run --rm run-u24
+Write a preset pointing `model_path` at `simulation/models/ant/ant.xml`
+(MuJoCo) or `usd_filename` at the Isaac USD, then:
 
+```bash
+CONFIG=<your-preset>.pbtxt docker compose run --rm run-u24
+
+# Isaac Sim (requires Isaac Lab installed)
 ISAAC_LAB_PATH=$HOME/IsaacLab \
 ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
-CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+CONFIG=<your-preset>.pbtxt \
 docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
+
+See [simulation/README.md](../../README.md) for the backend fields.

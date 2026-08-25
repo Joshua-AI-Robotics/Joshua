@@ -65,7 +65,7 @@ cc_binary(
         ":ethercat_status",
         ":ethercat_transport",
         ":soem_ethercat_transport",
-        "//robot/action/motors/drivers:am243_pdo_codec",
+        "//robot/board/am243:am243_pdo_codec",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],

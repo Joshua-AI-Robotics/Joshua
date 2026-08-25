@@ -5,6 +5,20 @@ general{
   id: 1
 }
 robot {
+  boards {
+    name: "arm_bus"
+    board_type: FEETECH_BUS
+    comm {
+      comm_type: SERIAL
+      serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
+    }
+    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
+    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
+    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
+    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
+  }
   actions {
     single_actions {
       node {
@@ -21,22 +35,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_1"
         id: 1
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 1
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 1
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 973
         operational_upper_limit: 3034
         sts3215_config {
           servo_id: 1
-          move_time_in_ms: 40
           move_speed: 500
           idle_position: 2070
         }
@@ -57,22 +64,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_2"
         id: 2
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 2
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 2
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 858
         operational_upper_limit: 3154
         sts3215_config {
           servo_id: 2
-          move_time_in_ms: 40
           move_speed: 500
           idle_position: 847
         }
@@ -93,22 +93,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_3"
         id: 3
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 3
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 3
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 798
         operational_upper_limit: 3015
         sts3215_config {
           servo_id: 3
-          move_time_in_ms: 40
           move_speed: 500
           idle_position: 3011
         }
@@ -129,22 +122,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_4"
         id: 4
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 4
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 4
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 668
         operational_upper_limit: 3124
         sts3215_config {
           servo_id: 4
-          move_time_in_ms: 40
           move_speed: 500
           idle_position: 655
         }
@@ -165,22 +151,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_5"
         id: 5
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 5
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 5
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 902
         operational_upper_limit: 2955
         sts3215_config {
           servo_id: 5
-          move_time_in_ms: 40
           move_speed: 1000
           idle_position: 1838
         }
@@ -201,22 +180,15 @@ robot {
       actuator {
         actuator_name: "sts_motor_6"
         id: 6
-        actuator_type: STS3215_SERVO
-        comm {
-          comm_type: SERIAL
-          serial_config {
-            id: 6
-            port: "/dev/ttyACM0"
-            baudrate: 1000000
-          }
-        }
+        motor_type: MOTOR_STS3215
+        board_name: "arm_bus"
+        channel: 6
         physical_lower_limit: 0
         physical_upper_limit: 4095
         operational_lower_limit: 1795
         operational_upper_limit: 3235
         sts3215_config {
           servo_id: 6
-          move_time_in_ms: 40
           move_speed: 1000
           idle_position: 1806
         }

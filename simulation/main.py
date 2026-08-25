@@ -4,8 +4,10 @@ Usage (unified config -- launched from Docker):
     CONFIG=config/config_preset/so100/sim_interactive.pbtxt \
         docker compose run --rm run-u22
 
-    # Isaac Sim viewer (requires Isaac Lab installed; see simulation/README.md)
-    CONFIG=config/config_preset/ant/ant_sim_isaac.pbtxt \
+    # Isaac Sim viewer needs a preset with sim_backend: SIM_BACKEND_ISAAC_SIM;
+    # none ships with the repo (see simulation/README.md). With one of your
+    # own, and Isaac Lab installed:
+    CONFIG=<your_isaac_preset>.pbtxt \
         docker compose -f docker-compose.yml -f docker-compose.isaac.yml \
         run --rm run-u24
 

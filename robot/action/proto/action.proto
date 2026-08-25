@@ -10,47 +10,69 @@ enum ActionType {
   ACTUATOR = 1;
 }
 
+// DEPRECATED: board/transport-flavored actuator types are replaced by
+// MotorType + Actuator.board_name (docs/BOARD_LAYER_RFC.md §6.3). Kept
+// functional during the board layer migration; removed in Phase 4 (§10).
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
-  MOCK_MOTOR = 2;
-  SPIKE_MOTOR = 3;
-  AM243_ETHERCAT_ACTUATOR = 4;
+  AM243_ETHERCAT_ACTUATOR = 2;
+}
+
+// What physically moves, independent of the board that runs its loop and
+// the transport that reaches that board. Values carry a MOTOR_ prefix
+// (unlike the RFC sketch) because proto enum values share the package
+// scope with the deprecated ActuatorType during migration.
+enum MotorType {
+  MOTOR_INVALID = 0;
+  MOTOR_STS3215 = 1;
+  MOTOR_STEPPER_NEMA17 = 2;
+  // Placeholder motor for the AM243 TI demo firmware: nothing physical
+  // moves, the host just ships a seed into the demo's PDO slot (PDO_JOINT).
+  // Deliberately narrow — do not bind real joints to it.
+  // TODO: When AM243_PDO_MAPPING_ACTUATOR_V1 lands, add real motor values
+  // (or a firmware-owned-joint value with proper unit config) and retire
+  // this one.
+  MOTOR_TI_DEMO = 3;
 }
 
 message Actuator {
   string actuator_name = 1;
   uint64 id = 2;
+  // DEPRECATED: use motor_type + board_name + channel instead. Kept
+  // functional during the board layer migration (docs/BOARD_LAYER_RFC.md §10).
   ActuatorType actuator_type = 3;
+  // DEPRECATED: comm now lives on the referenced robot.board.Board.
   robot.comm.Comm comm = 4;
   float physical_lower_limit = 5;  // TODO: Move this to physical layout.
   float physical_upper_limit = 6;  // TODO: Move this to physical layout.
   float operational_lower_limit = 7;
   float operational_upper_limit = 8;
+  MotorType motor_type = 9;
+  string board_name = 10;  // References a config.Robot.boards entry by name.
+  uint32 channel = 11;     // Channel index on that board.
   oneof action_config {
-    Sts3215Config sts3215_config = 11;
-    MockMotorConfig mock_motor_config = 12;
-    SpikeMotorConfig spike_motor_config = 13;
-    Am243EthercatConfig am243_ethercat_config = 14;
+    Sts3215Config sts3215_config = 12;
+    Am243EthercatConfig am243_ethercat_config = 13;
+    StepperConfig stepper_config = 14;
     // Add other motor type here.
   }
 }
 
+message StepperConfig {
+  // Motor's native steps/degree at the motor shaft, pre-gearbox (e.g. a
+  // 1.8-degree NEMA17 at 1/16 microstepping is 200*16/360).
+  float steps_per_degree = 1;
+  // Output:motor ratio; DegreesToSteps(angle) = angle * steps_per_degree *
+  // gear_ratio. 1.0 for a direct-drive joint.
+  float gear_ratio = 2;
+  float idle_position = 3;  // Degrees, matching SetPosition's unit.
+}
+
 message Sts3215Config {
   uint64 servo_id = 1;
-  uint32 move_time_in_ms = 2;
   uint32 move_speed = 3;
   float idle_position = 4;
-}
-
-message MockMotorConfig {
-  uint64 motor_id = 1;
-}
-
-message SpikeMotorConfig {
-  string hub_id = 1;
-  string port = 2;
-  float idle_position = 3;
 }
 
 enum Am243PdoMapping {

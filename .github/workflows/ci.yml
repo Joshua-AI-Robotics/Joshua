@@ -6,6 +6,18 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  agent-docs:
+    name: Agent instruction links
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify AGENTS.md link targets resolve
+        run: ./hooks/agents_doc_check.sh
+
   entrypoint-contract:
     name: Docker entrypoint contract
     runs-on: ubuntu-22.04
