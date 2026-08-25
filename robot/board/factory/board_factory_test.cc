@@ -55,10 +55,22 @@ TEST_F(BoardFactoryTest, InvalidBoardTypeIsRejected) {
 }
 
 TEST_F(BoardFactoryTest, UnportedBoardTypesReportUnimplemented) {
+  // HOST_GPIO is the only board type left without an implementation now that
+  // ARDUINO_UNO is ported.
+  robot::board::Board board = MakeMockBoard("bridge_1", 1);
+  board.set_board_type(robot::board::BoardType::HOST_GPIO);
+  auto result = BoardFactory::GetOrCreate(board);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+}
+
+TEST_F(BoardFactoryTest, ArduinoUnoIsPortedAndRejectsAMockShapedConfig) {
+  // ARDUINO_UNO is implemented; a config shaped for MockBoard (STEP_DIR
+  // channel, no comm) fails JoshuaWireBoard validation rather than
+  // UnportedBoardTypesReportUnimplemented.
   robot::board::Board board = MakeMockBoard("bridge_1", 1);
   board.set_board_type(robot::board::BoardType::ARDUINO_UNO);
   auto result = BoardFactory::GetOrCreate(board);
-  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {

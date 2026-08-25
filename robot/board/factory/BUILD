@@ -8,6 +8,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/board/am243:am243_board",
+        "//robot/board/arduino:arduino_board",
         "//robot/board/esp32:esp32_board",
         "//robot/board/feetech_bus:feetech_bus_board",
         "//robot/board/interfaces:board_interfaces",

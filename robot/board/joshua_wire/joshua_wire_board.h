@@ -21,19 +21,21 @@ namespace robot::board {
 // IDENTIFY handshake (board_id, protocol version, per-channel drive all
 // cross-checked against config), push CONFIGURE_CHANNEL for every channel,
 // then dispatch ENABLE/DISABLE/SET_TARGET/GET_FEEDBACK per channel. Every
-// Joshua-firmware MCU board (TeensyBoard today; ArduinoBoard, a future
-// ESP32 board, ...) speaks the exact same wire protocol, so this class
-// holds that entire orchestration once — a concrete board subclasses this
+// Joshua-firmware MCU board (TeensyBoard, ArduinoBoard, Esp32Board today,
+// ...) speaks the exact same wire protocol, so this class holds that
+// entire orchestration once — a concrete board subclasses this
 // and supplies only the handful of facts that actually differ per board:
 // which BoardType/jw1_board_id_t it is, and (if it ever isn't a plain
 // serial link) how its comm config is validated and its production
 // transport is built.
 //
 // What is NOT generic here, and stays a subclass's problem if it ever
-// needs to differ: nothing today — every current and planned board on this
-// class (Teensy, Arduino) is a serial FrameTransport speaking STEP_DIR
-// channels, so ValidateComm/CreateTransport below default to
-// exactly that and no subclass has needed to override either yet.
+// needs to differ: every board on this class (Teensy, Arduino, ESP32) is a
+// serial FrameTransport speaking STEP_DIR channels, so ValidateComm and
+// CreateTransport below default to exactly that. ArduinoBoard and
+// Esp32Board override CreateTransport only to wait out a post-open board
+// reset (the Uno's DTR auto-reset, the ESP32 bridge's EN auto-reset)
+// before the first frame; the handshake itself is unchanged.
 //
 // Board identity (expected BoardType / jw1_board_id_t) is constructor
 // data, not a virtual hook: unlike ValidateComm/CreateTransport

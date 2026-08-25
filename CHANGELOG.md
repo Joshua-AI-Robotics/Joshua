@@ -12,6 +12,12 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- Arduino Uno R3 on the board layer: `ArduinoBoard`,
+  `firmware/arduino/uno/` (`joshua_wire_v1` over UART serial), and
+  `config/config_preset/example/arduino_stepper_demo.pbtxt`. First
+  hardware goal is IDENTIFY-only (USB, no motor); flash and motion are
+  still open
+  ([`firmware/arduino/uno/README.md`](firmware/arduino/uno/README.md))
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
   new `simulation/isaac/` launcher + viewer, and the `IsaacSimConfig` proto
   ([simulation/README.md](simulation/README.md)). No Isaac preset ships — the
