@@ -39,8 +39,7 @@ ros2_py_binary(
     srcs = ["pointcloud2_visualizer.py"],
     main = "pointcloud2_visualizer.py",
     deps = [
-        # Note: Python ROS2 messages and rclpy are available via system Python installation
-        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
+        # Python ROS2 messages and rclpy are provided by the Docker image.
     ] + requirement("opencv-python") + requirement("numpy"),
     tags = ["manual"],
 )
@@ -64,8 +63,7 @@ py_library(
     srcs = ["qos_setting.py"],
     deps = [
         "//ros2/proto:node_py_proto",
-        # rclpy is available via system Python installation
-        # Ensure ROS2 is sourced: source /opt/ros/humble/setup.bash
+        # rclpy is provided by the selected Docker image's ROS2 installation.
     ] + requirement("PyYAML"),
 )
 

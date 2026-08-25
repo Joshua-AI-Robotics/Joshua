@@ -29,6 +29,7 @@ MODULE.bazel.lock
 .venv/
 .cache/
 
+.venv-*/
 
 # Python bytecode and tooling caches
 __pycache__/

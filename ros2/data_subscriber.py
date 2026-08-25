@@ -1,7 +1,6 @@
 import functools
 import os
 import sys
-import threading
 
 from rclpy.node import Node
 from std_msgs.msg import Bool
@@ -22,17 +21,16 @@ class DataSubscriber(Node):
         self.subscription_list = []
         self.topic_message_counts = {}
 
-        # Currently, only one data store is supported since one node can subscribe all topics.
+        # One data store per node; one node can subscribe to all topics.
         if len(config.ai.data_stores.single_data_stores) > 1:
             raise ValueError("Only one data store is supported")
 
         if len(config.ai.data_stores.single_data_stores) == 0:
             raise ValueError("No data stores found in config")
 
-        self.data_store = DataStore(
-            data_store_config=config.ai.data_stores.single_data_stores[0]
-        )
-        self._setup_subscriptions(config.ai.data_stores.single_data_stores[0].node)
+        store_config = config.ai.data_stores.single_data_stores[0]
+        self.data_store = DataStore(data_store_config=store_config)
+        self._setup_subscriptions(store_config.node)
 
         # Subscribe to recording control topic
         self.create_subscription(
@@ -45,11 +43,13 @@ class DataSubscriber(Node):
             try:
                 with open(index_file, "r") as f:
                     self.next_episode_index = int(f.read().strip()) + 1
-            except:
+            except (ValueError, OSError):
                 pass
 
         print(
-            f"[IDLE] Waiting for data... (Next Episode Index: {self.next_episode_index}) | Send True to 'recording_control' to start, False to stop."
+            "[IDLE] Waiting for data... "
+            f"(Next Episode Index: {self.next_episode_index}) | "
+            "Send True to 'recording_control' to start, False to stop."
         )
 
     def _setup_subscriptions(self, node: node_pb2.Node) -> None:
@@ -95,7 +95,11 @@ class DataSubscriber(Node):
             )
             display_str = f"[{state}] {counts_str}"
         else:
-            display_str = f"[{state}] Send True to 'recording_control' to start, False to stop. (Next Episode Index: {self.next_episode_index})"
+            display_str = (
+                f"[{state}] Send True to 'recording_control' to start, "
+                "False to stop. "
+                f"(Next Episode Index: {self.next_episode_index})"
+            )
 
         # Update terminal line
         sys.stdout.write(f"\r{display_str}\033[K")
@@ -104,20 +108,19 @@ class DataSubscriber(Node):
     def shutdown(self):
         """Save data on shutdown."""
         # Use print since current scope is out of ros2 context.
-        print(
-            f"Shutdown initiated. DataStore items: {self.data_store.get_total_message_count()}"
-        )
-        if self.data_store.get_total_message_count() > 0:
+        total = self.data_store.get_total_message_count()
+        print(f"Shutdown initiated. DataStore items: {total}")
+        if total > 0:
             print("Saving final dataset...")
             sys.stdout.flush()
-            # Fallback to bag_path parent + _processed if save_path doesn't exist
+            # Fallback to bag_path parent + _processed if save_path missing
             save_path = getattr(
-                self.data_store, "save_path", self.data_store.bag_path + "_processed"
+                self.data_store,
+                "save_path",
+                self.data_store.bag_path + "_processed",
             )
             self.data_store.post_process(save_path)
-            print(
-                f"Saved {self.data_store.get_total_message_count()} messages to {save_path}"
-            )
+            print(f"Saved {total} messages to {save_path}")
             sys.stdout.flush()
 
 
@@ -128,9 +131,8 @@ def main(argv=None):
 
 
 # How to test:
-# On terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_publish.pbtxt
-# On separate terminal, run:
-# bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
+# In separate Docker terminals, run:
+# make run-u22 CONFIG=config/config_preset/example/sample_data_publish.pbtxt
+# make run-u22 CONFIG=config/config_preset/example/sample_data_store.pbtxt
 if __name__ == "__main__":
     sys.exit(main())

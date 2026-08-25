@@ -162,5 +162,13 @@ COPY . /workspace/
 # Uncomment the next line to cache Bazel deps in the image
 # RUN bazel fetch //...
 
+# ============================================
+# Entrypoint: source ROS2 for every container command
+# ============================================
+# Lives at a fixed image path so the /workspace bind mount cannot hide it.
+COPY docker/entrypoint.sh /usr/local/bin/joshua-entrypoint.sh
+RUN chmod +x /usr/local/bin/joshua-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/joshua-entrypoint.sh"]
+
 # Default command
 CMD ["/bin/bash"]

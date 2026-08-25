@@ -12,6 +12,8 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- Docker Compose task services for shells, tests, launcher runs, package builds,
+  UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
   new `simulation/isaac/` launcher + viewer, and the `IsaacSimConfig` proto
   ([simulation/README.md](simulation/README.md)). No Isaac preset ships — the
@@ -33,6 +35,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- Docker images now source the ROS 2 environment through a shared entrypoint
+  ([docker/entrypoint.sh](docker/entrypoint.sh)), so non-interactive task
+  commands (e.g. `docker compose run --rm run-u22`) no longer fail with an
+  empty `AMENT_PREFIX_PATH` / `librcl_action.so` import error
 - Launcher default `--config` and all docs now point to the renamed preset
   `config/config_preset/so100/teleoperate.pbtxt` (old `so100_teleoperate.pbtxt`
   references were broken since the 0.2.2 rename)
@@ -77,6 +83,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - The `python_spike_*` presets and `docs/pybricks_test.md` /
   `docs/spike_python_driver_plan.md`, which documented driving a SPIKE hub
   from a preset — no longer possible
+- Host-side `scripts/build.py`; package builds now run through Compose services
 - RL training pipeline (`ai/train` trainer, Isaac Lab task/env builders,
   trajectory export, `training.proto`, `training_launcher.cc`, the
   `MODE_TRAINING` operation mode, and all 19 train/eval/export presets).
@@ -119,6 +126,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - No preset can exercise the node graph without real hardware any more, since
   the mock components are gone. `bazel test` and config validation remain the
   hardware-free verification path
+- Native Ubuntu setup is no longer a supported development entrypoint;
+  `scripts/setup.sh` now bootstraps/checks Docker host tooling only
+- CI now runs Bazel tests through Docker for both Ubuntu 22/Humble and
+  Ubuntu 24/Jazzy
 - `simulation/` restructured: backend code now lives in symmetric
   `simulation/mujoco/` (engine + modes) and `simulation/isaac/`
   (launcher + viewer) packages, and `simulation/models/` is organized
@@ -136,7 +147,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 - [`VERSION`](VERSION) as single source of truth for releases
 - [`CHANGELOG.md`](CHANGELOG.md) with project history
 - [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
-- README section for deployable binaries via [`scripts/build.py`](scripts/build.py)
+- README section for deployable binaries via `scripts/build.py`
 - Releases and versioning guidance in contributing docs
 
 ### Changed
@@ -193,7 +204,7 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 ### Added
 
 - React web control panel (`ui/`) ([#29](https://github.com/Joshua-AI-Robotics/Joshua/pull/29))
-- Cross-platform build script [`scripts/build.py`](scripts/build.py) and `joshua_main_pkg` deployable tarball ([#34](https://github.com/Joshua-AI-Robotics/Joshua/pull/34))
+- Cross-platform build script `scripts/build.py` and `joshua_main_pkg` deployable tarball ([#34](https://github.com/Joshua-AI-Robotics/Joshua/pull/34))
 - Data collecting node for dataset capture ([#19](https://github.com/Joshua-AI-Robotics/Joshua/pull/19))
 - Inference base class and refactored inference nodes ([#12](https://github.com/Joshua-AI-Robotics/Joshua/pull/12), [#18](https://github.com/Joshua-AI-Robotics/Joshua/pull/18), [#27](https://github.com/Joshua-AI-Robotics/Joshua/pull/27))
 - Node proto refactor and updated node generator ([#25](https://github.com/Joshua-AI-Robotics/Joshua/pull/25), [#28](https://github.com/Joshua-AI-Robotics/Joshua/pull/28))

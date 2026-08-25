@@ -17,8 +17,23 @@
 #   docker compose run --rm joshua-u24      # Interactive shell (Ubuntu 24.04 + Jazzy)
 #   docker compose run --rm joshua-mac-u22-arm64  # Interactive shell (Ubuntu 22.04 + Humble, macOS optimized)
 #
-# Run with Bazel target:
-#   docker compose run --rm joshua-u22 bazel run launcher:joshua_main
+# Canonical task entrypoints:
+#   docker compose run --rm test-u22
+#   CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
+#   TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+#
+# Developer shells and launcher tasks request an NVIDIA GPU by default. Use
+# docker-compose.cpu.yml as an explicit fallback on CPU-only hosts.
+# The Makefile provides optional shorthand for these commands.
+
+x-nvidia-gpu: &nvidia-gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
 
 services:
   # ============================================
@@ -27,6 +42,7 @@ services:
 
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 (Production ready)
   joshua-u22:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu22
@@ -50,9 +66,10 @@ services:
       - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
     working_dir: /workspace
 
-  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 (Experimental - needs source updates)
+  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12
   # Note: Use profile 'u24' to build this service
   joshua-u24:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu24
@@ -77,12 +94,141 @@ services:
       - u24  # Only build when explicitly requested
 
   # ============================================
+  # One-shot development tasks
+  # ============================================
+
+  test-u22:
+    extends:
+      service: joshua-u22
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-test-u22
+    command:
+      - bash
+      - -lc
+      - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u22
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
+        tests=$$(bazel query 'kind(".*_test rule", //...)');
+        if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
+        bazel test --config=u22 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.10 $$tests
+    profiles: [tasks]
+
+  test-u24:
+    extends:
+      service: joshua-u24
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-test-u24
+    command:
+      - bash
+      - -lc
+      - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u24
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
+        tests=$$(bazel query 'kind(".*_test rule", //...)');
+        if [[ -z "$$tests" ]]; then echo 'No Bazel test targets found.'; exit 0; fi;
+        bazel test --config=u24 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.12 $$tests
+    profiles: [tasks]
+
+  run-u22:
+    extends:
+      service: joshua-u22
+    container_name: joshua-run-u22
+    environment:
+      - CONFIG=${CONFIG:-}
+    command:
+      - bash
+      - -lc
+      - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u22
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
+        bazel run --config=u22 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.10
+        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+    profiles: [tasks]
+
+  run-u24:
+    extends:
+      service: joshua-u24
+    container_name: joshua-run-u24
+    environment:
+      - CONFIG=${CONFIG:-}
+    command:
+      - bash
+      - -lc
+      - >-
+        if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
+        echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
+        Rebuild your image first: docker compose build joshua-u24
+        If this persists after a rebuild, the image ROS install or entrypoint is broken." >&2;
+        exit 1; fi;
+        bazel run --config=u24 --config=x86-base
+        --@rules_python//python/config_settings:python_version=3.12
+        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+    profiles: [tasks]
+
+  build-u22-x86:
+    extends:
+      service: joshua-u22
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-build-u22-x86
+    command:
+      - /workspace/scripts/container_build.sh
+      - u22
+      - x86
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u22
+      - --config=x86-base
+      - --@rules_python//python/config_settings:python_version=3.10
+    profiles: [tasks]
+
+  build-u24-x86:
+    extends:
+      service: joshua-u24
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-build-u24-x86
+    command:
+      - /workspace/scripts/container_build.sh
+      - u24
+      - x86
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u24
+      - --config=x86-base
+      - --@rules_python//python/config_settings:python_version=3.12
+    profiles: [tasks]
+
+  # ============================================
   # ARM64 (aarch64) Services
   # ============================================
 
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64
   # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
+  # GPU-first like the x86 shells. UNTESTED on ARM64 hardware (no Jetson or
+  # qemu available); Jetson devices may need their own runtime overlay.
   joshua-u22-arm64:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu22
@@ -109,6 +255,7 @@ services:
   # Ubuntu 22.04 + ROS2 Humble + Python 3.10 for ARM64 (macOS optimized)
   # This service includes mock serial port support for development on macOS
   # Note: Use profile 'arm64' or 'mac' to build this service
+  # No GPU reservation: macOS has no NVIDIA container runtime.
   joshua-mac-u22-arm64:
     build:
       context: .
@@ -136,15 +283,19 @@ services:
       # Mock ports allow the application to run without physical serial devices
       - ENABLE_MOCK_SERIAL_PORTS=${ENABLE_MOCK_SERIAL_PORTS:-true}
       - JOSHUA_ENV_CACHE=/workspace/.cache/joshua/envs
-    entrypoint: ["/workspace/scripts/docker_entrypoint.sh"]
+    # No entrypoint override: the image entrypoint sources ROS2 and honors
+    # ENABLE_MOCK_SERIAL_PORTS.
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested
       - mac    # macOS-specific profile
 
-  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64 (Experimental)
+  # Ubuntu 24.04 + ROS2 Jazzy + Python 3.12 for ARM64
   # Note: Use profile 'arm64' to build these services (requires cross-platform build support)
+  # GPU-first like the x86 shells. UNTESTED on ARM64 hardware (no Jetson or
+  # qemu available); Jetson devices may need their own runtime overlay.
   joshua-u24-arm64:
+    <<: *nvidia-gpu
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.ubuntu24
@@ -167,6 +318,42 @@ services:
     working_dir: /workspace
     profiles:
       - arm64  # Only build when explicitly requested
+
+  build-u22-arm64:
+    extends:
+      service: joshua-u22-arm64
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-build-u22-arm64
+    command:
+      - /workspace/scripts/container_build.sh
+      - u22
+      - arm64
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u22
+      - --config=arm64-base
+      - --@rules_python//python/config_settings:python_version=3.10
+    profiles: [tasks]
+
+  build-u24-arm64:
+    extends:
+      service: joshua-u24-arm64
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []
+    container_name: joshua-build-u24-arm64
+    command:
+      - /workspace/scripts/container_build.sh
+      - u24
+      - arm64
+      - ${TARGET:-//launcher:joshua_main_pkg}
+      - --config=u24
+      - --config=arm64-base
+      - --@rules_python//python/config_settings:python_version=3.12
+    profiles: [tasks]
 
   joshua-ui:
     build:
