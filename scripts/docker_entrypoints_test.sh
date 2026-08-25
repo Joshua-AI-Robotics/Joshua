@@ -97,8 +97,15 @@ fi
 
 # Task commands must fail fast with a rebuild hint when run against a stale
 # image that predates the ROS-sourcing entrypoint.
+#
+# `docker compose config` renders the task command as a single-quoted YAML
+# scalar and folds it across lines to stay within its output width, replacing
+# a space with a newline plus indentation at a point that depends on the
+# Compose version. That can split a needle mid-phrase ("ROS 2 environment is
+# / missing"), so collapse all whitespace to single spaces before matching
+# rather than grepping the folded text line by line.
 for service in test-u22 test-u24 run-u22 run-u24; do
-  task_cmd=$("${default_compose[@]}" config "${service}")
+  task_cmd=$("${default_compose[@]}" config "${service}" | tr -s '[:space:]' ' ')
   for needle in 'AMENT_PREFIX_PATH' 'ROS 2 environment is missing' 'docker compose build joshua-' 'exit 1'; do
     if ! grep -qF "${needle}" <<<"${task_cmd}"; then
       echo "Task service ${service} is missing the stale-image ROS guard (no '${needle}')." >&2
