@@ -1,0 +1,24 @@
+# CODEOWNERS — review routing and merge gating for Joshua.
+#
+# GitHub reads this file (not a YAML manifest) to decide who must approve a
+# pull request. Every entry is `<path pattern> <owner>`; the LAST matching
+# pattern wins, so keep the broad rules above the specific ones.
+#
+# Listed owners are auto-requested as reviewers when a PR touches their paths.
+# Their approval becomes *required* to merge only once the `develop_rule`
+# ruleset is enforced with "Require review from Code Owners" enabled — see the
+# "Review process" section of CONTRIBUTING.md.
+#
+# An owner must have write access to the repository, or GitHub silently ignores
+# the entry.
+
+# ---------------------------------------------------------------------------
+# Board layer — hardware board drivers, frames, and the board factory.
+# ---------------------------------------------------------------------------
+/robot/board/            @heostar
+/docs/BOARD_LAYER_RFC.md @heostar
+
+# ---------------------------------------------------------------------------
+# Communication layer — serial and EtherCAT transports and the comm factory.
+# ---------------------------------------------------------------------------
+/robot/comm/             @piscesgh

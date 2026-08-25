@@ -194,7 +194,19 @@ These areas affect many presets and downstream nodes:
 
 ## Review process
 
+- Every PR into `develop` needs **at least one approving review** before it can
+  be merged.
 - A maintainer will review PRs for correctness, test coverage, and fit with the config-driven architecture.
+- Some subsystems have a **code owner** listed in
+  [`.github/CODEOWNERS`](.github/CODEOWNERS). Touching one of those paths
+  auto-requests that owner as a reviewer, and their approval is the one that
+  satisfies the requirement for that PR:
+
+  | Area | Paths | Owner |
+  | --- | --- | --- |
+  | Board layer | `robot/board/`, `docs/BOARD_LAYER_RFC.md` | [@heostar](https://github.com/heostar) |
+  | Communication layer | `robot/comm/` | [@piscesgh](https://github.com/piscesgh) |
+
 - Address review comments with new commits on the same branch.
 - PRs may be closed after extended inactivity; you can reopen or rebase when ready.
 
