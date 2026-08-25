@@ -19,6 +19,18 @@ jobs:
       - name: Verify AGENTS.md link targets resolve
         run: ./hooks/agents_doc_check.sh
 
+  codeowners:
+    name: CODEOWNERS coverage
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify every top-level directory has an owner
+        run: ./hooks/codeowners_check.sh
+
   test:
     runs-on: ubuntu-22.04
     steps:

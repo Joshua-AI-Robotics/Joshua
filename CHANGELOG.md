@@ -12,13 +12,16 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
-- [`.github/CODEOWNERS`](.github/CODEOWNERS) routing reviews for the two
-  subsystems that have a dedicated owner: the board layer (`robot/board/`,
-  `docs/BOARD_LAYER_RFC.md`) to @heostar and the communication layer
-  (`robot/comm/`) to @piscesgh. Owners are auto-requested as reviewers; their
-  approval becomes required once the `develop` ruleset is enforced with
-  "Require review from Code Owners" ([CONTRIBUTING.md](CONTRIBUTING.md)
-  "Review process")
+- [`.github/CODEOWNERS`](.github/CODEOWNERS) routing pull-request reviews.
+  Every top-level directory has an owner, plus dedicated subsystem owners for
+  the board layer (`robot/board/`, `docs/BOARD_LAYER_RFC.md`) and the
+  communication layer (`robot/comm/`); @hsmoon5458 is co-owner of every path.
+  Owners are auto-requested as reviewers, and their approval becomes required
+  once the `develop` ruleset is enforced with "Require review from Code Owners"
+  ([CONTRIBUTING.md](CONTRIBUTING.md) "Review process")
+- `hooks/codeowners_check.sh` and a `codeowners` CI job, failing the build when
+  a top-level directory has no owner in `.github/CODEOWNERS`, when a rule points
+  at a directory that no longer exists, or when a pattern lists no owner
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
   new `simulation/isaac/` launcher + viewer, and the `IsaacSimConfig` proto
   ([simulation/README.md](simulation/README.md)). No Isaac preset ships — the
