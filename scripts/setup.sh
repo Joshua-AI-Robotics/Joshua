@@ -55,8 +55,15 @@ echo -e "${BLUE}Installing Docker Engine, Compose v2, and buildx if needed...${N
 # both ship /usr/libexec/docker/cli-plugins/docker-compose, so dpkg refuses to
 # unpack docker-compose-plugin while the Ubuntu package is present. Remove the
 # conflicting Ubuntu-archive packages first (no-op if they aren't installed).
+# Remove one package per call, as Docker's own docs do. `apt-get remove` is
+# atomic: if a single name is missing from the archive -- releases differ, and
+# these names have moved between Ubuntu versions -- the whole call aborts with
+# "Unable to locate package" and removes *nothing*. The `|| true` would then
+# swallow that abort, silently leaving the conflict in place.
 CONFLICTING_PACKAGES=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
-apt-get remove -y "${CONFLICTING_PACKAGES[@]}" || true
+for pkg in "${CONFLICTING_PACKAGES[@]}"; do
+    apt-get remove -y "$pkg" || true
+done
 
 DOCKER_SOURCES=/etc/apt/sources.list.d/docker.sources
 LEGACY_DOCKER_LIST=/etc/apt/sources.list.d/docker.list
