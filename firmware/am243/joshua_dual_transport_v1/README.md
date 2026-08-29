@@ -5,18 +5,13 @@ One AM243 image that keeps TI's EtherCAT simple demo active while also serving
 and a small patch over the externally installed TI Industrial Communications
 SDK; it does not modify or vendor the SDK.
 
-## Status
-
-- [x] Source overlay and isolated build flow defined
-- [x] Image built successfully
-- [x] Flashed to LP-AM243
-- [x] Serial IDENTIFY/CONFIGURE/ENABLE/SET_TARGET/GET_FEEDBACK verified
-- [x] EtherCAT reaches OPERATIONAL with the serial task active
-- [ ] Physical motor output implemented
-
-This first milestone is deliberately motion-safe. Serial channel 0 reports
-`STEP_DIR` and implements the full command/response protocol in software, but
-does not toggle GPIO. EtherCAT retains the TI demo's existing PDO behavior.
+The LP-AM243 image implements dual EtherCAT and serial transports for testing
+and verification. The image has been built and flashed on the LP-AM243, the
+serial protocol (IDENTIFY, CONFIGURE, ENABLE, SET_TARGET, GET_FEEDBACK) has
+been exercised, and EtherCAT reaches OPERATIONAL with the serial task active.
+This milestone is intentionally motion-safe: the serial channel reports
+`STEP_DIR` and implements the command/response protocol in software but does
+not drive STEP/DIR GPIOs or move motors.
 
 ## Prerequisites
 
