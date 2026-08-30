@@ -1,0 +1,28 @@
+# Optional Isaac Sim overlay.
+#
+# Usage:
+#   export ISAAC_LAB_PATH=$HOME/IsaacLab
+#   export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
+#   docker compose -f docker-compose.yml -f docker-compose.isaac.yml --profile u24 run --rm joshua-u24 ...
+
+x-isaac-runtime: &isaac-runtime
+  volumes:
+    - ${HOME:?Set HOME}:${HOME:?Set HOME}
+  environment:
+    - ISAAC_LAB_PATH=${ISAAC_LAB_PATH}
+    - ISAAC_LAB_PYTHON=${ISAAC_LAB_PYTHON}
+    - ACCEPT_EULA=${ACCEPT_EULA:-Y}
+    - OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA:-YES}
+
+services:
+  joshua-u22:
+    <<: *isaac-runtime
+
+  joshua-u24:
+    <<: *isaac-runtime
+
+  run-u22:
+    <<: *isaac-runtime
+
+  run-u24:
+    <<: *isaac-runtime

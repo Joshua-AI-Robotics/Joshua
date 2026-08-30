@@ -78,7 +78,10 @@ Write a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and `usd_filename`
 pointing at `simulation/models/trileg/trileg_isaac.usda`, then:
 
 ```bash
-bazel run //launcher:joshua_main -- --config <your-preset>.pbtxt
+ISAAC_LAB_PATH=$HOME/IsaacLab \
+ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python \
+CONFIG=<your-preset>.pbtxt \
+docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
 See [simulation/README.md](../../README.md) for the backend fields.

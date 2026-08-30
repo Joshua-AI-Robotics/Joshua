@@ -1,14 +1,15 @@
 """Simulation entry point (MuJoCo and Isaac Sim backends).
 
-Usage (unified config -- launched from joshua_main or standalone):
-    bazel run //launcher:joshua_main -- \
-        --config config/config_preset/so100/sim_interactive.pbtxt
-
-    bazel run //simulation:simulation -- \
-        --config config/config_preset/so100/sim_mirror.pbtxt --mode interactive
+Usage (unified config -- launched from Docker):
+    CONFIG=config/config_preset/so100/sim_interactive.pbtxt \
+        docker compose run --rm run-u22
 
     # Isaac Sim viewer needs a preset with sim_backend: SIM_BACKEND_ISAAC_SIM;
-    # none ships with the repo. See simulation/README.md.
+    # none ships with the repo (see simulation/README.md). With one of your
+    # own, and Isaac Lab installed:
+    CONFIG=<your_isaac_preset>.pbtxt \
+        docker compose -f docker-compose.yml -f docker-compose.isaac.yml \
+        run --rm run-u24
 
 Legacy standalone SimulationConfig pbtxt files are also accepted.
 """
