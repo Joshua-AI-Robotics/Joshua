@@ -22,11 +22,11 @@ driver ever sees.
 
 ## 2. Status
 
-**Landed:** the protos and both seams; `BoardFactory` with instance cache and
-`ValidateMotorChannel`; AM243 over EtherCAT *and* serial; the Feetech/STS3215
-bus board and so100 actuator presets; the `joshua_wire_v1` C codec shared
-host↔firmware with golden-byte tests; Teensy 4.1 and ESP32, hardware-verified;
-the Python robot layer deleted.
+**Landed:** the protos, both seams, `BoardFactory` and `ValidateMotorChannel`;
+AM243 over EtherCAT *and* serial; the Feetech/STS3215 bus board and so100
+actuator presets; the `joshua_wire_v1` C codec shared host↔firmware with
+golden-byte tests; Teensy 4.1 and ESP32, hardware-verified; the Python robot
+layer deleted.
 
 **Open:**
 
@@ -51,7 +51,7 @@ name needs a new class today.
 | --- | --- | --- |
 | **F1** | `BoardFactory` switches on `board_type` alone, never `comm_type` — identity is bound to protocol at compile time. | `board_factory.cc:29` |
 | **F2** | `Init`/`OpenChannel`/`Teardown` are `final`, so dual-transport boards cannot subclass; `Am243Board` needs composition plus a `serial_mode_` bool. | `joshua_wire_board.h:55` |
-| **F3** | `SendAndReceive()` takes **already-framed** bytes, so every transport inherits serial's `0xA5`/crc16. Redundant on UDP; fatal on CAN — 39-byte frame, 8-byte MTU. | `frame_transport.h:39` |
+| **F3** | `SendAndReceive()` takes **already-framed** bytes, so every transport inherits serial's `0xA5`/crc16 — redundant on UDP, fatal on CAN (39-byte frame, 8-byte MTU). | `frame_transport.h:39` |
 | **F4** | Fixed response length is baked in at three levels at once; variable-length payloads break all three. | `frame_transport.h` |
 | **F5** | Three enums hand-mirrored with no `static_assert`. One already drifted: `JW1_BOARD_ESP32 = 8` vs `ESP32 = 7`. | `joshua_wire_v1.h:93` |
 | **F6** | `Esp32Board`'s only real override is a 2 s settle delay caused by the CP2102 bridge — a property of the USB-serial **link**, not of ESP32 silicon. | `esp32_board.cc` |
@@ -69,7 +69,8 @@ varint decode is data-dependent. Split the wire as every fieldbus already does
 | **Cyclic** | `SET_TARGET`, `GET_FEEDBACK` | fixed struct | loop rate |
 
 An 8-byte cyclic struct fits one CAN frame with no fragmentation; that should
-size it. The critical change: `Exchange` takes a **payload**, not a frame, so
+size it. (Serial answers `SET_TARGET` request/response today — question 2.)
+The critical change: `Exchange` takes a **payload**, not a frame, so
 framing and fragmentation live inside each transport.
 
 ```cpp
@@ -84,42 +85,42 @@ class CyclicTransport {  // fixed image swapped every cycle; no per-request resp
 };
 ```
 
-Identity becomes constructor data (`BoardIdentity`, generated from
-`BoardType`), and one engine per plane — `MessageBoard(identity, transport)`,
-`CyclicBoard(identity, transport, layout)` — replaces the per-board classes.
-`BoardFactory` does three independent lookups instead of one switch, so adding
+One engine per plane — `MessageBoard(identity, transport)` and
+`CyclicBoard(identity, transport, layout)` — replaces every per-board class,
+with identity passed in as data rather than encoded by the type. `BoardFactory`
+then resolves three axes independently instead of switching on one, so adding
 EtherCAT to a Teensy is a `.pbtxt` edit.
-
-| Today | Becomes | Why |
-| --- | --- | --- |
-| `BoardInterface`, `BoardChannel` | unchanged | already protocol-neutral |
-| `FrameTransport` | `MessageTransport` | transport owns its framing (F3) |
-| `JoshuaWireBoard` | `MessageBoard` | identity by constructor (F1, F2) |
-| `TeensyBoard`, `Esp32Board` | **deleted** | two constants each; delay → transport config (F6) |
-| `Am243Board` | split across planes | `serial_mode_` disappears (F2) |
-| `jw1_*` enums | generated from proto | drift becomes impossible (F5) |
 
 ## 5. Plan
 
-Each step ships independently. Only step 4 touches the wire.
+Architecture first: define every seam, both planes and the dependency rules
+before writing any transport. Steps 1–2 add no capability — they establish the
+structure and move what exists onto it. Only then is a new comm or a new wire
+format a one-file change, which is the entire claim of this RFC.
 
-**1 — Identity as data.** *No wire change; unblocks Teensy + EasyCAT.*
+**Step 1 — Establish the layers.** *Headers, fakes and build rules; no behaviour change.*
+- [ ] Declare both transport seams in `robot/comm/interfaces/`: `MessageTransport` (payload in, payload out) and `CyclicTransport` (image swap). Neither names a comm type.
+- [ ] Declare `BoardIdentity` and the two engines, `MessageBoard` and `CyclicBoard`, in `robot/board/engines/`. Identity is constructor data; no per-board subclass exists anywhere (F1, F2).
+- [ ] Settle which plane owns `SET_TARGET` (question 2). This sizes the engines and cannot be deferred past this step.
+- [ ] Enforce the dependency direction in Bazel visibility: motor drivers see only `BoardChannel`, engines see only the two seams, concrete transports are visible to the comm factory alone. A board target that can name a concrete transport is a layering bug.
+- [ ] Fakes for both seams, plus engine tests that run with no hardware.
+
+**Step 2 — Move the existing boards onto the architecture.** *No wire change; behaviour identical.*
+- [ ] `FrameTransport` → a serial `MessageTransport`; framing moves inside it and serial keeps today's exact bytes, so the golden-byte tests do not change (F3, F4).
+- [ ] `JoshuaWireBoard` → `MessageBoard`; delete `TeensyBoard` and `Esp32Board`; settle delay → serial transport config (F1, F2, F6).
 - [ ] Generate `BoardIdentity` and the `jw1_*` enums from the protos; fix `JW1_BOARD_ESP32` to `7` (F5).
-- [ ] Delete `TeensyBoard`/`Esp32Board`; settle delay → serial transport config (F1, F6).
-- [ ] `BoardFactory` does three lookups (F1).
+- [ ] AM243's EtherCAT path → `CyclicBoard` + an EtherCAT `CyclicTransport`, TI PDO map as an `ImageLayout`; `serial_mode_` and the hand-forwarding disappear (F2).
+- [ ] `BoardFactory` resolves three axes independently: identity, plane, transport.
+- [ ] Acceptance: so100 teleop and the AM243 EtherCAT path behave identically, and no per-board class remains.
 
-**2 — Framing into the transport.** *No wire change; pure refactor.*
-- [ ] `FrameTransport` → `MessageTransport` (F3, F4); serial keeps today's exact bytes.
-- [ ] Move the serial `PortResources` cache behind the board factory.
+**Step 3 — Prove the axes are independent.** *No wire change; the payoff.*
+- [ ] A UDP `MessageTransport` plus the matching firmware variant: same board, same firmware logic, new link — **no new class and no engine change**.
 
-**3 — A second comm.** *The proof.*
-- [ ] `UdpMessageTransport` + firmware variant: same board, same firmware logic, **no new class**.
+**Step 4 — Proto payloads on the message plane.** *Wire change; firmware flash.*
+- [ ] nanopb on firmware, length-prefixed responses, retire `JW1_*_RESPONSE_PAYLOAD_LEN` (F4). Gated on question 1.
 
-**4 — Proto payloads on the message plane.** *Wire change; firmware flash.*
-- [ ] nanopb on firmware, length-prefixed responses, retire `JW1_*_RESPONSE_PAYLOAD_LEN` (F4). Gated on questions 1–2.
-
-**5 — Extract the cyclic plane.** *Refactor; AM243 hardware retest.*
-- [ ] `CyclicTransport` + `CyclicBoard`; AM243 EtherCAT moves onto them, TI PDO map as an `ImageLayout`. CAN lands here.
+**Step 5 — New axis values on the finished architecture.**
+- [ ] CAN, with ISO-TP fragmentation inside the transport; EtherCAT mailbox (CoE) on the message plane. Each should be one new file and a `.pbtxt` edit — if it is not, steps 1–2 were wrong.
 
 **Independent of the above**
 - [ ] **Perception** — route `Sts3215Encoder` through `FeetechBusBoard`: it writes raw Feetech frames to the shared port from publisher timers, bypassing the bus mutex. Then `SensorType`, optional `board_name`/`channel`, `ValidateSensorChannel`.
@@ -130,7 +131,7 @@ Each step ships independently. Only step 4 touches the wire.
 ## 6. Open questions
 
 1. **Can every firmware image afford nanopb?** ESP32 has headroom (20.7 % flash); Arduino Uno may need a compact non-proto encoding. *Blocks step 4.*
-2. **Is `SET_TARGET` always cyclic?** Request/response on serial today. If boards straddle planes, hybrid composition is needed at step 1, not step 5. *Blocks step 4.*
+2. **Is `SET_TARGET` always cyclic?** Request/response on serial today. If a board needs both planes at once, the engines must compose rather than exclude — a shape decision, so it *blocks step 1.*
 3. **CANopen, or raw CAN with ISO-TP?** CANopen's SDO/PDO split partly duplicates our planes.
 4. **Keep crc16 on links that already checksum?** Redundant over UDP and CAN.
 5. **Is BLE on the roadmap?** Removed with the Python layer; if speculative, only avoid precluding it.
@@ -140,7 +141,7 @@ Each step ships independently. Only step 4 touches the wire.
 
 - The same board type runs over two comms by editing `Board.comm` — no new class.
 - Adding a board is a `.pbtxt` edit plus a firmware target; drivers, transports and the factory shape are untouched.
-- No enum is mirrored by hand between host and firmware.
+- No board target can name a concrete transport, and no enum is mirrored by hand between host and firmware.
 - so100 teleop and the AM243 EtherCAT path pass unchanged at every step.
 
 ## Appendix: v1 section numbers
