@@ -5,7 +5,7 @@
 // <stdint.h>/<stddef.h>, explicit little-endian byte packing, pure
 // encode/decode functions over caller-provided buffers. One source file is
 // compiled into both the host (as a Bazel cc_library, linked into
-// TeensyBoard/ArduinoBoard) and every Joshua firmware image (as a
+// Am243Board/TeensyBoard/ArduinoBoard) and every Joshua firmware image (as a
 // PlatformIO lib), so the two sides cannot drift silently — see the repo's
 // firmware/common/BUILD and firmware/teensy/41/platformio.ini.
 //
@@ -87,6 +87,7 @@ typedef enum {
 // value-for-value, for the subset of board types that run Joshua firmware.
 typedef enum {
   JW1_BOARD_INVALID = 0,
+  JW1_BOARD_AM243 = 1,
   JW1_BOARD_TEENSY41 = 2,
   JW1_BOARD_ARDUINO_UNO = 3,
   JW1_BOARD_ESP32 = 8,

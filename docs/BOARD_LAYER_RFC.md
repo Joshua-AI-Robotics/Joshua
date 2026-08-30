@@ -1461,6 +1461,11 @@ Each phase lands green and independently revertible.
       cache moved (Phase 3 below).
 
 ### Phase 3 — Port AM243
+
+> `Am243Board` now supports both the original config-driven EtherCAT path and
+> the Phase 5 Joshua-firmware pattern over serial. `comm_type` selects the
+> variant; `am243_ethercat_demo.pbtxt` and `am243_serial_demo.pbtxt` exercise
+> the two paths independently.
 - [x] EtherCAT transport cache in `CommFactory` keyed by `interface_name` —
       one SOEM master per NIC, mirroring the serial `PortResources` cache
       (today every call constructs a new master; two `ecx_init()`s on one
@@ -1478,14 +1483,9 @@ Each phase lands green and independently revertible.
       generic joint driver; it retires with `MOTOR_TI_DEMO`).
 - [x] Rewire `am243_demo_smoke`, `am243_driver_smoke`, `am243_config_smoke`
       to the new path — these are the hardware regression gates.
-- [x] Prove the config-driven path end to end:
-      `am243_ethercat_demo.pbtxt → actuator_subscriber → Am243Board` drives
-      the TI demo. `ActionFactory` routes `MOTOR_TI_DEMO` through
-      `BoardFactory → Am243Board → TiDemoDriver` and this is unit-tested
-      (`ActionFactoryBoardPathTest.CreatesTiDemoDriverOverMockBoardChannel`)
-      — same caveat as Phase 4's `FeetechBusBoard`: proven in software over
-      a mock board, not yet run against real LP-AM243 hardware from the
-      config-driven path end to end.
+- [x] Keep the EtherCAT config-driven proof and add
+      `am243_serial_demo.pbtxt → actuator_subscriber → Am243Board`, routing
+      `MOTOR_STEPPER_NEMA17` through the shared serial `JoshuaWireBoard` path.
 - [x] Update `docs/am243_ethercat.md` boundaries section.
 
 ### Phase 4 — Port STS3215 (actuators + encoder co-migration)

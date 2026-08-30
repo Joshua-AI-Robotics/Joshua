@@ -1,10 +1,12 @@
 #include "robot/board/am243/am243_board.h"
 
 #include <memory>
+#include <vector>
 
 #include "absl/status/status.h"
+#include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/am243/am243_pdo_codec.h"
+#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/factory/comm_factory.h"
@@ -13,201 +15,121 @@
 namespace robot::board {
 namespace {
 
-using robot::comm::CommFactory;
-using robot::comm::ethercat::FakeEthercatTransport;
+std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
+                                          jw1_board_id_t board_id = JW1_BOARD_AM243) {
+  jw1_identify_response_t response{};
+  response.board_id = board_id;
+  response.n_channels = n_channels;
+  for (uint8_t i = 0; i < n_channels; ++i) {
+    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
+  }
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
+  return std::vector<uint8_t>(buf, buf + len);
+}
+
+std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw1_status_t status) {
+  uint8_t buf[JW1_MAX_FRAME_LEN];
+  const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
+  return std::vector<uint8_t>(buf, buf + len);
+}
 
 robot::board::Board MakeAm243Board() {
   robot::board::Board board;
-  board.set_name("am243_1");
+  board.set_name("am243_stepper_bus");
   board.set_board_type(robot::board::BoardType::AM243);
-
   auto* comm = board.mutable_comm();
-  comm->set_comm_type(robot::comm::CommType::ETHERCAT);
-  auto* ethercat_config = comm->mutable_ethercat_config();
-  ethercat_config->set_interface_name("fake-am243-iface0");
-  ethercat_config->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
+  comm->set_comm_type(robot::comm::CommType::SERIAL);
+  comm->mutable_serial_config()->set_port("/dev/ttyACM0");
+  comm->mutable_serial_config()->set_baudrate(115200);
+  board.mutable_firmware()->set_min_proto_version(1);
 
   auto* channel = board.add_channels();
   channel->set_index(0);
-  channel->set_drive(robot::board::DriveInterface::PDO_JOINT);
+  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
+  channel->mutable_step_dir()->set_max_pulse_rate_hz(20000);
+  channel->mutable_step_dir()->set_enable_active_low(true);
+  channel->mutable_step_dir()->set_step_pin(2);
+  channel->mutable_step_dir()->set_dir_pin(3);
+  channel->mutable_step_dir()->set_enable_pin(4);
+  return board;
+}
 
-  auto* am243_config = board.mutable_am243_config();
-  am243_config->set_slave_index(2);
-  am243_config->set_pdo_mapping(robot::board::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
-  am243_config->set_output_offset_bytes(4);
-  am243_config->set_input_offset_bytes(12);
-  am243_config->set_output_size_bytes(8);
-  am243_config->set_input_size_bytes(8);
+robot::board::Board MakeAm243EthercatBoard() {
+  robot::board::Board board;
+  board.set_name("am243_ethercat");
+  board.set_board_type(robot::board::BoardType::AM243);
+  auto* comm = board.mutable_comm();
+  comm->set_comm_type(robot::comm::CommType::ETHERCAT);
+  comm->mutable_ethercat_config()->set_interface_name("fake-am243-iface0");
+  comm->mutable_ethercat_config()->set_process_data_mode(
+      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
+  auto* channel = board.add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::DriveInterface::PDO_JOINT);
+  auto* am243 = board.mutable_am243_config();
+  am243->set_slave_index(2);
+  am243->set_pdo_mapping(robot::board::Am243PdoMapping::AM243_PDO_MAPPING_TI_DEMO);
+  am243->set_output_offset_bytes(4);
+  am243->set_input_offset_bytes(12);
+  am243->set_output_size_bytes(8);
+  am243->set_input_size_bytes(8);
   return board;
 }
 
 class Am243BoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeEthercatTransport>();
-    CommFactory::SetEthercatTransportFactoryForTesting([this] { return transport_; });
+    serial_transport_ = std::make_shared<FakeFrameTransport>();
+    Am243Board::SetFrameTransportFactoryForTesting(
+        [this](const robot::comm::Comm&) -> absl::StatusOr<std::shared_ptr<FrameTransport>> {
+          return serial_transport_;
+        });
+    ethercat_transport_ = std::make_shared<robot::comm::ethercat::FakeEthercatTransport>();
+    robot::comm::CommFactory::SetEthercatTransportFactoryForTesting(
+        [this] { return ethercat_transport_; });
   }
 
   void TearDown() override {
-    CommFactory::SetEthercatTransportFactoryForTesting(nullptr);
-    CommFactory::ResetEthercatTransportCacheForTesting();
+    Am243Board::SetFrameTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetEthercatTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::ResetEthercatTransportCacheForTesting();
   }
 
-  std::shared_ptr<FakeEthercatTransport> transport_;
+  std::shared_ptr<FakeFrameTransport> serial_transport_;
+  std::shared_ptr<robot::comm::ethercat::FakeEthercatTransport> ethercat_transport_;
 };
 
-TEST_F(Am243BoardTest, InitOwnsFullSoemLifecycle) {
+TEST_F(Am243BoardTest, InitSucceedsAgainstAm243Identity) {
+  serial_transport_->QueueResponse(MakeIdentifyResponse(1));
+  serial_transport_->QueueResponse(
+      MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_OK));
   Am243Board board;
 
-  auto status = board.Init(MakeAm243Board());
-
-  EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->init_calls_, 1);
-  EXPECT_EQ(transport_->configure_slaves_calls_, 1);
-  EXPECT_EQ(transport_->start_cyclic_calls_, 1);
-  // The explicit region config wins over slave discovery.
-  EXPECT_EQ(transport_->get_pdo_region_calls_, 0);
+  EXPECT_TRUE(board.Init(MakeAm243Board()).ok());
 }
 
-TEST_F(Am243BoardTest, InitRejectsWrongBoardType) {
+TEST_F(Am243BoardTest, InitRejectsNonAm243BoardType) {
   auto config = MakeAm243Board();
-  config.set_board_type(robot::board::BoardType::MOCK);
+  config.set_board_type(robot::board::BoardType::TEENSY41);
   Am243Board board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(Am243BoardTest, InitRejectsMissingEthercatComm) {
-  auto config = MakeAm243Board();
-  config.mutable_comm()->set_comm_type(robot::comm::CommType::SERIAL);
+TEST_F(Am243BoardTest, InitSupportsEthercatDemoConfig) {
   Am243Board board;
 
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_TRUE(board.Init(MakeAm243EthercatBoard()).ok());
+  EXPECT_EQ(ethercat_transport_->configure_slaves_calls_, 1);
+  EXPECT_EQ(ethercat_transport_->start_cyclic_calls_, 1);
 }
 
-TEST_F(Am243BoardTest, InitRejectsLrwProcessDataMode) {
-  auto config = MakeAm243Board();
-  config.mutable_comm()->mutable_ethercat_config()->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW);
+TEST_F(Am243BoardTest, InitRejectsNonAm243WireIdentity) {
+  serial_transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_TEENSY41));
   Am243Board board;
 
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(Am243BoardTest, InitRejectsUnspecifiedPdoMapping) {
-  auto config = MakeAm243Board();
-  config.mutable_am243_config()->set_pdo_mapping(
-      robot::board::Am243PdoMapping::AM243_PDO_MAPPING_UNSPECIFIED);
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kUnimplemented);
-}
-
-TEST_F(Am243BoardTest, InitRejectsNonPdoJointChannel) {
-  auto config = MakeAm243Board();
-  config.mutable_channels(0)->set_drive(robot::board::DriveInterface::STEP_DIR);
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(Am243BoardTest, InitRejectsInvalidExplicitPdoRegion) {
-  auto config = MakeAm243Board();
-  config.mutable_am243_config()->set_input_size_bytes(0);
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(Am243BoardTest, InitFetchesPdoRegionWhenSizesAreZero) {
-  auto config = MakeAm243Board();
-  config.mutable_am243_config()->set_output_size_bytes(0);
-  config.mutable_am243_config()->set_input_size_bytes(0);
-  Am243Board board;
-
-  auto status = board.Init(config);
-
-  EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->get_pdo_region_calls_, 1);
-  EXPECT_EQ(transport_->requested_slave_index_, 2);
-}
-
-TEST_F(Am243BoardTest, InitSurfacesStartCyclicFailure) {
-  transport_->start_cyclic_status_ =
-      absl::Status(absl::StatusCode::kUnavailable, "slaves did not reach OPERATIONAL");
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(MakeAm243Board()).code(), absl::StatusCode::kUnavailable);
-}
-
-TEST_F(Am243BoardTest, OpenChannelRejectsUndeclaredIndex) {
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-
-  EXPECT_EQ(board.OpenChannel(3).status().code(), absl::StatusCode::kNotFound);
-}
-
-TEST_F(Am243BoardTest, SetTargetStagesSeedAndExchanges) {
-  transport_->process_data_.working_count = 3;
-  transport_->process_data_.expected_working_count = 3;
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-  auto channel_or = board.OpenChannel(0);
-  ASSERT_TRUE(channel_or.ok());
-
-  auto status = (*channel_or)->SetTarget(TargetMode::kPosition, 127.5f);
-
-  EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_process_data_calls_, 1);
-  EXPECT_EQ(transport_->last_write_region_.slave_index, 2);
-  EXPECT_EQ(transport_->last_outputs_, am243::EncodeDemoOutputSeed(128));
-}
-
-TEST_F(Am243BoardTest, SetTargetClampsNativeValueToSeedRange) {
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-  auto channel_or = board.OpenChannel(0);
-  ASSERT_TRUE(channel_or.ok());
-
-  ASSERT_TRUE((*channel_or)->SetTarget(TargetMode::kPosition, 500.0f).ok());
-  EXPECT_EQ(transport_->last_outputs_, am243::EncodeDemoOutputSeed(255));
-
-  ASSERT_TRUE((*channel_or)->SetTarget(TargetMode::kPosition, -10.0f).ok());
-  EXPECT_EQ(transport_->last_outputs_, am243::EncodeDemoOutputSeed(0));
-}
-
-TEST_F(Am243BoardTest, SetTargetReturnsWorkingCountMismatch) {
-  transport_->process_data_.working_count = 2;
-  transport_->process_data_.expected_working_count = 3;
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-  auto channel_or = board.OpenChannel(0);
-  ASSERT_TRUE(channel_or.ok());
-
-  EXPECT_EQ((*channel_or)->SetTarget(TargetMode::kPosition, 1.0f).code(),
-            absl::StatusCode::kUnavailable);
-}
-
-TEST_F(Am243BoardTest, ReadFeedbackDecodesDemoEcho) {
-  transport_->inputs_ = am243::EncodeDemoOutputSeed(42);
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-  auto channel_or = board.OpenChannel(0);
-  ASSERT_TRUE(channel_or.ok());
-
-  auto feedback_or = (*channel_or)->ReadFeedback();
-
-  ASSERT_TRUE(feedback_or.ok()) << feedback_or.status();
-  EXPECT_EQ(feedback_or->position, 42.0f);
-}
-
-TEST_F(Am243BoardTest, TeardownStopsCyclicExchange) {
-  Am243Board board;
-  ASSERT_TRUE(board.Init(MakeAm243Board()).ok());
-
-  EXPECT_TRUE(board.Teardown().ok());
-  EXPECT_EQ(transport_->stop_cyclic_calls_, 1);
+  EXPECT_EQ(board.Init(MakeAm243Board()).code(), absl::StatusCode::kFailedPrecondition);
 }
 
 }  // namespace

@@ -18,7 +18,9 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":am243_pdo_codec",
+        "//firmware/common:joshua_wire_v1",
         "//robot/board/interfaces:board_interfaces",
+        "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/ethercat:ethercat_status",
         "//robot/comm/ethercat:ethercat_transport",
@@ -36,16 +38,9 @@ cc_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":am243_board",
-        ":am243_pdo_codec",
-        "//config/proto:robot_cc_proto",
-        "//robot/action/motors/drivers:ti_demo_driver",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//robot/board/interfaces:board_interfaces",
         "//robot/board/proto:board_cc_proto",
-        "//robot/comm/ethercat:ethercat_transport",
-        "//robot/comm/factory:comm_factory",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
+        "//robot/comm/proto:comm_cc_proto",
+        "@glog",
     ],
 )
 
@@ -55,13 +50,10 @@ cc_binary(
     data = ["//config/config_preset:config_presets"],
     visibility = ["//visibility:public"],
     deps = [
-        ":am243_pdo_codec",
         "//config:config_utils",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_packet_cc_proto",
-        "//robot/comm/ethercat:ethercat_transport",
-        "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
@@ -82,7 +74,8 @@ cc_test(
     srcs = ["am243_board_test.cc"],
     deps = [
         ":am243_board",
-        ":am243_pdo_codec",
+        "//firmware/common:joshua_wire_v1",
+        "//robot/board/frame:fake_frame_transport",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/ethercat:fake_ethercat_transport",
         "//robot/comm/factory:comm_factory",

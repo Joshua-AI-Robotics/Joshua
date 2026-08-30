@@ -1,0 +1,15 @@
+--- EtherCAT_Slave_Simple.c
++++ EtherCAT_Slave_Simple.c
+@@ -45 +45,2 @@
+-#include "ecSlvSimple.h"
++#include "ecSlvSimple.h"
++#include "joshua_serial_task.h"
+@@ -245 +246,7 @@ static void EC_SLV_APP_SS_mainTask(void* pArg_p)
+-    OSAL_registerPrintOut(NULL, ESL_OS_printf);
++    /* UART0 is a binary joshua_wire_v1 transport from this point onward. */
++    JoshuaSerialDisableLogs();
++    OSAL_registerPrintOut(NULL, JoshuaSerialDiscardLog);
++    if (SystemP_SUCCESS != JoshuaSerialStart())
++    {
++        goto Exit;
++    }

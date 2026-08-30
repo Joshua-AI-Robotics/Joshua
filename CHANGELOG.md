@@ -130,6 +130,12 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   `scripts/setup.sh` now bootstraps/checks Docker host tooling only
 - CI now runs Bazel tests through Docker for both Ubuntu 22/Humble and
   Ubuntu 24/Jazzy
+- AM243 now supports both config-driven transports: the existing TI EtherCAT
+  demo and the shared `joshua_wire_v1` serial frame transport used by Teensy.
+- Added a buildable LP-AM243 firmware overlay that runs the TI EtherCAT demo
+  and a motion-safe `joshua_wire_v1` UART task in the same image.
+- Added an AM243 serial demo smoke that prints firmware identity, channel
+  capabilities, command results, feedback, and round-trip timing.
 - `simulation/` restructured: backend code now lives in symmetric
   `simulation/mujoco/` (engine + modes) and `simulation/isaac/`
   (launcher + viewer) packages, and `simulation/models/` is organized
