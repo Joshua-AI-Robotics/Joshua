@@ -1,0 +1,69 @@
+# Single NEMA17 stepper controlled by an AM243 over joshua_wire_v1 serial.
+# The AM243 host class reuses the same shared serial/frame implementation as
+# Teensy and other Joshua-firmware boards. This preset opens a real serial
+# device and may move hardware; verify the port, pins, and wiring first.
+
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "am243_serial_demo"
+  id: 243
+}
+
+robot {
+  boards {
+    name: "am243_stepper_bus"
+    board_type: AM243
+    comm {
+      comm_type: SERIAL
+      serial_config { port: "/dev/ttyACM0" baudrate: 115200 }
+    }
+    firmware { min_proto_version: 1 }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir {
+        max_pulse_rate_hz: 4000
+        invert_dir: false
+        enable_active_low: true
+        # AM243 GPIO identifiers expected by the board firmware. Confirm
+        # these values against the flashed image and physical wiring.
+        step_pin: 2
+        dir_pin: 3
+        enable_pin: 4
+        step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "am243_stepper_1/position"
+          normalized: false
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "am243_stepper_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "am243_stepper_bus"
+        channel: 0
+        physical_lower_limit: -180
+        physical_upper_limit: 180
+        operational_lower_limit: -90
+        operational_upper_limit: 90
+        stepper_config {
+          steps_per_degree: 8.888889
+          gear_ratio: 1.0
+          idle_position: 0
+        }
+      }
+    }
+  }
+}

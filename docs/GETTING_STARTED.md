@@ -1,53 +1,33 @@
 # Getting Started
 
-This guide covers installation, your first run, and common entry points. For build scripts and cross-platform builds, see [scripts/README.md](../scripts/README.md).
+Joshua is Docker-first and GPU-first for development. The host should provide Docker Engine, Docker Compose v2, an NVIDIA driver, and NVIDIA Container Toolkit. CPU-only development uses an explicit fallback. ROS2, Bazel, Python dependencies, CUDA user-space libraries, OpenCV, and build tools live inside Docker.
 
-## Prerequisites
+## Host Bootstrap
 
-Joshua supports **Ubuntu Linux** only. macOS is not supported (native or via Docker).
-
-- **Docker path:** Ubuntu 22.04 or 24.04 LTS, with Docker installed (see [Docker development environment](#docker-development-environment)).
-- **Native path:** Ubuntu 22.04 LTS (see [Native installation](#native-installation)).
-
-## Docker development environment
-
-### Linux: GPG credentials (Docker Desktop)
-
-On Linux, Docker Desktop may require GPG key credentials. See [Docker credentials management for Linux](https://docs.docker.com/desktop/setup/sign-in/#credentials-management-for-linux-users).
-
-### Build images
-
-Pick the image that matches your host OS and target ROS distribution:
-
-| Host | ROS | Build command |
-|------|-----|---------------|
-| Ubuntu (x86_64) | Humble (22.04) | `docker compose build joshua-u22` |
-| Ubuntu (ARM64) | Humble (22.04) | `docker compose --profile arm64 build joshua-u22-arm64` |
-| Ubuntu (x86_64) | Jazzy (24.04) | `docker compose --profile u24 build joshua-u24` |
-
-The ARM64 and Jazzy services are gated behind Compose profiles (`arm64`, `u24`), so the `--profile` flag is required when building them. An ARM64 variant exists for `joshua-u24` as well (e.g. Jetson): `docker compose --profile arm64 build joshua-u24-arm64`.
-
-### Run an interactive shell
+Use the bootstrap script to prepare Docker and NVIDIA host tooling:
 
 ```bash
-# Ubuntu 22.04 + ROS 2 Humble
-docker compose run joshua-u22
-
-# Ubuntu 24.04 + ROS 2 Jazzy
-docker compose run joshua-u24
+sudo ./scripts/setup.sh
+docker compose version
 ```
 
-Type `exit` to leave the shell. To resume a stopped container:
+If the script adds your user to the `docker` group, log out and back in before running Docker without `sudo`.
+
+## Docker Environments
+
+Both supported ROS stacks are first-class:
+
+| Stack | Command |
+|------|---------|
+| Ubuntu 22.04 / ROS2 Humble / Python 3.10 | `docker compose run --rm joshua-u22` |
+| Ubuntu 24.04 / ROS2 Jazzy / Python 3.12 | `docker compose run --rm joshua-u24` |
+
+Docker Compose is the canonical interface. The optional Makefile provides shorter aliases; run `make help` to list them.
+
+**After pulling changes** that touch `dockerfiles/`, `docker/`, or the requirements lockfiles, rebuild before running tasks — `docker compose run` does not rebuild on older Compose versions, and a stale image can be missing fixes that live in the image itself:
 
 ```bash
-docker container list -a
-docker start -ai <container_name>
-```
-
-Example:
-
-```bash
-docker start -ai joshua-joshua-u22-run-a199afce4b8a
+docker compose build joshua-u22   # and joshua-u24 if you use it
 ```
 
 ### Keep a development container running
@@ -60,67 +40,30 @@ and avoids bind-mount ownership churn from short-lived containers.
 # Start Ubuntu 24.04 + ROS 2 Jazzy once.
 docker compose --profile u24 up -d joshua-u24
 
-# Run commands in the existing container.
-docker compose exec joshua-u24 bazel test //robot/board/am243:am243_board_test
+# Run commands in the existing container (Bazel needs the matching configs).
+docker compose exec joshua-u24 bazel test --config=u24 --config=x86-base \
+  --@rules_python//python/config_settings:python_version=3.12 \
+  //robot/board/am243:am243_board_test
 
 # Open an interactive shell in the existing container.
 docker compose exec joshua-u24 bash
 ```
 
-## Native installation
+## Launcher
 
-On Ubuntu 22.04 LTS, install dependencies with the setup script:
-
-```bash
-sudo ./scripts/setup.sh --env=dev
-```
-
-See [scripts/README.md](../scripts/README.md) for `runtime` mode, build helpers, and Ubuntu 24.04 / Jazzy support.
-
-## First run: launcher
-
-From the repo root (inside Docker or natively), start the main launcher:
+Run the default launcher through Docker:
 
 ```bash
-bazel run launcher:joshua_main
+docker compose run --rm run-u22
+docker compose run --rm run-u24
 ```
 
 Pass a preset config when needed:
 
 ```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/so100/teleoperate.pbtxt
+CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u24
 ```
-
-## Example: SO100 teleoperation
-
-This preset runs SO100 in teleoperation mode (follower and lead arm per config):
-
-- Config: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt)
-
-Set each actuator's `operational_lower_limit` / `operational_upper_limit` in
-the preset before running. (The `MODE_CALIBRATION` node that measured these
-automatically was removed; set them by hand.)
-
-```bash
-bazel run launcher:joshua_main
-```
-
-## Simulation (overview)
-
-All modes use `joshua_main`; the preset’s `operation_mode` selects behavior. Full simulation docs: [simulation/README.md](../simulation/README.md).
-
-**MuJoCo interactive viewer:**
-
-```bash
-bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_interactive.pbtxt
-```
-
-**Isaac Sim viewer** (requires Isaac Lab installed): the Isaac Sim backend
-(`SIM_BACKEND_ISAAC_SIM`) is supported by `simulation/isaac/`, but **no preset
-ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
-against [simulation/README.md](../simulation/README.md) to use it.
-
-### Preset reference
 
 | Config | Backend | What it does |
 |--------|---------|-------------|
@@ -129,46 +72,98 @@ against [simulation/README.md](../simulation/README.md) to use it.
 | `so100/sim_mirror.pbtxt` | MuJoCo | Sim mirrors a real arm — **opens `/dev/ttyACM1`** |
 | `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 
-## Web UI with Docker
+Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.
 
-The React control panel can be built and served via Docker Compose from the project root.
+Set each actuator's `operational_lower_limit` / `operational_upper_limit` in
+the preset before running hardware. (The `MODE_CALIBRATION` node that measured
+these automatically was removed; set them by hand.)
 
-### Prerequisites
+## GPU and CPU modes
 
-- Docker and **Docker Compose v2** (`docker compose`, not `docker-compose`):
+Developer shells and launcher tasks request an NVIDIA GPU by default. Setup validates the host driver and installs NVIDIA Container Toolkit without installing project dependencies or the host CUDA toolkit:
 
 ```bash
-sudo apt install docker.io docker-compose-plugin
-sudo usermod -aG docker $USER
-newgrp docker
-docker compose version
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22 nvidia-smi
 ```
 
-### Build and run
+Run AI inference with the normal launcher service:
 
-The UI service is gated behind the `production` Compose profile:
+```bash
+CONFIG=config/config_preset/so100/random_noise.pbtxt docker compose run --rm run-u22
+```
+
+For CPU-only development, skip NVIDIA setup and apply the CPU override:
+
+```bash
+sudo ./scripts/setup.sh --cpu
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+  run --rm joshua-u22
+```
+
+**Isaac Sim viewer** (requires Isaac Lab installed): the Isaac Sim backend
+(`SIM_BACKEND_ISAAC_SIM`) is supported by `simulation/isaac/`, but **no preset
+ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
+against [simulation/README.md](../simulation/README.md) to use it.
+
+Tests, package builds, UI services, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
+
+## Tests and Builds
+
+Run tests inside Docker:
+
+```bash
+docker compose run --rm test-u22
+docker compose run --rm test-u24
+```
+
+Build deployable packages inside Docker:
+
+```bash
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
+```
+
+Artifacts are written under `dist/<os>/<cpu>/`.
+
+## Simulation
+
+MuJoCo simulation runs through the same Docker launcher:
+
+```bash
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
+CONFIG=config/config_preset/so100/sim_passive.pbtxt docker compose run --rm run-u24
+```
+
+Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables. **No Isaac preset ships with the repo** — write one against [simulation/README.md](../simulation/README.md) first.
+
+```bash
+export ISAAC_LAB_PATH=$HOME/IsaacLab
+export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
+CONFIG=<your-isaac-preset>.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
+```
+
+## Web UI
+
+Run the production UI:
 
 ```bash
 docker compose --profile production up --build joshua-ui
-docker compose --profile production up -d --build joshua-ui   # detached
-docker compose logs -f joshua-ui
-docker compose --profile production down
 ```
 
-**Development** (UI with hot reload and Zenoh bridge; add `ros2-demo-nodes` for demo traffic):
+Run the development UI with the Zenoh bridge:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
+docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+  up zenoh-bridge-ros2dds joshua-ui-dev
 ```
 
-Do not start `joshua-ui` and `joshua-ui-dev` at the same time (both use port 3000).
+Open `http://localhost:3000`.
 
-Open [http://localhost:3000](http://localhost:3000).
+Stop Docker Compose services:
 
-The image builds the React app, generates protobuf schema from repo protos, and serves via nginx. Build context is the repo root so schemas can read `config/`, `robot/`, and `ai/`.
-
-For local npm development, see [ui/README.md](../ui/README.md).
-
-## Web control panel
-
-See [ui/README.md](../ui/README.md) for local npm development and UI features.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+  --profile production --profile u24 --profile arm64 --profile mac down
+```

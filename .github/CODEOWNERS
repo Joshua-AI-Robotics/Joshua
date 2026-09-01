@@ -42,6 +42,7 @@
 /ai/                       @hsmoon5458
 /assets/                   @hsmoon5458
 /config/                   @hsmoon5458
+/docker/                   @donegjookim @hsmoon5458
 /dockerfiles/              @donegjookim @hsmoon5458
 # Docs are owned by every collaborator with write access, so a docs-only
 # change is never blocked waiting on one person.

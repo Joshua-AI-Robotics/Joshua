@@ -70,7 +70,8 @@ Contract tests in [`packet_parser_test.py`](packet_parser_test.py) compare these
 Run tests:
 
 ```bash
-bazel test //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 ---
@@ -83,7 +84,7 @@ Use this checklist any time you edit `action_packet.proto` or `perception_packet
 
 | Change | Action |
 |--------|--------|
-| New **float** field on `action_type` oneof (e.g. `acceleration`) | 1. Add to `ACTION_SCALAR_ONEOF_FIELDS`. 2. Add matching entry to `ACTION_TOPIC_SUFFIX_TO_FIELD` (suffix → field name). 3. Update `kActionTopicSuffixes[]` and `ActionPacketFromFloat()` in [`packet_parser.cc`](packet_parser.cc). 4. Run `bazel test //ros2/utils:packet_parser_test`. |
+| New **float** field on `action_type` oneof (e.g. `acceleration`) | 1. Add to `ACTION_SCALAR_ONEOF_FIELDS`. 2. Add matching entry to `ACTION_TOPIC_SUFFIX_TO_FIELD` (suffix → field name). 3. Update `kActionTopicSuffixes[]` and `ActionPacketFromFloat()` in [`packet_parser.cc`](packet_parser.cc). 4. Run the packet parser test inside the Docker shell. |
 | New **position** field (name contains `position`) on `action_type` or inside `ComplexAction` | Add path to `ACTION_POSITION_FIELD_PATHS` (e.g. `"complex.staging_position"`). Implement handling in `_apply_to_position_sources`, `extract_position_from_action`, and C++ `ApplyToPositionSources`. |
 | New position field **without** `position` in the name | Add path to `ACTION_POSITION_FIELD_PATHS` manually **and** extend `_discover_action_position_field_paths_from_proto()` in the test file so the contract test covers it. |
 | Field that should denormalize when `normalized=true` | Must be listed in `ACTION_POSITION_FIELD_PATHS`. |
@@ -92,7 +93,8 @@ Use this checklist any time you edit `action_packet.proto` or `perception_packet
 **Verify:**
 
 ```bash
-bazel test //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 Expected failing tests if you forget a registry update:
@@ -112,7 +114,8 @@ Expected failing tests if you forget a registry update:
 **Verify:**
 
 ```bash
-bazel test //ros2/utils:packet_parser_test
+docker compose run --rm joshua-u22 \
+  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
 ```
 
 Expected failing tests if you forget:
@@ -154,7 +157,7 @@ Registry/parser updates alone are not enough if a **new perception type** needs 
 
 3. Implement read/write for `"complex.staging_position"` in `_apply_to_position_sources` and `extract_position_from_action` (and C++).
 
-4. Run `bazel test //ros2/utils:packet_parser_test` — contract tests should pass once registries and handlers match proto.
+4. Run the packet parser test inside the Docker shell — contract tests should pass once registries and handlers match proto.
 
 ---
 

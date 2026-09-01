@@ -29,6 +29,7 @@ MODULE.bazel.lock
 .venv/
 .cache/
 
+.venv-*/
 
 # Python bytecode and tooling caches
 __pycache__/
@@ -53,3 +54,18 @@ dist/
 
 # Ignore MAC OS files
 .DS_Store
+
+# Firmware-specific ignores
+# Toolchain metadata, local build outputs, and third-party archives under firmware/
+firmware/**/.metadata/
+firmware/**/build/
+firmware/**/Debug/
+firmware/**/Release/
+firmware/**/out/
+firmware/**/*.out
+firmware/**/*.map
+firmware/**/*.mcelf*
+firmware/**/*.appimage*
+firmware/**/third_party/SOEM-master/
+firmware/**/third_party/SOEM-manual-build/
+firmware/**/third_party/soem-master.zip

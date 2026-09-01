@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "firmware/common/joshua_wire_v1.h"
 #include "robot/board/am243/am243_pdo_codec.h"
 #include "robot/comm/ethercat/ethercat_status.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
@@ -18,28 +19,20 @@ namespace robot::board {
 struct Am243SharedState {
   std::shared_ptr<robot::comm::ethercat::EthercatTransport> transport;
   robot::comm::ethercat::PdoRegion pdo_region;
-  // Serializes channel access to the slave's slice of the bus image. Two
-  // boards on one NIC still share the master transport underneath.
   std::mutex bus_mutex;
 };
 
 namespace {
 
-// One PDO_JOINT slot on the AM243 TI demo image. The channel's native unit
-// is the demo seed (0-255 counts, output byte 0); SetTarget stages the seed
-// and ships it with an immediate exchange on the shared master, and every
-// exchange is working-count checked. All target modes land on the same seed
-// byte because the demo exposes no per-mode fields.
 class Am243DemoChannel : public BoardChannel {
  public:
-  Am243DemoChannel(std::shared_ptr<Am243SharedState> state, uint32_t index)
-      : state_(std::move(state)), index_(index) {}
+  explicit Am243DemoChannel(std::shared_ptr<Am243SharedState> state)
+      : state_(std::move(state)) {}
 
-  // The TI demo has no enable/disable register; torque gating is a Joshua
-  // convention on the seed byte, owned by the motor driver.
   absl::Status Enable() override {
     return absl::OkStatus();
   }
+
   absl::Status Disable() override {
     return absl::OkStatus();
   }
@@ -66,18 +59,16 @@ class Am243DemoChannel : public BoardChannel {
 
  private:
   std::shared_ptr<Am243SharedState> state_;
-  const uint32_t index_;
 };
 
-absl::Status ValidateConfig(const robot::board::Board& config) {
+absl::Status ValidateEthercatConfig(const robot::board::Board& config) {
   if (config.board_type() != robot::board::BoardType::AM243) {
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not an AM243 board."));
   }
-  if (config.comm().comm_type() != robot::comm::CommType::ETHERCAT ||
-      !config.comm().has_ethercat_config()) {
+  if (!config.comm().has_ethercat_config()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("AM243 board '", config.name(), "' requires EtherCAT comm config."));
+        absl::StrCat("AM243 board '", config.name(), "' has no EtherCAT comm config."));
   }
   if (config.comm().ethercat_config().process_data_mode() !=
       robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR) {
@@ -116,7 +107,23 @@ absl::Status Am243Board::Init(const robot::board::Board& config) {
     return absl::FailedPreconditionError(
         absl::StrCat("AM243 board '", config.name(), "' is already initialized."));
   }
-  ABSL_RETURN_IF_ERROR(ValidateConfig(config));
+
+  if (config.comm().comm_type() == robot::comm::CommType::SERIAL) {
+    auto serial_board =
+        std::make_shared<JoshuaWireBoard>(robot::board::BoardType::AM243, JW1_BOARD_AM243);
+    ABSL_RETURN_IF_ERROR(serial_board->Init(config));
+    config_ = config;
+    serial_board_ = std::move(serial_board);
+    serial_mode_ = true;
+    initialized_ = true;
+    return absl::OkStatus();
+  }
+
+  if (config.comm().comm_type() != robot::comm::CommType::ETHERCAT) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "AM243 board '", config.name(), "' requires SERIAL or ETHERCAT comm config."));
+  }
+  ABSL_RETURN_IF_ERROR(ValidateEthercatConfig(config));
 
   auto state = std::make_shared<Am243SharedState>();
   ABSL_ASSIGN_OR_RETURN(state->transport,
@@ -145,11 +152,12 @@ absl::Status Am243Board::Init(const robot::board::Board& config) {
                                                      channel.index(),
                                                      " more than once."));
     }
-    channels_[channel.index()] = std::make_shared<Am243DemoChannel>(state, channel.index());
+    channels_[channel.index()] = std::make_shared<Am243DemoChannel>(state);
   }
 
   config_ = config;
   state_ = std::move(state);
+  serial_mode_ = false;
   initialized_ = true;
   return absl::OkStatus();
 }
@@ -157,6 +165,9 @@ absl::Status Am243Board::Init(const robot::board::Board& config) {
 absl::StatusOr<std::shared_ptr<BoardChannel>> Am243Board::OpenChannel(uint32_t index) {
   if (!initialized_) {
     return absl::FailedPreconditionError("AM243 board is not initialized.");
+  }
+  if (serial_mode_) {
+    return serial_board_->OpenChannel(index);
   }
   auto it = channels_.find(index);
   if (it == channels_.end()) {
@@ -173,15 +184,19 @@ absl::Status Am243Board::Teardown() {
   if (!initialized_) {
     return absl::OkStatus();
   }
-  // StopCyclic drops the whole group to INIT — master-wide, so this assumes
-  // the board is the last user of the interface. Fine for today's
-  // single-slave reality; revisit when two boards share one NIC. The master
-  // socket itself stays open in the CommFactory cache.
-  absl::Status stop_status = state_->transport->StopCyclic();
-  channels_.clear();
-  state_.reset();
+
+  absl::Status status = absl::OkStatus();
+  if (serial_mode_) {
+    status = serial_board_->Teardown();
+    serial_board_.reset();
+  } else {
+    status = state_->transport->StopCyclic();
+    channels_.clear();
+    state_.reset();
+  }
   initialized_ = false;
-  return stop_status;
+  serial_mode_ = false;
+  return status;
 }
 
 }  // namespace robot::board

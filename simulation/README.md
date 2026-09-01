@@ -41,8 +41,7 @@ selected via `simulation.mode` in the preset:
 
 ```bash
 # SO-ARM100 interactive viewer
-bazel run //launcher:joshua_main -- \
-    --config config/config_preset/so100/sim_interactive.pbtxt
+CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm run-u22
 ```
 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
@@ -71,7 +70,7 @@ simulation/isaac/viewer.py     (Isaac Lab venv, py3.11)
 
 ### Prerequisites
 
-1. **Install Isaac Sim** (4.5+ recommended, NVIDIA GPU required):
+1. **Install Isaac Sim** (4.5+ recommended, NVIDIA GPU required) on the host:
    https://docs.isaacsim.omniverse.nvidia.com/latest/installation/index.html
 
 2. **Clone and install Isaac Lab**:
@@ -83,7 +82,7 @@ cd IsaacLab
 ./isaaclab.sh --install
 ```
 
-3. **Set environment variables**:
+3. **Set environment variables** for the Docker-launched Joshua process:
 
 ```bash
 export ISAAC_LAB_PATH=~/IsaacLab
@@ -98,7 +97,10 @@ a preset with `sim_backend: SIM_BACKEND_ISAAC_SIM` and a `usd_filename` pointing
 at a model under [models/](models/), then:
 
 ```bash
-bazel run //launcher:joshua_main -- --config <your-preset>.pbtxt
+export ISAAC_LAB_PATH=$HOME/IsaacLab
+export ISAAC_LAB_PYTHON=$HOME/env_isaaclab/bin/python
+CONFIG=<your-preset>.pbtxt \
+  docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
 Close the viewer window (or Ctrl+C) to exit.

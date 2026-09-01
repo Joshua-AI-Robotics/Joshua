@@ -1,0 +1,15 @@
+bazel-bin
+bazel-Joshua
+bazel-workspace
+bazel-out
+bazel-testlogs
+.venv
+.venv-cuda-smoke
+venv
+ENV
+node_modules
+ui/node_modules
+dist
+output
+.cache
+.claude

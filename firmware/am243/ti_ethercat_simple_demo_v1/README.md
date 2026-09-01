@@ -110,8 +110,7 @@ full SOEM master scan trace and expected slave identity
 fields), or run the host smoke binary:
 
 ```bash
-bazel run //robot/board/am243:am243_config_smoke -- \
-  config/config_preset/example/am243_ethercat_demo.pbtxt <interface_name> 80 5000 1
+bazel run //robot/comm/ethercat:am243_demo_smoke -- <interface_name> 20 1
 ```
 
 ## Wiring / Pinout
@@ -119,8 +118,10 @@ bazel run //robot/board/am243:am243_config_smoke -- \
 Not applicable — AM243 communicates over EtherCAT (a NIC-to-NIC Ethernet
 link, not a channel-table pinout contract), and this firmware doesn't
 expose a Joshua-authored channel table (`docs/BOARD_LAYER_RFC.md` §7.3 —
-AM243 stays on its own vendor-specific PDO codec,
-`robot/board/am243/am243_pdo_codec.*`).
+the EtherCAT variant stays on its vendor-specific PDO codec,
+`robot/board/am243/am243_pdo_codec.*`). `Am243Board` also supports serial
+`joshua_wire_v1`, which requires a different, Joshua-compatible firmware
+image; that image is not this vendor demo.
 
 ## Known gaps / Troubleshooting
 

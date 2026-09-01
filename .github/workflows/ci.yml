@@ -5,7 +5,6 @@ on:
     branches: [ develop ]
   workflow_dispatch: {}
 
-# TODO: Move this test to run in a docker image.
 jobs:
   agent-docs:
     name: Agent instruction links
@@ -31,7 +30,8 @@ jobs:
       - name: Verify every top-level directory has an owner
         run: ./hooks/codeowners_check.sh
 
-  test:
+  entrypoint-contract:
+    name: Docker entrypoint contract
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -39,7 +39,30 @@ jobs:
         with:
           submodules: false
 
-      - name: Free Disk Space for Unused Packages in Joshua Project
+      - name: Check Docker-first invariants
+        run: ./scripts/docker_entrypoints_test.sh
+
+  docker-test:
+    name: Docker tests (${{ matrix.os }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: u22
+            service: test-u22
+            shell: joshua-u22
+          - os: u24
+            service: test-u24
+            shell: joshua-u24
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Free disk space
         run: |
           echo "Disk space before cleanup:"
           df -h
@@ -55,29 +78,16 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Mount Bazel Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-${{ runner.os }}-
+      - name: Build Docker image
+        run: docker compose build ${{ matrix.service }}
 
-      - name: Install Bazelisk
-        run: sudo npm install -g @bazel/bazelisk
+      # Regression check for the non-interactive ROS bug: task commands must
+      # see a sourced ROS environment. CPU overlay because runners have no GPU.
+      - name: Verify ROS environment in non-interactive shell
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.cpu.yml
+          run --rm ${{ matrix.shell }}
+          bash -c 'test -n "$AMENT_PREFIX_PATH" && python3 -c "import rclpy" && echo "ROS environment OK"'
 
-      - name: Setup ROS 2
-        uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: humble
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libevdev-dev
-
-      - name: Run Tests
-        run: bazel test //...
+      - name: Run Bazel tests in Docker
+        run: docker compose run --rm ${{ matrix.service }}

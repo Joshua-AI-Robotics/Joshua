@@ -33,45 +33,50 @@ pure MuJoCo/Isaac simulation.
 
 ## Development environment
 
-Two supported paths — [CONTRIBUTING.md](CONTRIBUTING.md) is authoritative.
-Docker is recommended:
+Development is **Docker-first** — [CONTRIBUTING.md](CONTRIBUTING.md) is
+authoritative. Native Ubuntu development is not a supported entrypoint; ROS 2,
+Bazel, Python, and CUDA all live inside the images.
+
+The host bootstrap installs Docker and NVIDIA container support only:
+
+```bash
+sudo ./scripts/setup.sh          # add --cpu on hosts without an NVIDIA GPU
+```
+
+Then open a dev shell:
 
 ```bash
 docker compose build joshua-u22       # Ubuntu 22.04 / ROS 2 Humble
 docker compose run --rm joshua-u22    # interactive shell
 ```
 
-Native Ubuntu 22.04 is also supported:
-
-```bash
-sudo ./scripts/setup.sh --env=dev
-```
-
-Ubuntu 24.04 / ROS 2 Jazzy is experimental and sits behind a Compose profile
-(`docker compose --profile u24 run --rm joshua-u24`). Development is supported
-on **Ubuntu Linux** only; macOS is not. ARM64, Jazzy, and Isaac Sim variants
-are documented in [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+Ubuntu 24.04 / ROS 2 Jazzy is equally supported — CI tests both stacks on every
+PR. Use `docker compose run --rm joshua-u24`; `run` enables the service's `u24`
+profile for you, so `--profile u24` is only needed for a persistent
+`docker compose up`. Development is supported on **Ubuntu Linux** only; macOS
+is not. ARM64 and Isaac Sim variants are documented in
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ## Test
 
-Run these **inside a dev shell**, or natively after `setup.sh --env=dev` — a
-bare host without ROS 2 and Bazel will fail:
+What CI runs on every PR is the Compose **task service**, not a bare `bazel`
+invocation — it pins the Bazel configs and Python version. Reproduce CI exactly
+from the host with:
 
 ```bash
-bazel test //...   # what CI runs on every PR
+docker compose run --rm test-u22   # or test-u24 for the Jazzy stack
 ```
 
-For targeted work, run the package you touched:
+Inside a dev shell, `bazel` works directly for iteration:
 
 ```bash
-bazel test //ros2/utils:packet_parser_test
+bazel test //ros2/utils:packet_parser_test   # the package you touched
 ```
 
-To run one-shot from the host without opening a shell:
-
-```bash
-docker compose run --rm joshua-u22 bazel test //...
-```
+Be aware that a bare `bazel test //...` omits the `--config=u22`
+(or `--config=u24`), `--config=x86-base`, and `python_version` flags the task
+service injects, so its results are not CI-representative — confirm with
+`test-u22`/`test-u24` before claiming CI will pass.
 
 CI tests and normal package builds do not require GPU hardware.
 
@@ -83,8 +88,10 @@ Before pushing:
 ./hooks/lint_check.sh --fix   # auto-fix files changed since diverging from develop
 ```
 
-Covers `clang-format` (C/C++/proto) and `black`/`isort`/`flake8` (Python). After
-`setup.sh --env=dev`, pre-commit runs these automatically on **pre-push**.
+Covers `clang-format` (C/C++/proto) and `black`/`isort`/`flake8` (Python). The
+script needs `pre-commit` on the machine you run it from
+(`python3 -m pip install --user pre-commit`); nothing installs a git pre-push
+hook for you, so run it yourself before pushing.
 
 `BUILD`/`BUILD.bazel` files are **not** covered by that script — run
 `buildifier` on them yourself when you edit them.
