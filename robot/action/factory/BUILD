@@ -11,6 +11,7 @@ cc_library(
         "//robot/action/motors/drivers:sts3215_driver",
         "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/board/factory:board_factory",
+        "//robot/board/factory:board_resolver",
         "//robot/board/factory:motor_channel_validation",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
