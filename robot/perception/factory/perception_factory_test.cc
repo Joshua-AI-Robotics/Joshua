@@ -162,5 +162,42 @@ TEST_F(PerceptionFactoryTest, RejectsMeaningTheSignalLegCannotProduce) {
   EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
+// Device leg: a sensor_config whose meaning disagrees with sensor_type is a
+// config error, not a silently mismatched driver.
+TEST_F(PerceptionFactoryTest, RejectsDeviceConfigThatContradictsSensorType) {
+  config::Robot robot_config;
+  robot::perception::SinglePerception single_perception;
+  auto* sensor = single_perception.mutable_sensor();
+  sensor->set_sensor_name("webcam");
+  sensor->set_sensor_type(robot::perception::SensorType::RANGE_SCAN);
+  sensor->mutable_opencv_config()->set_id(0);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(sensor_or.status().message().find("opencv_config"), std::string::npos)
+      << sensor_or.status().message();
+}
+
+// A stream sensor on a link no transport exists for fails in CommFactory,
+// not in the driver -- the comm axis is resolved before the device is built.
+TEST_F(PerceptionFactoryTest, ReportsUnsupportedCommForAStreamSensor) {
+  config::Robot robot_config;
+  robot::perception::SinglePerception single_perception;
+  auto* sensor = single_perception.mutable_sensor();
+  sensor->set_sensor_name("lidar_1");
+  sensor->set_sensor_type(robot::perception::SensorType::RANGE_SCAN);
+  sensor->mutable_lds01_config();
+  sensor->mutable_comm()->set_comm_type(robot::comm::CommType::ETHERNET_UDP);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kUnimplemented);
+}
+
 }  // namespace
 }  // namespace robot::perception
