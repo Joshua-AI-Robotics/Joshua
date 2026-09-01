@@ -12,6 +12,11 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `Channel.signal` (`SignalInterface`), the sensing counterpart of
+  `Channel.drive`: how a board acquires a reading — `SERVO_BUS_REGISTER`,
+  `QUADRATURE`, `ANALOG_ADC`, `PDO_SLOT` — independent of what the reading
+  means ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §5.5). A channel
+  may declare a drive, a signal, or both
 - `robot::comm::StreamTransport`, the seam for a device that multiplexes
   nothing — a scanning lidar, a GPS. `Lds01Driver` takes one instead of a
   `Serial`, so its link is a `comm_type` edit rather than a driver change,
