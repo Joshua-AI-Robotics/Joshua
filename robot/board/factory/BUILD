@@ -34,6 +34,19 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "board_resolver",
+    srcs = ["board_resolver.cc"],
+    hdrs = ["board_resolver.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/board/proto:board_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
 cc_test(
     name = "board_factory_test",
     srcs = ["board_factory_test.cc"],

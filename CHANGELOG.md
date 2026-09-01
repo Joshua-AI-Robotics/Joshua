@@ -12,6 +12,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `robot/board/factory/board_resolver.h`: one implementation of
+  `(board_name, channel)` resolution against `boards{}`, so every layer that
+  binds to a board channel resolves it the same way and reports the same
+  errors ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §6.5)
 - Docker Compose task services for shells, tests, launcher runs, package builds,
   UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
