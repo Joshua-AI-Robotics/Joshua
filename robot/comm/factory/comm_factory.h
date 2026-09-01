@@ -10,6 +10,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
+#include "robot/comm/interfaces/stream_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "robot/comm/serial/serial.h"
 
@@ -18,6 +19,13 @@ namespace robot::comm {
 class CommFactory {
  public:
   static absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::Comm& comm);
+
+  // The comm axis for single-stream sensor devices (a scanning lidar, a
+  // GPS). Sensor drivers take a StreamTransport, so moving such a device to
+  // a different link is a comm_type edit in the preset rather than a
+  // driver change — the same claim the board layer makes for actuators.
+  static absl::StatusOr<std::shared_ptr<StreamTransport>> CreateStreamTransport(
+      const robot::comm::Comm& comm);
 
   // TODO(docs/BOARD_LAYER_RFC.md §7.3/§10 Phase 5): CreateUdp, for boards
   // whose CommType is ETHERNET_UDP (already reserved in comm.proto) — not
