@@ -1,5 +1,7 @@
 #include "robot/perception/factory/perception_factory.h"
 
+#include <string>
+
 #include "absl/status/status.h"
 #include "config/proto/robot.pb.h"
 #include "gtest/gtest.h"
@@ -7,25 +9,24 @@
 namespace robot::perception {
 namespace {
 
-// Board-layer perception: an STS3215 encoder bound to a MOCK board's
-// SERVO_BUS_UART channel, so the resolution flow runs without hardware --
-// the perception twin of ActionFactoryBoardPathTest.
-robot::perception::SinglePerception MakeEncoderPerception() {
+// Board leg: JOINT_POSITION on a MOCK board's SERVO_BUS_REGISTER channel, so
+// the resolution flow runs with no hardware -- the perception twin of
+// ActionFactoryBoardPathTest.
+robot::perception::SinglePerception MakeBoardSensor() {
   robot::perception::SinglePerception single_perception;
-  single_perception.set_perception_type(robot::perception::PerceptionType::ENCODER);
-
-  auto* encoder = single_perception.mutable_encoder();
-  encoder->set_encoder_name("sts3215_encoder_1");
-  encoder->set_id(1);
-  encoder->set_encoder_type(robot::perception::EncoderType::STS3215_ENCODER);
-  encoder->set_board_name("mock_bus_1");
-  encoder->set_channel(1);
-  encoder->set_operational_lower_limit(1147.0f);
-  encoder->set_operational_upper_limit(3154.0f);
+  auto* sensor = single_perception.mutable_sensor();
+  sensor->set_sensor_name("joint_1");
+  sensor->set_id(1);
+  sensor->set_sensor_type(robot::perception::SensorType::JOINT_POSITION);
+  sensor->set_board_name("mock_bus_1");
+  sensor->set_channel(1);
+  sensor->set_operational_lower_limit(1147.0f);
+  sensor->set_operational_upper_limit(3154.0f);
   return single_perception;
 }
 
-config::Robot MakeRobotWithMockServoBoard() {
+config::Robot MakeRobotWithMockServoBoard(
+    robot::board::SignalInterface signal = robot::board::SignalInterface::SERVO_BUS_REGISTER) {
   config::Robot robot_config;
   auto* board = robot_config.add_boards();
   board->set_name("mock_bus_1");
@@ -33,110 +34,169 @@ config::Robot MakeRobotWithMockServoBoard() {
   auto* channel = board->add_channels();
   channel->set_index(1);
   channel->set_drive(robot::board::DriveInterface::SERVO_BUS_UART);
+  channel->set_signal(signal);
   channel->mutable_servo_bus()->set_servo_id(1);
   return robot_config;
 }
 
-class PerceptionFactoryBoardPathTest : public ::testing::Test {
+class PerceptionFactoryTest : public ::testing::Test {
  protected:
   void TearDown() override {
     robot::board::BoardFactory::ResetForTesting();
   }
 };
 
-TEST_F(PerceptionFactoryBoardPathTest, CreatesEncoderOverMockBoardChannel) {
+TEST_F(PerceptionFactoryTest, CreatesJointPositionSensorOverMockBoardChannel) {
   auto robot_config = MakeRobotWithMockServoBoard();
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      MakeEncoderPerception(), robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(MakeBoardSensor(),
+                                                                          robot_config.boards());
 
-  ASSERT_TRUE(perception_or.ok()) << perception_or.status();
-  EXPECT_EQ((*perception_or)->GetId(), "sts3215_encoder_1");
-  EXPECT_TRUE((*perception_or)->GetData().ok());
+  ASSERT_TRUE(sensor_or.ok()) << sensor_or.status();
+  EXPECT_EQ((*sensor_or)->GetId(), "joint_1");
+  EXPECT_TRUE((*sensor_or)->GetData().ok());
 }
 
-// An encoder and an actuator naming the same board share one instance and
-// therefore one bus mutex -- the whole point of routing perception through
-// the board layer (docs/BOARD_LAYER_RFC.md §5.3).
-TEST_F(PerceptionFactoryBoardPathTest, EncoderSharesTheBoardInstanceWithOtherChannels) {
+// The same sensor class, unchanged, over a different signal leg. This is the
+// claim the SensorType/SignalInterface split makes: a new way of acquiring a
+// joint angle needs no new sensor class.
+TEST_F(PerceptionFactoryTest, SameSensorClassServesADifferentSignalLeg) {
+  auto robot_config = MakeRobotWithMockServoBoard(robot::board::SignalInterface::QUADRATURE);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(MakeBoardSensor(),
+                                                                          robot_config.boards());
+
+  ASSERT_TRUE(sensor_or.ok()) << sensor_or.status();
+  EXPECT_TRUE((*sensor_or)->GetData().ok());
+}
+
+// A sensor and an actuator naming one board share a single instance, and so
+// a single bus mutex -- the reason perception routes through the board layer
+// at all (docs/BOARD_LAYER_RFC.md §5.3).
+TEST_F(PerceptionFactoryTest, SensorSharesTheBoardInstanceWithOtherChannels) {
   auto robot_config = MakeRobotWithMockServoBoard();
 
   auto first = robot::board::BoardFactory::GetOrCreate(robot_config.boards(0));
   ASSERT_TRUE(first.ok()) << first.status();
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      MakeEncoderPerception(), robot_config.boards());
-  ASSERT_TRUE(perception_or.ok()) << perception_or.status();
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(MakeBoardSensor(),
+                                                                          robot_config.boards());
+  ASSERT_TRUE(sensor_or.ok()) << sensor_or.status();
 
   auto second = robot::board::BoardFactory::GetOrCreate(robot_config.boards(0));
   ASSERT_TRUE(second.ok()) << second.status();
   EXPECT_EQ(first->get(), second->get());
 }
 
-TEST_F(PerceptionFactoryBoardPathTest, RejectsDeprecatedInlineComm) {
+TEST_F(PerceptionFactoryTest, RejectsSensorDeclaringBothLegs) {
   auto robot_config = MakeRobotWithMockServoBoard();
-  auto single_perception = MakeEncoderPerception();
-  single_perception.mutable_encoder()->mutable_comm()->set_comm_type(robot::comm::CommType::SERIAL);
+  auto single_perception = MakeBoardSensor();
+  single_perception.mutable_sensor()->mutable_comm()->set_comm_type(robot::comm::CommType::SERIAL);
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      single_perception, robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
 
-  ASSERT_FALSE(perception_or.ok());
-  EXPECT_EQ(perception_or.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_NE(perception_or.status().message().find("deprecated comm"), std::string::npos)
-      << perception_or.status().message();
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(sensor_or.status().message().find("both legs"), std::string::npos)
+      << sensor_or.status().message();
 }
 
-TEST_F(PerceptionFactoryBoardPathTest, RejectsMissingBoardName) {
+TEST_F(PerceptionFactoryTest, RejectsSensorDeclaringNeitherLeg) {
   auto robot_config = MakeRobotWithMockServoBoard();
-  auto single_perception = MakeEncoderPerception();
-  single_perception.mutable_encoder()->clear_board_name();
+  auto single_perception = MakeBoardSensor();
+  single_perception.mutable_sensor()->clear_board_name();
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      single_perception, robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
 
-  ASSERT_FALSE(perception_or.ok());
-  EXPECT_EQ(perception_or.status().code(), absl::StatusCode::kInvalidArgument);
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(sensor_or.status().message().find("neither leg"), std::string::npos)
+      << sensor_or.status().message();
 }
 
-TEST_F(PerceptionFactoryBoardPathTest, RejectsUnknownBoardName) {
+TEST_F(PerceptionFactoryTest, RejectsUnknownBoardName) {
   auto robot_config = MakeRobotWithMockServoBoard();
-  auto single_perception = MakeEncoderPerception();
-  single_perception.mutable_encoder()->set_board_name("no_such_board");
+  auto single_perception = MakeBoardSensor();
+  single_perception.mutable_sensor()->set_board_name("no_such_board");
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      single_perception, robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
 
-  ASSERT_FALSE(perception_or.ok());
-  EXPECT_EQ(perception_or.status().code(), absl::StatusCode::kNotFound);
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kNotFound);
 }
 
-TEST_F(PerceptionFactoryBoardPathTest, RejectsUndeclaredChannel) {
+TEST_F(PerceptionFactoryTest, RejectsUndeclaredChannel) {
   auto robot_config = MakeRobotWithMockServoBoard();
-  auto single_perception = MakeEncoderPerception();
-  single_perception.mutable_encoder()->set_channel(9);
+  auto single_perception = MakeBoardSensor();
+  single_perception.mutable_sensor()->set_channel(9);
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      single_perception, robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
 
-  ASSERT_FALSE(perception_or.ok());
-  EXPECT_EQ(perception_or.status().code(), absl::StatusCode::kNotFound);
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kNotFound);
 }
 
-TEST_F(PerceptionFactoryBoardPathTest, RejectsChannelWhoseDriveCannotReportPosition) {
+TEST_F(PerceptionFactoryTest, RejectsChannelWithNoSignalLeg) {
+  auto robot_config = MakeRobotWithMockServoBoard(robot::board::SignalInterface::SIGNAL_INVALID);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(MakeBoardSensor(),
+                                                                          robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(PerceptionFactoryTest, RejectsMeaningTheSignalLegCannotProduce) {
+  auto robot_config = MakeRobotWithMockServoBoard();
+  auto single_perception = MakeBoardSensor();
+  single_perception.mutable_sensor()->set_sensor_type(robot::perception::SensorType::IMAGE);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+// Device leg: a sensor_config whose meaning disagrees with sensor_type is a
+// config error, not a silently mismatched driver.
+TEST_F(PerceptionFactoryTest, RejectsDeviceConfigThatContradictsSensorType) {
   config::Robot robot_config;
-  auto* board = robot_config.add_boards();
-  board->set_name("mock_bus_1");
-  board->set_board_type(robot::board::BoardType::MOCK);
-  auto* channel = board->add_channels();
-  channel->set_index(1);
-  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
+  robot::perception::SinglePerception single_perception;
+  auto* sensor = single_perception.mutable_sensor();
+  sensor->set_sensor_name("webcam");
+  sensor->set_sensor_type(robot::perception::SensorType::RANGE_SCAN);
+  sensor->mutable_opencv_config()->set_id(0);
 
-  auto perception_or = robot::perception::PerceptionFactory::CreatePerception(
-      MakeEncoderPerception(), robot_config.boards());
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
 
-  ASSERT_FALSE(perception_or.ok());
-  EXPECT_EQ(perception_or.status().code(), absl::StatusCode::kInvalidArgument);
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(sensor_or.status().message().find("opencv_config"), std::string::npos)
+      << sensor_or.status().message();
+}
+
+// A stream sensor on a link no transport exists for fails in CommFactory,
+// not in the driver -- the comm axis is resolved before the device is built.
+TEST_F(PerceptionFactoryTest, ReportsUnsupportedCommForAStreamSensor) {
+  config::Robot robot_config;
+  robot::perception::SinglePerception single_perception;
+  auto* sensor = single_perception.mutable_sensor();
+  sensor->set_sensor_name("lidar_1");
+  sensor->set_sensor_type(robot::perception::SensorType::RANGE_SCAN);
+  sensor->mutable_lds01_config();
+  sensor->mutable_comm()->set_comm_type(robot::comm::CommType::ETHERNET_UDP);
+
+  auto sensor_or = robot::perception::PerceptionFactory::CreatePerception(single_perception,
+                                                                          robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kUnimplemented);
 }
 
 }  // namespace

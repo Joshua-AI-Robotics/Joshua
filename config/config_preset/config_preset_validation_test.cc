@@ -31,13 +31,13 @@ TEST(ConfigValidationTest, ValidateAllConfigPresets) {
   }
 }
 
-// Static counterpart to PerceptionFactory::CreateBoardEncoder: every
-// ENCODER in every preset must resolve to a real board channel. This is
-// the check that was missing when commit 8cf099a moved the so100 presets
-// onto boards{} -- it stripped the encoders' inline comm without giving
-// them a board_name, and nothing failed until the node was launched
-// against hardware.
-TEST(ConfigValidationTest, EveryEncoderResolvesToABoardChannel) {
+// Static counterpart to PerceptionFactory::CreateSensor: every sensor in
+// every preset must resolve, on whichever leg it declares. This is the
+// check that was missing when commit 8cf099a moved the so100 presets onto
+// boards{} -- it stripped the encoders' inline comm without giving them a
+// board to name, and nothing failed until the node was launched against
+// hardware.
+TEST(ConfigValidationTest, EverySensorResolves) {
   const std::string directory = kConfigPresetDirectory;
   ASSERT_TRUE(fs::exists(directory)) << "Config directory not found: " << directory;
 
@@ -50,40 +50,47 @@ TEST(ConfigValidationTest, EveryEncoderResolvesToABoardChannel) {
     ASSERT_TRUE(config.ok()) << config_path << ": " << config.status().message();
 
     for (const auto& single_perception : config->robot().perceptions().single_perceptions()) {
-      if (single_perception.perception_type() != robot::perception::PerceptionType::ENCODER) {
-        continue;
-      }
-      const auto& encoder = single_perception.encoder();
-      const std::string where = config_path + ": encoder '" + encoder.encoder_name() + "'";
+      const auto& sensor = single_perception.sensor();
+      const std::string where = config_path + ": sensor '" + sensor.sensor_name() + "'";
 
-      EXPECT_FALSE(encoder.has_comm())
-          << where
-          << " still sets the deprecated inline comm; declare the port once in "
-             "boards{} and set board_name + channel.";
-      ASSERT_FALSE(encoder.board_name().empty()) << where << " has no board_name.";
+      ASSERT_NE(sensor.sensor_type(), robot::perception::SensorType::SENSOR_INVALID)
+          << where << " has no sensor_type.";
+
+      const bool on_board = !sensor.board_name().empty();
+      const bool has_device_config =
+          sensor.sensor_config_case() != robot::perception::Sensor::SENSOR_CONFIG_NOT_SET;
+
+      EXPECT_FALSE(on_board && (has_device_config || sensor.has_comm()))
+          << where << " declares both a board and its own comm/device config.";
+      ASSERT_TRUE(on_board || has_device_config)
+          << where << " declares neither a board nor a device config.";
+
+      if (!on_board) {
+        continue;  // Device leg: the sensor_config oneof selects the driver.
+      }
 
       const robot::board::Board* board = nullptr;
       for (const auto& candidate : config->robot().boards()) {
-        if (candidate.name() == encoder.board_name()) {
+        if (candidate.name() == sensor.board_name()) {
           board = &candidate;
           break;
         }
       }
-      ASSERT_NE(board, nullptr) << where << " references board '" << encoder.board_name()
+      ASSERT_NE(board, nullptr) << where << " references board '" << sensor.board_name()
                                 << "' but no boards{} entry declares that name.";
 
       const robot::board::Channel* channel = nullptr;
       for (const auto& candidate : board->channels()) {
-        if (candidate.index() == encoder.channel()) {
+        if (candidate.index() == sensor.channel()) {
           channel = &candidate;
           break;
         }
       }
-      ASSERT_NE(channel, nullptr) << where << " uses channel " << encoder.channel()
-                                  << " but board '" << board->name() << "' does not declare it.";
+      ASSERT_NE(channel, nullptr) << where << " uses channel " << sensor.channel() << " but board '"
+                                  << board->name() << "' does not declare it.";
 
       const auto status =
-          robot::board::ValidateSensorChannel(encoder.encoder_type(), channel->drive());
+          robot::board::ValidateSensorChannel(sensor.sensor_type(), channel->signal());
       EXPECT_TRUE(status.ok()) << where << ": " << status.message();
     }
   }

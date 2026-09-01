@@ -10,6 +10,7 @@ cc_library(
         "//config/proto:robot_cc_proto",
         "//robot/comm/ethercat:ethercat_transport",
         "//robot/comm/ethercat:soem_ethercat_transport",
+        "//robot/comm/interfaces:stream_transport",
         "//robot/comm/proto:comm_cc_proto",
         "//robot/comm/serial",
         "@abseil-cpp//absl/status:status",

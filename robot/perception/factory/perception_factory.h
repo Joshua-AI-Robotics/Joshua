@@ -5,59 +5,47 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "config/proto/robot.pb.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "robot/board/factory/board_factory.h"
+#include "robot/board/factory/board_resolver.h"
 #include "robot/board/factory/sensor_channel_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/camera/cv_camera.h"
-#include "robot/perception/encoder/board_encoder.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
+#include "robot/perception/sensors/joint_position_sensor.h"
 #include "utils/status_macros.h"
 
 namespace robot::perception {
+
+// Builds a sensor from config, the perception twin of ActionFactory
+// (docs/BOARD_LAYER_RFC.md §6.5).
+//
+// There are exactly two acquisition strategies, and which one applies is a
+// property of the device rather than a switch on its model:
+//
+//   Board leg (board_name set) — the device multiplexes several channels
+//   over one link, so it is a board. Resolution is identical to an
+//   actuator's: board_name -> Board -> ValidateSensorChannel ->
+//   BoardFactory -> OpenSensorChannel. The sensor class is chosen by
+//   sensor_type alone, never by board or signal, which is why one
+//   JointPositionSensor covers a Feetech register read, a quadrature
+//   counter and a PDO slot.
+//
+//   Device leg — the device multiplexes nothing, so it owns its own
+//   stream. The sensor_config oneof selects the driver, and the comm axis
+//   comes from CommFactory, so moving a lidar to another link is a preset
+//   edit.
+//
+// Callers must pass config.robot().boards() (see ros2/encoder_publisher.cc).
 class PerceptionFactory {
  public:
-  // Board-layer factory, the perception twin of ActionFactory::CreateAction
-  // (docs/BOARD_LAYER_RFC.md §6.5): an encoder resolves board_name against
-  // `boards`, validates encoder_type against the channel's drive, and reads
-  // through BoardChannel. Callers must pass config.robot().boards() (see
-  // ros2/encoder_publisher.cc).
-  //
-  // Cameras and lidars still construct their own comm: neither is a
-  // board-layer device yet, since no board exposes a frame or scan channel.
-  // They keep the pre-board-layer path until BoardChannel grows a
-  // non-motor feedback shape.
   static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreatePerception(
       const robot::perception::SinglePerception& single_perception,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
-    switch (single_perception.perception_type()) {
-      case PerceptionType::CAMERA: {
-        const auto& camera = single_perception.camera();
-        // Assuming CvCamera for now. Add logic for other camera types if needed.
-        return std::make_unique<CvCamera>(camera);
-      }
-      case PerceptionType::ENCODER:
-        return CreateBoardEncoder(single_perception.encoder(), boards);
-
-      case PerceptionType::LIDAR: {
-        const auto& lidar_config = single_perception.lidar();
-        switch (lidar_config.lidar_type()) {
-          case LidarType::LDS01: {
-            ABSL_ASSIGN_OR_RETURN(auto serial,
-                                  robot::comm::CommFactory::CreateSerial(lidar_config.comm()));
-            auto lidar = std::make_unique<Lds01Driver>(serial, lidar_config);
-            ABSL_RETURN_IF_ERROR(lidar->Init());
-            return lidar;
-          }
-          default:
-            return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid lidar type.");
-        }
-      }
-      default:
-        return absl::Status(absl::StatusCode::kInvalidArgument, "Invalid perception type.");
-    }
+    return CreateSensor(single_perception.sensor(), boards);
   }
 
   ~PerceptionFactory() = default;
@@ -67,63 +55,103 @@ class PerceptionFactory {
   PerceptionFactory& operator=(PerceptionFactory&&) = default;
 
  private:
-  // Resolution flow, mirroring ActionFactory::CreateBoardActuator:
-  // board_name -> Board config -> ValidateSensorChannel -> BoardFactory ->
-  // OpenChannel -> encoder.
-  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateBoardEncoder(
-      const robot::perception::Encoder& encoder,
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSensor(
+      const robot::perception::Sensor& sensor,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
-    if (encoder.encoder_type() == robot::perception::EncoderType::ENCODER_INVLAID) {
-      return absl::Status(absl::StatusCode::kInvalidArgument,
-                          "Encoder '" + encoder.encoder_name() + "' has no encoder_type.");
-    }
-    if (encoder.has_comm()) {
-      return absl::Status(
-          absl::StatusCode::kInvalidArgument,
-          "Encoder '" + encoder.encoder_name() +
-              "' sets deprecated comm; encoders no longer own a port. Set board_name + "
-              "channel and declare the port once in boards{} "
-              "(docs/BOARD_LAYER_RFC.md §6.3).");
-    }
-    if (encoder.board_name().empty()) {
-      return absl::Status(absl::StatusCode::kInvalidArgument,
-                          "Encoder '" + encoder.encoder_name() + "' has no board_name.");
+    const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+
+    if (sensor.sensor_type() == robot::perception::SensorType::SENSOR_INVALID) {
+      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
     }
 
-    const robot::board::Board* board_config = nullptr;
-    for (const auto& board : boards) {
-      if (board.name() == encoder.board_name()) {
-        board_config = &board;
-        break;
-      }
+    const bool on_board = !sensor.board_name().empty();
+    const bool has_device_config =
+        sensor.sensor_config_case() != robot::perception::Sensor::SENSOR_CONFIG_NOT_SET;
+    if (on_board && (has_device_config || sensor.has_comm())) {
+      return absl::InvalidArgumentError(
+          absl::StrCat(owner,
+                       " declares both legs: it names a board and also carries its own comm or "
+                       "device config. A sensor reaches hardware over exactly one."));
     }
-    if (board_config == nullptr) {
-      return absl::Status(absl::StatusCode::kNotFound,
-                          "Encoder '" + encoder.encoder_name() + "' references board '" +
-                              encoder.board_name() + "' but no boards{} entry declares that name.");
+    if (!on_board && !has_device_config) {
+      return absl::InvalidArgumentError(
+          absl::StrCat(owner,
+                       " declares neither leg: set board_name + channel for a sensor on a board, "
+                       "or a device config (opencv_config, lds01_config) for a single-stream "
+                       "device."));
     }
 
-    const robot::board::Channel* channel_config = nullptr;
-    for (const auto& channel : board_config->channels()) {
-      if (channel.index() == encoder.channel()) {
-        channel_config = &channel;
-        break;
-      }
-    }
-    if (channel_config == nullptr) {
-      return absl::Status(absl::StatusCode::kNotFound,
-                          "Encoder '" + encoder.encoder_name() + "' uses channel " +
-                              std::to_string(encoder.channel()) + " but board '" +
-                              board_config->name() + "' does not declare it.");
-    }
+    return on_board ? CreateBoardSensor(sensor, boards, owner) : CreateDeviceSensor(sensor, owner);
+  }
+
+  // Board leg. Mirrors ActionFactory::CreateBoardActuator step for step,
+  // over the same resolver.
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateBoardSensor(
+      const robot::perception::Sensor& sensor,
+      const google::protobuf::RepeatedPtrField<robot::board::Board>& boards,
+      const std::string& owner) {
+    ABSL_ASSIGN_OR_RETURN(
+        auto resolved,
+        robot::board::ResolveChannelConfig(boards, owner, sensor.board_name(), sensor.channel()));
     ABSL_RETURN_IF_ERROR(
-        robot::board::ValidateSensorChannel(encoder.encoder_type(), channel_config->drive()));
+        robot::board::ValidateSensorChannel(sensor.sensor_type(), resolved.channel->signal()));
 
-    ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*board_config));
-    ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(encoder.channel()));
-    auto board_encoder = std::make_unique<BoardEncoder>(channel, encoder);
-    ABSL_RETURN_IF_ERROR(board_encoder->Init());
-    return board_encoder;
+    ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
+    ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenSensorChannel(sensor.channel()));
+
+    switch (sensor.sensor_type()) {
+      case robot::perception::SensorType::JOINT_POSITION:
+        return std::make_unique<JointPositionSensor>(channel, sensor);
+      default:
+        return absl::UnimplementedError(absl::StrCat(
+            owner,
+            ": sensor_type ",
+            robot::perception::SensorType_Name(sensor.sensor_type()),
+            " has no board-attached sensor driver yet (docs/BOARD_LAYER_RFC.md §10)."));
+    }
+  }
+
+  // Device leg. The sensor_config oneof is the discriminator, the way a
+  // Channel's drive_config oneof selects a drive.
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateDeviceSensor(
+      const robot::perception::Sensor& sensor, const std::string& owner) {
+    switch (sensor.sensor_config_case()) {
+      case robot::perception::Sensor::kOpencvConfig: {
+        ABSL_RETURN_IF_ERROR(RequireSensorType(
+            sensor, robot::perception::SensorType::IMAGE, owner, "opencv_config"));
+        return std::make_unique<CvCamera>(sensor);
+      }
+      case robot::perception::Sensor::kLds01Config: {
+        ABSL_RETURN_IF_ERROR(RequireSensorType(
+            sensor, robot::perception::SensorType::RANGE_SCAN, owner, "lds01_config"));
+        ABSL_ASSIGN_OR_RETURN(auto stream,
+                              robot::comm::CommFactory::CreateStreamTransport(sensor.comm()));
+        auto lidar = std::make_unique<Lds01Driver>(stream, sensor);
+        ABSL_RETURN_IF_ERROR(lidar->Init());
+        return lidar;
+      }
+      case robot::perception::Sensor::SENSOR_CONFIG_NOT_SET:
+      default:
+        return absl::InvalidArgumentError(absl::StrCat(owner, " has no device config."));
+    }
+  }
+
+  static absl::Status RequireSensorType(const robot::perception::Sensor& sensor,
+                                        robot::perception::SensorType expected,
+                                        const std::string& owner,
+                                        const std::string& config_name) {
+    if (sensor.sensor_type() == expected) {
+      return absl::OkStatus();
+    }
+    return absl::InvalidArgumentError(
+        absl::StrCat(owner,
+                     " sets ",
+                     config_name,
+                     ", which produces ",
+                     robot::perception::SensorType_Name(expected),
+                     ", but declares sensor_type ",
+                     robot::perception::SensorType_Name(sensor.sensor_type()),
+                     "."));
   }
 
   PerceptionFactory() = default;

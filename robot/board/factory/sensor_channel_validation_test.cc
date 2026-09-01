@@ -1,30 +1,54 @@
 #include "robot/board/factory/sensor_channel_validation.h"
 
+#include <string>
+
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
 
 namespace robot::board {
 namespace {
 
-TEST(SensorChannelValidationTest, Sts3215EncoderAcceptsServoBusChannel) {
-  EXPECT_TRUE(ValidateSensorChannel(robot::perception::EncoderType::STS3215_ENCODER,
-                                    robot::board::DriveInterface::SERVO_BUS_UART)
-                  .ok());
+// One sensor meaning, three signal legs that can produce it: the property
+// the whole perception axis split exists to give us
+// (docs/BOARD_LAYER_RFC.md §5.5).
+TEST(SensorChannelValidationTest, JointPositionComesFromAnyPositionSignal) {
+  for (const auto signal : {robot::board::SignalInterface::SERVO_BUS_REGISTER,
+                            robot::board::SignalInterface::QUADRATURE,
+                            robot::board::SignalInterface::PDO_SLOT}) {
+    EXPECT_TRUE(ValidateSensorChannel(robot::perception::SensorType::JOINT_POSITION, signal).ok())
+        << robot::board::SignalInterface_Name(signal);
+  }
 }
 
-TEST(SensorChannelValidationTest, Sts3215EncoderRejectsStepDirChannel) {
-  const auto status = ValidateSensorChannel(robot::perception::EncoderType::STS3215_ENCODER,
-                                            robot::board::DriveInterface::STEP_DIR);
+TEST(SensorChannelValidationTest, RejectsSignalThatCannotProduceTheReading) {
+  const auto status = ValidateSensorChannel(robot::perception::SensorType::JOINT_POSITION,
+                                            robot::board::SignalInterface::ANALOG_ADC);
   EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_NE(status.message().find("SERVO_BUS_UART"), std::string::npos) << status.message();
-  EXPECT_NE(status.message().find("STEP_DIR"), std::string::npos) << status.message();
+  EXPECT_NE(status.message().find("ANALOG_ADC"), std::string::npos) << status.message();
+  EXPECT_NE(status.message().find("FORCE_TORQUE"), std::string::npos) << status.message();
 }
 
-TEST(SensorChannelValidationTest, RejectsInvalidEncoderType) {
-  EXPECT_EQ(ValidateSensorChannel(robot::perception::EncoderType::ENCODER_INVLAID,
-                                  robot::board::DriveInterface::SERVO_BUS_UART)
+TEST(SensorChannelValidationTest, RejectsChannelWithNoSignalLeg) {
+  const auto status = ValidateSensorChannel(robot::perception::SensorType::JOINT_POSITION,
+                                            robot::board::SignalInterface::SIGNAL_INVALID);
+  EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(status.message().find("Channel.signal"), std::string::npos) << status.message();
+}
+
+TEST(SensorChannelValidationTest, RejectsInvalidSensorType) {
+  EXPECT_EQ(ValidateSensorChannel(robot::perception::SensorType::SENSOR_INVALID,
+                                  robot::board::SignalInterface::SERVO_BUS_REGISTER)
                 .code(),
             absl::StatusCode::kInvalidArgument);
+}
+
+// A meaning no signal leg produces yet fails with a message that names what
+// the leg does measure, rather than a bare "invalid".
+TEST(SensorChannelValidationTest, RejectsUnsupportedMeaningWithAnActionableMessage) {
+  const auto status = ValidateSensorChannel(robot::perception::SensorType::IMAGE,
+                                            robot::board::SignalInterface::SERVO_BUS_REGISTER);
+  EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(status.message().find("JOINT_POSITION"), std::string::npos) << status.message();
 }
 
 }  // namespace

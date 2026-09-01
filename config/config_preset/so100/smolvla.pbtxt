@@ -12,12 +12,12 @@ robot {
       comm_type: SERIAL
       serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
     }
-    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
-    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
-    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
-    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
-    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
-    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
+    channels { index: 1 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 2 } }
+    channels { index: 3 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 3 } }
+    channels { index: 4 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 4 } }
+    channels { index: 5 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 5 } }
+    channels { index: 6 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 6 } }
   }
   actions {
     single_actions {
@@ -208,12 +208,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: CAMERA
-      camera {
-        camera_name: "webcam"
+      sensor {
+        sensor_name: "webcam"
         id: 1
-        camera_type: OPENCV
-        comm{}
+        sensor_type: IMAGE
         opencv_config {
           id: 0
           width: 640
@@ -233,11 +231,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_1"
+      sensor {
+        sensor_name: "sts3215_encoder_1"
         id: 1
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 973
         operational_upper_limit: 3034
         board_name: "arm_bus"
@@ -255,11 +252,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_2"
+      sensor {
+        sensor_name: "sts3215_encoder_2"
         id: 2
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 858
         operational_upper_limit: 3154
         board_name: "arm_bus"
@@ -277,11 +273,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_3"
+      sensor {
+        sensor_name: "sts3215_encoder_3"
         id: 3
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 798
         operational_upper_limit: 3015
         board_name: "arm_bus"
@@ -299,11 +294,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_4"
+      sensor {
+        sensor_name: "sts3215_encoder_4"
         id: 4
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 640
         operational_upper_limit: 3124
         board_name: "arm_bus"
@@ -321,11 +315,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_5"
+      sensor {
+        sensor_name: "sts3215_encoder_5"
         id: 5
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 902
         operational_upper_limit: 2955
         board_name: "arm_bus"
@@ -343,11 +336,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_6"
+      sensor {
+        sensor_name: "sts3215_encoder_6"
         id: 6
-        encoder_type: STS3215_ENCODER
+        sensor_type: JOINT_POSITION
         operational_lower_limit: 1795
         operational_upper_limit: 3235
         board_name: "arm_bus"

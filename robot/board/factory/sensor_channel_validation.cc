@@ -1,37 +1,69 @@
 #include "robot/board/factory/sensor_channel_validation.h"
 
+#include <initializer_list>
+#include <string>
+#include <vector>
+
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 
 namespace robot::board {
 
 namespace {
 
-absl::Status RequireDrive(robot::perception::EncoderType encoder_type,
-                          robot::board::DriveInterface actual,
-                          robot::board::DriveInterface required) {
-  if (actual == required) {
-    return absl::OkStatus();
+// What each signal leg can measure. Adding a signal means adding one row;
+// adding a sensor meaning means listing it under the legs that can produce
+// it. Neither requires touching a sensor driver.
+std::vector<robot::perception::SensorType> ProducibleBy(robot::board::SignalInterface signal) {
+  switch (signal) {
+    case robot::board::SignalInterface::SERVO_BUS_REGISTER:
+    case robot::board::SignalInterface::QUADRATURE:
+    case robot::board::SignalInterface::PDO_SLOT:
+      return {robot::perception::SensorType::JOINT_POSITION};
+    case robot::board::SignalInterface::ANALOG_ADC:
+      return {robot::perception::SensorType::FORCE_TORQUE};
+    case robot::board::SignalInterface::SIGNAL_INVALID:
+    default:
+      return {};
   }
-  return absl::InvalidArgumentError(absl::StrCat("Encoder ",
-                                                 robot::perception::EncoderType_Name(encoder_type),
-                                                 " requires a ",
-                                                 robot::board::DriveInterface_Name(required),
-                                                 " channel, but the channel's drive is ",
-                                                 robot::board::DriveInterface_Name(actual),
-                                                 "."));
+}
+
+std::string NameList(const std::vector<robot::perception::SensorType>& types) {
+  std::vector<std::string> names;
+  names.reserve(types.size());
+  for (const auto type : types) {
+    names.push_back(robot::perception::SensorType_Name(type));
+  }
+  return absl::StrJoin(names, ", ");
 }
 
 }  // namespace
 
-absl::Status ValidateSensorChannel(robot::perception::EncoderType encoder_type,
-                                   robot::board::DriveInterface drive) {
-  switch (encoder_type) {
-    case robot::perception::EncoderType::STS3215_ENCODER:
-      return RequireDrive(encoder_type, drive, robot::board::DriveInterface::SERVO_BUS_UART);
-    case robot::perception::EncoderType::ENCODER_INVLAID:
-    default:
-      return absl::InvalidArgumentError("Encoder has an invalid encoder_type.");
+absl::Status ValidateSensorChannel(robot::perception::SensorType sensor_type,
+                                   robot::board::SignalInterface signal) {
+  if (sensor_type == robot::perception::SensorType::SENSOR_INVALID) {
+    return absl::InvalidArgumentError("Sensor has an invalid sensor_type.");
   }
+  if (signal == robot::board::SignalInterface::SIGNAL_INVALID) {
+    return absl::InvalidArgumentError(
+        "The channel declares no signal leg; set Channel.signal on any channel a sensor "
+        "binds to (docs/BOARD_LAYER_RFC.md §5.5).");
+  }
+
+  const auto producible = ProducibleBy(signal);
+  for (const auto type : producible) {
+    if (type == sensor_type) {
+      return absl::OkStatus();
+    }
+  }
+  return absl::InvalidArgumentError(
+      absl::StrCat("A ",
+                   robot::board::SignalInterface_Name(signal),
+                   " channel cannot produce ",
+                   robot::perception::SensorType_Name(sensor_type),
+                   "; it measures ",
+                   producible.empty() ? std::string("nothing") : NameList(producible),
+                   "."));
 }
 
 }  // namespace robot::board

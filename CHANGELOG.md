@@ -12,17 +12,37 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
-- Perception now resolves through the board layer: `Encoder` gains
-  `board_name` + `channel`, `PerceptionFactory::CreatePerception` takes
-  `boards`, and the new `BoardEncoder` reads position over `BoardChannel`.
-  An encoder and an actuator on the same bus now share one board instance
-  and one bus mutex instead of opening the port twice
-  ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 6)
-- `ValidateSensorChannel`, the perception twin of `ValidateMotorChannel`, so
-  an encoder bound to a channel that cannot report position fails at `Init()`
-  with an actionable error
-- A preset validation test asserting every `ENCODER` resolves to a real board
-  channel, which catches the class of config regression described below
+- **Perception rebuilt on the same four axes as actuation**
+  ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 6). `SensorType`
+  is the semantic axis (`JOINT_POSITION`, `IMAGE`, `RANGE_SCAN`, ...) and
+  `Channel.signal` (`SignalInterface`) is the sensing counterpart of
+  `Channel.drive`: how a board acquires a reading, independent of what the
+  reading means. Board and comm are literally the same axes actuators use, so
+  one `boards{}` block serves both. One `JointPositionSensor` now covers a
+  Feetech register read, a quadrature counter and an EtherCAT PDO slot
+- `ActuatorChannel` and `SensorChannel` as separate seams, with `BoardChannel`
+  their union for a slot that both drives and senses. Perception is handed a
+  `SensorChannel`, so a sensor holds no method that can command motion — it
+  previously held the full channel, including `SetTarget`, in a separate OS
+  process
+- `BoardInterface::OpenSensorChannel`, which makes sensor-only channels
+  expressible for the first time (a bare quadrature or ADC input has no
+  actuator half to open)
+- `robot::comm::StreamTransport`, the seam for single-stream devices — a
+  device that multiplexes nothing is not a board. `Lds01Driver` takes one
+  instead of a `Serial`, so a lidar's link becomes a `comm_type` edit; the
+  third transport shape alongside the RFC's message and cyclic planes
+- `board/factory/board_resolver.h`: one implementation of
+  `(board_name, channel)` resolution, shared by `ActionFactory` and
+  `PerceptionFactory`, which had grown near-identical copies
+- `ValidateSensorChannel`, the perception twin of `ValidateMotorChannel`,
+  expressed as what a signal leg can measure rather than as a
+  sensor-by-device table
+- A preset validation test asserting every sensor resolves on whichever leg it
+  declares, which catches the class of config regression described below
+- `NodeGenerator::CheckConfigIntegrity` now warns when one board is claimed by
+  more than one node id: each node is its own process, so the board's
+  in-process bus mutex cannot serialize them
 - Docker Compose task services for shells, tests, launcher runs, package builds,
   UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
@@ -50,8 +70,12 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
   telemetry at all. Migrating the presets onto `boards{}` removed the
   encoders' inline `comm {}` without giving them anywhere else to get a
   port, so every encoder failed to construct and the `ENCODER_PUBLISHER`
-  node came up with zero encoders. Encoders now name a board like actuators
+  node came up with zero encoders. Sensors now name a board like actuators
   do
+- The serial-port conflict check in `CheckConfigIntegrity` only looked at
+  per-sensor inline `comm`, so it stopped seeing any port once ports moved
+  into `boards{}`. It now checks stream devices by port and board-attached
+  ones by board ownership
 - Perception publishers logged "Check hardware connection or permissions" and
   discarded the real error, which made the config failure above look like a
   wiring problem. The actual status message is now logged
@@ -72,11 +96,19 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 - `Sts3215Encoder`, together with its private copy of the Feetech read
   codec (packet builder, checksum, status parse). The identical read already
-  existed in `feetech_protocol.h` behind `FeetechBusBoard::ReadFeedback()`;
-  `BoardEncoder` uses it
-- Per-encoder `comm {}` from every preset, and `Sts3215EncoderConfig.servo_id`
-  from presets — the servo id is a channel wiring fact
-  (`Channel.servo_bus.servo_id`) and was previously declared in two places
+  existed in `feetech_protocol.h` behind `FeetechBusBoard::ReadFeedback()`
+- The `Camera`/`Encoder`/`Lidar` messages and the `PerceptionType`,
+  `CameraType`, `EncoderType` and `LidarType` enums, which conflated a
+  sensor's meaning with its device family and its transport — the same
+  conflation `ActuatorType` was split to undo. Replaced by one `Sensor`
+  message plus `SensorType`; a device family, where it still matters, is
+  selected by the `sensor_config` oneof
+- The empty `CameraInterface`, `EncoderInterface` and `LidarInterface`
+  marker classes. Sensors implement `PerceptionInterface` directly
+- Per-sensor `comm {}` where the device is on a board, `Camera.comm` (a V4L2
+  device index is not a comm), and `Sts3215EncoderConfig.servo_id` — the
+  servo id is a channel wiring fact (`Channel.servo_bus.servo_id`) and was
+  previously declared in two places
 - **All Python from the robot layer** (BOARD_LAYER_RFC.md §10 Phase 9):
   `action_factory.py`, `perception_factory.py`, `comm_factory.py`, the action
   and perception interface base classes, `serial.py`, and every mock driver.

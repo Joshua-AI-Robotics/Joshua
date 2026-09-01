@@ -35,6 +35,19 @@ cc_library(
 )
 
 cc_library(
+    name = "board_resolver",
+    srcs = ["board_resolver.cc"],
+    hdrs = ["board_resolver.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/board/proto:board_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
     name = "sensor_channel_validation",
     srcs = ["sensor_channel_validation.cc"],
     hdrs = ["sensor_channel_validation.h"],

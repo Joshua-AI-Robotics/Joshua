@@ -35,12 +35,13 @@ class EncoderPublisher : public rclcpp::Node {
   EncoderPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (single_perception.perception_type() != robot::perception::PerceptionType::ENCODER ||
+      if (single_perception.sensor().sensor_type() !=
+              robot::perception::SensorType::JOINT_POSITION ||
           static_cast<int>(single_perception.node().id()) != node_id) {
         continue;
       }
 
-      const auto& encoder_proto = single_perception.encoder();
+      const auto& sensor_proto = single_perception.sensor();
       const auto& qos_setting = single_perception.node().qos_setting();
 
       auto interface = robot::perception::PerceptionFactory::CreatePerception(
@@ -48,7 +49,7 @@ class EncoderPublisher : public rclcpp::Node {
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to create perception interface for encoder '%s': %s",
-                     encoder_proto.encoder_name().c_str(),
+                     sensor_proto.sensor_name().c_str(),
                      std::string(interface.status().message()).c_str());
         continue;
       }
@@ -78,7 +79,7 @@ class EncoderPublisher : public rclcpp::Node {
 
       RCLCPP_INFO(this->get_logger(),
                   "Found encoder '%s' in configuration for node_id %d. Publishing on %zu topics.",
-                  encoder_proto.encoder_name().c_str(),
+                  sensor_proto.sensor_name().c_str(),
                   node_id,
                   single_perception.node().publishers().size());
     }

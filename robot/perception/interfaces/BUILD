@@ -7,36 +7,8 @@ cc_library(
     hdrs = ["perception_interface.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//robot/perception/proto:perception_packet_cc_proto",
         "@abseil-cpp//absl/status:status",
-    ],
-)
-
-cc_library(
-    name = "camera_interface",
-    hdrs = ["camera_interface.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":perception_interface",
-        "//config/proto:robot_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
-    ],
-)
-
-cc_library(
-    name = "encoder_interface",
-    hdrs = ["encoder_interface.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":perception_interface",
-        "//robot/perception/proto:perception_packet_cc_proto",
-    ],
-)
-
-cc_library(
-    name = "lidar_interface",
-    hdrs = ["lidar_interface.h"],
-    deps = [
-        ":perception_interface",
-        "//robot/perception/proto:perception_packet_cc_proto",
+        "@abseil-cpp//absl/status:statusor",
     ],
 )

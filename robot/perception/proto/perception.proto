@@ -5,74 +5,21 @@ import "ros2/proto/node.proto";
 
 package robot.perception;
 
-enum PerceptionType {
-  PERCEPTION_INVALID = 0;
-  CAMERA = 1;
-  ENCODER = 2;
-  LIDAR = 3;
-  RADAR = 4;
-  HID = 5;  // Human Interface Device
-}
-
-enum CameraType {
-  CAMERA_INVLAID = 0;
-  OPENCV = 1;
-}
-
-enum EncoderType {
-  ENCODER_INVLAID = 0;
-  STS3215_ENCODER = 1;
-}
-
-enum LidarType {
-  LIDAR_INVLAID = 0;
-  LDS01 = 1;
-}
-
-enum RadarType { RADAR_INVLAID = 0; }
-
-enum HidType { HID_INVLAID = 0; }
-
-message Camera {
-  string camera_name = 1;
-  uint64 id = 2;
-  CameraType camera_type = 3;
-  robot.comm.Comm comm = 4;
-  oneof camera_config {
-    OpenCvConfig opencv_config = 6;
-  }
-}
-
-// A joint-position sensor read through the board layer. Like Actuator, an
-// encoder names a board and a channel rather than owning a comm handle:
-// the board owns the port and the wire protocol, so an encoder and an
-// actuator on the same bus share one instance and one bus mutex
-// (docs/BOARD_LAYER_RFC.md §5.3).
-message Encoder {
-  string encoder_name = 1;
-  uint64 id = 2;
-  EncoderType encoder_type = 3;
-  // Deprecated: encoders no longer own a comm handle. Set board_name +
-  // channel instead; PerceptionFactory rejects this field. Kept reserved
-  // so old presets fail loudly rather than silently reading nothing.
-  robot.comm.Comm comm = 4;
-  float operational_lower_limit = 5;
-  float operational_upper_limit = 6;
-  oneof encoder_config {
-    Sts3215EncoderConfig sts3215_encoder_config = 9;
-  }
-  // Board leg: resolved against config.robot().boards() by name, exactly
-  // as Actuator.board_name is.
-  string board_name = 10;
-  uint32 channel = 11;
-}
-
-message Lidar {
-  string lidar_name = 1;
-  uint64 id = 2;
-  LidarType lidar_type = 3;
-  robot.comm.Comm comm = 4;
-  // TODO(hmoon): Add more spec here.
+// What a sensor measures. The semantic axis, and the perception twin of
+// robot.action.MotorType: it says what the reading *means*, never which
+// device produces it, which board reads it, how the host reaches that
+// board, or how the board acquires the signal — those are the BoardType,
+// CommType and SignalInterface axes (docs/BOARD_LAYER_RFC.md §5.5, §6.1).
+//
+// This is why one JointPositionSensor serves a Feetech register read, a
+// quadrature counter and an EtherCAT PDO slot without knowing which.
+enum SensorType {
+  SENSOR_INVALID = 0;
+  JOINT_POSITION = 1;  // One joint's angle, in the channel's native unit.
+  IMAGE = 2;
+  RANGE_SCAN = 3;
+  IMU_6DOF = 4;
+  FORCE_TORQUE = 5;
 }
 
 message OpenCvConfig {
@@ -83,20 +30,54 @@ message OpenCvConfig {
   string fourcc = 5;
 }
 
-message Sts3215EncoderConfig {
-  // Deprecated: the servo id is a wiring fact about the bus channel, so it
-  // lives in Channel.servo_bus.servo_id on the board that owns the port.
-  uint64 servo_id = 1;
+// LDS-01 scanning lidar. Empty: the message's presence is what selects the
+// driver, the way a Channel's drive_config oneof selects a drive.
+message Lds01Config {}
+
+// One sensor. A sensor reaches its hardware over exactly one of two legs,
+// and which leg it uses is a property of the device, not a preference:
+//
+//   Board leg — the device multiplexes several channels over one shared
+//   link (a Feetech servo bus, an MCU, an EtherCAT slave). It needs channel
+//   addressing and bus arbitration, so it is a board: the sensor names one
+//   and the board owns the port and the mutex.
+//
+//   Device leg — the device multiplexes nothing (a camera, a scanning
+//   lidar). There is no channel to address and no bus to share, so it owns
+//   its own stream, obtained from CommFactory by comm_type.
+message Sensor {
+  string sensor_name = 1;
+  uint64 id = 2;
+  SensorType sensor_type = 3;
+
+  // Board leg. Resolved against config.robot().boards() by name, exactly as
+  // Actuator.board_name is.
+  string board_name = 4;
+  uint32 channel = 5;
+
+  // Device leg. Mutually exclusive with the board leg.
+  robot.comm.Comm comm = 6;
+
+  float operational_lower_limit = 7;
+  float operational_upper_limit = 8;
+
+  // Device-family config for the device leg; its presence selects the
+  // driver. Board-leg sensors leave this unset — (board_type, signal)
+  // already says how the reading is acquired.
+  oneof sensor_config {
+    OpenCvConfig opencv_config = 10;
+    Lds01Config lds01_config = 11;
+  }
 }
 
 message SinglePerception {
   ros2.node.Node node = 1;
-  PerceptionType perception_type = 2;
-  oneof perception_data {
-    Camera camera = 3;
-    Encoder encoder = 4;
-    Lidar lidar = 5;
-  }
+  // 2-5 held the pre-board-layer shape: a PerceptionType discriminator and
+  // a Camera/Encoder/Lidar oneof, which conflated the sensor's meaning with
+  // its device family and its transport. Replaced by Sensor + SensorType.
+  reserved 2, 3, 4, 5;
+  reserved "perception_type", "camera", "encoder", "lidar";
+  Sensor sensor = 6;
 }
 
 message Perception {

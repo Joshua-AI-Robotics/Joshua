@@ -37,12 +37,12 @@ class LidarPublisher : public rclcpp::Node {
   LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (single_perception.perception_type() != robot::perception::PerceptionType::LIDAR ||
+      if (single_perception.sensor().sensor_type() != robot::perception::SensorType::RANGE_SCAN ||
           static_cast<int>(single_perception.node().id()) != node_id) {
         continue;
       }
 
-      const auto& lidar_proto = single_perception.lidar();
+      const auto& sensor_proto = single_perception.sensor();
       const auto& qos_setting = single_perception.node().qos_setting();
 
       auto interface = robot::perception::PerceptionFactory::CreatePerception(
@@ -50,7 +50,7 @@ class LidarPublisher : public rclcpp::Node {
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to create perception interface for lidar '%s': %s",
-                     lidar_proto.lidar_name().c_str(),
+                     sensor_proto.sensor_name().c_str(),
                      std::string(interface.status().message()).c_str());
         continue;
       }
@@ -77,13 +77,13 @@ class LidarPublisher : public rclcpp::Node {
                   .timer = this->create_wall_timer(
                       std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
                       [this]() { publish_lidar_data(); }),
-                  .frame_id =
-                      lidar_proto.lidar_name().empty() ? "lidar_frame" : lidar_proto.lidar_name()});
+                  .frame_id = sensor_proto.sensor_name().empty() ? "lidar_frame"
+                                                                 : sensor_proto.sensor_name()});
       }
 
       RCLCPP_INFO(this->get_logger(),
                   "Found lidar '%s' in configuration for node_id %d. Publishing on %zu topics",
-                  lidar_proto.lidar_name().c_str(),
+                  sensor_proto.sensor_name().c_str(),
                   node_id,
                   single_perception.node().publishers().size());
     }

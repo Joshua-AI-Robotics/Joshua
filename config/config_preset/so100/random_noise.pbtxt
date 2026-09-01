@@ -12,12 +12,12 @@ robot {
       comm_type: SERIAL
       serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
     }
-    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
-    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
-    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
-    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
-    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
-    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
+    channels { index: 1 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 2 } }
+    channels { index: 3 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 3 } }
+    channels { index: 4 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 4 } }
+    channels { index: 5 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 5 } }
+    channels { index: 6 drive: SERVO_BUS_UART signal: SERVO_BUS_REGISTER servo_bus { servo_id: 6 } }
   }
   actions {
     single_actions {
@@ -208,12 +208,10 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: CAMERA
-      camera {
-        camera_name: "webcam"
+      sensor {
+        sensor_name: "webcam"
         id: 1
-        camera_type: OPENCV
-        comm{}
+        sensor_type: IMAGE
         opencv_config {
           id: 0
           width: 640
@@ -223,7 +221,6 @@ robot {
       }
     }
   }
-
 }
 
 ai {
