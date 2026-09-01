@@ -1,0 +1,74 @@
+# CODEOWNERS — review routing and merge gating for Joshua.
+#
+# GitHub reads this file (not a YAML manifest) to decide who is auto-requested
+# to review a pull request, and — once the `develop` ruleset enables "Require
+# review from Code Owners" — whose approval is required to merge it.
+#
+# Two rules govern everything below:
+#
+#   1. LAST MATCHING PATTERN WINS, and it wins *completely*. Rules do not stack.
+#      A rule on a subdirectory REPLACES the rule on its parent, so every child
+#      entry must repeat every owner it wants — including @hsmoon5458.
+#
+#   2. LISTING SEVERAL OWNERS MEANS "ANY ONE OF THEM". Two owners on a line is
+#      not a two-approval requirement; either one satisfies the gate. GitHub
+#      cannot express "both of these people must approve" here.
+#
+# A trailing `/` matches the directory and everything under it. An owner must
+# have write access to the repository, or GitHub silently ignores the entry.
+#
+# @hsmoon5458 is co-owner of every path, so a review is never blocked on a
+# single person being unavailable.
+
+# ---------------------------------------------------------------------------
+# Default — catches the repository root files (README, MODULE.bazel, BUILD,
+# VERSION, requirements*, docker-compose*, and the agent instruction files) and
+# anything not matched by a rule below.
+# ---------------------------------------------------------------------------
+*                          @hsmoon5458
+
+# ---------------------------------------------------------------------------
+# Top-level directories.
+#
+# Every top-level directory is listed explicitly, even where the owner is the
+# same as the `*` default above. The redundancy is deliberate: it makes an
+# unowned top-level directory visible as a missing line, and gives each
+# subsystem a place to hand ownership to someone else later.
+#
+# Enforced per-PR by hooks/codeowners_check.sh.
+# ---------------------------------------------------------------------------
+/.gemini/                  @hsmoon5458
+/.github/                  @hsmoon5458
+/ai/                       @hsmoon5458
+/assets/                   @hsmoon5458
+/config/                   @hsmoon5458
+/docker/                   @donegjookim @hsmoon5458
+/dockerfiles/              @donegjookim @hsmoon5458
+# Docs are owned by every collaborator with write access, so a docs-only
+# change is never blocked waiting on one person.
+/docs/                     @heostar @piscesgh @donegjookim @hsmoon5458
+/firmware/                 @heostar @hsmoon5458
+/hooks/                    @hsmoon5458
+/launcher/                 @hsmoon5458
+/node_generator/           @hsmoon5458
+/robot/                    @hsmoon5458
+/ros2/                     @hsmoon5458
+/scripts/                  @hsmoon5458
+/simulation/               @hsmoon5458
+/third_party/              @hsmoon5458
+/tools/                    @hsmoon5458
+/ui/                       @donegjookim @hsmoon5458
+/utils/                    @hsmoon5458
+
+# ---------------------------------------------------------------------------
+# Subsystem owners.
+#
+# These override the top-level rules above and must stay below them.
+# ---------------------------------------------------------------------------
+
+# Board layer — board drivers, frames, and the board factory.
+/robot/board/              @heostar @piscesgh @hsmoon5458
+/docs/BOARD_LAYER_RFC.md   @heostar @piscesgh @hsmoon5458
+
+# Communication layer — serial and EtherCAT transports and the comm factory.
+/robot/comm/               @piscesgh @hsmoon5458

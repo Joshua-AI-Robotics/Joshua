@@ -2,7 +2,7 @@
 
 **A modular framework for robotic AI systems**
 
-**Version:** see [`VERSION`](VERSION) · [Changelog](CHANGELOG.md)
+**Version:** see [`VERSION`](VERSION)
 
 Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
 
@@ -77,7 +77,6 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | AI coding agents | [AGENTS.md](AGENTS.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
 | Security | [SECURITY.md](SECURITY.md) |
 
 ## License

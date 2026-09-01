@@ -170,14 +170,41 @@ These areas affect many presets and downstream nodes:
 ## Releases and versioning
 
 - **Single source of truth:** [`VERSION`](VERSION)
-- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md) — add entries under `[Unreleased]` with each user-facing change
 - **SemVer:** `0.x.y` while the API is pre-1.0; breaking changes may land in minor releases
 - **Tags:** `vX.Y.Z` on `develop` when cutting a release (for example `v0.1.0`)
 - Keep [`MODULE.bazel`](MODULE.bazel) `version` and [`ui/package.json`](ui/package.json) in sync with `VERSION`
 
 ## Review process
 
+- Every PR into `develop` needs **at least one approving review** before it can
+  be merged.
 - A maintainer will review PRs for correctness, test coverage, and fit with the config-driven architecture.
+- Reviewers are routed by [`.github/CODEOWNERS`](.github/CODEOWNERS). Touching
+  an owned path auto-requests that owner, and their approval is the one that
+  satisfies the requirement for the PR.
+
+  **Every top-level directory has an owner**, enforced per-PR by the
+  `CODEOWNERS coverage` CI job (`hooks/codeowners_check.sh`) — adding a new
+  top-level directory fails the build until it is given one.
+
+  [@hsmoon5458](https://github.com/hsmoon5458) is co-owner of every path, so a
+  review is never blocked on one person being away. Subsystems with a dedicated
+  owner:
+
+  | Area | Paths | Owners |
+  | --- | --- | --- |
+  | Board layer | `robot/board/`, `docs/BOARD_LAYER_RFC.md` | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Communication layer | `robot/comm/` | [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Firmware | `firmware/` | [@heostar](https://github.com/heostar), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Web UI | `ui/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Docker images | `dockerfiles/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
+  | Docs | `docs/` (except `docs/BOARD_LAYER_RFC.md`, owned by the board layer) | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) — everyone with write access |
+  | Everything else | the remaining top-level directories and root files | [@hsmoon5458](https://github.com/hsmoon5458) |
+
+  Two owners on a line means **either** may approve — not that both must. And a
+  rule on a subdirectory *replaces* its parent's rule rather than adding to it,
+  so each entry repeats every owner it wants.
+
 - Address review comments with new commits on the same branch.
 - PRs may be closed after extended inactivity; you can reopen or rebase when ready.
 

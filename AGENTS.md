@@ -103,7 +103,6 @@ hook for you, so run it yourself before pushing.
   branches are named for the **operator**, not the agent, so ownership and
   review routing stay with a person.
 - Agent-assisted commits carry a `Co-Authored-By:` trailer naming the model.
-- Record user-facing changes in [CHANGELOG.md](CHANGELOG.md).
 - The protobuf config is the single source of truth for a robot setup; don't
   duplicate configuration into code.
 
