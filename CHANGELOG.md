@@ -12,6 +12,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `PerceptionFactory::CreatePerception` takes `boards` and resolves a `Sensor`
+  through the board layer — the same flow `ActionFactory` uses, over the same
+  resolver. A sensor and an actuator naming one board share a single instance
+  and therefore a single bus mutex
 - `SensorType` and the `Sensor` message: the perception twin of
   `robot.action.MotorType`, saying what a reading *means* rather than which
   device produced it. With `Channel.signal`, perception now has the same four
