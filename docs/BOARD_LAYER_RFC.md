@@ -15,14 +15,17 @@ preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.
 | **Comm** | how the host reaches the board | `Board.comm.comm_type` |
 | **Drive** | how the board moves the motor | `Channel.drive` |
 
-One file per axis value, never one per combination. Two seams carry it and
-both stay unchanged: `BoardInterface` (init, channels, teardown) and
-`BoardChannel` (`Enable`/`SetTarget`/`ReadFeedback`), which is all a motor
-driver ever sees.
+One file per axis value, never one per combination. Two interfaces hold the
+axes apart: `BoardInterface` (init, channels, teardown) and `BoardChannel`
+(`Enable`/`SetTarget`/`ReadFeedback`), which is all a motor driver ever sees.
+**Nothing in this document changes either one** — the rework in §4 happens below
+them, in two separate *transport* interfaces, which is why it touches no motor
+driver.
 
 ## 2. Status
 
-**Landed:** the protos, both seams, `BoardFactory` and `ValidateMotorChannel`;
+**Landed:** the protos, both board interfaces, `BoardFactory` and
+`ValidateMotorChannel`;
 AM243 over EtherCAT *and* serial; the Feetech/STS3215 bus board and so100
 actuator presets; the `joshua_wire_v1` C codec shared host↔firmware with
 golden-byte tests; Teensy 4.1 and ESP32, hardware-verified; the Python robot
@@ -54,14 +57,15 @@ name needs a new class today.
 | **F3** | `SendAndReceive()` takes **already-framed** bytes, so every transport inherits serial's `0xA5`/crc16 — redundant on UDP, fatal on CAN (39-byte frame, 8-byte MTU). | `frame_transport.h:39` |
 | **F4** | Fixed response length is baked in at three levels at once; variable-length payloads break all three. | `frame_transport.h` |
 | **F5** | Three enums hand-mirrored with no `static_assert`. One already drifted: `JW1_BOARD_ESP32 = 8` vs `ESP32 = 7`. | `joshua_wire_v1.h:93` |
-| **F6** | `Esp32Board`'s only real override is a 2 s settle delay caused by the CP2102 bridge — a property of the USB-serial **link**, not of ESP32 silicon. | `esp32_board.cc` |
+| **F6** | `Esp32Board`'s only real override is a one-time 2 s sleep at `Init`: opening the port asserts DTR, which the CP2102 bridge wires to reset, so the board reboots and the first exchange waits it out — nothing per message. A property of the **link**, not of ESP32 silicon. | `esp32_board.cc` |
 
 ## 4. Target: two planes
 
 Proto packets should reach the MCU over any comm — but not on the control
 loop, where EtherCAT PDO needs a fixed-size image, CAN's MTU is 8 bytes, and
 varint decode is data-dependent. Split the wire as every fieldbus already does
-(EtherCAT CoE/PDO, CANopen SDO/PDO):
+(EtherCAT CoE/PDO, CANopen SDO/PDO). A **plane** is one of the two paths an
+operation can take to the board:
 
 | Plane | Operations | Payload | Rate |
 | --- | --- | --- | --- |
@@ -86,24 +90,26 @@ class CyclicTransport {  // fixed image swapped every cycle; no per-request resp
 ```
 
 One engine per plane — `MessageBoard(identity, transport)` and
-`CyclicBoard(identity, transport, layout)` — replaces every per-board class,
-with identity passed in as data rather than encoded by the type. `BoardFactory`
-then resolves three axes independently instead of switching on one, so adding
-EtherCAT to a Teensy is a `.pbtxt` edit.
+`CyclicBoard(identity, transport, layout)` — replaces every per-board class.
+**Identity** is the data saying which board this is: `board_type`, channel
+count, expected firmware version, the `jw1_*` enum values. Passing it to the
+constructor rather than encoding it in the type is what removes `TeensyBoard`
+and `Esp32Board`. `BoardFactory` then resolves three axes independently instead
+of switching on one, so adding EtherCAT to a Teensy is a `.pbtxt` edit.
 
 ## 5. Plan
 
-Architecture first: define every seam, both planes and the dependency rules
+Architecture first: define every interface, both planes and the dependency rules
 before writing any transport. Steps 1–2 add no capability — they establish the
 structure and move what exists onto it. Only then is a new comm or a new wire
 format a one-file change, which is the entire claim of this RFC.
 
 **Step 1 — Establish the layers.** *Headers, fakes and build rules; no behaviour change.*
-- [ ] Declare both transport seams in `robot/comm/interfaces/`: `MessageTransport` (payload in, payload out) and `CyclicTransport` (image swap). Neither names a comm type.
+- [ ] Declare both transport interfaces in `robot/comm/interfaces/`: `MessageTransport` (payload in, payload out) and `CyclicTransport` (image swap). Neither names a comm type.
 - [ ] Declare `BoardIdentity` and the two engines, `MessageBoard` and `CyclicBoard`, in `robot/board/engines/`. Identity is constructor data; no per-board subclass exists anywhere (F1, F2).
 - [ ] Settle which plane owns `SET_TARGET` (question 2). This sizes the engines and cannot be deferred past this step.
-- [ ] Enforce the dependency direction in Bazel visibility: motor drivers see only `BoardChannel`, engines see only the two seams, concrete transports are visible to the comm factory alone. A board target that can name a concrete transport is a layering bug.
-- [ ] Fakes for both seams, plus engine tests that run with no hardware.
+- [ ] Enforce the dependency direction in Bazel visibility: motor drivers see only `BoardChannel`; the engines see only `MessageTransport` and `CyclicTransport`, never a concrete one; concrete transports are visible to the comm factory alone. A board target that can name a concrete transport is a layering bug.
+- [ ] Fakes for both transport interfaces, plus engine tests that run with no hardware.
 
 **Step 2 — Move the existing boards onto the architecture.** *No wire change; behaviour identical.*
 - [ ] `FrameTransport` → a serial `MessageTransport`; framing moves inside it and serial keeps today's exact bytes, so the golden-byte tests do not change (F3, F4).
@@ -153,10 +159,10 @@ as those files are touched.
 
 | Cited as | Subject | Now |
 | --- | --- | --- |
-| §5.3 | the two seams, unit convention, instance caching | §1 (still true) |
+| §5.3 | the two board interfaces, unit convention, instance caching | §1 (still true) |
 | §5.5 | comm vs drive legs, motor↔drive validation | §1 (still true) |
 | §5.6 | boards without a separate MCU (Feetech, HOST_GPIO) | archived — behaviour unchanged |
 | §7.2 / §7.3 | `joshua_wire_v1` framing, shared-codec rules | archived; superseded by §4 |
 | §7.5 | the firmware channel table | archived — behaviour unchanged |
-| §12.7 | torque semantics at the seam | resolved in phase 4; see `board_channel.h` |
+| §12.7 | torque semantics on `BoardChannel` | resolved in phase 4; see `board_channel.h` |
 | §10 Phase N | the old rollout checklist | §5 |
