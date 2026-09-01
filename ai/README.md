@@ -188,6 +188,5 @@ lock; model locks hold only model-specific closures.
 Recording demos uses `ai/train/data_store.py` and is independent of the
 inference plug-in system. See [`train/README.md`](train/README.md).
 
-Training (BC, RL) is not implemented. The RL pipeline that once lived here was
-removed (see [`CHANGELOG.md`](../CHANGELOG.md)), and the training RFC that
-described the planned replacement has been retired.
+Training (BC, RL) is not implemented. The former RL pipeline and the training
+RFC that described its planned replacement have been removed.

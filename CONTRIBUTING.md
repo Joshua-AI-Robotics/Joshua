@@ -187,7 +187,6 @@ These areas affect many presets and downstream nodes:
 ## Releases and versioning
 
 - **Single source of truth:** [`VERSION`](VERSION)
-- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md) — add entries under `[Unreleased]` with each user-facing change
 - **SemVer:** `0.x.y` while the API is pre-1.0; breaking changes may land in minor releases
 - **Tags:** `vX.Y.Z` on `develop` when cutting a release (for example `v0.1.0`)
 - Keep [`MODULE.bazel`](MODULE.bazel) `version` and [`ui/package.json`](ui/package.json) in sync with `VERSION`
