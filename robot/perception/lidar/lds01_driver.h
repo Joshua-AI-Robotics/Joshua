@@ -2,19 +2,26 @@
 #include <glog/logging.h>
 
 #include <atomic>
+#include <memory>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "config/proto/robot.pb.h"
-#include "robot/comm/serial/serial.h"
+#include "robot/comm/interfaces/stream_transport.h"
 #include "robot/perception/interfaces/lidar_interface.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
+// The lidar pushes frames on its own schedule, so it takes a
+// StreamTransport rather than a Serial: the parser below is the same
+// whether those bytes arrive over UART or, later, UDP, which makes the
+// link a comm_type edit in the preset (docs/BOARD_LAYER_RFC.md §5.3).
 class Lds01Driver : public LidarInterface {
  public:
-  explicit Lds01Driver(const std::shared_ptr<robot::comm::Serial>& serial,
-                       const robot::perception::Lidar& lidar_config);
+  Lds01Driver(std::shared_ptr<robot::comm::StreamTransport> stream,
+              const robot::perception::Lidar& lidar_config);
   ~Lds01Driver() = default;
 
   absl::Status Init() override;
@@ -25,7 +32,7 @@ class Lds01Driver : public LidarInterface {
  private:
   void reading_thread_func();
 
-  std::shared_ptr<robot::comm::Serial> serial_;
+  std::shared_ptr<robot::comm::StreamTransport> stream_;
   std::string id_;
   mutable robot::perception::PerceptionPacket reusable_packet_;
   std::thread receiving_thread_;

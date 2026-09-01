@@ -12,6 +12,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `robot::comm::StreamTransport`, the seam for a device that multiplexes
+  nothing — a scanning lidar, a GPS. `Lds01Driver` takes one instead of a
+  `Serial`, so its link is a `comm_type` edit rather than a driver change,
+  and `CommFactory::CreateStreamTransport` resolves the comm axis for it
 - `robot/board/factory/board_resolver.h`: one implementation of
   `(board_name, channel)` resolution against `boards{}`, so every layer that
   binds to a board channel resolves it the same way and reports the same
