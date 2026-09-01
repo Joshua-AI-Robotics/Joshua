@@ -5,6 +5,23 @@ import "ros2/proto/node.proto";
 
 package robot.perception;
 
+// What a sensor measures. The semantic axis, and the perception twin of
+// robot.action.MotorType: it says what the reading *means*, never which
+// device produces it, which board reads it, how the host reaches that
+// board, or how the board acquires the signal — those are the BoardType,
+// CommType and SignalInterface axes (docs/BOARD_LAYER_RFC.md §5.5, §6.1).
+//
+// This is why one JointPositionSensor serves a Feetech register read, a
+// quadrature counter and an EtherCAT PDO slot without knowing which.
+enum SensorType {
+  SENSOR_INVALID = 0;
+  JOINT_POSITION = 1;  // One joint's angle, in the channel's native unit.
+  IMAGE = 2;
+  RANGE_SCAN = 3;
+  IMU_6DOF = 4;
+  FORCE_TORQUE = 5;
+}
+
 enum PerceptionType {
   PERCEPTION_INVALID = 0;
   CAMERA = 1;
@@ -75,14 +92,57 @@ message Sts3215EncoderConfig {
   uint64 servo_id = 1;
 }
 
+// LDS-01 scanning lidar. Empty: the message's presence is what selects the
+// driver, the way a Channel's drive_config oneof selects a drive.
+message Lds01Config {}
+
+// One sensor. A sensor reaches its hardware over exactly one of two legs,
+// and which leg it uses is a property of the device, not a preference:
+//
+//   Board leg — the device multiplexes several channels over one shared
+//   link (a Feetech servo bus, an MCU, an EtherCAT slave). It needs channel
+//   addressing and bus arbitration, so it is a board: the sensor names one
+//   and the board owns the port and the mutex.
+//
+//   Device leg — the device multiplexes nothing (a camera, a scanning
+//   lidar). There is no channel to address and no bus to share, so it owns
+//   its own stream, obtained from CommFactory by comm_type.
+message Sensor {
+  string sensor_name = 1;
+  uint64 id = 2;
+  SensorType sensor_type = 3;
+
+  // Board leg. Resolved against config.robot().boards() by name, exactly as
+  // Actuator.board_name is.
+  string board_name = 4;
+  uint32 channel = 5;
+
+  // Device leg. Mutually exclusive with the board leg.
+  robot.comm.Comm comm = 6;
+
+  float operational_lower_limit = 7;
+  float operational_upper_limit = 8;
+
+  // Device-family config for the device leg; its presence selects the
+  // driver. Board-leg sensors leave this unset — (board_type, signal)
+  // already says how the reading is acquired.
+  oneof sensor_config {
+    OpenCvConfig opencv_config = 10;
+    Lds01Config lds01_config = 11;
+  }
+}
+
 message SinglePerception {
   ros2.node.Node node = 1;
+  // Being replaced by `sensor` below, which carries the sensor's meaning
+  // rather than its device family (docs/BOARD_LAYER_RFC.md §10 Phase 6).
   PerceptionType perception_type = 2;
   oneof perception_data {
     Camera camera = 3;
     Encoder encoder = 4;
     Lidar lidar = 5;
   }
+  Sensor sensor = 6;
 }
 
 message Perception {

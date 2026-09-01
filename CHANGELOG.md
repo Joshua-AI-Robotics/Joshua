@@ -12,6 +12,16 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `SensorType` and the `Sensor` message: the perception twin of
+  `robot.action.MotorType`, saying what a reading *means* rather than which
+  device produced it. With `Channel.signal`, perception now has the same four
+  axes as actuation, two of them shared
+  ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §5.5, §6.1)
+- `JointPositionSensor`, which reads a joint angle over any `BoardChannel`
+  whose signal leg can produce one — a Feetech register read, a quadrature
+  counter or a PDO slot, with no per-device class
+- `ValidateSensorChannel`, expressed as what a signal leg can measure rather
+  than as a sensor-by-device table
 - `Channel.signal` (`SignalInterface`), the sensing counterpart of
   `Channel.drive`: how a board acquires a reading — `SERVO_BUS_REGISTER`,
   `QUADRATURE`, `ANALOG_ADC`, `PDO_SLOT` — independent of what the reading
