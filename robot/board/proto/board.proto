@@ -24,6 +24,22 @@ enum BoardType {
                     // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
 }
 
+// The signal leg: how the board acquires a measurement. The sensing
+// counterpart of DriveInterface (docs/BOARD_LAYER_RFC.md §5.5) -- a board
+// reaches a sensor exactly the way it reaches a motor, over a leg that is
+// independent of the sensor's meaning, the board type and the comm type.
+//
+// A channel may declare a drive, a signal, or both. A Feetech servo is
+// both: one channel that commands position and reports it. A quadrature
+// input on an MCU pin is signal-only; a step/dir output is drive-only.
+enum SignalInterface {
+  SIGNAL_INVALID = 0;
+  SERVO_BUS_REGISTER = 1;  // Feetech/Dynamixel present-position register read.
+  QUADRATURE = 2;          // A/B incremental encoder on MCU pins.
+  ANALOG_ADC = 3;          // Raw ADC count from an MCU pin.
+  PDO_SLOT = 4;            // Slot in a cyclic EtherCAT input image.
+}
+
 // The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
 enum DriveInterface {
   DRIVE_INVALID = 0;
@@ -81,13 +97,18 @@ message HostGpioConfig {
   repeated uint32 pins = 2;  // Pin group on the host header.
 }
 
-// One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
-// pins) and tunables are pushed at Init() via CONFIGURE_CHANNEL — see
-// StepDirConfig for why pins moved out of the firmware image
-// (docs/BOARD_LAYER_RFC.md §7.5).
+// One slot on one board: a motor, a sensor, or — as on a smart servo —
+// both at once. Both wiring facts (e.g. StepDirConfig's pins) and tunables
+// are pushed at Init() via CONFIGURE_CHANNEL — see StepDirConfig for why
+// pins moved out of the firmware image (docs/BOARD_LAYER_RFC.md §7.5).
 message Channel {
   uint32 index = 1;
+  // Output leg. DRIVE_INVALID for a sensor-only channel.
   DriveInterface drive = 2;
+  // Input leg. SIGNAL_INVALID for an actuator-only channel. Required for
+  // any channel a sensor binds to -- PerceptionFactory validates the
+  // sensor's meaning against it.
+  SignalInterface signal = 3;
   oneof drive_config {
     StepDirConfig step_dir = 10;
     ServoBusConfig servo_bus = 11;
