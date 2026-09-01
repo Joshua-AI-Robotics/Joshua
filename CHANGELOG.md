@@ -12,6 +12,9 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `NodeGenerator::CheckConfigIntegrity` warns when one board is claimed by more
+  than one node id: each node runs in its own process, so the board's
+  in-process bus mutex cannot serialize them
 - `PerceptionFactory::CreatePerception` takes `boards` and resolves a `Sensor`
   through the board layer — the same flow `ActionFactory` uses, over the same
   resolver. A sensor and an actuator naming one board share a single instance
@@ -62,6 +65,10 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- The serial-port conflict check in `CheckConfigIntegrity` only looked at
+  per-sensor inline `comm`, so it stopped seeing any port once ports moved into
+  `boards{}`. It now checks single-stream devices by port and board-attached
+  ones by board ownership
 - so100 `teleoperate.pbtxt` and `smolvla.pbtxt` published no encoder telemetry
   at all. Commit `8cf099a` migrated the presets onto `boards{}` and removed the
   encoders' inline `comm {}`, which had nowhere to go because `Encoder` could
@@ -86,6 +93,18 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Removed
 
+- `Sts3215Encoder`, together with its private copy of the Feetech read codec
+  (packet builder, checksum, status parse). The identical read already existed
+  in `feetech_protocol.h` behind `FeetechBusBoard::ReadFeedback()`
+- The `Camera`/`Encoder`/`Lidar` messages and the `PerceptionType`,
+  `CameraType`, `EncoderType` and `LidarType` enums, which conflated a sensor's
+  meaning with its device family and its transport — the same conflation
+  `ActuatorType` was split to undo. A device family, where it still matters, is
+  now selected by the `sensor_config` oneof
+- The empty `CameraInterface`, `EncoderInterface` and `LidarInterface` marker
+  classes. Sensors implement `PerceptionInterface` directly
+- `Camera.comm` (a V4L2 device index is not a comm) and
+  `Sts3215EncoderConfig.servo_id` (the servo id is a channel wiring fact)
 - **All Python from the robot layer** (BOARD_LAYER_RFC.md §10 Phase 9):
   `action_factory.py`, `perception_factory.py`, `comm_factory.py`, the action
   and perception interface base classes, `serial.py`, and every mock driver.

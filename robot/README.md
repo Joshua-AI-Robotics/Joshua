@@ -25,8 +25,26 @@ board, and a transport can be chosen independently in config rather than in
 code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
-`board_name` → `BoardFactory` → `OpenChannel` → driver. Perception has not
-migrated — it is still driver-direct (Phase 6). Check
+`board_name` → `BoardFactory` → `OpenChannel` → driver, over the shared lookup
+in `board/factory/board_resolver.h`.
+
+Perception resolves the same way (Phase 6), and a sensor reaches hardware over
+one of exactly two legs — which one is a property of the device, not a
+preference:
+
+- **Board leg.** The device multiplexes several channels over one link (a
+  Feetech servo bus, an MCU, an EtherCAT slave), so it needs channel
+  addressing and bus arbitration: it *is* a board. The sensor names one and
+  opens a channel on it, so a sensor and an actuator on one bus share a board
+  instance and its bus mutex.
+- **Device leg.** The device multiplexes nothing (a camera, a scanning lidar).
+  There is no channel to address and no bus to share, so it owns its own
+  handle — a `robot::comm::StreamTransport` for anything that streams bytes,
+  which keeps the comm axis a config choice.
+
+Sensors are named for what they measure, never for how they are wired, which
+is why one `JointPositionSensor` serves a Feetech register read, a quadrature
+counter and a PDO slot. Check
 [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10 for which phase has
 landed before assuming either way.
 
@@ -41,14 +59,18 @@ selects between backends.
 
 - `action/` — motor drivers (`motors/drivers/`), the actuator interfaces, and
   `factory/`, which resolves a config actuator to a driver.
-- `board/` — `interfaces/` (`BoardChannel`, `BoardInterface`), `factory/` with
-  its per-board instance cache and motor/channel compatibility validation,
+- `board/` — `interfaces/` (`BoardChannel`, `BoardInterface`), and `factory/`
+  with its per-board instance cache, the shared channel resolver, and the
+  motor/drive and sensor/signal compatibility tables,
   `proto/`, and `mock/`. `mock/` is C++ test infrastructure: it lets the
   factory and board tests exercise real drivers with no hardware attached.
-- `comm/` — `serial/` and `ethercat/` transports plus `factory/`. Transports
-  move bytes and know nothing about motors.
-- `perception/` — camera, encoder, and lidar drivers behind
-  `perception/interfaces/`.
+- `comm/` — `interfaces/` (`StreamTransport`), `serial/` and `ethercat/`
+  transports, plus `factory/`. Transports move bytes and know nothing about
+  motors or sensors.
+- `perception/` — sensor drivers behind the single `PerceptionInterface`
+  seam: `sensors/` for board-attached sensors (`JointPositionSensor` over a
+  `BoardChannel`, owning no port), `camera/` and `lidar/` for single-stream
+  devices, and `factory/`, which picks the leg and resolves the sensor.
 
 ## Non-Goals
 

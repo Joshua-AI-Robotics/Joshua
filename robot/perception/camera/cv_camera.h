@@ -9,15 +9,19 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "robot/perception/interfaces/camera_interface.h"
+#include "robot/perception/interfaces/perception_interface.h"
+#include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
 
+// SensorType::IMAGE over a V4L2 device. A camera multiplexes nothing, so
+// it is not a board: it owns its own device handle and is selected by the
+// presence of OpenCvConfig (docs/BOARD_LAYER_RFC.md §5.3).
 // TODO: Update the ID, and logic.
-class CvCamera : public CameraInterface {
+class CvCamera : public PerceptionInterface {
  public:
-  CvCamera(const robot::perception::Camera& camera_config);
+  explicit CvCamera(const robot::perception::Sensor& sensor_config);
   ~CvCamera() override;
 
   absl::Status Init() override;
