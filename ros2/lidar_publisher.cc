@@ -45,12 +45,13 @@ class LidarPublisher : public rclcpp::Node {
       const auto& lidar_proto = single_perception.lidar();
       const auto& qos_setting = single_perception.node().qos_setting();
 
-      auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
+      auto interface = robot::perception::PerceptionFactory::CreatePerception(
+          single_perception, config.robot().boards());
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
-                     "Failed to create perception interface for lidar '%s'. Check hardware "
-                     "connection or permissions.",
-                     lidar_proto.lidar_name().c_str());
+                     "Failed to create perception interface for lidar '%s': %s",
+                     lidar_proto.lidar_name().c_str(),
+                     std::string(interface.status().message()).c_str());
         continue;
       }
 

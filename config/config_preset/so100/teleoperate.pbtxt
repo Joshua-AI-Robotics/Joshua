@@ -215,9 +215,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 1147
         operational_upper_limit: 3154
-        sts3215_encoder_config {
-          servo_id: 1
-        }
+        board_name: "arm_bus"
+        channel: 1
       }
     }
     single_perceptions {
@@ -238,10 +237,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 1670
         operational_upper_limit: 3986
-        sts3215_encoder_config {
-          servo_id: 2
-
-        }
+        board_name: "arm_bus"
+        channel: 2
       }
     }
     single_perceptions {
@@ -262,10 +259,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 910
         operational_upper_limit: 3113
-        sts3215_encoder_config {
-          servo_id: 3
-
-        }
+        board_name: "arm_bus"
+        channel: 3
       }
     }
     single_perceptions {
@@ -286,10 +281,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 20
         operational_upper_limit: 2407
-        sts3215_encoder_config {
-          servo_id: 4
-
-        }
+        board_name: "arm_bus"
+        channel: 4
       }
     }
     single_perceptions {
@@ -310,9 +303,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 1730
         operational_upper_limit: 3811
-        sts3215_encoder_config {
-          servo_id: 5
-        }
+        board_name: "arm_bus"
+        channel: 5
       }
     }
     single_perceptions {
@@ -333,9 +325,8 @@ robot {
         encoder_type: STS3215_ENCODER
         operational_lower_limit: 2028
         operational_upper_limit: 3100
-        sts3215_encoder_config {
-          servo_id: 6
-        }
+        board_name: "arm_bus"
+        channel: 6
       }
     }
   }

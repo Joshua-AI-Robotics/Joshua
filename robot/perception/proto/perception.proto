@@ -43,16 +43,28 @@ message Camera {
   }
 }
 
+// A joint-position sensor read through the board layer. Like Actuator, an
+// encoder names a board and a channel rather than owning a comm handle:
+// the board owns the port and the wire protocol, so an encoder and an
+// actuator on the same bus share one instance and one bus mutex
+// (docs/BOARD_LAYER_RFC.md §5.3).
 message Encoder {
   string encoder_name = 1;
   uint64 id = 2;
   EncoderType encoder_type = 3;
+  // Deprecated: encoders no longer own a comm handle. Set board_name +
+  // channel instead; PerceptionFactory rejects this field. Kept reserved
+  // so old presets fail loudly rather than silently reading nothing.
   robot.comm.Comm comm = 4;
   float operational_lower_limit = 5;
   float operational_upper_limit = 6;
   oneof encoder_config {
     Sts3215EncoderConfig sts3215_encoder_config = 9;
   }
+  // Board leg: resolved against config.robot().boards() by name, exactly
+  // as Actuator.board_name is.
+  string board_name = 10;
+  uint32 channel = 11;
 }
 
 message Lidar {
@@ -72,6 +84,8 @@ message OpenCvConfig {
 }
 
 message Sts3215EncoderConfig {
+  // Deprecated: the servo id is a wiring fact about the bus channel, so it
+  // lives in Channel.servo_bus.servo_id on the board that owns the port.
   uint64 servo_id = 1;
 }
 

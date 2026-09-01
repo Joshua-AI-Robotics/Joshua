@@ -12,6 +12,17 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- Perception now resolves through the board layer: `Encoder` gains
+  `board_name` + `channel`, `PerceptionFactory::CreatePerception` takes
+  `boards`, and the new `BoardEncoder` reads position over `BoardChannel`.
+  An encoder and an actuator on the same bus now share one board instance
+  and one bus mutex instead of opening the port twice
+  ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 6)
+- `ValidateSensorChannel`, the perception twin of `ValidateMotorChannel`, so
+  an encoder bound to a channel that cannot report position fails at `Init()`
+  with an actionable error
+- A preset validation test asserting every `ENCODER` resolves to a real board
+  channel, which catches the class of config regression described below
 - Docker Compose task services for shells, tests, launcher runs, package builds,
   UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
@@ -35,6 +46,15 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- so100 `teleoperate.pbtxt` and `smolvla.pbtxt` published no encoder
+  telemetry at all. Migrating the presets onto `boards{}` removed the
+  encoders' inline `comm {}` without giving them anywhere else to get a
+  port, so every encoder failed to construct and the `ENCODER_PUBLISHER`
+  node came up with zero encoders. Encoders now name a board like actuators
+  do
+- Perception publishers logged "Check hardware connection or permissions" and
+  discarded the real error, which made the config failure above look like a
+  wiring problem. The actual status message is now logged
 - Docker images now source the ROS 2 environment through a shared entrypoint
   ([docker/entrypoint.sh](docker/entrypoint.sh)), so non-interactive task
   commands (e.g. `docker compose run --rm run-u22`) no longer fail with an
@@ -50,6 +70,13 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Removed
 
+- `Sts3215Encoder`, together with its private copy of the Feetech read
+  codec (packet builder, checksum, status parse). The identical read already
+  existed in `feetech_protocol.h` behind `FeetechBusBoard::ReadFeedback()`;
+  `BoardEncoder` uses it
+- Per-encoder `comm {}` from every preset, and `Sts3215EncoderConfig.servo_id`
+  from presets — the servo id is a channel wiring fact
+  (`Channel.servo_bus.servo_id`) and was previously declared in two places
 - **All Python from the robot layer** (BOARD_LAYER_RFC.md §10 Phase 9):
   `action_factory.py`, `perception_factory.py`, `comm_factory.py`, the action
   and perception interface base classes, `serial.py`, and every mock driver.

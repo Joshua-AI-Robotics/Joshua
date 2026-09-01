@@ -42,12 +42,13 @@ class CameraPublisher : public rclcpp::Node {
       const auto& camera_proto = single_perception.camera();
       const auto& qos_setting = single_perception.node().qos_setting();
 
-      auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
+      auto interface = robot::perception::PerceptionFactory::CreatePerception(
+          single_perception, config.robot().boards());
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
-                     "Failed to create perception interface for camera '%s'. Check hardware "
-                     "connection or permissions.",
-                     camera_proto.camera_name().c_str());
+                     "Failed to create perception interface for camera '%s': %s",
+                     camera_proto.camera_name().c_str(),
+                     std::string(interface.status().message()).c_str());
         continue;
       }
 

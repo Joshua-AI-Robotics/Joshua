@@ -25,8 +25,11 @@ board, and a transport can be chosen independently in config rather than in
 code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
-`board_name` → `BoardFactory` → `OpenChannel` → driver. Perception has not
-migrated — it is still driver-direct (Phase 6). Check
+`board_name` → `BoardFactory` → `OpenChannel` → driver. Encoders now resolve
+the same way, through `PerceptionFactory` (Phase 6), so an encoder and an
+actuator on one bus share a board instance and its bus mutex. Cameras and
+lidars are still driver-direct: neither is a board-layer device, because no
+board exposes a frame or scan channel yet. Check
 [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10 for which phase has
 landed before assuming either way.
 
@@ -42,13 +45,16 @@ selects between backends.
 - `action/` — motor drivers (`motors/drivers/`), the actuator interfaces, and
   `factory/`, which resolves a config actuator to a driver.
 - `board/` — `interfaces/` (`BoardChannel`, `BoardInterface`), `factory/` with
-  its per-board instance cache and motor/channel compatibility validation,
+  its per-board instance cache and the motor/channel and sensor/channel
+  compatibility tables,
   `proto/`, and `mock/`. `mock/` is C++ test infrastructure: it lets the
   factory and board tests exercise real drivers with no hardware attached.
 - `comm/` — `serial/` and `ethercat/` transports plus `factory/`. Transports
   move bytes and know nothing about motors.
-- `perception/` — camera, encoder, and lidar drivers behind
-  `perception/interfaces/`.
+- `perception/` — camera and lidar drivers behind `perception/interfaces/`,
+  plus `encoder/board_encoder.h`, which reads position over a `BoardChannel`
+  and owns no port of its own, and `factory/`, which resolves a config
+  encoder to a board channel.
 
 ## Non-Goals
 
