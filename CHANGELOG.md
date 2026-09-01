@@ -62,6 +62,15 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Fixed
 
+- so100 `teleoperate.pbtxt` and `smolvla.pbtxt` published no encoder telemetry
+  at all. Commit `8cf099a` migrated the presets onto `boards{}` and removed the
+  encoders' inline `comm {}`, which had nowhere to go because `Encoder` could
+  not name a board. Every encoder then failed to construct and the
+  `ENCODER_PUBLISHER` node came up with zero encoders. Encoders now name a
+  board like actuators do
+- Perception publishers logged `Check hardware connection or permissions` and
+  discarded the real status, so the config failure above read as a wiring
+  fault. The actual message is now logged
 - Docker images now source the ROS 2 environment through a shared entrypoint
   ([docker/entrypoint.sh](docker/entrypoint.sh)), so non-interactive task
   commands (e.g. `docker compose run --rm run-u22`) no longer fail with an
