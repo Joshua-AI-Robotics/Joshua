@@ -5,19 +5,31 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "config/proto/robot.pb.h"
+#include "google/protobuf/repeated_ptr_field.h"
+#include "robot/board/factory/board_factory.h"
+#include "robot/board/factory/board_resolver.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/encoder/sts3215_encoder.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
+#include "robot/perception/position/sts3215_position_sensor.h"
 #include "utils/status_macros.h"
 
 namespace robot::perception {
 class PerceptionFactory {
  public:
+  // Callers provide the configured boards used to resolve board-attached
+  // sensors.
   static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreatePerception(
-      const robot::perception::SinglePerception& single_perception) {
+      const robot::perception::SinglePerception& single_perception,
+      const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+    if (single_perception.sensor_config_case() !=
+        robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET) {
+      return CreateSensor(single_perception, boards);
+    }
     switch (single_perception.perception_type()) {
       case PerceptionType::CAMERA: {
         const auto& camera = single_perception.camera();
@@ -67,6 +79,46 @@ class PerceptionFactory {
   PerceptionFactory& operator=(PerceptionFactory&&) = default;
 
  private:
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSensor(
+      const robot::perception::SinglePerception& sensor,
+      const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+    const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+
+    if (sensor.sensor_type() == robot::perception::SensorType::SENSOR_INVALID) {
+      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
+    }
+
+    switch (sensor.sensor_config_case()) {
+      case robot::perception::SinglePerception::kSts3215EncoderConfig:
+        return CreateSts3215PositionSensor(sensor, boards, owner);
+      case robot::perception::SinglePerception::kOpencvConfig:
+      case robot::perception::SinglePerception::kLds01Config:
+        return absl::UnimplementedError(
+            absl::StrCat(owner, ": direct sensor migration is not implemented yet."));
+      case robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET:
+      default:
+        return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+    }
+  }
+
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>
+  CreateSts3215PositionSensor(const robot::perception::SinglePerception& sensor,
+                              const google::protobuf::RepeatedPtrField<robot::board::Board>& boards,
+                              const std::string& owner) {
+    if (sensor.sensor_type() != robot::perception::SensorType::POSITION) {
+      return absl::InvalidArgumentError(
+          absl::StrCat(owner, ": sts3215_encoder_config requires POSITION sensor_type."));
+    }
+    const auto& config = sensor.sts3215_encoder_config();
+    ABSL_ASSIGN_OR_RETURN(
+        auto resolved,
+        robot::board::ResolveChannelConfig(boards, owner, config.board_name(), config.channel()));
+
+    ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
+    ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(config.channel()));
+    return std::make_unique<Sts3215PositionSensor>(channel, sensor);
+  }
+
   PerceptionFactory() = default;
 };
 }  // namespace robot::perception
