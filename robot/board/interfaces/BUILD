@@ -5,8 +5,10 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "board_interfaces",
     hdrs = [
+        "actuator_channel.h",
         "board_channel.h",
         "board_interface.h",
+        "sensor_channel.h",
     ],
     deps = [
         "//robot/board/proto:board_cc_proto",

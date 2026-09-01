@@ -12,6 +12,13 @@ Version numbers are defined in [`VERSION`](VERSION). Git tags use the form `vX.Y
 
 ### Added
 
+- `ActuatorChannel` and `SensorChannel` as separate board-layer seams, with
+  `BoardChannel` their union for a slot that both drives and senses. A
+  consumer now takes only the half it needs, so a sensor can be handed a
+  handle that has no way to command motion
+  ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §5.3)
+- `BoardInterface::OpenSensorChannel`, which makes sensor-only channels
+  expressible — a bare quadrature or ADC input has no actuator half to open
 - Docker Compose task services for shells, tests, launcher runs, package builds,
   UI, and Isaac-backed simulation overlays, with optional Makefile aliases
 - Isaac Sim as a plain simulation backend (`SIM_BACKEND_ISAAC_SIM`):
