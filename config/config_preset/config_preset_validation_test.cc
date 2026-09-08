@@ -50,9 +50,6 @@ TEST(ConfigValidationTest, EverySensorResolves) {
     ASSERT_TRUE(config.ok()) << config_path << ": " << config.status().message();
 
     for (const auto& single_perception : config->robot().perceptions().single_perceptions()) {
-      if (!single_perception.has_sensor()) {
-        continue;  // Still on the pre-board-layer shape; migrates with it.
-      }
       const auto& sensor = single_perception.sensor();
       const std::string where = config_path + ": sensor '" + sensor.sensor_name() + "'";
 

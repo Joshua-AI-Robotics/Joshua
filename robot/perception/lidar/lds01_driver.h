@@ -8,16 +8,16 @@
 #include <utility>
 #include <vector>
 
-#include "config/proto/robot.pb.h"
 #include "robot/comm/interfaces/stream_transport.h"
 #include "robot/perception/interfaces/lidar_interface.h"
+#include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
 class Lds01Driver : public LidarInterface {
  public:
   Lds01Driver(std::shared_ptr<robot::comm::StreamTransport> stream,
-              const robot::perception::Lidar& lidar_config);
+              const robot::perception::Sensor& sensor_config);
   ~Lds01Driver() = default;
 
   absl::Status Init() override;
