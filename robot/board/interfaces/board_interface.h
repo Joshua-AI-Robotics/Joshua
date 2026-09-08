@@ -9,9 +9,10 @@
 
 namespace robot::board {
 
-// One controller shared by every actuator that names it: two actuators on
-// the same board share one instance and one comm handle
-// (docs/BOARD_LAYER_RFC.md §5.3). Instances come from BoardFactory.
+// One controller shared by everything that names it: two actuators, or an
+// actuator and a sensor, on the same board share one instance and one comm
+// handle, and therefore one bus mutex (docs/BOARD_LAYER_RFC.md §5.3).
+// Instances come from BoardFactory.
 class BoardInterface {
  public:
   virtual ~BoardInterface() = default;
