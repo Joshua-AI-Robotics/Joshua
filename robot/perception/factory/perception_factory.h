@@ -43,9 +43,10 @@ class PerceptionFactory {
         const auto& lidar_config = single_perception.lidar();
         switch (lidar_config.lidar_type()) {
           case LidarType::LDS01: {
-            ABSL_ASSIGN_OR_RETURN(auto serial,
-                                  robot::comm::CommFactory::CreateSerial(lidar_config.comm()));
-            auto lidar = std::make_unique<Lds01Driver>(serial, lidar_config);
+            ABSL_ASSIGN_OR_RETURN(
+                auto stream,
+                robot::comm::CommFactory::CreateStreamTransport(lidar_config.comm()));
+            auto lidar = std::make_unique<Lds01Driver>(stream, lidar_config);
             ABSL_RETURN_IF_ERROR(lidar->Init());
             return lidar;
           }

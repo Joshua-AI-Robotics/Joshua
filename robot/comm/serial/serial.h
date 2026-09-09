@@ -9,6 +9,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "robot/comm/interfaces/stream_transport.h"
 
 namespace robot::comm {
 
@@ -25,18 +26,22 @@ class SerialTransport {
                                                           size_t expected_response_size) = 0;
 };
 
-class Serial : public SerialTransport {
+// Implements both byte-level seams: SerialTransport for bus-protocol boards
+// that need the atomic write-then-read (FeetechBusBoard), and
+// StreamTransport for single-stream sensor drivers that just pull bytes
+// (Lds01Driver). Neither of those depends on this class.
+class Serial : public SerialTransport, public StreamTransport {
  public:
   Serial(std::shared_ptr<boost::asio::io_context> io, std::string uart_port, int uart_baudrate);
   ~Serial();
   absl::Status Write(const std::vector<uint8_t>& data) override;
-  absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read);
+  absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read) override;
 
   absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
                                                   size_t expected_response_size) override;
 
   absl::Status Flush();
-  absl::Status Open();
+  absl::Status Open() override;
 
  private:
   std::string uart_port_;

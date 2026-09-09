@@ -55,6 +55,32 @@ absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMod
 }
 }  // namespace
 
+absl::StatusOr<std::shared_ptr<StreamTransport>> CommFactory::CreateStreamTransport(
+    const robot::comm::Comm& comm) {
+  switch (comm.comm_type()) {
+    case CommType::SERIAL: {
+      auto serial = CreateSerial(comm);
+      if (!serial.ok()) {
+        return serial.status();
+      }
+      return std::shared_ptr<StreamTransport>(*serial);
+    }
+    case CommType::ETHERNET_UDP:
+      // Reserved in comm.proto; no UDP transport exists yet
+      // (docs/BOARD_LAYER_RFC.md §10). When CreateUdp lands, this becomes
+      // one more case and every stream sensor gains UDP for free.
+      return absl::UnimplementedError(
+          "ETHERNET_UDP stream transport is not implemented yet; no UDP transport exists.");
+    case CommType::ETHERCAT:
+      return absl::InvalidArgumentError(
+          "ETHERCAT is a cyclic process-data link, not a byte stream; a stream sensor cannot "
+          "use it.");
+    case CommType::COMM_INVALID:
+    default:
+      return absl::InvalidArgumentError("Comm has an invalid comm_type.");
+  }
+}
+
 absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(const robot::comm::Comm& comm) {
   if (comm.comm_type() != CommType::SERIAL) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Comm is not of type SERIAL");
