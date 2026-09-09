@@ -7,6 +7,7 @@
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | System architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
+| Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
 | Agent instructions RFC (AGENTS.md contract) | [AGENTS_RFC.md](AGENTS_RFC.md) |
 | AM243 EtherCAT bring-up | [am243_ethercat.md](am243_ethercat.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
