@@ -8,7 +8,6 @@ cc_library(
     deps = [
         "//firmware/common:joshua_wire_v1",
         "//robot/board/frame:frame_transport",
-        "//robot/board/frame:serial_frame_transport",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
@@ -28,6 +27,7 @@ cc_test(
         "//firmware/common:joshua_wire_v1",
         "//robot/board/frame:fake_frame_transport",
         "//robot/board/proto:board_cc_proto",
+        "//robot/comm/factory:comm_factory",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",

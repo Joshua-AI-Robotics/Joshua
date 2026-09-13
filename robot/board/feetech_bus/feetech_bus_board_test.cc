@@ -6,6 +6,7 @@
 #include "gtest/gtest.h"
 #include "robot/board/feetech_bus/feetech_protocol.h"
 #include "robot/board/proto/board.pb.h"
+#include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "robot/comm/serial/fake_serial_transport.h"
 
@@ -40,6 +41,7 @@ robot::board::Board MakeArmBusBoard() {
   board.set_board_type(robot::board::BoardType::FEETECH_BUS);
   auto* comm = board.mutable_comm();
   comm->set_comm_type(robot::comm::CommType::SERIAL);
+  comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(1000000);
 
@@ -55,15 +57,15 @@ class FeetechBusBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
     transport_ = std::make_shared<FakeSerialTransport>();
-    FeetechBusBoard::SetSerialTransportFactoryForTesting(
-        [this](const robot::comm::Comm&)
-            -> absl::StatusOr<std::shared_ptr<robot::comm::SerialTransport>> {
-          return transport_;
+    robot::comm::CommFactory::SetCommTransportFactoryForTesting(
+        [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
+          return robot::comm::CommTransport{
+              std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
         });
   }
 
   void TearDown() override {
-    FeetechBusBoard::SetSerialTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
   // Every channel's Init() does a PING + read-model-number IDENTIFY, so
