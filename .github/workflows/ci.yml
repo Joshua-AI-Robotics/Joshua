@@ -18,6 +18,25 @@ jobs:
       - name: Verify AGENTS.md link targets resolve
         run: ./hooks/agents_doc_check.sh
 
+      - name: Verify skill docs are well formed
+        run: ./hooks/skills_doc_check.sh
+
+      - name: Smoke-test the skill installer
+        run: |
+          bash -n scripts/install-skills.sh
+          # Install into a throwaway HOME with a fake Codex dir present, then
+          # assert the symlink landed and points back at the repo.
+          smoke="$(mktemp -d)"
+          mkdir -p "$smoke/.codex"
+          HOME="$smoke" CODEX_HOME="$smoke/.codex" ./scripts/install-skills.sh
+          link="$smoke/.codex/skills/joshua-add-subsystem-doc"
+          test -L "$link"
+          test "$(readlink "$link")" = "$PWD/docs/skills/joshua-add-subsystem-doc"
+          # Re-running is idempotent (refreshes the same link, no error).
+          HOME="$smoke" CODEX_HOME="$smoke/.codex" ./scripts/install-skills.sh
+          rm -rf "$smoke"
+          echo "installer smoke OK"
+
   codeowners:
     name: CODEOWNERS coverage
     runs-on: ubuntu-22.04
