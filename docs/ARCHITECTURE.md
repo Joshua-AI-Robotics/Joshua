@@ -54,6 +54,14 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - **Extensibility** — new sensors and action types without breaking the core
 - **Modularity** — clear split between config, runtime packets, and ROS 2 topics
 
+## Experimental Joshua MHS interface
+
+The opt-in [Joshua MHS interface](../mhs/README.md) exposes one configured Teensy
+stepper to local MCP clients. A Python SDK adapter communicates over a private
+pipe with a C++ executor that validates and monitors bounded moves through the
+board interface. It runs separately from the ROS graph; API-enabled presets are
+rejected by the ROS launcher to avoid its automatic actuator enable path.
+
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run

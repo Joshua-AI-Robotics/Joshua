@@ -1,5 +1,7 @@
 # Joshua Hardware API: MHS-inspired proof of concept
 
+Implementation: [Joshua MHS MVP](../mhs/README.md) provides the initial five tools for one stepper. Application demos remain separate experiments; first establish the discover → act → observe interface.
+
 Status: proposed implementation plan; no runtime changes included.
 
 Research date: September 13, 2026. Joshua baseline reviewed: `9bd755a`.
@@ -158,7 +160,7 @@ docker compose run --rm test-u22
 docker compose run --rm test-u24
 ```
 
-Suggested changes: a small `gateway/` package for descriptors and adapters; the config schema/preset; a C++ executor under `ros2/`; narrow stepper feedback/lifecycle changes under `robot/`; and demo documentation. Add a `.github/CODEOWNERS` entry for any new top-level directory. Follow the [board RFC](BOARD_LAYER_RFC.md), keep PRs focused, and target `develop`.
+Suggested changes: a small `mhs/` package for descriptors and adapters; the config schema/preset; a C++ executor under `ros2/`; narrow stepper feedback/lifecycle changes under `robot/`; and demo documentation. Add a `.github/CODEOWNERS` entry for any new top-level directory. Follow the [board RFC](BOARD_LAYER_RFC.md), keep PRs focused, and target `develop`.
 
 Use a dedicated Docker demo service exposing the selected Teensy serial device only to the executor. Apply [AGENTS.md](../AGENTS.md) when running hardware. This plan reuses the existing setup and installed firmware; it does not launch hardware or request flashing.
 
