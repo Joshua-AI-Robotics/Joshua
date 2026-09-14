@@ -46,18 +46,16 @@ fi
 # Candidate agent skill directories. A directory is used only if its parent
 # (the agent's home) already exists, so we never create a skill dir for an agent
 # that is not installed. Add new agents here as their skill paths are confirmed.
-CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+codex_skill_home="${CODEX_HOME:-$HOME/.codex}"
 TARGETS=(
-  "$CODEX_HOME/skills"      # Codex
+  "$codex_skill_home/skills" # Codex
   "$HOME/.claude/skills"    # Claude Code
 )
 
 # Collect the skills to install: docs/skills/joshua-* that contain a SKILL.md.
+# An empty list is not an early exit — prune_stale below still needs to run so
+# that removing the last skill cleans up its leftover link.
 mapfile -t SKILLS < <(find "$SRC" -mindepth 1 -maxdepth 1 -type d -name 'joshua-*' | sort)
-if [[ ${#SKILLS[@]} -eq 0 ]]; then
-  echo "no joshua-* skills in $SRC/ yet" >&2
-  exit 0
-fi
 
 # Remove links this script previously created that no longer have a source —
 # e.g. a skill renamed or deleted in the repo. Only touches symlinks under the
@@ -91,10 +89,20 @@ link_one() {
   name="$(basename "$skill_dir")"
   dest="$target_dir/$name"
 
-  # Refuse to clobber a real directory/file that isn't one of our symlinks,
-  # unless --force. A symlink (typically our own from a prior run) is safe to
-  # replace.
-  if [[ -e "$dest" && ! -L "$dest" && $FORCE -eq 0 ]]; then
+  # Only refresh a link we own (one already pointing under $SRC). A real
+  # directory, or a symlink to something else (a local experiment, another
+  # checkout), is left alone unless --force — we never silently clobber it.
+  if [[ -L "$dest" ]]; then
+    local cur; cur="$(readlink "$dest")"
+    case "$cur" in
+      "$SRC"/*) ;;                    # our own link — safe to refresh
+      *)
+        if [[ $FORCE -eq 0 ]]; then
+          echo "skip: $dest is a symlink to $cur (not ours) — pass --force to replace" >&2
+          return
+        fi ;;
+    esac
+  elif [[ -e "$dest" && $FORCE -eq 0 ]]; then
     echo "skip: $dest exists and is not a symlink — pass --force to overwrite" >&2
     return
   fi
@@ -124,6 +132,10 @@ for target in "${TARGETS[@]}"; do
     link_one "$skill" "$target"
   done
 done
+
+if [[ ${#SKILLS[@]} -eq 0 ]]; then
+  echo "no joshua-* skills in $SRC/ — pruned any stale links, nothing to install"
+fi
 
 if [[ $installed_any -eq 0 ]]; then
   echo "" >&2

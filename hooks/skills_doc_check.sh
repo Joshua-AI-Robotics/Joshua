@@ -76,13 +76,18 @@ frontmatter_value() {
   python3 -c '
 import re, sys
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+text = text.replace("\r\n", "\n").replace("\r", "\n")  # tolerate CRLF
 m = re.match(r"^---\n(.*?)\n---\n", text, flags=re.S)
 if not m:
     sys.exit(0)
 for line in m.group(1).split("\n"):
     k, _, v = line.partition(":")
     if k.strip() == sys.argv[2]:
-        print(v.strip())
+        v = v.strip()
+        q = v[:1]
+        if len(v) >= 2 and v[-1] == q and q in ("\"", chr(39)):
+            v = v[1:-1]                # strip matching surrounding quotes
+        print(v)
         break
 ' "$1" "$2"
 }
@@ -108,12 +113,15 @@ while IFS= read -r stray; do
 done < <(find "$SKILLS_DIR" -mindepth 2 -maxdepth 2 -name SKILL.md \
            -not -path "$SKILLS_DIR/joshua-*/SKILL.md")
 
-if [[ ${#SKILL_DIRS[@]} -eq 0 ]]; then
-  if [[ $status -eq 0 ]]; then
-    echo "no skills in $SKILLS_DIR/ yet — index present, nothing to check"
-  fi
-  exit $status
-fi
+# Catch a skill authored as a flat file (docs/skills/joshua-x.md) instead of a
+# directory. Both the guard and the installer key off directories, so a flat
+# file would pass silently and never install. README.md is the one allowed
+# top-level file.
+while IFS= read -r stray; do
+  [[ -z "$stray" ]] && continue
+  echo "STRAY FILE: $stray — skills are directories (joshua-<name>/SKILL.md), not flat files" >&2
+  status=1
+done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.md' -not -name README.md)
 
 index_text="$(strip_code "$INDEX")"
 
@@ -179,6 +187,20 @@ for dir in "${SKILL_DIRS[@]}"; do
            grep -oE '(^|[[:space:]])@[^[:space:]]+\.md' |
            sed -E 's/^[[:space:]]*@//')
 done
+
+# The per-skill loop asserts every skill has an index link. Also check the
+# inverse: every skill link in the index points at a skill that still exists,
+# so a deleted skill whose README row was left behind is caught too.
+while IFS= read -r target; do
+  [[ -z "$target" ]] && continue
+  target="${target%% *}"
+  path="${target%%#*}"
+  [[ -z "$path" ]] && continue
+  if [[ ! -e "$SKILLS_DIR/$path" ]]; then
+    echo "DANGLING INDEX LINK: $INDEX -> $target (no such skill)" >&2
+    status=1
+  fi
+done < <(strip_code "$INDEX" | grep -oE '\]\(joshua-[^)]+\)' | sed -E 's/^\]\((.*)\)$/\1/')
 
 if [[ $status -eq 0 ]]; then
   echo "skills OK: every skill has valid frontmatter, is indexed, and its links resolve"
