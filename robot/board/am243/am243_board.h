@@ -1,9 +1,7 @@
 #pragma once
 
-#include <functional>
 #include <map>
 #include <memory>
-#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -29,12 +27,6 @@ class Am243Board : public BoardInterface {
   absl::Status Init(const robot::board::Board& config) override;
   absl::StatusOr<std::shared_ptr<BoardChannel>> OpenChannel(uint32_t index) override;
   absl::Status Teardown() override;
-
-  static void SetFrameTransportFactoryForTesting(
-      std::function<absl::StatusOr<std::shared_ptr<FrameTransport>>(const robot::comm::Comm&)>
-          factory) {
-    JoshuaWireBoard::SetFrameTransportFactoryForTesting(std::move(factory));
-  }
 
  private:
   bool initialized_ = false;

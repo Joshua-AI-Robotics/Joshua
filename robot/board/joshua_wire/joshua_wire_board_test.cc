@@ -7,6 +7,7 @@
 #include "gtest/gtest.h"
 #include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
+#include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
 
 namespace robot::board {
@@ -76,6 +77,7 @@ robot::board::Board MakeBoardConfig() {
   board.set_board_type(robot::board::BoardType::ARDUINO_UNO);
   auto* comm = board.mutable_comm();
   comm->set_comm_type(robot::comm::CommType::SERIAL);
+  comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
   board.mutable_firmware()->set_min_proto_version(1);
@@ -88,14 +90,15 @@ class JoshuaWireBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
     transport_ = std::make_shared<FakeFrameTransport>();
-    JoshuaWireBoard::SetFrameTransportFactoryForTesting(
-        [this](const robot::comm::Comm&) -> absl::StatusOr<std::shared_ptr<FrameTransport>> {
-          return transport_;
+    robot::comm::CommFactory::SetCommTransportFactoryForTesting(
+        [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
+          return robot::comm::CommTransport{
+              std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
         });
   }
 
   void TearDown() override {
-    JoshuaWireBoard::SetFrameTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
   // Init() always does IDENTIFY then one CONFIGURE_CHANNEL per configured
