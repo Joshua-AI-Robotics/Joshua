@@ -36,6 +36,11 @@ if [[ ! -d "$SKILLS_DIR" ]]; then
   exit 0
 fi
 
+if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+  echo "PyYAML is required; install it with: python3 -m pip install PyYAML==6.0.2" >&2
+  exit 1
+fi
+
 if [[ ! -f "$INDEX" ]]; then
   echo "MISSING: $INDEX — the skill index must exist once $SKILLS_DIR/ does" >&2
   exit 1
@@ -69,27 +74,6 @@ for line in lines:
 
 print(re.sub(r"(`+)(?:(?!\1).)*?\1", " ", "\n".join(out)))
 ' "$1"
-}
-
-# Read one frontmatter key from a SKILL.md (empty if absent/malformed).
-frontmatter_value() {
-  python3 -c '
-import re, sys
-text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-text = text.replace("\r\n", "\n").replace("\r", "\n")  # tolerate CRLF
-m = re.match(r"^---\n(.*?)\n---\n", text, flags=re.S)
-if not m:
-    sys.exit(0)
-for line in m.group(1).split("\n"):
-    k, _, v = line.partition(":")
-    if k.strip() == sys.argv[2]:
-        v = v.strip()
-        q = v[:1]
-        if len(v) >= 2 and v[-1] == q and q in ("\"", chr(39)):
-            v = v[1:-1]                # strip matching surrounding quotes
-        print(v)
-        break
-' "$1" "$2"
 }
 
 status=0
@@ -135,18 +119,8 @@ for dir in "${SKILL_DIRS[@]}"; do
     continue
   fi
 
-  # 1. frontmatter present and consistent with the directory name.
-  fm_name="$(frontmatter_value "$skill" name)"
-  fm_desc="$(frontmatter_value "$skill" description)"
-  if [[ -z "$fm_name" ]]; then
-    echo "BAD FRONTMATTER: $skill has no 'name:' key" >&2
-    status=1
-  elif [[ "$fm_name" != "$name" ]]; then
-    echo "NAME MISMATCH: $skill declares name: $fm_name but lives in $name/" >&2
-    status=1
-  fi
-  if [[ -z "$fm_desc" ]]; then
-    echo "BAD FRONTMATTER: $skill has no 'description:' key" >&2
+  # 1. Parse YAML, then validate the required fields and directory name.
+  if ! python3 "$ROOT/hooks/skill_metadata_check.py" "$skill"; then
     status=1
   fi
 

@@ -59,7 +59,14 @@ confused for one another.
    them from the skill.
 3. Add a row to the [Index](#index) above.
 4. Reference the skill from the subsystem doc where it applies.
-5. Run `hooks/skills_doc_check.sh` — it is blocking in CI and verifies
+5. Install the checker dependency with `python3 -m pip install PyYAML==6.0.2`,
+   then run `hooks/skills_doc_check.sh` — it is blocking in CI and verifies
    frontmatter, indexing, and that every link inside the skill resolves.
 
-The `name:` in the frontmatter must match the directory name.
+The header must be valid YAML. Both `name` and `description` must be nonempty
+strings, and `name` must match the directory name. Quote descriptions containing
+`: ` (a colon followed by a space), or use a YAML block scalar.
+
+Run `python3 hooks/skills_framework_test.py` to test the checker and installer
+in temporary directories, including both supported assistants and preservation
+of existing installations.
