@@ -1,0 +1,18 @@
+syntax = "proto3";
+package config;
+
+// Opt-in exposure for the experimental Joshua MHS interface. Existing presets
+// expose nothing. Wiring, motor conversion and position limits remain in Robot.
+message HardwareApi {
+  bool enabled = 1;
+  repeated HardwareDevice devices = 2;
+}
+
+message HardwareDevice {
+  string actuator_name = 1;
+  string description = 2;
+  repeated string tags = 3;
+  double max_move_degrees = 4;
+  uint32 max_move_duration_ms = 5;
+  uint32 feedback_max_age_ms = 6;
+}

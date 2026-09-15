@@ -1,8 +1,12 @@
 #include "robot/comm/serial/serial.h"
 
+#include <fcntl.h>
+#include <poll.h>
 #include <termios.h>
+#include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 
 namespace robot::comm {
@@ -119,37 +123,54 @@ absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_
     LOG(WARNING) << "tcflush failed during query: " << strerror(errno);
   }
 
-  // 2. Write Command
-  try {
-    boost::asio::write(*serial_, boost::asio::buffer(command));
-  } catch (const boost::system::system_error& e) {
-    return absl::Status(absl::StatusCode::kInternal,
-                        "Error writing query command: " + std::string(e.what()));
+  // A synchronous boost::asio::read is not cancelled by serial_port::cancel,
+  // which only cancels asynchronous operations. Use nonblocking fd I/O and a
+  // single deadline covering both write and read, including partial responses.
+  const int fd = serial_->native_handle();
+  const int flags = fcntl(fd, F_GETFL);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    return absl::InternalError("Cannot configure nonblocking serial query");
   }
-
-  // 3. Read Response
+  struct RestoreFlags {
+    int fd, flags;
+    ~RestoreFlags() {
+      fcntl(fd, F_SETFL, flags);
+    }
+  } restore{fd, flags};
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+  auto transfer = [&](uint8_t* data, size_t size, bool writing) -> absl::Status {
+    size_t offset = 0;
+    while (offset < size) {
+      const auto remaining = deadline - std::chrono::steady_clock::now();
+      if (remaining <= std::chrono::steady_clock::duration::zero()) {
+        return absl::DeadlineExceededError("Serial query deadline exceeded");
+      }
+      const int wait_ms =
+          static_cast<int>(
+              std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count()) +
+          1;
+      pollfd descriptor{fd, static_cast<short>(writing ? POLLOUT : POLLIN), 0};
+      const int ready = poll(&descriptor, 1, wait_ms);
+      if (ready < 0 && errno == EINTR) continue;
+      if (ready < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+        return absl::UnavailableError("Serial query connection lost");
+      }
+      if (ready == 0) continue;
+      const ssize_t count = writing ? ::write(fd, data + offset, size - offset)
+                                    : ::read(fd, data + offset, size - offset);
+      if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+      if (count <= 0) return absl::UnavailableError("Serial query transfer failed");
+      offset += static_cast<size_t>(count);
+    }
+    return absl::OkStatus();
+  };
+  // transfer does not mutate outgoing bytes; a copy avoids casting away const.
+  auto outgoing = command;
+  auto status = transfer(outgoing.data(), outgoing.size(), true);
+  if (!status.ok()) return status;
   std::vector<uint8_t> buffer(expected_response_size);
-  boost::system::error_code ec;
-
-  boost::asio::steady_timer timer(*io_context_);
-  timer.expires_after(std::chrono::milliseconds(20));  // Slightly longer timeout for full query
-  timer.async_wait([&](const boost::system::error_code& e) {
-    if (!e) serial_->cancel();
-  });
-
-  try {
-    boost::asio::read(*serial_, boost::asio::buffer(buffer), ec);
-  } catch (const boost::system::system_error& e) {
-    return absl::Status(absl::StatusCode::kInternal,
-                        "Error reading query response: " + std::string(e.what()));
-  }
-
-  timer.cancel();
-
-  if (ec) {
-    return absl::Status(absl::StatusCode::kInternal,
-                        "Query read failed/timed out: " + ec.message());
-  }
+  status = transfer(buffer.data(), buffer.size(), false);
+  if (!status.ok()) return status;
 
   return buffer;
 }

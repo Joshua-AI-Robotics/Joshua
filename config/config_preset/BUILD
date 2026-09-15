@@ -13,3 +13,5 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+exports_files(["example/teensy_hardware_api.pbtxt"])

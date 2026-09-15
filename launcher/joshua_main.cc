@@ -25,6 +25,11 @@ int main(int argc, char* argv[]) {
   }
   const auto& config = config_or.value();
 
+  if (config.hardware_api().enabled()) {
+    LOG(ERROR) << "Hardware API presets require mhs/executor; ROS launch is disabled";
+    return 1;
+  }
+
   if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
     return launcher::RunSimulation(FLAGS_config, config);
   }
