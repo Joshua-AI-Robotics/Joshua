@@ -5,6 +5,17 @@ import "ros2/proto/node.proto";
 
 package robot.perception;
 
+// Describes what a sensor measures, independently of its hardware and
+// communication mechanism.
+enum SensorType {
+  SENSOR_INVALID = 0;
+  POSITION = 1;  // Linear or rotary position, in the channel's native unit.
+  IMAGE = 2;
+  RANGE_SCAN = 3;
+  IMU_6DOF = 4;
+  FORCE_TORQUE = 5;
+}
+
 enum PerceptionType {
   PERCEPTION_INVALID = 0;
   CAMERA = 1;
@@ -69,19 +80,37 @@ message OpenCvConfig {
   uint32 height = 3;
   uint32 fps = 4;
   string fourcc = 5;
+  robot.comm.Comm comm = 6;
 }
 
 message Sts3215EncoderConfig {
   uint64 servo_id = 1;
+  string board_name = 2;
+  uint32 channel = 3;
+}
+
+message Lds01Config {
+  robot.comm.Comm comm = 1;
 }
 
 message SinglePerception {
   ros2.node.Node node = 1;
+  // Deprecated device-family discriminator.
   PerceptionType perception_type = 2;
   oneof perception_data {
     Camera camera = 3;
     Encoder encoder = 4;
     Lidar lidar = 5;
+  }
+  // TODO: Fields 2-5 belong to the legacy perception model. Once that
+  // model is removed, reuse fields 2-5 for the flattened sensor fields.
+  string sensor_name = 6;
+  uint64 id = 7;
+  SensorType sensor_type = 8;
+  oneof sensor_config {
+    OpenCvConfig opencv_config = 9;
+    Lds01Config lds01_config = 10;
+    Sts3215EncoderConfig sts3215_encoder_config = 11;
   }
 }
 
