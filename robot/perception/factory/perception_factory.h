@@ -26,10 +26,39 @@ class PerceptionFactory {
   static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreatePerception(
       const robot::perception::SinglePerception& single_perception,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
-    if (single_perception.sensor_config_case() !=
-        robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET) {
-      return CreateSensor(single_perception, boards);
+    if (single_perception.sensor_config_case() ==
+            robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET &&
+        single_perception.sensor_type() == robot::perception::SensorType::SENSOR_INVALID) {
+      return CreateLegacyPerception(single_perception);
     }
+
+    const std::string owner = absl::StrCat("Sensor '", single_perception.sensor_name(), "'");
+    if (single_perception.sensor_type() == robot::perception::SensorType::SENSOR_INVALID) {
+      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
+    }
+
+    switch (single_perception.sensor_config_case()) {
+      case robot::perception::SinglePerception::kSts3215EncoderConfig:
+        return CreateSts3215PositionSensor(single_perception, boards, owner);
+      case robot::perception::SinglePerception::kOpencvConfig:
+      case robot::perception::SinglePerception::kLds01Config:
+        return absl::UnimplementedError(
+            absl::StrCat(owner, ": direct sensor migration is not implemented yet."));
+      case robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET:
+      default:
+        return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+    }
+  }
+
+  ~PerceptionFactory() = default;
+  PerceptionFactory(const PerceptionFactory&) = delete;
+  PerceptionFactory& operator=(const PerceptionFactory&) = delete;
+  PerceptionFactory(PerceptionFactory&&) = default;
+  PerceptionFactory& operator=(PerceptionFactory&&) = default;
+
+ private:
+  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>
+  CreateLegacyPerception(const robot::perception::SinglePerception& single_perception) {
     switch (single_perception.perception_type()) {
       case PerceptionType::CAMERA: {
         const auto& camera = single_perception.camera();
@@ -69,35 +98,6 @@ class PerceptionFactory {
       }
       default:
         return absl::InvalidArgumentError("Invalid perception type.");
-    }
-  }
-
-  ~PerceptionFactory() = default;
-  PerceptionFactory(const PerceptionFactory&) = delete;
-  PerceptionFactory& operator=(const PerceptionFactory&) = delete;
-  PerceptionFactory(PerceptionFactory&&) = default;
-  PerceptionFactory& operator=(PerceptionFactory&&) = default;
-
- private:
-  static absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSensor(
-      const robot::perception::SinglePerception& sensor,
-      const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
-    const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
-
-    if (sensor.sensor_type() == robot::perception::SensorType::SENSOR_INVALID) {
-      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
-    }
-
-    switch (sensor.sensor_config_case()) {
-      case robot::perception::SinglePerception::kSts3215EncoderConfig:
-        return CreateSts3215PositionSensor(sensor, boards, owner);
-      case robot::perception::SinglePerception::kOpencvConfig:
-      case robot::perception::SinglePerception::kLds01Config:
-        return absl::UnimplementedError(
-            absl::StrCat(owner, ": direct sensor migration is not implemented yet."));
-      case robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET:
-      default:
-        return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
     }
   }
 

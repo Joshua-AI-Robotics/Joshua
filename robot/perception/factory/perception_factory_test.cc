@@ -75,6 +75,44 @@ TEST_F(PerceptionFactoryTest, RejectsSensorWithoutConcreteDriverConfig) {
 
   ASSERT_FALSE(sensor_or.ok());
   EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(sensor_or.status().message(), "Sensor 'joint_1' has no sensor_config.");
+}
+
+TEST_F(PerceptionFactoryTest, RejectsConcreteDriverConfigWithoutSensorType) {
+  auto robot_config = MakeRobotWithMockServoBoard();
+  auto single_perception = MakeBoardSensor();
+  single_perception.clear_sensor_type();
+
+  auto sensor_or = PerceptionFactory::CreatePerception(single_perception, robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(sensor_or.status().message(), "Sensor 'joint_1' has no sensor_type.");
+}
+
+TEST_F(PerceptionFactoryTest, DoesNotFallBackToLegacyForIncompleteSensorConfig) {
+  auto robot_config = MakeRobotWithMockServoBoard();
+  auto single_perception = MakeBoardSensor();
+  single_perception.clear_sts3215_encoder_config();
+  single_perception.set_perception_type(PerceptionType::LIDAR);
+
+  auto sensor_or = PerceptionFactory::CreatePerception(single_perception, robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(sensor_or.status().message(), "Sensor 'joint_1' has no sensor_config.");
+}
+
+TEST_F(PerceptionFactoryTest, UsesLegacyValidationForLegacyConfig) {
+  config::Robot robot_config;
+  SinglePerception single_perception;
+  single_perception.set_perception_type(PerceptionType::LIDAR);
+
+  auto sensor_or = PerceptionFactory::CreatePerception(single_perception, robot_config.boards());
+
+  ASSERT_FALSE(sensor_or.ok());
+  EXPECT_EQ(sensor_or.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(sensor_or.status().message(), "Invalid lidar type.");
 }
 
 TEST_F(PerceptionFactoryTest, RejectsUnknownBoardName) {
