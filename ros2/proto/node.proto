@@ -5,12 +5,12 @@ package ros2.node;
 import "ros2/proto/ros2_data_type.proto";
 
 // Enum values here must match with the file name under ros2/
-// (e.g. camera_publisher.cc, encoder_publisher.cc, etc.)
+// (e.g. camera_publisher.cc, position_publisher.cc, etc.)
 // This is used to resolve the native binary path.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
-  ENCODER_PUBLISHER = 2;
+  POSITION_PUBLISHER = 2;
   ACTUATOR_SUBSCRIBER = 3;
   INFERENCE = 4;
   LIDAR_PUBLISHER = 5;

@@ -13,6 +13,7 @@ cc_library(
     ],
     deps = [
         "//config:config_utils",
+        "//config:validation",
         "//config/proto:config_cc_proto",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -99,22 +100,16 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
-    name = "encoder_publisher",
-    srcs = ["encoder_publisher.cc"],
+    name = "position_publisher",
+    srcs = ["position_publisher.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
     set_up_ament = True,
     deps = [
+        ":position_publishers",
         "//config/proto:config_cc_proto",
-        "//robot/perception/factory:perception_factory",
-        "//robot/perception/proto:perception_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -215,4 +210,40 @@ genrule(
     outs = ["ros2_node_wrapper.sh"],
     cmd = "cp $< $@ && chmod +x $@",
     visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "position_publishers",
+    hdrs = ["position_publishers.h"],
+    deps = [
+        "//config/proto:robot_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "position_publishers_test",
+    srcs = ["position_publishers_test.cc"],
+    deps = [
+        ":position_publishers",
+        "//robot/board/factory:board_factory",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "node_runner_test",
+    srcs = ["node_runner_test.cc"],
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:rclcpp",
+    ],
 )

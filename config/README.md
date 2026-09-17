@@ -53,3 +53,48 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
    safe/unsafe boundary in this repo. What counts as safe is defined once, in
    the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
    against that list rather than against a copy of it here.
+
+## Sensor configuration
+
+Each `single_perceptions` entry declares `sensor_name`, `sensor_type`, and one
+concrete config: `opencv_config` for `IMAGE`, `lds01_config` for `RANGE_SCAN`, or
+`sts3215_encoder_config` for `POSITION`. Sensor names also identify output
+perception packets. Legacy `perception_type` and `camera`/`encoder`/`lidar`
+wrappers are no longer accepted.
+
+For example, position feedback references a configured board channel:
+
+```text
+sensor_name: "joint_1"
+sensor_type: POSITION
+sts3215_encoder_config { board_name: "arm_bus" channel: 1 }
+```
+
+The board owns serial settings and servo IDs. Position readings retain the
+channel's native units; the old encoder operational limits were unused and are
+not part of the new sensor config. Actuator limits remain configured separately.
+OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
+its transport settings in `lds01_config.comm`.
+
+One serial bus must belong to one node process. Position sensors use
+`POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
+does not read or publish sensors. Reading sensors from an actuator's bus in a
+separate process is not supported by the current bus ownership model.
+The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
+the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
+subscribers share `sts3215_servo_<joint>/position` topics, carrying native
+position values as `Float32` commands directly between the two nodes.
+Preset tests validate declared dependencies and serial-port ownership without
+opening hardware.
+
+`config::ValidateConfig` in [validation.h](validation.h)
+accepts the full `config::Config` and orchestrates separate checks for node assignments,
+board/channel references, serial settings, and bus ownership. These checks use
+resource dependencies rather than sensor measurement types. A sensor can
+require board channels, direct communication, both, or neither. Sensor config
+checks and dependency extraction are separate private helpers in that module.
+Adding a driver updates those helpers; the shared resource checks
+remain independent of sensor types. Factories keep defensive construction checks
+for direct callers, without depending on the validation module.
+There is no central sensor-to-publisher allowlist; node validation checks that
+node types are specified and each node ID has one consistent type.

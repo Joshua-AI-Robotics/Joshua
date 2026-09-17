@@ -34,20 +34,21 @@ class CameraPublisher : public rclcpp::Node {
   CameraPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (single_perception.perception_type() != robot::perception::PerceptionType::CAMERA ||
+      if (single_perception.sensor_type() != robot::perception::SensorType::IMAGE ||
           static_cast<int>(single_perception.node().id()) != node_id) {
         continue;
       }
 
-      const auto& camera_proto = single_perception.camera();
+      const std::string sensor_name = single_perception.sensor_name();
       const auto& qos_setting = single_perception.node().qos_setting();
 
-      auto interface = robot::perception::PerceptionFactory::CreatePerception(single_perception);
+      auto interface = robot::perception::PerceptionFactory::CreatePerception(
+          single_perception, config.robot().boards());
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to create perception interface for camera '%s'. Check hardware "
                      "connection or permissions.",
-                     camera_proto.camera_name().c_str());
+                     sensor_name.c_str());
         continue;
       }
 
@@ -76,7 +77,7 @@ class CameraPublisher : public rclcpp::Node {
 
       RCLCPP_INFO(this->get_logger(),
                   "Found camera '%s' in configuration for node_id %d. Publishing on %zu topics",
-                  camera_proto.camera_name().c_str(),
+                  sensor_name.c_str(),
                   node_id,
                   single_perception.node().publishers().size());
     }

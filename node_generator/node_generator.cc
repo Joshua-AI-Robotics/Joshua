@@ -15,6 +15,7 @@
 #include <thread>
 
 #include "config/config_utils.h"
+#include "config/validation.h"
 #include "utils/status_macros.h"
 
 namespace node_generator {
@@ -302,47 +303,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
 }
 
 absl::Status NodeGenerator::CheckConfigIntegrity() {
-  auto robot_config = config_.robot();
-  std::map<std::string, uint32_t> port_to_node_id;
-
-  // Helper lambda to extract serial port from a perception's config if it exists.
-  auto get_serial_port = [](const auto& perception_details) -> std::string {
-    if (perception_details.comm().comm_type() == robot::comm::CommType::SERIAL) {
-      return perception_details.comm().serial_config().port();
-    }
-    return "";
-  };
-
-  // Check for serial port conflicts among all perception devices.
-  // This ensures a single physical port is not managed by multiple node processes.
-  for (const auto& single_perception : robot_config.perceptions().single_perceptions()) {
-    uint32_t node_id = single_perception.node().id();
-    std::string port_name;
-
-    if (single_perception.has_camera()) {
-      port_name = get_serial_port(single_perception.camera());
-    } else if (single_perception.has_encoder()) {
-      port_name = get_serial_port(single_perception.encoder());
-    }
-
-    if (!port_name.empty()) {
-      if (port_to_node_id.count(port_name)) {
-        if (port_to_node_id[port_name] != node_id) {
-          LOG(ERROR) << "Configuration Integrity Failure: Serial port '" << port_name
-                     << "' is assigned to multiple node_ids (" << port_to_node_id[port_name]
-                     << " and " << node_id
-                     << "). This is not allowed as it will cause resource conflicts.";
-          return absl::Status(absl::StatusCode::kInvalidArgument, "Serial port conflict");
-        }
-      } else {
-        port_to_node_id[port_name] = node_id;
-      }
-    }
-  }
-
-  // TODO: Add more check here for the config.
-
-  return absl::OkStatus();
+  return config::ValidateConfig(config_);
 }
 
 absl::Status NodeGenerator::LaunchAllNodes() {

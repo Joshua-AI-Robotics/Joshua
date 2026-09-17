@@ -5,6 +5,7 @@
 #include <string>
 
 #include "config/config_utils.h"
+#include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
 
 namespace ros2_utils {
@@ -46,6 +47,12 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
   }
 
   config::Config config = result.value();
+  const auto validation_status = config::ValidateConfig(config);
+  if (!validation_status.ok()) {
+    LOG(ERROR) << "Invalid config: " << validation_status;
+    rclcpp::shutdown();
+    return 1;
+  }
 
   rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
   rclcpp::shutdown();

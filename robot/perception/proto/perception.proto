@@ -16,77 +16,18 @@ enum SensorType {
   FORCE_TORQUE = 5;
 }
 
-enum PerceptionType {
-  PERCEPTION_INVALID = 0;
-  CAMERA = 1;
-  ENCODER = 2;
-  LIDAR = 3;
-  RADAR = 4;
-  HID = 5;  // Human Interface Device
-}
-
-enum CameraType {
-  CAMERA_INVLAID = 0;
-  OPENCV = 1;
-}
-
-enum EncoderType {
-  ENCODER_INVLAID = 0;
-  STS3215_ENCODER = 1;
-}
-
-enum LidarType {
-  LIDAR_INVLAID = 0;
-  LDS01 = 1;
-}
-
-enum RadarType { RADAR_INVLAID = 0; }
-
-enum HidType { HID_INVLAID = 0; }
-
-message Camera {
-  string camera_name = 1;
-  uint64 id = 2;
-  CameraType camera_type = 3;
-  robot.comm.Comm comm = 4;
-  oneof camera_config {
-    OpenCvConfig opencv_config = 6;
-  }
-}
-
-message Encoder {
-  string encoder_name = 1;
-  uint64 id = 2;
-  EncoderType encoder_type = 3;
-  robot.comm.Comm comm = 4;
-  float operational_lower_limit = 5;
-  float operational_upper_limit = 6;
-  oneof encoder_config {
-    Sts3215EncoderConfig sts3215_encoder_config = 9;
-  }
-}
-
-message Lidar {
-  string lidar_name = 1;
-  uint64 id = 2;
-  LidarType lidar_type = 3;
-  robot.comm.Comm comm = 4;
-  // TODO(hmoon): Add more spec here.
-}
-
 message OpenCvConfig {
   uint64 id = 1;
   uint32 width = 2;
   uint32 height = 3;
   uint32 fps = 4;
   string fourcc = 5;
-  robot.comm.Comm comm = 6;
 }
 
 message Sts3215EncoderConfig {
-  uint64 servo_id = 1;
-  string board_name = 2;
-  uint32 channel = 3;
+  // Servo addresses belong to the board channel.
+  string board_name = 1;
+  uint32 channel = 2;
 }
 
 message Lds01Config {
@@ -95,22 +36,13 @@ message Lds01Config {
 
 message SinglePerception {
   ros2.node.Node node = 1;
-  // Deprecated device-family discriminator.
-  PerceptionType perception_type = 2;
-  oneof perception_data {
-    Camera camera = 3;
-    Encoder encoder = 4;
-    Lidar lidar = 5;
-  }
-  // TODO: Fields 2-5 belong to the legacy perception model. Once that
-  // model is removed, reuse fields 2-5 for the flattened sensor fields.
-  string sensor_name = 6;
-  uint64 id = 7;
-  SensorType sensor_type = 8;
+  string sensor_name = 2;
+  uint64 id = 3;
+  SensorType sensor_type = 4;
   oneof sensor_config {
-    OpenCvConfig opencv_config = 9;
-    Lds01Config lds01_config = 10;
-    Sts3215EncoderConfig sts3215_encoder_config = 11;
+    OpenCvConfig opencv_config = 5;
+    Lds01Config lds01_config = 6;
+    Sts3215EncoderConfig sts3215_encoder_config = 7;
   }
 }
 

@@ -6,6 +6,22 @@ general{
 }
 robot {
   boards {
+    name: "leader_bus"
+    board_type: FEETECH_BUS
+    comm {
+      comm_type: SERIAL
+      transport_type: MESSAGE
+      serial_config { port: "/dev/ttyACM1" baudrate: 1000000 }
+    }
+    channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
+    channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
+    channels { index: 3 drive: SERVO_BUS_UART servo_bus { servo_id: 3 } }
+    channels { index: 4 drive: SERVO_BUS_UART servo_bus { servo_id: 4 } }
+    channels { index: 5 drive: SERVO_BUS_UART servo_bus { servo_id: 5 } }
+    channels { index: 6 drive: SERVO_BUS_UART servo_bus { servo_id: 6 } }
+  }
+
+  boards {
     name: "arm_bus"
     board_type: FEETECH_BUS
     comm {
@@ -201,142 +217,115 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1_state"
+          topic: "sts3215_servo_1/position"
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_1"
-        id: 1
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 1147
-        operational_upper_limit: 3154
-        sts3215_encoder_config {
-          servo_id: 1
-        }
+      sensor_name: "sts3215_encoder_1"
+      id: 1
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 1
       }
     }
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2_state"
+          topic: "sts3215_servo_2/position"
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_2"
-        id: 2
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 1670
-        operational_upper_limit: 3986
-        sts3215_encoder_config {
-          servo_id: 2
-
-        }
-      }
-    }
-    single_perceptions {
-        node {
-        id: 2
-        node_type: ENCODER_PUBLISHER
-        qos_setting {}
-        publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3_state"
-          publish_rate_hz: 30
-        }
-      }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_3"
-        id: 3
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 910
-        operational_upper_limit: 3113
-        sts3215_encoder_config {
-          servo_id: 3
-
-        }
+      sensor_name: "sts3215_encoder_2"
+      id: 2
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 2
       }
     }
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4_state"
+          topic: "sts3215_servo_3/position"
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_4"
-        id: 4
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 20
-        operational_upper_limit: 2407
-        sts3215_encoder_config {
-          servo_id: 4
-
-        }
+      sensor_name: "sts3215_encoder_3"
+      id: 3
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 3
       }
     }
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5_state"
+          topic: "sts3215_servo_4/position"
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_5"
-        id: 5
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 1730
-        operational_upper_limit: 3811
-        sts3215_encoder_config {
-          servo_id: 5
-        }
+      sensor_name: "sts3215_encoder_4"
+      id: 4
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 4
       }
     }
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6_state"
+          topic: "sts3215_servo_5/position"
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_6"
-        id: 6
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 2028
-        operational_upper_limit: 3100
-        sts3215_encoder_config {
-          servo_id: 6
+      sensor_name: "sts3215_encoder_5"
+      id: 5
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 5
+      }
+    }
+    single_perceptions {
+      node {
+        id: 2
+        node_type: POSITION_PUBLISHER
+        qos_setting {}
+        publishers {
+          ros2_data_type: FLOAT32
+          topic: "sts3215_servo_6/position"
+          publish_rate_hz: 30
         }
+      }
+      sensor_name: "sts3215_encoder_6"
+      id: 6
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "leader_bus"
+        channel: 6
       }
     }
   }
