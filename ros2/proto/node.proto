@@ -10,14 +10,12 @@ import "ros2/proto/ros2_data_type.proto";
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
-  reserved 2;
-  reserved "ENCODER_PUBLISHER";
+  POSITION_PUBLISHER = 2;
   ACTUATOR_SUBSCRIBER = 3;
   INFERENCE = 4;
   LIDAR_PUBLISHER = 5;
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
-  POSITION_PUBLISHER = 8;
 }
 
 enum QosReliabilityPolicy {

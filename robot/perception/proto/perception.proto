@@ -22,15 +22,12 @@ message OpenCvConfig {
   uint32 height = 3;
   uint32 fps = 4;
   string fourcc = 5;
-  reserved 6;
-  reserved "comm";  // OpenCV uses the camera index directly.
 }
 
 message Sts3215EncoderConfig {
-  reserved 1;
-  reserved "servo_id";  // Servo addresses belong to the board channel.
-  string board_name = 2;
-  uint32 channel = 3;
+  // Servo addresses belong to the board channel.
+  string board_name = 1;
+  uint32 channel = 2;
 }
 
 message Lds01Config {
@@ -39,16 +36,13 @@ message Lds01Config {
 
 message SinglePerception {
   ros2.node.Node node = 1;
-  reserved 2 to 5;
-  reserved "perception_type", "camera", "encoder", "lidar";
-
-  string sensor_name = 6;
-  uint64 id = 7;
-  SensorType sensor_type = 8;
+  string sensor_name = 2;
+  uint64 id = 3;
+  SensorType sensor_type = 4;
   oneof sensor_config {
-    OpenCvConfig opencv_config = 9;
-    Lds01Config lds01_config = 10;
-    Sts3215EncoderConfig sts3215_encoder_config = 11;
+    OpenCvConfig opencv_config = 5;
+    Lds01Config lds01_config = 6;
+    Sts3215EncoderConfig sts3215_encoder_config = 7;
   }
 }
 

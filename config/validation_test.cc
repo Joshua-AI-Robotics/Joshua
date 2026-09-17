@@ -180,11 +180,9 @@ TEST(ValidationTest, RejectsLidarWithoutByteStreamBeforeOpeningHardware) {
 TEST(ValidationTest, RejectsLegacyTextConfig) {
   config::Config config;
   auto& robot = *config.mutable_robot();
-  // TextFormat skips reserved names; semantic validation must reject the
-  // resulting entry instead of treating it as an empty/default sensor.
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+  // Removed fields are unknown names and must fail during text parsing.
+  EXPECT_FALSE(google::protobuf::TextFormat::ParseFromString(
       "perceptions { single_perceptions { perception_type: ENCODER } }", &robot));
-  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 }  // namespace
 }  // namespace config
