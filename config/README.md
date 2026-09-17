@@ -79,7 +79,7 @@ its transport settings in `lds01_config.comm`.
 One serial bus must belong to one node process. If position sensors read the
 actuator board, give them the actuator's node ID and `ACTUATOR_SUBSCRIBER` node
 type; that process publishes feedback as well as accepting commands. Sensors
-on a separate board can use `ENCODER_PUBLISHER`. The `smolvla` preset shares
+on a separate board can use `POSITION_PUBLISHER`. The `smolvla` preset shares
 `arm_bus` on `/dev/ttyACM0`; `teleoperate` reads a separate `leader_bus` on
 `/dev/ttyACM1`. Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.

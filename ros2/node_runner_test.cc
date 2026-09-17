@@ -28,7 +28,7 @@ TEST(NodeRunnerTest, RejectsInvalidConfigBeforeConstructingNode) {
     file << R"pb(robot {
                    perceptions {
                      single_perceptions {
-                       node { id: 1 node_type: ENCODER_PUBLISHER }
+                       node { id: 1 node_type: POSITION_PUBLISHER }
                        sensor_name: "joint"
                        sensor_type: POSITION
                      }

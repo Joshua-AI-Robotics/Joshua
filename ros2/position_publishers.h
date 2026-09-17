@@ -13,7 +13,7 @@
 
 namespace ros2_utils {
 
-// Shared by encoder-only nodes and actuator nodes reading their own board's
+// Shared by standalone position nodes and actuator nodes reading their own board's
 // feedback. Keeping both consumers in one process shares the BoardFactory cache.
 class PositionPublishers {
  public:

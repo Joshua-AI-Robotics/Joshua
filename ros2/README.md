@@ -57,4 +57,11 @@ Notes
 - The resolver assumes a single consistent type per topic (ROS 2 convention).
 - It is safe to call from streaming/generator code paths; `CvBridge` is instantiated lazily and reused.
 
-
+Position publishing
+-------------------
+`position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
+It uses the shared `PositionPublishers` component, which also publishes board
+feedback inside `actuator_subscriber` when sensors and actuators share one bus.
+The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
+been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
+names and Float32 position values are unchanged.

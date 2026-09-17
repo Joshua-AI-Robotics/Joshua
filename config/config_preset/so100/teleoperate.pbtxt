@@ -217,7 +217,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -236,7 +236,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -255,7 +255,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -274,7 +274,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -293,7 +293,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -312,7 +312,7 @@ robot {
     single_perceptions {
       node {
         id: 2
-        node_type: ENCODER_PUBLISHER
+        node_type: POSITION_PUBLISHER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32

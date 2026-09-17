@@ -100,8 +100,8 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
-    name = "encoder_publisher",
-    srcs = ["encoder_publisher.cc"],
+    name = "position_publisher",
+    srcs = ["position_publisher.cc"],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -109,14 +109,7 @@ ros2_cpp_binary(
     deps = [
         ":position_publishers",
         "//config/proto:config_cc_proto",
-        "//robot/perception/factory:perception_factory",
-        "//robot/perception/proto:perception_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
         "//ros2:node_runner",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
 )

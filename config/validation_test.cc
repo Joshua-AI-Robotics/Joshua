@@ -26,7 +26,7 @@ config::Config MakeConfig() {
         }
         perceptions {
           single_perceptions {
-            node { id: 1 node_type: ENCODER_PUBLISHER }
+            node { id: 1 node_type: POSITION_PUBLISHER }
             sensor_name: "joint"
             sensor_type: POSITION
             sts3215_encoder_config { board_name: "bus" channel: 1 }
