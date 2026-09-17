@@ -31,6 +31,8 @@ class PositionPublishers {
       }
       auto interface = std::shared_ptr<robot::perception::PerceptionInterface>(std::move(*result));
       for (const auto& config : sensor.node().publishers()) {
+        // TODO(hmoon): Support additional position message types, including Float64
+        // (double), JointState, and other configured ROS message types.
         if (config.ros2_data_type() != ros2::data_type::FLOAT32 || config.publish_rate_hz() == 0) {
           RCLCPP_ERROR(node.get_logger(),
                        "Position topic '%s' requires FLOAT32 and a positive rate.",
