@@ -7,16 +7,25 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
-#include "robot/perception/factory/sensor_config.h"
 #include "utils/status_macros.h"
 
 namespace node_generator {
 namespace {
 
+struct BoardChannelReference {
+  std::string board_name;
+  uint32_t channel;
+};
+
+struct DeviceResources {
+  std::vector<BoardChannelReference> board_channels;
+  std::vector<robot::comm::Comm> comms;
+};
+
 struct DeviceDependencies {
   std::string owner;
   ros2::node::Node node;
-  robot::perception::SensorDependencies resources;
+  DeviceResources resources;
 };
 
 struct Connection {
@@ -24,6 +33,73 @@ struct Connection {
   uint32_t node_id;
   robot::comm::Comm comm;
 };
+
+absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sensor) {
+  using robot::perception::SensorType;
+  using robot::perception::SinglePerception;
+  const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+  if (sensor.sensor_name().empty()) {
+    return absl::InvalidArgumentError("Sensor has no sensor_name.");
+  }
+  if (sensor.sensor_type() == SensorType::SENSOR_INVALID) {
+    return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
+  }
+  switch (sensor.sensor_config_case()) {
+    case SinglePerception::kSts3215EncoderConfig: {
+      if (sensor.sensor_type() != SensorType::POSITION) {
+        return absl::InvalidArgumentError(
+            absl::StrCat(owner, ": sts3215_encoder_config requires POSITION sensor_type."));
+      }
+      return absl::OkStatus();
+    }
+    case SinglePerception::kOpencvConfig:
+      if (sensor.sensor_type() != SensorType::IMAGE) {
+        return absl::InvalidArgumentError(
+            absl::StrCat(owner, ": opencv_config requires IMAGE sensor_type."));
+      }
+      return absl::OkStatus();
+    case SinglePerception::kLds01Config:
+      if (sensor.sensor_type() != SensorType::RANGE_SCAN) {
+        return absl::InvalidArgumentError(
+            absl::StrCat(owner, ": lds01_config requires RANGE_SCAN sensor_type."));
+      }
+      if (!sensor.lds01_config().has_comm() ||
+          sensor.lds01_config().comm().transport_type() != robot::comm::BYTE_STREAM) {
+        return absl::InvalidArgumentError(
+            absl::StrCat(owner, ": lds01_config requires BYTE_STREAM comm."));
+      }
+      return absl::OkStatus();
+    case SinglePerception::SENSOR_CONFIG_NOT_SET:
+    default:
+      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+  }
+}
+
+absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
+  for (const auto& sensor : perceptions.single_perceptions()) {
+    ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
+  }
+  return absl::OkStatus();
+}
+
+// Extract resources independently of validation. Sensor-specific field access is
+// confined here; resource resolution and ownership checks stay generic.
+absl::StatusOr<DeviceResources> CollectSensorDependencies(
+    const robot::perception::SinglePerception& sensor) {
+  using robot::perception::SinglePerception;
+  switch (sensor.sensor_config_case()) {
+    case SinglePerception::kSts3215EncoderConfig: {
+      const auto& config = sensor.sts3215_encoder_config();
+      return DeviceResources{{{config.board_name(), config.channel()}}, {}};
+    }
+    case SinglePerception::kLds01Config:
+      return DeviceResources{{}, {sensor.lds01_config().comm()}};
+    case SinglePerception::kOpencvConfig:
+      return DeviceResources{};
+    default:
+      return absl::InvalidArgumentError("Cannot collect dependencies without a sensor config.");
+  }
+}
 
 absl::StatusOr<std::vector<DeviceDependencies>> CollectDeviceDependencies(
     const config::Robot& robot) {
@@ -36,7 +112,7 @@ absl::StatusOr<std::vector<DeviceDependencies>> CollectDeviceDependencies(
                        {{{actuator.board_name(), actuator.channel()}}, {}}});
   }
   for (const auto& sensor : robot.perceptions().single_perceptions()) {
-    ABSL_ASSIGN_OR_RETURN(auto resources, robot::perception::GetSensorDependencies(sensor));
+    ABSL_ASSIGN_OR_RETURN(auto resources, CollectSensorDependencies(sensor));
     devices.push_back(
         {absl::StrCat("Sensor '", sensor.sensor_name(), "'"), sensor.node(), std::move(resources)});
   }
@@ -117,6 +193,7 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
 
 absl::Status ValidateConfig(const config::Config& config) {
   const auto& robot = config.robot();
+  ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));
   ABSL_ASSIGN_OR_RETURN(auto connections, ResolveConnections(robot.boards(), devices));

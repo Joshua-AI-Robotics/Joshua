@@ -6,7 +6,6 @@ cc_library(
     hdrs = ["perception_factory.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":sensor_config",
         "//config/proto:robot_cc_proto",
         "//robot/board/factory:board_factory",
         "//robot/board/factory:board_resolver",
@@ -32,19 +31,5 @@ cc_test(
         "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "sensor_config",
-    srcs = ["sensor_config.cc"],
-    hdrs = ["sensor_config.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//robot/comm/proto:comm_cc_proto",
-        "//robot/perception/proto:perception_cc_proto",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-        "@abseil-cpp//absl/strings",
     ],
 )

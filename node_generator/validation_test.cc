@@ -142,6 +142,41 @@ TEST(ValidationTest, ValidatesSerialSettingsOnResolvedBoards) {
   robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->clear_baudrate();
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+TEST(ValidationTest, RejectsIncompleteSensorDefinitions) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  sensor->clear_sensor_name();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  sensor->set_sensor_name("joint");
+  sensor->clear_sensor_type();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  sensor->set_sensor_type(robot::perception::POSITION);
+  sensor->clear_sts3215_encoder_config();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(ValidationTest, RejectsDriverAndMeasurementMismatchBeforeResourceResolution) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  config.mutable_robot()->clear_boards();
+  sensor->set_sensor_type(robot::perception::IMAGE);
+  // InvalidArgument comes from the type mismatch, before board lookup (NotFound).
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  sensor->mutable_opencv_config();
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  sensor->set_sensor_type(robot::perception::POSITION);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  sensor->mutable_lds01_config();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(ValidationTest, RejectsLidarWithoutByteStreamBeforeOpeningHardware) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  sensor->set_sensor_type(robot::perception::RANGE_SCAN);
+  auto* lidar = sensor->mutable_lds01_config();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  lidar->mutable_comm()->set_transport_type(robot::comm::MESSAGE);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
 TEST(ValidationTest, RejectsLegacyTextConfig) {
   config::Config config;
   auto& robot = *config.mutable_robot();

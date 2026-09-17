@@ -24,7 +24,6 @@ cc_library(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
-        "//robot/perception/factory:sensor_config",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

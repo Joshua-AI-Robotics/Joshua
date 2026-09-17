@@ -14,6 +14,7 @@ cc_library(
     deps = [
         "//config:config_utils",
         "//config/proto:config_cc_proto",
+        "//node_generator:validation",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -240,6 +241,17 @@ cc_test(
         "//robot/board/factory:board_factory",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "node_runner_test",
+    srcs = ["node_runner_test.cc"],
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
     ],
 )
