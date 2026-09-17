@@ -1,12 +1,13 @@
-#include "config/perception_validation.h"
+#include "node_generator/validation.h"
 
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 
-namespace config::config_util {
+namespace node_generator {
 namespace {
-Robot MakeRobot() {
-  Robot robot;
+config::Config MakeConfig() {
+  config::Config config;
+  auto& robot = *config.mutable_robot();
   EXPECT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(
         boards {
@@ -33,30 +34,33 @@ Robot MakeRobot() {
         }
       )pb",
       &robot));
-  return robot;
+  return config;
 }
 
-TEST(PerceptionValidationTest, ResolvesBoardWithoutOpeningHardware) {
-  EXPECT_TRUE(ValidatePerceptions(MakeRobot()).ok());
+TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
+  EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
 }
-TEST(PerceptionValidationTest, RejectsMissingBoardAndChannel) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, RejectsMissingBoardAndChannel) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   robot.mutable_boards(0)->set_name("other");
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kNotFound);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kNotFound);
   robot.mutable_boards(0)->set_name("bus");
   robot.mutable_boards(0)->clear_channels();
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kNotFound);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kNotFound);
 }
-TEST(PerceptionValidationTest, BoardSensorsSharePortOnlyWithinOneNode) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, BoardSensorsSharePortOnlyWithinOneNode) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   auto sensor = robot.perceptions().single_perceptions(0);
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
-  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  EXPECT_TRUE(ValidateConfig(config).ok());
   robot.mutable_perceptions()->mutable_single_perceptions(1)->mutable_node()->set_id(2);
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferentNodes) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferentNodes) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   auto* sensor = robot.mutable_perceptions()->add_single_perceptions();
   sensor->set_sensor_name("lidar");
   sensor->set_sensor_type(robot::perception::RANGE_SCAN);
@@ -65,42 +69,47 @@ TEST(PerceptionValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferen
   auto* comm = sensor->mutable_lds01_config()->mutable_comm();
   *comm = robot.boards(0).comm();
   comm->set_transport_type(robot::comm::BYTE_STREAM);
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   auto* action = robot.mutable_actions()->add_single_actions();
   action->mutable_node()->set_id(2);
   action->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
   action->mutable_actuator()->set_board_name("bus");
   action->mutable_actuator()->set_channel(1);
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
   auto* node = robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node();
   node->set_id(2);
   node->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
-  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  EXPECT_TRUE(ValidateConfig(config).ok());
 }
-TEST(PerceptionValidationTest, DoesNotMaintainASensorToPublisherAllowlist) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, DoesNotMaintainASensorToPublisherAllowlist) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->set_node_type(
       ros2::node::CAMERA_PUBLISHER);
   // Publisher capabilities are not a shared resource-validation concern.
-  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  EXPECT_TRUE(ValidateConfig(config).ok());
 }
-TEST(PerceptionValidationTest, RejectsUnspecifiedNodeType) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, RejectsUnspecifiedNodeType) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->clear_node_type();
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, RejectsConflictingNodeTypesForOneProcess) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, RejectsConflictingNodeTypesForOneProcess) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   auto sensor = robot.perceptions().single_perceptions(0);
   sensor.mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, DirectSensorsDoNotRequireBoards) {
-  Robot robot;
+TEST(ValidationTest, DirectSensorsDoNotRequireBoards) {
+  config::Config config;
+  auto& robot = *config.mutable_robot();
   auto* sensor = robot.mutable_perceptions()->add_single_perceptions();
   sensor->set_sensor_name("scan");
   sensor->set_sensor_type(robot::perception::RANGE_SCAN);
@@ -110,34 +119,37 @@ TEST(PerceptionValidationTest, DirectSensorsDoNotRequireBoards) {
   comm->set_transport_type(robot::comm::BYTE_STREAM);
   comm->mutable_serial_config()->set_port("/test/scan");
   comm->mutable_serial_config()->set_baudrate(230400);
-  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  EXPECT_TRUE(ValidateConfig(config).ok());
   comm->mutable_serial_config()->clear_baudrate();
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, SensorsWithoutCommDoNotRequireSerialSettings) {
-  Robot robot;
+TEST(ValidationTest, SensorsWithoutCommDoNotRequireSerialSettings) {
+  config::Config config;
+  auto& robot = *config.mutable_robot();
   auto* sensor = robot.mutable_perceptions()->add_single_perceptions();
   sensor->set_sensor_name("camera");
   sensor->set_sensor_type(robot::perception::IMAGE);
   sensor->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
   sensor->mutable_opencv_config()->set_id(0);
-  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  EXPECT_TRUE(ValidateConfig(config).ok());
 }
-TEST(PerceptionValidationTest, ValidatesSerialSettingsOnResolvedBoards) {
-  auto robot = MakeRobot();
+TEST(ValidationTest, ValidatesSerialSettingsOnResolvedBoards) {
+  auto config = MakeConfig();
+  auto& robot = *config.mutable_robot();
   robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->clear_port();
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
   robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_port("/test/bus");
   robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->clear_baudrate();
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
-TEST(PerceptionValidationTest, RejectsLegacyTextConfig) {
-  Robot robot;
+TEST(ValidationTest, RejectsLegacyTextConfig) {
+  config::Config config;
+  auto& robot = *config.mutable_robot();
   // TextFormat skips reserved names; semantic validation must reject the
   // resulting entry instead of treating it as an empty/default sensor.
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       "perceptions { single_perceptions { perception_type: ENCODER } }", &robot));
-  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 }  // namespace
-}  // namespace config::config_util
+}  // namespace node_generator

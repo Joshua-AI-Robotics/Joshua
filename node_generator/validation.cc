@@ -1,4 +1,4 @@
-#include "config/perception_validation.h"
+#include "node_generator/validation.h"
 
 #include <map>
 #include <string>
@@ -10,7 +10,7 @@
 #include "robot/perception/factory/sensor_config.h"
 #include "utils/status_macros.h"
 
-namespace config::config_util {
+namespace node_generator {
 namespace {
 
 struct DeviceDependencies {
@@ -25,7 +25,8 @@ struct Connection {
   robot::comm::Comm comm;
 };
 
-absl::StatusOr<std::vector<DeviceDependencies>> CollectDeviceDependencies(const Robot& robot) {
+absl::StatusOr<std::vector<DeviceDependencies>> CollectDeviceDependencies(
+    const config::Robot& robot) {
   std::vector<DeviceDependencies> devices;
   for (const auto& action : robot.actions().single_actions()) {
     if (!action.has_actuator()) continue;
@@ -114,7 +115,8 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
 
 }  // namespace
 
-absl::Status ValidatePerceptions(const Robot& robot) {
+absl::Status ValidateConfig(const config::Config& config) {
+  const auto& robot = config.robot();
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));
   ABSL_ASSIGN_OR_RETURN(auto connections, ResolveConnections(robot.boards(), devices));
@@ -122,4 +124,4 @@ absl::Status ValidatePerceptions(const Robot& robot) {
   ABSL_RETURN_IF_ERROR(ValidateBusOwnership(connections));
   return absl::OkStatus();
 }
-}  // namespace config::config_util
+}  // namespace node_generator

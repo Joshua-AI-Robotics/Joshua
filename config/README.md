@@ -84,7 +84,8 @@ on a separate board can use `ENCODER_PUBLISHER`. The `smolvla` preset shares
 `/dev/ttyACM1`. Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
-`ValidatePerceptions` orchestrates separate checks for node assignments,
+`node_generator::ValidateConfig` in [validation.h](../node_generator/validation.h)
+accepts the full `config::Config` and orchestrates separate checks for node assignments,
 board/channel references, serial settings, and bus ownership. These checks use
 resource dependencies rather than sensor measurement types. A sensor can
 require board channels, direct communication, both, or neither. Each concrete

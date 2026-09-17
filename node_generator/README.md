@@ -23,3 +23,16 @@ The Node Generator is executed from the command line, pointing to a specific con
 ### Running the Node Generator
 
 Check the [launcher/joshua_main.cc](../launcher/joshua_main.cc)
+
+## Config validation
+
+[validation.h](validation.h) exposes `ValidateConfig(const config::Config&)` as
+an independent library, separate from process launching. `CheckConfigIntegrity`
+and preset-validation tests both call it.
+
+[validation.cc](validation.cc) composes focused checks for node assignments,
+resource references, serial settings, and bus ownership. The entry point takes
+the full config so checks for boards, actuators, sensors, and future sections
+have one shared home. Add new checks as separate functions and call them from
+`ValidateConfig`; keep driver-specific requirements beside the relevant factory.
+Validation does not instantiate drivers, open devices, or launch nodes.

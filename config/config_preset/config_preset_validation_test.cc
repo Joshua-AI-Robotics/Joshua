@@ -3,8 +3,8 @@
 #include <vector>
 
 #include "config/config_utils.h"
-#include "config/perception_validation.h"
 #include "gtest/gtest.h"
+#include "node_generator/validation.h"
 
 namespace {
 
@@ -27,7 +27,7 @@ TEST(ConfigValidationTest, ValidateAllConfigPresets) {
       EXPECT_TRUE(result.ok()) << "Failed to load config: " << config_path
                                << "\nError: " << result.status().message();
       if (result.ok()) {
-        const auto status = config::config_util::ValidatePerceptions(result->robot());
+        const auto status = node_generator::ValidateConfig(*result);
         EXPECT_TRUE(status.ok()) << config_path << ": " << status;
       }
       checked_files++;
