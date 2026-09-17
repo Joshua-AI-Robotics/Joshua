@@ -221,7 +221,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_1_state"
+          topic: "sts3215_servo_1/position"
           publish_rate_hz: 30
         }
       }
@@ -240,7 +240,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_2_state"
+          topic: "sts3215_servo_2/position"
           publish_rate_hz: 30
         }
       }
@@ -259,7 +259,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_3_state"
+          topic: "sts3215_servo_3/position"
           publish_rate_hz: 30
         }
       }
@@ -278,7 +278,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_4_state"
+          topic: "sts3215_servo_4/position"
           publish_rate_hz: 30
         }
       }
@@ -297,7 +297,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_5_state"
+          topic: "sts3215_servo_5/position"
           publish_rate_hz: 30
         }
       }
@@ -316,7 +316,7 @@ robot {
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
-          topic: "sts3215_encoder_6_state"
+          topic: "sts3215_servo_6/position"
           publish_rate_hz: 30
         }
       }

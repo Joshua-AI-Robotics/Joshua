@@ -81,8 +81,9 @@ One serial bus must belong to one node process. Position sensors use
 does not read or publish sensors. Reading sensors from an actuator's bus in a
 separate process is not supported by the current bus ownership model.
 The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
-the follower actuators use `/dev/ttyACM0`. Its leader state topics and follower
-command topics have different names and require a mapping to connect them.
+the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
+subscribers share `sts3215_servo_<joint>/position` topics, carrying native
+position values as `Float32` commands directly between the two nodes.
 Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
