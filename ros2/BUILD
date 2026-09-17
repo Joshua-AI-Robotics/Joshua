@@ -106,6 +106,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":position_publishers",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
@@ -149,6 +150,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":position_publishers",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_cc_proto",
@@ -215,4 +217,29 @@ genrule(
     outs = ["ros2_node_wrapper.sh"],
     cmd = "cp $< $@ && chmod +x $@",
     visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "position_publishers",
+    hdrs = ["position_publishers.h"],
+    deps = [
+        "//config/proto:robot_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "position_publishers_test",
+    srcs = ["position_publishers_test.cc"],
+    deps = [
+        ":position_publishers",
+        "//robot/board/factory:board_factory",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
 )

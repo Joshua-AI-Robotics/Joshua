@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "config/config_utils.h"
+#include "config/perception_validation.h"
 #include "gtest/gtest.h"
 
 namespace {
@@ -25,8 +26,13 @@ TEST(ConfigValidationTest, ValidateAllConfigPresets) {
       // EXPECT_TRUE continues execution even on failure
       EXPECT_TRUE(result.ok()) << "Failed to load config: " << config_path
                                << "\nError: " << result.status().message();
+      if (result.ok()) {
+        const auto status = config::config_util::ValidatePerceptions(result->robot());
+        EXPECT_TRUE(status.ok()) << config_path << ": " << status;
+      }
       checked_files++;
     }
   }
+  EXPECT_GT(checked_files, 0);
 }
 }  // namespace

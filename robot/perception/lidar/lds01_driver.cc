@@ -11,9 +11,9 @@
 namespace robot::perception {
 
 Lds01Driver::Lds01Driver(std::shared_ptr<robot::comm::ByteStream> stream,
-                         const robot::perception::Lidar& lidar_config)
+                         const robot::perception::SinglePerception& lidar_config)
     : stream_(std::move(stream)) {
-  id_ = std::to_string(lidar_config.id());
+  id_ = lidar_config.sensor_name();
 }
 
 absl::Status Lds01Driver::Init() {
@@ -38,8 +38,7 @@ absl::Status Lds01Driver::Teardown() {
 }
 
 std::string Lds01Driver::GetId() {
-  auto id = "lds01_driver_" + id_;
-  return id;
+  return id_;
 }
 
 absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {

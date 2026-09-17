@@ -7,6 +7,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//config:config_utils",
+        "//config:perception_validation",
         "//ros2/proto:node_cc_proto",
         "//utils:status_macros",
         "@abseil-cpp//absl/container:flat_hash_map",

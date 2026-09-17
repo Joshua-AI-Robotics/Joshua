@@ -78,8 +78,7 @@ TEST(Sts3215PositionSensorTest, PublishesThePositionTheChannelReports) {
 
 // A sensor observes; it must never command. The channel it holds can do
 // both -- a channel is a channel -- so this is the guarantee, and it is
-// worth asserting because perception publishers run in their own process
-// while an actuator node drives the same bus.
+// worth asserting when sensors share a board with actuator drivers.
 TEST(Sts3215PositionSensorTest, NeverCommandsTheChannel) {
   auto channel = std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{});
   Sts3215PositionSensor sensor(channel, MakeSensorConfig());

@@ -25,10 +25,10 @@ board, and a transport can be chosen independently in config rather than in
 code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
-`board_name` → `BoardFactory` → `OpenChannel` → driver. Perception has not
-migrated — it is still driver-direct (Phase 6). Check
-[docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10 for which phase has
-landed before assuming either way.
+`board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
+Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
+All perceptions select a concrete driver through `SinglePerception.sensor_config`;
+the legacy camera/encoder/lidar config wrappers have been removed.
 
 **There is no Python in this directory, and none should be added.** The Python
 robot layer (factories, interfaces, mock drivers) was deleted in RFC §10

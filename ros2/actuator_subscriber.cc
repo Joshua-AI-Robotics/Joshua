@@ -8,6 +8,7 @@
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
 #include "ros2/node_runner.h"
+#include "ros2/position_publishers.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
@@ -122,6 +123,8 @@ class ActionSubscriber : public rclcpp::Node {
       }
     }
 
+    positions_ = std::make_unique<ros2_utils::PositionPublishers>(*this, node_id, config.robot());
+
     if (actuators_.empty()) {
       RCLCPP_ERROR(
           this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
@@ -155,6 +158,7 @@ class ActionSubscriber : public rclcpp::Node {
 
  private:
   std::list<Actuator> actuators_;
+  std::unique_ptr<ros2_utils::PositionPublishers> positions_;
 };
 
 int main(int argc, char* argv[]) {

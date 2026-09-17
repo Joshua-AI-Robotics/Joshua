@@ -40,7 +40,7 @@ robot {
         board_name: "arm_bus"
         channel: 1
         physical_lower_limit: 0
-               physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 973
         operational_upper_limit: 3034
         sts3215_config {
@@ -69,7 +69,7 @@ robot {
         board_name: "arm_bus"
         channel: 2
         physical_lower_limit: 0
-               physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 858
         operational_upper_limit: 3154
         sts3215_config {
@@ -98,7 +98,7 @@ robot {
         board_name: "arm_bus"
         channel: 3
         physical_lower_limit: 0
-                physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 798
         operational_upper_limit: 3015
         sts3215_config {
@@ -127,7 +127,7 @@ robot {
         board_name: "arm_bus"
         channel: 4
         physical_lower_limit: 0
-               physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 668
         operational_upper_limit: 3124
         sts3215_config {
@@ -156,7 +156,7 @@ robot {
         board_name: "arm_bus"
         channel: 5
         physical_lower_limit: 0
-               physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 902
         operational_upper_limit: 2955
         sts3215_config {
@@ -185,7 +185,7 @@ robot {
         board_name: "arm_bus"
         channel: 6
         physical_lower_limit: 0
-               physical_upper_limit: 4095
+        physical_upper_limit: 4095
         operational_lower_limit: 1795
         operational_upper_limit: 3235
         sts3215_config {
@@ -209,24 +209,20 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: CAMERA
-      camera {
-        camera_name: "webcam"
-        id: 1
-        camera_type: OPENCV
-        comm{}
-        opencv_config {
-          id: 0
-          width: 640
-          height: 480
-          fps: 30
-        }
+      sensor_name: "webcam"
+      id: 1
+      sensor_type: IMAGE
+      opencv_config {
+        id: 0
+        width: 640
+        height: 480
+        fps: 30
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -234,22 +230,18 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_1"
-        id: 1
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 973
-        operational_upper_limit: 3034
-        sts3215_encoder_config {
-          servo_id: 1
-        }
+      sensor_name: "sts3215_encoder_1"
+      id: 1
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 1
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -257,22 +249,18 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_2"
-        id: 2
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 858
-        operational_upper_limit: 3154
-        sts3215_encoder_config {
-          servo_id: 2
-        }
+      sensor_name: "sts3215_encoder_2"
+      id: 2
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 2
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -280,22 +268,18 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_3"
-        id: 3
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 798
-        operational_upper_limit: 3015
-        sts3215_encoder_config {
-          servo_id: 3
-        }
+      sensor_name: "sts3215_encoder_3"
+      id: 3
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 3
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -303,22 +287,18 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_4"
-        id: 4
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 640
-        operational_upper_limit: 3124
-        sts3215_encoder_config {
-          servo_id: 4
-        }
+      sensor_name: "sts3215_encoder_4"
+      id: 4
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 4
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -326,22 +306,18 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_5"
-        id: 5
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 902
-        operational_upper_limit: 2955
-        sts3215_encoder_config {
-          servo_id: 5
-        }
+      sensor_name: "sts3215_encoder_5"
+      id: 5
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 5
       }
     }
     single_perceptions {
       node {
-        id: 3
-        node_type: ENCODER_PUBLISHER
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
         qos_setting {}
         publishers {
           ros2_data_type: FLOAT32
@@ -349,16 +325,12 @@ robot {
           publish_rate_hz: 30
         }
       }
-      perception_type: ENCODER
-      encoder {
-        encoder_name: "sts3215_encoder_6"
-        id: 6
-        encoder_type: STS3215_ENCODER
-        operational_lower_limit: 1795
-        operational_upper_limit: 3235
-        sts3215_encoder_config {
-          servo_id: 6
-        }
+      sensor_name: "sts3215_encoder_6"
+      id: 6
+      sensor_type: POSITION
+      sts3215_encoder_config {
+        board_name: "arm_bus"
+        channel: 6
       }
     }
   }

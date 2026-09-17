@@ -53,3 +53,33 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
    safe/unsafe boundary in this repo. What counts as safe is defined once, in
    the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
    against that list rather than against a copy of it here.
+
+## Sensor configuration
+
+Each `single_perceptions` entry declares `sensor_name`, `sensor_type`, and one
+concrete config: `opencv_config` for `IMAGE`, `lds01_config` for `RANGE_SCAN`, or
+`sts3215_encoder_config` for `POSITION`. Sensor names also identify output
+perception packets. Legacy `perception_type` and `camera`/`encoder`/`lidar`
+wrappers are no longer accepted.
+
+For example, position feedback references a configured board channel:
+
+```text
+sensor_name: "joint_1"
+sensor_type: POSITION
+sts3215_encoder_config { board_name: "arm_bus" channel: 1 }
+```
+
+The board owns serial settings and servo IDs. Position readings retain the
+channel's native units; the old encoder operational limits were unused and are
+not part of the new sensor config. Actuator limits remain configured separately.
+OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
+its transport settings in `lds01_config.comm`.
+
+One serial bus must belong to one node process. If position sensors read the
+actuator board, give them the actuator's node ID and `ACTUATOR_SUBSCRIBER` node
+type; that process publishes feedback as well as accepting commands. Sensors
+on a separate board can use `ENCODER_PUBLISHER`. The `smolvla` preset shares
+`arm_bus` on `/dev/ttyACM0`; `teleoperate` reads a separate `leader_bus` on
+`/dev/ttyACM1`. Preset tests validate sensor selection, board/channel references,
+and serial-port ownership without opening hardware.

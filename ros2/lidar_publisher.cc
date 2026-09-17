@@ -17,22 +17,6 @@
 
 namespace {
 
-// The display name, whichever shape the entry uses.
-std::string DisplayName(const robot::perception::SinglePerception& single_perception) {
-  return single_perception.sensor_type() != robot::perception::SensorType::SENSOR_INVALID
-             ? single_perception.sensor_name()
-             : single_perception.lidar().lidar_name();
-}
-
-// True for either shape while presets migrate: the new Sensor message
-// names the reading's meaning, the old one named a device family.
-bool Matches(const robot::perception::SinglePerception& single_perception) {
-  if (single_perception.sensor_type() != robot::perception::SensorType::SENSOR_INVALID) {
-    return single_perception.sensor_type() == robot::perception::SensorType::RANGE_SCAN;
-  }
-  return single_perception.perception_type() == robot::perception::PerceptionType::LIDAR;
-}
-
 bool ValidateLidarPublisher(const ros2::data_type::Ros2DataType ros2_data_type) {
   return ros2_data_type == ros2::data_type::POINTCLOUD2;
 }
@@ -53,12 +37,12 @@ class LidarPublisher : public rclcpp::Node {
   LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (!Matches(single_perception) ||
+      if (single_perception.sensor_type() != robot::perception::SensorType::RANGE_SCAN ||
           static_cast<int>(single_perception.node().id()) != node_id) {
         continue;
       }
 
-      const std::string sensor_name = DisplayName(single_perception);
+      const std::string sensor_name = single_perception.sensor_name();
       const auto& qos_setting = single_perception.node().qos_setting();
 
       auto interface = robot::perception::PerceptionFactory::CreatePerception(

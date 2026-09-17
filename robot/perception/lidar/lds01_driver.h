@@ -17,7 +17,7 @@ namespace robot::perception {
 class Lds01Driver : public LidarInterface {
  public:
   Lds01Driver(std::shared_ptr<robot::comm::ByteStream> stream,
-              const robot::perception::Lidar& lidar_config);
+              const robot::perception::SinglePerception& lidar_config);
   ~Lds01Driver() = default;
 
   absl::Status Init() override;
