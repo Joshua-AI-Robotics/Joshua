@@ -76,12 +76,14 @@ not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
 
-One serial bus must belong to one node process. If position sensors read the
-actuator board, give them the actuator's node ID and `ACTUATOR_SUBSCRIBER` node
-type; that process publishes feedback as well as accepting commands. Sensors
-on a separate board can use `POSITION_PUBLISHER`. The `smolvla` preset shares
-`arm_bus` on `/dev/ttyACM0`; `teleoperate` reads a separate `leader_bus` on
-`/dev/ttyACM1`. Preset tests validate declared dependencies and serial-port ownership without
+One serial bus must belong to one node process. Position sensors use
+`POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
+does not read or publish sensors. Reading sensors from an actuator's bus in a
+separate process is not supported by the current bus ownership model.
+The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
+the follower actuators use `/dev/ttyACM0`. Its leader state topics and follower
+command topics have different names and require a mapping to connect them.
+Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
 `config::ValidateConfig` in [validation.h](validation.h)

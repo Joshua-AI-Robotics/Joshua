@@ -25,7 +25,7 @@ TEST(PositionPublishersTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProc
     sensor->mutable_sts3215_encoder_config()->set_board_name("shared_board");
     sensor->mutable_sts3215_encoder_config()->set_channel(1);
     sensor->mutable_node()->set_id(1);
-    sensor->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+    sensor->mutable_node()->set_node_type(ros2::node::POSITION_PUBLISHER);
     auto* topic = sensor->mutable_node()->add_publishers();
     topic->set_topic("position_feedback_test");
     topic->set_ros2_data_type(ros2::data_type::FLOAT32);

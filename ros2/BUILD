@@ -144,7 +144,6 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
-        ":position_publishers",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_cc_proto",

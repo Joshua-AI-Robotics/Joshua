@@ -60,8 +60,10 @@ Notes
 Position publishing
 -------------------
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
-It uses the shared `PositionPublishers` component, which also publishes board
-feedback inside `actuator_subscriber` when sensors and actuators share one bus.
+It uses the `PositionPublishers` component to read sensors and publish their values.
+`actuator_subscriber` only receives action commands and executes them; it does not
+host sensor publishers. Position sensors and actuators must use separate bus owners
+with the current standalone node layout.
 The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
 been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
 names and Float32 position values are unchanged.

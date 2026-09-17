@@ -13,8 +13,7 @@
 
 namespace ros2_utils {
 
-// Shared by standalone position nodes and actuator nodes reading their own board's
-// feedback. Keeping both consumers in one process shares the BoardFactory cache.
+// Reads and publishes the position sensors assigned to a standalone position node.
 class PositionPublishers {
  public:
   PositionPublishers(rclcpp::Node& node, uint32_t node_id, const config::Robot& robot) {
