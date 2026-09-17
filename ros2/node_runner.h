@@ -5,7 +5,7 @@
 #include <string>
 
 #include "config/config_utils.h"
-#include "node_generator/validation.h"
+#include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
 
 namespace ros2_utils {
@@ -47,7 +47,7 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
   }
 
   config::Config config = result.value();
-  const auto validation_status = node_generator::ValidateConfig(config);
+  const auto validation_status = config::ValidateConfig(config);
   if (!validation_status.ok()) {
     LOG(ERROR) << "Invalid config: " << validation_status;
     rclcpp::shutdown();

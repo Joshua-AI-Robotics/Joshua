@@ -15,7 +15,7 @@
 #include <thread>
 
 #include "config/config_utils.h"
-#include "node_generator/validation.h"
+#include "config/validation.h"
 #include "utils/status_macros.h"
 
 namespace node_generator {
@@ -303,7 +303,7 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
 }
 
 absl::Status NodeGenerator::CheckConfigIntegrity() {
-  return ValidateConfig(config_);
+  return config::ValidateConfig(config_);
 }
 
 absl::Status NodeGenerator::LaunchAllNodes() {

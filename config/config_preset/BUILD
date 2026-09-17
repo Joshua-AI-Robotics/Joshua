@@ -10,7 +10,7 @@ cc_test(
     data = [":config_presets"],
     deps = [
         "//config:config_utils",
-        "//node_generator:validation",
+        "//config:validation",
         "@googletest//:gtest_main",
     ],
 )

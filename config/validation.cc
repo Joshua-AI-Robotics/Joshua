@@ -1,4 +1,4 @@
-#include "node_generator/validation.h"
+#include "config/validation.h"
 
 #include <map>
 #include <string>
@@ -9,7 +9,7 @@
 #include "robot/board/factory/board_resolver.h"
 #include "utils/status_macros.h"
 
-namespace node_generator {
+namespace config {
 namespace {
 
 struct BoardChannelReference {
@@ -201,4 +201,4 @@ absl::Status ValidateConfig(const config::Config& config) {
   ABSL_RETURN_IF_ERROR(ValidateBusOwnership(connections));
   return absl::OkStatus();
 }
-}  // namespace node_generator
+}  // namespace config

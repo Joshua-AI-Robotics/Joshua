@@ -26,16 +26,16 @@ Check the [launcher/joshua_main.cc](../launcher/joshua_main.cc)
 
 ## Config validation
 
-[validation.h](validation.h) exposes `ValidateConfig(const config::Config&)` as
+[config/validation.h](../config/validation.h) exposes `config::ValidateConfig(const config::Config&)` as
 an independent library, separate from process launching. `CheckConfigIntegrity`
 and preset-validation tests both call it. The C++ ROS node runner also validates
 configs before constructing a node when launched directly.
 
-[validation.cc](validation.cc) composes focused checks for node assignments,
+[config/validation.cc](../config/validation.cc) composes focused checks for node assignments,
 resource references, serial settings, and bus ownership. The entry point takes
 the full config so checks for boards, actuators, sensors, and future sections
 have one shared home. Add new checks as separate functions and call them from
-`ValidateConfig`. Sensor configuration checks and dependency extraction are
+`config::ValidateConfig`. Sensor configuration checks and dependency extraction are
 separate private helpers in this module. Factories retain defensive checks for
 construction and initialization, and do not depend on node generation.
 Validation does not instantiate drivers, open devices, or launch nodes.

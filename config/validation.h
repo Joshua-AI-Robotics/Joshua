@@ -3,7 +3,7 @@
 #include "absl/status/status.h"
 #include "config/proto/config.pb.h"
 
-namespace node_generator {
+namespace config {
 
 // Config-wide entry point for integrity checks before launching nodes. Composes
 // resource, node-assignment, serial-setting, and bus-ownership checks; additional
@@ -12,4 +12,4 @@ namespace node_generator {
 // module; factories retain defensive checks at construction boundaries.
 absl::Status ValidateConfig(const config::Config& config);
 
-}  // namespace node_generator
+}  // namespace config

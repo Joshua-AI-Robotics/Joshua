@@ -1,9 +1,9 @@
-#include "node_generator/validation.h"
+#include "config/validation.h"
 
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 
-namespace node_generator {
+namespace config {
 namespace {
 config::Config MakeConfig() {
   config::Config config;
@@ -187,4 +187,4 @@ TEST(ValidationTest, RejectsLegacyTextConfig) {
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 }  // namespace
-}  // namespace node_generator
+}  // namespace config
