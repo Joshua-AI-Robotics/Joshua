@@ -41,10 +41,10 @@ cc_library(
     hdrs = ["sensor_config.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/board/factory:board_resolver",
-        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/proto:comm_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
         "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
     ],
 )

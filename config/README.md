@@ -81,5 +81,15 @@ actuator board, give them the actuator's node ID and `ACTUATOR_SUBSCRIBER` node
 type; that process publishes feedback as well as accepting commands. Sensors
 on a separate board can use `ENCODER_PUBLISHER`. The `smolvla` preset shares
 `arm_bus` on `/dev/ttyACM0`; `teleoperate` reads a separate `leader_bus` on
-`/dev/ttyACM1`. Preset tests validate sensor selection, board/channel references,
-and serial-port ownership without opening hardware.
+`/dev/ttyACM1`. Preset tests validate declared dependencies and serial-port ownership without
+opening hardware.
+
+`ValidatePerceptions` orchestrates separate checks for node assignments,
+board/channel references, serial settings, and bus ownership. These checks use
+resource dependencies rather than sensor measurement types. A sensor can
+require board channels, direct communication, both, or neither. Each concrete
+driver describes those dependencies through `GetSensorDependencies` beside the
+perception factory, where its driver-specific config requirements are checked.
+Adding a driver does not require a new sensor case in the shared validator.
+There is no central sensor-to-publisher allowlist; node validation checks that
+node types are specified and each node ID has one consistent type.

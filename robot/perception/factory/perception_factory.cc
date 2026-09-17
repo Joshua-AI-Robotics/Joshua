@@ -41,7 +41,7 @@ PerceptionFactory::CreatePerception(
     const robot::perception::SinglePerception& single_perception,
     const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
   const std::string owner = absl::StrCat("Sensor '", single_perception.sensor_name(), "'");
-  ABSL_RETURN_IF_ERROR(ValidateSensorConfig(single_perception, boards));
+  ABSL_RETURN_IF_ERROR(ValidateSensorConfig(single_perception));
 
   switch (single_perception.sensor_config_case()) {
     case robot::perception::SinglePerception::kSts3215EncoderConfig:

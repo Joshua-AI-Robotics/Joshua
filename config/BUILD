@@ -22,6 +22,7 @@ cc_library(
         "//robot/perception/factory:sensor_config",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
     ],
 )

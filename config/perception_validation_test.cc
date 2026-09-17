@@ -80,10 +80,55 @@ TEST(PerceptionValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
   node->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
   EXPECT_TRUE(ValidatePerceptions(robot).ok());
 }
-TEST(PerceptionValidationTest, RejectsPublisherThatWouldIgnoreSensor) {
+TEST(PerceptionValidationTest, DoesNotMaintainASensorToPublisherAllowlist) {
   auto robot = MakeRobot();
   robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->set_node_type(
       ros2::node::CAMERA_PUBLISHER);
+  // Publisher capabilities are not a shared resource-validation concern.
+  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+}
+TEST(PerceptionValidationTest, RejectsUnspecifiedNodeType) {
+  auto robot = MakeRobot();
+  robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->clear_node_type();
+  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(PerceptionValidationTest, RejectsConflictingNodeTypesForOneProcess) {
+  auto robot = MakeRobot();
+  auto sensor = robot.perceptions().single_perceptions(0);
+  sensor.mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+  *robot.mutable_perceptions()->add_single_perceptions() = sensor;
+  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(PerceptionValidationTest, DirectSensorsDoNotRequireBoards) {
+  Robot robot;
+  auto* sensor = robot.mutable_perceptions()->add_single_perceptions();
+  sensor->set_sensor_name("scan");
+  sensor->set_sensor_type(robot::perception::RANGE_SCAN);
+  sensor->mutable_node()->set_node_type(ros2::node::LIDAR_PUBLISHER);
+  auto* comm = sensor->mutable_lds01_config()->mutable_comm();
+  comm->set_comm_type(robot::comm::SERIAL);
+  comm->set_transport_type(robot::comm::BYTE_STREAM);
+  comm->mutable_serial_config()->set_port("/test/scan");
+  comm->mutable_serial_config()->set_baudrate(230400);
+  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+  comm->mutable_serial_config()->clear_baudrate();
+  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(PerceptionValidationTest, SensorsWithoutCommDoNotRequireSerialSettings) {
+  Robot robot;
+  auto* sensor = robot.mutable_perceptions()->add_single_perceptions();
+  sensor->set_sensor_name("camera");
+  sensor->set_sensor_type(robot::perception::IMAGE);
+  sensor->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
+  sensor->mutable_opencv_config()->set_id(0);
+  EXPECT_TRUE(ValidatePerceptions(robot).ok());
+}
+TEST(PerceptionValidationTest, ValidatesSerialSettingsOnResolvedBoards) {
+  auto robot = MakeRobot();
+  robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->clear_port();
+  EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
+  robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_port("/test/bus");
+  robot.mutable_boards(0)->mutable_comm()->mutable_serial_config()->clear_baudrate();
   EXPECT_EQ(ValidatePerceptions(robot).code(), absl::StatusCode::kInvalidArgument);
 }
 TEST(PerceptionValidationTest, RejectsLegacyTextConfig) {

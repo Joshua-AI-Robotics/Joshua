@@ -3,12 +3,9 @@
 #include <string>
 
 #include "absl/strings/str_cat.h"
-#include "robot/board/factory/board_resolver.h"
 
 namespace robot::perception {
-absl::Status ValidateSensorConfig(
-    const SinglePerception& sensor,
-    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+absl::StatusOr<SensorDependencies> GetSensorDependencies(const SinglePerception& sensor) {
   const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
   if (sensor.sensor_name().empty()) {
     return absl::InvalidArgumentError("Sensor has no sensor_name.");
@@ -23,16 +20,14 @@ absl::Status ValidateSensorConfig(
             absl::StrCat(owner, ": sts3215_encoder_config requires POSITION sensor_type."));
       }
       const auto& config = sensor.sts3215_encoder_config();
-      return robot::board::ResolveChannelConfig(
-                 boards, owner, config.board_name(), config.channel())
-          .status();
+      return SensorDependencies{{{config.board_name(), config.channel()}}, {}};
     }
     case SinglePerception::kOpencvConfig:
       if (sensor.sensor_type() != IMAGE) {
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": opencv_config requires IMAGE sensor_type."));
       }
-      return absl::OkStatus();
+      return SensorDependencies{};
     case SinglePerception::kLds01Config:
       if (sensor.sensor_type() != RANGE_SCAN) {
         return absl::InvalidArgumentError(
@@ -43,10 +38,13 @@ absl::Status ValidateSensorConfig(
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": lds01_config requires BYTE_STREAM comm."));
       }
-      return absl::OkStatus();
+      return SensorDependencies{{}, {sensor.lds01_config().comm()}};
     case SinglePerception::SENSOR_CONFIG_NOT_SET:
     default:
       return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
   }
+}
+absl::Status ValidateSensorConfig(const SinglePerception& sensor) {
+  return GetSensorDependencies(sensor).status();
 }
 }  // namespace robot::perception
