@@ -64,6 +64,9 @@ class ActionSubscriber : public rclcpp::Node {
         const auto data_type = subscription.ros2_data_type();
         const std::string& topic = subscription.topic();
 
+        // TODO(hmoon): Support additional command message types, including Float64
+        // (double) and JointState. Update ActionPacket and message-to-packet
+        // conversion alongside the subscription support.
         if (data_type != ros2::data_type::FLOAT32) {
           RCLCPP_ERROR(
               this->get_logger(),
