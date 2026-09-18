@@ -1,0 +1,2 @@
+# Isolated MCP adapter environment; not needed by ROS or the C++ runtime.
+mcp==1.28.1

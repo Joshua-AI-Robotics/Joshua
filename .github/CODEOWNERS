@@ -48,6 +48,7 @@
 # change is never blocked waiting on one person.
 /docs/                     @heostar @piscesgh @donegjookim @hsmoon5458
 /firmware/                 @heostar @hsmoon5458
+/mhs/                      @hsmoon5458
 /hooks/                    @hsmoon5458
 /launcher/                 @hsmoon5458
 /node_generator/           @hsmoon5458

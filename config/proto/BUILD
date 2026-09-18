@@ -9,6 +9,7 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         ":ai_proto",
+        ":hardware_api_proto",
         ":robot_proto",
         "//simulation/proto:simulation_proto",
     ],
@@ -29,11 +30,11 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    visibility = ["//visibility:public"],
     deps = [
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
     ],
-    visibility = ["//visibility:public"],
 )
 
 proto_library(
@@ -72,4 +73,16 @@ py_proto_library(
     name = "config_py_proto",
     visibility = ["//visibility:public"],
     deps = [":config_proto"],
+)
+
+proto_library(
+    name = "hardware_api_proto",
+    srcs = ["hardware_api.proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "hardware_api_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":hardware_api_proto"],
 )
