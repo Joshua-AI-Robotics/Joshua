@@ -29,6 +29,7 @@ class StepperDriver : public robot::action::ActuatorInterface {
   std::string GetId() override;
   absl::Status SetAction(const robot::action::ActionPacket& action_packet) override;
   absl::Status Teardown() override;
+  absl::StatusOr<ActionFeedback> ReadFeedback() override;
 
   // ActuatorInterface methods.
   absl::Status SetSpeed(float value) override;

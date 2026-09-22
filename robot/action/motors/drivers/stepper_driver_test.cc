@@ -173,5 +173,23 @@ TEST(StepperDriverTest, TeardownSetsIdleThenDisables) {
   EXPECT_EQ(channel->disable_calls_, 1);
 }
 
+TEST(StepperDriverTest, ManualLifecycleDisablesAtInitAndTeardownWithoutIdleTarget) {
+  auto channel = std::make_shared<RecordingChannel>();
+  auto config = MakeStepperActuator();
+  config.mutable_stepper_config()->set_manual_lifecycle(true);
+  StepperDriver driver(channel, config);
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->disable_calls_, 1);
+  ASSERT_TRUE(driver.SetPosition(10.04f).ok());
+  EXPECT_EQ(channel->last_value_, 89);
+  const auto writes = channel->set_target_calls_;
+  ASSERT_TRUE(driver.Teardown().ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  EXPECT_EQ(channel->disable_calls_, 2);
+  EXPECT_EQ(channel->enable_calls_, 0);
+  ASSERT_TRUE(driver.ReadFeedback().ok());
+  EXPECT_EQ(driver.ReadFeedback()->emitted_steps, 0);
+}
 }  // namespace
 }  // namespace robot::action

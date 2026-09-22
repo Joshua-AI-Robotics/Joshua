@@ -57,10 +57,12 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 ## Experimental Joshua MHS interface
 
 The opt-in [Joshua MHS interface](../mhs/README.md) exposes one configured Teensy
-stepper to local MCP clients. A Python SDK adapter communicates over a private
-pipe with a C++ executor that validates and monitors bounded moves through the
-board interface. It runs separately from the ROS graph; API-enabled presets are
-rejected by the ROS launcher to avoid its automatic actuator enable path.
+stepper to local MCP clients. A Python SDK adapter communicates through a stdio ROS bridge using configured
+command/status topics. The existing actuator subscriber owns bounded-move
+validation and monitoring, and executes through the action factory and motor
+driver. API-enabled presets require operator reference confirmation at launch
+and an explicit-enable, disable-only stepper lifecycle. The bridge never opens
+a board or transport.
 
 ## Related documentation
 

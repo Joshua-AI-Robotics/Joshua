@@ -1,57 +1,45 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_python//python:defs.bzl", "py_test")
 
 cc_library(
-    name = "runtime",
-    srcs = ["runtime.cc"],
-    hdrs = ["runtime.h"],
+    name = "ros_client",
+    srcs = ["ros_client.cc"],
+    hdrs = ["ros_client.h"],
+    visibility = ["//visibility:public"],
     deps = [
-        "//config/proto:config_cc_proto",
-        "//config/proto:hardware_api_cc_proto",
-        "//robot/action/proto:action_cc_proto",
-        "//robot/board/factory:board_resolver",
-        "//robot/board/interfaces:board_interfaces",
-        "//robot/board/proto:board_cc_proto",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
+        "//ros2:actuator_session",
+        "//ros2/utils:qos_setting",
         "@protobuf",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
 cc_binary(
-    name = "executor",
-    srcs = ["executor.cc"],
+    name = "ros_bridge",
+    srcs = ["ros_bridge.cc"],
     deps = [
-        ":runtime",
+        ":ros_client",
         "//config:config_utils",
-        "//robot/board/teensy:teensy_board",
+        "//ros2:actuator_session",
         "@glog",
         "@protobuf",
-    ],
-)
-
-cc_test(
-    name = "runtime_test",
-    srcs = ["runtime_test.cc"],
-    deps = [
-        ":runtime",
-        "@googletest//:gtest_main",
-        "@protobuf",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
 py_test(
-    name = "executor_test",
+    name = "ros_bridge_test",
     srcs = [
         "client.py",
-        "executor_test.py",
+        "ros_bridge_test.py",
     ],
     args = [
-        "$(location :executor)",
+        "$(location :ros_bridge)",
         "$(location //config/config_preset:example/teensy_hardware_api.pbtxt)",
     ],
     data = [
-        ":executor",
+        ":ros_bridge",
         "//config/config_preset:example/teensy_hardware_api.pbtxt",
     ],
     imports = ["."],

@@ -1,6 +1,7 @@
-#include "mhs/runtime.h"
+#include "ros2/actuator_session.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iostream>
 #include <utility>
@@ -8,7 +9,7 @@
 #include "absl/status/status.h"
 #include "robot/board/factory/board_resolver.h"
 
-namespace mhs {
+namespace ros2_actuator {
 namespace {
 using google::protobuf::Struct;
 using google::protobuf::Value;
@@ -40,6 +41,21 @@ Struct Error(const std::string& message) {
   (*out.mutable_fields())["error"] = V(message);
   return out;
 }
+bool ValidTopic(const std::string& topic) {
+  if (topic.empty() || topic.front() != '/' || topic.back() == '/') return false;
+  bool first = true;
+  for (size_t i = 1; i < topic.size(); ++i) {
+    const unsigned char c = topic[i];
+    if (c == '/') {
+      if (first) return false;
+      first = true;
+    } else {
+      if (!(std::isalpha(c) || c == '_' || (!first && std::isdigit(c)))) return false;
+      first = false;
+    }
+  }
+  return !first;
+}
 bool Positive(double x) {
   return std::isfinite(x) && x > 0;
 }
@@ -61,7 +77,10 @@ absl::StatusOr<Device> ResolveDevice(const config::Config& config) {
   int matches = 0;
   for (const auto& action : config.robot().actions().single_actions()) {
     if (action.has_actuator() && action.actuator().actuator_name() == d.exposure.actuator_name()) {
+      if (action.action_type() != robot::action::ACTUATOR)
+        return absl::InvalidArgumentError("Exposed action must have ACTUATOR type");
       d.actuator = action.actuator();
+      d.node = action.node();
       ++matches;
     }
   }
@@ -69,7 +88,27 @@ absl::StatusOr<Device> ResolveDevice(const config::Config& config) {
     return absl::InvalidArgumentError(
         "Exposure must name exactly one actuator and provide a description");
   }
+  if (d.node.node_type() != ros2::node::ACTUATOR_SUBSCRIBER || d.node.id() == 0) {
+    return absl::InvalidArgumentError("Exposed actuator requires an ACTUATOR_SUBSCRIBER node");
+  }
+  if (d.node.subscriptions_size() != 1 || d.node.publishers_size() != 1 ||
+      d.node.subscriptions(0).ros2_data_type() != ros2::data_type::STRING ||
+      d.node.publishers(0).ros2_data_type() != ros2::data_type::STRING ||
+      d.node.subscriptions(0).normalized())
+    return absl::InvalidArgumentError(
+        "Exposed actuator requires one STRING command subscription and status publisher");
+  d.command_topic = d.node.subscriptions(0).topic();
+  d.status_topic = d.node.publishers(0).topic();
+  if (!ValidTopic(d.command_topic) || !ValidTopic(d.status_topic) ||
+      d.command_topic == d.status_topic ||
+      d.node.qos_setting().durability_policy() != ros2::node::QOS_DURABILITY_POLICY_VOLATILE ||
+      d.node.qos_setting().reliability_policy() != ros2::node::QOS_RELIABILITY_POLICY_RELIABLE) {
+    return absl::InvalidArgumentError(
+        "Distinct absolute command/status topics and reliable volatile QoS are required");
+  }
   const auto& a = d.actuator;
+  if (!a.stepper_config().manual_lifecycle())
+    return absl::InvalidArgumentError("Exposed stepper requires manual_lifecycle");
   auto resolved = robot::board::ResolveChannelConfig(
       config.robot().boards(), "hardware_api", a.board_name(), a.channel());
   if (!resolved.ok()) return resolved.status();
@@ -98,24 +137,33 @@ absl::StatusOr<Device> ResolveDevice(const config::Config& config) {
     return absl::InvalidArgumentError(
         "Invalid limits, conversion, move duration (1..60000 ms), or freshness (1..1000 ms)");
   }
+  // Do not let another configured action bypass this session on the same channel.
+  for (const auto& action : config.robot().actions().single_actions()) {
+    if (action.actuator().actuator_name() != a.actuator_name() &&
+        action.actuator().board_name() == a.board_name() &&
+        action.actuator().channel() == a.channel())
+      return absl::InvalidArgumentError("Exposed actuator channel has another command owner");
+  }
   return d;
 }
 
-Runtime::Runtime(Device device) : device_(std::move(device)) {}
-Runtime::~Runtime() {
+ActuatorSession::ActuatorSession(Device device) : device_(std::move(device)) {}
+ActuatorSession::~ActuatorSession() {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (channel_) {
+  if (action_) {
     auto status = StopLocked("shutdown");
     if (!status.ok()) std::cerr << "Shutdown disable unconfirmed: " << status << "\n";
   }
 }
 
-absl::Status Runtime::Attach(std::shared_ptr<robot::board::BoardChannel> channel) {
+absl::Status ActuatorSession::Attach(std::shared_ptr<robot::action::ActionInterface> action) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (channel_ || !channel)
-    return absl::FailedPreconditionError("Already attached or null channel");
-  channel_ = std::move(channel);
-  auto status = channel_->Disable();
+  if (action_ || !action)
+    return absl::FailedPreconditionError("Already attached or null action interface");
+  action_ = std::move(action);
+  robot::action::ActionPacket packet;
+  packet.set_preset(robot::action::PRESET_DISABLE_TORQUE);
+  auto status = action_->SetAction(packet);
   disable_acknowledged_ = status.ok();
   if (status.ok()) status = ReadLocked();
   if (!status.ok()) {
@@ -130,20 +178,21 @@ absl::Status Runtime::Attach(std::shared_ptr<robot::board::BoardChannel> channel
   return absl::OkStatus();
 }
 
-absl::Status Runtime::ReadLocked() {
+absl::Status ActuatorSession::ReadLocked() {
   feedback_valid_ = false;
   const auto start = Clock::now();
-  auto feedback = channel_->ReadFeedback();
+  auto feedback = action_->ReadFeedback();
   if (!feedback.ok()) return feedback.status();
   if (Clock::now() - start > std::chrono::milliseconds(device_.exposure.feedback_max_age_ms())) {
     return absl::DeadlineExceededError("Feedback request exceeded freshness budget");
   }
-  if (!std::isfinite(feedback->position) || std::abs(feedback->position) > 16777215 ||
-      std::round(feedback->position) != feedback->position || feedback->fault_flags != 0) {
+  if (!std::isfinite(feedback->emitted_steps) || std::abs(feedback->emitted_steps) > 16777215 ||
+      std::round(feedback->emitted_steps) != feedback->emitted_steps ||
+      feedback->fault_flags != 0) {
     return absl::DataLossError("Invalid controller feedback or controller fault");
   }
   if (reference_valid_) {
-    const double next = feedback->position;
+    const double next = feedback->emitted_steps;
     const bool moving = outcome_ == "moving";
     const double lower = moving ? std::min(steps_, target_) : steps_;
     const double upper = moving ? std::max(steps_, target_) : steps_;
@@ -152,7 +201,7 @@ absl::Status Runtime::ReadLocked() {
           "Unexpected counter change; possible reset or competing controller");
     }
   }
-  steps_ = feedback->position;
+  steps_ = feedback->emitted_steps;
   const double degrees = steps_ / device_.steps_per_degree;
   if (degrees < device_.actuator.operational_lower_limit() ||
       degrees > device_.actuator.operational_upper_limit()) {
@@ -170,10 +219,12 @@ absl::Status Runtime::ReadLocked() {
   return absl::OkStatus();
 }
 
-absl::Status Runtime::StopLocked(const std::string& outcome) {
+absl::Status ActuatorSession::StopLocked(const std::string& outcome) {
   reference_valid_ = false;
   outcome_ = outcome;
-  auto status = channel_->Disable();
+  robot::action::ActionPacket packet;
+  packet.set_preset(robot::action::PRESET_DISABLE_TORQUE);
+  auto status = action_->SetAction(packet);
   disable_acknowledged_ = status.ok();
   if (!status.ok()) {
     error_ = status.ToString();
@@ -182,7 +233,7 @@ absl::Status Runtime::StopLocked(const std::string& outcome) {
   return status;
 }
 
-void Runtime::Poll() {
+void ActuatorSession::Poll() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (outcome_ != "moving") return;
   if (Clock::now() >= deadline_) {
@@ -205,11 +256,11 @@ void Runtime::Poll() {
   }
 }
 
-Struct Runtime::StateLocked() const {
+Struct ActuatorSession::StateLocked() const {
   Struct out;
   auto& f = *out.mutable_fields();
   f["device_id"] = V(device_.actuator.actuator_name());
-  f["connected"] = V(channel_ != nullptr);
+  f["connected"] = V(action_ != nullptr);
   f["reference_valid"] = V(reference_valid_);
   f["physical_position_verified"] = V(false);
   f["feedback_source"] = V("controller_emitted_steps");
@@ -230,7 +281,7 @@ Struct Runtime::StateLocked() const {
   return out;
 }
 
-Struct Runtime::DescribeLocked() const {
+Struct ActuatorSession::DescribeLocked() const {
   Struct out;
   auto& f = *out.mutable_fields();
   f["device_id"] = V(device_.actuator.actuator_name());
@@ -247,7 +298,7 @@ Struct Runtime::DescribeLocked() const {
   f["write_semantics"] =
       V("Absolute position, rounded to a whole step. Accepted is not completed. One active move; "
         "no queue or automatic retry. Stop requires operator restart/reference confirmation.");
-  f["connected"] = V(channel_ != nullptr);
+  f["connected"] = V(action_ != nullptr);
   for (const auto& tag : device_.exposure.tags())
     *f["tags"].mutable_list_value()->add_values() = V(tag);
   for (const char* op : {"read_state", "write_position", "stop_device"})
@@ -255,7 +306,7 @@ Struct Runtime::DescribeLocked() const {
   return out;
 }
 
-Struct Runtime::Handle(const Struct& request) {
+Struct ActuatorSession::Handle(const Struct& request) {
   std::lock_guard<std::mutex> lock(mutex_);
   const auto op = Field(request, "operation").string_value();
   if (op == "list_devices") {
@@ -266,9 +317,9 @@ Struct Runtime::Handle(const Struct& request) {
   if (Field(request, "device_id").string_value() != device_.actuator.actuator_name())
     return Error("Unknown device_id");
   if (op == "describe_device") return DescribeLocked();
-  if (!channel_)
+  if (!action_)
     return Error(
-        "Hardware is offline; operator must start the executor with hardware/reference "
+        "Hardware is offline; operator must start the ROS actuator node with hardware/reference "
         "confirmation");
   if (op == "stop_device") {
     auto status = StopLocked("stopped");
@@ -308,6 +359,9 @@ Struct Runtime::Handle(const Struct& request) {
   const double target = std::round(degrees * device_.steps_per_degree);
   const double quantized = target / device_.steps_per_degree;
   if (quantized < lo || quantized > hi) return Error("Rounded target exceeds operational limits");
+  const float command_degrees = static_cast<float>(quantized);
+  if (std::round(static_cast<double>(command_degrees) * device_.steps_per_degree) != target)
+    return Error("Rounded target cannot be represented by the actuator command format");
   auto status = ReadLocked();
   if (!status.ok()) {
     error_ = status.ToString();
@@ -322,13 +376,17 @@ Struct Runtime::Handle(const Struct& request) {
   deadline_ = Clock::now() + std::chrono::milliseconds(device_.exposure.max_move_duration_ms());
   ++command_id_;
   target_ = target;
-  status = channel_->SetTarget(robot::board::TargetMode::kPosition, static_cast<float>(target));
+  robot::action::ActionPacket packet;
+  packet.set_position(command_degrees);
+  status = action_->SetAction(packet);
   if (status.ok() && Clock::now() >= deadline_) {
     status = absl::DeadlineExceededError("Move duration exceeded before enable");
   }
   if (status.ok()) {
     disable_acknowledged_ = false;
-    status = channel_->Enable();
+    packet.Clear();
+    packet.set_preset(robot::action::PRESET_ENABLE_TORQUE);
+    status = action_->SetAction(packet);
   }
   if (!status.ok()) {
     error_ = status.ToString();
@@ -342,4 +400,4 @@ Struct Runtime::Handle(const Struct& request) {
   (*out.mutable_fields())["accepted"] = V(true);
   return out;
 }
-}  // namespace mhs
+}  // namespace ros2_actuator

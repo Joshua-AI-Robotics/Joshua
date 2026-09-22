@@ -1,3 +1,5 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
@@ -144,6 +146,8 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":actuator_command_endpoint",
+        ":actuator_session",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_cc_proto",
@@ -244,6 +248,58 @@ cc_test(
         ":node_runner",
         "//config/proto:config_cc_proto",
         "@googletest//:gtest_main",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_library(
+    name = "actuator_session",
+    srcs = ["actuator_session.cc"],
+    hdrs = ["actuator_session.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//config/proto:hardware_api_cc_proto",
+        "//robot/action/interfaces:action_interface",
+        "//robot/action/proto:action_cc_proto",
+        "//robot/board/factory:board_resolver",
+        "//robot/board/proto:board_cc_proto",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/proto:ros2_data_type_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@protobuf",
+    ],
+)
+
+cc_library(
+    name = "actuator_command_endpoint",
+    srcs = ["actuator_command_endpoint.cc"],
+    hdrs = ["actuator_command_endpoint.h"],
+    deps = [
+        ":actuator_session",
+        "//ros2/utils:qos_setting",
+        "@protobuf",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "actuator_session_test",
+    srcs = ["actuator_session_test.cc"],
+    env_inherit = [
+        "AMENT_PREFIX_PATH",
+        "LD_LIBRARY_PATH",
+    ],
+    deps = [
+        ":actuator_command_endpoint",
+        ":actuator_session",
+        "//mhs:ros_client",
+        "//robot/action/motors/drivers:stepper_driver",
+        "//robot/board/interfaces:board_interfaces",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
 )

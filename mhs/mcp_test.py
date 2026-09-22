@@ -1,7 +1,8 @@
-"""Run with the mhs venv after building executor; no hardware is opened."""
+"""Run with the mhs venv after building ros_bridge; no hardware is opened."""
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -13,10 +14,17 @@ async def main():
     root = Path(__file__).resolve().parent.parent
     params = StdioServerParameters(
         command=sys.executable,
+        # The SDK deliberately filters subprocess environment variables; the
+        # bridge needs the sourced ROS installation's runtime search paths.
+        env={
+            key: os.environ[key]
+            for key in ("AMENT_PREFIX_PATH", "LD_LIBRARY_PATH", "ROS_DISTRO")
+            if key in os.environ
+        },
         args=[
             str(root / "mhs/server.py"),
-            "--executor",
-            str(root / "bazel-bin/mhs/executor"),
+            "--bridge",
+            str(root / "bazel-bin/mhs/ros_bridge"),
             "--config",
             str(root / "config/config_preset/example/teensy_hardware_api.pbtxt"),
         ],

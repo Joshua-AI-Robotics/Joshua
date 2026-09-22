@@ -2,16 +2,15 @@
 #include <poll.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <iostream>
-#include <thread>
 
 #include "config/config_utils.h"
-#include "mhs/runtime.h"
 #include "google/protobuf/util/json_util.h"
-#include "robot/board/teensy/teensy_board.h"
+#include "mhs/ros_client.h"
+#include "ros2/actuator_session.h"
 
 namespace {
 volatile std::sig_atomic_t shutdown_requested = 0;
@@ -22,11 +21,12 @@ void RequestShutdown(int) {
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
-  if (argc != 2 && (argc != 3 || std::string(argv[2]) != "--hardware-and-reference-confirmed")) {
-    std::cerr << "Usage: executor CONFIG [--hardware-and-reference-confirmed]\n";
+  setenv("RCUTILS_LOGGING_USE_STDOUT", "0", 1);
+  if (argc != 2 && (argc != 3 || std::string(argv[2]) != "--connect-ros")) {
+    std::cerr << "Usage: ros_bridge CONFIG [--connect-ros]\n";
     return 2;
   }
-  // A broken adapter pipe must unwind through Runtime's disabling destructor.
+  // A broken adapter pipe must unwind through the ROS shutdown stop request.
   std::signal(SIGPIPE, SIG_IGN);
   std::signal(SIGTERM, RequestShutdown);
   std::signal(SIGINT, RequestShutdown);
@@ -35,37 +35,17 @@ int main(int argc, char** argv) {
     std::cerr << config.status() << '\n';
     return 2;
   }
-  auto device = mhs::ResolveDevice(*config);
+  auto device = ros2_actuator::ResolveDevice(*config);
   if (!device.ok()) {
     std::cerr << device.status() << '\n';
     return 2;
   }
-  robot::board::TeensyBoard board;
-  mhs::Runtime runtime(*device);
+  ros2_actuator::ActuatorSession offline(*device);
+  std::unique_ptr<mhs::RosClient> client;
   if (argc == 3) {
-    auto status = board.Init(device->board);
-    if (!status.ok()) {
-      std::cerr << status << '\n';
-      return 1;
-    }
-    auto channel = board.OpenChannel(device->actuator.channel());
-    if (!channel.ok()) {
-      std::cerr << channel.status() << '\n';
-      return 1;
-    }
-    status = runtime.Attach(*channel);
-    if (!status.ok()) {
-      std::cerr << status << '\n';
-      return 1;
-    }
+    rclcpp::init(0, nullptr, rclcpp::InitOptions(), rclcpp::SignalHandlerOptions::None);
+    client = std::make_unique<mhs::RosClient>(*device);
   }
-  std::atomic<bool> done{false};
-  std::thread monitor([&] {
-    while (!done.load()) {
-      runtime.Poll();
-      std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-  });
   std::string pending;
   while (!shutdown_requested) {
     pollfd input{STDIN_FILENO, POLLIN, 0};
@@ -92,7 +72,7 @@ int main(int argc, char** argv) {
       if (!parsed.ok()) {
         (*response.mutable_fields())["error"].set_string_value("Invalid request JSON object");
       } else {
-        response = runtime.Handle(request);
+        response = client ? client->Request(request) : offline.Handle(request);
       }
       std::string json;
       const auto encoded = google::protobuf::util::MessageToJsonString(response, &json);
@@ -104,7 +84,17 @@ int main(int argc, char** argv) {
       }
     }
   }
-  done.store(true);
-  monitor.join();
+  if (client) {
+    auto stopped = client->Stop();
+    const auto ack = stopped.fields().find("disable_acknowledged");
+    if (ack == stopped.fields().end() || !ack->second.bool_value()) {
+      std::cerr << "ROS shutdown disable unconfirmed\n";
+      client.reset();
+      rclcpp::shutdown();
+      return 1;
+    }
+    client.reset();
+    rclcpp::shutdown();
+  }
   return 0;
 }

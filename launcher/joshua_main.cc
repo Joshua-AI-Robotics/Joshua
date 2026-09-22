@@ -1,14 +1,21 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstdlib>
+
 #include "config/config_utils.h"
 #include "launcher/simulation_launcher.h"
 #include "node_generator/node_generator.h"
+#include "ros2/actuator_session.h"
 #include "version.h"
 
 DEFINE_string(config,
               "config/config_preset/so100/teleoperate.pbtxt",
               "Path to the robot config file");
+
+DEFINE_bool(hardware_and_reference_confirmed,
+            false,
+            "Operator confirms hardware setup and coordinate reference for this ROS session");
 
 int main(int argc, char* argv[]) {
   gflags::SetVersionString(JOSHUA_VERSION);
@@ -26,8 +33,18 @@ int main(int argc, char* argv[]) {
   const auto& config = config_or.value();
 
   if (config.hardware_api().enabled()) {
-    LOG(ERROR) << "Hardware API presets require mhs/executor; ROS launch is disabled";
-    return 1;
+    auto device = ros2_actuator::ResolveDevice(config);
+    if (!device.ok()) {
+      LOG(ERROR) << device.status();
+      return 1;
+    }
+    if (!FLAGS_hardware_and_reference_confirmed ||
+        config.general().operation_mode() == config::General::MODE_SIMULATION) {
+      LOG(ERROR) << "Hardware API ROS launch requires --hardware_and_reference_confirmed "
+                    "and a hardware operation mode";
+      return 1;
+    }
+    setenv("JOSHUA_HARDWARE_REFERENCE_CONFIRMED", "1", 1);
   }
 
   if (config.general().operation_mode() == config::General::MODE_SIMULATION) {

@@ -8,9 +8,9 @@
 #include "absl/status/statusor.h"
 #include "config/proto/config.pb.h"
 #include "google/protobuf/struct.pb.h"
-#include "robot/board/interfaces/board_channel.h"
+#include "robot/action/interfaces/action_interface.h"
 
-namespace mhs {
+namespace ros2_actuator {
 
 // An immutable, validated snapshot. MVP supports one Teensy STEP_DIR actuator.
 struct Device {
@@ -18,18 +18,21 @@ struct Device {
   robot::board::Board board;
   config::HardwareDevice exposure;
   double steps_per_degree;
+  ros2::node::Node node;
+  std::string command_topic;
+  std::string status_topic;
 };
 absl::StatusOr<Device> ResolveDevice(const config::Config& config);
 
-// Hardware-independent policy/lifecycle; channel injection is for C++ tests.
-// The executor owns a monitor thread calling Poll even while no client is reading.
-class Runtime {
+// Bounded move policy shared by ROS command producers. Drivers own hardware I/O.
+// The actuator node calls Poll even while no client is reading.
+class ActuatorSession {
  public:
   using Clock = std::chrono::steady_clock;
-  explicit Runtime(Device device);
-  ~Runtime();
+  explicit ActuatorSession(Device device);
+  ~ActuatorSession();
   // Operator-only entrypoint, never exposed as an MCP tool. Does not enable.
-  absl::Status Attach(std::shared_ptr<robot::board::BoardChannel> channel);
+  absl::Status Attach(std::shared_ptr<robot::action::ActionInterface> action);
   google::protobuf::Struct Handle(const google::protobuf::Struct& request);
   void Poll();
 
@@ -39,7 +42,7 @@ class Runtime {
   google::protobuf::Struct StateLocked() const;
   google::protobuf::Struct DescribeLocked() const;
   Device device_;
-  std::shared_ptr<robot::board::BoardChannel> channel_;
+  std::shared_ptr<robot::action::ActionInterface> action_;
   mutable std::mutex mutex_;
   bool reference_valid_ = false;
   bool feedback_valid_ = false;
@@ -54,4 +57,4 @@ class Runtime {
   int64_t received_unix_ms_ = 0;
 };
 
-}  // namespace mhs
+}  // namespace ros2_actuator

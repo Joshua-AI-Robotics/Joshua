@@ -1,5 +1,8 @@
+#include <cstdlib>
 #include <list>
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -7,6 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "ros2/actuator_command_endpoint.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
@@ -28,6 +32,15 @@ class ActionSubscriber : public rclcpp::Node {
  public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
+    std::optional<ros2_actuator::Device> exposed;
+    if (config.hardware_api().enabled()) {
+      auto resolved = ros2_actuator::ResolveDevice(config);
+      if (!resolved.ok()) throw std::runtime_error(resolved.status().ToString());
+      const char* confirmed = std::getenv("JOSHUA_HARDWARE_REFERENCE_CONFIRMED");
+      if (!confirmed || std::string(confirmed) != "1")
+        throw std::runtime_error("Operator hardware/reference confirmation is required");
+      exposed = *resolved;
+    }
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
           static_cast<int>(single_action.node().id()) != node_id) {
@@ -51,9 +64,16 @@ class ActionSubscriber : public rclcpp::Node {
       auto shared_interface =
           std::shared_ptr<robot::action::ActionInterface>(std::move(interface.value()));
 
+      if (exposed && exposed->actuator.actuator_name() == device_id) {
+        command_endpoint_ =
+            std::make_unique<ros2_actuator::CommandEndpoint>(*this, *exposed, shared_interface);
+        continue;
+      }
+
       robot::action::ActionPacket enable_packet;
       enable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
-      if (!shared_interface->SetAction(enable_packet).ok()) {
+      if (!action_proto.stepper_config().manual_lifecycle() &&
+          !shared_interface->SetAction(enable_packet).ok()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to enable torque for actuator '%s'!",
                      action_proto.actuator_name().c_str());
@@ -125,7 +145,7 @@ class ActionSubscriber : public rclcpp::Node {
       }
     }
 
-    if (actuators_.empty()) {
+    if (actuators_.empty() && !command_endpoint_) {
       RCLCPP_ERROR(
           this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
       return;
@@ -158,6 +178,7 @@ class ActionSubscriber : public rclcpp::Node {
 
  private:
   std::list<Actuator> actuators_;
+  std::unique_ptr<ros2_actuator::CommandEndpoint> command_endpoint_;
 };
 
 int main(int argc, char* argv[]) {

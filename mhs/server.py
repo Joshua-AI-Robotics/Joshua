@@ -2,7 +2,7 @@
 
 import argparse
 
-from client import ExecutorClient
+from client import RosBridgeClient
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -58,13 +58,11 @@ def create_server(client):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executor", required=True)
+    parser.add_argument("--bridge", required=True)
     parser.add_argument("--config", required=True)
-    parser.add_argument("--hardware-and-reference-confirmed", action="store_true")
+    parser.add_argument("--connect-ros", action="store_true")
     args = parser.parse_args()
-    client = ExecutorClient(
-        args.executor, args.config, args.hardware_and_reference_confirmed
-    )
+    client = RosBridgeClient(args.bridge, args.config, args.connect_ros)
     try:
         # Validate startup/config before completing the MCP handshake.
         client.request("list_devices")

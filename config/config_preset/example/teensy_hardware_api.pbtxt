@@ -1,6 +1,6 @@
 # Experimental Joshua MHS preset. Wiring follows teensy_stepper_demo.pbtxt.
-# Use mhs/executor; see mhs/README.md. Never run with another serial owner.
-# Controller-level MCP bench check passed for 20 degrees and return to zero.
+# Launch the ROS actuator node; MHS connects via configured topics. See mhs/README.md.
+# Earlier bench checks used an incorrect 1/16 conversion; see mhs/README.md.
 # Emitted steps do not independently verify physical movement; see mhs/README.md.
 
 general {
@@ -46,6 +46,13 @@ robot {
   }
   actions {
     single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions { topic: "/teensy_stepper_1/command" ros2_data_type: STRING }
+        publishers { topic: "/teensy_stepper_1/status" ros2_data_type: STRING }
+      }
       action_type: ACTUATOR
       actuator {
         actuator_name: "teensy_stepper_1"
@@ -54,17 +61,20 @@ robot {
         board_name: "stepper_bus"
         channel: 0
         physical_lower_limit: 0
-        # Operator-confirmed free-rotation bench: retain the five-turn counter
-        # and allow one further 90-degree forward move. These are the bounds
-        # for this experiment, not measured mechanical end stops.
+        # Operator-selected free-rotation bench bounds, not measured stops.
+        # Conversion corrected to 1/8 microstepping; retained counts now map
+        # to twice the previously reported degrees. Recheck the reference.
         physical_upper_limit: 1890
         operational_lower_limit: 0
         operational_upper_limit: 1890
         stepper_config {
-          # 1.8-degree/step NEMA17 at 1/16 microstepping: 200 * 16 / 360.
-          steps_per_degree: 8.888889
+          # SW1..SW6: OFF/ON/OFF/ON/ON/OFF, reported by the operator.
+          # 1.8-degree motor at 1/8 microstepping: 1600 pulses/rev / 360.
+          # Matches the observed 180-degree travel for 800 emitted pulses.
+          steps_per_degree: 4.4444447
           gear_ratio: 1.0
           idle_position: 0
+          manual_lifecycle: true
         }
       }
     }
@@ -72,7 +82,7 @@ robot {
 }
 
 # Illustrative limits only: operator must validate the rig and coordinate
-# reference before enabling hardware. Use mhs/executor, not the ROS launcher.
+# reference before launching the ROS actuator session.
 hardware_api {
   enabled: true
   devices {

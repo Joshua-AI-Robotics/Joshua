@@ -3,7 +3,7 @@
 import sys
 import unittest
 
-from client import ExecutorClient
+from client import RosBridgeClient
 
 EXECUTOR, CONFIG = sys.argv[1:3]
 del sys.argv[1:3]
@@ -11,7 +11,7 @@ del sys.argv[1:3]
 
 class ExecutorTest(unittest.TestCase):
     def test_offline_discovery_and_rejected_motion(self):
-        client = ExecutorClient(EXECUTOR, CONFIG)
+        client = RosBridgeClient(EXECUTOR, CONFIG)
         try:
             devices = client.request("list_devices")["devices"]
             self.assertEqual(len(devices), 1)
