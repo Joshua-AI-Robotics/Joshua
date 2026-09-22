@@ -113,6 +113,11 @@ absl::StatusOr<Device> ResolveDevice(const config::Config& config) {
       config.robot().boards(), "hardware_api", a.board_name(), a.channel());
   if (!resolved.ok()) return resolved.status();
   d.board = *resolved->board;
+  if (d.board.comm().comm_type() != robot::comm::SERIAL ||
+      d.board.comm().transport_type() != robot::comm::MESSAGE) {
+    return absl::InvalidArgumentError(
+        "Exposed Teensy requires SERIAL comm with transport_type: MESSAGE");
+  }
   if (a.motor_type() != robot::action::MOTOR_STEPPER_NEMA17 || !a.has_stepper_config() ||
       d.board.board_type() != robot::board::TEENSY41 || d.board.channels_size() != 1 ||
       a.channel() != 0 || resolved->channel->drive() != robot::board::STEP_DIR ||

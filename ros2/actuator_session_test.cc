@@ -34,6 +34,7 @@ config::Config Config() {
           boards {
             name: "board"
             board_type: TEENSY41
+            comm { comm_type: SERIAL transport_type: MESSAGE }
             channels {
               index: 0
               drive: STEP_DIR
@@ -67,6 +68,21 @@ config::Config Config() {
       &c));
   return c;
 }
+TEST(ActuatorSessionConfigTest, RejectsMissingOrIncompatibleTransport) {
+  auto config = Config();
+  auto* comm = config.mutable_robot()->mutable_boards(0)->mutable_comm();
+  for (auto transport :
+       {robot::comm::TRANSPORT_INVALID, robot::comm::BYTE_STREAM, robot::comm::CYCLIC}) {
+    comm->set_transport_type(transport);
+    auto result = ResolveDevice(config);
+    ASSERT_FALSE(result.ok());
+    EXPECT_NE(std::string(result.status().message()).find("transport_type: MESSAGE"),
+              std::string::npos);
+  }
+  comm->set_transport_type(robot::comm::MESSAGE);
+  EXPECT_TRUE(ResolveDevice(config).ok());
+}
+
 Struct Request(const std::string& op, double position = 0) {
   Struct s;
   (*s.mutable_fields())["operation"].set_string_value(op);

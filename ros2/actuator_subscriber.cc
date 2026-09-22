@@ -55,9 +55,9 @@ class ActionSubscriber : public rclcpp::Node {
           robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
       if (!interface.ok()) {
         RCLCPP_ERROR(this->get_logger(),
-                     "Failed to create action interface for actuator '%s'. Check hardware "
-                     "connection or permissions.",
-                     action_proto.actuator_name().c_str());
+                     "Failed to create action interface for actuator '%s': %s",
+                     action_proto.actuator_name().c_str(),
+                     interface.status().ToString().c_str());
         continue;
       }
 
