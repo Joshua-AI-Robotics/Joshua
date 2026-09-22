@@ -11,9 +11,7 @@
 #include "robot/action/proto/action_packet.pb.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
-#include "ros2/utils/mapped_message.h"
 #include "ros2/utils/packet_parser.h"
-#include "ros2/utils/qos_setting.h"
 
 class ActionSubscriber : public rclcpp::Node {
  private:
@@ -21,8 +19,6 @@ class ActionSubscriber : public rclcpp::Node {
     std::string topic;
     std::shared_ptr<robot::action::ActionInterface> interface;
     std::pair<float, float> limits;
-    bool normalized;
-    std::string device_id;
     rclcpp::SubscriptionBase::SharedPtr subscription;
     robot::action::ActionPacket reusable_packet;
   };
@@ -32,20 +28,6 @@ class ActionSubscriber : public rclcpp::Node {
       : Node(node_name) {
     const auto validation = config::ValidateConfig(config);
     if (!validation.ok()) throw std::invalid_argument(validation.ToString());
-    std::vector<std::shared_ptr<ros2_utils::MappedMessage>> codecs;
-    for (const auto& action : config.robot().actions().single_actions()) {
-      if (action.action_type() != robot::action::ACTUATOR ||
-          action.node().id() != static_cast<uint32_t>(node_id))
-        continue;
-      for (const auto& sub : action.node().subscriptions()) {
-        auto codec =
-            ros2_utils::MappedMessage::Create(sub.ros2_data_type(), sub.scalar_mapping(), false);
-        if (!codec.ok())
-          throw std::invalid_argument(sub.topic() + ": " + codec.status().ToString());
-        codecs.push_back(*codec);
-      }
-    }
-    size_t endpoint = 0;
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
           static_cast<int>(single_action.node().id()) != node_id) {
@@ -53,8 +35,6 @@ class ActionSubscriber : public rclcpp::Node {
       }
 
       const auto& action_proto = single_action.actuator();
-      const auto& qos_setting = single_action.node().qos_setting();
-      const std::string device_id = action_proto.actuator_name();
 
       auto interface =
           robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
@@ -70,38 +50,22 @@ class ActionSubscriber : public rclcpp::Node {
 
       for (const auto& subscription : single_action.node().subscriptions()) {
         const std::string& topic = subscription.topic();
-        auto codec = codecs.at(endpoint++);
-        // Explicit commands decouple externally owned topic names from devices.
-        const std::string command_topic =
-            subscription.command().empty() ? topic : device_id + "/" + subscription.command();
         Actuator& actuator =
             actuators_.emplace_back(Actuator{.topic = topic,
                                              .interface = shared_interface,
                                              .limits = {action_proto.operational_lower_limit(),
-                                                        action_proto.operational_upper_limit()},
-                                             .normalized = subscription.normalized(),
-                                             .device_id = device_id});
+                                                        action_proto.operational_upper_limit()}});
 
-        const auto qos = ros2_utils::CreateQosSetting(qos_setting);
-        actuator.subscription = this->create_generic_subscription(
-            topic,
-            codec->type_name(),
-            qos,
-            [this, &actuator, codec, command_topic](
-                std::shared_ptr<rclcpp::SerializedMessage> msg) {
-              auto value = codec->Decode(*msg);
-              if (!value.ok()) {
+        auto result = ros2_utils::CreateActionMessageSubscription(
+            *this,
+            subscription,
+            single_action,
+            [this, &actuator](absl::StatusOr<robot::action::ActionPacket> parsed) {
+              if (!parsed.ok()) {
                 RCLCPP_ERROR(get_logger(),
                              "Invalid command on '%s': %s",
                              actuator.topic.c_str(),
-                             value.status().ToString().c_str());
-                return;
-              }
-              auto parsed =
-                  ros2_utils::ActionPacketFromFloat(*value, command_topic, actuator.normalized);
-              if (!parsed.ok()) {
-                RCLCPP_ERROR(
-                    get_logger(), "Invalid command: %s", parsed.status().ToString().c_str());
+                             parsed.status().ToString().c_str());
                 return;
               }
               actuator.reusable_packet = *parsed;
@@ -115,6 +79,8 @@ class ActionSubscriber : public rclcpp::Node {
                              status.ToString().c_str());
               }
             });
+        if (!result.ok()) throw std::invalid_argument(result.status().ToString());
+        actuator.subscription = *result;
       }
     }
 

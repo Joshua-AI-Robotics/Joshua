@@ -21,12 +21,12 @@ Proto definitions:
 
 Perception data on ROS uses **native message types only** (no serialized `PerceptionPacket` on the wire). Legacy actuator commands use **`std_msgs/Float32`** on topics named `/<device_id>/<action_type>` where `action_type` is one of `position`, `torque`, `speed`, `dc`. Set `normalized: true` on the subscription config for `.../position` when the Float32 value is in `[-1, 1]`.
 
-The C++ position/actuator nodes also support explicit numeric field mappings
-through [`mapped_message.h`](mapped_message.h); see the
-[ROS node documentation](../README.md#mapped-position-and-actuator-messages).
-That adapter converts the selected field to the existing internal float packet
-representation. The Python inference/trajectory producers retain their Float32
-contract. An explicit subscription `command` bypasses topic-name inference.
+The C++ position/actuator nodes also support compiled numeric scalar/array types
+and JointState through fixed conversions in `packet_parser.cc`; see the
+[ROS node documentation](../README.md#typed-position-and-actuator-messages).
+The Python inference/trajectory producers retain their Float32 contract.
+JointState commands select the configured actuator name and convert radians to
+driver units; their topic name does not encode the command.
 
 ## Actuator topic convention
 

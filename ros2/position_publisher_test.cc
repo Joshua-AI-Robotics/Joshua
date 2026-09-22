@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/board/factory/board_factory.h"
 #include "ros2/utils/qos_setting.h"
+#include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/float64.hpp"
 
@@ -41,8 +42,10 @@ TEST(PositionPublisherTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProce
     mapped->set_topic("position_feedback_double");
     mapped->set_ros2_data_type(ros2::data_type::FLOAT64);
     mapped->set_publish_rate_hz(30);
-    mapped->mutable_scalar_mapping()->set_field_path("data");
-    mapped->mutable_scalar_mapping()->set_scale(0.5);
+    auto* joint = sensor->mutable_node()->add_publishers();
+    joint->set_topic("position_feedback_joint");
+    joint->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+    joint->set_publish_rate_hz(30);
     auto existing_board = robot::board::BoardFactory::GetOrCreate(*board);
     ASSERT_TRUE(existing_board.ok()) << existing_board.status();
     auto channel = (*existing_board)->OpenChannel(1);
@@ -51,10 +54,24 @@ TEST(PositionPublisherTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProce
     ASSERT_TRUE((*channel)->SetTarget(robot::board::TargetMode::kPosition, 2048.0f).ok());
 
     auto node = MakePositionPublisherForTest(config);
+    bool joint_received = false;
+    auto joint_subscription = node->create_subscription<sensor_msgs::msg::JointState>(
+        joint->topic(),
+        10,
+        [&joint_received](sensor_msgs::msg::JointState::ConstSharedPtr message) {
+          ASSERT_EQ(message->name.size(), 1);
+          EXPECT_EQ(message->name[0], "joint");
+          ASSERT_EQ(message->position.size(), 1);
+          EXPECT_DOUBLE_EQ(message->position[0], 3.14159265358979323846);
+          EXPECT_TRUE(message->velocity.empty());
+          EXPECT_TRUE(message->effort.empty());
+          EXPECT_GT(message->header.stamp.sec, 0);
+          joint_received = true;
+        });
     bool mapped_received = false;
     auto double_subscription = node->create_subscription<std_msgs::msg::Float64>(
         mapped->topic(), 10, [&mapped_received](std_msgs::msg::Float64::ConstSharedPtr message) {
-          EXPECT_DOUBLE_EQ(message->data, 1024.0);
+          EXPECT_DOUBLE_EQ(message->data, 2048.0);
           mapped_received = true;
         });
     bool received = false;
@@ -68,12 +85,14 @@ TEST(PositionPublisherTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProce
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while ((!received || !mapped_received) && std::chrono::steady_clock::now() < deadline) {
+    while ((!received || !mapped_received || !joint_received) &&
+           std::chrono::steady_clock::now() < deadline) {
       executor.spin_some();
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     EXPECT_TRUE(received);
     EXPECT_TRUE(mapped_received);
+    EXPECT_TRUE(joint_received);
   }
   robot::board::BoardFactory::ResetForTesting();
   rclcpp::shutdown();

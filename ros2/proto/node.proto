@@ -50,41 +50,16 @@ message QosSetting {
   uint64 lifespan_nanoseconds = 8;
 }
 
-// One numeric value crosses the ROS/hardware boundary. Paths use dotted members
-// and zero-based array indices, e.g. pose.position.x or position[0].
-message FieldConstant {
-  string field_path = 1;
-  oneof value {
-    double number = 2;
-    string text = 3;
-  }
-}
-message ScalarMapping {
-  // Only legacy FLOAT32 may omit this (defaults to "data").
-  string field_path = 1;
-  // output = input * scale + offset; absent scale means 1.
-  // Publisher: sensor -> ROS units; subscription: ROS -> driver units.
-  optional double scale = 2;
-  double offset = 3;
-  // Publisher-only metadata, e.g. name[0] or header.frame_id. Other fields
-  // retain ROS message defaults; this does not synthesize a complete sensor.
-  repeated FieldConstant constants = 4;
-}
-
 message Publisher {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;
-  ScalarMapping scalar_mapping = 4;
 }
 
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   bool normalized = 3;
-  ScalarMapping scalar_mapping = 4;
-  // position, speed, or torque. Empty preserves /<actuator_name>/<command>.
-  string command = 5;
 }
 
 message Node {

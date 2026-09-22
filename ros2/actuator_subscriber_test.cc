@@ -12,7 +12,7 @@
 std::shared_ptr<rclcpp::Node> MakeActuatorSubscriberForTest(const config::Config& config);
 
 namespace {
-TEST(ActuatorSubscriberTest, MapsExternalTopicAndRejectsInvalidValuesBeforeDriver) {
+TEST(ActuatorSubscriberTest, TypedFloat64RejectsInvalidValuesBeforeDriver) {
   ASSERT_EQ(setenv("ROS_LOG_DIR", std::getenv("TEST_TMPDIR"), 1), 0);
   rclcpp::init(0, nullptr);
   {
@@ -38,11 +38,8 @@ TEST(ActuatorSubscriberTest, MapsExternalTopicAndRejectsInvalidValuesBeforeDrive
     node->set_id(1);
     node->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
     auto* subscription = node->add_subscriptions();
-    subscription->set_topic("external_controller_target");
+    subscription->set_topic("joint/position");
     subscription->set_ros2_data_type(ros2::data_type::FLOAT64);
-    subscription->set_command("position");
-    subscription->mutable_scalar_mapping()->set_field_path("data");
-    subscription->mutable_scalar_mapping()->set_scale(2);
     auto hardware = robot::board::BoardFactory::GetOrCreate(*board);
     ASSERT_TRUE(hardware.ok());
     auto channel = (*hardware)->OpenChannel(1);
@@ -69,23 +66,23 @@ TEST(ActuatorSubscriberTest, MapsExternalTopicAndRejectsInvalidValuesBeforeDrive
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
       }
     };
-    send(25);  // ROS 25 -> driver/channel 50.
+    send(25);  // Scalar types retain native driver units.
     auto feedback = (*channel)->ReadFeedback();
     ASSERT_TRUE(feedback.ok());
-    EXPECT_FLOAT_EQ(feedback->position, 50.0f);
+    EXPECT_FLOAT_EQ(feedback->position, 25.0f);
     for (double bad :
          {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::max(), 1000.0}) {
       send(bad);
       feedback = (*channel)->ReadFeedback();
       ASSERT_TRUE(feedback.ok());
-      EXPECT_FLOAT_EQ(feedback->position, 50.0f);
+      EXPECT_FLOAT_EQ(feedback->position, 25.0f);
     }
   }
   robot::board::BoardFactory::ResetForTesting();
   rclcpp::shutdown();
 }
 
-TEST(ActuatorSubscriberTest, ResolvesAllMappingsBeforeEnablingAnyChannel) {
+TEST(ActuatorSubscriberTest, RejectsUnsupportedTypeBeforeEnablingAnyChannel) {
   ASSERT_EQ(setenv("ROS_LOG_DIR", std::getenv("TEST_TMPDIR"), 1), 0);
   rclcpp::init(0, nullptr);
   {
@@ -113,9 +110,7 @@ TEST(ActuatorSubscriberTest, ResolvesAllMappingsBeforeEnablingAnyChannel) {
     valid->set_ros2_data_type(ros2::data_type::FLOAT32);
     auto* invalid = node->add_subscriptions();
     invalid->set_topic("other");
-    invalid->set_command("position");
-    invalid->set_ros2_data_type(ros2::data_type::FLOAT64);
-    invalid->mutable_scalar_mapping()->set_field_path("nonexistent");
+    invalid->set_ros2_data_type(ros2::data_type::IMAGE);
     auto hardware = robot::board::BoardFactory::GetOrCreate(*board);
     ASSERT_TRUE(hardware.ok());
     auto channel = (*hardware)->OpenChannel(1);

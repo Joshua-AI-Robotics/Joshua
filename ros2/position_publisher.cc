@@ -7,9 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/node_runner.h"
-#include "ros2/utils/mapped_message.h"
 #include "ros2/utils/packet_parser.h"
-#include "ros2/utils/qos_setting.h"
 
 class PositionPublisher : public rclcpp::Node {
  public:
@@ -17,22 +15,6 @@ class PositionPublisher : public rclcpp::Node {
       : Node(node_name) {
     const auto validation = config::ValidateConfig(config);
     if (!validation.ok()) throw std::invalid_argument(validation.ToString());
-    // Resolve every message/path first: a bad later endpoint must not open an
-    // earlier sensor's hardware as a side effect of partial initialization.
-    std::vector<std::shared_ptr<ros2_utils::MappedMessage>> codecs;
-    for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
-      if (sensor.node().id() != static_cast<uint32_t>(node_id) ||
-          sensor.sensor_type() != robot::perception::POSITION)
-        continue;
-      for (const auto& pub : sensor.node().publishers()) {
-        auto codec =
-            ros2_utils::MappedMessage::Create(pub.ros2_data_type(), pub.scalar_mapping(), true);
-        if (!codec.ok())
-          throw std::invalid_argument(pub.topic() + ": " + codec.status().ToString());
-        codecs.push_back(*codec);
-      }
-    }
-    size_t endpoint = 0;
     for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
       if (sensor.node().id() != static_cast<uint32_t>(node_id) ||
           sensor.sensor_type() != robot::perception::POSITION)
@@ -42,14 +24,11 @@ class PositionPublisher : public rclcpp::Node {
       if (!result.ok()) throw std::runtime_error(result.status().ToString());
       auto interface = std::shared_ptr<robot::perception::PerceptionInterface>(std::move(*result));
       for (const auto& pub : sensor.node().publishers()) {
-        auto codec = codecs.at(endpoint++);
-        auto publisher =
-            create_generic_publisher(pub.topic(),
-                                     codec->type_name(),
-                                     ros2_utils::CreateQosSetting(sensor.node().qos_setting()));
+        auto publisher = ros2_utils::CreatePositionMessagePublisher(*this, pub, sensor);
+        if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
         timers_.push_back(create_wall_timer(
             std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
-            [interface, codec, publisher, logger = get_logger()]() {
+            [interface, publish = *publisher, logger = get_logger()]() {
               try {
                 auto packet = interface->GetData();
                 if (!packet.ok()) {
@@ -63,13 +42,10 @@ class PositionPublisher : public rclcpp::Node {
                       logger, "Invalid position: %s", position.status().ToString().c_str());
                   return;
                 }
-                auto message = codec->Encode(*position);
-                if (!message.ok()) {
-                  RCLCPP_ERROR(
-                      logger, "Cannot encode position: %s", message.status().ToString().c_str());
-                  return;
+                const auto status = publish(*position);
+                if (!status.ok()) {
+                  RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
                 }
-                publisher->publish(*message);
               } catch (const std::exception& error) {
                 RCLCPP_ERROR(logger, "Error publishing position: %s", error.what());
               }

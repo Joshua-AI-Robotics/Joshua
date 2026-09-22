@@ -8,7 +8,6 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
-#include "ros2/utils/numeric_message_config.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/status_macros.h"
 
@@ -152,8 +151,7 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
   for (const auto& sensor : robot.perceptions().single_perceptions()) {
     if (sensor.node().node_type() != ros2::node::POSITION_PUBLISHER) continue;
     for (const auto& pub : sensor.node().publishers()) {
-      ABSL_RETURN_IF_ERROR(
-          ros2_utils::ValidateNumericMapping(pub.ros2_data_type(), pub.scalar_mapping(), true));
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
       if (pub.publish_rate_hz() == 0)
         return absl::InvalidArgumentError("Position publisher requires a positive rate");
       ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
@@ -163,23 +161,12 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
     if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER) continue;
     const auto& actuator = action.actuator();
     for (const auto& sub : action.node().subscriptions()) {
-      ABSL_RETURN_IF_ERROR(
-          ros2_utils::ValidateNumericMapping(sub.ros2_data_type(), sub.scalar_mapping(), false));
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
       ABSL_RETURN_IF_ERROR(check_topic(sub.topic(), sub.ros2_data_type()));
-      std::string field = sub.command();
-      if (field.empty()) {
-        ABSL_ASSIGN_OR_RETURN(auto device, ros2_utils::DeviceIdFromTopic(sub.topic()));
-        if (device != actuator.actuator_name())
-          return absl::InvalidArgumentError("Actuator topic device must match actuator_name");
+      std::string field = "position";
+      if (sub.ros2_data_type() != ros2::data_type::JOINT_STATE) {
         ABSL_ASSIGN_OR_RETURN(field, ros2_utils::ParseActionTypeFromTopic(sub.topic()));
       }
-      if (field != "position" && field != "speed" && field != "torque")
-        return absl::InvalidArgumentError(
-            "Current motor drivers support position, speed and torque commands only");
-      if (sub.normalized() && (field != "position" || sub.scalar_mapping().has_scale() ||
-                               sub.scalar_mapping().offset() != 0))
-        return absl::InvalidArgumentError(
-            "normalized requires a position command without scale/offset");
       if (field == "position" &&
           (!std::isfinite(actuator.operational_lower_limit()) ||
            !std::isfinite(actuator.operational_upper_limit()) ||

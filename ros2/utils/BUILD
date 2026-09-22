@@ -49,6 +49,7 @@ cc_library(
     hdrs = ["qos_setting.h"],
     deps = [
         "//ros2/proto:node_cc_proto",
+        "@glog",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -72,11 +73,18 @@ cc_library(
     srcs = ["packet_parser.cc"],
     hdrs = ["packet_parser.h"],
     deps = [
+        ":qos_setting",
+        "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
+        "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//utils:status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -99,57 +107,14 @@ py_test(
     ] + requirement("protobuf"),
 )
 
-cc_library(
-    name = "numeric_message_config",
-    srcs = ["numeric_message_config.cc"],
-    hdrs = ["numeric_message_config.h"],
-    deps = [
-        "//ros2/proto:node_cc_proto",
-        "@abseil-cpp//absl/status",
-    ],
-)
-
-cc_library(
-    name = "mapped_message",
-    srcs = ["mapped_message.cc"],
-    hdrs = [
-        "checked_number.h",
-        "mapped_message.h",
-    ],
-    deps = [
-        ":numeric_message_config",
-        "//ros2/proto:node_cc_proto",
-        "//utils:status_macros",
-        "@abseil-cpp//absl/status:statusor",
-        "@ros2_deps//:rclcpp",
-        "@ros2_deps//:rosidl_typesupport_introspection_c",
-        "@ros2_deps//:rosidl_typesupport_introspection_cpp",
-    ],
-)
-
 cc_test(
-    name = "mapped_message_test",
-    srcs = ["mapped_message_test.cc"],
-    env_inherit = [
-        "AMENT_PREFIX_PATH",
-        "LD_LIBRARY_PATH",
-    ],
+    name = "packet_parser_cc_test",
+    srcs = ["packet_parser_cc_test.cc"],
     deps = [
-        ":mapped_message",
-        ":numeric_message_config",
+        ":packet_parser",
         "@googletest//:gtest_main",
-        "@ros2_deps//:cpp_geometry_msgs",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
-)
-
-py_test(
-    name = "type_mapping_test",
-    srcs = ["type_mapping_test.py"],
-    data = [
-        "numeric_message_config.cc",
-        "//ros2:ros2_type_resolver.py",
-    ],
-    deps = ["//ros2/proto:ros2_data_type_py_proto"] + requirement("protobuf"),
 )
