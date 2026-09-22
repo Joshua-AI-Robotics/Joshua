@@ -184,5 +184,55 @@ TEST(ValidationTest, RejectsLegacyTextConfig) {
   EXPECT_FALSE(google::protobuf::TextFormat::ParseFromString(
       "perceptions { single_perceptions { perception_type: ENCODER } }", &robot));
 }
+
+TEST(ValidationTest, NumericEndpointsRequireExplicitMappingExceptLegacyFloat32) {
+  auto config = MakeConfig();
+  auto* pub = config.mutable_robot()
+                  ->mutable_perceptions()
+                  ->mutable_single_perceptions(0)
+                  ->mutable_node()
+                  ->add_publishers();
+  pub->set_topic("joint/position");
+  pub->set_publish_rate_hz(30);
+  pub->set_ros2_data_type(ros2::data_type::FLOAT64);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  pub->mutable_scalar_mapping()->set_field_path("data");
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  pub->mutable_scalar_mapping()->set_scale(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  pub->clear_scalar_mapping();
+  pub->set_ros2_data_type(ros2::data_type::FLOAT32);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+}
+TEST(ValidationTest, ExternalCommandsRejectUnsupportedSemanticsAndTopicTypeConflicts) {
+  auto config = MakeConfig();
+  auto* action = config.mutable_robot()->mutable_actions()->add_single_actions();
+  action->mutable_node()->set_id(1);
+  action->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  sensor->mutable_node()->set_id(2);
+  config.mutable_robot()->mutable_boards(0)->clear_comm();
+  auto* actuator = action->mutable_actuator();
+  actuator->set_actuator_name("joint");
+  actuator->set_board_name("bus");
+  actuator->set_channel(1);
+  auto* sub = action->mutable_node()->add_subscriptions();
+  sub->set_topic("external_command");
+  sub->set_ros2_data_type(ros2::data_type::TWIST);
+  sub->mutable_scalar_mapping()->set_field_path("linear.x");
+  sub->set_command("speed");
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  sub->set_command("dc");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  sub->set_command("speed");
+  sub->set_normalized(true);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  sub->set_normalized(false);
+  auto* pub = sensor->mutable_node()->add_publishers();
+  pub->set_topic("/external_command");
+  pub->set_ros2_data_type(ros2::data_type::FLOAT32);
+  pub->set_publish_rate_hz(10);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
 }  // namespace
 }  // namespace config

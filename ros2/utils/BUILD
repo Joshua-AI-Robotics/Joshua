@@ -38,10 +38,10 @@ ros2_py_binary(
     name = "pointcloud2_visualizer",
     srcs = ["pointcloud2_visualizer.py"],
     main = "pointcloud2_visualizer.py",
+    tags = ["manual"],
     deps = [
         # Python ROS2 messages and rclpy are provided by the Docker image.
     ] + requirement("opencv-python") + requirement("numpy"),
-    tags = ["manual"],
 )
 
 cc_library(
@@ -97,4 +97,59 @@ py_test(
         "//robot/action/proto:action_packet_py_proto",
         "//robot/perception/proto:perception_packet_py_proto",
     ] + requirement("protobuf"),
+)
+
+cc_library(
+    name = "numeric_message_config",
+    srcs = ["numeric_message_config.cc"],
+    hdrs = ["numeric_message_config.h"],
+    deps = [
+        "//ros2/proto:node_cc_proto",
+        "@abseil-cpp//absl/status",
+    ],
+)
+
+cc_library(
+    name = "mapped_message",
+    srcs = ["mapped_message.cc"],
+    hdrs = [
+        "checked_number.h",
+        "mapped_message.h",
+    ],
+    deps = [
+        ":numeric_message_config",
+        "//ros2/proto:node_cc_proto",
+        "//utils:status_macros",
+        "@abseil-cpp//absl/status:statusor",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:rosidl_typesupport_introspection_c",
+        "@ros2_deps//:rosidl_typesupport_introspection_cpp",
+    ],
+)
+
+cc_test(
+    name = "mapped_message_test",
+    srcs = ["mapped_message_test.cc"],
+    env_inherit = [
+        "AMENT_PREFIX_PATH",
+        "LD_LIBRARY_PATH",
+    ],
+    deps = [
+        ":mapped_message",
+        ":numeric_message_config",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_geometry_msgs",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+py_test(
+    name = "type_mapping_test",
+    srcs = ["type_mapping_test.py"],
+    data = [
+        "numeric_message_config.cc",
+        "//ros2:ros2_type_resolver.py",
+    ],
+    deps = ["//ros2/proto:ros2_data_type_py_proto"] + requirement("protobuf"),
 )

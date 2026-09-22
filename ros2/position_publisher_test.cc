@@ -1,20 +1,26 @@
-#include "ros2/position_publishers.h"
-
 #include <chrono>
 #include <cstdlib>
 #include <thread>
 
+#include "config/proto/config.pb.h"
 #include "gtest/gtest.h"
+#include "rclcpp/rclcpp.hpp"
 #include "robot/board/factory/board_factory.h"
+#include "ros2/utils/qos_setting.h"
+#include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/float64.hpp"
+
+std::shared_ptr<rclcpp::Node> MakePositionPublisherForTest(const config::Config& config);
 
 namespace {
-TEST(PositionPublishersTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProcess) {
+TEST(PositionPublisherTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProcess) {
   const char* test_tmpdir = std::getenv("TEST_TMPDIR");
   ASSERT_NE(test_tmpdir, nullptr);
   ASSERT_EQ(setenv("ROS_LOG_DIR", test_tmpdir, 1), 0);
   rclcpp::init(0, nullptr);
   {
-    config::Robot robot;
+    config::Config config;
+    auto& robot = *config.mutable_robot();
     auto* board = robot.add_boards();
     board->set_name("shared_board");
     board->set_board_type(robot::board::MOCK);
@@ -31,6 +37,12 @@ TEST(PositionPublishersTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProc
     topic->set_ros2_data_type(ros2::data_type::FLOAT32);
     topic->set_publish_rate_hz(30);
 
+    auto* mapped = sensor->mutable_node()->add_publishers();
+    mapped->set_topic("position_feedback_double");
+    mapped->set_ros2_data_type(ros2::data_type::FLOAT64);
+    mapped->set_publish_rate_hz(30);
+    mapped->mutable_scalar_mapping()->set_field_path("data");
+    mapped->mutable_scalar_mapping()->set_scale(0.5);
     auto existing_board = robot::board::BoardFactory::GetOrCreate(*board);
     ASSERT_TRUE(existing_board.ok()) << existing_board.status();
     auto channel = (*existing_board)->OpenChannel(1);
@@ -38,7 +50,13 @@ TEST(PositionPublishersTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProc
     ASSERT_TRUE((*channel)->Enable().ok());
     ASSERT_TRUE((*channel)->SetTarget(robot::board::TargetMode::kPosition, 2048.0f).ok());
 
-    auto node = std::make_shared<rclcpp::Node>("position_feedback_test");
+    auto node = MakePositionPublisherForTest(config);
+    bool mapped_received = false;
+    auto double_subscription = node->create_subscription<std_msgs::msg::Float64>(
+        mapped->topic(), 10, [&mapped_received](std_msgs::msg::Float64::ConstSharedPtr message) {
+          EXPECT_DOUBLE_EQ(message->data, 1024.0);
+          mapped_received = true;
+        });
     bool received = false;
     auto subscription = node->create_subscription<std_msgs::msg::Float32>(
         topic->topic(),
@@ -47,15 +65,15 @@ TEST(PositionPublishersTest, PublishesFeedbackFromTheBoardsAlreadyOpenInThisProc
           EXPECT_FLOAT_EQ(message->data, 2048.0f);
           received = true;
         });
-    ros2_utils::PositionPublishers publishers(*node, 1, robot);
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!received && std::chrono::steady_clock::now() < deadline) {
+    while ((!received || !mapped_received) && std::chrono::steady_clock::now() < deadline) {
       executor.spin_some();
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     EXPECT_TRUE(received);
+    EXPECT_TRUE(mapped_received);
   }
   robot::board::BoardFactory::ResetForTesting();
   rclcpp::shutdown();

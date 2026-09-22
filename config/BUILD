@@ -19,6 +19,8 @@ cc_library(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
+        "//ros2/utils:numeric_message_config",
+        "//ros2/utils:packet_parser",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

@@ -107,9 +107,12 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
-        ":position_publishers",
         "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
         "//ros2:node_runner",
+        "//ros2/utils:mapped_message",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -150,6 +153,7 @@ ros2_cpp_binary(
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
+        "//ros2/utils:mapped_message",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
@@ -212,25 +216,25 @@ genrule(
     visibility = ["//visibility:public"],
 )
 
-cc_library(
-    name = "position_publishers",
-    hdrs = ["position_publishers.h"],
+cc_test(
+    name = "position_publisher_test",
+    srcs = [
+        "position_publisher.cc",
+        "position_publisher_test.cc",
+    ],
+    defines = ["JOSHUA_NODE_TEST"],
+    env_inherit = [
+        "AMENT_PREFIX_PATH",
+        "LD_LIBRARY_PATH",
+    ],
     deps = [
-        "//config/proto:robot_cc_proto",
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/board/factory:board_factory",
         "//robot/perception/factory:perception_factory",
+        "//ros2/utils:mapped_message",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-cc_test(
-    name = "position_publishers_test",
-    srcs = ["position_publishers_test.cc"],
-    deps = [
-        ":position_publishers",
-        "//robot/board/factory:board_factory",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -244,6 +248,31 @@ cc_test(
         ":node_runner",
         "//config/proto:config_cc_proto",
         "@googletest//:gtest_main",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "actuator_subscriber_test",
+    srcs = [
+        "actuator_subscriber.cc",
+        "actuator_subscriber_test.cc",
+    ],
+    defines = ["JOSHUA_NODE_TEST"],
+    env_inherit = [
+        "AMENT_PREFIX_PATH",
+        "LD_LIBRARY_PATH",
+    ],
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/action/factory:action_factory",
+        "//robot/board/factory:board_factory",
+        "//ros2/utils:mapped_message",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
 )

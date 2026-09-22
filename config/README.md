@@ -98,3 +98,12 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 There is no central sensor-to-publisher allowlist; node validation checks that
 node types are specified and each node ID has one consistent type.
+
+
+Position publishers and actuator subscribers support explicit numeric field
+mappings into the configured ROS message type. Existing FLOAT32 endpoints remain
+compatible. See [mapped ROS messages](../ros2/README.md#mapped-position-and-actuator-messages)
+for nested paths, array indices, unit conversions, metadata, and downstream
+hardware/model constraints. Mapping syntax and endpoint contracts are validated
+without opening devices; installed message schemas are checked by each node
+before it creates drivers.
