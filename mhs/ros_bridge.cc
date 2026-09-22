@@ -71,6 +71,22 @@ int main(int argc, char** argv) {
       const auto parsed = google::protobuf::util::JsonStringToMessage(line, &request);
       if (!parsed.ok()) {
         (*response.mutable_fields())["error"].set_string_value("Invalid request JSON object");
+      } else if (request.fields().contains("operation") &&
+                 request.fields().at("operation").string_value() == "session_launch_info") {
+        // Managed launch starts only this node, with no unrelated actuators.
+        auto& fields = *response.mutable_fields();
+        if (config->robot().actions().single_actions_size() != 1 ||
+            config->general().operation_mode() == config::General::MODE_SIMULATION ||
+            config->general().operation_mode() == config::General::MODE_INVALID ||
+            device->board.comm().comm_type() != robot::comm::SERIAL ||
+            device->board.comm().serial_config().port().empty()) {
+          fields["error"].set_string_value(
+              "Managed sessions require one configured serial actuator and a hardware mode");
+        } else {
+          fields["device_id"].set_string_value(device->actuator.actuator_name());
+          fields["node_id"].set_number_value(device->node.id());
+          fields["serial_port"].set_string_value(device->board.comm().serial_config().port());
+        }
       } else {
         response = client ? client->Request(request) : offline.Handle(request);
       }

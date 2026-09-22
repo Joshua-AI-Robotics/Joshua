@@ -44,3 +44,13 @@ py_test(
     ],
     imports = ["."],
 )
+
+py_test(
+    name = "session_test",
+    srcs = [
+        "client.py",
+        "session.py",
+        "session_test.py",
+    ],
+    imports = ["."],
+)

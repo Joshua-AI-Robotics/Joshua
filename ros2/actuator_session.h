@@ -31,7 +31,7 @@ class ActuatorSession {
   using Clock = std::chrono::steady_clock;
   explicit ActuatorSession(Device device);
   ~ActuatorSession();
-  // Operator-only entrypoint, never exposed as an MCP tool. Does not enable.
+  // Internal attachment after operator confirmation. Does not enable.
   absl::Status Attach(std::shared_ptr<robot::action::ActionInterface> action);
   google::protobuf::Struct Handle(const google::protobuf::Struct& request);
   void Poll();

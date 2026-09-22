@@ -13,6 +13,9 @@ class ExecutorTest(unittest.TestCase):
     def test_offline_discovery_and_rejected_motion(self):
         client = RosBridgeClient(EXECUTOR, CONFIG)
         try:
+            info = client.request("session_launch_info")
+            self.assertEqual(info["node_id"], 1)
+            self.assertEqual(info["serial_port"], "/dev/ttyACM0")
             devices = client.request("list_devices")["devices"]
             self.assertEqual(len(devices), 1)
             device_id = devices[0]["device_id"]

@@ -27,6 +27,8 @@ async def main():
             str(root / "bazel-bin/mhs/ros_bridge"),
             "--config",
             str(root / "config/config_preset/example/teensy_hardware_api.pbtxt"),
+            "--actuator-node",
+            "/not-launched-in-offline-test",
         ],
     )
     async with stdio_client(params) as (reader, writer):
@@ -39,7 +41,19 @@ async def main():
                 "read_state",
                 "write_position",
                 "stop_device",
+                "start_session",
+                "end_session",
             }
+            start = next(t for t in tools if t.name == "start_session")
+            assert set(start.inputSchema["required"]) == {
+                "hardware_ready",
+                "reference_confirmed",
+            }
+            assert start.annotations.destructiveHint
+            result = await session.call_tool(
+                "start_session", {"hardware_ready": False, "reference_confirmed": False}
+            )
+            assert result.isError and "confirmation" in result.content[0].text
             schema = next(t.inputSchema for t in tools if t.name == "write_position")
             assert schema["properties"]["position_degrees"]["type"] == "number"
             result = await session.call_tool("list_devices", {})
@@ -57,7 +71,8 @@ async def main():
             )
             assert result.isError and "offline" in result.content[0].text
     print(
-        "MCP handshake, tool schemas, discovery, description, offline rejection: passed"
+        "MCP handshake, lifecycle schemas, confirmation gate, "
+        "offline discovery/rejection: passed"
     )
 
 

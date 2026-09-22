@@ -13,8 +13,9 @@ MCP host → Python MCP SDK → stdio ROS bridge
          ← configured ROS status topic ← driver acknowledgment / feedback
 ```
 
-MHS has no device access. `ros_bridge` replaces the former standalone hardware
-executor. The ROS actuator node is the sole owner of the configured board,
+The MCP session manager launches the existing ROS actuator executable; it
+does not implement motor I/O. `ros_bridge` replaces the former standalone
+hardware executor. The ROS actuator node is the sole owner of the configured board,
 uses the existing action factory and motor driver, and monitors active moves
 every 20 ms even when the MCP client disconnects. Limits, wiring, conversion,
 node assignment, topic names and QoS all come from the protobuf config.
@@ -38,6 +39,8 @@ Float32 command interface.
 | --- | --- |
 | `list_devices()` | Configured descriptions, tags and capabilities |
 | `describe_device(device_id)` | Units, limits, resolution and feedback limitations |
+| `start_session(hardware_ready, reference_confirmed)` | Start the ROS actuator node, connect, and return disabled state |
+| `end_session()` | Request disable, close the bridge, and stop the owned ROS node |
 | `read_state(device_id)` | Fresh emitted-step feedback and command status |
 | `write_position(device_id, position_degrees)` | Driver acceptance of a bounded absolute target |
 | `stop_device(device_id)` | Disable acknowledgment and invalidated session reference |
@@ -46,9 +49,11 @@ Discover and describe first. After a write, poll `read_state` until `status`
 leaves `moving`. `controller_target_reached` means the emitted-step counter
 reached the quantized target; `physical_position_verified` is always false.
 The motor stays enabled after completion. Overlapping moves are rejected.
-Stop, timeout or feedback/transport failure invalidates the reference. There
-is no MCP rearm tool: an operator must inspect the rig and restart the ROS
-session. Restarting only the MCP bridge does not rearm it.
+Stop, timeout or feedback/transport failure invalidates the reference. An operator
+must inspect the rig and provide fresh hardware/reference confirmation before
+starting a new session. In managed mode, call `end_session`, then
+`start_session` with that confirmation. Calling `start_session` on an active
+session returns its state; it never silently restarts or rearms it.
 
 A ROS publication is not an acknowledgment. Requests carry a unique ID, the
 actuator session ID and a short expiration time. Replies correlate by request
@@ -78,12 +83,16 @@ docker run --rm -v "$PWD:/workspace" -w /workspace \
   bash -lc 'source /opt/ros/jazzy/setup.bash &&
     bazel test --config=u24 --config=x86-base \
       --@rules_python//python/config_settings:python_version=3.12 \
-      //ros2:actuator_session_test //mhs:ros_bridge_test \
+      //ros2:actuator_session_test //mhs:ros_bridge_test //mhs:session_test \
       //robot/action/motors/drivers:stepper_driver_test &&
     bazel build --config=u24 --config=x86-base \
       --@rules_python//python/config_settings:python_version=3.12 \
       //launcher:joshua_main //mhs:ros_bridge &&
-    mkdir -p dist/mhs && cp bazel-bin/mhs/ros_bridge dist/mhs/ros_bridge &&
+    mkdir -p dist/mhs &&
+    cp bazel-bin/mhs/ros_bridge dist/mhs/ros_bridge.new &&
+    mv dist/mhs/ros_bridge.new dist/mhs/ros_bridge &&
+    cp bazel-bin/ros2/actuator_subscriber dist/mhs/actuator_subscriber.new &&
+    mv dist/mhs/actuator_subscriber.new dist/mhs/actuator_subscriber &&
     python3 -m venv .cache/mhs-venv &&
     .cache/mhs-venv/bin/pip install -r mhs/requirements.lock &&
     .cache/mhs-venv/bin/python mhs/mcp_test.py'
@@ -106,15 +115,47 @@ from the old `--executor` configuration to `--bridge`.
 command = "docker"
 args = [
   "run", "--rm", "-i", "--init",
+  "--device=/dev/ttyACM0:/dev/ttyACM0",
+  "-v", "joshua-mhs-locks:/run/joshua-mhs-locks",
   "-v", "/ABS/PATH/Joshua:/workspace:ro", "-w", "/workspace",
   "joshua:u24-jazzy", "bash", "-lc",
-  "source /opt/ros/jazzy/setup.bash && exec /workspace/.cache/mhs-venv/bin/python /workspace/mhs/server.py --bridge /workspace/dist/mhs/ros_bridge --config config/config_preset/example/teensy_hardware_api.pbtxt"
+  "source /opt/ros/jazzy/setup.bash && exec /workspace/.cache/mhs-venv/bin/python /workspace/mhs/server.py --bridge /workspace/dist/mhs/ros_bridge --config config/config_preset/example/teensy_hardware_api.pbtxt --actuator-node /workspace/dist/mhs/actuator_subscriber --session-lock-dir /run/joshua-mhs-locks"
 ]
 ```
 
-Without `--connect-ros`, discovery is offline and all motion is rejected. The
-bridge needs no serial-device mapping. Toggle the MCP connection off/on after
-changing its arguments or rebuilding it.
+This managed configuration initially exposes discovery with `connected: false`.
+No device is opened merely by connecting MCP. The Teensy must be plugged in for
+Docker's device mapping to succeed. Toggle the MCP connection off/on after
+updating these arguments or rebuilding the executables.
+
+You can now do the whole workflow in the ChatGPT app:
+
+1. Ask Joshua to list and describe devices.
+2. Confirm that the rig is connected and clear, no other serial owner is
+   running, and the position reference is valid. Ask it to call `start_session`
+   and read state without moving. The tool requires both confirmation booleans.
+3. Request a bounded move, then poll `read_state` for completion.
+4. Ask it to `end_session`. Check `disable_acknowledged` and `errors`.
+
+`start_session` launches only the configured actuator node, using the trusted
+`--actuator-node` executable. Tool calls cannot choose a command, executable,
+config path, topic or device path. Configuration is snapshotted when the MCP
+server starts, so discovery and live control use the same preset. The bridge
+switches to ROS internally; no app config edit or terminal command is needed.
+
+The named lock volume prevents concurrent managed sessions from owning the
+same serial path, including across MCP connections. Use the same lock volume
+for every instance. This advisory lock does not cover independently started
+launchers or other serial programs; do not run those concurrently. Node or
+startup failure requires `end_session` and fresh operator confirmation before
+another start. There are no automatic restarts, homing or firmware flashing.
+Closing MCP requests disable and shuts down its owned node. Shutdown errors
+remain visible and are not treated as proof that the motor stopped.
+
+For offline-only discovery without managed tools, omit `--actuator-node`, the
+device mapping and the lock volume. To connect to an independently launched
+ROS graph, use `--connect-ros` instead of `--actuator-node`; these modes are
+mutually exclusive.
 
 ## Supervised hardware session
 
@@ -122,8 +163,8 @@ Check wiring, reviewed travel limits, an accessible independent stop and the
 coordinate reference before launching. Do not run the old standalone executor
 or any other serial owner alongside the ROS node.
 
-From an appropriately configured Joshua Docker development shell, an operator
-can launch the configured ROS graph with:
+Managed MCP sessions use `start_session` as described above. Alternatively,
+from a Joshua Docker development shell, an operator can launch the graph with:
 
 ```bash
 bazel run --config=u24 --config=x86-base \
@@ -148,8 +189,9 @@ For a relative move, read current state and add the desired displacement to
 The checked-in bench preset retains the operator-selected 0–1,890 degree range
 and 90-degree per-move limit. These are experiment bounds, not measured stops.
 Do not widen them to suppress unexplained feedback. After stop or a fault,
-inspect the rig, restart the ROS node with reference confirmation, and reconnect
-the bridge. Preset edits require restarting both processes.
+inspect the rig and obtain fresh reference confirmation. In managed mode,
+end and start the session through MCP; for a standalone graph, restart the node
+and reconnect the bridge. Preset edits require reloading the MCP server.
 
 ## Feedback and physical limits
 
@@ -188,3 +230,13 @@ angular accuracy. The retained counter is not reset by this config change:
 1,600 steps now represent approximately 360 degrees, rather than 180 degrees.
 Recheck the physical reference before another supervised run. Other presets
 have not been recalibrated, and the configured travel bounds are unchanged.
+
+
+### Managed session verification
+
+The managed MCP lifecycle was exercised on the connected Teensy without a
+position command: discovery reported disconnected, `start_session` launched
+the ROS actuator node and returned `ready_disarmed` with 2,000 emitted steps
+(approximately 450 degrees), a repeated start reused the same session, and
+`end_session` returned `disable_acknowledged: true` with no cleanup errors.
+Discovery then reported disconnected again. The counter did not change.
