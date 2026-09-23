@@ -63,13 +63,21 @@ ui/
 - ✅ React Router for navigation
 - ✅ Responsive design
 - ✅ Dark mode support (via ShadCN theme)
+- ✅ Protobuf-schema-driven configuration forms
+- ✅ Load, edit, preview, and save `.pbtxt` configuration files
+- ✅ ROS 2 node, topic, topology, and log monitoring through the Zenoh bridge
 
-## Next Steps
+## Boundaries
 
-1. Implement protobuf-driven config editor
-2. Add ROS2 WebSocket integration for monitoring
-3. Implement calibration interface
-4. Add real-time status updates
+The config editor creates and edits files in the browser. It does not run the
+repository's semantic config validation, launch Joshua, or prove that a preset
+is safe to use with connected hardware. Follow the [config
+guide](../config/README.md) and [hardware-safety rules](../AGENTS.md) before
+running a saved preset.
+
+The monitoring view reads ROS 2 graph and log data through the Zenoh bridge. It
+is an observability tool; a connected dashboard does not by itself verify robot
+or hardware behavior.
 
 ## Integration
 
