@@ -42,41 +42,37 @@ Future integration work follows these rules:
 1. **Protobuf remains the source of truth.** Skills, the UI, generated
    inventories, and MCP tools consume or produce Joshua configs; none owns a
    parallel robot schema.
-2. **Subsystems own runtime contracts.** Board, communication, perception,
-   ROS 2, inference, and MCP owners define their interfaces and tests.
+2. **Subsystems own runtime contracts.** Each board, communication,
+   perception, ROS 2, inference, or future MCP contract is defined and tested
+   by the subsystem that owns the runtime behavior.
 3. **Current support requires merged evidence.** Open pull requests can inform
    planning, but they do not establish a supported capability.
 4. **Evidence has levels.** Static checks, container tests, replay, simulation,
    and hardware runs support different claims.
-5. **Raw evidence remains available.** Derived datasets and evaluation records
-   identify their source data and conversion process.
-6. **Hardware remains deliberate.** A generated config, successful validator,
+5. **Hardware remains deliberate.** A generated config, successful validator,
    simulation result, or agent recommendation never authorizes a hardware run.
-7. **Each pull request is independently useful.** One change should be
+6. **Each pull request is independently useful.** One change should be
    understandable and reviewable without accepting later work.
 
 ## Work tracks
 
-| Track | Sequence | Ownership |
+| Track | Sequence | Review boundary |
 |---|---|---|
-| Contributor workflows | support catalog → validation → configuration → guided integration | AI maintainers, with subsystem-owner review for layer-specific guidance |
-| Robot learning | raw recording → synchronized episode → model and evaluation identity | AI and data-path owners |
-| Runtime and MCP | typed runtime capability → optional MCP front end and operator guide | Runtime and MCP owners |
+| Contributor workflows | supported-component catalog → validation → configuration → guided integration | Subsystem owners review layer-specific guidance. |
+| Runtime and MCP | typed runtime capability → optional MCP front end and operator guide | Runtime owners define and test capabilities before MCP exposes them. |
 
 The tracks can advance independently. A unit waits only for the prerequisites
 listed below.
 
 ## Readiness dependencies
 
-| Unit | Ready when | Boundary |
+| Proposed follow-up | Ready when | Boundary |
 |---|---|---|
-| Supported-capability catalog | This integration guide is merged. | List only merged boards, communication capabilities, perceptions, models, simulations, ROS 2 data types, and representative presets. |
+| Supported-component catalog | Its source files and subsystem reviewers are identified. | List only merged boards, communication capabilities, perceptions, models, simulations, ROS 2 data types, and representative presets. |
 | Change-validation skill | The catalog and relevant test commands are stable. | Select existing checks and state what each result proves; do not implement another validator. |
 | Configuration skill | The validation skill and canonical config validator are stable. | Create or modify presets through existing schemas and validation paths. |
 | Layer-specific guidance | That layer's extension contract is merged and documented. | Cover communication, board/GPIO, and perception separately because their owners and evidence differ. |
 | Guided-integration skill | The catalog, validation skill, and configuration skill are available. | Compose supported components into a preset; route new-driver work to the owning layer. |
-| Episode conversion | A concrete consumer and version are selected, with a synthetic golden recording. | Convert raw rosbag2 data deterministically without introducing a Joshua training framework. |
-| Model and evaluation identity | Episode identity and one real training/evaluation path exist. | Add only the artifact and evidence fields required by that workflow. |
 | MCP front end | At least one typed runtime capability and its tests are stable. | Adapt Joshua's runtime and config interfaces; do not control hardware drivers or raw ROS topics directly. |
 
 This table records architectural readiness, not delivery status. Progress
@@ -84,59 +80,46 @@ belongs in GitHub, and each pull request owns its detailed acceptance criteria.
 
 ## Contributor workflow boundaries
 
-The capability catalog defines `supported`, `experimental`, and `planned`.
-Every supported entry points to implementation, configuration, tests, and
-system constraints where applicable. Facts that can be derived from schemas,
-manifests, BUILD targets, or presets should not be copied by hand.
+The planned supported-component catalog should distinguish merged support from
+experimental and planned work. Every supported entry should point to
+implementation, configuration, tests, and system constraints where applicable.
+Facts that can be derived from schemas, manifests, BUILD targets, or presets
+should not be copied by hand.
 
-The validation skill uses commands owned by subsystem documentation and
-[`CONTRIBUTING.md`](../CONTRIBUTING.md). It distinguishes documentation
-checks, targeted tests, CI-equivalent containers, replay, simulation, and
-hardware evidence, and states what was skipped or unavailable.
+The planned validation skill should use commands owned by subsystem
+documentation and [`CONTRIBUTING.md`](../CONTRIBUTING.md). It should
+distinguish documentation checks, targeted tests, CI-equivalent containers,
+replay, simulation, and hardware evidence, and state what was skipped or
+unavailable.
 
-The configuration skill starts from the nearest merged preset. The web UI may
-help edit a `.pbtxt` file, but semantic validation still uses Joshua's
-canonical validator. Device paths, network interfaces, camera indices, and
-operation mode must be inspected before a run is proposed.
+The planned configuration skill should start from the nearest merged preset.
+The web UI may help edit a `.pbtxt` file, but semantic validation still uses
+Joshua's canonical validator. Device paths, network interfaces, camera indices,
+and operation mode must be inspected before a run is proposed.
 
-The first guided-integration workflow assembles a preset from supported
-components, validates it, and prepares review evidence. Adding a transport,
-board, GPIO interface, sensor, or other runtime extension remains a separate,
+The first guided-integration workflow should assemble a preset from supported
+components, validate it, and prepare review evidence. Adding a transport, board,
+GPIO interface, sensor, or other runtime extension should remain a separate,
 owner-reviewed change.
-
-## Robot-learning boundaries
-
-Raw recordings remain unchanged and independently inspectable. Episode
-conversion records the source bag, converter and format versions, topic and
-schema mapping, clock domains, episode boundaries, sampling frequency,
-alignment policy, and deterministic split rules. Missing, duplicate, late, and
-out-of-order samples have defined behavior, and identical inputs and options
-produce identical aligned data and metadata.
-
-Model identity follows one working training and evaluation path. It records an
-immutable checkpoint identity, dataset and conversion identity, preprocessing
-contract, locked environment, and reproducible evaluation command and result.
-Offline, simulation, and closed-loop hardware evidence remain distinct.
-
-Training orchestration, experiment dashboards, and a general model registry are
-out of scope until repeated project needs justify them.
 
 ## Runtime and MCP boundaries
 
-MCP is an optional front end over Joshua's typed capabilities. Before it exposes
-an operation, the owning runtime defines the operation's input, output, state
-transition, cancellation behavior, errors, observability, and safety boundary.
-Integration work does not prescribe a new runtime state machine.
+A future MCP integration should be an optional front end over Joshua's typed
+capabilities. Before it exposes an operation, the owning runtime should define
+the operation's input, output, state transition, cancellation behavior, errors,
+observability, and safety boundary. Integration work should not prescribe a new
+runtime state machine.
 
-The MCP front end calls runtime and configuration interfaces rather than raw ROS
-topics or hardware drivers. Authorization and hardware-sensitive operations
-remain host-controlled; cancellation, timeouts, partial failure, logs, and
-cleanup remain observable.
+The MCP front end should call runtime and configuration interfaces rather than
+raw ROS topics or hardware drivers. The MCP host should control user
+authorization, while Joshua's runtime should continue enforcing hardware safety.
+Cancellation, timeouts, partial failure, diagnostics, and cleanup should remain
+observable.
 
-Its operator guide covers configuration, selecting or building the binary,
-installation, connection, session start and stop, running Joshua, status, and
-server hosting. Joshua continues to work without MCP through its protobuf config
-and normal launcher.
+A later operator guide should cover configuration, selecting or building the
+binary, installation, connection, starting and stopping a Joshua-controlled
+operation, status, diagnostics, and server hosting. Joshua should continue to
+work without MCP through its protobuf config and normal launcher.
 
 ## Pull-request boundaries
 
@@ -146,7 +129,7 @@ All work follows [`CONTRIBUTING.md`](../CONTRIBUTING.md) and
 - keep one architectural unit per pull request;
 - explain context, purpose, scope, rationale, evidence, limits, and likely
   follow-up work in plain language;
-- update this guide and the capability catalog when merged support changes;
+- update the owning subsystem guide when merged support changes;
 - distinguish software, replay, simulation, and hardware evidence;
 - avoid real-device runs unless the user authorizes them for the current turn
   and confirms the hardware setup.
@@ -155,8 +138,6 @@ All work follows [`CONTRIBUTING.md`](../CONTRIBUTING.md) and
 
 - A second robot configuration language.
 - A second build, test, launch, release, or hardware-control path.
-- A universal training framework before Joshua supports one real workflow.
-- A general experiment-tracking service or model registry.
 - Automatic hardware execution from a skill, UI, or MCP prompt.
 - Defining runtime interfaces outside their owning subsystem.
 - Compatibility claims based only on architectural resemblance.
@@ -165,5 +146,5 @@ All work follows [`CONTRIBUTING.md`](../CONTRIBUTING.md) and
 
 Update this guide only when current support, a cross-cutting rule, ownership
 boundary, dependency, or non-goal changes. Track delivery in GitHub and put
-implementation details in the pull request that owns them. Mark capabilities
-current only after they merge.
+implementation details in the pull request that owns them. Describe a
+capability as current only after it merges.
