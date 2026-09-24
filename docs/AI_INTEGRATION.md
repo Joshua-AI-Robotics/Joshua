@@ -28,30 +28,32 @@ not replace them or track live delivery status.
 
 | Area | Current source | Boundary |
 |---|---|---|
-| Configuration | Protobuf schemas, presets, and [validation](../config/README.md) | The `.pbtxt` config is the source of truth. The web UI edits files but does not replace semantic validation. |
-| AI inference | The [inference host and model adapters](../ai/README.md) | The host owns ROS 2 wiring; adapters own model loading, preprocessing, inference, and postprocessing in isolated environments. |
-| Data collection | [DataStore](../ai/train/README.md) | Raw rosbag2 events and general-purpose exports exist today; synchronized training episodes do not. |
-| Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | Runtime interfaces remain owned by their subsystems. |
+| Configuration | Protobuf schemas, presets, and [validation](../config/README.md) | The `.pbtxt` config is the source of truth. The web UI imports, edits, and downloads configs in the browser; canonical semantic validation remains `config::ValidateConfig`. |
+| AI inference | The [inference host and model adapters](../ai/README.md) | The host owns ROS 2 wiring, message decoding, scheduling, output publication, and operational-limit conversion. Adapters own model-specific loading, preprocessing, inference, and postprocessing in per-model environments. |
+| Data collection | [DataStore](../ai/train/README.md) | DataStore records interleaved rosbag2 events and exports Hugging Face, JSONL, CSV, or Parquet data. Recording sessions are episode-indexed, but synchronized state-action training episodes are not produced. |
+| Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path; NodeGenerator manages ROS 2 node processes; each subsystem owns its runtime interfaces. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not imply hardware validation. |
-| Contributor workflows | Repository documentation, `AGENTS.md`, and [repo-owned skills](skills/README.md) | Skills order existing commands; they do not create another build, validation, or launch path. |
+| Contributor workflows | Repository documentation, `AGENTS.md`, and [repo-owned skills](skills/README.md) | Skills document and sequence existing repository workflows; they do not define parallel build, validation, or launch paths. |
 
 ## Direction
 
 Future integration work follows these rules:
 
-1. **Protobuf remains the source of truth.** Skills, the UI, generated
-   inventories, and MCP tools consume or produce Joshua configs; none owns a
-   parallel robot schema.
-2. **Subsystems own runtime contracts.** Each board, communication,
-   perception, ROS 2, inference, or future MCP contract is defined and tested
-   by the subsystem that owns the runtime behavior.
+1. **Protobuf remains the source of truth.** The UI consumes and produces
+   Joshua configs today. Planned skills, generated inventories, and MCP tools
+   should use the same schema; none should own a parallel robot schema.
+2. **Subsystems own runtime contracts.** Cross-cutting tools should expose a
+   runtime capability only after the subsystem that owns its behavior has
+   defined, documented, and tested it.
 3. **Current support requires merged evidence.** Open pull requests can inform
    planning, but they do not establish a supported capability.
-4. **Evidence has levels.** Static checks, container tests, replay, simulation,
-   and hardware runs support different claims.
-5. **Hardware remains deliberate.** A generated config, successful validator,
-   simulation result, or agent recommendation never authorizes a hardware run.
-6. **Each pull request is independently useful.** One change should be
+4. **Evidence has levels.** Static checks, container tests, recorded-data or
+   trajectory replay where available, simulation, and hardware runs support
+   different claims.
+5. **Hardware runs remain deliberate.** A generated config, successful
+   validator, simulation result, or agent recommendation does not authorize a
+   hardware run.
+6. **Each pull request should be independently useful.** One change should be
    understandable and reviewable without accepting later work.
 
 ## Work tracks
@@ -89,8 +91,8 @@ should not be copied by hand.
 The planned validation skill should use commands owned by subsystem
 documentation and [`CONTRIBUTING.md`](../CONTRIBUTING.md). It should
 distinguish documentation checks, targeted tests, CI-equivalent containers,
-replay, simulation, and hardware evidence, and state what was skipped or
-unavailable.
+recorded-data or trajectory replay where available, simulation, and hardware
+evidence, and state what was skipped or unavailable.
 
 The planned configuration skill should start from the nearest merged preset.
 The web UI may help edit a `.pbtxt` file, but semantic validation still uses
@@ -130,7 +132,8 @@ All work follows [`CONTRIBUTING.md`](../CONTRIBUTING.md) and
 - explain context, purpose, scope, rationale, evidence, limits, and likely
   follow-up work in plain language;
 - update the owning subsystem guide when merged support changes;
-- distinguish software, replay, simulation, and hardware evidence;
+- distinguish software, replay where available, simulation, and hardware
+  evidence;
 - avoid real-device runs unless the user authorizes them for the current turn
   and confirms the hardware setup.
 

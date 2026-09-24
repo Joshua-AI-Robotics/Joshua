@@ -65,7 +65,7 @@ ui/
 - ✅ Dark mode support (via ShadCN theme)
 - ✅ Protobuf-schema-driven configuration forms
 - ✅ Load, edit, preview, and save `.pbtxt` configuration files
-- ✅ ROS 2 node, topic, topology, and bridge-diagnostic views through Zenoh
+- ✅ ROS 2 node, topic, and topology views plus Zenoh bridge admin records
 
 ## Boundaries
 
@@ -76,9 +76,9 @@ guide](../config/README.md) and [hardware-safety rules](../AGENTS.md) before
 running a saved preset.
 
 The monitoring view reads ROS 2 graph metadata from the Zenoh bridge admin
-space. Its diagnostic view shows records returned by that admin API; it is not
-a `/rosout` log stream. A connected dashboard does not by itself verify robot
-or hardware behavior.
+space. The Logs tab formats records returned by that admin API; it is not a
+`/rosout` log stream. A connected dashboard does not by itself verify robot or
+hardware behavior.
 
 ## Integration
 

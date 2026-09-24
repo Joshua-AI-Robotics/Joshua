@@ -4,7 +4,7 @@
 
 **Version:** see [`VERSION`](VERSION)
 
-Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher validates the config and starts the selected nodes; the React control panel lets you edit configuration and monitor the system.
+Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher loads the protobuf config and starts the selected runtime; the React control panel lets you edit configuration and inspect ROS 2 graph metadata and Zenoh bridge admin records.
 
 ![Project Joshua core concept](assets/images/joshua_summary.png)
 

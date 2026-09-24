@@ -1,6 +1,6 @@
 # Architecture
 
-Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the React web control panel.
+Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode. The launcher loads that config and starts the selected runtime. The React web control panel imports, edits, and downloads configs and exposes ROS 2 graph metadata and Zenoh bridge admin records.
 
 ![Project Joshua core concept](../assets/images/joshua_summary.png)
 
@@ -18,7 +18,7 @@ All static configuration uses Protocol Buffers:
 | `action.proto` | Actuators, interfaces, operational parameters |
 | `perception.proto` | Cameras, encoders, and other sensors |
 
-Presets live under `config/config_preset/`. The launcher reads a `.pbtxt` file and instantiates the corresponding node graph.
+Presets live under `config/config_preset/`. The launcher reads a `.pbtxt` file and selects simulation or the ROS 2 node-generation path from `operation_mode`.
 
 ## Runtime data layer (Protobuf + ROS 2)
 
