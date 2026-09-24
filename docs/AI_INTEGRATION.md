@@ -2,8 +2,9 @@
 
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. This
-guide records the shared rules for extending those pieces and the proposed work
-needed before an optional Model Context Protocol (MCP) front end is added.
+guide records the shared rules for extending those pieces and independent
+proposed follow-ups, including an optional Model Context Protocol (MCP) front
+end.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
@@ -13,8 +14,8 @@ subsystem or runtime roles.
 
 | Area | Current implementation | Limitation |
 |---|---|---|
-| Configuration | Protobuf schemas, presets, and [`config::ValidateConfig`](../config/README.md) | The `.pbtxt` config is the source of truth. The [web UI](../ui/README.md) can import, edit, and download configs, but saved files still require canonical validation. |
-| AI inference | The [inference host and model adapters](../ai/README.md) | The host handles ROS 2 wiring, message decoding, scheduling, output publication, and operational-limit conversion. Adapters handle model-specific loading, preprocessing, inference, and postprocessing in per-model environments. |
+| Configuration | Protobuf schemas, presets, and [`config::ValidateConfig`](../config/README.md) | The `.pbtxt` config is the source of truth. The [web UI](../ui/README.md) can import, edit, and download configs, but it only parses and formats them; pass its output through the applicable semantic validation path before use. |
+| AI inference | The [inference host and model adapters](../ai/README.md) | The host handles ROS 2 wiring, message decoding, scheduling, output publication, and conversion of outputs marked `normalized` using configured actuator limits. Adapters handle model-specific loading, preprocessing, inference, and postprocessing in per-model environments. |
 | Data collection | [DataStore](../ai/train/README.md) | DataStore records interleaved rosbag2 events and exports Hugging Face, JSONL, CSV, or Parquet data. Recording sessions are episode-indexed, but synchronized state-action training episodes are not produced. |
 | Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeGenerator manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is documented today. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
@@ -49,8 +50,10 @@ subsystem or runtime roles.
 | Guided-integration skill | The catalog, validation skill, and configuration skill | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
 | MCP front end and operator guide | One bounded Joshua operation with a tested interface | An optional adapter over existing runtime and configuration interfaces, plus setup, connection, operation, diagnostics, and hosting instructions. |
 
-These items describe proposed work, not current support or required project
-phases. They do not prevent contributors from proposing other changes.
+These items describe independent proposed work, not current support or required
+project phases. MCP requires only the tested contract and safeguards relevant
+to each operation it exposes; it does not depend on the contributor tooling
+items in this table.
 
 ## MCP constraints
 
@@ -60,24 +63,27 @@ and operational limits. MCP integration should adapt that interface instead of
 creating a separate runtime state machine.
 
 The MCP front end should call runtime and configuration interfaces rather than
-raw ROS topics or hardware drivers. Its authorization flow must not bypass
-existing validation, operational limits, or the explicit approval required for
-a hardware run. Cancellation, timeouts, partial failure, diagnostics, and
-cleanup should remain observable.
+raw ROS topics or hardware drivers. Its authorization flow must not bypass the
+applicable config validation, operation-specific limits, or approval from the
+operator responsible for the hardware. These mechanisms are not a general
+guarantee of hardware safety. Cancellation, timeouts, partial failure,
+diagnostics, and cleanup should remain observable.
 
 Joshua should continue to work without MCP through its protobuf config and
 normal launcher.
 
-## Pull-request expectations
+## Contributing
 
-All work follows [`CONTRIBUTING.md`](../CONTRIBUTING.md) and
-[`AGENTS.md`](../AGENTS.md). Each pull request should:
+Human contributors should follow [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+AI-assisted workflows must also follow [`AGENTS.md`](../AGENTS.md). Each pull
+request should:
 
 - cover one architectural unit;
 - explain context, purpose, scope, rationale, evidence, limits, and likely
   follow-up work in plain language;
 - update affected subsystem documentation when merged support changes;
 - distinguish software, replay where available, simulation, and hardware
-  evidence; and
-- avoid real-device runs unless the user authorizes them for the current turn
-  and confirms the hardware setup.
+  evidence.
+
+Real-device runs require explicit approval from the operator responsible for
+the hardware and confirmation that the setup is ready for that run.
