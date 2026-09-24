@@ -17,7 +17,7 @@ subsystem or runtime roles.
 | Configuration | Protobuf schemas, presets, and [`config::ValidateConfig`](../config/README.md) | The `.pbtxt` config is the source of truth. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) uses the generated schema to edit configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
 | AI inference | The [inference host and model adapters](../ai/README.md) | The host handles ROS 2 wiring, message decoding, scheduling, output publication, and conversion of outputs marked `normalized` using configured actuator limits. Adapters handle model-specific loading, preprocessing, inference, and postprocessing in per-model environments. |
 | Data collection | [DataStore](../ai/train/README.md) | DataStore records interleaved rosbag2 events and exports Hugging Face, JSONL, CSV, or Parquet data. Recording sessions are episode-indexed, but synchronized state-action training episodes are not produced. |
-| Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeGenerator manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is documented today. |
+| Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeGenerator manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is merged into `develop`. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
@@ -41,12 +41,15 @@ subsystem or runtime roles.
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
-| MCP front end and operator guide | One bounded Joshua operation with a tested interface | An optional adapter over existing runtime and configuration interfaces, plus setup, connection, operation, diagnostics, and hosting instructions. |
+| MCP front end and operator guide | One bounded Joshua operation with a tested interface; use [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) as an experimental reference | Stabilize and merge the operation, then land an optional adapter plus setup, connection, operation, diagnostics, and hosting instructions. |
 
 These items describe independent proposed work, not current support or required
 project phases. MCP requires only the tested contract and safeguards relevant
 to each operation it exposes; it does not depend on the contributor tooling
 items in this table.
+
+PR #90 is an unmerged MHS-inspired vertical slice for one actuator. It informs
+this direction but does not establish current MCP support.
 
 ## MCP constraints
 
