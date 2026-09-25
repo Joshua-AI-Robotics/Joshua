@@ -2,6 +2,7 @@
 
 #include <glog/logging.h>
 
+#include <cmath>
 #include <string>
 
 namespace robot::action {
@@ -28,6 +29,7 @@ absl::Status StepperDriver::Init() {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Stepper driver requires a board channel");
   }
+  if (action_config_.stepper_config().manual_lifecycle()) return channel_->Disable();
   // Auto-enables (matches TiDemoDriver, unlike Sts3215Driver): a TB6600's
   // ENA pin is a binary holding-torque gate with no real safety case for
   // withholding it on an open-loop stepper the way STS3215's torque-enable
@@ -108,11 +110,16 @@ absl::Status StepperDriver::SetSpeed(float value) {
 }
 
 absl::Status StepperDriver::SetPosition(float angle_deg) {
-  if (angle_deg < operational_lower_limit_ || angle_deg > operational_upper_limit_) {
+  if (!std::isfinite(angle_deg) || angle_deg < operational_lower_limit_ ||
+      angle_deg > operational_upper_limit_) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Stepper position is outside operational limits");
   }
-  return channel_->SetTarget(robot::board::TargetMode::kPosition, DegreesToSteps(angle_deg));
+  const double native = static_cast<double>(angle_deg) * steps_per_degree_ * gear_ratio_;
+  return channel_->SetTarget(robot::board::TargetMode::kPosition,
+                             action_config_.stepper_config().manual_lifecycle()
+                                 ? static_cast<float>(std::round(native))
+                                 : DegreesToSteps(angle_deg));
 }
 
 absl::Status StepperDriver::SetTorque(float torque) {
@@ -137,7 +144,14 @@ absl::Status StepperDriver::SetIdlePosition() {
   return channel_->SetTarget(robot::board::TargetMode::kPosition, DegreesToSteps(idle_position_));
 }
 
+absl::StatusOr<ActionFeedback> StepperDriver::ReadFeedback() {
+  auto feedback = channel_->ReadFeedback();
+  if (!feedback.ok()) return feedback.status();
+  return ActionFeedback{feedback->position, feedback->fault_flags};
+}
+
 absl::Status StepperDriver::Teardown() {
+  if (action_config_.stepper_config().manual_lifecycle()) return channel_->Disable();
   auto idle_status = SetIdlePosition();
   if (!idle_status.ok()) {
     return idle_status;

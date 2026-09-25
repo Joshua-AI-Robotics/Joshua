@@ -1,0 +1,98 @@
+# Experimental Joshua MHS preset. Wiring follows teensy_stepper_demo.pbtxt.
+# Launch the ROS actuator node; MHS connects via configured topics. See mhs/README.md.
+# Earlier bench checks used an incorrect 1/16 conversion; see mhs/README.md.
+# Emitted steps do not independently verify physical movement; see mhs/README.md.
+
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "teensy_hardware_api"
+  id: 41
+}
+
+robot {
+  boards {
+    name: "stepper_bus"
+    board_type: TEENSY41
+    comm {
+      comm_type: SERIAL
+      transport_type: MESSAGE
+      serial_config { port: "/dev/ttyACM0" baudrate: 115200 }
+    }
+    firmware {
+      min_proto_version: 1
+    }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir {
+        max_pulse_rate_hz: 4000
+        invert_dir: false
+        enable_active_low: true
+        # GPIO pins on the Teensy 4.1, matching whatever the board is
+        # physically wired to (docs/BOARD_LAYER_RFC.md §7.5, revised —
+        # pins are host-configured, not baked into the firmware image).
+        # See firmware/teensy/41/README.md's Wiring / Pinout section.
+        step_pin: 2
+        dir_pin: 3
+        enable_pin: 4
+        # STEP pulse HIGH width, tuned for this TB6600's opto-isolated
+        # 3.3V-driven input. Left at firmware's own default (20us) here
+        # since that default was derived from this exact hardware; a
+        # different STEP/DIR driver chip would set this instead of
+        # needing a firmware edit.
+        step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions { topic: "/teensy_stepper_1/command" ros2_data_type: STRING }
+        publishers { topic: "/teensy_stepper_1/status" ros2_data_type: STRING }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "teensy_stepper_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "stepper_bus"
+        channel: 0
+        physical_lower_limit: 0
+        # Operator-selected free-rotation bench bounds, not measured stops.
+        # Conversion corrected to 1/8 microstepping; retained counts now map
+        # to twice the previously reported degrees. Recheck the reference.
+        physical_upper_limit: 1890
+        operational_lower_limit: 0
+        operational_upper_limit: 1890
+        stepper_config {
+          # SW1..SW6: OFF/ON/OFF/ON/ON/OFF, reported by the operator.
+          # 1.8-degree motor at 1/8 microstepping: 1600 pulses/rev / 360.
+          # Matches the observed 180-degree travel for 800 emitted pulses.
+          steps_per_degree: 4.4444447
+          gear_ratio: 1.0
+          idle_position: 0
+          manual_lifecycle: true
+        }
+      }
+    }
+  }
+}
+
+# Illustrative limits only: operator must validate the rig and coordinate
+# reference before launching the ROS actuator session.
+hardware_api {
+  enabled: true
+  devices {
+    actuator_name: "teensy_stepper_1"
+    description: "Bench stepper driven by Teensy 4.1 and TB6600. Absolute output-shaft angle relative to an operator-established reference; open-loop emitted-step feedback only."
+    tags: "actuator"
+    tags: "stepper"
+    max_move_degrees: 90
+    max_move_duration_ms: 5000
+    feedback_max_age_ms: 250
+  }
+}

@@ -1,4 +1,4 @@
-ROS 2 Type Resolver Utilities  
+ROS 2 Type Resolver Utilities
 ==============================
 
 Overview
@@ -38,8 +38,8 @@ Fast paths
 
 Extend the resolver
 -------------------
-1) Add new types to `ROS2_TYPE_MAPPING` if missing.  
-2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).  
+1) Add new types to `ROS2_TYPE_MAPPING` if missing.
+2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).
 3) Extend `build_entry_for_message` to add a specialized path (decode/transform) before falling back to the generic dict conversion.
 
 Usage with DataStore
@@ -67,3 +67,13 @@ with the current standalone node layout.
 The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
 been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
 names and Float32 position values are unchanged.
+
+
+## Bounded actuator sessions
+
+`actuator_subscriber` also hosts the opt-in, acknowledged command interface for
+`Config.hardware_api`. `actuator_session` validates and monitors bounded moves
+through `ActionInterface`; `actuator_command_endpoint` carries requests and
+correlated responses on the actuator's configured STRING topics. The hardware
+factory and motor driver remain the only execution path. See
+[the MHS guide](../mhs/README.md) for the protocol, lifecycle, and tests.

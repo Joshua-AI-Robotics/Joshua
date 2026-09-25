@@ -53,6 +53,7 @@ cc_binary(
         ":version",
         "//config:config_utils",
         "//node_generator",
+        "//ros2:actuator_session",
         "@gflags",
         "@glog",
     ],

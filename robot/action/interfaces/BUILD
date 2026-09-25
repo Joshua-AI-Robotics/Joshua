@@ -7,6 +7,7 @@ cc_library(
     deps = [
         "//robot/action/proto:action_packet_cc_proto",
         "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
         "@glog",
     ],
 )

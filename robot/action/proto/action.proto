@@ -67,6 +67,9 @@ message StepperConfig {
   // gear_ratio. 1.0 for a direct-drive joint.
   float gear_ratio = 2;
   float idle_position = 3;  // Degrees, matching SetPosition's unit.
+  // Explicit enable and disable-only teardown for supervised ROS sessions.
+  // Defaults preserve the existing teleoperation lifecycle.
+  bool manual_lifecycle = 4;
 }
 
 message Sts3215Config {
