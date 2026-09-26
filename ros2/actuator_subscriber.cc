@@ -9,6 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 
@@ -118,10 +119,6 @@ class ActionSubscriber : public rclcpp::Node {
   std::list<Actuator> actuators_;
 };
 
-namespace ros2_utils {
-std::shared_ptr<rclcpp::Node> CreateNode(const std::string& name,
-                                         int id,
-                                         const config::Config& config) {
-  return std::make_shared<ActionSubscriber>(name, id, config);
+int main(int argc, char* argv[]) {
+  return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber");
 }
-}  // namespace ros2_utils

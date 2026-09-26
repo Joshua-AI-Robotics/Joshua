@@ -124,12 +124,9 @@ defines radian/metre units.
 Hardware and downstream constraints
 ----------------------------------
 
-The shared C++ runner (`node_runner.cc`, with no header) owns `main`, config
-loading, validation, spinning, and shutdown. Each executable links one node
-implementation supplying `ros2_utils::CreateNode`. The runner validates the full config before
-constructing a node, including when launched directly without `node_generator`.
-The position and actuator constructors assume this prevalidated config;
-in-process callers use `CreateValidatedNode` to enforce the same boundary.
+The shared C++ runner (`RunNode<T>` in `node_runner.h`) loads and validates the
+full config before constructing a node, including when launched directly without
+`node_generator`. Position and actuator constructors rely on that shared check.
 Validation rejects unsupported wire/driver combinations before hardware
 initialization. Conversions reject non-finite values, overflow, underflow to
 zero, fractional integer feedback, and integer commands that lose precision

@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
+#include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
@@ -158,10 +159,6 @@ class CameraPublisher : public rclcpp::Node {
   std::vector<Camera> cameras_;
 };
 
-namespace ros2_utils {
-std::shared_ptr<rclcpp::Node> CreateNode(const std::string& name,
-                                         int id,
-                                         const config::Config& config) {
-  return std::make_shared<CameraPublisher>(name, id, config);
+int main(int argc, char* argv[]) {
+  return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
 }
-}  // namespace ros2_utils
