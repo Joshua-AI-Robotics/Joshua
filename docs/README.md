@@ -4,6 +4,7 @@
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Config, protos, data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Data storage and inspection | [../ai/train/README.md](../ai/train/README.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | System architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |

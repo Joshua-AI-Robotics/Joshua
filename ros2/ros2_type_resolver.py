@@ -115,3 +115,96 @@ def resolve_message_class_from_enum(enum_value: int) -> Any:
         raise ValueError(f"Unsupported Ros2DataType: {name}")
     package, interface, type_name = ros2_type.split("/")
     return getattr(importlib.import_module(f"{package}.{interface}"), type_name)
+
+
+def get_ros2_type_string_from_enum(enum_value: int) -> str:
+    """Resolve ROS 2 type string strictly from Ros2DataType enum."""
+    try:
+        name = ros2_data_type_pb2.Ros2DataType.Name(enum_value)
+    except Exception:
+        raise ValueError(f"Unknown Ros2DataType value: {enum_value}")
+
+    normalized = name.upper()
+    for prefix in ("DATA_TYPE_", "ROS2_DATA_TYPE_"):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :]
+
+    if normalized not in ROS2_TYPE_MAPPING:
+        raise ValueError(f"Unsupported Ros2DataType: {name}")
+    return ROS2_TYPE_MAPPING[normalized]
+
+
+# --- Utilities for post-processing decisions based on ROS2_TYPE_MAPPING ---
+
+# Reverse map: "package/msg/Type" -> "KEY"
+_REVERSE_ROS2_TYPE_MAPPING = {v: k for k, v in ROS2_TYPE_MAPPING.items()}
+
+
+def get_ros2_mapping_key(ros2_type: str) -> str:
+    """
+    Return the canonical mapping key for a fully-qualified ROS 2 type string.
+    Returns '' if not found.
+    """
+    if not isinstance(ros2_type, str):
+        return ""
+    return _REVERSE_ROS2_TYPE_MAPPING.get(ros2_type.strip(), "")
+
+
+def add_post_process_feature(base_entry: dict, ros2_type: str, value) -> dict:
+    """
+    Mutate base_entry by adding an appropriate feature field for the given ros2_type.
+    Currently collapses IMAGE and COMPRESSED_IMAGE to 'image'.
+    Returns the mutated base_entry.
+    """
+    key = get_ros2_mapping_key(ros2_type)
+    if key in ("IMAGE", "COMPRESSED_IMAGE"):
+        base_entry["image"] = value
+    # Extend here for other types if you want canonical feature names
+    return base_entry
+
+
+def build_entry_for_message(base_entry: dict, ros2_type: str, msg, bridge=None) -> dict:
+    """
+    Build a single dataset entry for a ROS 2 message.
+    - Uses ROS2_TYPE_MAPPING to pick specialized handling (e.g., images)
+    - Falls back to message_to_ordereddict for generic types
+    """
+    from rosidl_runtime_py.convert import message_to_ordereddict
+
+    key = get_ros2_mapping_key(ros2_type)
+
+    # Local lazy singleton for CvBridge to avoid repeated construction
+    def _get_cv_bridge():
+        nonlocal bridge
+        if bridge is not None:
+            return bridge
+        try:
+            # lazily create and cache in the outer closure if provided None
+            from cv_bridge import CvBridge
+
+            bridge = CvBridge()
+            return bridge
+        except Exception:
+            raise
+
+    try:
+        if key == "IMAGE":
+            cv_image = _get_cv_bridge().imgmsg_to_cv2(msg, desired_encoding="rgb8")
+            add_post_process_feature(base_entry, ros2_type, cv_image)
+            return base_entry
+        if key == "COMPRESSED_IMAGE":
+            cv_image = _get_cv_bridge().compressed_imgmsg_to_cv2(
+                msg, desired_encoding="rgb8"
+            )
+            add_post_process_feature(base_entry, ros2_type, cv_image)
+            return base_entry
+
+        # TODO: Add support for other types
+
+        # Generic path for all other types.
+        # Note: Datasets expects consistent schema. data_store.py handles missing keys.
+        entry = {**base_entry, **message_to_ordereddict(msg)}
+        return entry
+    except Exception:
+        # Robust fallback
+        return {**base_entry, **message_to_ordereddict(msg)}

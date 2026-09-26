@@ -6,14 +6,16 @@ Inference is the only Python ROS node. Its required Python support remains:
 `utils/qos_setting.py` / `utils/ros_python_paths.py`.
 
 `ros2_type_resolver.py` maps `Ros2DataType` enums to generated Python message
-classes for inference; dataset conversion helpers have been removed. Add new
+classes for inference and supplies type names and dataset conversion helpers
+for the data store library. Add new
 inference message types to `ROS2_TYPE_MAPPING` and the inference observation
 codec as needed.
 
-The data subscriber, data store and dataset inspector, MuJoCo mirror mode,
-and Python point-cloud visualizer have been removed. Their config fields and
-enum values are reserved; recording and mirror presets must be migrated before
-use. The other simulation modes remain available.
+The data subscriber, MuJoCo mirror mode, and Python point-cloud visualizer have
+been removed. Their node/mode enum values are reserved. The
+[data store library and dataset loader](../ai/train/README.md) remain available;
+recording callers must supply their own subscriptions. Other simulation modes
+remain available.
 
 ## Trajectory playback
 

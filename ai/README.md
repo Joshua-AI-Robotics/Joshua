@@ -9,6 +9,7 @@ the engine never imports model-specific libraries directly.
 | [`inference/`](inference/) | Inference engine: ROS host, launcher, per-model venvs |
 | [`models/`](models/) | Model plug-ins: adapters, config protos, manifests, locks |
 | [`proto/`](proto/) | Shared catalog (`ModelType`, `SingleModel`) |
+| [`train/`](train/) | Data store library and dataset inspection CLI |
 
 **Related docs**
 
@@ -184,6 +185,7 @@ lock; model locks hold only model-specific closures.
 
 ## Scope
 
-The AI stack supports inference and model plug-ins. The built-in data subscriber,
-data store, and dataset inspection tools have been removed. Training (BC, RL)
-is not implemented.
+The AI stack supports inference and model plug-ins, plus the
+[data store library and dataset loader](train/README.md). Recording callers
+provide their own subscriptions; the built-in data subscriber has been removed.
+Training (BC, RL) is not implemented.
