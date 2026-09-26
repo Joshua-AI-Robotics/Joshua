@@ -40,6 +40,7 @@ class ActionSubscriber : public rclcpp::Node {
           robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
       if (!interface.ok()) throw std::runtime_error(interface.status().ToString());
 
+      // Use a shared pointer to ensure that multiple subscriptions can share the same interface.
       auto shared_interface =
           std::shared_ptr<robot::action::ActionInterface>(std::move(interface.value()));
 
