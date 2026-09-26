@@ -19,7 +19,14 @@ Proto definitions:
 - **Extract** scalar action fields for inference / trajectory Float32 publish
 - **Validate** required perception fields when converting driver protos to native ROS messages (`require_perception_*`)
 
-Perception data on ROS uses **native message types only** (no serialized `PerceptionPacket` on the wire). Actuator commands use **`std_msgs/Float32`** on topics named `/<device_id>/<action_type>` where `action_type` is one of `position`, `torque`, `speed`, `dc`. Set `normalized: true` on the subscription config for `.../position` when the Float32 value is in `[-1, 1]`.
+Perception data on ROS uses **native message types only** (no serialized `PerceptionPacket` on the wire). Legacy actuator commands use **`std_msgs/Float32`** on topics named `/<device_id>/<action_type>` where `action_type` is one of `position`, `torque`, `speed`, `dc`. Set `normalized: true` on the subscription config for `.../position` when the Float32 value is in `[-1, 1]`.
+
+The C++ position/actuator nodes also support compiled numeric scalar/array types
+and JointState through fixed conversions in `packet_parser.cc`; see the
+[ROS node documentation](../README.md#typed-position-and-actuator-messages).
+The Python inference/trajectory producers retain their Float32 contract.
+JointState commands select the configured actuator name and convert radians to
+driver units; their topic name does not encode the command.
 
 ## Actuator topic convention
 

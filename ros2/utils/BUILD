@@ -38,10 +38,10 @@ ros2_py_binary(
     name = "pointcloud2_visualizer",
     srcs = ["pointcloud2_visualizer.py"],
     main = "pointcloud2_visualizer.py",
+    tags = ["manual"],
     deps = [
         # Python ROS2 messages and rclpy are provided by the Docker image.
     ] + requirement("opencv-python") + requirement("numpy"),
-    tags = ["manual"],
 )
 
 cc_library(
@@ -49,6 +49,7 @@ cc_library(
     hdrs = ["qos_setting.h"],
     deps = [
         "//ros2/proto:node_cc_proto",
+        "@glog",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -72,11 +73,18 @@ cc_library(
     srcs = ["packet_parser.cc"],
     hdrs = ["packet_parser.h"],
     deps = [
+        ":qos_setting",
+        "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
+        "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//utils:status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
@@ -97,4 +105,16 @@ py_test(
         "//robot/action/proto:action_packet_py_proto",
         "//robot/perception/proto:perception_packet_py_proto",
     ] + requirement("protobuf"),
+)
+
+cc_test(
+    name = "packet_parser_cc_test",
+    srcs = ["packet_parser_cc_test.cc"],
+    deps = [
+        ":packet_parser",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
 )

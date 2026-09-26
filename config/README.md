@@ -98,3 +98,11 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 There is no central sensor-to-publisher allowlist; node validation checks that
 node types are specified and each node ID has one consistent type.
+
+
+Position publishers and actuator subscribers select compiled ROS message types
+using the existing `ros2_data_type` field. No field mappings are required.
+See [typed ROS messages](../ros2/README.md#typed-position-and-actuator-messages)
+for supported types, fixed conversion rules, JointState units and names, and
+hardware/model constraints. Unsupported message/driver combinations are rejected
+before hardware initialization; existing Float32 presets remain compatible.
