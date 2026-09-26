@@ -45,8 +45,7 @@ topic and joint name. Multi-field, SI, or mismatched payloads are rejected rathe
 than silently losing fields or units. Match the publisher/subscriber normalized
 position convention in config.
 
-Removed protobuf field numbers/names are reserved; `normalized` and `preset`
-retain their existing wire numbers. `joint` has a new tag because its default
+`normalized` and `preset` retain their existing wire numbers. `joint` has a new tag because its default
 units differ from the retired SI-only payload. Old scalar/complex binary
 packets and old text configs require explicit migration and producer/consumer
 updates together; they are not automatically translated.

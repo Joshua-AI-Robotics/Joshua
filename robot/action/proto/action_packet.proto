@@ -33,9 +33,6 @@ message JointCommand {
 
 // Main action packet - uses oneof for type safety
 message ActionPacket {
-  // Retired scalar/complex fields and the previous SI-only joint_command.
-  reserved 3, 4, 5, 7, 8, 10;
-  reserved "position", "torque", "speed", "complex", "dc", "joint_command";
   string action_id = 1;
   // For joint, preserves the source stamp (including zero/negative
   // values). Clock domain, scheduling and freshness are not inferred.
