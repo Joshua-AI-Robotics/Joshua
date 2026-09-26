@@ -36,14 +36,16 @@ message ActionPacket {
   string action_id = 1;
   // For joint, preserves the source stamp (including zero/negative
   // values). Clock domain, scheduling and freshness are not inferred.
-  int64 timestamp_ns = 2;
+  // TODO(hmoon): Sync the timestamp unit and source across the system.
+  uint64 timestamp_ns = 2;
+  uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
   // If true, joint.position is in [-1, 1] and mapped to native operational limits.
   // Only valid with NATIVE units; cleared by the subscriber after mapping.
-  bool normalized = 3;
+  bool normalized = 4;
 
   oneof action_type {
-    JointCommand joint = 4;    // Unified actuator motion.
-    PresetCommand preset = 5;  // Preset command
+    JointCommand joint = 5;    // Unified actuator motion.
+    PresetCommand preset = 6;  // Preset command
   }
 }
