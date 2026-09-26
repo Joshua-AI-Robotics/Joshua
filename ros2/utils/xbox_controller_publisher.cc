@@ -1,3 +1,5 @@
+#include <glog/logging.h>
+
 #include <csignal>
 
 #include "rclcpp/rclcpp.hpp"
@@ -14,25 +16,31 @@ class XboxControllerPublisher : public rclcpp::Node {
 
     // Initialize Xbox controller
     if (!xbox_controller_.Init()) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to initialize Xbox controller!");
+      LOG(ERROR) << "[" << get_name() << "] "
+                 << "Failed to initialize Xbox controller!";
     } else {
-      RCLCPP_INFO(this->get_logger(), "Xbox controller publisher node started!");
-      RCLCPP_INFO(this->get_logger(), "Publishing normalized Float32MultiArray with 19 elements:");
-      RCLCPP_INFO(
-          this->get_logger(),
-          "  [0-3]: Joysticks [-1,1] (left_stick_x, left_stick_y, right_stick_x, right_stick_y)");
-      RCLCPP_INFO(this->get_logger(), "  [4-5]: D-pad [-1,1] (dpad_x, dpad_y)");
-      RCLCPP_INFO(this->get_logger(), "  [6-7]: Triggers [0,1] (left_trigger, right_trigger)");
-      RCLCPP_INFO(this->get_logger(),
-                  "  [8-18]: Buttons [0,1] (a, b, x, y, left_bumper, right_bumper, start, back, "
-                  "left_stick_click, right_stick_click, guide)");
+      LOG(INFO) << "[" << get_name() << "] "
+                << "Xbox controller publisher node started!";
+      LOG(INFO) << "[" << get_name() << "] "
+                << "Publishing normalized Float32MultiArray with 19 elements:";
+      LOG(INFO)
+          << "[" << get_name() << "] "
+          << "  [0-3]: Joysticks [-1,1] (left_stick_x, left_stick_y, right_stick_x, right_stick_y)";
+      LOG(INFO) << "[" << get_name() << "] "
+                << "  [4-5]: D-pad [-1,1] (dpad_x, dpad_y)";
+      LOG(INFO) << "[" << get_name() << "] "
+                << "  [6-7]: Triggers [0,1] (left_trigger, right_trigger)";
+      LOG(INFO) << "[" << get_name() << "] "
+                << "  [8-18]: Buttons [0,1] (a, b, x, y, left_bumper, right_bumper, start, back, "
+                   "left_stick_click, right_stick_click, guide)";
     }
   }
 
   ~XboxControllerPublisher() {
     // Ensure proper cleanup when the node is destroyed
     xbox_controller_.Cleanup();
-    RCLCPP_INFO(this->get_logger(), "Xbox controller publisher node shutting down.");
+    LOG(INFO) << "[" << get_name() << "] "
+              << "Xbox controller publisher node shutting down.";
   }
 
  private:
@@ -94,14 +102,15 @@ class XboxControllerPublisher : public rclcpp::Node {
 };
 
 int main(int argc, char* argv[]) {
+  google::InitGoogleLogging(argv[0]);
+  FLAGS_logtostderr = 1;
   rclcpp::init(argc, argv);
 
   auto node = std::make_shared<XboxControllerPublisher>();
 
   // Set up signal handler for teardown
   std::signal(SIGINT, [](int) {
-    RCLCPP_INFO(rclcpp::get_logger("xbox_controller_publisher"),
-                "Received interrupt signal, shutting down...");
+    LOG(INFO) << "Received interrupt signal, shutting down...";
     rclcpp::shutdown();
   });
 

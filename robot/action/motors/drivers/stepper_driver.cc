@@ -75,8 +75,12 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
       // preserve combined command fields and firmware honors requested speed.
       // Define position/velocity semantics explicitly; effort requires separate
       // hardware capability support and must not be treated as a torque-enable gate.
-      if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort()))
-        return absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
+      if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort())) {
+        const auto status =
+            absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
+        LOG(ERROR) << "Actuator '" << action_config_.actuator_name() << "': " << status;
+        return status;
+      }
       if (command.position_encoding() == JointCommand::POSITION_SI) {
         if (command.has_position()) {
           command.set_position(command.position() * (180.0 / 3.14159265358979323846));

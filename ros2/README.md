@@ -179,3 +179,16 @@ even when it has several subscriptions.
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
+
+## C++ node logging
+
+C++ nodes and utilities use glog (`LOG`, with `VLOG(1)` for debug output).
+Entrypoints initialize glog before ROS initialization and send logs to stderr,
+including source file/line; node logs retain the node name. These application
+messages no longer publish through ROS `/rosout`. ROS library diagnostics and
+Python nodes still use their existing logging systems.
+
+A returned `absl::Status` does not retain its creation location: the caller's
+log identifies the caller. The stepper SI velocity/effort rejection is additionally
+logged at its origin, so that path emits both the driver location and the node's
+topic context. This does not enable the unsupported hardware capability.

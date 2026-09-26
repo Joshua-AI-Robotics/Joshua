@@ -1,3 +1,5 @@
+#include <glog/logging.h>
+
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -26,26 +28,28 @@ class PositionPublisher : public rclcpp::Node {
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
         timers_.push_back(create_wall_timer(
             std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
-            [interface, publish = *publisher, logger = get_logger()]() {
+            [interface, publish = *publisher, node_name]() {
               try {
                 auto packet = interface->GetData();
                 if (!packet.ok()) {
-                  RCLCPP_WARN(
-                      logger, "Cannot read position: %s", packet.status().ToString().c_str());
+                  LOG(WARNING) << "[" << node_name << "] "
+                               << "Cannot read position: " << packet.status().ToString();
                   return;
                 }
                 auto position = ros2_utils::RequirePerceptionPosition(*packet);
                 if (!position.ok()) {
-                  RCLCPP_ERROR(
-                      logger, "Invalid position: %s", position.status().ToString().c_str());
+                  LOG(ERROR) << "[" << node_name << "] "
+                             << "Invalid position: " << position.status().ToString();
                   return;
                 }
                 const auto status = publish(*position);
                 if (!status.ok()) {
-                  RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
+                  LOG(ERROR) << "[" << node_name << "] "
+                             << "Cannot publish position: " << status.ToString();
                 }
               } catch (const std::exception& error) {
-                RCLCPP_ERROR(logger, "Error publishing position: %s", error.what());
+                LOG(ERROR) << "[" << node_name << "] "
+                           << "Error publishing position: " << error.what();
               }
             }));
       }

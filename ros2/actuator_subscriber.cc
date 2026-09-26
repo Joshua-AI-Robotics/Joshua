@@ -63,10 +63,9 @@ class ActionSubscriber : public rclcpp::Node {
             single_action,
             [this, &actuator](absl::StatusOr<robot::action::ActionPacket> parsed) {
               if (!parsed.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Invalid command on '%s': %s",
-                             actuator.topic.c_str(),
-                             parsed.status().ToString().c_str());
+                LOG(ERROR) << "[" << get_name() << "] "
+                           << "Invalid command on '" << actuator.topic
+                           << "': " << parsed.status().ToString();
                 return;
               }
               actuator.reusable_packet = *parsed;
@@ -74,18 +73,16 @@ class ActionSubscriber : public rclcpp::Node {
               const auto encoding_status =
                   ros2_utils::ResolvePositionEncoding(actuator.reusable_packet, lower, upper);
               if (!encoding_status.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Invalid position on '%s': %s",
-                             actuator.topic.c_str(),
-                             encoding_status.ToString().c_str());
+                LOG(ERROR) << "[" << get_name() << "] "
+                           << "Invalid position on '" << actuator.topic
+                           << "': " << encoding_status.ToString();
                 return;
               }
               const auto status = actuator.interface->SetAction(actuator.reusable_packet);
               if (!status.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Actuator '%s' rejected command: %s",
-                             actuator.topic.c_str(),
-                             status.ToString().c_str());
+                LOG(ERROR) << "[" << get_name() << "] "
+                           << "Actuator '" << actuator.topic
+                           << "' rejected command: " << status.ToString();
               }
             });
         if (!result.ok()) throw std::invalid_argument(result.status().ToString());
@@ -94,15 +91,14 @@ class ActionSubscriber : public rclcpp::Node {
     }
 
     if (actuators_.empty()) {
-      RCLCPP_ERROR(
-          this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
+      LOG(ERROR) << "[" << get_name() << "] "
+                 << "No actuators found in configuration for node_id " << node_id << "!";
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(),
-                "Actuator subscriber node started with %zu subscriptions for node_id %d!",
-                actuators_.size(),
-                node_id);
+    LOG(INFO) << "[" << get_name() << "] "
+              << "Actuator subscriber node started with " << actuators_.size()
+              << " subscriptions for node_id " << node_id << "!";
   }
 
   ~ActionSubscriber() {

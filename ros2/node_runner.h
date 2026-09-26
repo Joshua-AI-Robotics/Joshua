@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glog/logging.h>
+
 #include <csignal>
 #include <memory>
 #include <string>
@@ -23,15 +25,15 @@ inline void sigterm_handler(int) noexcept {
 // logger_name is used for usage/error logging.
 template <typename NodeT>
 int RunNode(int argc, char* argv[], const char* logger_name) {
+  if (!google::IsGoogleLoggingInitialized()) google::InitGoogleLogging(argv[0]);
+  FLAGS_logtostderr = 1;
   rclcpp::init(argc, argv);
 
   // Ensure external termination results in teardown
   std::signal(SIGTERM, detail::sigterm_handler);
 
   if (argc < 4) {
-    RCLCPP_ERROR(rclcpp::get_logger(logger_name),
-                 "Usage: %s <node_name> <node_id> <config_path>",
-                 logger_name);
+    LOG(ERROR) << "Usage: " << logger_name << " <node_name> <node_id> <config_path>";
     return 1;
   }
 

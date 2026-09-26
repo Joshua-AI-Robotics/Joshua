@@ -10,6 +10,7 @@ ros2_cpp_binary(
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
         "//utils:xbox_controller",
+        "@glog",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -19,6 +20,7 @@ ros2_cpp_binary(
     name = "camera_subscriber",
     srcs = ["camera_subscriber.cc"],
     deps = [
+        "@glog",
         "@local_deps//:opencv",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:rclcpp",
@@ -29,6 +31,7 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
+        "@glog",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
