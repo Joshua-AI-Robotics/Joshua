@@ -180,6 +180,37 @@ robot {
             }
           }
         }
+        # TODO(hmoon): Support combined position/velocity trajectory commands:
+        # Float32 publishing currently skips the following multi-field waypoints.
+        # Add a ROS message path carrying both fields and firmware/protocol support
+        # for a position target with a speed limit. ESP32 currently replaces the
+        # velocity target with position and uses max_pulse_rate_hz for pulse timing.
+        # Waypoint timestamps schedule dispatch, not arrival; allow final-move time
+        # before restarting the loop. A 90-degree move over 1.5 s requires 60 deg/s.
+        waypoints {
+          timestamp_sec: 2.5
+          topic: "esp32_stepper_1/position"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              units: NATIVE
+              position: 90
+              velocity: 150
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 3.5
+          topic: "esp32_stepper_1/position"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              units: NATIVE
+              position: 180
+              velocity: 150
+            }
+          }
+        }
       }
     }
   }
