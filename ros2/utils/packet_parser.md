@@ -47,26 +47,39 @@ Float32 trajectory publishing accepts one native numeric field, matching its
 topic and joint name. Multi-field, SI, or mismatched payloads are rejected rather
 than silently losing fields or units. The current Float32 trajectory publisher accepts native position encoding only.
 
-The packet and subscription `normalized` booleans are removed. Migrate false to
-`position_encoding: POSITION_NATIVE`, and true to
-`position_encoding: POSITION_NORMALIZED_MINUS_ONE_ONE`. Existing SI joint
-positions must now explicitly set `position_encoding: POSITION_SI`; `units: SI`
-only describes velocity/effort. Update binary producers and consumers together.
+Neither normalization nor position encoding belongs to Subscription. The actuator
+node defines fixed contracts: numeric scalar/array position values are native;
+JointState positions and velocity/effort are SI. The adapters populate JointCommand
+encoding/units accordingly. Remove old `normalized` and `position_encoding` fields
+from subscriptions; producers using normalized values must convert before ROS
+publishing. Internal JointCommand retains its explicit position encoding, including
+both normalized ranges for internal producers. Existing SI internal packets must
+set POSITION_SI explicitly; `units: SI` applies only to velocity/effort.
 
-For scalar subscriptions:
+Topic names are always strings. Message structure is selected by ros2_data_type:
 
 ```protobuf
-subscriptions {
-  ros2_data_type: FLOAT32
-  topic: "esp32_stepper_1/position"
-  position_encoding: POSITION_NORMALIZED_ZERO_ONE
+node {
+  id: 1
+  node_type: ACTUATOR_SUBSCRIBER
+  subscriptions {
+    ros2_data_type: JOINT_STATE
+    topic: "esp32_stepper_1/joint_state"
+  }
 }
 ```
 
-For limits [0, 360], [0, 1] maps 0/0.5/1 to 0/180/360, while [-1, 1]
-maps -1/0/1 to the same targets. Formula: `lower + fraction * (upper - lower)`.
-JointState defaults to SI regardless of an omitted subscription encoding.
-Encoding configuration is rejected on non-position scalar topics.
+The message's name/position/velocity/effort arrays belong in the ROS payload, not
+in `topic`. The decoder selects the configured actuator's name and copies all
+present numeric fields into one joint command. Other actuators may subscribe to
+the same topic and select their own entries. The topic suffix does not infer the
+message type. Drivers still reject unsupported field combinations.
+
+Publishers must also implement the selected type. The position publisher supports
+JointState position feedback; the current trajectory publisher supports only
+Float32 and cannot publish combined position/velocity/effort by changing config.
+Internal normalization conversion remains strict and uses operational limits;
+ROS scalar inputs are never inferred to be normalized from their values.
 
 The inference adapter's separate `ActionCommand.normalized` API is unchanged:
 it converts its legacy [-1, 1] output with its existing clamp policy before ROS

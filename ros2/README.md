@@ -101,9 +101,9 @@ subscriptions {
 
 Scalar/array command topics retain `/<actuator_name>/position`, `/speed`, or
 `/torque`. Current drivers do not implement `/dc`; validation rejects it.
-Scalar/array position subscriptions use `position_encoding`; omission defaults to
-POSITION_NATIVE. JointState always uses POSITION_SI; an explicit conflicting
-subscription encoding is rejected.
+The actuator node interprets scalar/array positions as native units and JointState
+as SI. Subscriptions contain only topic and message type, not actuator encoding.
+Normalized scalar producers must convert before publishing.
 Both endpoints must use the same wire type; Float32 and Float64 do not match.
 
 JointState command topics use `config.topic()` directly and can have any valid ROS

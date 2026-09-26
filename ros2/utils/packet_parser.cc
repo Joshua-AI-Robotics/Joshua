@@ -218,8 +218,8 @@ absl::StatusOr<ActionPacket> DecodeCommand(const Message& message,
     } else {
       ABSL_ASSIGN_OR_RETURN(value, NativeCommand(message.data));
     }
-    auto packet =
-        ActionPacketFromFloat(value, subscription.topic(), subscription.position_encoding());
+    // Scalar ROS messages carry no unit metadata; this node defines native units.
+    auto packet = ActionPacketFromFloat(value, subscription.topic());
     if (packet.ok() && packet->has_joint()) packet->mutable_joint()->set_joint_name(actuator_name);
     return packet;
   }
@@ -262,11 +262,8 @@ absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscript
   auto type = subscription.ros2_data_type();
   ABSL_RETURN_IF_ERROR(VisitPositionMessage(type, [](auto) { return absl::OkStatus(); }));
   if (type == ros2::data_type::JOINT_STATE) {
-    if ((subscription.has_position_encoding() &&
-         subscription.position_encoding() != JointCommand::POSITION_SI) ||
-        actuator.actuator_name().empty())
-      return absl::InvalidArgumentError(
-          "JointState requires an actuator name and SI position encoding");
+    if (actuator.actuator_name().empty())
+      return absl::InvalidArgumentError("JointState requires an actuator name");
     // Driver support is checked against the supplied fields when a command arrives.
     return absl::OkStatus();
   }
@@ -276,10 +273,6 @@ absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscript
   ABSL_ASSIGN_OR_RETURN(auto command, ParseActionTypeFromTopic(subscription.topic()));
   if (command == "dc")
     return absl::InvalidArgumentError("Current motor drivers do not support duty cycle");
-  if (!JointCommand::PositionEncoding_IsValid(subscription.position_encoding()))
-    return absl::InvalidArgumentError("Unknown position encoding");
-  if (subscription.has_position_encoding() && command != "position")
-    return absl::InvalidArgumentError("Position encoding applies only to position topics");
   if (type == ros2::data_type::BOOL &&
       (command != "torque" || (actuator.motor_type() != robot::action::MOTOR_STS3215 &&
                                actuator.motor_type() != robot::action::MOTOR_STEPPER_NEMA17)))

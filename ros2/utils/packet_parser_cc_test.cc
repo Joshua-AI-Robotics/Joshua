@@ -185,8 +185,6 @@ TEST_F(PacketParserCppTest, JointStateRejectsMalformedMessages) {
   message = valid;
   message.header.stamp.nanosec = 1000000000u;
   EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
-  config.set_position_encoding(robot::action::JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
-  EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, valid).ok());
 }
 TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
   std_msgs::msg::Bool message;
@@ -245,16 +243,13 @@ TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
   EXPECT_TRUE(effort->joint().has_effort());
 }
 
-TEST_F(PacketParserCppTest, ScalarPositionEncodingReachesPacketAndResolvesOnce) {
+TEST(PacketPositionEncodingTest, InternalNormalizedPositionResolvesOnce) {
   using Joint = robot::action::JointCommand;
   for (auto encoding :
        {Joint::POSITION_NORMALIZED_ZERO_ONE, Joint::POSITION_NORMALIZED_MINUS_ONE_ONE}) {
-    config.set_position_encoding(encoding);
     const double minimum = encoding == Joint::POSITION_NORMALIZED_ZERO_ONE ? 0 : -1;
     for (double value : {minimum, (minimum + 1) / 2, 1.0}) {
-      std_msgs::msg::Float64 message;
-      message.data = value;
-      auto packet = Send(ros2::data_type::FLOAT64, message);
+      auto packet = ros2_utils::ActionPacketFromFloat(value, "elbow/position", encoding);
       ASSERT_TRUE(packet.ok());
       EXPECT_EQ(packet->joint().position_encoding(), encoding);
       packet->mutable_joint()->set_velocity(-2);
@@ -271,15 +266,27 @@ TEST_F(PacketParserCppTest, ScalarPositionEncodingReachesPacketAndResolvesOnce) 
       EXPECT_DOUBLE_EQ(packet->joint().position(), expected);
     }
   }
-  config.set_position_encoding(Joint::POSITION_SI);
+}
+
+TEST_F(PacketParserCppTest, ScalarContractIsNativeAndTopicSuffixDoesNotSelectWireType) {
   std_msgs::msg::Float64 message;
   message.data = 0.25;
   auto packet = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(packet.ok());
-  EXPECT_EQ(packet->joint().position_encoding(), Joint::POSITION_SI);
-  EXPECT_EQ(packet->joint().units(), Joint::NATIVE);
-  config.set_topic("elbow/speed");
+  EXPECT_EQ(packet->joint().position_encoding(), robot::action::JointCommand::POSITION_NATIVE);
+  EXPECT_DOUBLE_EQ(packet->joint().position(), 0.25);
+  config.set_topic("elbow/joint_state");
   EXPECT_FALSE(Send(ros2::data_type::FLOAT64, message).ok());
+  sensor_msgs::msg::JointState joints;
+  joints.name = {"elbow"};
+  joints.position = {0.25};
+  joints.velocity = {1};
+  joints.effort = {2};
+  packet = Send(ros2::data_type::JOINT_STATE, joints);
+  ASSERT_TRUE(packet.ok());
+  EXPECT_EQ(packet->joint().position_encoding(), robot::action::JointCommand::POSITION_SI);
+  EXPECT_DOUBLE_EQ(packet->joint().velocity(), 1);
+  EXPECT_DOUBLE_EQ(packet->joint().effort(), 2);
 }
 
 TEST(PacketPositionEncodingTest, RejectsInvalidValuesAndLimitsWithoutMutation) {

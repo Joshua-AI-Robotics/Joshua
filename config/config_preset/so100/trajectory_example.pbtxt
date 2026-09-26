@@ -40,7 +40,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_1/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -69,7 +68,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_2/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -98,7 +96,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_3/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -127,7 +124,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_4/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -156,7 +152,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_5/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -185,7 +180,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts_motor_6/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR

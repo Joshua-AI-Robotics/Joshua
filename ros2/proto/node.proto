@@ -3,7 +3,6 @@ syntax = "proto3";
 package ros2.node;
 
 import "ros2/proto/ros2_data_type.proto";
-import "robot/action/proto/action_packet.proto";
 
 // Enum values here must match with the file name under ros2/
 // (e.g. camera_publisher.cc, position_publisher.cc, etc.)
@@ -60,9 +59,6 @@ message Publisher {
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
-  // Scalar position input defaults to native. JointState always uses SI;
-  // if specified for JointState this must be POSITION_SI.
-  optional robot.action.JointCommand.PositionEncoding position_encoding = 3;
 }
 
 message Node {

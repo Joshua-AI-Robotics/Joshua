@@ -35,7 +35,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "am243_joint_1/position"
-          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR

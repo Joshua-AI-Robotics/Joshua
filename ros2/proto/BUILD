@@ -9,7 +9,6 @@ proto_library(
     srcs = ["node.proto"],
     deps = [
         ":ros2_data_type_proto",
-        "//robot/action/proto:action_packet_proto",
     ],
 )
 

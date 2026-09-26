@@ -115,8 +115,8 @@ the default, preserving existing config limits and numeric topic values. See
 [packet contracts](../ros2/utils/packet_parser.md) for SI units, driver capability
 limits, torque-enable presets, and migration details.
 
-Scalar actuator position subscriptions can select `position_encoding`:
-`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
-`POSITION_NORMALIZED_MINUS_ONE_ONE`. Normalized ranges map to actuator operational
-limits; invalid inputs are rejected. Replace old `normalized: true` with
-`position_encoding: POSITION_NORMALIZED_MINUS_ONE_ONE`. JointState is always SI.
+ROS endpoints contain only their topic string and `ros2_data_type`. The selected
+node defines the interpretation: actuator scalar position topics use native units,
+while JointState uses SI and selects the configured actuator by message name.
+Position encoding remains inside JointCommand for internal consumers. Scalar
+producers must convert normalized outputs before publishing.
