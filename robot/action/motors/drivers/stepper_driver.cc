@@ -71,6 +71,10 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
       auto validation = ValidateJointCommand(command, action_config_.actuator_name());
       if (!validation.ok()) return validation;
       // Validate every field before issuing any channel writes.
+      // TODO(hmoon): Support SI velocity commands once BoardChannel and joshua_wire
+      // preserve combined command fields and firmware honors requested speed.
+      // Define position/velocity semantics explicitly; effort requires separate
+      // hardware capability support and must not be treated as a torque-enable gate.
       if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort()))
         return absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
       if (command.position_encoding() == JointCommand::POSITION_SI) {
