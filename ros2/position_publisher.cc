@@ -24,9 +24,6 @@ class PositionPublisher : public rclcpp::Node {
       for (const auto& pub : sensor.node().publishers()) {
         auto publisher = ros2_utils::CreatePositionMessagePublisher(*this, pub, sensor);
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
-        // TODO(hmoon): Integrate acquisition scheduling and message timestamps with
-        // the planned system-wide clock (including PTP synchronization), retaining
-        // config-driven rates and sharing each sensor reading across its publishers.
         timers_.push_back(create_wall_timer(
             std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
             [interface, publish = *publisher, logger = get_logger()]() {
@@ -56,6 +53,9 @@ class PositionPublisher : public rclcpp::Node {
   }
 
  private:
+  // TODO(hmoon): Integrate acquisition scheduling and message timestamps with
+  // the planned system-wide clock (including PTP synchronization), retaining
+  // config-driven rates and sharing each sensor reading across its publishers.
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
 int main(int argc, char* argv[]) {
