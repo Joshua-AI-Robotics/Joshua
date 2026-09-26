@@ -1,3 +1,5 @@
+#include <glog/logging.h>
+
 #include <list>
 #include <memory>
 #include <set>
@@ -100,12 +102,12 @@ class ActionSubscriber : public rclcpp::Node {
     std::set<robot::action::ActionInterface*> torn_down;
     for (auto& actuator : actuators_) {
       if (!torn_down.insert(actuator.interface.get()).second) continue;
-      threads.emplace_back([&actuator, logger = get_logger()]() {
+      threads.emplace_back([&actuator]() {
         robot::action::ActionPacket teardown_packet;
         teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         auto status = actuator.interface->SetAction(teardown_packet);
         if (!status.ok()) {
-          RCLCPP_ERROR(logger, "Failed to teardown actuator '%s'", actuator.topic.c_str());
+          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
         }
       });
     }

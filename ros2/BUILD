@@ -155,6 +155,7 @@ ros2_cpp_binary(
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
+        "@glog",
         "@protobuf",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
