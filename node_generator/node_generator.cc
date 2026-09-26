@@ -343,9 +343,8 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   }
 
   // The executable is named for the node type, C++ and Python alike: the
-  // hardware-facing nodes are C++, and INFERENCE, DATA_SUBSCRIBER, and
-  // TRAJECTORY_PUBLISHER are Python with no C++ counterpart to disambiguate
-  // from. Nothing is selected between, so nothing is suffixed.
+  // hardware and trajectory nodes are C++; INFERENCE and DATA_SUBSCRIBER
+  // use Python. There is one executable per type, so no language suffix is needed.
   const std::string& exec_name = node_type_str;
 
   if (!IsExecutableAvailable(exec_name)) {

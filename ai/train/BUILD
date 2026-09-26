@@ -8,11 +8,12 @@ py_library(
     srcs = ["data_store.py"],
     deps = [
         "//ai/proto:data_store_py_proto",
+        "//ros2:ros2_type_resolver",
     ] + requirement("datasets") + requirement("glog"),
 )
 
 py_binary(
     name = "data_load",
     srcs = ["data_load.py"],
-    deps = requirement("datasets") + requirement("glog") + requirement("python-gflags"),
+    deps = requirement("datasets") + requirement("glog") + requirement("python-gflags") + requirement("numpy"),
 )

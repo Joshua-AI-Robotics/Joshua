@@ -35,7 +35,6 @@ from config.proto import config_pb2  # noqa: E402
 from simulation.mujoco.engine import MuJoCoEngine  # noqa: E402
 from simulation.mujoco.modes import (  # noqa: E402
     interactive,
-    mirror,
     offscreen,
     passive,
 )
@@ -49,14 +48,12 @@ gflags.DEFINE_string(
 gflags.DEFINE_string(
     "mode",
     None,
-    "Override the simulation sub-mode. "
-    "One of: interactive, passive, mirror, offscreen.",
+    "Override the simulation sub-mode. " "One of: interactive, passive, offscreen.",
 )
 
 _MODE_ENUM = {
     "interactive": simulation_pb2.MODE_INTERACTIVE,
     "passive": simulation_pb2.MODE_PASSIVE,
-    "mirror": simulation_pb2.MODE_MIRROR,
     "offscreen": simulation_pb2.MODE_OFFSCREEN,
 }
 
@@ -87,8 +84,6 @@ def _run_mode(config: simulation_pb2.SimulationConfig, engine: MuJoCoEngine) -> 
         interactive.run(engine)
     elif mode == simulation_pb2.MODE_PASSIVE:
         passive.run(engine, config.passive)
-    elif mode == simulation_pb2.MODE_MIRROR:
-        mirror.run(engine, config.mirror)
     elif mode == simulation_pb2.MODE_OFFSCREEN:
         offscreen.run(engine, config.offscreen)
     else:

@@ -9,7 +9,7 @@ the engine never imports model-specific libraries directly.
 | [`inference/`](inference/) | Inference engine: ROS host, launcher, per-model venvs |
 | [`models/`](models/) | Model plug-ins: adapters, config protos, manifests, locks |
 | [`proto/`](proto/) | Shared catalog (`ModelType`, `SingleModel`) |
-| [`train/`](train/) | Data collection (`DataStore`) — separate from inference |
+| [`train/`](train/) | Data store library and dataset inspection CLI |
 
 **Related docs**
 
@@ -183,10 +183,9 @@ lock; model locks hold only model-specific closures.
 
 ---
 
-## Data collection (not inference)
+## Scope
 
-Recording demos uses `ai/train/data_store.py` and is independent of the
-inference plug-in system. See [`train/README.md`](train/README.md).
-
-Training (BC, RL) is not implemented. The former RL pipeline and the training
-RFC that described its planned replacement have been removed.
+The AI stack supports inference and model plug-ins, plus the
+[data store library and dataset loader](train/README.md). The data subscriber
+provides ROS recording through the launcher.
+Training (BC, RL) is not implemented.

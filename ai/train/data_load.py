@@ -1,8 +1,9 @@
 import sys
+
 import gflags
 import glog
-from datasets import load_from_disk
 import numpy as np
+from datasets import load_from_disk
 
 FLAGS = gflags.FLAGS
 
@@ -11,29 +12,23 @@ gflags.DEFINE_string(
     None,
     "Path to the dataset directory (e.g. /tmp/Joshua/data/..._processed)",
 )
-gflags.DEFINE_integer(
-    "num_samples", 3, "Number of samples to inspect per split."
-)
-gflags.DEFINE_bool(
-    "show_schema", True, "Whether to print the detailed dataset schema."
-)
-gflags.DEFINE_bool(
-    "show_metadata", True, "Whether to print dataset metadata."
-)
+gflags.DEFINE_integer("num_samples", 3, "Number of samples to inspect per split.")
+gflags.DEFINE_bool("show_schema", True, "Whether to print the detailed dataset schema.")
+gflags.DEFINE_bool("show_metadata", True, "Whether to print dataset metadata.")
 
 
 def inspect_value(value, indent="  "):
     """Recursively inspect structure of values without printing massive arrays."""
     if value is None:
         return "None"
-    
+
     if isinstance(value, (str, int, float, bool)):
         s = str(value)
         return s[:200] + "..." if len(s) > 200 else s
-        
+
     if isinstance(value, bytes):
         return f"<bytes len={len(value)}>"
-        
+
     if isinstance(value, np.ndarray):
         return f"<np.ndarray shape={value.shape} dtype={value.dtype}>"
 
@@ -98,7 +93,11 @@ def main(argv):
         print("\n" + "=" * 50)
         print(" 3. DATASET METADATA ")
         print("=" * 50)
-        info = dataset[list(dataset.keys())[0]].info if hasattr(dataset, "keys") else dataset.info
+        info = (
+            dataset[list(dataset.keys())[0]].info
+            if hasattr(dataset, "keys")
+            else dataset.info
+        )
         print(f"Description: {info.description}")
         print(f"Version:     {info.version}")
         print(f"Homepage:    {info.homepage}")
@@ -121,7 +120,7 @@ def main(argv):
         print(f"\nSample {i}:")
         print("-" * 20)
         example = ds_to_sample[i]
-        
+
         # Sort keys for consistent display
         for key in sorted(example.keys()):
             val_str = inspect_value(example[key])

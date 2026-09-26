@@ -1,82 +1,49 @@
-AI Data Pipeline
-================
+# Data storage and inspection
 
-This directory contains the tools for collecting data and managing datasets for the Joshua platform.
+`//ai/train:data_store` provides the Python `DataStore` library for recording ROS
+messages to rosbag2 and exporting Hugging Face datasets, JSONL, CSV, or Parquet.
+`//ai/train:data_load` inspects an existing Hugging Face dataset on disk.
 
-> The RL training pipeline (Isaac Lab trainer, evaluation, trajectory export)
-> has been removed. Isaac Sim is still available as a pure simulation backend
-> -- see [simulation/README.md](../../simulation/README.md).
+## Data store
 
-DataStore (Data Collection)
----------------------------
+Construct `DataStore` with an `ai.data_store.SingleDataStore` protobuf. The
+`ai.data_stores` config section assigns a `DATA_SUBSCRIBER` node, which the
+launcher starts to subscribe and record configured topics. See
+`config/config_preset/example/sample_data_store.pbtxt`. Publish Bool messages
+on `/recording_control` (true to start, false to stop); shutdown exports the bag.
 
-### Overview
-`ai/train/data_store.py` is the core data logging engine. It subscribes to ROS 2 topics in real-time, records them efficiently to `rosbag2` (SQLite3), and post-processes them into machine-learning-ready formats (Hugging Face Datasets, JSONL, CSV, Parquet).
+The library can also be used directly:
 
-### Key Features
--   **Robust Schema Handling**: Automatically discovers all possible fields across heterogeneous topics (e.g., Images + Encoder values) to ensure a consistent, crash-free dataset schema.
--   **Episode Indexing**: Maintains a persistent, auto-incrementing global episode counter across runs to prevent data overwrites and simplify merging.
--   **Real-time Control**: Supports dynamic Start/Stop recording via ROS topics or internal logic.
--   **Optimized Post-Processing**:
-    -   Images are decoded to Numpy once and stored efficiently.
-    -   Generic messages are converted to dictionaries.
-    -   Sparse data handling: Missing fields are automatically filled with `None` to satisfy strict dataset schemas.
+```python
+from ai.train.data_store import DataStore
 
-### Architecture
-1.  **Recording (Online)**:
-    -   Uses `rosbag2_py.SequentialWriter` for high-throughput, low-latency logging.
-    -   Writes interleaved message streams (preserving exact timing).
-2.  **Post-Processing (Offline/Shutdown)**:
-    -   **Pass 1 (Discovery)**: Scans the bag to identify all unique topics and their field structures.
-    -   **Pass 2 (Conversion)**: Streams the bag, enforces the unified schema, injects `episode_index`, and writes to the target format using `datasets.Dataset.from_generator`.
-
-### Usage
-
-**1. Configuration**
-Define your data sources in a `.pbtxt` config file (e.g., `config/config_preset/example/sample_data_store.pbtxt`).
-
-**2. Running the Data Subscriber**
-The `ros2/data_subscriber.py` node wraps the DataStore.
-```bash
-# Launch the subscriber
-bazel run launcher:joshua_main -- --config=config/config_preset/example/sample_data_store.pbtxt
+store = DataStore(single_data_store_config)
+store.start_recording()
+store.add_data(message, topic="/joint/position")
+store.stop_recording()
+store.post_process()
 ```
 
-**3. Controlling Recording**
-Control the recording state via the `/recording_control` topic:
-```bash
-# Start Recording (Episode N)
-ros2 topic pub --once /recording_control std_msgs/msg/Bool "{data: true}"
+Set `store_path`, `data_store_mode`, `data_store_type`, and `node.subscriptions`
+(topic and `ros2_data_type`) in the protobuf. The node ID/type are used by the launcher. Direct library callers must call
+`add_data` only for configured topics and own their ROS subscriptions and
+initialization of the ROS Python environment.
 
-# Stop Recording
-ros2 topic pub --once /recording_control std_msgs/msg/Bool "{data: false}"
+The store records episode indices and exports rows with topic, timestamp,
+episode index, and message fields. Images are decoded through cv_bridge;
+`ros2/ros2_type_resolver.py` supplies the type names and dataset conversion helpers.
+The current `CLOUD_STORAGE` option uses the configured path; cloud synchronization
+is not implemented.
+
+## Dataset loader
+
+Run inside the Docker development shell:
+
+```bash
+bazel run --config=u22 --config=x86-base \
+  --@rules_python//python/config_settings:python_version=3.10 \
+  //ai/train:data_load -- --dataset_path=/path/to/dataset --num_samples=5
 ```
 
-**4. Data Inspection**
-Use the provided utility to inspect generated datasets:
-```bash
-# View schema, metadata, and samples
-bazel run ai/train:data_load -- --dataset_path=/tmp/Joshua/data/..._processed --num_samples=5
-```
-
-### Dataset Format
-The output is an **Interleaved Message Stream**. Each row corresponds to a single ROS message event.
--   `topic`: The source topic name (e.g., `camera_1`, `encoder_joint_1`).
--   `timestamp`: Float (seconds).
--   `episode_index`: Integer ID for the recording session.
--   `image`: Numpy array (for camera topics, else None).
--   `data`: Scalar/Value (for standard messages, else None).
--   *(Other fields dynamically discovered from message types)*
-
-*Note: For training (e.g., LeRobot, Octo), this interleaved data typically needs to be synchronized/resampled into state-action pairs.*
-
-Extending Types (`ros2/ros2_type_resolver.py`)
-------------------------------------------------
--   **New Message Types**: Add them to `ROS2_TYPE_MAPPING`.
--   **Special Handling**: Extend `build_entry_for_message` if you need custom decoding (like we do for Images) instead of generic dictionary conversion.
-
-Training & Fine-Tuning
-----------------------
-*(Section to be expanded)*
--   **LeRobot Integration**: The dataset format is compatible with Hugging Face Datasets, making it a natural fit for the [LeRobot](https://github.com/huggingface/lerobot) framework.
--   **Preprocessing**: Use `LeRobotDataset` to synchronize the interleaved `DataStore` output into `(observation, action)` batches for training.
+The loader prints schema, metadata, and sample summaries. It does not launch ROS
+nodes or access robot hardware. Training is not implemented in this package.

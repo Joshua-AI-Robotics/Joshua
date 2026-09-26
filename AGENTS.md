@@ -13,8 +13,8 @@ Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
 
 **The filename does not tell you whether a preset is safe.** The launcher
 branches on `general.operation_mode`, not the name — and a `MODE_SIMULATION`
-preset may still declare real devices (`so100/sim_mirror.pbtxt` opens
-`/dev/ttyACM1`), and a preset naming no `/dev` path at all may still drive real
+preset may still declare real devices, and a preset naming no `/dev` path at
+all may still drive real
 hardware over the network (`example/am243_ethercat_demo.pbtxt` opens the
 `ethercat0` NIC). Since the mock drivers were removed
 ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9), **no preset is

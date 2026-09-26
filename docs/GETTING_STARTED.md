@@ -69,7 +69,6 @@ CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm 
 |--------|---------|-------------|
 | `so100/sim_interactive.pbtxt` | MuJoCo | SO-ARM100 interactive 3D viewer |
 | `so100/sim_passive.pbtxt` | MuJoCo | SO-ARM100 passive sim |
-| `so100/sim_mirror.pbtxt` | MuJoCo | Sim mirrors a real arm — **opens `/dev/ttyACM1`** |
 | `so100/teleoperate.pbtxt` | Hardware | SO100 teleoperation |
 
 Hardware runs use the privileged/device access already configured in Docker Compose. Connect the robot devices to the host before starting the container.

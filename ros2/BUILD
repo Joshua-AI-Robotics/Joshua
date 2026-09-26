@@ -28,7 +28,6 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//config/proto:config_py_proto",
-        "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:ros_python_paths_py",
         # rclpy is provided by the selected Docker image's ROS2 installation.
     ] + requirement("protobuf") + requirement("PyYAML"),
@@ -63,7 +62,6 @@ ros2_py_binary(
         "//ai/inference:inference_launcher",
         "//config/proto:config_py_proto",
         "//ros2:node_runner_py",
-        "//ros2/proto:trajectory_py_proto",
     ] + requirement("numpy") + requirement("protobuf") + requirement("PyYAML"),
     # rclpy is provided by the selected Docker image's ROS2 installation.
 )
@@ -160,50 +158,6 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_py_binary(
-    name = "trajectory_publisher",
-    srcs = [
-        "trajectory_publisher.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "trajectory_publisher.py",
-    set_up_ament = True,
-    deps = [
-        "//config/proto:config_py_proto",
-        "//robot/action/proto:action_packet_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:packet_parser_py",
-        "//ros2/utils:qos_setting_py",
-    ] + requirement("protobuf"),
-)
-
-ros2_py_binary(
-    name = "data_subscriber",
-    srcs = [
-        "data_subscriber.py",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
-    main = "data_subscriber.py",
-    set_up_ament = True,
-    deps = [
-        "//ai/train:data_store",
-        "//config/proto:config_py_proto",
-        "//ros2:node_runner_py",
-        "//ros2:ros2_type_resolver",
-        "//ros2/proto:node_py_proto",
-        "//ros2/proto:trajectory_py_proto",
-        "//ros2/utils:qos_setting_py",
-        # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
-    ] + requirement("protobuf"),
-)
-
 genrule(
     name = "ros2_node_wrapper",
     srcs = ["ros2_node_wrapper_template.sh"],
@@ -246,4 +200,63 @@ cc_test(
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+ros2_cpp_binary(
+    name = "trajectory_publisher",
+    srcs = ["trajectory_publisher.cc"],
+    data = ["//config/config_preset:config_presets"],
+    set_up_ament = True,
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/proto:ros2_data_type_cc_proto",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "trajectory_publisher_test",
+    srcs = [
+        "trajectory_publisher.cc",
+        "trajectory_publisher_test.cc",
+    ],
+    defines = ["JOSHUA_NODE_TEST"],
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/proto:ros2_data_type_cc_proto",
+        "//ros2/utils:qos_setting",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_py_binary(
+    name = "data_subscriber",
+    srcs = [
+        "data_subscriber.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "data_subscriber.py",
+    set_up_ament = True,
+    deps = [
+        "//ai/train:data_store",
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2:ros2_type_resolver",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:qos_setting_py",
+        # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
+    ] + requirement("protobuf"),
 )

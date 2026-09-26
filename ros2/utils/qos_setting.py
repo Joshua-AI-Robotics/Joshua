@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from rclpy.duration import Duration
 from rclpy.qos import (
@@ -32,7 +31,8 @@ def create_qos_setting(qos_setting: node_pb2.QosSetting) -> QoSProfile:
         qos_profile.reliability = ReliabilityPolicy.BEST_EFFORT
     else:
         logging.warning(
-            f"Invalid reliability policy: {node_pb2.QosReliabilityPolicy.Name(qos_setting.reliability_policy)}. Using default reliable policy."
+            "Invalid reliability policy: %s. Using default reliable policy.",
+            node_pb2.QosReliabilityPolicy.Name(qos_setting.reliability_policy),
         )
         qos_profile.reliability = ReliabilityPolicy.RELIABLE
 
@@ -43,7 +43,8 @@ def create_qos_setting(qos_setting: node_pb2.QosSetting) -> QoSProfile:
         qos_profile.durability = DurabilityPolicy.VOLATILE
     else:
         logging.warning(
-            f"Invalid durability policy: {node_pb2.QosDurabilityPolicy.Name(qos_setting.durability_policy)}. Using default volatile policy."
+            "Invalid durability policy: %s. Using default volatile policy.",
+            node_pb2.QosDurabilityPolicy.Name(qos_setting.durability_policy),
         )
         qos_profile.durability = DurabilityPolicy.VOLATILE
 
@@ -54,7 +55,8 @@ def create_qos_setting(qos_setting: node_pb2.QosSetting) -> QoSProfile:
         qos_profile.history = HistoryPolicy.KEEP_ALL
     else:
         logging.warning(
-            f"Invalid history policy: {node_pb2.QosHistoryPolicy.Name(qos_setting.history_policy)}. Using default keep last policy."
+            "Invalid history policy: %s. Using default keep last policy.",
+            node_pb2.QosHistoryPolicy.Name(qos_setting.history_policy),
         )
         qos_profile.history = HistoryPolicy.KEEP_LAST
 
@@ -69,7 +71,8 @@ def create_qos_setting(qos_setting: node_pb2.QosSetting) -> QoSProfile:
         qos_profile.liveliness = LivelinessPolicy.MANUAL_BY_TOPIC
     else:
         logging.warning(
-            f"Invalid liveliness policy: {node_pb2.QosLivelinessPolicy.Name(qos_setting.liveliness_policy)}. Using default liveliness policy."
+            "Invalid liveliness policy: %s. Using default liveliness policy.",
+            node_pb2.QosLivelinessPolicy.Name(qos_setting.liveliness_policy),
         )
         qos_profile.liveliness = LivelinessPolicy.AUTOMATIC
 

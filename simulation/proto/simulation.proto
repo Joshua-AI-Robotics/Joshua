@@ -2,13 +2,12 @@ syntax = "proto3";
 
 package simulation;
 
-import "ros2/proto/ros2_data_type.proto";
-
 enum SimulationMode {
   MODE_INVALID = 0;
   MODE_INTERACTIVE = 1;
   MODE_PASSIVE = 2;
-  MODE_MIRROR = 3;
+  reserved 3;
+  reserved "MODE_MIRROR";
   MODE_OFFSCREEN = 4;
 }
 
@@ -40,21 +39,9 @@ message IsaacSimConfig {
   bool headless = 9;
 }
 
-message TopicMapping {
-  string topic = 1;
-  ros2.data_type.Ros2DataType ros2_data_type = 2;
-  // Offset added to the encoder value before setting MuJoCo ctrl.
-  // mujoco_ctrl = encoder_value + offset
-  double offset = 3;
-}
-
 message PassiveConfig {
   string trajectory_path = 1;
   float speed = 2;
-}
-
-message MirrorConfig {
-  repeated TopicMapping topic_mappings = 1;
 }
 
 message OffscreenConfig {
@@ -69,7 +56,8 @@ message SimulationConfig {
   string model_path = 1;
   SimulationMode mode = 2;
   PassiveConfig passive = 3;
-  MirrorConfig mirror = 4;
+  reserved 4;
+  reserved "mirror";
   OffscreenConfig offscreen = 5;
   // Which simulator to launch. Defaults to MuJoCo when unset.
   SimulatorBackend backend = 6;

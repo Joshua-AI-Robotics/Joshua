@@ -1,27 +1,23 @@
 """Real-time data store for ROS2 messages and post-processing to various formats."""
 
-import json
 import os
 import time
-from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import glog
-import rclpy
 import rosbag2_py
-from datasets import Dataset, Features, Sequence, Value
+from datasets import Dataset
 from rclpy.serialization import serialize_message
-from rosidl_runtime_py.utilities import get_message
 from std_msgs.msg import Int32
 
 from ai.proto import data_store_pb2
-from ros2.ros2_type_resolver import get_ros2_type_name, get_ros2_type_string_from_enum
+from ros2.ros2_type_resolver import get_ros2_type_string_from_enum
 
 
 class DataStore:
-    """Real-time data store for ROS2 messages using rosbag2 and post-processing to various formats."""
+    """Record ROS messages with rosbag2 and export them to dataset formats."""
 
-    def __init__(self, data_store_config: data_store_pb2.DataStore):
+    def __init__(self, data_store_config: data_store_pb2.SingleDataStore):
         """Initialize the data store.
 
         Args:
@@ -42,7 +38,8 @@ class DataStore:
             path = os.path.join(data_store_config.store_path, f"dataset_{timestamp}")
             # rosbag2 creates the directory itself, so we don't strictly need makedirs,
             # but good to ensure parent path exists.
-            # However, rosbag2 will fail if the directory already exists and is not empty/valid bag.
+            # However, rosbag2 will fail if the directory already exists and is not
+            # empty/valid bag.
             # We append timestamp so it should be unique.
             self.bag_path = path
             glog.info(
@@ -56,7 +53,8 @@ class DataStore:
             # TODO: Handle cloud storage sync
             self.bag_path = data_store_config.store_path
             glog.info(
-                f"DataStore initialized with CLOUD_STORAGE mode\ncloud path: {self.bag_path}"
+                "DataStore initialized with CLOUD_STORAGE mode\n"
+                f"cloud path: {self.bag_path}"
             )
         else:
             glog.error(f"Invalid data store mode: {data_store_config.data_store_mode}")
@@ -147,7 +145,7 @@ class DataStore:
         Args:
             msg: The ROS2 message object.
             topic: Topic name of the message.
-            timestamp: Optional timestamp in seconds (uses current time if not provided).
+            timestamp: Optional seconds; defaults to the current time.
         """
         if not self.is_recording:
             return
@@ -169,7 +167,7 @@ class DataStore:
         """Post-process the recorded bag file into the target dataset format.
 
         Args:
-            path: Output directory for the processed dataset. If None, uses bag_path parent.
+            path: Output directory; defaults to bag_path + "_processed".
         """
         glog.info(
             f"Starting Post-Processing. Total message count: {self.total_message_count}"
@@ -177,7 +175,8 @@ class DataStore:
         glog.info(f"Topic message counts: {self.topic_message_counts}")
 
         # Ensure writer is flushed/closed
-        # There is no explicit close() in python api for SequentialWriter in older rosbag2 versions,
+        # There is no explicit close() in python api for SequentialWriter in older
+        # rosbag2 versions,
         # but let's assume we just stop writing.
 
         # Force delete writer to ensure file handle is released
@@ -257,8 +256,10 @@ class DataStore:
 
             current_episode_index = -1
 
-            # Pre-scan the bag to discover all possible keys across all topics to ensure a robust schema.
-            # We read the first message of each topic to determine the union of all fields.
+            # Pre-scan the bag to discover all possible keys across all topics to ensure
+            # a robust schema.
+            # We read the first message of each topic to determine the union of all
+            # fields.
 
             discovered_keys = {"topic", "timestamp", "episode_index"}
 
@@ -295,7 +296,8 @@ class DataStore:
 
             del scan_reader
 
-            # Let's define a safe wrapper that yields consistent rows based on discovered keys
+            # Let's define a safe wrapper that yields consistent rows based on
+            # discovered keys
             def safe_build_entry(base, m_type, m):
                 row = build_entry_for_message(base, m_type, m)
                 for key in discovered_keys:

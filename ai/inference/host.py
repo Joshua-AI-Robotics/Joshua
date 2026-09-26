@@ -32,7 +32,6 @@ from config.proto import config_pb2
 from robot.action.proto import action_pb2
 from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
-from ros2.utils.packet_parser import denormalize_position_value
 from ros2.utils.qos_setting import create_qos_setting
 
 
@@ -234,7 +233,13 @@ class InferenceHost(Node):
                         "normalized output requires actuator limits for topic "
                         f"'{publisher.topic}'"
                     )
-                value = denormalize_position_value(value, limits[0], limits[1])
+                # The inference host is the only Python consumer of this mapping.
+                lower, upper = limits
+                normalized = max(-1.0, min(1.0, value))
+                value = max(
+                    lower,
+                    min(upper, lower + (normalized + 1.0) * (upper - lower) / 2.0),
+                )
 
             ros_msg = Float32()
             ros_msg.data = value
