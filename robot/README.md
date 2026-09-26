@@ -80,7 +80,10 @@ STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
 use presets to enable/disable torque. TI demo supports native position/velocity/
 effort using its existing firmware scaling, but rejects SI commands. Drivers
-validate the entire payload before writes. Channel failures are returned; a
+validate the entire payload before writes. Shared interface validation checks only
+name, field presence, enum validity and finiteness; each driver's implementation
+owns supported combinations, SI conversions, float range and operational limits.
+Channel failures are returned; a
 multi-field command is not a transactional hardware operation.
 
 Scalar topics retain native values: `/position` maps to position, `/speed` and

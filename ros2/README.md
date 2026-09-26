@@ -173,7 +173,7 @@ even when it has several subscriptions.
 | Legacy packets and drivers use float | Scalars retain checked conversion to float. JointCommand preserves double precision until checked driver conversion; hardware precision is unchanged. |
 | Hardware units and register widths vary | Retain device validation and native quantization. Implement JointCommand conversion and capability checks in each driver; reject unsupported fields before writes. |
 | STS3215/stepper torque is enable/disable | Never map JointState physical effort to these gates. Reject effort; Bool remains restricted to enable gates. |
-| Inference/trajectory still produce FLOAT32; scalar observation decoding assumes FLOAT32 | Keep their existing endpoints; expose another typed endpoint on a different topic for external ROS consumers. Update those producers/codecs in a separate change. |
+| Inference still produces FLOAT32; trajectory supports FLOAT32 and JOINT_STATE | JointState waypoints require SI values and preserve optional fields. Driver capabilities still apply; changing the wire type does not add velocity/effort control. |
 | Dataset message types/shapes can change | Update dataset/model expectations and keep topic types stable during recording. |
 | Multiple command sources can target a device | Coordinate command ownership externally; message-type support does not add arbitration. |
 

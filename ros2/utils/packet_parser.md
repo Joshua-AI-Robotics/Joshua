@@ -76,8 +76,13 @@ the same topic and select their own entries. The topic suffix does not infer the
 message type. Drivers still reject unsupported field combinations.
 
 Publishers must also implement the selected type. The position publisher supports
-JointState position feedback; the current trajectory publisher supports only
-Float32 and cannot publish combined position/velocity/effort by changing config.
+JointState position feedback. The trajectory publisher supports Float32 and
+JointState: each JointState waypoint publishes one named joint with every supplied
+position/velocity/effort field. Position must explicitly use POSITION_SI and any
+velocity/effort must use units SI; native/normalized values are rejected rather
+than guessed or silently relabeled. Omitted arrays stay empty. The frame is copied;
+a nonzero source stamp is preserved, otherwise ROS publish time is used. Drivers
+still decide which combinations they can execute.
 Internal normalization conversion remains strict and uses operational limits;
 ROS scalar inputs are never inferred to be normalized from their values.
 

@@ -245,6 +245,32 @@ TEST(StepperDriverTest, NativeJointValidatesAllFieldsBeforeWriting) {
   EXPECT_FALSE(driver.SetAction(packet).ok());
 }
 
+// Expose common validation without constructing a driver or touching hardware.
+class JointValidationAccess : public ActuatorInterface {
+ public:
+  using ActuatorInterface::ValidateJointCommand;
+};
+
+TEST(ActuatorValidationTest, CommonValidationDoesNotImposeDriverCapabilities) {
+  JointCommand command;
+  command.set_joint_name("joint");
+  command.set_position_encoding(JointCommand::POSITION_SI);
+  command.set_units(JointCommand::SI);
+  command.set_position(1);
+  command.set_velocity(-2);
+  command.set_effort(-3);
+  EXPECT_TRUE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  command.set_effort(std::numeric_limits<double>::max());
+  EXPECT_TRUE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "other").ok());
+  command.set_velocity(std::numeric_limits<double>::infinity());
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  command.clear_position();
+  command.clear_velocity();
+  command.clear_effort();
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+}
+
 }  // namespace
 TEST(StepperDriverTest, PositionEncodingIsIndependentOfVelocityUnits) {
   auto channel = std::make_shared<RecordingChannel>();

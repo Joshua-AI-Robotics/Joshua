@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Dict, List
 
 from rclpy.node import Node
+from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 
 from config.proto import config_pb2
@@ -34,6 +36,7 @@ class TrajectoryPublisher(Node):
         self._waypoints: List[TrajectoryWaypointEntry] = []
         self._topic_pubs: Dict[str, TopicPub] = {}
         self._loop_running = False
+        unsupported_topics = set()
 
         for single_trajectory in config.robot.trajectories.single_trajectories:
             if (
@@ -62,17 +65,22 @@ class TrajectoryPublisher(Node):
                             waypoint.topic,
                             ros2_data_type_pb2.FLOAT32,
                         )
-                        if data_type != ros2_data_type_pb2.FLOAT32:
+                        message_class = {
+                            ros2_data_type_pb2.FLOAT32: Float32,
+                            ros2_data_type_pb2.JOINT_STATE: JointState,
+                        }.get(data_type)
+                        if message_class is None:
+                            if waypoint.topic in unsupported_topics:
+                                continue
+                            unsupported_topics.add(waypoint.topic)
                             self.get_logger().error(
-                                "Unsupported publisher ros2_data_type %s "
-                                "for topic '%s'. "
-                                "Only FLOAT32 is supported.",
-                                str(data_type),
-                                waypoint.topic,
+                                f"Unsupported publisher ros2_data_type {data_type} "
+                                f"for topic '{waypoint.topic}'. "
+                                "Supported types: FLOAT32, JOINT_STATE."
                             )
                             continue
                         pub = self.create_publisher(
-                            Float32,
+                            message_class,
                             waypoint.topic,
                             create_qos_setting(qos_setting),
                         )
@@ -84,6 +92,12 @@ class TrajectoryPublisher(Node):
         if not self._waypoints:
             self.get_logger().error(
                 f"No trajectory waypoints found for node_id {node_id}!"
+            )
+            return
+
+        if not self._topic_pubs:
+            self.get_logger().error(
+                "No supported trajectory publishers; playback will not start."
             )
             return
 
@@ -109,9 +123,57 @@ class TrajectoryPublisher(Node):
         self.get_logger().info("All topics have subscribers, starting trajectory loop")
         self._loop_timer = self.create_timer(0.0, self._run_trajectory_loop)
 
+    def _joint_state_message(
+        self, packet: action_packet_pb2.ActionPacket
+    ) -> JointState:
+        if not packet.HasField("joint") or not packet.joint.joint_name:
+            raise ValueError("JointState requires a named joint command")
+        joint = packet.joint
+        fields = [f for f in ("position", "velocity", "effort") if joint.HasField(f)]
+        if not fields or any(not math.isfinite(getattr(joint, f)) for f in fields):
+            raise ValueError("JointState requires finite position, velocity or effort")
+        if (
+            joint.HasField("position")
+            and joint.position_encoding != action_packet_pb2.JointCommand.POSITION_SI
+        ):
+            raise ValueError(
+                "JointState position requires POSITION_SI (radians or meters)"
+            )
+        if (joint.HasField("velocity") or joint.HasField("effort")) and (
+            joint.units != action_packet_pb2.JointCommand.SI
+        ):
+            raise ValueError("JointState velocity and effort require SI units")
+        message = JointState()
+        message.name = [joint.joint_name]
+        for field in fields:
+            setattr(message, field, [getattr(joint, field)])
+        message.header.frame_id = joint.frame_id
+        if packet.timestamp_ns:
+            sec, nanosec = divmod(packet.timestamp_ns, 1_000_000_000)
+            if not -(2**31) <= sec < 2**31:
+                raise ValueError("Source timestamp exceeds ROS time range")
+            message.header.stamp.sec = sec
+            message.header.stamp.nanosec = nanosec
+        else:
+            # Config waypoints normally have no source stamp; use ROS publish time.
+            message.header.stamp = self.get_clock().now().to_msg()
+        return message
+
     def _publish_waypoint(self, waypoint: TrajectoryWaypointEntry) -> None:
         topic_pub = self._topic_pubs.get(waypoint.topic)
         if topic_pub is None:
+            return
+
+        if topic_pub.data_type == ros2_data_type_pb2.JOINT_STATE:
+            try:
+                message = self._joint_state_message(waypoint.action)
+            except ValueError as exc:
+                self.get_logger().error(
+                    f"[t={waypoint.timestamp_sec:.3f}s] Invalid JointState "
+                    f"on '{waypoint.topic}': {exc}; skipping"
+                )
+                return
+            topic_pub.publisher.publish(message)
             return
 
         value = extract_scalar_from_action(waypoint.action, waypoint.topic)

@@ -72,6 +72,10 @@ class JoshuaWireChannel : public BoardChannel {
       return absl::UnimplementedError(
           "joshua_wire_v1 channel has no torque target (open-loop drive).");
     }
+    // TODO(hmoon): Encode the structured BoardChannel command once the versioned
+    // wire contract exists. Check firmware capabilities before sending combined
+    // fields. Use exhaustive mode dispatch: the current position/otherwise-
+    // velocity mapping must not reinterpret future modes as velocity.
     const jw1_mode_t wire_mode =
         mode == TargetMode::kPosition ? JW1_MODE_POSITION : JW1_MODE_VELOCITY;
     uint8_t buf[JW1_MAX_FRAME_LEN];
