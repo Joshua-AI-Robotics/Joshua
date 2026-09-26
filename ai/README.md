@@ -186,6 +186,6 @@ lock; model locks hold only model-specific closures.
 ## Scope
 
 The AI stack supports inference and model plug-ins, plus the
-[data store library and dataset loader](train/README.md). Recording callers
-provide their own subscriptions; the built-in data subscriber has been removed.
+[data store library and dataset loader](train/README.md). The data subscriber
+provides ROS recording through the launcher.
 Training (BC, RL) is not implemented.

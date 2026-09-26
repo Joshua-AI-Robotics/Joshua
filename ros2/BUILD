@@ -238,3 +238,25 @@ cc_test(
         "@ros2_deps//:rclcpp",
     ],
 )
+
+ros2_py_binary(
+    name = "data_subscriber",
+    srcs = [
+        "data_subscriber.py",
+    ],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
+    main = "data_subscriber.py",
+    set_up_ament = True,
+    deps = [
+        "//ai/train:data_store",
+        "//config/proto:config_py_proto",
+        "//ros2:node_runner_py",
+        "//ros2:ros2_type_resolver",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:qos_setting_py",
+        # Note: rclpy and std_msgs are available via system Python when ROS2 is sourced
+    ] + requirement("protobuf"),
+)

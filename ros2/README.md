@@ -1,7 +1,7 @@
 # ROS 2 nodes
 
 Hardware publishers, actuator subscribers, and `trajectory_publisher` run in C++.
-Inference is the only Python ROS node. Its required Python support remains:
+Inference and data recording use Python ROS nodes. Their Python support includes:
 `node_runner.py`, `image_converter.py`, `ros2_type_resolver.py`, and
 `utils/qos_setting.py` / `utils/ros_python_paths.py`.
 
@@ -11,11 +11,10 @@ for the data store library. Add new
 inference message types to `ROS2_TYPE_MAPPING` and the inference observation
 codec as needed.
 
-The data subscriber, MuJoCo mirror mode, and Python point-cloud visualizer have
-been removed. Their node/mode enum values are reserved. The
-[data store library and dataset loader](../ai/train/README.md) remain available;
-recording callers must supply their own subscriptions. Other simulation modes
-remain available.
+MuJoCo mirror mode and the Python point-cloud visualizer have been removed.
+The data subscriber, [data store and dataset loader](../ai/train/README.md)
+remain available, including the recording preset and launcher integration.
+Other simulation modes remain available.
 
 ## Trajectory playback
 
