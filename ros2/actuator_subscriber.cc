@@ -26,8 +26,6 @@ class ActionSubscriber : public rclcpp::Node {
  public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
-    const auto validation = config::ValidateConfig(config);
-    if (!validation.ok()) throw std::invalid_argument(validation.ToString());
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
           static_cast<int>(single_action.node().id()) != node_id) {
@@ -107,7 +105,7 @@ class ActionSubscriber : public rclcpp::Node {
         teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         auto status = actuator.interface->SetAction(teardown_packet);
         if (!status.ok()) {
-          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
+          RCLCPP_ERROR(get_logger(), "Failed to teardown actuator '%s'", actuator.topic.c_str());
         }
       });
     }
@@ -128,6 +126,12 @@ int main(int argc, char* argv[]) {
 
 #else
 std::shared_ptr<rclcpp::Node> MakeActuatorSubscriberForTest(const config::Config& config) {
-  return std::make_shared<ActionSubscriber>("actuator_command_test", 1, config);
+  return ros2_utils::CreateValidatedNode(
+      "actuator_command_test",
+      1,
+      config,
+      [](const std::string& name, int id, const config::Config& validated_config) {
+        return std::make_shared<ActionSubscriber>(name, id, validated_config);
+      });
 }
 #endif

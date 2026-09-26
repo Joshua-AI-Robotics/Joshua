@@ -13,8 +13,6 @@ class PositionPublisher : public rclcpp::Node {
  public:
   PositionPublisher(const std::string& node_name, int node_id, const config::Config& config)
       : Node(node_name) {
-    const auto validation = config::ValidateConfig(config);
-    if (!validation.ok()) throw std::invalid_argument(validation.ToString());
     for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
       if (sensor.node().id() != static_cast<uint32_t>(node_id) ||
           sensor.sensor_type() != robot::perception::POSITION)
@@ -63,6 +61,12 @@ int main(int argc, char* argv[]) {
 }
 #else
 std::shared_ptr<rclcpp::Node> MakePositionPublisherForTest(const config::Config& config) {
-  return std::make_shared<PositionPublisher>("position_feedback_test", 1, config);
+  return ros2_utils::CreateValidatedNode(
+      "position_feedback_test",
+      1,
+      config,
+      [](const std::string& name, int id, const config::Config& validated_config) {
+        return std::make_shared<PositionPublisher>(name, id, validated_config);
+      });
 }
 #endif

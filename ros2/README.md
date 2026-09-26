@@ -124,7 +124,11 @@ defines radian/metre units.
 Hardware and downstream constraints
 ----------------------------------
 
-Config validation rejects unsupported wire/driver combinations before hardware
+The shared C++ runner (`node_runner.cc`) validates the full config before
+constructing a node, including when launched directly without `node_generator`.
+The position and actuator constructors assume this prevalidated config;
+in-process callers use `CreateValidatedNode` to enforce the same boundary.
+Validation rejects unsupported wire/driver combinations before hardware
 initialization. Conversions reject non-finite values, overflow, underflow to
 zero, fractional integer feedback, and integer commands that lose precision
 when converted to the internal float API. Float64 input still rounds to float;

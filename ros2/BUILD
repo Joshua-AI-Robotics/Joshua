@@ -7,6 +7,7 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "node_runner",
+    srcs = ["node_runner.cc"],
     hdrs = ["node_runner.h"],
     data = [
         "//config/config_preset:config_presets",

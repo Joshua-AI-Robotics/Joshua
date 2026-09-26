@@ -41,4 +41,22 @@ TEST(NodeRunnerTest, RejectsInvalidConfigBeforeConstructingNode) {
   char* argv[] = {binary.data(), node_name.data(), node_id.data(), config_path.data(), nullptr};
   EXPECT_EQ(ros2_utils::RunNode<MustNotConstructNode>(4, argv, "node_runner_test"), 1);
 }
+TEST(NodeRunnerTest, SharedConstructionRejectsInvalidConfigBeforeFactory) {
+  config::Config config;
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->add_single_perceptions();
+  sensor->set_sensor_name("joint");
+  sensor->set_sensor_type(robot::perception::POSITION);
+  bool constructed = false;
+  EXPECT_THROW(
+      ros2_utils::CreateValidatedNode(
+          "test",
+          1,
+          config,
+          [&](const std::string&, int, const config::Config&) -> std::shared_ptr<rclcpp::Node> {
+            constructed = true;
+            return nullptr;
+          }),
+      std::invalid_argument);
+  EXPECT_FALSE(constructed);
+}
 }  // namespace
