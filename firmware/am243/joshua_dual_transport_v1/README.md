@@ -34,6 +34,20 @@ firmware/am243/joshua_dual_transport_v1/scripts/build.sh
 Artifacts are written under the ignored `out/` directory. The build uses a
 temporary working tree and leaves TI SDK sources unchanged.
 
+For the opt-in v2 **UART** artifact, build with:
+
+```bash
+JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+```
+
+Outputs are named `am243_dual_transport_v2.release.*`. The script also forwards
+arguments to `make`, allowing explicit `CCS_PATH`, `SYSCFG_PATH`, and compiler
+path overrides without editing the SDK. EtherCAT remains the TI demo, not
+JoshuaWire v2. The software-only UART command handler is shared with native
+host/session tests. Historical hardware results here apply to v1; v2 has not
+been flashed or hardware-validated. See the
+[v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
+
 ## Flash
 
 Not automated by this target. After the image is built and reviewed, adapt the

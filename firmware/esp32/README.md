@@ -42,6 +42,13 @@ proven on Teensy works unchanged here, no ESP32-specific code needed.
 
 ## Status
 
+The hardware results below describe v1. For opt-in v2, build with
+`pio run -e esp32-serial-v2` and select `Board.protocol: JOSHUA_WIRE_V2`.
+The default environment remains v1. Both versions share command dispatch in
+`firmware/common/joshua_stepdir_commands.cpp`; see the
+[v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
+V2 hardware validation has not yet been performed.
+
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
       reused unchanged
@@ -227,7 +234,7 @@ MCU — but treat that as a prediction until it's actually been run.
 ## Related files
 
 - `robot/board/esp32/esp32_board.{h,cc}` — paired host-side board class; a
-  one-line constructor supplying `BoardType::ESP32` and `JW1_BOARD_ESP32`
+  one-line constructor supplying `BoardType::ESP32` and `JW_BOARD_ESP32`
   to `JoshuaWireBoard`, plus a `CreateTransport()` override for the
   post-open settle delay (see Known gaps above) — everything else is
   inherited

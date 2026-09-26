@@ -33,6 +33,11 @@ so explicitly with `TODO` placeholders rather than staying silent.
 | Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
 | ESP32 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, and protocol-verified on real hardware (IDENTIFY/ENABLE/SET_TARGET all confirmed) — joins the same joshua_wire_v1 family as Teensy. Physical motor rotation not yet observed on this board. | [`esp32/README.md`](esp32/README.md) |
 
+- `common/joshua_wire_commands.h`: version-neutral command IDs (`JW_CMD_*`),
+  statuses, modes, wire board/drive IDs and semantic payload types (`jw_*_t`).
+  Both frame codecs include it. Command IDs do not select a wire version;
+  `JW_CMD_RESET_SESSION` still requires a v2 endpoint. V1 frame-building helpers
+  keep their `jw1_*` names because they actually produce/consume v1 frames.
 - `common/joshua_wire_v1.{h,c}`: the shared frame codec between Joshua host
   boards and Joshua-authored MCU firmware (docs/BOARD_LAYER_RFC.md §7.2/§7.3).
   Built as a Bazel `cc_library` for the host and as a PlatformIO library
@@ -42,12 +47,48 @@ so explicitly with `TODO` placeholders rather than staying silent.
   the existing TI EtherCAT demo. The dual-transport AM243 overlay builds both
   into one image while keeping the TI SDK outside the repository.
 
+## Opt-in JoshuaWire v2 serial milestone
+
+The existing v1 artifacts remain the defaults. Separate v2 artifacts now use
+the shared `common/joshua_wire_v2` codec and firmware session on Teensy 4.1,
+ESP32, and AM243 UART. Build without flashing:
+
+```bash
+pio run -d firmware/teensy/41 -e teensy41-serial-v2
+pio run -d firmware/esp32 -e esp32-serial-v2
+JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+```
+
+Select `protocol: JOSHUA_WIRE_V2` in the corresponding host `Board` config.
+There is no wire-version auto-detection or fallback. Historical hardware
+verification in the table above applies to **v1**, not these new v2 artifacts.
+The AM243 v2 artifact changes UART only; EtherCAT still runs TI's demo with
+separate state, and UART still has no physical motor output.
+
+V2 requires RESET_SESSION before commands. Reset disables existing outputs
+before clearing configuration; the host must configure and explicitly enable
+channels again. ESTOP is latched until a new session. The serial firmware session executes
+strictly increasing message IDs, replays the cached response for an identical
+immediate retry, and drops older IDs or changed requests reusing an ID. It is
+single-threaded/single-flight, not a multi-transport command arbiter. Session IDs
+provide correlation, not authentication: a different-session reset is accepted.
+No communication-loss watchdog has been added in this milestone.
+
+V1 wire encoding is unchanged. Shared command validation now rejects enabling
+unconfigured channels and malformed/non-finite targets. Native Bazel tests
+exercise the actual MCU dispatch with simulated serial/GPIO, plus the AM243
+software handler and host session; no tests flash or move hardware.
+
 ## Layout
+
+For the protocol/session/dispatch file map and contributor entry points, see
+[Shared firmware and JoshuaWire](common/README.md).
 
 ```text
 firmware/
   FLASHING_TEMPLATE.md   the section structure every board README follows
-  common/       # shared host/firmware wire codec (joshua_wire_v1)
+  common/       # shared commands, v1/v2 codecs, sessions and drive backend
+  testing/      # native-test Arduino substitute and shared firmware tests
   am243/        # TI demo metadata plus Joshua's dual-transport source overlay
   teensy/41/    # Joshua-owned firmware for the Teensy 4.1
   arduino/      # not started — placeholder README only

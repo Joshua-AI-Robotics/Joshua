@@ -55,7 +55,7 @@ void StepDirInit(ChannelState* channel) {
   channel->enabled = false;
 }
 
-void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config) {
+void StepDirConfigure(ChannelState* channel, const jw_configure_step_dir_t* config) {
   channel->step_dir.config = *config;
   pinMode(channel->step_dir.config.step_pin, OUTPUT);
   pinMode(channel->step_dir.config.dir_pin, OUTPUT);
@@ -84,7 +84,7 @@ void StepDirDisable(ChannelState* channel) {
   digitalWrite(channel->step_dir.config.enable_pin, inactive_level);
 }
 
-void StepDirSetTarget(ChannelState* channel, jw1_mode_t mode, float value) {
+void StepDirSetTarget(ChannelState* channel, jw_mode_t mode, float value) {
   channel->target_mode = mode;
   channel->target_value = value;
 }
@@ -102,7 +102,7 @@ void StepDirService(ChannelState* channel) {
   }
 
   switch (channel->target_mode) {
-    case JW1_MODE_POSITION: {
+    case JW_MODE_POSITION: {
       const long target_steps = lroundf(channel->target_value);
       if (channel->step_dir.position_steps == target_steps) {
         return;
@@ -110,14 +110,14 @@ void StepDirService(ChannelState* channel) {
       Pulse(channel, target_steps > channel->step_dir.position_steps);
       return;
     }
-    case JW1_MODE_VELOCITY: {
+    case JW_MODE_VELOCITY: {
       if (channel->target_value == 0.0f) {
         return;
       }
       Pulse(channel, channel->target_value > 0.0f);
       return;
     }
-    case JW1_MODE_TORQUE:
+    case JW_MODE_TORQUE:
     default:
       return;  // No torque target on an open-loop STEP_DIR channel.
   }

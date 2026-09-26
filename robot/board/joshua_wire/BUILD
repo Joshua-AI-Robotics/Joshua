@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["joshua_wire_board.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":joshua_wire_v2_session",
         "//firmware/common:joshua_wire_v1",
         "//robot/board/frame:frame_transport",
         "//robot/board/interfaces:board_interfaces",
@@ -16,6 +17,36 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "joshua_wire_v2_session",
+    srcs = ["joshua_wire_v2_session.cc"],
+    hdrs = ["joshua_wire_v2_session.h"],
+    visibility = ["//robot/board:__subpackages__"],
+    deps = [
+        "//firmware/common:joshua_wire_v1",
+        "//firmware/common:joshua_wire_v2",
+        "//robot/comm/interfaces:message_transport",
+        "//utils:status_macros",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "joshua_wire_v2_session_test",
+    srcs = ["joshua_wire_v2_session_test.cc"],
+    deps = [
+        ":joshua_wire_board",
+        ":joshua_wire_v2_session",
+        "//firmware/am243/joshua_dual_transport_v1:serial_commands",
+        "//firmware/common:joshua_wire_serial_endpoint",
+        "//firmware/common:joshua_wire_v1",
+        "//firmware/common:joshua_wire_v2",
+        "//robot/comm/factory:comm_factory",
+        "@googletest//:gtest_main",
     ],
 )
 

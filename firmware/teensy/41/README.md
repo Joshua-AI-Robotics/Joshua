@@ -37,6 +37,13 @@ the same way rather than copy-pasted per firmware.
 
 ## Status
 
+The hardware results below describe v1. For opt-in v2, build with
+`pio run -e teensy41-serial-v2` and select `Board.protocol: JOSHUA_WIRE_V2`.
+The default environment remains v1. Both versions share command dispatch in
+`firmware/common/joshua_stepdir_commands.cpp`; see the
+[v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
+V2 hardware validation has not yet been performed.
+
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`)
 - [x] Firmware flashed (`pio run --target upload`)
@@ -224,7 +231,7 @@ they vary (some are current-then-microstep, some the reverse).
 
 - `robot/board/teensy/teensy_board.h` — paired host-side board class;
   header-only, a one-line constructor passing Teensy's identity
-  (`TEENSY41`, `JW1_BOARD_TEENSY41`) up to `JoshuaWireBoard` — everything
+  (`TEENSY41`, `JW_BOARD_TEENSY41`) up to `JoshuaWireBoard` — everything
   else is inherited, see below
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every

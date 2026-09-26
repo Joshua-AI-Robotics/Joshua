@@ -123,6 +123,14 @@ message Am243Config {
   uint32 input_size_bytes = 6;
 }
 
+// Explicit wire-version opt-in during the v2 migration. Unspecified preserves
+// existing board behavior (JoshuaWire v1, Feetech, or the TI PDO demo).
+enum BoardProtocol {
+  BOARD_PROTOCOL_UNSPECIFIED = 0;
+  JOSHUA_WIRE_V1 = 1;
+  JOSHUA_WIRE_V2 = 2;
+}
+
 message Board {
   string name = 1;  // Referenced by actuators; cache key.
   BoardType board_type = 2;
@@ -130,6 +138,7 @@ message Board {
                                   // (omitted for HOST_GPIO / MOCK).
   repeated Channel channels = 4;  // Drive leg: what each slot drives.
   FirmwareSpec firmware = 5;
+  BoardProtocol protocol = 6;
   oneof board_config {
     Am243Config am243_config = 10;
   }

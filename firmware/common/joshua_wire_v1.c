@@ -94,7 +94,8 @@ int jw1_decode_frame(const uint8_t* buf, size_t len, jw1_frame_t* out) {
   if (buf == NULL || out == NULL) {
     return -1;
   }
-  if (len < 4 || buf[0] != JW1_SYNC_BYTE) {
+  if (len < 4 || buf[0] != JW1_SYNC_BYTE || buf[2] != JW1_PROTO_VERSION ||
+      len > JW1_MAX_FRAME_LEN) {
     return -1;
   }
   const uint8_t frame_len = buf[1];
@@ -117,13 +118,13 @@ int jw1_decode_frame(const uint8_t* buf, size_t len, jw1_frame_t* out) {
 }
 
 int jw1_encode_identify_request(uint8_t* buf, size_t cap) {
-  return jw1_encode_frame(buf, cap, JW1_CMD_IDENTIFY, JW1_CHANNEL_NONE, NULL, 0);
+  return jw1_encode_frame(buf, cap, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, NULL, 0);
 }
 
 int jw1_encode_configure_channel_step_dir(uint8_t* buf,
                                           size_t cap,
                                           uint8_t channel,
-                                          const jw1_configure_step_dir_t* config) {
+                                          const jw_configure_step_dir_t* config) {
   if (config == NULL) {
     return -1;
   }
@@ -135,67 +136,65 @@ int jw1_encode_configure_channel_step_dir(uint8_t* buf,
   payload[7] = config->dir_pin;
   payload[8] = config->enable_pin;
   jw1_put_u16le(payload + 9, config->step_pulse_width_us);
-  return jw1_encode_frame(buf, cap, JW1_CMD_CONFIGURE_CHANNEL, channel, payload, sizeof(payload));
+  return jw1_encode_frame(buf, cap, JW_CMD_CONFIGURE_CHANNEL, channel, payload, sizeof(payload));
 }
 
-int jw1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel, jw1_mode_t mode, float value) {
+int jw1_encode_set_target(uint8_t* buf, size_t cap, uint8_t channel, jw_mode_t mode, float value) {
   uint8_t payload[5] = {0};
   payload[0] = (uint8_t)mode;
   jw1_put_f32le(payload + 1, value);
-  return jw1_encode_frame(buf, cap, JW1_CMD_SET_TARGET, channel, payload, sizeof(payload));
+  return jw1_encode_frame(buf, cap, JW_CMD_SET_TARGET, channel, payload, sizeof(payload));
 }
 
 int jw1_encode_get_feedback_request(uint8_t* buf, size_t cap, uint8_t channel) {
-  return jw1_encode_frame(buf, cap, JW1_CMD_GET_FEEDBACK, channel, NULL, 0);
+  return jw1_encode_frame(buf, cap, JW_CMD_GET_FEEDBACK, channel, NULL, 0);
 }
 
 int jw1_encode_enable(uint8_t* buf, size_t cap, uint8_t channel) {
-  return jw1_encode_frame(buf, cap, JW1_CMD_ENABLE, channel, NULL, 0);
+  return jw1_encode_frame(buf, cap, JW_CMD_ENABLE, channel, NULL, 0);
 }
 
 int jw1_encode_disable(uint8_t* buf, size_t cap, uint8_t channel) {
-  return jw1_encode_frame(buf, cap, JW1_CMD_DISABLE, channel, NULL, 0);
+  return jw1_encode_frame(buf, cap, JW_CMD_DISABLE, channel, NULL, 0);
 }
 
 int jw1_encode_estop(uint8_t* buf, size_t cap) {
-  return jw1_encode_frame(buf, cap, JW1_CMD_ESTOP, JW1_CHANNEL_NONE, NULL, 0);
+  return jw1_encode_frame(buf, cap, JW_CMD_ESTOP, JW_CHANNEL_NONE, NULL, 0);
 }
 
 int jw1_encode_status_response(
-    uint8_t* buf, size_t cap, uint8_t cmd, uint8_t channel, jw1_status_t status) {
+    uint8_t* buf, size_t cap, uint8_t cmd, uint8_t channel, jw_status_t status) {
   const uint8_t payload[1] = {(uint8_t)status};
   return jw1_encode_frame(buf, cap, cmd, channel, payload, sizeof(payload));
 }
 
-int jw1_encode_identify_response(uint8_t* buf,
-                                 size_t cap,
-                                 const jw1_identify_response_t* response) {
+int jw1_encode_identify_response(uint8_t* buf, size_t cap, const jw_identify_response_t* response) {
   if (response == NULL) {
     return -1;
   }
-  if (response->n_channels > JW1_MAX_CHANNELS) {
+  if (response->n_channels > JW_MAX_CHANNELS) {
     return -1;
   }
-  // Fixed-size payload (JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN) so a host atop a
+  // Fixed-size payload (JW_IDENTIFY_RESPONSE_PAYLOAD_LEN) so a host atop a
   // fixed-size-read transport can size its read before it knows
-  // n_channels; slots beyond n_channels are padded JW1_DRIVE_INVALID.
-  uint8_t payload[JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN] = {0};
+  // n_channels; slots beyond n_channels are padded JW_DRIVE_INVALID.
+  uint8_t payload[JW_IDENTIFY_RESPONSE_PAYLOAD_LEN] = {0};
   size_t offset = 0;
   payload[offset++] = (uint8_t)response->board_id;
-  memcpy(payload + offset, response->fw_name, JW1_FW_NAME_LEN);
-  offset += JW1_FW_NAME_LEN;
+  memcpy(payload + offset, response->fw_name, JW_FW_NAME_LEN);
+  offset += JW_FW_NAME_LEN;
   payload[offset++] = response->n_channels;
-  for (uint8_t i = 0; i < JW1_MAX_CHANNELS; i++) {
+  for (uint8_t i = 0; i < JW_MAX_CHANNELS; i++) {
     payload[offset++] =
-        (uint8_t)(i < response->n_channels ? response->channel_drives[i] : JW1_DRIVE_INVALID);
+        (uint8_t)(i < response->n_channels ? response->channel_drives[i] : JW_DRIVE_INVALID);
   }
-  return jw1_encode_frame(buf, cap, JW1_CMD_IDENTIFY, JW1_CHANNEL_NONE, payload, (uint8_t)offset);
+  return jw1_encode_frame(buf, cap, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, payload, (uint8_t)offset);
 }
 
 int jw1_encode_feedback_response(uint8_t* buf,
                                  size_t cap,
                                  uint8_t channel,
-                                 const jw1_feedback_t* feedback) {
+                                 const jw_feedback_t* feedback) {
   if (feedback == NULL) {
     return -1;
   }
@@ -203,35 +202,35 @@ int jw1_encode_feedback_response(uint8_t* buf,
   jw1_put_f32le(payload, feedback->position);
   jw1_put_f32le(payload + 4, feedback->velocity);
   jw1_put_u16le(payload + 8, feedback->fault_flags);
-  return jw1_encode_frame(buf, cap, JW1_CMD_GET_FEEDBACK, channel, payload, sizeof(payload));
+  return jw1_encode_frame(buf, cap, JW_CMD_GET_FEEDBACK, channel, payload, sizeof(payload));
 }
 
-int jw1_decode_identify_response(const jw1_frame_t* frame, jw1_identify_response_t* out) {
+int jw1_decode_identify_response(const jw1_frame_t* frame, jw_identify_response_t* out) {
   if (frame == NULL || out == NULL) {
     return -1;
   }
-  if (frame->cmd != JW1_CMD_IDENTIFY || frame->payload_len != JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN) {
+  if (frame->cmd != JW_CMD_IDENTIFY || frame->payload_len != JW_IDENTIFY_RESPONSE_PAYLOAD_LEN) {
     return -1;
   }
   size_t offset = 0;
-  out->board_id = (jw1_board_id_t)frame->payload[offset++];
-  memcpy(out->fw_name, frame->payload + offset, JW1_FW_NAME_LEN);
-  offset += JW1_FW_NAME_LEN;
+  out->board_id = (jw_board_id_t)frame->payload[offset++];
+  memcpy(out->fw_name, frame->payload + offset, JW_FW_NAME_LEN);
+  offset += JW_FW_NAME_LEN;
   out->n_channels = frame->payload[offset++];
-  if (out->n_channels > JW1_MAX_CHANNELS) {
+  if (out->n_channels > JW_MAX_CHANNELS) {
     return -1;
   }
   for (uint8_t i = 0; i < out->n_channels; i++) {
-    out->channel_drives[i] = (jw1_drive_t)frame->payload[offset + i];
+    out->channel_drives[i] = (jw_drive_t)frame->payload[offset + i];
   }
   return 0;
 }
 
-int jw1_decode_feedback_response(const jw1_frame_t* frame, jw1_feedback_t* out) {
+int jw1_decode_feedback_response(const jw1_frame_t* frame, jw_feedback_t* out) {
   if (frame == NULL || out == NULL) {
     return -1;
   }
-  if (frame->cmd != JW1_CMD_GET_FEEDBACK || frame->payload_len != 10) {
+  if (frame->cmd != JW_CMD_GET_FEEDBACK || frame->payload_len != 10) {
     return -1;
   }
   out->position = jw1_get_f32le(frame->payload);
@@ -240,34 +239,34 @@ int jw1_decode_feedback_response(const jw1_frame_t* frame, jw1_feedback_t* out) 
   return 0;
 }
 
-int jw1_decode_status_response(const jw1_frame_t* frame, jw1_status_t* out) {
+int jw1_decode_status_response(const jw1_frame_t* frame, jw_status_t* out) {
   if (frame == NULL || out == NULL) {
     return -1;
   }
   if (frame->payload_len != 1) {
     return -1;
   }
-  *out = (jw1_status_t)frame->payload[0];
+  *out = (jw_status_t)frame->payload[0];
   return 0;
 }
 
-int jw1_decode_set_target(const jw1_frame_t* frame, jw1_set_target_t* out) {
+int jw1_decode_set_target(const jw1_frame_t* frame, jw_set_target_t* out) {
   if (frame == NULL || out == NULL) {
     return -1;
   }
-  if (frame->cmd != JW1_CMD_SET_TARGET || frame->payload_len != 5) {
+  if (frame->cmd != JW_CMD_SET_TARGET || frame->payload_len != 5) {
     return -1;
   }
-  out->mode = (jw1_mode_t)frame->payload[0];
+  out->mode = (jw_mode_t)frame->payload[0];
   out->value = jw1_get_f32le(frame->payload + 1);
   return 0;
 }
 
-int jw1_decode_configure_channel_step_dir(const jw1_frame_t* frame, jw1_configure_step_dir_t* out) {
+int jw1_decode_configure_channel_step_dir(const jw1_frame_t* frame, jw_configure_step_dir_t* out) {
   if (frame == NULL || out == NULL) {
     return -1;
   }
-  if (frame->cmd != JW1_CMD_CONFIGURE_CHANNEL || frame->payload_len != 11) {
+  if (frame->cmd != JW_CMD_CONFIGURE_CHANNEL || frame->payload_len != 11) {
     return -1;
   }
   out->max_pulse_rate_hz = jw1_get_u32le(frame->payload);

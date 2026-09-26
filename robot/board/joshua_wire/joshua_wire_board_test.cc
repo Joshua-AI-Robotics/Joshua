@@ -23,23 +23,23 @@ namespace {
 class FakeJoshuaWireBoard : public JoshuaWireBoard {
  public:
   FakeJoshuaWireBoard()
-      : JoshuaWireBoard(robot::board::BoardType::ARDUINO_UNO, JW1_BOARD_ARDUINO_UNO) {}
+      : JoshuaWireBoard(robot::board::BoardType::ARDUINO_UNO, JW_BOARD_ARDUINO_UNO) {}
 };
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw1_board_id_t board_id = JW1_BOARD_ARDUINO_UNO) {
-  jw1_identify_response_t response{};
+                                          jw_board_id_t board_id = JW_BOARD_ARDUINO_UNO) {
+  jw_identify_response_t response{};
   response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
-    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
+    response.channel_drives[i] = JW_DRIVE_STEP_DIR;
   }
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
   return std::vector<uint8_t>(buf, buf + len);
 }
 
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw1_status_t status) {
+std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw_status_t status) {
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
   return std::vector<uint8_t>(buf, buf + len);
@@ -49,7 +49,7 @@ std::vector<uint8_t> MakeFeedbackResponse(uint8_t channel,
                                           float position,
                                           float velocity,
                                           uint16_t fault_flags) {
-  jw1_feedback_t feedback{position, velocity, fault_flags};
+  jw_feedback_t feedback{position, velocity, fault_flags};
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_feedback_response(buf, sizeof(buf), channel, &feedback);
   return std::vector<uint8_t>(buf, buf + len);
@@ -108,7 +108,7 @@ class JoshuaWireBoardTest : public ::testing::Test {
   void QueueSuccessfulInit(uint8_t n_channels = 1) {
     transport_->QueueResponse(MakeIdentifyResponse(n_channels));
     for (uint8_t i = 0; i < n_channels; i++) {
-      transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, i, JW1_STATUS_OK));
+      transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, i, JW_STATUS_OK));
     }
   }
 
@@ -144,7 +144,7 @@ TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
   ASSERT_TRUE(channel0.ok());
   ASSERT_TRUE(channel1.ok());
 
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_ENABLE, 1, JW1_STATUS_OK));
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
   EXPECT_TRUE((*channel1)->Enable().ok());
   EXPECT_EQ(transport_->last_sent_[4], 1);  // Reached the wire as channel 1, not 0.
 }
@@ -211,7 +211,7 @@ TEST_F(JoshuaWireBoardTest, ConfigureChannelSendsStepPulseWidthOnTheWire) {
   // step_pulse_width_us(2, LE) — starts at last_sent_[5].
   ASSERT_EQ(transport_->sent_.size(), 2u);
   const auto& configure_frame = transport_->sent_[1];
-  ASSERT_EQ(configure_frame[3], JW1_CMD_CONFIGURE_CHANNEL);
+  ASSERT_EQ(configure_frame[3], JW_CMD_CONFIGURE_CHANNEL);
   EXPECT_EQ(configure_frame[14], 0xf4);  // 500 & 0xFF
   EXPECT_EQ(configure_frame[15], 0x01);  // 500 >> 8
 }
@@ -231,7 +231,7 @@ TEST_F(JoshuaWireBoardTest, InitFailsWhenBoardIdMismatches) {
   // catch "wrong device on this port" (e.g. a re-enumerated serial path
   // now pointing at a different board) instead of silently proceeding as
   // long as channel shapes happen to match (docs/BOARD_LAYER_RFC.md §7.5).
-  transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_TEENSY41));
+  transport_->QueueResponse(MakeIdentifyResponse(1, JW_BOARD_TEENSY41));
   FakeJoshuaWireBoard board;
 
   EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kFailedPrecondition);
@@ -246,7 +246,7 @@ TEST_F(JoshuaWireBoardTest, InitFailsWhenFirmwareReportsFewerChannels) {
 
 TEST_F(JoshuaWireBoardTest, InitFailsWhenConfigureChannelReturnsError) {
   transport_->QueueResponse(MakeIdentifyResponse(1));
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_ERROR));
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, 0, JW_STATUS_ERROR));
   FakeJoshuaWireBoard board;
 
   EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kInternal);
@@ -259,11 +259,11 @@ TEST_F(JoshuaWireBoardTest, OpenChannelEnableSendsEnableFrame) {
   auto channel = board.OpenChannel(0);
   ASSERT_TRUE(channel.ok()) << channel.status();
 
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_ENABLE, 0, JW1_STATUS_OK));
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 0, JW_STATUS_OK));
   auto status = (*channel)->Enable();
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_sent_[3], JW1_CMD_ENABLE);
+  EXPECT_EQ(transport_->last_sent_[3], JW_CMD_ENABLE);
   EXPECT_EQ(transport_->last_sent_[4], 0);
 }
 
@@ -274,12 +274,12 @@ TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
   auto channel = board.OpenChannel(0);
   ASSERT_TRUE(channel.ok());
 
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_SET_TARGET, 0, JW1_STATUS_OK));
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_SET_TARGET, 0, JW_STATUS_OK));
   auto status = (*channel)->SetTarget(TargetMode::kPosition, 1234.0f);
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_sent_[3], JW1_CMD_SET_TARGET);
-  EXPECT_EQ(transport_->last_sent_[5], JW1_MODE_POSITION);
+  EXPECT_EQ(transport_->last_sent_[3], JW_CMD_SET_TARGET);
+  EXPECT_EQ(transport_->last_sent_[5], JW_MODE_POSITION);
 }
 
 TEST_F(JoshuaWireBoardTest, SetTargetTorqueIsUnimplementedWithoutTouchingWire) {

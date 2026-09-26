@@ -15,6 +15,8 @@
 
 namespace robot::board {
 
+class JoshuaWireV2Session;
+
 // Shared host-side implementation of the joshua_wire_v1 board contract:
 // open a FrameTransport, run the
 // IDENTIFY handshake (board_id, protocol version, per-channel drive all
@@ -24,7 +26,7 @@ namespace robot::board {
 // ArduinoBoard, ...) speaks the exact same wire protocol, so this class
 // holds that entire orchestration once — a concrete board subclasses this
 // and supplies only the handful of facts that actually differ per board:
-// which BoardType/jw1_board_id_t it is, and (if it ever isn't a plain
+// which BoardType/jw_board_id_t it is, and (if it ever isn't a plain
 // serial link) how its comm config is validated and its production
 // transport is built.
 //
@@ -35,7 +37,7 @@ namespace robot::board {
 // Esp32Board overrides CreateTransport only to wait out the board's
 // auto-reset after open; the handshake itself is unchanged.
 //
-// Board identity (expected BoardType / jw1_board_id_t) is constructor
+// Board identity (expected BoardType / jw_board_id_t) is constructor
 // data, not a virtual hook: unlike ValidateComm/CreateTransport
 // below (genuine behavior a future board might need to override), a
 // board's identity is a compile-time-known constant with no logic behind
@@ -45,8 +47,7 @@ namespace robot::board {
 // a concrete board.
 class JoshuaWireBoard : public BoardInterface {
  public:
-  JoshuaWireBoard(robot::board::BoardType expected_board_type,
-                  jw1_board_id_t expected_wire_board_id)
+  JoshuaWireBoard(robot::board::BoardType expected_board_type, jw_board_id_t expected_wire_board_id)
       : expected_board_type_(expected_board_type),
         expected_wire_board_id_(expected_wire_board_id) {}
   ~JoshuaWireBoard() override = default;
@@ -77,11 +78,12 @@ class JoshuaWireBoard : public BoardInterface {
                                    const robot::board::Board& config) const;
 
   const robot::board::BoardType expected_board_type_;
-  const jw1_board_id_t expected_wire_board_id_;
+  const jw_board_id_t expected_wire_board_id_;
 
   bool initialized_ = false;
   robot::board::Board config_;
   std::shared_ptr<FrameTransport> transport_;
+  std::shared_ptr<JoshuaWireV2Session> v2_session_;
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels_;
 };
 

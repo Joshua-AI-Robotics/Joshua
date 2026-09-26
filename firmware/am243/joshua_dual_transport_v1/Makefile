@@ -25,11 +25,15 @@ FILES_PATH := \
 	generated
 
 INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
+JOSHUA_WIRE_VERSION ?= 1
+INCLUDES += -DJOSHUA_WIRE_VERSION=$(JOSHUA_WIRE_VERSION)
 
-OBJS += joshua_serial_task.obj joshua_wire_v1.obj
-DEPS += joshua_serial_task.d joshua_wire_v1.d
+JOSHUA_OBJS := joshua_serial_task.obj joshua_serial_commands.obj joshua_wire_v1.obj \
+	joshua_wire_v2.obj joshua_wire_v2_firmware_session.obj joshua_wire_serial_endpoint.obj
+OBJS += $(JOSHUA_OBJS)
+DEPS += $(JOSHUA_OBJS:.obj=.d)
 
 vpath %.c
 vpath %.c $(FILES_PATH)
 
-$(OUTNAME): joshua_serial_task.obj joshua_wire_v1.obj
+$(OUTNAME): $(JOSHUA_OBJS)

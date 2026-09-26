@@ -54,6 +54,23 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
    the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
    against that list rather than against a copy of it here.
 
+## JoshuaWire serial protocol selection
+
+Existing board configs keep their current protocol when `protocol` is omitted.
+For a serial AM243, Teensy 4.1, or ESP32 running the matching **v2 firmware
+artifact**, add these fields inside its `Board` entry:
+
+```text
+protocol: JOSHUA_WIRE_V2
+firmware { min_proto_version: 2 }
+```
+
+This is an explicit selection, not version negotiation. V1 and v2 artifacts
+reject each other's frames. V2 initializes with a fresh session reset, then
+IDENTIFY and CONFIGURE_CHANNEL; initialization leaves channels disabled.
+Feetech and the current AM243 EtherCAT TI-demo path do not accept this selection.
+See [firmware build instructions](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone).
+
 ## Sensor configuration
 
 Each `single_perceptions` entry declares `sensor_name`, `sensor_type`, and one

@@ -32,3 +32,17 @@ implementation is added.
 Device protocol parsing remains outside this layer. For example, the lidar
 parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`.
+
+### Transitional serial v2 exchange
+
+`MessageTransport::Exchange` accepts a request and returns a variable-length
+response; legacy fixed-size `SendAndReceive` remains supported. Serial currently
+implements `Exchange` with JoshuaWire's sync/length framing, a 64-byte cap, and
+one 100 ms deadline spanning write and read. It flushes stale input before each
+request and serializes exchanges on the bus mutex. CRC, version, and correlation
+validation belong to the board's v2 session wrapper. A mismatched reply fails
+the operation (outcome unknown), rather than waiting for another reply.
+
+This framing implementation is transitional: the separate framed-serial adapter,
+configurable deadlines/settle policy, cyclic v2 capability, and EtherCAT mailbox
+are still pending under the board/comm separation plan.

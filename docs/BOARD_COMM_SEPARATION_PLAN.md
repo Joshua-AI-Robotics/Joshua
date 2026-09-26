@@ -1,9 +1,29 @@
 # Board and Comm Separation Plan
 
-Status: **Proposed**
+Status: **In progress — opt-in serial v2 milestone implemented**
 
 Companion to: [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md),
 [am243_ethercat.md](am243_ethercat.md)
+
+Implementation checkpoint:
+
+- Step 2: shared C v2 codec/firmware session, explicit v1/v2 serial artifacts for
+  Teensy 4.1, ESP32 and AM243 UART, and the opt-in host session are implemented.
+  Tests cover golden bytes, correlation, reset/reboot, duplicate execution,
+  ID exhaustion, concurrent callers, timeouts, late responses and teardown.
+- Step 3 is partial: variable-length message exchange exists, but the legacy
+  fixed-size API and in-memory v1 command-payload bridge remain. Serial framing
+  still lives in `Serial`, with a fixed 100 ms exchange deadline. The final
+  composed board engine, comm visibility restrictions and cyclic capability
+  are not implemented yet. Mismatched serial replies fail closed rather than
+  being skipped while waiting for another reply.
+- Steps 4–7 remain pending. AM243 EtherCAT still uses the independent TI demo;
+  no JoshuaWire PDO/CoE profile, owner loop, mailbox, watchdog or cross-transport
+  arbiter is claimed by this checkpoint. V2 has not been hardware-validated.
+
+The contracts below remain the target design, not a claim that the entire plan
+has landed. See [firmware usage](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone)
+and [host config](../config/README.md#joshuawire-serial-protocol-selection).
 
 ## 1. Goal
 

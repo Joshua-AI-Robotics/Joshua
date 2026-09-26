@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "serial",
@@ -37,5 +37,16 @@ cc_library(
         ":serial",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "serial_exchange_test",
+    srcs = ["serial_exchange_test.cc"],
+    deps = [
+        ":serial",
+        "//firmware/common:joshua_wire_v2",
+        "@boost.asio",
+        "@googletest//:gtest_main",
     ],
 )

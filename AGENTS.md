@@ -118,6 +118,7 @@ touches their area:
   [scripts/](scripts/README.md), [tools/](tools/README.md),
   [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
+- **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of
   [CONTRIBUTING.md](CONTRIBUTING.md).

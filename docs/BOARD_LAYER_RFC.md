@@ -12,6 +12,12 @@ separation now lives in
 document makes a newer explicit decision about plane composition or command
 routing, it supersedes the corresponding open question in this RFC.
 
+Implementation checkpoint: opt-in JoshuaWire v2 over serial now exists for
+Teensy 4.1, ESP32 and AM243 UART, with host/firmware correlation and reset tests.
+The separation plan records the remaining EtherCAT and composed-engine work;
+the serial milestone does not complete those architectural phases or hardware
+validation.
+
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.
 
@@ -65,7 +71,7 @@ name needs a new class today.
 | **F2** | `Init`/`OpenChannel`/`Teardown` are `final`, so dual-transport boards cannot subclass; `Am243Board` needs composition plus a `serial_mode_` bool. | `joshua_wire_board.h:55` |
 | **F3** | `SendAndReceive()` takes **already-framed** bytes, so every transport inherits serial's `0xA5`/crc16 — redundant on UDP, fatal on CAN (39-byte frame, 8-byte MTU). | `frame_transport.h:39` |
 | **F4** | Fixed response length is baked in at three levels at once; variable-length payloads break all three. | `frame_transport.h` |
-| **F5** | Three enums hand-mirrored with no `static_assert`. One already drifted: `JW1_BOARD_ESP32 = 8` vs `ESP32 = 7`. | `joshua_wire_v1.h:93` |
+| **F5** | Three enums hand-mirrored with no `static_assert`. One already drifted: `JW_BOARD_ESP32 = 8` vs `ESP32 = 7`. The neutral-header extraction preserves this existing wire ID. | `firmware/common/joshua_wire_commands.h` |
 | **F6** | `Esp32Board`'s only real override is a one-time 2 s sleep at `Init`: opening the port asserts DTR, which the CP2102 bridge wires to reset, so the board reboots and the first exchange waits it out — nothing per message. A property of the **link**, not of ESP32 silicon. | `esp32_board.cc` |
 
 ## 4. Target: two planes
@@ -123,7 +129,7 @@ format a one-file change, which is the entire claim of this RFC.
 **Step 2 — Move the existing boards onto the architecture.** *No wire change; behaviour identical.*
 - [ ] `FrameTransport` → a serial `MessageTransport`; framing moves inside it and serial keeps today's exact bytes, so the golden-byte tests do not change (F3, F4).
 - [ ] `JoshuaWireBoard` → `MessageBoard`; delete `TeensyBoard` and `Esp32Board`; settle delay → serial transport config (F1, F2, F6).
-- [ ] Generate `BoardIdentity` and the `jw1_*` enums from the protos; fix `JW1_BOARD_ESP32` to `7` (F5).
+- [ ] Generate `BoardIdentity` and the `jw_*` enums from the protos; fix `JW_BOARD_ESP32` to `7` with an explicit wire-compatibility migration (F5).
 - [ ] AM243's EtherCAT path → `CyclicBoard` + an EtherCAT `CyclicTransport`, TI PDO map as an `ImageLayout`; `serial_mode_` and the hand-forwarding disappear (F2).
 - [ ] `BoardFactory` resolves three axes independently: identity, plane, transport.
 - [ ] Acceptance: so100 teleop and the AM243 EtherCAT path behave identically, and no per-board class remains.
@@ -132,7 +138,7 @@ format a one-file change, which is the entire claim of this RFC.
 - [ ] A UDP `MessageTransport` plus the matching firmware variant: same board, same firmware logic, new link — **no new class and no engine change**.
 
 **Step 4 — Proto payloads on the message plane.** *Wire change; firmware flash.*
-- [ ] nanopb on firmware, length-prefixed responses, retire `JW1_*_RESPONSE_PAYLOAD_LEN` (F4). Gated on question 1.
+- [ ] nanopb on firmware, length-prefixed responses, retire `JW_*_RESPONSE_PAYLOAD_LEN` (F4). Gated on question 1.
 
 **Step 5 — New axis values on the finished architecture.**
 - [ ] CAN, with ISO-TP fragmentation inside the transport; EtherCAT mailbox (CoE) on the message plane. Each should be one new file and a `.pbtxt` edit — if it is not, steps 1–2 were wrong.

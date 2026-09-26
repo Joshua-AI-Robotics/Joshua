@@ -16,19 +16,19 @@ namespace robot::board {
 namespace {
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw1_board_id_t board_id = JW1_BOARD_AM243) {
-  jw1_identify_response_t response{};
+                                          jw_board_id_t board_id = JW_BOARD_AM243) {
+  jw_identify_response_t response{};
   response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; ++i) {
-    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
+    response.channel_drives[i] = JW_DRIVE_STEP_DIR;
   }
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
   return std::vector<uint8_t>(buf, buf + len);
 }
 
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw1_status_t status) {
+std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw_status_t status) {
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
   return std::vector<uint8_t>(buf, buf + len);
@@ -105,7 +105,7 @@ class Am243BoardTest : public ::testing::Test {
 
 TEST_F(Am243BoardTest, InitSucceedsAgainstAm243Identity) {
   serial_transport_->QueueResponse(MakeIdentifyResponse(1));
-  serial_transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_OK));
+  serial_transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, 0, JW_STATUS_OK));
   Am243Board board;
 
   EXPECT_TRUE(board.Init(MakeAm243Board()).ok());
@@ -128,7 +128,7 @@ TEST_F(Am243BoardTest, InitSupportsEthercatDemoConfig) {
 }
 
 TEST_F(Am243BoardTest, InitRejectsNonAm243WireIdentity) {
-  serial_transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_TEENSY41));
+  serial_transport_->QueueResponse(MakeIdentifyResponse(1, JW_BOARD_TEENSY41));
   Am243Board board;
 
   EXPECT_EQ(board.Init(MakeAm243Board()).code(), absl::StatusCode::kFailedPrecondition);

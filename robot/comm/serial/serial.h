@@ -47,6 +47,9 @@ class Serial : public SerialTransport, public ByteStream {
 
   absl::Status Flush();
   absl::Status Open() override;
+  // JoshuaWire length-prefixed frames, bounded to 64 bytes. Includes write and
+  // read in one 100 ms deadline and one bus lock; accepts variable-size replies.
+  absl::StatusOr<std::vector<uint8_t>> Exchange(const std::vector<uint8_t>& request) override;
 
  private:
   std::string uart_port_;

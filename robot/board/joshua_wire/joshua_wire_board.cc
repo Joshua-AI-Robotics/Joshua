@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "utils/status_macros.h"
 
@@ -12,35 +13,35 @@ namespace robot::board {
 
 namespace {
 
-absl::Status JwStatusToAbsl(jw1_status_t status, const std::string& what) {
+absl::Status JwStatusToAbsl(jw_status_t status, const std::string& what) {
   switch (status) {
-    case JW1_STATUS_OK:
+    case JW_STATUS_OK:
       return absl::OkStatus();
-    case JW1_STATUS_UNSUPPORTED:
+    case JW_STATUS_UNSUPPORTED:
       return absl::UnimplementedError(absl::StrCat(what, ": firmware reports unsupported."));
-    case JW1_STATUS_ERROR:
+    case JW_STATUS_ERROR:
     default:
       return absl::InternalError(absl::StrCat(what, ": firmware reports error."));
   }
 }
 
-// robot.board.DriveInterface -> jw1_drive_t, value-for-value (mirrors the
-// comment on jw1_drive_t in joshua_wire_v1.h). Used to cross-check IDENTIFY's
+// robot.board.DriveInterface -> jw_drive_t, value-for-value (mirrors the
+// comment on jw_drive_t in joshua_wire_v1.h). Used to cross-check IDENTIFY's
 // reported per-channel drive against what config declares, generically —
 // adding a wire-side drive here (there already are PWM_DC/SERVO_BUS_UART/
 // CAN/PDO_JOINT slots reserved) needs no change to IdentifyAndValidate.
-absl::StatusOr<jw1_drive_t> ToWireDrive(robot::board::DriveInterface drive) {
+absl::StatusOr<jw_drive_t> ToWireDrive(robot::board::DriveInterface drive) {
   switch (drive) {
     case robot::board::DriveInterface::STEP_DIR:
-      return JW1_DRIVE_STEP_DIR;
+      return JW_DRIVE_STEP_DIR;
     case robot::board::DriveInterface::PWM_DC:
-      return JW1_DRIVE_PWM_DC;
+      return JW_DRIVE_PWM_DC;
     case robot::board::DriveInterface::SERVO_BUS_UART:
-      return JW1_DRIVE_SERVO_BUS_UART;
+      return JW_DRIVE_SERVO_BUS_UART;
     case robot::board::DriveInterface::CAN:
-      return JW1_DRIVE_CAN;
+      return JW_DRIVE_CAN;
     case robot::board::DriveInterface::PDO_JOINT:
-      return JW1_DRIVE_PDO_JOINT;
+      return JW_DRIVE_PDO_JOINT;
     default:
       return absl::InvalidArgumentError(absl::StrCat("DriveInterface ",
                                                      robot::board::DriveInterface_Name(drive),
@@ -72,8 +73,7 @@ class JoshuaWireChannel : public BoardChannel {
       return absl::UnimplementedError(
           "joshua_wire_v1 channel has no torque target (open-loop drive).");
     }
-    const jw1_mode_t wire_mode =
-        mode == TargetMode::kPosition ? JW1_MODE_POSITION : JW1_MODE_VELOCITY;
+    const jw_mode_t wire_mode = mode == TargetMode::kPosition ? JW_MODE_POSITION : JW_MODE_VELOCITY;
     uint8_t buf[JW1_MAX_FRAME_LEN];
     const int len = jw1_encode_set_target(buf, sizeof(buf), channel_index_, wire_mode, value);
     return SendExpectStatus(buf, len, "SetTarget");
@@ -88,12 +88,12 @@ class JoshuaWireChannel : public BoardChannel {
     ABSL_ASSIGN_OR_RETURN(
         auto response,
         transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW1_FEEDBACK_RESPONSE_PAYLOAD_LEN)));
+                                   JW1_FRAME_LEN(JW_FEEDBACK_RESPONSE_PAYLOAD_LEN)));
     jw1_frame_t frame;
     if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
       return absl::InternalError("Malformed GET_FEEDBACK response frame.");
     }
-    jw1_feedback_t feedback;
+    jw_feedback_t feedback;
     if (jw1_decode_feedback_response(&frame, &feedback) != 0) {
       return absl::InternalError("Malformed GET_FEEDBACK response payload.");
     }
@@ -112,12 +112,12 @@ class JoshuaWireChannel : public BoardChannel {
     ABSL_ASSIGN_OR_RETURN(
         auto response,
         transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW1_STATUS_RESPONSE_PAYLOAD_LEN)));
+                                   JW1_FRAME_LEN(JW_STATUS_RESPONSE_PAYLOAD_LEN)));
     jw1_frame_t frame;
     if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
       return absl::InternalError(absl::StrCat("Malformed ", what, " response frame."));
     }
-    jw1_status_t status;
+    jw_status_t status;
     if (jw1_decode_status_response(&frame, &status) != 0) {
       return absl::InternalError(absl::StrCat("Malformed ", what, " response payload."));
     }
@@ -135,7 +135,7 @@ class JoshuaWireChannel : public BoardChannel {
 // board that subclasses JoshuaWireBoard.
 absl::Status ConfigureStepDirChannel(FrameTransport& transport,
                                      const robot::board::Channel& channel) {
-  jw1_configure_step_dir_t config{};
+  jw_configure_step_dir_t config{};
   config.max_pulse_rate_hz = channel.step_dir().max_pulse_rate_hz();
   config.invert_dir = channel.step_dir().invert_dir() ? 1 : 0;
   config.enable_active_low = channel.step_dir().enable_active_low() ? 1 : 0;
@@ -152,12 +152,12 @@ absl::Status ConfigureStepDirChannel(FrameTransport& transport,
   }
   ABSL_ASSIGN_OR_RETURN(auto response,
                         transport.SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                                 JW1_FRAME_LEN(JW1_STATUS_RESPONSE_PAYLOAD_LEN)));
+                                                 JW1_FRAME_LEN(JW_STATUS_RESPONSE_PAYLOAD_LEN)));
   jw1_frame_t frame;
   if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
     return absl::InternalError("Malformed CONFIGURE_CHANNEL response frame.");
   }
-  jw1_status_t status;
+  jw_status_t status;
   if (jw1_decode_status_response(&frame, &status) != 0) {
     return absl::InternalError("Malformed CONFIGURE_CHANNEL response payload.");
   }
@@ -203,6 +203,10 @@ absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateTransport
 }
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
+  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED && config.protocol() != JOSHUA_WIRE_V1 &&
+      config.protocol() != JOSHUA_WIRE_V2) {
+    return absl::InvalidArgumentError("Unsupported JoshuaWire board protocol.");
+  }
   const std::string type_name = robot::board::BoardType_Name(expected_board_type_);
   if (config.board_type() != expected_board_type_) {
     return absl::InvalidArgumentError(
@@ -217,13 +221,13 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(
         absl::StrCat(type_name, " board '", config.name(), "' declares no channels."));
   }
-  if (config.channels_size() > JW1_MAX_CHANNELS) {
+  if (config.channels_size() > JW_MAX_CHANNELS) {
     return absl::InvalidArgumentError(absl::StrCat(type_name,
                                                    " board '",
                                                    config.name(),
                                                    "' declares more channels than joshua_wire_v1 "
                                                    "supports (",
-                                                   JW1_MAX_CHANNELS,
+                                                   JW_MAX_CHANNELS,
                                                    ")."));
   }
   std::set<uint32_t> seen_indices;
@@ -270,7 +274,7 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
                        channel.step_dir().step_pulse_width_us(),
                        " that doesn't fit the wire field (max 65535)."));
     }
-    if (channel.index() >= JW1_MAX_CHANNELS) {
+    if (channel.index() >= JW_MAX_CHANNELS) {
       return absl::InvalidArgumentError(absl::StrCat(type_name,
                                                      " board '",
                                                      config.name(),
@@ -278,7 +282,7 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
                                                      channel.index(),
                                                      " exceeds joshua_wire_v1's max channel "
                                                      "index (",
-                                                     JW1_MAX_CHANNELS - 1,
+                                                     JW_MAX_CHANNELS - 1,
                                                      "); it must match the firmware channel "
                                                      "table's array position."));
     }
@@ -306,25 +310,28 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
   ABSL_ASSIGN_OR_RETURN(
       auto response,
       transport.SendAndReceive(std::vector<uint8_t>(request, request + request_len),
-                               JW1_FRAME_LEN(JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN)));
+                               JW1_FRAME_LEN(JW_IDENTIFY_RESPONSE_PAYLOAD_LEN)));
 
   jw1_frame_t frame;
   if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
     return absl::UnavailableError(absl::StrCat(
         "Board '", config.name(), "': malformed IDENTIFY response; check wiring/firmware."));
   }
-  if (frame.proto_ver < config.firmware().min_proto_version()) {
+  // V2 session adapter has already validated the on-wire version and IDs;
+  // frame is the unchanged v1 command-payload representation inside this engine.
+  const uint32_t protocol_version = config.protocol() == JOSHUA_WIRE_V2 ? 2 : frame.proto_ver;
+  if (protocol_version < config.firmware().min_proto_version()) {
     return absl::FailedPreconditionError(absl::StrCat("Board '",
                                                       config.name(),
                                                       "': firmware proto_ver ",
-                                                      frame.proto_ver,
+                                                      protocol_version,
                                                       " is older than the configured "
                                                       "min_proto_version ",
                                                       config.firmware().min_proto_version(),
                                                       "."));
   }
 
-  jw1_identify_response_t identify;
+  jw_identify_response_t identify;
   if (jw1_decode_identify_response(&frame, &identify) != 0) {
     return absl::UnavailableError(
         absl::StrCat("Board '", config.name(), "': malformed IDENTIFY payload."));
@@ -354,7 +361,7 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
                                                         identify.n_channels,
                                                         " channels."));
     }
-    ABSL_ASSIGN_OR_RETURN(const jw1_drive_t expected_drive, ToWireDrive(channel.drive()));
+    ABSL_ASSIGN_OR_RETURN(const jw_drive_t expected_drive, ToWireDrive(channel.drive()));
     if (identify.channel_drives[channel.index()] != expected_drive) {
       return absl::FailedPreconditionError(
           absl::StrCat("Board '",
@@ -379,6 +386,13 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
 
   ABSL_ASSIGN_OR_RETURN(auto transport, CreateTransport(config.comm()));
 
+  std::shared_ptr<JoshuaWireV2Session> v2_session;
+  if (config.protocol() == JOSHUA_WIRE_V2) {
+    v2_session = std::make_shared<JoshuaWireV2Session>(std::move(transport));
+    transport = v2_session;
+    ABSL_RETURN_IF_ERROR(transport->Open());
+  }
+
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*transport, config));
 
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels;
@@ -390,6 +404,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
 
   config_ = config;
   transport_ = std::move(transport);
+  v2_session_ = std::move(v2_session);
   channels_ = std::move(channels);
   initialized_ = true;
   return absl::OkStatus();
@@ -411,10 +426,12 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 }
 
 absl::Status JoshuaWireBoard::Teardown() {
+  const auto status = v2_session_ ? v2_session_->Close() : absl::OkStatus();
+  v2_session_.reset();
   channels_.clear();
   transport_.reset();
   initialized_ = false;
-  return absl::OkStatus();
+  return status;
 }
 
 }  // namespace robot::board

@@ -117,7 +117,7 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
 - Board-management tooling, including UART flashing and debug helpers, should
   stay outside the runtime actuator path.
 - Config-driven AM243 boards use `comm_type: SERIAL` and require firmware that
-  answers `joshua_wire_v1` IDENTIFY with `JW1_BOARD_AM243`. The vendor TI demo
+  answers `joshua_wire_v1` IDENTIFY with `JW_BOARD_AM243`. The vendor TI demo
   instead uses `comm_type: ETHERCAT` and the TI demo PDO mapping.
 
 Both examples are retained:
