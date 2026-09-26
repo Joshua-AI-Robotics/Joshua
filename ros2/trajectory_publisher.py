@@ -64,7 +64,8 @@ class TrajectoryPublisher(Node):
                         )
                         if data_type != ros2_data_type_pb2.FLOAT32:
                             self.get_logger().error(
-                                "Unsupported publisher ros2_data_type %s for topic '%s'. "
+                                "Unsupported publisher ros2_data_type %s "
+                                "for topic '%s'. "
                                 "Only FLOAT32 is supported.",
                                 str(data_type),
                                 waypoint.topic,
@@ -113,7 +114,7 @@ class TrajectoryPublisher(Node):
         if topic_pub is None:
             return
 
-        value = extract_scalar_from_action(waypoint.action)
+        value = extract_scalar_from_action(waypoint.action, waypoint.topic)
         if value is None:
             which = waypoint.action.WhichOneof("action_type") or "none"
             self.get_logger().warning(

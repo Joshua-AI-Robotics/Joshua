@@ -70,7 +70,7 @@ TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow)
   message.data = 12.5;
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
-  EXPECT_FLOAT_EQ(result->position(), 12.5f);
+  EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),
                          std::numeric_limits<double>::max(),
@@ -86,14 +86,14 @@ TEST_F(PacketParserCppTest, RejectsIntegerCommandPrecisionLoss) {
   message.data = 16777216;
   auto result = Send(ros2::data_type::UINT64, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_FLOAT_EQ(result->position(), 16777216.f);
+  EXPECT_FLOAT_EQ(result->joint().position(), 16777216.f);
 }
 TEST_F(PacketParserCppTest, ArraysContainExactlyOneValue) {
   std_msgs::msg::Float64MultiArray message;
   message.data = {8.5};
   auto result = Send(ros2::data_type::FLOAT64_MULTI_ARRAY, message);
   ASSERT_TRUE(result.ok()) << result.status();
-  EXPECT_FLOAT_EQ(result->position(), 8.5);
+  EXPECT_FLOAT_EQ(result->joint().position(), 8.5);
   message.data = {};
   EXPECT_FALSE(Send(ros2::data_type::FLOAT64_MULTI_ARRAY, message).ok());
   message.data = {1, 2};
@@ -116,8 +116,9 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   message.header.stamp.nanosec = 456;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok()) << result.status();
-  ASSERT_TRUE(result->has_joint_command());
-  const auto& command = result->joint_command();
+  ASSERT_TRUE(result->has_joint());
+  const auto& command = result->joint();
+  EXPECT_EQ(command.units(), robot::action::JointCommand::SI);
   EXPECT_EQ(command.joint_name(), "elbow");
   EXPECT_DOUBLE_EQ(command.position(), message.position[1]);
   EXPECT_DOUBLE_EQ(command.velocity(), -0.25);
@@ -126,7 +127,7 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   EXPECT_EQ(result->timestamp_ns(), 123000000456LL);
   EXPECT_FALSE(result->normalized());
   ros2_utils::DenormalizeActionPacket(*result, 0, 4095);
-  EXPECT_DOUBLE_EQ(result->joint_command().position(), message.position[1]);
+  EXPECT_DOUBLE_EQ(result->joint().position(), message.position[1]);
 }
 TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
   sensor_msgs::msg::JointState message;
@@ -140,9 +141,9 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
     if (field == 2) message.effort = {0};
     auto result = Send(ros2::data_type::JOINT_STATE, message);
     ASSERT_TRUE(result.ok()) << result.status();
-    EXPECT_EQ(result->joint_command().has_position(), field == 0);
-    EXPECT_EQ(result->joint_command().has_velocity(), field == 1);
-    EXPECT_EQ(result->joint_command().has_effort(), field == 2);
+    EXPECT_EQ(result->joint().has_position(), field == 0);
+    EXPECT_EQ(result->joint().has_velocity(), field == 1);
+    EXPECT_EQ(result->joint().has_effort(), field == 2);
     EXPECT_EQ(result->timestamp_ns(), 0);
   }
   message.header.stamp.sec = -1;
@@ -154,7 +155,7 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
   message.effort = {std::numeric_limits<double>::max()};
   result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_DOUBLE_EQ(result->joint_command().effort(), message.effort[0]);
+  EXPECT_DOUBLE_EQ(result->joint().effort(), message.effort[0]);
 }
 TEST_F(PacketParserCppTest, JointStateRejectsMalformedMessages) {
   sensor_msgs::msg::JointState valid;
@@ -194,11 +195,11 @@ TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
   config.set_topic("elbow/torque");
   auto result = Send(ros2::data_type::BOOL, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_FLOAT_EQ(result->torque(), 1);
+  EXPECT_EQ(result->preset(), robot::action::PRESET_ENABLE_TORQUE);
   message.data = false;
   result = Send(ros2::data_type::BOOL, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_FLOAT_EQ(result->torque(), 0);
+  EXPECT_EQ(result->preset(), robot::action::PRESET_DISABLE_TORQUE);
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
   EXPECT_FALSE(Send(ros2::data_type::BOOL, message).ok());
 }
@@ -226,4 +227,22 @@ TEST_F(PacketParserCppTest, IntegerFeedbackDoesNotTruncateOrWrap) {
   ASSERT_TRUE(value.has_value());
   EXPECT_EQ(*value, 42);
 }
+TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
+  action.mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);
+  config.set_topic("elbow/torque");
+  std_msgs::msg::Float64 message;
+  message.data = 1;
+  auto enabled = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(enabled.ok());
+  EXPECT_EQ(enabled->preset(), robot::action::PRESET_ENABLE_TORQUE);
+  message.data = 0;
+  auto disabled = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(disabled.ok());
+  EXPECT_EQ(disabled->preset(), robot::action::PRESET_DISABLE_TORQUE);
+  config.set_topic("elbow/effort");
+  auto effort = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(effort.ok());
+  EXPECT_TRUE(effort->joint().has_effort());
+}
+
 }  // namespace

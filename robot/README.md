@@ -68,17 +68,26 @@ EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
 
 ## Joint commands
 
-`ActionPacket.joint_command` carries one named joint's optional position,
-velocity, and effort in SI units, with frame metadata and a source timestamp.
-Drivers handle this packet without ROS dependencies. Optional fields preserve
-missing-versus-zero semantics. Validate the complete requested combination and
-all limits before channel writes; never silently drop a supplied field.
+`ActionPacket.joint` is the motion payload for every actuator. Optional position,
+velocity, and effort distinguish omission from zero. `units: NATIVE` is the
+default: position uses existing driver units and velocity retains the driver's
+nonnegative move-speed setting. `units: SI` represents physical position,
+velocity, and effort. ROS JointState decoding sets SI explicitly and preserves
+joint name, frame, timestamp, and every supplied numeric field.
 
-STS3215 and stepper currently accept position only and convert radians to their
-native position units. Their shared position-only validator rejects velocity
-and effort before any write; neither driver provides signed physical velocity
-or effort control through its legacy speed/torque API. TI demo rejects the new
-packet outright. A future driver implements `kJointCommand` with its own joint
-kind, SI conversions, supported combinations, and limits; the ROS decoder needs
-no driver-specific branch. Header metadata alone never schedules a command or
-performs a coordinate transform.
+STS3215 and stepper support native position/velocity combinations and SI
+position-only commands (radians converted to ticks/degrees). They reject effort;
+use presets to enable/disable torque. TI demo supports native position/velocity/
+effort using its existing firmware scaling, but rejects SI commands. Drivers
+validate the entire payload before writes. Channel failures are returned; a
+multi-field command is not a transactional hardware operation.
+
+Scalar topics retain native values: `/position` maps to position, `/speed` and
+`/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
+maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
+unsupported by runtime motor drivers. The standalone Pybricks tool defines
+native effort as duty percent and requires it to be sent alone.
+
+Normalized scalar positions map through configured operational limits and clear
+the normalization flag before driver execution. SI commands cannot be normalized.
+Header metadata does not imply scheduling, clock synchronization, or transforms.

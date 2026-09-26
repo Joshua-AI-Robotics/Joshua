@@ -32,28 +32,44 @@ class ActuatorInterface : public ActionInterface {
   };
 
  protected:
-  // For position-only revolute drivers. Validate the entire requested command
-  // before issuing any channel writes; velocity is not a speed-limit setting and
-  // effort must never become an enable/disable gate. Metadata is informational.
-  static absl::StatusOr<float> JointPositionInNativeUnits(const ActionPacket& packet,
-                                                          const std::string& joint_name,
-                                                          double units_per_radian) {
-    const auto& command = packet.joint_command();
+  // Validate the complete payload before any device writes. NATIVE velocity is
+  // the driver's existing move-speed setting; SI velocity is physical velocity.
+  static absl::StatusOr<JointCommand> NativeJointCommand(const ActionPacket& packet,
+                                                         const std::string& joint_name,
+                                                         double units_per_radian,
+                                                         bool supports_native_effort,
+                                                         float lower_limit,
+                                                         float upper_limit) {
+    auto command = packet.joint();
     if (packet.normalized() || joint_name.empty() || command.joint_name() != joint_name)
-      return absl::InvalidArgumentError("Joint command requires matching name and SI units");
-    if (command.has_velocity() || command.has_effort())
+      return absl::InvalidArgumentError(
+          "Joint command requires matching name and denormalized values");
+    if (!command.has_position() && !command.has_velocity() && !command.has_effort())
+      return absl::InvalidArgumentError("Joint command is empty");
+    if (command.units() == JointCommand::SI) {
+      if (units_per_radian <= 0 || command.has_velocity() || command.has_effort())
+        return absl::UnimplementedError(
+            "Driver has no requested SI velocity/effort or position contract");
+      command.set_position(command.position() * units_per_radian);
+      command.set_units(JointCommand::NATIVE);
+    } else if (command.units() != JointCommand::NATIVE) {
+      return absl::InvalidArgumentError("Unknown joint command units");
+    }
+    if (command.has_effort() && !supports_native_effort)
       return absl::UnimplementedError(
-          "Driver supports JointState position only, not velocity/effort");
-    if (!command.has_position() || !std::isfinite(command.position()))
-      return absl::InvalidArgumentError("Joint command requires a finite position");
-    const long double native = static_cast<long double>(command.position()) * units_per_radian;
-    if (!std::isfinite(native) || native < -std::numeric_limits<float>::max() ||
-        native > std::numeric_limits<float>::max())
-      return absl::OutOfRangeError("Joint position exceeds native float range");
-    const float value = static_cast<float>(native);
-    if (native != 0 && value == 0)
-      return absl::OutOfRangeError("Joint position underflows native float range");
-    return value;
+          "Driver has no effort control; use presets for torque enable/disable");
+    for (double value : {command.position(), command.velocity(), command.effort()}) {
+      if (!std::isfinite(value) || std::abs(value) > std::numeric_limits<float>::max() ||
+          (value != 0 && static_cast<float>(value) == 0))
+        return absl::OutOfRangeError("Joint value exceeds native float range");
+    }
+    if (command.has_position() &&
+        (command.position() < lower_limit || command.position() > upper_limit))
+      return absl::InvalidArgumentError("Joint position is outside operational limits");
+    if ((command.has_velocity() && command.velocity() < 0) ||
+        (command.has_effort() && command.effort() < 0))
+      return absl::InvalidArgumentError("Driver requires nonnegative native speed and effort");
+    return command;
   }
 };
 }  // namespace robot::action

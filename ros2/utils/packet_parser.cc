@@ -186,7 +186,8 @@ absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState
   ActionPacket packet;
   packet.set_timestamp_ns(static_cast<int64_t>(message.header.stamp.sec) * 1000000000LL +
                           message.header.stamp.nanosec);
-  auto* command = packet.mutable_joint_command();
+  auto* command = packet.mutable_joint();
+  command->set_units(robot::action::JointCommand::SI);
   command->set_joint_name(actuator_name);
   command->set_frame_id(message.header.frame_id);
   const auto index = static_cast<size_t>(it - message.name.begin());
@@ -215,25 +216,23 @@ absl::StatusOr<ActionPacket> DecodeCommand(const Message& message,
     } else {
       ABSL_ASSIGN_OR_RETURN(value, NativeCommand(message.data));
     }
-    return ActionPacketFromFloat(value, subscription.topic(), subscription.normalized());
+    auto packet = ActionPacketFromFloat(value, subscription.topic(), subscription.normalized());
+    if (packet.ok() && packet->has_joint()) packet->mutable_joint()->set_joint_name(actuator_name);
+    return packet;
   }
 }
 
 template <typename Fn>
 void ApplyToPositionSources(ActionPacket& packet, Fn transform) {
-  if (packet.has_position()) {
-    packet.set_position(transform(packet.position()));
-  }
-  if (packet.has_complex() && packet.complex().has_position()) {
-    packet.mutable_complex()->set_position(transform(packet.complex().position()));
+  if (packet.has_joint() && packet.joint().has_position() &&
+      packet.joint().units() == robot::action::JointCommand::NATIVE) {
+    packet.mutable_joint()->set_position(transform(packet.joint().position()));
+    packet.set_normalized(false);
   }
 }
 
-// Allowed /<device_id>/<action_type> topic suffixes for numeric scalar/array actuator commands.
-// TODO(hmoon): Keep in sync with ACTION_TOPIC_SUFFIX_TO_FIELD in packet_parser.py and
-// ACTION_SCALAR_ONEOF_FIELDS when action_packet.proto gains a new float oneof arm.
-// Checklist: ros2/utils/packet_parser.md § "After editing action_packet.proto".
-const char* kActionTopicSuffixes[] = {"position", "torque", "speed", "dc"};
+// Numeric topic aliases map into JointCommand fields.
+const char* kActionTopicSuffixes[] = {"position", "torque", "speed", "dc", "velocity", "effort"};
 
 std::string NormalizeTopicSuffix(std::string suffix) {
   std::transform(suffix.begin(), suffix.end(), suffix.begin(), [](unsigned char c) {
@@ -315,15 +314,30 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
     const robot::action::SingleAction& action,
     ActionMessageCallback callback) {
   ABSL_RETURN_IF_ERROR(ValidateActionMessageType(config, action.actuator()));
+  const auto motor_type = action.actuator().motor_type();
+  const bool torque_gate = config.ros2_data_type() != ros2::data_type::JOINT_STATE &&
+                           (motor_type == robot::action::MOTOR_STS3215 ||
+                            motor_type == robot::action::MOTOR_STEPPER_NEMA17) &&
+                           ParseActionTypeFromTopic(config.topic()).value() == "torque";
   std::shared_ptr<rclcpp::SubscriptionBase> result;
   ABSL_RETURN_IF_ERROR(VisitPositionMessage(config.ros2_data_type(), [&](auto tag) {
     using Message = typename decltype(tag)::Type;
     result = node.create_subscription<Message>(
         config.topic(),
         CreateQosSetting(action.node().qos_setting()),
-        [actuator_name = action.actuator().actuator_name(), config, callback](
+        [actuator_name = action.actuator().actuator_name(), torque_gate, config, callback](
             typename Message::ConstSharedPtr message) {
-          callback(DecodeCommand(*message, config, actuator_name));
+          auto packet = DecodeCommand(*message, config, actuator_name);
+          if (packet.ok() && packet->has_joint() && torque_gate) {
+            const double gate = packet->joint().effort();
+            if (gate < 0) {
+              callback(absl::InvalidArgumentError("Torque gate must be nonnegative"));
+              return;
+            }
+            packet->set_preset(gate > 0 ? robot::action::PRESET_ENABLE_TORQUE
+                                        : robot::action::PRESET_DISABLE_TORQUE);
+          }
+          callback(std::move(packet));
         });
     return absl::OkStatus();
   }));
@@ -379,16 +393,20 @@ absl::StatusOr<ActionPacket> ActionPacketFromFloat(const float value,
     return field.status();
   }
 
+  if (!std::isfinite(value)) return absl::InvalidArgumentError("Command must be finite");
+  if (normalized && *field != "position")
+    return absl::InvalidArgumentError("Only position commands support normalization");
   ActionPacket packet;
-  if (field.value() == "position") {
+  ABSL_ASSIGN_OR_RETURN(auto name, DeviceIdFromTopic(topic));
+  auto* joint = packet.mutable_joint();
+  joint->set_joint_name(name);
+  if (*field == "position") {
     packet.set_normalized(normalized);
-    packet.set_position(value);
-  } else if (field.value() == "torque") {
-    packet.set_torque(value);
-  } else if (field.value() == "speed") {
-    packet.set_speed(value);
-  } else if (field.value() == "dc") {
-    packet.set_dc(value);
+    joint->set_position(value);
+  } else if (*field == "speed" || *field == "velocity") {
+    joint->set_velocity(value);
+  } else {
+    joint->set_effort(value);
   }
   return packet;
 }

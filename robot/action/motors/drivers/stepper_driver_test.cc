@@ -158,7 +158,8 @@ TEST(StepperDriverTest, SetActionSurfacesChannelFailure) {
   ASSERT_TRUE(driver.Init().ok());
 
   robot::action::ActionPacket packet;
-  packet.set_position(10.0f);
+  packet.mutable_joint()->set_joint_name("stepper_1");
+  packet.mutable_joint()->set_position(10.0f);
 
   EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnavailable);
 }
@@ -179,7 +180,8 @@ TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   StepperDriver driver(channel, MakeStepperActuator());
   ASSERT_TRUE(driver.Init().ok());
   ActionPacket packet;
-  auto* command = packet.mutable_joint_command();
+  auto* command = packet.mutable_joint();
+  command->set_units(robot::action::JointCommand::SI);
   command->set_joint_name("stepper_1");
   command->set_position(3.14159265358979323846 / 4.0);
   command->set_frame_id("base");
@@ -220,6 +222,26 @@ TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   EXPECT_EQ(channel->set_target_calls_, writes);
   EXPECT_EQ(channel->enable_calls_, enables);
   EXPECT_EQ(channel->disable_calls_, disables);
+}
+
+TEST(StepperDriverTest, NativeJointValidatesAllFieldsBeforeWriting) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* joint = packet.mutable_joint();
+  joint->set_joint_name("stepper_1");
+  joint->set_position(10);
+  joint->set_velocity(20);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  const int writes = channel->set_target_calls_;
+  joint->set_position(1e9);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  joint->clear_position();
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  joint->set_velocity(-1);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
 }
 
 }  // namespace

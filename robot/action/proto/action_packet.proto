@@ -2,7 +2,8 @@ syntax = "proto3";
 
 package robot.action;
 
-// Preset commands that don't require parameters
+// Preset commands to position the actuator in a known state.
+// Should be defined in a config.
 enum PresetCommand {
   PRESET_UNKNOWN = 0;
   PRESET_MIDDLE_POSITION = 1;
@@ -13,44 +14,39 @@ enum PresetCommand {
   PRESET_RESET_ENCODER = 6;
 }
 
-message ComplexAction {
-  optional float position = 1;      // Target position
-  optional float speed = 2;         // Movement speed
-  optional float torque = 3;        // Torque setting (e.g. servo torque enable/disable)
-  optional uint32 duration_ms = 4;  // Duration in milliseconds
-  optional float dc = 5;            // Duty cycle (-100 to 100)
-}
-
-// One named joint command in SI units. The driver's joint kind determines units:
-// revolute: rad, rad/s, N*m; prismatic: m, m/s, N. No native-unit conversion here.
-// Presence is meaningful: an omitted field is not a zero command.
+// Unified actuator motion command. Presence distinguishes omitted fields from zero.
 message JointCommand {
+  enum Units {
+    // Driver-defined position, move-speed setting and effort (never an enable gate).
+    NATIVE = 0;
+    // Physical position, velocity and effort: rad, rad/s, N*m for revolute joints.
+    SI = 1;
+  }
   string joint_name = 1;
   optional double position = 2;
   optional double velocity = 3;
-  optional double effort = 4;
+  optional double effort = 4;  // NATIVE may mean duty cycle for a driver with that contract.
   // Source metadata only; no coordinate transformation is implied.
   string frame_id = 5;
+  Units units = 6;
 }
 
 // Main action packet - uses oneof for type safety
 message ActionPacket {
+  // Retired scalar/complex fields and the previous SI-only joint_command.
+  reserved 3, 4, 5, 7, 8, 10;
+  reserved "position", "torque", "speed", "complex", "dc", "joint_command";
   string action_id = 1;
-  // For joint_command, preserves the source stamp (including zero/negative
+  // For joint, preserves the source stamp (including zero/negative
   // values). Clock domain, scheduling and freshness are not inferred.
   int64 timestamp_ns = 2;
 
-  // If true, legacy position is in [-1, 1] and mapped to operational limits.
-  // Must be false for joint_command, whose values are already in SI units.
+  // If true, joint.position is in [-1, 1] and mapped to native operational limits.
+  // Only valid with NATIVE units; cleared by the subscriber after mapping.
   bool normalized = 9;
 
   oneof action_type {
-    float position = 3;         // Simple position command
-    float torque = 4;           // Torque setting (e.g. servo torque enable/disable)
-    float speed = 5;            // Simple speed command
-    PresetCommand preset = 6;   // Preset command
-    ComplexAction complex = 7;  // Complex multi-parameter action
-    float dc = 8;               // Duty cycle (-100 to 100)
-    JointCommand joint_command = 10;
+    JointCommand joint = 11;   // Unified actuator motion.
+    PresetCommand preset = 6;  // Preset command
   }
 }

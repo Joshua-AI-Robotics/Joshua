@@ -106,3 +106,11 @@ See [typed ROS messages](../ros2/README.md#typed-position-and-actuator-messages)
 for supported types, fixed conversion rules, JointState units and names, and
 hardware/model constraints. Unsupported message/driver combinations are rejected
 before hardware initialization; existing Float32 presets remain compatible.
+
+## Actuator motion packets
+
+Trajectory actions use `action { joint { joint_name: "sts_motor_1" position: 2004 } }`.
+`JointCommand` replaces scalar and complex action packets. Native units remain
+the default, preserving existing config limits and numeric topic values. See
+[packet contracts](../ros2/utils/packet_parser.md) for SI units, driver capability
+limits, torque-enable presets, and migration details.

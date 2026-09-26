@@ -241,44 +241,44 @@ robot {
       }
       trajectory {
         # Midpoint of each joint's operational span (raw ticks).
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_1/position" action { position: 2004.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_2/position" action { position: 2006.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_3/position" action { position: 1907.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_4/position" action { position: 1896.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_5/position" action { position: 1929.0 } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_6/position" action { position: 2515.0 } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2004.0 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2006.0 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1907.0 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1896.0 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1929.0 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2515.0 } } }
 
         # Pose A: all joints move together within ±10% band (20% total span).
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_1/position" action { position: 2210.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_2/position" action { position: 1776.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_3/position" action { position: 2128.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_4/position" action { position: 1650.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_5/position" action { position: 2134.0 } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_6/position" action { position: 2371.0 } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2210.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 1776.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 2128.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1650.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 2134.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2371.0 } } }
 
         # Pose B: simultaneous opposite corners in band.
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_1/position" action { position: 1797.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_2/position" action { position: 2236.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_3/position" action { position: 1685.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_4/position" action { position: 2142.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_5/position" action { position: 1723.0 } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_6/position" action { position: 2659.0 } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 1797.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2236.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1685.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 2142.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1723.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2659.0 } } }
 
         # Pose C: mixed offsets, all joints at once.
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_1/position" action { position: 2100.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_2/position" action { position: 1850.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_3/position" action { position: 2050.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_4/position" action { position: 1800.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_5/position" action { position: 2080.0 } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_6/position" action { position: 2450.0 } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2100.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 1850.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 2050.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1800.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 2080.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2450.0 } } }
 
         # Return to midpoint together.
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_1/position" action { position: 2004.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_2/position" action { position: 2006.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_3/position" action { position: 1907.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_4/position" action { position: 1896.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_5/position" action { position: 1929.0 } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_6/position" action { position: 2515.0 } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2004.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2006.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1907.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1896.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1929.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2515.0 } } }
       }
     }
   }

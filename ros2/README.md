@@ -110,7 +110,7 @@ topic name. The message's `name` array selects `actuator_name`; no synthetic
 array must be empty or match the names array, all supplied values must be finite,
 and at least one of position, velocity, or effort must be present.
 
-The decoder emits `ActionPacket.joint_command`, retaining optional double-valued
+The decoder emits `ActionPacket.joint`, retaining optional double-valued
 position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
 m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
 preserves the selected joint name, `header.frame_id`, and the source timestamp in
@@ -119,22 +119,29 @@ source times are preserved. Metadata does not schedule execution, enforce
 freshness, identify a clock domain, or trigger coordinate transforms. Those
 policies belong to future clock/PTP and coordinate-handling work.
 
-Drivers own command capabilities and SI-to-native conversion. Current STS3215
-and stepper drivers support **position-only execution**: STS3215 converts radians
-to ticks (4096/revolution), and stepper converts radians to degrees before its
-existing steps conversion. Both reject any supplied velocity/effort, including
-zero, before applying the position. Their legacy speed setting is nonnegative;
-legacy torque is an enable gate, not physical effort. The TI demo rejects all
-joint commands because it has no physical SI contract. Decoding succeeds
-independently of those driver restrictions, so future drivers can implement the
-new packet without changes to subscription creation. Validate every requested
-field, combination, unit conversion and limit before issuing writes; this is
-prevalidation, not a guarantee of atomic hardware execution.
+`ActionPacket.joint` is the motion payload for every actuator. Optional position,
+velocity, and effort distinguish omission from zero. `units: NATIVE` is the
+default: position uses existing driver units and velocity retains the driver's
+nonnegative move-speed setting. `units: SI` represents physical position,
+velocity, and effort. ROS JointState decoding sets SI explicitly and preserves
+joint name, frame, timestamp, and every supplied numeric field.
 
-`normalized` is rejected for JointState commands. Existing scalar/array commands
-retain their native-unit and normalization conventions. The new packet arm must
-be understood by downstream drivers; rebuild packet consumers together. The ROS
-message and config schemas are unchanged.
+STS3215 and stepper support native position/velocity combinations and SI
+position-only commands (radians converted to ticks/degrees). They reject effort;
+use presets to enable/disable torque. TI demo supports native position/velocity/
+effort using its existing firmware scaling, but rejects SI commands. Drivers
+validate the entire payload before writes. Channel failures are returned; a
+multi-field command is not a transactional hardware operation.
+
+Scalar topics retain native values: `/position` maps to position, `/speed` and
+`/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
+maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
+unsupported by runtime motor drivers. The standalone Pybricks tool defines
+native effort as duty percent and requires it to be sent alone.
+
+Normalized scalar positions map through configured operational limits and clear
+the normalization flag before driver execution. SI commands cannot be normalized.
+Header metadata does not imply scheduling, clock synchronization, or transforms.
 
 Position feedback still publishes one named position per sensor (using
 `sensor_name`), converted to radians with a ROS timestamp. It does not fabricate
