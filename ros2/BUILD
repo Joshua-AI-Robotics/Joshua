@@ -8,7 +8,6 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "node_runner",
     srcs = ["node_runner.cc"],
-    hdrs = ["node_runner.h"],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -216,52 +215,17 @@ genrule(
 )
 
 cc_test(
-    name = "position_publisher_test",
-    srcs = [
-        "position_publisher.cc",
-        "position_publisher_test.cc",
-    ],
-    defines = ["JOSHUA_NODE_TEST"],
-    deps = [
-        ":node_runner",
-        "//config/proto:config_cc_proto",
-        "//robot/board/factory:board_factory",
-        "//robot/perception/factory:perception_factory",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@googletest//:gtest_main",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-cc_test(
     name = "node_runner_test",
-    srcs = ["node_runner_test.cc"],
-    deps = [
-        ":node_runner",
-        "//config/proto:config_cc_proto",
-        "@googletest//:gtest_main",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-cc_test(
-    name = "actuator_subscriber_test",
     srcs = [
-        "actuator_subscriber.cc",
-        "actuator_subscriber_test.cc",
+        "node_runner.cc",
+        "node_runner_test.cc",
     ],
-    defines = ["JOSHUA_NODE_TEST"],
+    local_defines = ["JOSHUA_NODE_TEST"],
     deps = [
-        ":node_runner",
+        "//config:config_utils",
+        "//config:validation",
         "//config/proto:config_cc_proto",
-        "//robot/action/factory:action_factory",
-        "//robot/board/factory:board_factory",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
         "@googletest//:gtest_main",
-        "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
 )

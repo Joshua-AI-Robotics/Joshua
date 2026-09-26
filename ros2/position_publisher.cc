@@ -6,7 +6,6 @@
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
-#include "ros2/node_runner.h"
 #include "ros2/utils/packet_parser.h"
 
 class PositionPublisher : public rclcpp::Node {
@@ -55,18 +54,10 @@ class PositionPublisher : public rclcpp::Node {
  private:
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
-#ifndef JOSHUA_NODE_TEST
-int main(int argc, char* argv[]) {
-  return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
+namespace ros2_utils {
+std::shared_ptr<rclcpp::Node> CreateNode(const std::string& name,
+                                         int id,
+                                         const config::Config& config) {
+  return std::make_shared<PositionPublisher>(name, id, config);
 }
-#else
-std::shared_ptr<rclcpp::Node> MakePositionPublisherForTest(const config::Config& config) {
-  return ros2_utils::CreateValidatedNode(
-      "position_feedback_test",
-      1,
-      config,
-      [](const std::string& name, int id, const config::Config& validated_config) {
-        return std::make_shared<PositionPublisher>(name, id, validated_config);
-      });
-}
-#endif
+}  // namespace ros2_utils
