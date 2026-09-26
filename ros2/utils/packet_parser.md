@@ -45,10 +45,11 @@ topic and joint name. Multi-field, SI, or mismatched payloads are rejected rathe
 than silently losing fields or units. Match the publisher/subscriber normalized
 position convention in config.
 
-`normalized` and `preset` retain their existing wire numbers. `joint` has a new tag because its default
-units differ from the retired SI-only payload. Old scalar/complex binary
-packets and old text configs require explicit migration and producer/consumer
-updates together; they are not automatically translated.
+`ActionPacket` uses sequential tags: action ID 1, timestamp 2, normalized 3,
+joint 4, and preset 5. This renumbering is a breaking binary schema change.
+Previously serialized packets require explicit migration; rebuild and update
+producers and consumers together. Old scalar/complex text configs also require
+migration; they are not automatically translated.
 
 ## Extending support
 

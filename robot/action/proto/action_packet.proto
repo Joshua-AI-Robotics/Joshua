@@ -40,10 +40,10 @@ message ActionPacket {
 
   // If true, joint.position is in [-1, 1] and mapped to native operational limits.
   // Only valid with NATIVE units; cleared by the subscriber after mapping.
-  bool normalized = 9;
+  bool normalized = 3;
 
   oneof action_type {
-    JointCommand joint = 11;   // Unified actuator motion.
-    PresetCommand preset = 6;  // Preset command
+    JointCommand joint = 4;    // Unified actuator motion.
+    PresetCommand preset = 5;  // Preset command
   }
 }
