@@ -100,12 +100,12 @@ class ActionSubscriber : public rclcpp::Node {
     std::set<robot::action::ActionInterface*> torn_down;
     for (auto& actuator : actuators_) {
       if (!torn_down.insert(actuator.interface.get()).second) continue;
-      threads.emplace_back([&actuator]() {
+      threads.emplace_back([&actuator, logger = get_logger()]() {
         robot::action::ActionPacket teardown_packet;
         teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         auto status = actuator.interface->SetAction(teardown_packet);
         if (!status.ok()) {
-          RCLCPP_ERROR(get_logger(), "Failed to teardown actuator '%s'", actuator.topic.c_str());
+          RCLCPP_ERROR(logger, "Failed to teardown actuator '%s'", actuator.topic.c_str());
         }
       });
     }
