@@ -16,10 +16,6 @@ The data subscriber, [data store and dataset loader](../ai/train/README.md)
 remain available, including the recording preset and launcher integration.
 Other simulation modes remain available.
 
-The C++ `node_runner.cc` owns the shared `main`, config loading and validation,
-spinning, and shutdown. Each executable links one node implementation supplying
-`ros2_utils::CreateNode`; there is no C++ runner header or template.
-
 ## Trajectory playback
 
 `trajectory_publisher.cc` uses the existing `TRAJECTORY_PUBLISHER` node type,

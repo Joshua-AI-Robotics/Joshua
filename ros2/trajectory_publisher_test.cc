@@ -13,9 +13,9 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
 
-namespace ros2_utils {
-std::shared_ptr<rclcpp::Node> CreateValidatedNode(const std::string&, int, const config::Config&);
-}  // namespace ros2_utils
+std::shared_ptr<rclcpp::Node> MakeTrajectoryPublisher(const std::string&,
+                                                      int,
+                                                      const config::Config&);
 
 namespace {
 using namespace std::chrono_literals;
@@ -61,7 +61,7 @@ class TrajectoryPublisherTest : public testing::Test {
 };
 
 TEST_F(TrajectoryPublisherTest, WaitsForAllTopicsThenSortsAndRepeats) {
-  auto publisher = ros2_utils::CreateValidatedNode("trajectory_test", 7, Config());
+  auto publisher = MakeTrajectoryPublisher("trajectory_test", 7, Config());
   auto listener = std::make_shared<rclcpp::Node>("trajectory_listener");
   std::vector<float> values;
   auto first = listener->create_subscription<std_msgs::msg::Float32>(
@@ -86,25 +86,24 @@ TEST_F(TrajectoryPublisherTest, WaitsForAllTopicsThenSortsAndRepeats) {
 }
 
 TEST_F(TrajectoryPublisherTest, RejectsInvalidConfigsBeforePlayback) {
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("empty", 7, config::Config()),
-               std::invalid_argument);
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("wrong_id", 8, Config()), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("empty", 7, config::Config()), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("wrong_id", 8, Config()), std::invalid_argument);
   auto config = Config();
   auto* entry = config.mutable_robot()->mutable_trajectories()->mutable_single_trajectories(0);
   auto* publisher = entry->mutable_node()->add_publishers();
   publisher->set_topic("/trajectory_test/a");
   publisher->set_ros2_data_type(ros2::data_type::FLOAT64);
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("wrong_type", 7, config), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("wrong_type", 7, config), std::invalid_argument);
   entry->mutable_node()->clear_publishers();
   auto* waypoint = entry->mutable_trajectory()->mutable_waypoints(0);
   waypoint->mutable_action()->set_position(std::numeric_limits<float>::quiet_NaN());
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("nan", 7, config), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("nan", 7, config), std::invalid_argument);
   waypoint->mutable_action()->set_preset(robot::action::PRESET_IDLE_POSITION);
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("preset", 7, config), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("preset", 7, config), std::invalid_argument);
   waypoint->mutable_action()->set_position(1);
   waypoint->set_timestamp_sec(-1);
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("negative_time", 7, config), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("negative_time", 7, config), std::invalid_argument);
   for (auto& point : *entry->mutable_trajectory()->mutable_waypoints()) point.set_timestamp_sec(0);
-  EXPECT_THROW(ros2_utils::CreateValidatedNode("zero_duration", 7, config), std::invalid_argument);
+  EXPECT_THROW(MakeTrajectoryPublisher("zero_duration", 7, config), std::invalid_argument);
 }
 }  // namespace

@@ -12,6 +12,7 @@
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/proto/action_packet.pb.h"
+#include "ros2/node_runner.h"
 #include "ros2/proto/node.pb.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/qos_setting.h"
@@ -140,10 +141,20 @@ class TrajectoryPublisher : public rclcpp::Node {
   size_t next_ = 0;
 };
 
-namespace ros2_utils {
-std::shared_ptr<rclcpp::Node> CreateNode(const std::string& name,
-                                         int id,
-                                         const config::Config& config) {
-  return std::make_shared<TrajectoryPublisher>(name, id, config);
+#ifndef JOSHUA_NODE_TEST
+int main(int argc, char* argv[]) {
+  try {
+    return ros2_utils::RunNode<TrajectoryPublisher>(argc, argv, "trajectory_publisher");
+  } catch (const std::exception& error) {
+    RCLCPP_ERROR(rclcpp::get_logger("trajectory_publisher"), "%s", error.what());
+    if (rclcpp::ok()) rclcpp::shutdown();
+    return 1;
+  }
 }
-}  // namespace ros2_utils
+#else
+std::shared_ptr<rclcpp::Node> MakeTrajectoryPublisher(const std::string& name,
+                                                      int node_id,
+                                                      const config::Config& config) {
+  return std::make_shared<TrajectoryPublisher>(name, node_id, config);
+}
+#endif

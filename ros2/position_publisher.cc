@@ -2,6 +2,7 @@
 
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/node_runner.h"
 #include "ros2/position_publishers.h"
 
 class PositionPublisher : public rclcpp::Node {
@@ -13,10 +14,6 @@ class PositionPublisher : public rclcpp::Node {
   ros2_utils::PositionPublishers positions_;
 };
 
-namespace ros2_utils {
-std::shared_ptr<rclcpp::Node> CreateNode(const std::string& name,
-                                         int id,
-                                         const config::Config& config) {
-  return std::make_shared<PositionPublisher>(name, id, config);
+int main(int argc, char* argv[]) {
+  return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
 }
-}  // namespace ros2_utils

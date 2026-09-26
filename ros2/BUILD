@@ -7,7 +7,7 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "node_runner",
-    srcs = ["node_runner.cc"],
+    hdrs = ["node_runner.h"],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -193,14 +193,9 @@ cc_test(
 
 cc_test(
     name = "node_runner_test",
-    srcs = [
-        "node_runner.cc",
-        "node_runner_test.cc",
-    ],
-    local_defines = ["JOSHUA_NODE_TEST"],
+    srcs = ["node_runner_test.cc"],
     deps = [
-        "//config:config_utils",
-        "//config:validation",
+        ":node_runner",
         "//config/proto:config_cc_proto",
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
@@ -227,14 +222,12 @@ ros2_cpp_binary(
 cc_test(
     name = "trajectory_publisher_test",
     srcs = [
-        "node_runner.cc",
         "trajectory_publisher.cc",
         "trajectory_publisher_test.cc",
     ],
-    local_defines = ["JOSHUA_NODE_TEST"],
+    defines = ["JOSHUA_NODE_TEST"],
     deps = [
-        "//config:config_utils",
-        "//config:validation",
+        ":node_runner",
         "//config/proto:config_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2/proto:node_cc_proto",
