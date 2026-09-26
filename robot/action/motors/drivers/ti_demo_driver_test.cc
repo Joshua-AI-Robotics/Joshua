@@ -139,5 +139,22 @@ TEST(TiDemoDriverTest, SetActionSurfacesChannelFailure) {
   EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnavailable);
 }
 
+TEST(TiDemoDriverTest, JointCommandHasNoPhysicalContractAndDoesNotWrite) {
+  auto channel = std::make_shared<RecordingChannel>();
+  TiDemoDriver driver(channel, MakeJointActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  const int enables = channel->enable_calls_;
+  ActionPacket packet;
+  auto* command = packet.mutable_joint_command();
+  command->set_joint_name("joint_1");
+  command->set_position(0);
+  command->set_velocity(-1);
+  command->set_effort(0);
+  EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(channel->set_target_calls_, 0);
+  EXPECT_EQ(channel->enable_calls_, enables);
+  EXPECT_EQ(channel->disable_calls_, 0);
+}
+
 }  // namespace
 }  // namespace robot::action

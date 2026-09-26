@@ -70,6 +70,8 @@ absl::Status TiDemoDriver::SetAction(const robot::action::ActionPacket& action_p
           return absl::OkStatus();
       }
 
+    case robot::action::ActionPacket::kJointCommand:
+      return absl::UnimplementedError("TI demo has no physical JointState command contract");
     case robot::action::ActionPacket::kComplex: {
       const auto& complex_action = action_packet.complex();
       if (complex_action.has_speed()) {

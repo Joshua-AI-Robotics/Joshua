@@ -1,5 +1,6 @@
 #include "robot/action/motors/drivers/sts3215_driver.h"
 
+#include <limits>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -145,6 +146,54 @@ TEST(Sts3215DriverTest, SetActionSurfacesChannelFailure) {
   packet.set_position(2070.0f);
 
   EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnavailable);
+}
+
+TEST(Sts3215DriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsBeforeWrites) {
+  auto channel = std::make_shared<RecordingChannel>();
+  Sts3215Driver driver(channel, MakeServoActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* command = packet.mutable_joint_command();
+  command->set_joint_name("servo_1");
+  command->set_position(3.14159265358979323846);
+  command->set_frame_id("base");
+  packet.set_timestamp_ns(123);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
+  EXPECT_NEAR(channel->last_value_, 2048.0f, 0.001f);
+  const int writes = channel->set_target_calls_;
+  const int enables = channel->enable_calls_;
+  const int disables = channel->disable_calls_;
+  for (double value : {0.0, -1.0, 1.0}) {
+    command->set_velocity(value);
+    EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
+    command->clear_velocity();
+    command->set_effort(value);
+    EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
+    command->clear_effort();
+  }
+  packet.set_normalized(true);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  packet.set_normalized(false);
+  command->set_joint_name("wrong_joint");
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  command->set_joint_name("servo_1");
+  for (double value : {std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::infinity(),
+                       std::numeric_limits<double>::max(),
+                       std::numeric_limits<double>::denorm_min(),
+                       1000.0}) {
+    command->set_position(value);
+    EXPECT_FALSE(driver.SetAction(packet).ok());
+  }
+  command->clear_position();
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  command->set_velocity(0);
+  command->set_effort(0);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  EXPECT_EQ(channel->enable_calls_, enables);
+  EXPECT_EQ(channel->disable_calls_, disables);
 }
 
 }  // namespace

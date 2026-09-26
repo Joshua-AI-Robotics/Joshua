@@ -63,6 +63,12 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           return absl::OkStatus();
       }
 
+    case robot::action::ActionPacket::kJointCommand: {
+      auto position = JointPositionInNativeUnits(
+          action_packet, action_config_.actuator_name(), 4096.0 / (2.0 * 3.14159265358979323846));
+      if (!position.ok()) return position.status();
+      return SetPosition(*position);
+    }
     case robot::action::ActionPacket::kComplex: {
       const auto& complex_action = action_packet.complex();
       if (complex_action.has_speed()) {

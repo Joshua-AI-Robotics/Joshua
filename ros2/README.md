@@ -104,22 +104,43 @@ Scalar/array command topics retain `/<actuator_name>/position`, `/speed`, or
 `normalized: true` retains the existing [-1, 1] scalar/array position behavior.
 Both endpoints must use the same wire type; Float32 and Float64 do not match.
 
-JointState command topics can have any name because the message itself identifies
-the actuator. It is a **position-only** command contract: name/position lengths
-must match, the target name must occur exactly once, and velocity/effort must be
-empty. `normalized` is rejected. Publisher names come from `sensor_name`.
-Each sensor publishes independently; use an aggregator when a consumer requires
-one synchronized multi-joint snapshot.
+JointState command topics use `config.topic()` directly and can have any valid ROS
+topic name. The message's `name` array selects `actuator_name`; no synthetic
+`/position` topic is constructed. Names must be nonempty and unique. Each numeric
+array must be empty or match the names array, all supplied values must be finite,
+and at least one of position, velocity, or effort must be present.
 
-JointState conversions follow the existing device contracts: STS3215 ticks use
-4096 counts/revolution, and stepper driver positions use degrees. Feedback from
-the STS3215 position sensor is converted to radians; commands are converted back
-to the selected driver's units. The TI demo has no supported JointState unit
-contract and is rejected. This expresses the device's existing zero reference;
-it does not infer URDF offsets, direction, or additional mechanical calibration.
-The [STS3215 specifications](https://www.feetechrc.com/products.html?keyword=STS3215)
-define encoder resolution; [JointState](https://docs.ros2.org/foxy/api/sensor_msgs/msg/JointState.html)
-defines radian/metre units.
+The decoder emits `ActionPacket.joint_command`, retaining optional double-valued
+position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
+m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
+preserves the selected joint name, `header.frame_id`, and the source timestamp in
+`ActionPacket.timestamp_ns`. Nanoseconds must be below 1e9; zero and negative
+source times are preserved. Metadata does not schedule execution, enforce
+freshness, identify a clock domain, or trigger coordinate transforms. Those
+policies belong to future clock/PTP and coordinate-handling work.
+
+Drivers own command capabilities and SI-to-native conversion. Current STS3215
+and stepper drivers support **position-only execution**: STS3215 converts radians
+to ticks (4096/revolution), and stepper converts radians to degrees before its
+existing steps conversion. Both reject any supplied velocity/effort, including
+zero, before applying the position. Their legacy speed setting is nonnegative;
+legacy torque is an enable gate, not physical effort. The TI demo rejects all
+joint commands because it has no physical SI contract. Decoding succeeds
+independently of those driver restrictions, so future drivers can implement the
+new packet without changes to subscription creation. Validate every requested
+field, combination, unit conversion and limit before issuing writes; this is
+prevalidation, not a guarantee of atomic hardware execution.
+
+`normalized` is rejected for JointState commands. Existing scalar/array commands
+retain their native-unit and normalization conventions. The new packet arm must
+be understood by downstream drivers; rebuild packet consumers together. The ROS
+message and config schemas are unchanged.
+
+Position feedback still publishes one named position per sensor (using
+`sensor_name`), converted to radians with a ROS timestamp. It does not fabricate
+velocity or effort. Use an aggregator for synchronized multi-joint feedback.
+Device zero references are retained; URDF offsets and mechanical calibration
+are not inferred.
 
 Hardware and downstream constraints
 ----------------------------------
@@ -127,9 +148,9 @@ Hardware and downstream constraints
 The shared C++ runner (`RunNode<T>` in `node_runner.h`) loads and validates the
 full config before constructing a node, including when launched directly without
 `node_generator`. Position and actuator constructors rely on that shared check.
-Validation rejects unsupported wire/driver combinations before hardware
-initialization. Conversions reject non-finite values, overflow, underflow to
-zero, fractional integer feedback, and integer commands that lose precision
+Config validation rejects invalid subscription settings before hardware
+initialization. JointState field and driver capability checks run on each command.
+Conversions reject non-finite values, overflow, underflow to zero, fractional integer feedback, and integer commands that lose precision
 when converted to the internal float API. Float64 input still rounds to float;
 a wider ROS type does not add sensor or driver precision. Driver limits and
 board-level range checks continue to apply. Teardown runs once per actuator,
@@ -137,9 +158,9 @@ even when it has several subscriptions.
 
 | Boundary | Mitigation / next step |
 |---|---|
-| Internal packets and drivers use float | Keep checked conversions in the existing parser. Widening precision requires an end-to-end packet/driver/firmware change. |
-| Hardware units and register widths vary | Retain device validation and native quantization. Add fixed conversion/capability support with each new driver; reject unknown JointState units. |
-| STS3215/stepper torque is enable/disable | Never interpret JointState effort as physical torque; Bool is restricted to binary enable gates. |
+| Legacy packets and drivers use float | Scalars retain checked conversion to float. JointCommand preserves double precision until checked driver conversion; hardware precision is unchanged. |
+| Hardware units and register widths vary | Retain device validation and native quantization. Implement JointCommand conversion and capability checks in each driver; reject unsupported fields before writes. |
+| STS3215/stepper torque is enable/disable | Never map JointState physical effort to these gates. Reject effort; Bool remains restricted to enable gates. |
 | Inference/trajectory still produce FLOAT32; scalar observation decoding assumes FLOAT32 | Keep their existing endpoints; expose another typed endpoint on a different topic for external ROS consumers. Update those producers/codecs in a separate change. |
 | Dataset message types/shapes can change | Update dataset/model expectations and keep topic types stable during recording. |
 | Multiple command sources can target a device | Coordinate command ownership externally; message-type support does not add arbitration. |

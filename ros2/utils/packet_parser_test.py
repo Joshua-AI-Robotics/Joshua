@@ -83,6 +83,17 @@ class PacketParserTest(unittest.TestCase):
         packet.complex.position = 12.5
         self.assertAlmostEqual(extract_position_from_action(packet), 12.5)
 
+    def test_joint_command_is_not_a_legacy_normalized_or_scalar_command(self):
+        packet = action_packet_pb2.ActionPacket()
+        packet.joint_command.joint_name = "joint"
+        packet.joint_command.position = 0.5
+        packet.joint_command.velocity = 0.0
+        denormalize_action_packet(packet, 100.0, 200.0)
+        self.assertEqual(packet.joint_command.position, 0.5)
+        self.assertTrue(packet.joint_command.HasField("velocity"))
+        self.assertFalse(packet.joint_command.HasField("effort"))
+        self.assertIsNone(extract_scalar_from_action(packet))
+
     def test_extract_scalar_from_action(self):
         packet = action_packet_pb2.ActionPacket()
         packet.speed = 3.5

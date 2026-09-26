@@ -25,8 +25,12 @@ The C++ position/actuator nodes also support compiled numeric scalar/array types
 and JointState through fixed conversions in `packet_parser.cc`; see the
 [ROS node documentation](../README.md#typed-position-and-actuator-messages).
 The Python inference/trajectory producers retain their Float32 contract.
-JointState commands select the configured actuator name and convert radians to
-driver units; their topic name does not encode the command.
+JointState commands select the configured actuator name and preserve optional
+position, velocity, and effort in `ActionPacket.joint_command` using SI units and
+double precision. Frame ID and source timestamp are retained as metadata. The
+configured topic is used directly; drivers validate support and convert units.
+`joint_command` is excluded from legacy normalization/scalar registries: it must
+never be treated as a normalized float or torque-enable command.
 
 ## Actuator topic convention
 

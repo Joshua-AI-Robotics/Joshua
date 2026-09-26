@@ -204,17 +204,20 @@ TEST(ValidationTest, PositionEndpointOnlyNeedsSupportedTypeAndRate) {
   pub->set_ros2_data_type(ros2::data_type::BOOL);
   EXPECT_FALSE(ValidateConfig(config).ok());
 }
-TEST(ValidationTest, JointStateRequiresDriverUnitContract) {
+TEST(ValidationTest, JointStateValidatesStructureAndLeavesCapabilitiesToDriver) {
   robot::action::Actuator actuator;
   actuator.set_actuator_name("joint");
   ros2::node::Subscription sub;
   sub.set_topic("/joint_commands");
   sub.set_ros2_data_type(ros2::data_type::JOINT_STATE);
   actuator.set_motor_type(robot::action::MOTOR_TI_DEMO);
-  EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
   actuator.set_motor_type(robot::action::MOTOR_STEPPER_NEMA17);
   EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
   sub.set_normalized(true);
+  EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  sub.set_normalized(false);
+  actuator.clear_actuator_name();
   EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
 }
 }  // namespace

@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <limits>
+#include <set>
 #include <type_traits>
 #include <vector>
 
@@ -137,17 +139,6 @@ absl::StatusOr<float> NativeCommand(T value) {
   }
   return result;
 }
-absl::StatusOr<double> NativeUnitsPerRadian(robot::action::MotorType motor) {
-  switch (motor) {
-    case robot::action::MOTOR_STS3215:
-      return kStsTicksPerRadian;
-    case robot::action::MOTOR_STEPPER_NEMA17:
-      return 180.0 / kPi;
-    default:
-      return absl::InvalidArgumentError("Driver has no JointState position unit conversion");
-  }
-}
-
 template <typename Message>
 absl::Status EncodePosition(float value,
                             const std::string& name,
@@ -169,31 +160,62 @@ absl::Status EncodePosition(float value,
   return absl::OkStatus();
 }
 
+absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState& message,
+                                              const std::string& actuator_name) {
+  std::set<std::string> names;
+  for (const auto& name : message.name) {
+    if (name.empty() || !names.insert(name).second)
+      return absl::InvalidArgumentError("JointState names must be nonempty and unique");
+  }
+  const auto it = std::find(message.name.begin(), message.name.end(), actuator_name);
+  if (it == message.name.end())
+    return absl::InvalidArgumentError("JointState does not contain the configured actuator");
+  if (message.position.empty() && message.velocity.empty() && message.effort.empty())
+    return absl::InvalidArgumentError("JointState command has no position, velocity or effort");
+  for (const auto* values : {&message.position, &message.velocity, &message.effort}) {
+    if (!values->empty() && values->size() != message.name.size())
+      return absl::InvalidArgumentError("JointState arrays must be empty or match name length");
+    for (double value : *values) {
+      if (!std::isfinite(value))
+        return absl::InvalidArgumentError("JointState values must be finite");
+    }
+  }
+  if (message.header.stamp.nanosec >= 1000000000u)
+    return absl::InvalidArgumentError("JointState stamp.nanosec must be less than 1e9");
+
+  ActionPacket packet;
+  packet.set_timestamp_ns(static_cast<int64_t>(message.header.stamp.sec) * 1000000000LL +
+                          message.header.stamp.nanosec);
+  auto* command = packet.mutable_joint_command();
+  command->set_joint_name(actuator_name);
+  command->set_frame_id(message.header.frame_id);
+  const auto index = static_cast<size_t>(it - message.name.begin());
+  if (!message.position.empty()) command->set_position(message.position[index]);
+  if (!message.velocity.empty()) command->set_velocity(message.velocity[index]);
+  if (!message.effort.empty()) command->set_effort(message.effort[index]);
+  return packet;
+}
+
 template <typename Message>
-absl::StatusOr<float> DecodeCommand(const Message& message,
-                                    const robot::action::Actuator& actuator) {
+absl::StatusOr<ActionPacket> DecodeCommand(const Message& message,
+                                           const ros2::node::Subscription& subscription,
+                                           const std::string& actuator_name) {
   if constexpr (std::is_same_v<Message, sensor_msgs::msg::JointState>) {
-    if (message.position.size() != message.name.size() || !message.velocity.empty() ||
-        !message.effort.empty())
-      return absl::InvalidArgumentError(
-          "JointState commands require matching names/positions and empty velocity/effort");
-    const auto& name = actuator.actuator_name();
-    auto it = std::find(message.name.begin(), message.name.end(), name);
-    if (it == message.name.end() || std::count(message.name.begin(), message.name.end(), name) != 1)
-      return absl::InvalidArgumentError("JointState must contain the actuator name exactly once");
-    ABSL_ASSIGN_OR_RETURN(auto scale, NativeUnitsPerRadian(actuator.motor_type()));
-    return CheckedNumber<float>(
-        static_cast<long double>(message.position[it - message.name.begin()]) * scale);
-  } else if constexpr (IsVector<decltype(message.data)>::value) {
-    if (message.data.size() != 1 || message.layout.data_offset != 0 ||
-        message.layout.dim.size() > 1 ||
-        (message.layout.dim.size() == 1 &&
-         (message.layout.dim[0].size != 1 || message.layout.dim[0].stride != 1)))
-      return absl::InvalidArgumentError(
-          "Actuator MultiArray must contain exactly one contiguous value");
-    return NativeCommand(message.data.front());
+    return DecodeJointState(message, actuator_name);
   } else {
-    return NativeCommand(message.data);
+    float value;
+    if constexpr (IsVector<decltype(message.data)>::value) {
+      if (message.data.size() != 1 || message.layout.data_offset != 0 ||
+          message.layout.dim.size() > 1 ||
+          (message.layout.dim.size() == 1 &&
+           (message.layout.dim[0].size != 1 || message.layout.dim[0].stride != 1)))
+        return absl::InvalidArgumentError(
+            "Actuator MultiArray must contain exactly one contiguous value");
+      ABSL_ASSIGN_OR_RETURN(value, NativeCommand(message.data.front()));
+    } else {
+      ABSL_ASSIGN_OR_RETURN(value, NativeCommand(message.data));
+    }
+    return ActionPacketFromFloat(value, subscription.topic(), subscription.normalized());
   }
 }
 
@@ -249,8 +271,9 @@ absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscript
   if (type == ros2::data_type::JOINT_STATE) {
     if (subscription.normalized() || actuator.actuator_name().empty())
       return absl::InvalidArgumentError(
-          "JointState requires an actuator name and unnormalized radians");
-    return NativeUnitsPerRadian(actuator.motor_type()).status();
+          "JointState requires an actuator name and unnormalized SI values");
+    // Driver support is checked against the supplied fields when a command arrives.
+    return absl::OkStatus();
   }
   ABSL_ASSIGN_OR_RETURN(auto device, DeviceIdFromTopic(subscription.topic()));
   if (device != actuator.actuator_name())
@@ -293,22 +316,14 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
     ActionMessageCallback callback) {
   ABSL_RETURN_IF_ERROR(ValidateActionMessageType(config, action.actuator()));
   std::shared_ptr<rclcpp::SubscriptionBase> result;
-  const auto command_topic = config.ros2_data_type() == ros2::data_type::JOINT_STATE
-                                 ? action.actuator().actuator_name() + "/position"
-                                 : config.topic();
   ABSL_RETURN_IF_ERROR(VisitPositionMessage(config.ros2_data_type(), [&](auto tag) {
     using Message = typename decltype(tag)::Type;
     result = node.create_subscription<Message>(
         config.topic(),
         CreateQosSetting(action.node().qos_setting()),
-        [actuator = action.actuator(), normalized = config.normalized(), command_topic, callback](
+        [actuator_name = action.actuator().actuator_name(), config, callback](
             typename Message::ConstSharedPtr message) {
-          auto value = DecodeCommand(*message, actuator);
-          if (!value.ok()) {
-            callback(value.status());
-            return;
-          }
-          callback(ActionPacketFromFloat(*value, command_topic, normalized));
+          callback(DecodeCommand(*message, config, actuator_name));
         });
     return absl::OkStatus();
   }));

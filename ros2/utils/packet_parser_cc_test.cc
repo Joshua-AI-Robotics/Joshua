@@ -2,7 +2,9 @@
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "rclcpp/rclcpp.hpp"
@@ -100,27 +102,90 @@ TEST_F(PacketParserCppTest, ArraysContainExactlyOneValue) {
   message.layout.data_offset = 1;
   EXPECT_FALSE(Send(ros2::data_type::FLOAT64_MULTI_ARRAY, message).ok());
 }
-TEST_F(PacketParserCppTest, JointStateSelectsByNameAndConvertsRadiansToDriverUnits) {
-  config.set_topic("joint_commands");
+TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
+  config.set_topic("/commands/arbitrary_topic");
+  // Parsing must not depend on a driver's current physical capabilities.
+  action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
   sensor_msgs::msg::JointState message;
   message.name = {"other", "elbow"};
   message.position = {2, 1.5707963267948966};
+  message.velocity = {4, -0.25};
+  message.effort = {6, -1.125};
+  message.header.frame_id = "robot_base";
+  message.header.stamp.sec = 123;
+  message.header.stamp.nanosec = 456;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok()) << result.status();
-  EXPECT_FLOAT_EQ(result->position(), 90);
-  action.mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);
+  ASSERT_TRUE(result->has_joint_command());
+  const auto& command = result->joint_command();
+  EXPECT_EQ(command.joint_name(), "elbow");
+  EXPECT_DOUBLE_EQ(command.position(), message.position[1]);
+  EXPECT_DOUBLE_EQ(command.velocity(), -0.25);
+  EXPECT_DOUBLE_EQ(command.effort(), -1.125);
+  EXPECT_EQ(command.frame_id(), "robot_base");
+  EXPECT_EQ(result->timestamp_ns(), 123000000456LL);
+  EXPECT_FALSE(result->normalized());
+  ros2_utils::DenormalizeActionPacket(*result, 0, 4095);
+  EXPECT_DOUBLE_EQ(result->joint_command().position(), message.position[1]);
+}
+TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
+  sensor_msgs::msg::JointState message;
+  message.name = {"elbow"};
+  for (int field = 0; field < 3; ++field) {
+    message.position.clear();
+    message.velocity.clear();
+    message.effort.clear();
+    if (field == 0) message.position = {0};
+    if (field == 1) message.velocity = {0};
+    if (field == 2) message.effort = {0};
+    auto result = Send(ros2::data_type::JOINT_STATE, message);
+    ASSERT_TRUE(result.ok()) << result.status();
+    EXPECT_EQ(result->joint_command().has_position(), field == 0);
+    EXPECT_EQ(result->joint_command().has_velocity(), field == 1);
+    EXPECT_EQ(result->joint_command().has_effort(), field == 2);
+    EXPECT_EQ(result->timestamp_ns(), 0);
+  }
+  message.header.stamp.sec = -1;
+  message.header.stamp.nanosec = 500000000;
+  auto result = Send(ros2::data_type::JOINT_STATE, message);
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ(result->timestamp_ns(), -500000000);
+  // Preserve double precision/range until the receiving driver validates it.
+  message.effort = {std::numeric_limits<double>::max()};
   result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_FLOAT_EQ(result->position(), 1024);
-  message.name = {"elbow", "elbow"};
+  EXPECT_DOUBLE_EQ(result->joint_command().effort(), message.effort[0]);
+}
+TEST_F(PacketParserCppTest, JointStateRejectsMalformedMessages) {
+  sensor_msgs::msg::JointState valid;
+  valid.name = {"other", "elbow"};
+  valid.position = {2, 1};
+  for (const auto& names : std::vector<std::vector<std::string>>{
+           {"elbow", "elbow"}, {"other", "missing"}, {"", "elbow"}, {"elbow"}, {}}) {
+    auto message = valid;
+    message.name = names;
+    EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
+  }
+  for (int field = 0; field < 3; ++field) {
+    auto message = valid;
+    auto* values = field == 0   ? &message.position
+                   : field == 1 ? &message.velocity
+                                : &message.effort;
+    *values = {1};
+    EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
+    *values = {1, std::numeric_limits<double>::quiet_NaN()};
+    EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
+    *values = {std::numeric_limits<double>::infinity(), 1};
+    EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
+  }
+  auto message = valid;
+  message.position.clear();
   EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
-  message.name = {"other", "missing"};
+  message = valid;
+  message.header.stamp.nanosec = 1000000000u;
   EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
-  message.name = {"elbow"};
-  EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
-  message.position = {1};
-  message.effort = {1};
-  EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
+  config.set_normalized(true);
+  EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, valid).ok());
 }
 TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
   std_msgs::msg::Bool message;

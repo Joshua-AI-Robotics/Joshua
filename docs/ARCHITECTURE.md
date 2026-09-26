@@ -31,6 +31,7 @@ At runtime Joshua uses protobuf packets internally and standard ROS 2 messages a
 - Simple: position, torque, speed
 - Presets: middle position, idle, teardown
 - Complex multi-parameter actions
+- Named joint commands with optional SI position, velocity, effort, and source metadata
 
 **`perception_packet.proto`** — unified perception:
 

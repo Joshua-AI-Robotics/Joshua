@@ -21,12 +21,27 @@ message ComplexAction {
   optional float dc = 5;            // Duty cycle (-100 to 100)
 }
 
+// One named joint command in SI units. The driver's joint kind determines units:
+// revolute: rad, rad/s, N*m; prismatic: m, m/s, N. No native-unit conversion here.
+// Presence is meaningful: an omitted field is not a zero command.
+message JointCommand {
+  string joint_name = 1;
+  optional double position = 2;
+  optional double velocity = 3;
+  optional double effort = 4;
+  // Source metadata only; no coordinate transformation is implied.
+  string frame_id = 5;
+}
+
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
+  // For joint_command, preserves the source stamp (including zero/negative
+  // values). Clock domain, scheduling and freshness are not inferred.
   int64 timestamp_ns = 2;
 
-  // If true, position is in [-1, 1] and mapped to operational limits at the actuator.
+  // If true, legacy position is in [-1, 1] and mapped to operational limits.
+  // Must be false for joint_command, whose values are already in SI units.
   bool normalized = 9;
 
   oneof action_type {
@@ -36,5 +51,6 @@ message ActionPacket {
     PresetCommand preset = 6;   // Preset command
     ComplexAction complex = 7;  // Complex multi-parameter action
     float dc = 8;               // Duty cycle (-100 to 100)
+    JointCommand joint_command = 10;
   }
 }

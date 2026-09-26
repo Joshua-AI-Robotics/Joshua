@@ -65,3 +65,20 @@ Adding a motor type, board, or transport should mean **one new file in one
 layer**, not a new enum value threaded through several. Communication mechanism
 and capability boundaries are described in [comm/README.md](comm/README.md).
 EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
+
+## Joint commands
+
+`ActionPacket.joint_command` carries one named joint's optional position,
+velocity, and effort in SI units, with frame metadata and a source timestamp.
+Drivers handle this packet without ROS dependencies. Optional fields preserve
+missing-versus-zero semantics. Validate the complete requested combination and
+all limits before channel writes; never silently drop a supplied field.
+
+STS3215 and stepper currently accept position only and convert radians to their
+native position units. Their shared position-only validator rejects velocity
+and effort before any write; neither driver provides signed physical velocity
+or effort control through its legacy speed/torque API. TI demo rejects the new
+packet outright. A future driver implements `kJointCommand` with its own joint
+kind, SI conversions, supported combinations, and limits; the ROS decoder needs
+no driver-specific branch. Header metadata alone never schedules a command or
+performs a coordinate transform.
