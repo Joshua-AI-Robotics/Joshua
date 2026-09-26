@@ -28,7 +28,7 @@ At runtime Joshua uses protobuf packets internally and standard ROS 2 messages a
 
 **`action_packet.proto`** — action commands:
 
-- `joint`: named motion command with optional position, velocity, effort, explicit native/SI units, and source metadata
+- `joint`: named motion command with optional position, velocity, effort, explicit position encoding, independent velocity/effort units, and source metadata
 - `preset`: middle position, idle, teardown, and torque enable/disable
 
 **`perception_packet.proto`** — unified perception:

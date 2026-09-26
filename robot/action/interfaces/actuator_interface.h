@@ -41,19 +41,24 @@ class ActuatorInterface : public ActionInterface {
                                                          float lower_limit,
                                                          float upper_limit) {
     auto command = packet.joint();
-    if (packet.normalized() || joint_name.empty() || command.joint_name() != joint_name)
+    if (joint_name.empty() || command.joint_name() != joint_name)
       return absl::InvalidArgumentError(
           "Joint command requires matching name and denormalized values");
     if (!command.has_position() && !command.has_velocity() && !command.has_effort())
       return absl::InvalidArgumentError("Joint command is empty");
-    if (command.units() == JointCommand::SI) {
-      if (units_per_radian <= 0 || command.has_velocity() || command.has_effort())
-        return absl::UnimplementedError(
-            "Driver has no requested SI velocity/effort or position contract");
-      command.set_position(command.position() * units_per_radian);
-      command.set_units(JointCommand::NATIVE);
-    } else if (command.units() != JointCommand::NATIVE) {
-      return absl::InvalidArgumentError("Unknown joint command units");
+    if (command.units() != JointCommand::NATIVE && command.units() != JointCommand::SI)
+      return absl::InvalidArgumentError("Unknown velocity/effort units");
+    if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort()))
+      return absl::UnimplementedError("Driver has no SI velocity/effort contract");
+    if (command.position_encoding() == JointCommand::POSITION_SI) {
+      if (command.has_position()) {
+        if (units_per_radian <= 0)
+          return absl::UnimplementedError("Driver has no SI position contract");
+        command.set_position(command.position() * units_per_radian);
+        command.set_position_encoding(JointCommand::POSITION_NATIVE);
+      }
+    } else if (command.position_encoding() != JointCommand::POSITION_NATIVE) {
+      return absl::InvalidArgumentError("Driver requires resolved native or SI position encoding");
     }
     if (command.has_effort() && !supports_native_effort)
       return absl::UnimplementedError(

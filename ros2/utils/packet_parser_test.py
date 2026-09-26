@@ -12,16 +12,17 @@ from ros2.utils.packet_parser import (
     PERCEPTION_DATA_TYPE_FIELDS,
     PacketParseError,
     action_packet_from_float,
-    denormalize_action_packet,
     denormalize_position_value,
     device_id_from_topic,
     extract_position_from_action,
     extract_scalar_from_action,
     parse_action_type_from_topic,
     require_perception_position,
+    resolve_position_encoding,
 )
 
 _TYPE_DOUBLE = descriptor.FieldDescriptor.TYPE_DOUBLE
+JointCommand = action_packet_pb2.JointCommand
 
 
 def _discover_action_type_float_fields() -> set[str]:
@@ -48,10 +49,12 @@ def _discover_perception_data_type_fields_from_proto() -> set[str]:
 
 
 def _make_action_with_position_path(
-    path: str, *, normalized: bool, value: float
+    path: str, *, value: float
 ) -> action_packet_pb2.ActionPacket:
     packet = action_packet_pb2.ActionPacket()
-    packet.normalized = normalized
+    packet.joint.position_encoding = (
+        action_packet_pb2.JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE
+    )
     if path != "joint.position":
         raise ValueError(f"Unknown position path: {path}")
     packet.joint.position = value
@@ -61,16 +64,20 @@ def _make_action_with_position_path(
 class PacketParserTest(unittest.TestCase):
     def test_denormalize_joint_position(self):
         packet = action_packet_pb2.ActionPacket()
-        packet.normalized = True
+        packet.joint.position_encoding = (
+            action_packet_pb2.JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE
+        )
         packet.joint.position = 0.0
-        denormalize_action_packet(packet, 100.0, 200.0)
+        resolve_position_encoding(packet, 100.0, 200.0)
         self.assertAlmostEqual(packet.joint.position, 150.0)
 
     def test_denormalize_lower_limit(self):
         packet = action_packet_pb2.ActionPacket()
-        packet.normalized = True
+        packet.joint.position_encoding = (
+            action_packet_pb2.JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE
+        )
         packet.joint.position = -1.0
-        denormalize_action_packet(packet, 100.0, 200.0)
+        resolve_position_encoding(packet, 100.0, 200.0)
         self.assertAlmostEqual(packet.joint.position, 100.0)
 
     def test_extract_position_from_action(self):
@@ -83,7 +90,7 @@ class PacketParserTest(unittest.TestCase):
         packet.joint.joint_name = "joint"
         packet.joint.position = 0.5
         packet.joint.velocity = 0.0
-        denormalize_action_packet(packet, 100.0, 200.0)
+        resolve_position_encoding(packet, 100.0, 200.0)
         self.assertEqual(packet.joint.position, 0.5)
         self.assertTrue(packet.joint.HasField("velocity"))
         self.assertFalse(packet.joint.HasField("effort"))
@@ -95,14 +102,50 @@ class PacketParserTest(unittest.TestCase):
         self.assertAlmostEqual(extract_scalar_from_action(packet), 3.5)
 
     def test_normalization_cleared_and_multi_field_scalar_rejected(self):
-        packet = action_packet_from_float(0, "arm/position", normalized=True)
-        denormalize_action_packet(packet, 100, 200)
-        self.assertFalse(packet.normalized)
-        denormalize_action_packet(packet, 100, 200)
+        packet = action_packet_from_float(
+            0,
+            "arm/position",
+            position_encoding=JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE,
+        )
+        resolve_position_encoding(packet, 100, 200)
+        self.assertEqual(
+            packet.joint.position_encoding,
+            action_packet_pb2.JointCommand.POSITION_NATIVE,
+        )
+        resolve_position_encoding(packet, 100, 200)
         self.assertEqual(packet.joint.position, 150)
         self.assertIsNone(extract_scalar_from_action(packet, "arm/speed"))
         packet.joint.velocity = 0
         self.assertIsNone(extract_scalar_from_action(packet))
+
+    def test_both_normalized_encodings_and_rejection(self):
+        joint_type = action_packet_pb2.JointCommand
+        for encoding, minimum in (
+            (joint_type.POSITION_NORMALIZED_ZERO_ONE, 0),
+            (joint_type.POSITION_NORMALIZED_MINUS_ONE_ONE, -1),
+        ):
+            for value, expected in ((minimum, 100), ((minimum + 1) / 2, 150), (1, 200)):
+                packet = action_packet_from_float(
+                    value, "arm/position", position_encoding=encoding
+                )
+                resolve_position_encoding(packet, 100, 200)
+                self.assertEqual(packet.joint.position, expected)
+                self.assertEqual(
+                    packet.joint.position_encoding, joint_type.POSITION_NATIVE
+                )
+            for value in (minimum - 0.01, 1.01, float("nan"), float("inf")):
+                packet.joint.position_encoding = encoding
+                packet.joint.position = value
+                with self.assertRaises(PacketParseError):
+                    resolve_position_encoding(packet, 100, 200)
+                self.assertEqual(packet.joint.position_encoding, encoding)
+            packet.joint.position = 0.5
+            for upper in (100, 99, float("inf")):
+                with self.assertRaises(PacketParseError):
+                    resolve_position_encoding(packet, 100, upper)
+            packet.joint.ClearField("position")
+            with self.assertRaises(PacketParseError):
+                resolve_position_encoding(packet, 100, 200)
 
     def test_require_perception_position(self):
         packet = perception_packet_pb2.PerceptionPacket()
@@ -134,14 +177,24 @@ class PacketParserTest(unittest.TestCase):
         )
 
     def test_action_packet_from_float_position_normalized(self):
-        packet = action_packet_from_float(0.0, "arm/position", normalized=True)
-        self.assertTrue(packet.normalized)
+        packet = action_packet_from_float(
+            0.0,
+            "arm/position",
+            position_encoding=JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE,
+        )
+        self.assertEqual(
+            packet.joint.position_encoding,
+            action_packet_pb2.JointCommand.POSITION_NORMALIZED_MINUS_ONE_ONE,
+        )
         self.assertAlmostEqual(packet.joint.position, 0.0)
 
     def test_action_packet_from_float_dc(self):
         packet = action_packet_from_float(10.0, "motor/dc")
         self.assertAlmostEqual(packet.joint.effort, 10.0)
-        self.assertFalse(packet.normalized)
+        self.assertEqual(
+            packet.joint.position_encoding,
+            action_packet_pb2.JointCommand.POSITION_NATIVE,
+        )
 
 
 class PacketParserProtoContractTest(unittest.TestCase):
@@ -181,10 +234,8 @@ class PacketParserProtoContractTest(unittest.TestCase):
     def test_each_action_position_path_is_denormalized(self):
         for path in ACTION_POSITION_FIELD_PATHS:
             with self.subTest(path=path):
-                packet = _make_action_with_position_path(
-                    path, normalized=True, value=0.0
-                )
-                denormalize_action_packet(packet, 0.0, 100.0)
+                packet = _make_action_with_position_path(path, value=0.0)
+                resolve_position_encoding(packet, 0.0, 100.0)
                 self.assertAlmostEqual(extract_position_from_action(packet), 50.0)
 
 

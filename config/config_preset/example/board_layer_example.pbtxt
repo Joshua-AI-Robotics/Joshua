@@ -54,7 +54,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "bridge_joint_1/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -78,7 +78,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "arm_joint_1/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR

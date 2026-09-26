@@ -114,8 +114,6 @@ class PybricksMotorDriver:
             self._handle_preset(action_packet.preset)
 
         elif action_type == "joint":
-            if action_packet.normalized:
-                raise ValueError("Pybricks requires denormalized commands")
             self._handle_joint(action_packet.joint)
 
         else:
@@ -161,6 +159,8 @@ class PybricksMotorDriver:
     def _handle_joint(self, command: action_packet_pb2.JointCommand) -> None:
         if command.joint_name != self._spec.port:
             raise ValueError("Joint name must match the Pybricks port")
+        if command.position_encoding != action_packet_pb2.JointCommand.POSITION_NATIVE:
+            raise ValueError("Pybricks tool requires native position encoding")
         if command.units != action_packet_pb2.JointCommand.NATIVE:
             raise ValueError(
                 "Pybricks tool supports native degrees, deg/s and duty percent only"

@@ -61,18 +61,26 @@ def action_packet_from_float(
     value: float,
     topic: str,
     *,
-    normalized: bool = False,
+    position_encoding: int = action_packet_pb2.JointCommand.POSITION_NATIVE,
 ) -> action_packet_pb2.ActionPacket:
     """Build ActionPacket from a Float32 actuator command topic and value."""
     field = parse_action_type_from_topic(topic)
     if not math.isfinite(value):
         raise PacketParseError("Command must be finite")
-    if normalized and field != "position":
-        raise PacketParseError("Only position commands support normalization")
+    if (
+        position_encoding
+        not in action_packet_pb2.JointCommand.PositionEncoding.values()
+    ):
+        raise PacketParseError("Unknown position encoding")
+    if (
+        position_encoding != action_packet_pb2.JointCommand.POSITION_NATIVE
+        and field != "position"
+    ):
+        raise PacketParseError("Position encoding applies only to position topics")
     packet = action_packet_pb2.ActionPacket()
     packet.joint.joint_name = device_id_from_topic(topic)
     if field == "position":
-        packet.normalized = normalized
+        packet.joint.position_encoding = position_encoding
     setattr(packet.joint, field, float(value))
     return packet
 
@@ -84,28 +92,48 @@ def map_normalized_position(value: float, lower: float, upper: float) -> float:
 
 
 def denormalize_position_value(value: float, lower: float, upper: float) -> float:
-    """Map normalized position to raw ticks and clamp to operational limits."""
+    """Inference adapter's legacy [-1, 1] clamp policy, not packet decoding."""
     position = map_normalized_position(value, lower, upper)
     return max(lower, min(upper, position))
 
 
-def denormalize_action_packet(
+def resolve_position_encoding(
     packet: action_packet_pb2.ActionPacket,
     lower: float,
     upper: float,
 ) -> action_packet_pb2.ActionPacket:
-    if not packet.normalized:
+    if not packet.HasField("joint"):
         return packet
-    if (
-        not packet.HasField("joint")
-        or not packet.joint.HasField("position")
-        or packet.joint.units != action_packet_pb2.JointCommand.NATIVE
+    joint = packet.joint
+    encoding = joint.position_encoding
+    if encoding not in action_packet_pb2.JointCommand.PositionEncoding.values():
+        raise PacketParseError("Unknown position encoding")
+    if joint.HasField("position") and not math.isfinite(joint.position):
+        raise PacketParseError("Position must be finite")
+    if encoding in (
+        action_packet_pb2.JointCommand.POSITION_NATIVE,
+        action_packet_pb2.JointCommand.POSITION_SI,
     ):
-        raise PacketParseError("Normalization requires a native joint position")
-    packet.joint.position = denormalize_position_value(
-        packet.joint.position, lower, upper
+        return packet
+    if not joint.HasField("position"):
+        raise PacketParseError("Normalized encoding requires position")
+    if not math.isfinite(lower) or not math.isfinite(upper) or lower >= upper:
+        raise PacketParseError(
+            "Normalization requires finite increasing operational limits"
+        )
+    minimum = (
+        0.0
+        if encoding == action_packet_pb2.JointCommand.POSITION_NORMALIZED_ZERO_ONE
+        else -1.0
     )
-    packet.normalized = False
+    if not minimum <= joint.position <= 1.0:
+        raise PacketParseError("Position outside configured normalized range")
+    fraction = (joint.position - minimum) / (1.0 - minimum)
+    value = (1.0 - fraction) * lower + fraction * upper
+    if not math.isfinite(value):
+        raise PacketParseError("Converted position must be finite")
+    joint.position = value
+    joint.position_encoding = action_packet_pb2.JointCommand.POSITION_NATIVE
     return packet
 
 
@@ -123,6 +151,8 @@ def extract_scalar_from_action(
     if (
         not packet.HasField("joint")
         or packet.joint.units != action_packet_pb2.JointCommand.NATIVE
+        or packet.joint.position_encoding
+        != action_packet_pb2.JointCommand.POSITION_NATIVE
     ):
         return None
     fields = [field for field in ACTION_JOINT_FIELDS if packet.joint.HasField(field)]

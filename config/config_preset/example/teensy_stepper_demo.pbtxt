@@ -64,7 +64,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "teensy_stepper_1/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR

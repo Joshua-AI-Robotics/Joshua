@@ -36,16 +36,16 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
     const robot::action::SingleAction& action,
     ActionMessageCallback callback);
 
-float MapNormalizedPosition(float value, float lower, float upper);
-float DenormalizePositionValue(float value, float lower, float upper);
-
-void DenormalizeActionPacket(robot::action::ActionPacket& packet, float lower, float upper);
+// Convert normalized position to native once. Reject invalid ranges, never clamp.
+absl::Status ResolvePositionEncoding(robot::action::ActionPacket& packet, float lower, float upper);
 
 absl::StatusOr<std::string> ParseActionTypeFromTopic(const std::string& topic);
 absl::StatusOr<std::string> DeviceIdFromTopic(const std::string& topic);
-absl::StatusOr<robot::action::ActionPacket> ActionPacketFromFloat(float value,
-                                                                  const std::string& topic,
-                                                                  bool normalized = false);
+absl::StatusOr<robot::action::ActionPacket> ActionPacketFromFloat(
+    float value,
+    const std::string& topic,
+    robot::action::JointCommand::PositionEncoding position_encoding =
+        robot::action::JointCommand::POSITION_NATIVE);
 
 absl::StatusOr<float> RequirePerceptionPosition(const robot::perception::PerceptionPacket& packet);
 absl::Status RequirePerceptionImage(const robot::perception::PerceptionPacket& packet);

@@ -69,11 +69,12 @@ EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
 ## Joint commands
 
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
-velocity, and effort distinguish omission from zero. `units: NATIVE` is the
-default: position uses existing driver units and velocity retains the driver's
-nonnegative move-speed setting. `units: SI` represents physical position,
-velocity, and effort. ROS JointState decoding sets SI explicitly and preserves
-joint name, frame, timestamp, and every supplied numeric field.
+velocity, and effort distinguish omission from zero. `position_encoding` selects
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. The separate `units` field applies only to
+velocity and effort: NATIVE preserves existing driver settings; SI means physical
+velocity and effort. JointState sets SI position encoding and SI velocity/effort
+units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
 STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
@@ -88,6 +89,8 @@ maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remai
 unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
-Normalized scalar positions map through configured operational limits and clear
-the normalization flag before driver execution. SI commands cannot be normalized.
+Normalized positions map through configured operational limits once, then become
+POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
+limits are rejected, never clamped. Native and SI positions are left for drivers.
+Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.

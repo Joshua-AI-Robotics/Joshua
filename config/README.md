@@ -114,3 +114,9 @@ Trajectory actions use `action { joint { joint_name: "sts_motor_1" position: 200
 the default, preserving existing config limits and numeric topic values. See
 [packet contracts](../ros2/utils/packet_parser.md) for SI units, driver capability
 limits, torque-enable presets, and migration details.
+
+Scalar actuator position subscriptions can select `position_encoding`:
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. Normalized ranges map to actuator operational
+limits; invalid inputs are rejected. Replace old `normalized: true` with
+`position_encoding: POSITION_NORMALIZED_MINUS_ONE_ONE`. JointState is always SI.

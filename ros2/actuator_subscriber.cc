@@ -71,7 +71,15 @@ class ActionSubscriber : public rclcpp::Node {
               }
               actuator.reusable_packet = *parsed;
               const auto [lower, upper] = actuator.limits;
-              ros2_utils::DenormalizeActionPacket(actuator.reusable_packet, lower, upper);
+              const auto encoding_status =
+                  ros2_utils::ResolvePositionEncoding(actuator.reusable_packet, lower, upper);
+              if (!encoding_status.ok()) {
+                RCLCPP_ERROR(get_logger(),
+                             "Invalid position on '%s': %s",
+                             actuator.topic.c_str(),
+                             encoding_status.ToString().c_str());
+                return;
+              }
               const auto status = actuator.interface->SetAction(actuator.reusable_packet);
               if (!status.ok()) {
                 RCLCPP_ERROR(get_logger(),

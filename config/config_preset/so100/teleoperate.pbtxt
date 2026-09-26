@@ -45,7 +45,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_1/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -74,7 +74,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_2/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -103,7 +103,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_3/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -132,7 +132,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_4/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -161,7 +161,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_5/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR
@@ -190,7 +190,7 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_6/position"
-          normalized: false
+          position_encoding: POSITION_NATIVE
         }
       }
       action_type: ACTUATOR

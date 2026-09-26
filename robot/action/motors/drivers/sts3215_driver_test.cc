@@ -156,6 +156,7 @@ TEST(Sts3215DriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   ActionPacket packet;
   auto* command = packet.mutable_joint();
   command->set_units(robot::action::JointCommand::SI);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name("servo_1");
   command->set_position(3.14159265358979323846);
   command->set_frame_id("base");
@@ -174,9 +175,9 @@ TEST(Sts3215DriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
     EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
     command->clear_effort();
   }
-  packet.set_normalized(true);
+  command->set_position_encoding(JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
   EXPECT_FALSE(driver.SetAction(packet).ok());
-  packet.set_normalized(false);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name("wrong_joint");
   EXPECT_FALSE(driver.SetAction(packet).ok());
   command->set_joint_name("servo_1");

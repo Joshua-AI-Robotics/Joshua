@@ -148,6 +148,7 @@ TEST(TiDemoDriverTest, JointCommandHasNoPhysicalContractAndDoesNotWrite) {
   ActionPacket packet;
   auto* command = packet.mutable_joint();
   command->set_units(robot::action::JointCommand::SI);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name("joint_1");
   command->set_position(0);
   command->set_velocity(-1);

@@ -42,6 +42,7 @@ namespace ros2_utils {
 namespace {
 
 using robot::action::ActionPacket;
+using robot::action::JointCommand;
 // STS3215 encoder resolution is a device property (4096 ticks/revolution).
 // JointState uses radians; scalar messages keep the existing native units.
 constexpr double kPi = 3.14159265358979323846;
@@ -187,7 +188,8 @@ absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState
   packet.set_timestamp_ns(static_cast<int64_t>(message.header.stamp.sec) * 1000000000LL +
                           message.header.stamp.nanosec);
   auto* command = packet.mutable_joint();
-  command->set_units(robot::action::JointCommand::SI);
+  command->set_units(JointCommand::SI);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name(actuator_name);
   command->set_frame_id(message.header.frame_id);
   const auto index = static_cast<size_t>(it - message.name.begin());
@@ -216,18 +218,10 @@ absl::StatusOr<ActionPacket> DecodeCommand(const Message& message,
     } else {
       ABSL_ASSIGN_OR_RETURN(value, NativeCommand(message.data));
     }
-    auto packet = ActionPacketFromFloat(value, subscription.topic(), subscription.normalized());
+    auto packet =
+        ActionPacketFromFloat(value, subscription.topic(), subscription.position_encoding());
     if (packet.ok() && packet->has_joint()) packet->mutable_joint()->set_joint_name(actuator_name);
     return packet;
-  }
-}
-
-template <typename Fn>
-void ApplyToPositionSources(ActionPacket& packet, Fn transform) {
-  if (packet.has_joint() && packet.joint().has_position() &&
-      packet.joint().units() == robot::action::JointCommand::NATIVE) {
-    packet.mutable_joint()->set_position(transform(packet.joint().position()));
-    packet.set_normalized(false);
   }
 }
 
@@ -268,9 +262,11 @@ absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscript
   auto type = subscription.ros2_data_type();
   ABSL_RETURN_IF_ERROR(VisitPositionMessage(type, [](auto) { return absl::OkStatus(); }));
   if (type == ros2::data_type::JOINT_STATE) {
-    if (subscription.normalized() || actuator.actuator_name().empty())
+    if ((subscription.has_position_encoding() &&
+         subscription.position_encoding() != JointCommand::POSITION_SI) ||
+        actuator.actuator_name().empty())
       return absl::InvalidArgumentError(
-          "JointState requires an actuator name and unnormalized SI values");
+          "JointState requires an actuator name and SI position encoding");
     // Driver support is checked against the supplied fields when a command arrives.
     return absl::OkStatus();
   }
@@ -280,8 +276,10 @@ absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscript
   ABSL_ASSIGN_OR_RETURN(auto command, ParseActionTypeFromTopic(subscription.topic()));
   if (command == "dc")
     return absl::InvalidArgumentError("Current motor drivers do not support duty cycle");
-  if (subscription.normalized() && command != "position")
-    return absl::InvalidArgumentError("Only position commands support normalization");
+  if (!JointCommand::PositionEncoding_IsValid(subscription.position_encoding()))
+    return absl::InvalidArgumentError("Unknown position encoding");
+  if (subscription.has_position_encoding() && command != "position")
+    return absl::InvalidArgumentError("Position encoding applies only to position topics");
   if (type == ros2::data_type::BOOL &&
       (command != "torque" || (actuator.motor_type() != robot::action::MOTOR_STS3215 &&
                                actuator.motor_type() != robot::action::MOTOR_STEPPER_NEMA17)))
@@ -344,23 +342,29 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
   return result;
 }
 
-float MapNormalizedPosition(const float value, const float lower, const float upper) {
-  const float normalized = std::max(-1.0f, std::min(1.0f, value));
-  return lower + (normalized + 1.0f) * (upper - lower) / 2.0f;
-}
-
-float DenormalizePositionValue(const float value, const float lower, const float upper) {
-  const float position = MapNormalizedPosition(value, lower, upper);
-  return std::max(lower, std::min(upper, position));
-}
-
-void DenormalizeActionPacket(ActionPacket& packet, const float lower, const float upper) {
-  if (!packet.normalized()) {
-    return;
-  }
-  ApplyToPositionSources(packet, [lower, upper](const float value) {
-    return DenormalizePositionValue(value, lower, upper);
-  });
+absl::Status ResolvePositionEncoding(ActionPacket& packet, const float lower, const float upper) {
+  if (!packet.has_joint()) return absl::OkStatus();
+  auto* joint = packet.mutable_joint();
+  const auto encoding = joint->position_encoding();
+  if (!JointCommand::PositionEncoding_IsValid(encoding))
+    return absl::InvalidArgumentError("Unknown position encoding");
+  if (joint->has_position() && !std::isfinite(joint->position()))
+    return absl::InvalidArgumentError("Position must be finite");
+  if (encoding == JointCommand::POSITION_NATIVE || encoding == JointCommand::POSITION_SI)
+    return absl::OkStatus();
+  if (!joint->has_position())
+    return absl::InvalidArgumentError("Normalized encoding requires position");
+  if (!std::isfinite(lower) || !std::isfinite(upper) || lower >= upper)
+    return absl::InvalidArgumentError(
+        "Normalization requires finite increasing operational limits");
+  const double minimum = encoding == JointCommand::POSITION_NORMALIZED_ZERO_ONE ? 0.0 : -1.0;
+  const double value = joint->position();
+  if (value < minimum || value > 1.0)
+    return absl::OutOfRangeError("Position outside configured normalized range");
+  const double fraction = (value - minimum) / (1.0 - minimum);
+  joint->set_position(static_cast<double>(lower) + fraction * (static_cast<double>(upper) - lower));
+  joint->set_position_encoding(JointCommand::POSITION_NATIVE);
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::string> ParseActionTypeFromTopic(const std::string& topic) {
@@ -385,23 +389,26 @@ absl::StatusOr<std::string> DeviceIdFromTopic(const std::string& topic) {
   return trimmed.substr(0, slash);
 }
 
-absl::StatusOr<ActionPacket> ActionPacketFromFloat(const float value,
-                                                   const std::string& topic,
-                                                   const bool normalized) {
+absl::StatusOr<ActionPacket> ActionPacketFromFloat(
+    const float value,
+    const std::string& topic,
+    const JointCommand::PositionEncoding position_encoding) {
   auto field = ParseActionTypeFromTopic(topic);
   if (!field.ok()) {
     return field.status();
   }
 
   if (!std::isfinite(value)) return absl::InvalidArgumentError("Command must be finite");
-  if (normalized && *field != "position")
-    return absl::InvalidArgumentError("Only position commands support normalization");
+  if (!JointCommand::PositionEncoding_IsValid(position_encoding))
+    return absl::InvalidArgumentError("Unknown position encoding");
+  if (position_encoding != JointCommand::POSITION_NATIVE && *field != "position")
+    return absl::InvalidArgumentError("Position encoding applies only to position topics");
   ActionPacket packet;
   ABSL_ASSIGN_OR_RETURN(auto name, DeviceIdFromTopic(topic));
   auto* joint = packet.mutable_joint();
   joint->set_joint_name(name);
   if (*field == "position") {
-    packet.set_normalized(normalized);
+    joint->set_position_encoding(position_encoding);
     joint->set_position(value);
   } else if (*field == "speed" || *field == "velocity") {
     joint->set_velocity(value);

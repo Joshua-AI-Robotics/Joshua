@@ -16,10 +16,16 @@ enum PresetCommand {
 
 // Unified actuator motion command. Presence distinguishes omitted fields from zero.
 message JointCommand {
+  enum PositionEncoding {
+    POSITION_NATIVE = 0;
+    POSITION_SI = 1;
+    POSITION_NORMALIZED_ZERO_ONE = 2;
+    POSITION_NORMALIZED_MINUS_ONE_ONE = 3;
+  }
   enum Units {
-    // Driver-defined position, move-speed setting and effort (never an enable gate).
+    // Driver-defined velocity setting and effort (never an enable gate).
     NATIVE = 0;
-    // Physical position, velocity and effort: rad, rad/s, N*m for revolute joints.
+    // Physical velocity and effort: rad/s and N*m for revolute joints.
     SI = 1;
   }
   string joint_name = 1;
@@ -28,7 +34,9 @@ message JointCommand {
   optional double effort = 4;  // NATIVE may mean duty cycle for a driver with that contract.
   // Source metadata only; no coordinate transformation is implied.
   string frame_id = 5;
+  // Applies only to velocity and effort; position has its own encoding.
   Units units = 6;
+  PositionEncoding position_encoding = 7;
 }
 
 // Main action packet - uses oneof for type safety
@@ -39,10 +47,6 @@ message ActionPacket {
   // TODO(hmoon): Sync the timestamp unit and source across the system.
   uint64 timestamp_ns = 2;
   uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
-
-  // If true, joint.position is in [-1, 1] and mapped to native operational limits.
-  // Only valid with NATIVE units; cleared by the subscriber after mapping.
-  bool normalized = 4;
 
   oneof action_type {
     JointCommand joint = 5;    // Unified actuator motion.

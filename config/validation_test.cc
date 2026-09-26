@@ -214,9 +214,13 @@ TEST(ValidationTest, JointStateValidatesStructureAndLeavesCapabilitiesToDriver) 
   EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
   actuator.set_motor_type(robot::action::MOTOR_STEPPER_NEMA17);
   EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
-  sub.set_normalized(true);
+  sub.set_position_encoding(robot::action::JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
   EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
-  sub.set_normalized(false);
+  sub.set_position_encoding(robot::action::JointCommand::POSITION_NATIVE);
+  EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  sub.set_position_encoding(robot::action::JointCommand::POSITION_SI);
+  EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  sub.clear_position_encoding();
   actuator.clear_actuator_name();
   EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
 }

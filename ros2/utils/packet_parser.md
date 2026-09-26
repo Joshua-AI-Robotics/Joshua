@@ -4,11 +4,12 @@
 `packet_parser.py` supplies matching field access for Python consumers.
 
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
-velocity, and effort distinguish omission from zero. `units: NATIVE` is the
-default: position uses existing driver units and velocity retains the driver's
-nonnegative move-speed setting. `units: SI` represents physical position,
-velocity, and effort. ROS JointState decoding sets SI explicitly and preserves
-joint name, frame, timestamp, and every supplied numeric field.
+velocity, and effort distinguish omission from zero. `position_encoding` selects
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. The separate `units` field applies only to
+velocity and effort: NATIVE preserves existing driver settings; SI means physical
+velocity and effort. JointState sets SI position encoding and SI velocity/effort
+units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
 STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
@@ -23,8 +24,10 @@ maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remai
 unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
-Normalized scalar positions map through configured operational limits and clear
-the normalization flag before driver execution. SI commands cannot be normalized.
+Normalized positions map through configured operational limits once, then become
+POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
+limits are rejected, never clamped. Native and SI positions are left for drivers.
+Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
 ## Config migration
@@ -35,21 +38,39 @@ Replace `action { position: 2004 }` with:
 action { joint { joint_name: "sts_motor_1" position: 2004 } }
 ```
 
-The optional native units marker may be written as `units: NATIVE`. Replace
+The optional position marker may be written as `position_encoding: POSITION_NATIVE`. Replace
 complex speed with `joint.velocity`; map physical/native effort only where the
 driver supports it. Torque enable/disable becomes a preset, not effort.
 Duration is no longer part of a command; trajectory waypoints provide timing.
 
 Float32 trajectory publishing accepts one native numeric field, matching its
 topic and joint name. Multi-field, SI, or mismatched payloads are rejected rather
-than silently losing fields or units. Match the publisher/subscriber normalized
-position convention in config.
+than silently losing fields or units. The current Float32 trajectory publisher accepts native position encoding only.
 
-`ActionPacket` uses sequential tags: action ID 1, timestamp 2, normalized 3,
-joint 4, and preset 5. This renumbering is a breaking binary schema change.
-Previously serialized packets require explicit migration; rebuild and update
-producers and consumers together. Old scalar/complex text configs also require
-migration; they are not automatically translated.
+The packet and subscription `normalized` booleans are removed. Migrate false to
+`position_encoding: POSITION_NATIVE`, and true to
+`position_encoding: POSITION_NORMALIZED_MINUS_ONE_ONE`. Existing SI joint
+positions must now explicitly set `position_encoding: POSITION_SI`; `units: SI`
+only describes velocity/effort. Update binary producers and consumers together.
+
+For scalar subscriptions:
+
+```protobuf
+subscriptions {
+  ros2_data_type: FLOAT32
+  topic: "esp32_stepper_1/position"
+  position_encoding: POSITION_NORMALIZED_ZERO_ONE
+}
+```
+
+For limits [0, 360], [0, 1] maps 0/0.5/1 to 0/180/360, while [-1, 1]
+maps -1/0/1 to the same targets. Formula: `lower + fraction * (upper - lower)`.
+JointState defaults to SI regardless of an omitted subscription encoding.
+Encoding configuration is rejected on non-position scalar topics.
+
+The inference adapter's separate `ActionCommand.normalized` API is unchanged:
+it converts its legacy [-1, 1] output with its existing clamp policy before ROS
+publishing. That producer API does not use the removed packet/subscription flag.
 
 ## Extending support
 

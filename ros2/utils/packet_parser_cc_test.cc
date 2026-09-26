@@ -125,8 +125,8 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   EXPECT_DOUBLE_EQ(command.effort(), -1.125);
   EXPECT_EQ(command.frame_id(), "robot_base");
   EXPECT_EQ(result->timestamp_ns(), 123000000456LL);
-  EXPECT_FALSE(result->normalized());
-  ros2_utils::DenormalizeActionPacket(*result, 0, 4095);
+  EXPECT_EQ(result->joint().position_encoding(), robot::action::JointCommand::POSITION_SI);
+  EXPECT_TRUE(ros2_utils::ResolvePositionEncoding(*result, 0, 4095).ok());
   EXPECT_DOUBLE_EQ(result->joint().position(), message.position[1]);
 }
 TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
@@ -185,7 +185,7 @@ TEST_F(PacketParserCppTest, JointStateRejectsMalformedMessages) {
   message = valid;
   message.header.stamp.nanosec = 1000000000u;
   EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, message).ok());
-  config.set_normalized(true);
+  config.set_position_encoding(robot::action::JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
   EXPECT_FALSE(Send(ros2::data_type::JOINT_STATE, valid).ok());
 }
 TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
@@ -243,6 +243,69 @@ TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
   auto effort = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(effort.ok());
   EXPECT_TRUE(effort->joint().has_effort());
+}
+
+TEST_F(PacketParserCppTest, ScalarPositionEncodingReachesPacketAndResolvesOnce) {
+  using Joint = robot::action::JointCommand;
+  for (auto encoding :
+       {Joint::POSITION_NORMALIZED_ZERO_ONE, Joint::POSITION_NORMALIZED_MINUS_ONE_ONE}) {
+    config.set_position_encoding(encoding);
+    const double minimum = encoding == Joint::POSITION_NORMALIZED_ZERO_ONE ? 0 : -1;
+    for (double value : {minimum, (minimum + 1) / 2, 1.0}) {
+      std_msgs::msg::Float64 message;
+      message.data = value;
+      auto packet = Send(ros2::data_type::FLOAT64, message);
+      ASSERT_TRUE(packet.ok());
+      EXPECT_EQ(packet->joint().position_encoding(), encoding);
+      packet->mutable_joint()->set_velocity(-2);
+      packet->mutable_joint()->set_effort(3);
+      packet->mutable_joint()->set_units(Joint::SI);
+      ASSERT_TRUE(ros2_utils::ResolvePositionEncoding(*packet, 100, 200).ok());
+      const double expected = 100 + (value - minimum) / (1 - minimum) * 100;
+      EXPECT_DOUBLE_EQ(packet->joint().position(), expected);
+      EXPECT_DOUBLE_EQ(packet->joint().velocity(), -2);
+      EXPECT_DOUBLE_EQ(packet->joint().effort(), 3);
+      EXPECT_EQ(packet->joint().units(), Joint::SI);
+      EXPECT_EQ(packet->joint().position_encoding(), Joint::POSITION_NATIVE);
+      ASSERT_TRUE(ros2_utils::ResolvePositionEncoding(*packet, 100, 200).ok());
+      EXPECT_DOUBLE_EQ(packet->joint().position(), expected);
+    }
+  }
+  config.set_position_encoding(Joint::POSITION_SI);
+  std_msgs::msg::Float64 message;
+  message.data = 0.25;
+  auto packet = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(packet.ok());
+  EXPECT_EQ(packet->joint().position_encoding(), Joint::POSITION_SI);
+  EXPECT_EQ(packet->joint().units(), Joint::NATIVE);
+  config.set_topic("elbow/speed");
+  EXPECT_FALSE(Send(ros2::data_type::FLOAT64, message).ok());
+}
+
+TEST(PacketPositionEncodingTest, RejectsInvalidValuesAndLimitsWithoutMutation) {
+  using Joint = robot::action::JointCommand;
+  for (auto encoding :
+       {Joint::POSITION_NORMALIZED_ZERO_ONE, Joint::POSITION_NORMALIZED_MINUS_ONE_ONE}) {
+    robot::action::ActionPacket packet;
+    auto* joint = packet.mutable_joint();
+    joint->set_position_encoding(encoding);
+    const double minimum = encoding == Joint::POSITION_NORMALIZED_ZERO_ONE ? 0 : -1;
+    for (double value : {minimum - 0.01,
+                         1.01,
+                         std::numeric_limits<double>::infinity(),
+                         std::numeric_limits<double>::quiet_NaN()}) {
+      joint->set_position(value);
+      EXPECT_FALSE(ros2_utils::ResolvePositionEncoding(packet, 100, 200).ok());
+      EXPECT_EQ(joint->position_encoding(), encoding);
+    }
+    joint->set_position(0.5);
+    for (float upper : {100.f, 99.f, std::numeric_limits<float>::infinity()}) {
+      EXPECT_FALSE(ros2_utils::ResolvePositionEncoding(packet, 100, upper).ok());
+      EXPECT_DOUBLE_EQ(joint->position(), 0.5);
+    }
+    joint->clear_position();
+    EXPECT_FALSE(ros2_utils::ResolvePositionEncoding(packet, 100, 200).ok());
+  }
 }
 
 }  // namespace

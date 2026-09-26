@@ -182,6 +182,7 @@ TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   ActionPacket packet;
   auto* command = packet.mutable_joint();
   command->set_units(robot::action::JointCommand::SI);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name("stepper_1");
   command->set_position(3.14159265358979323846 / 4.0);
   command->set_frame_id("base");
@@ -200,9 +201,9 @@ TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
     EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
     command->clear_effort();
   }
-  packet.set_normalized(true);
+  command->set_position_encoding(JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
   EXPECT_FALSE(driver.SetAction(packet).ok());
-  packet.set_normalized(false);
+  command->set_position_encoding(JointCommand::POSITION_SI);
   command->set_joint_name("wrong_joint");
   EXPECT_FALSE(driver.SetAction(packet).ok());
   command->set_joint_name("stepper_1");
@@ -245,4 +246,25 @@ TEST(StepperDriverTest, NativeJointValidatesAllFieldsBeforeWriting) {
 }
 
 }  // namespace
+TEST(StepperDriverTest, PositionEncodingIsIndependentOfVelocityUnits) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* joint = packet.mutable_joint();
+  joint->set_joint_name("stepper_1");
+  joint->set_position_encoding(JointCommand::POSITION_SI);
+  joint->set_position(3.14159265358979323846 / 4.0);
+  joint->set_velocity(20);  // Native move speed, despite SI position.
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  const int writes = channel->set_target_calls_;
+  joint->set_units(JointCommand::SI);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  joint->clear_velocity();
+  joint->set_position_encoding(JointCommand::POSITION_NATIVE);
+  joint->set_position(45);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+}
+
 }  // namespace robot::action
