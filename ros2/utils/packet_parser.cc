@@ -21,9 +21,8 @@ void ApplyToPositionSources(ActionPacket& packet, Fn transform) {
 }
 
 // Allowed /<device_id>/<action_type> topic suffixes for Float32 actuator commands.
-// TODO(hmoon): Keep in sync with ACTION_TOPIC_SUFFIX_TO_FIELD in packet_parser.py and
-// ACTION_SCALAR_ONEOF_FIELDS when action_packet.proto gains a new float oneof arm.
-// Checklist: ros2/utils/packet_parser.md § "After editing action_packet.proto".
+// Keep this allowlist, ActionPacketFromFloat, and trajectory scalar extraction
+// in sync when action_packet.proto gains a new scalar action.
 const char* kActionTopicSuffixes[] = {"position", "torque", "speed", "dc"};
 
 std::string NormalizeTopicSuffix(std::string suffix) {

@@ -16,7 +16,7 @@ simulation/
 ├── proto/              # SimulationConfig schema
 ├── mujoco/             # MuJoCo backend (in-process)
 │   ├── engine.py       #   model/data wrapper
-│   └── modes/          #   interactive · passive · mirror · offscreen
+│   └── modes/          #   interactive · passive · offscreen
 ├── isaac/              # Isaac Sim backend (subprocess)
 │   ├── launcher.py     #   Bazel-side: config → JSON, spawns the viewer
 │   └── viewer.py       #   Isaac-venv-side: USD scene + physics loop
@@ -29,14 +29,13 @@ simulation/
 
 ## MuJoCo backend
 
-MuJoCo runs in-process (Bazel-managed Python) and supports four modes,
+MuJoCo runs in-process (Bazel-managed Python) and supports three modes,
 selected via `simulation.mode` in the preset:
 
 | Mode | Description |
 |------|-------------|
 | `MODE_INTERACTIVE` | Interactive 3D viewer |
 | `MODE_PASSIVE` | Trajectory playback from a CSV file |
-| `MODE_MIRROR` | Mirror live hardware encoder topics into the sim |
 | `MODE_OFFSCREEN` | Headless frame rendering to disk |
 
 ```bash
@@ -47,6 +46,9 @@ CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm 
 Robot models (MuJoCo XML) live in [models/](models/) under each robot's
 directory; `model_path` in the preset points at the scene XML, e.g.
 `simulation/models/so_arm100/so_arm100_scene.xml`.
+
+MuJoCo mirror mode and its ROS topic mappings have been removed. The former
+`MODE_MIRROR` value and `mirror` config field are reserved.
 
 ## Isaac Sim backend
 

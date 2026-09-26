@@ -14,7 +14,8 @@ enum NodeType {
   ACTUATOR_SUBSCRIBER = 3;
   INFERENCE = 4;
   LIDAR_PUBLISHER = 5;
-  DATA_SUBSCRIBER = 6;
+  reserved 6;
+  reserved "DATA_SUBSCRIBER";
   TRAJECTORY_PUBLISHER = 7;
 }
 

@@ -3,7 +3,7 @@ from typing import Any
 
 from ros2.proto import ros2_data_type_pb2
 
-# This mapping data MUST match Ros2DataType enum values in ai_model.proto.
+# Keep this mapping in sync with ros2/proto/ros2_data_type.proto.
 ROS2_TYPE_MAPPING = {
     # std_msgs
     "FLOAT32": "std_msgs/msg/Float32",
@@ -104,185 +104,14 @@ ROS2_TYPE_MAPPING = {
 }
 
 
-def resolve_message_class(ros2_type: str, enum_value: int) -> Any:
-    """
-    Resolve ROS 2 message class from either a fully-qualified type string
-    (e.g., "sensor_msgs/msg/Image") or a Ros2DataType enum value.
-    """
-    if ros2_type:
-        return _resolve_from_string(ros2_type)
-    return _resolve_from_enum(enum_value)
-
-
 def resolve_message_class_from_enum(enum_value: int) -> Any:
-    """Resolve ROS 2 message class strictly from Ros2DataType enum."""
-    return _resolve_from_enum(enum_value)
-
-
-def _resolve_from_string(ros2_type: str) -> Any:
-    try:
-        return _import_message_class(ros2_type)
-    except Exception as exc:
-        raise ValueError(f"Failed to resolve ROS 2 type '{ros2_type}': {exc}")
-
-
-def _resolve_from_enum(enum_value: int) -> Any:
+    """Resolve the configured enum to a generated ROS message class for inference."""
     try:
         name = ros2_data_type_pb2.Ros2DataType.Name(enum_value)
-    except Exception:
-        raise ValueError(f"Unknown Ros2DataType value: {enum_value}")
-
-    normalized = name.upper()
-    for prefix in ("DATA_TYPE_", "ROS2_DATA_TYPE_"):
-        if normalized.startswith(prefix):
-            normalized = normalized[len(prefix) :]
-
-    if normalized not in ROS2_TYPE_MAPPING:
+    except ValueError as exc:
+        raise ValueError(f"Unknown Ros2DataType value: {enum_value}") from exc
+    ros2_type = ROS2_TYPE_MAPPING.get(name)
+    if ros2_type is None:
         raise ValueError(f"Unsupported Ros2DataType: {name}")
-    return _import_message_class(ROS2_TYPE_MAPPING[normalized])
-
-
-def get_ros2_type_string_from_enum(enum_value: int) -> str:
-    """Resolve ROS 2 type string strictly from Ros2DataType enum."""
-    try:
-        name = ros2_data_type_pb2.Ros2DataType.Name(enum_value)
-    except Exception:
-        raise ValueError(f"Unknown Ros2DataType value: {enum_value}")
-
-    normalized = name.upper()
-    for prefix in ("DATA_TYPE_", "ROS2_DATA_TYPE_"):
-        if normalized.startswith(prefix):
-            normalized = normalized[len(prefix) :]
-
-    if normalized not in ROS2_TYPE_MAPPING:
-        raise ValueError(f"Unsupported Ros2DataType: {name}")
-    return ROS2_TYPE_MAPPING[normalized]
-
-
-def _import_message_class(ros2_type: str) -> Any:
-    """
-    Import a ROS 2 interface class using Python import mechanics.
-    Accepts strings like "package/msg/Type", "package/srv/Type", or "package/action/Type".
-    """
-    parts = ros2_type.split("/")
-    if len(parts) != 3:
-        raise ValueError(
-            f"Invalid ROS 2 type format '{ros2_type}'. Expected 'package/(msg|srv|action)/Type'."
-        )
-
-    package, interface_kind, type_name = parts
-    if interface_kind not in ("msg", "srv", "action"):
-        raise ValueError(
-            f"Invalid interface kind '{interface_kind}' in '{ros2_type}'. Expected 'msg', 'srv', or 'action'."
-        )
-
-    module_name = f"{package}.{interface_kind}"
-    try:
-        module = importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        raise ImportError(
-            f"Could not import module '{module_name}' for '{ros2_type}': {exc}"
-        ) from exc
-
-    try:
-        return getattr(module, type_name)
-    except AttributeError as exc:
-        raise ImportError(
-            f"Type '{type_name}' not found in module '{module_name}' for '{ros2_type}'."
-        ) from exc
-
-
-def get_ros2_type_name(msg: Any) -> str:
-    """
-    Get the ROS 2 type name string (e.g., 'std_msgs/msg/Float32') from a message instance or class.
-    """
-    cls = msg if isinstance(msg, type) else msg.__class__
-    module = cls.__module__
-    name = cls.__name__
-
-    parts = module.split(".")
-    if len(parts) >= 2:
-        # Handle standard pattern: package.interface_kind.module
-        package = parts[0]
-        interface_kind = parts[1]
-        return f"{package}/{interface_kind}/{name}"
-
-    raise ValueError(
-        f"Could not determine ROS 2 type name from class '{module}.{name}'"
-    )
-
-
-# --- Utilities for post-processing decisions based on ROS2_TYPE_MAPPING ---
-
-# Reverse map: "package/msg/Type" -> "KEY"
-_REVERSE_ROS2_TYPE_MAPPING = {v: k for k, v in ROS2_TYPE_MAPPING.items()}
-
-
-def get_ros2_mapping_key(ros2_type: str) -> str:
-    """
-    Return the canonical mapping key (e.g., 'IMAGE', 'IMU', 'STRING') for a fully-qualified ROS 2 type string.
-    Returns '' if not found.
-    """
-    if not isinstance(ros2_type, str):
-        return ""
-    return _REVERSE_ROS2_TYPE_MAPPING.get(ros2_type.strip(), "")
-
-
-def add_post_process_feature(base_entry: dict, ros2_type: str, value) -> dict:
-    """
-    Mutate base_entry by adding an appropriate feature field for the given ros2_type.
-    Currently collapses IMAGE and COMPRESSED_IMAGE to 'image'.
-    Returns the mutated base_entry.
-    """
-    key = get_ros2_mapping_key(ros2_type)
-    if key in ("IMAGE", "COMPRESSED_IMAGE"):
-        base_entry["image"] = value
-    # Extend here for other types if you want canonical feature names
-    return base_entry
-
-
-def build_entry_for_message(base_entry: dict, ros2_type: str, msg, bridge=None) -> dict:
-    """
-    Build a single dataset entry for a ROS 2 message.
-    - Uses ROS2_TYPE_MAPPING to pick specialized handling (e.g., images)
-    - Falls back to message_to_ordereddict for generic types
-    """
-    from rosidl_runtime_py.convert import message_to_ordereddict
-
-    key = get_ros2_mapping_key(ros2_type)
-
-    # Local lazy singleton for CvBridge to avoid repeated construction
-    def _get_cv_bridge():
-        nonlocal bridge
-        if bridge is not None:
-            return bridge
-        try:
-            # lazily create and cache in the outer closure if provided None
-            from cv_bridge import CvBridge
-
-            bridge = CvBridge()
-            return bridge
-        except Exception:
-            raise
-
-    try:
-        if key == "IMAGE":
-            cv_image = _get_cv_bridge().imgmsg_to_cv2(msg, desired_encoding="rgb8")
-            add_post_process_feature(base_entry, ros2_type, cv_image)
-            return base_entry
-        if key == "COMPRESSED_IMAGE":
-            cv_image = _get_cv_bridge().compressed_imgmsg_to_cv2(
-                msg, desired_encoding="rgb8"
-            )
-            add_post_process_feature(base_entry, ros2_type, cv_image)
-            return base_entry
-
-        # TODO: Add support for other types
-
-        # Generic path for all other types.
-        # Note: Datasets expects consistent schema. data_store.py handles missing keys.
-        entry = {**base_entry, **message_to_ordereddict(msg)}
-        return entry
-    except Exception:
-        # Robust fallback
-        return {**base_entry, **message_to_ordereddict(msg)}
+    package, interface, type_name = ros2_type.split("/")
+    return getattr(importlib.import_module(f"{package}.{interface}"), type_name)

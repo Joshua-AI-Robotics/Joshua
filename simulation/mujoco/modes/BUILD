@@ -21,16 +21,6 @@ py_library(
 )
 
 py_library(
-    name = "mirror",
-    srcs = ["mirror.py"],
-    deps = [
-        "//simulation/mujoco:engine",
-        "//simulation/proto:simulation_py_proto",
-        "//ros2:ros2_type_resolver",
-    ] + requirement("mujoco") + requirement("numpy") + requirement("glog"),
-)
-
-py_library(
     name = "offscreen",
     srcs = ["offscreen.py"],
     deps = [

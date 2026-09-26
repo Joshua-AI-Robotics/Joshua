@@ -275,18 +275,6 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     }
   }
 
-  // Data store.
-  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
-    const uint32_t node_id = single_data_store.node().id();
-    auto [it, inserted] =
-        identified_nodes_.try_emplace(node_id, single_data_store.node().node_type());
-    if (!inserted && it->second != single_data_store.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
-    }
-  }
-
   // Trajectories
   for (const auto& single_trajectory : config_.robot().trajectories().single_trajectories()) {
     const uint32_t node_id = single_trajectory.node().id();
@@ -343,9 +331,8 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   }
 
   // The executable is named for the node type, C++ and Python alike: the
-  // hardware-facing nodes are C++, and INFERENCE, DATA_SUBSCRIBER, and
-  // TRAJECTORY_PUBLISHER are Python with no C++ counterpart to disambiguate
-  // from. Nothing is selected between, so nothing is suffixed.
+  // hardware and trajectory nodes are C++; only INFERENCE uses Python.
+  // There is one executable per type, so no language suffix is needed.
   const std::string& exec_name = node_type_str;
 
   if (!IsExecutableAvailable(exec_name)) {
@@ -665,10 +652,6 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_model : config_.ai().models().single_models()) {
     ExtractTopicsFromNode(single_model.node(), node_id, publish_topics, subscribe_topics);
-  }
-
-  for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {
-    ExtractTopicsFromNode(single_data_store.node(), node_id, publish_topics, subscribe_topics);
   }
 
   for (const auto& single_trajectory : config_.robot().trajectories().single_trajectories()) {

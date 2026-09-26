@@ -12,7 +12,8 @@ message General {
     MODE_TELEOPERATE = 1;
     MODE_INFERENCE = 2;
     MODE_TEST = 3;
-    MODE_DATA_STORE = 4;
+    reserved 4;
+    reserved "MODE_DATA_STORE";
     MODE_SIMULATION = 5;
   }
 

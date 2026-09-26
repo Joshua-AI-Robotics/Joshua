@@ -152,7 +152,7 @@ Joshua is organized around a single protobuf config that drives the runtime grap
 | ROS 2 nodes | `ros2/` | Actions, perceptions, bridges |
 | Node generator | `node_generator/` | Turns config into node definitions |
 | Launcher | `launcher/` | `joshua_main` entry point |
-| AI & data | `ai/` | Policies and dataset collection (DataStore) |
+| AI & data | `ai/` | Inference engine and model plug-ins |
 | Simulation | `simulation/` | Models and sim presets |
 | Web UI | `ui/` | React control panel |
 | Docker & builds | `dockerfiles/`, `scripts/` | Cross-platform and ARM64 builds |
@@ -163,7 +163,7 @@ Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how config, protos, 
 
 These areas affect many presets and downstream nodes:
 
-- **`action_packet.proto`** and [`ros2/utils/packet_parser`](ros2/utils/packet_parser.md) — update registries, open `docker compose run --rm joshua-u22`, then run `bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test`
+- **`action_packet.proto`** and [`ros2/utils/packet_parser`](ros2/utils/packet_parser.md) — update conversions, open `docker compose run --rm joshua-u22`, then run `bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test`
 - **Top-level protos** (`config.proto`, `robot.proto`, `ai.proto`) — may require node generator and preset updates
 - **Breaking preset moves** — update docs and any referenced paths in README / GETTING_STARTED
 

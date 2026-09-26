@@ -1,7 +1,6 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
-load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -34,21 +33,12 @@ ros2_cpp_binary(
     ],
 )
 
-ros2_py_binary(
-    name = "pointcloud2_visualizer",
-    srcs = ["pointcloud2_visualizer.py"],
-    main = "pointcloud2_visualizer.py",
-    deps = [
-        # Python ROS2 messages and rclpy are provided by the Docker image.
-    ] + requirement("opencv-python") + requirement("numpy"),
-    tags = ["manual"],
-)
-
 cc_library(
     name = "qos_setting",
     hdrs = ["qos_setting.h"],
     deps = [
         "//ros2/proto:node_cc_proto",
+        "@glog",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -64,7 +54,7 @@ py_library(
     deps = [
         "//ros2/proto:node_py_proto",
         # rclpy is provided by the selected Docker image's ROS2 installation.
-    ] + requirement("PyYAML"),
+    ],
 )
 
 cc_library(
@@ -80,21 +70,12 @@ cc_library(
     ],
 )
 
-py_library(
-    name = "packet_parser_py",
-    srcs = ["packet_parser.py"],
-    deps = [
-        "//robot/action/proto:action_packet_py_proto",
-        "//robot/perception/proto:perception_packet_py_proto",
-    ] + requirement("protobuf"),
-)
-
-py_test(
+cc_test(
     name = "packet_parser_test",
-    srcs = ["packet_parser_test.py"],
+    srcs = ["packet_parser_test.cc"],
     deps = [
-        ":packet_parser_py",
-        "//robot/action/proto:action_packet_py_proto",
-        "//robot/perception/proto:perception_packet_py_proto",
-    ] + requirement("protobuf"),
+        ":packet_parser",
+        "@googletest//:gtest_main",
+        "@protobuf",
+    ],
 )

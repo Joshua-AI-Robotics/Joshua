@@ -13,5 +13,4 @@
 | AM243 EtherCAT bring-up | [am243_ethercat.md](am243_ethercat.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
-| Data collection (DataStore) | [ai/train/README.md](../ai/train/README.md) |
 | React web UI | [ui/README.md](../ui/README.md) |

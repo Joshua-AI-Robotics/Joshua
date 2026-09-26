@@ -26,8 +26,8 @@ py_library(
     srcs = ["manifest.py"],
     deps = [
         ":adapter",
-        "//ai/proto:ai_model_py_proto",
         "//ai/inference/proto:model_manifest_py_proto",
+        "//ai/proto:ai_model_py_proto",
     ] + requirement("protobuf"),
 )
 
@@ -63,7 +63,6 @@ py_library(
         "//robot/action/proto:action_py_proto",
         "//ros2:ros2_type_resolver",
         "//ros2/proto:ros2_data_type_py_proto",
-        "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
     ] + requirement("protobuf"),
 )
@@ -73,8 +72,8 @@ py_library(
     srcs = ["host_main.py"],
     deps = [
         ":host",
-        "//ros2/utils:ros_python_paths_py",
         "//ros2:node_runner_py",
+        "//ros2/utils:ros_python_paths_py",
     ],
 )
 
@@ -84,9 +83,9 @@ py_library(
     data = [
         "//:requirements.lock",
         "//:requirements_3.12.lock",
-        "//ai/models:sources",
-        "//ai/models:manifests",
         "//ai/models:locks",
+        "//ai/models:manifests",
+        "//ai/models:sources",
     ],
     deps = [
         ":environment_manager",
