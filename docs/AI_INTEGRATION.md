@@ -1,36 +1,38 @@
 # AI integration
 
 Joshua already connects protobuf configuration, ROS 2 runtime components,
-model adapters, data collection, simulation, and contributor workflows. This
-guide records the shared rules for extending those pieces and independent
-proposed follow-ups, including an optional Model Context Protocol (MCP) front
-end.
+model adapters, data collection, simulation, and contributor workflows. The
+[inference host](../ai/README.md) and [data collection](../ai/train/README.md)
+remain separate from the proposed first Model Context Protocol (MCP) release:
+an optional front end for exactly one tested, bounded robot operation. This
+guide records shared design rules and independent proposed follow-ups.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
 subsystem or runtime roles.
 
-## Current capabilities
+## Relevant current capabilities
 
 | Area | Current implementation | Limitation |
 |---|---|---|
 | Configuration | Protobuf schemas, presets, and [`config::ValidateConfig`](../config/README.md) | The `.pbtxt` config is the source of truth. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) uses the generated schema to edit configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
-| AI inference | The [inference host and model adapters](../ai/README.md) | The host handles ROS 2 wiring, message decoding, scheduling, output publication, and conversion of outputs marked `normalized` using configured actuator limits. Adapters handle model-specific loading, preprocessing, inference, and postprocessing in per-model environments. |
-| Data collection | [DataStore](../ai/train/README.md) | DataStore records interleaved rosbag2 events and exports Hugging Face, JSONL, CSV, or Parquet data. Recording sessions are episode-indexed, but synchronized state-action training episodes are not produced. |
 | Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeGenerator manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is merged into `develop`. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
 ## Design rules
 
-1. **Protobuf remains the source of truth.** Planned skills, generated
-   inventories, the UI, and MCP tools should use Joshua's existing schema
-   instead of introducing another robot configuration language.
-2. **Runtime contracts stay with their implementation.** A cross-cutting tool
-   should expose an operation only after its behavior, inputs, outputs, errors,
-   and tests are defined with the subsystem that implements it.
-3. **Current support requires merged evidence.** Open pull requests can inform
-   planning, but they do not establish a supported capability.
+1. **Protobuf remains the source of truth.** Tools that handle configuration
+   should use Joshua's existing schema and presets. Read-only inventories
+   should derive facts from source without needing to write a config. Neither
+   should introduce a parallel robot configuration format.
+2. **Operations are defined by their implementing subsystem.** That subsystem
+   should define and test an operation's inputs, outputs, behavior, and failure
+   cases before a shared API or tool wraps it; see the fuller
+   [MCP constraints](#mcp-constraints) for MCP tools.
+3. **Support claims match evidence.** Call a capability supported only when its
+   implementation is merged and evidence demonstrates the stated scope and
+   verification level. Open pull requests are experimental planning evidence.
 
 ## Proposed follow-ups
 
@@ -41,15 +43,42 @@ subsystem or runtime roles.
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
-| MCP front end and operator guide | One bounded Joshua operation with a tested interface; use [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) as an experimental reference | Stabilize and merge the operation, then land an optional adapter plus setup, connection, operation, diagnostics, and hosting instructions. |
+| MCP front end and operator guide | One bounded robot operation with a tested subsystem interface; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
 
 These items describe independent proposed work, not current support or required
 project phases. MCP requires only the tested contract and safeguards relevant
 to each operation it exposes; it does not depend on the contributor tooling
 items in this table.
 
-PR #90 is an unmerged MHS-inspired vertical slice for one actuator. It informs
-this direction but does not establish current MCP support.
+PR #90 is an unmerged prototype for one actuator. It informs
+this direction but does not establish current MCP support or select the first
+operation.
+
+### Proposed MCP operator guide
+
+For that first operation, the guide should tell a new operator:
+
+- how to host the adapter, authorize access, and connect an MCP client;
+- how to inspect the selected preset's operation mode and every declared
+  hardware endpoint (including serial paths, network interfaces, and camera
+  indices), then run configuration integrity checks before launch through a
+  path that opens no devices. A normal launch must not be presented as a
+  validation-only check;
+- how to identify the board and revision as precisely as the preset and merged
+  documentation permit, map its declared pins and channels to physical
+  terminals and signal grounds, and find the required firmware and manual setup.
+  Link the matching board-specific wiring and firmware instructions (for
+  example, the [Teensy 4.1 guide](../firmware/teensy/41/README.md) in the
+  [firmware index](../firmware/README.md)). The MCP adapter must not flash
+  firmware;
+- how to run, stop or cancel the operation, inspect diagnostics, clean up, and
+  locate and use a physical power disconnect independently of software;
+- what Joshua has not verified and the operator must confirm before real
+  motion: each endpoint reaches the intended physical device; the wiring,
+  grounds, driver and power settings, and physical operating limits match the
+  connected hardware;
+  the required board revision and flashed firmware build are correct where
+  Joshua cannot report them; and the setup is ready.
 
 ## MCP constraints
 
