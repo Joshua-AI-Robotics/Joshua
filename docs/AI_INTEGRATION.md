@@ -25,9 +25,10 @@ subsystem or runtime roles.
 
 1. **Use the existing protobuf schema for robot configuration.** Skills, the
    UI, and MCP tools that read or write robot configuration must use Joshua's
-   existing protobuf schema and `.pbtxt` configs. Read-only inventories derive
-   facts from merged source files without writing configuration. Do not create
-   a parallel robot configuration format.
+   existing protobuf schema and `.pbtxt` configs. Read-only inventories must
+   derive configuration facts from that schema and merged presets, and other
+   support facts from relevant merged sources; they do not write configuration.
+   Do not create a parallel robot configuration format.
 2. **Define each runtime operation in the subsystem that implements it.**
    Before a shared tool or API exposes an operation, the implementing subsystem
    must define and test its inputs, outputs, behavior, and failure cases.
@@ -91,8 +92,12 @@ and explain in plain language:
   including when to use the physical disconnect instead of software.
 
 The guide should mark each step Joshua cannot perform or verify as a manual
-operator step. Before real motion, the adapter must request explicit operator
-confirmation of those steps; passing configuration checks does not replace it.
+operator step. For each real-motion run, the adapter must obtain confirmation
+directly from the human responsible for the hardware through a channel the AI
+model cannot supply or bypass. A model-supplied tool argument or automatic app
+approval does not count. If the operator cannot confirm a required item, the
+guide must tell them not to proceed, and the adapter must not begin motion.
+Passing configuration checks does not replace human confirmation.
 
 ## MCP constraints
 
@@ -103,7 +108,7 @@ creating a separate runtime state machine.
 
 The MCP front end should use each subsystem's documented runtime interface,
 including ROS 2 topics, services, or actions when they are the intended
-integration boundary. It should not communicate directly with hardware drivers
+integration boundary. It must not communicate directly with hardware drivers
 or bypass the existing node graph. Its authorization flow must not bypass the
 applicable config validation, operation-specific limits, or approval from the
 operator responsible for the hardware. These mechanisms are not a general

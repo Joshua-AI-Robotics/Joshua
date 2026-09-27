@@ -3,7 +3,7 @@
 | Topic | Guide |
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
-| System architecture, config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | AI integration rules and proposed follow-ups (including MCP) | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
