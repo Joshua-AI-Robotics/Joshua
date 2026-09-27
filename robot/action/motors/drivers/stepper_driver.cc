@@ -62,8 +62,8 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
         case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
           return SetTorque(0.0f);
         default:
-          LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
-          return absl::OkStatus();
+          return absl::InvalidArgumentError("Unknown actuator preset: " +
+                                            std::to_string(action_packet.preset()));
       }
 
     case robot::action::ActionPacket::kJoint: {
@@ -76,10 +76,7 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
       // Define position/velocity semantics explicitly; effort requires separate
       // hardware capability support and must not be treated as a torque-enable gate.
       if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort())) {
-        const auto status =
-            absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
-        LOG(ERROR) << "Actuator '" << action_config_.actuator_name() << "': " << status;
-        return status;
+        return absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
       }
       if (command.position_encoding() == JointCommand::POSITION_SI) {
         if (command.has_position()) {
@@ -122,8 +119,6 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
     }
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
-      LOG(WARNING) << "No action type set in stepper ActionPacket [ID: "
-                   << action_packet.action_id() << "]";
       return absl::InvalidArgumentError("ActionPacket requires joint or preset");
   }
 }

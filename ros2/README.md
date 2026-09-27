@@ -203,7 +203,9 @@ post-shutdown messages fall back to glog because ROS routing is unavailable.
 
 The mode covers Joshua C++ node logs, not Python loggers or direct driver/library
 LOG calls. The latter remain glog. A returned status carries no source location;
-the existing stepper diagnostic logs at its origin and the node adds topic context.
+returned errors are logged at the node boundary with topic context. Drivers preserve
+the failure details in their status rather than also logging the same error.
+Destructor cleanup failures are logged locally when no caller can receive a status.
 Standalone C++ utilities have no config input and use BOTH. The logging context
 is process-wide, matching Joshua's one-node-per-process launcher; component
 composition would require per-node contexts.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <csignal>
+#include <exception>
 #include <memory>
 #include <string>
 
@@ -35,28 +36,37 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
     return 1;
   }
 
-  const std::string node_name = argv[1];
-  const int node_id = std::stoi(argv[2]);
-  const std::string config_path = argv[3];
+  try {
+    const std::string node_name = argv[1];
+    SetLogNodeName(node_name);
+    const int node_id = std::stoi(argv[2]);
+    const std::string config_path = argv[3];
 
-  auto result = config::config_util::LoadConfig(config_path);
+    auto result = config::config_util::LoadConfig(config_path);
 
-  if (!result.ok()) {
-    JOSHUA_LOG(ERROR) << "Failed to load config: " << result.status().message();
-    return 1;
+    if (!result.ok()) {
+      JOSHUA_LOG(ERROR) << "Failed to load config: " << result.status();
+      return 1;
+    }
+
+    config::Config config = result.value();
+    const auto validation_status = config::ValidateConfig(config);
+    if (!validation_status.ok()) {
+      JOSHUA_LOG(ERROR) << "Invalid config: " << validation_status;
+      return 1;
+    }
+
+    InitializeRosLogging(argc, argv, config.general().ros2_log_mode());
+    rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
+    rclcpp::shutdown();
+    return 0;
+  } catch (const std::exception& error) {
+    JOSHUA_LOG(ERROR) << "Node failed: " << error.what();
+  } catch (...) {
+    JOSHUA_LOG(ERROR) << "Node failed with an unknown exception";
   }
-
-  config::Config config = result.value();
-  const auto validation_status = config::ValidateConfig(config);
-  if (!validation_status.ok()) {
-    JOSHUA_LOG(ERROR) << "Invalid config: " << validation_status;
-    return 1;
-  }
-
-  InitializeRosLogging(argc, argv, config.general().ros2_log_mode());
-  rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
-  rclcpp::shutdown();
-  return 0;
+  if (rclcpp::ok()) rclcpp::shutdown();
+  return 1;
 }
 
 }  // namespace ros2_utils

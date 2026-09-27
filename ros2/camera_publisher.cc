@@ -48,7 +48,7 @@ class CameraPublisher : public rclcpp::Node {
           single_perception, config.robot().boards());
       if (!interface.ok()) {
         JOSHUA_LOG(ERROR) << "Failed to create perception interface for camera '" << sensor_name
-                          << "': " << std::string(interface.status().message());
+                          << "': " << interface.status();
         continue;
       }
 
@@ -99,7 +99,8 @@ class CameraPublisher : public rclcpp::Node {
         auto packet = camera.interface->GetData();
 
         if (!packet.ok()) {
-          JOSHUA_LOG(WARNING) << "Failed to get data from camera '" << camera.topic << "'!";
+          JOSHUA_LOG(WARNING) << "Failed to get data from camera '" << camera.topic
+                              << "': " << packet.status();
           continue;
         }
 

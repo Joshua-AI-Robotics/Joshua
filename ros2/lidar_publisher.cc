@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -51,7 +52,7 @@ class LidarPublisher : public rclcpp::Node {
           single_perception, config.robot().boards());
       if (!interface.ok()) {
         JOSHUA_LOG(ERROR) << "Failed to create perception interface for lidar '" << sensor_name
-                          << "': " << std::string(interface.status().message());
+                          << "': " << interface.status();
         continue;
       }
 
@@ -92,6 +93,23 @@ class LidarPublisher : public rclcpp::Node {
                      << " lidars for node_id " << node_id << "!";
   }
 
+  ~LidarPublisher() override {
+    std::set<robot::perception::PerceptionInterface*> stopped;
+    for (const auto& lidar : lidars_) {
+      if (!stopped.insert(lidar.interface.get()).second) continue;
+      try {
+        const auto status = lidar.interface->Teardown();
+        if (!status.ok())
+          JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << status;
+      } catch (const std::exception& error) {
+        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << error.what();
+      } catch (...) {
+        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic
+                          << "' teardown failed with an unknown exception";
+      }
+    }
+  }
+
  private:
   void publish_lidar_data() {
     if (lidars_.empty()) {
@@ -104,7 +122,8 @@ class LidarPublisher : public rclcpp::Node {
         auto packet = lidar.interface->GetData();
 
         if (!packet.ok()) {
-          JOSHUA_LOG(WARNING) << "Failed to get data from lidar '" << lidar.topic << "'!";
+          JOSHUA_LOG(WARNING) << "Failed to get data from lidar '" << lidar.topic
+                              << "': " << packet.status();
           continue;
         }
 

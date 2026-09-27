@@ -107,7 +107,7 @@ class ActionSubscriber : public rclcpp::Node {
         teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         auto status = actuator.interface->SetAction(teardown_packet);
         if (!status.ok()) {
-          JOSHUA_LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
+          JOSHUA_LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "': " << status;
         }
       });
     }
