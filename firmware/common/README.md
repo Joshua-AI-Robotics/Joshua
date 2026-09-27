@@ -65,6 +65,10 @@ These are implementation bridges, not the intended final architecture:
 
 ## Tests and builds
 
+For manual serial checks after an intentional flash, use the
+[v2 validation guide](../../docs/JOSHUA_WIRE_V2_VALIDATION.md). The shared probe
+defaults to reset/identify/ESTOP only; old board-specific smokes still use v1.
+
 `*_test.cc` files are maintained source, kept beside the code they verify:
 commands tests pin wire values, v1 tests cover legacy framing, and v2 tests
 cover framing, firmware sessions and the serial endpoint. Board-specific native
