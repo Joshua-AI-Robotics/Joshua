@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -8,6 +6,7 @@
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/packet_parser.h"
 
@@ -15,6 +14,7 @@ class PositionPublisher : public rclcpp::Node {
  public:
   PositionPublisher(const std::string& node_name, int node_id, const config::Config& config)
       : Node(node_name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
       if (sensor.node().id() != static_cast<uint32_t>(node_id) ||
           sensor.sensor_type() != robot::perception::POSITION)
@@ -28,28 +28,24 @@ class PositionPublisher : public rclcpp::Node {
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
         timers_.push_back(create_wall_timer(
             std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
-            [interface, publish = *publisher, node_name]() {
+            [interface, publish = *publisher]() {
               try {
                 auto packet = interface->GetData();
                 if (!packet.ok()) {
-                  LOG(WARNING) << "[" << node_name << "] "
-                               << "Cannot read position: " << packet.status().ToString();
+                  JOSHUA_LOG(WARNING) << "Cannot read position: " << packet.status().ToString();
                   return;
                 }
                 auto position = ros2_utils::RequirePerceptionPosition(*packet);
                 if (!position.ok()) {
-                  LOG(ERROR) << "[" << node_name << "] "
-                             << "Invalid position: " << position.status().ToString();
+                  JOSHUA_LOG(ERROR) << "Invalid position: " << position.status().ToString();
                   return;
                 }
                 const auto status = publish(*position);
                 if (!status.ok()) {
-                  LOG(ERROR) << "[" << node_name << "] "
-                             << "Cannot publish position: " << status.ToString();
+                  JOSHUA_LOG(ERROR) << "Cannot publish position: " << status.ToString();
                 }
               } catch (const std::exception& error) {
-                LOG(ERROR) << "[" << node_name << "] "
-                           << "Error publishing position: " << error.what();
+                JOSHUA_LOG(ERROR) << "Error publishing position: " << error.what();
               }
             }));
       }

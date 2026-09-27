@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include <memory>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -7,11 +5,13 @@
 #include <opencv2/imgproc.hpp>
 
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "sensor_msgs/msg/image.hpp"
 
 class CameraSubscriber : public rclcpp::Node {
  public:
   CameraSubscriber(const std::string& subscribe_topic) : Node("camera_subscriber") {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     // Create subscriber for camera image data
     subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
         subscribe_topic,
@@ -21,18 +21,14 @@ class CameraSubscriber : public rclcpp::Node {
     // Create OpenCV window
     cv::namedWindow("Camera Feed", cv::WINDOW_AUTOSIZE);
 
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Camera subscriber node started!";
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Listening on topic: " << subscribe_topic;
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Press 'q' to quit";
+    JOSHUA_LOG(INFO) << "Camera subscriber node started!";
+    JOSHUA_LOG(INFO) << "Listening on topic: " << subscribe_topic;
+    JOSHUA_LOG(INFO) << "Press 'q' to quit";
   }
 
   ~CameraSubscriber() {
     cv::destroyAllWindows();
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Camera subscriber node shutting down.";
+    JOSHUA_LOG(INFO) << "Camera subscriber node shutting down.";
   }
 
  private:
@@ -40,15 +36,13 @@ class CameraSubscriber : public rclcpp::Node {
     try {
       // Validate message
       if (msg->data.empty()) {
-        LOG(WARNING) << "[" << get_name() << "] "
-                     << "Received empty image data!";
+        JOSHUA_LOG(WARNING) << "Received empty image data!";
         return;
       }
 
       // Check encoding
       if (msg->encoding != "rgb8") {
-        LOG(WARNING) << "[" << get_name() << "] "
-                     << "Unexpected encoding: " << msg->encoding << ", expected rgb8";
+        JOSHUA_LOG(WARNING) << "Unexpected encoding: " << msg->encoding << ", expected rgb8";
         return;
       }
 
@@ -57,9 +51,8 @@ class CameraSubscriber : public rclcpp::Node {
 
       // Copy image data
       if (msg->data.size() != frame.total() * frame.elemSize()) {
-        LOG(ERROR) << "[" << get_name() << "] "
-                   << "Data size mismatch! Expected: " << frame.total() * frame.elemSize()
-                   << ", Got: " << msg->data.size();
+        JOSHUA_LOG(ERROR) << "Data size mismatch! Expected: " << frame.total() * frame.elemSize()
+                          << ", Got: " << msg->data.size();
         return;
       }
 
@@ -70,8 +63,7 @@ class CameraSubscriber : public rclcpp::Node {
       cv::cvtColor(frame, bgr_frame, cv::COLOR_RGB2BGR);
 
       if (bgr_frame.empty()) {
-        LOG(WARNING) << "[" << get_name() << "] "
-                     << "Failed to process image from received data!";
+        JOSHUA_LOG(WARNING) << "Failed to process image from received data!";
         return;
       }
 
@@ -103,21 +95,18 @@ class CameraSubscriber : public rclcpp::Node {
       // Display the frame
       cv::imshow("Camera Feed", display_frame);
 
-      VLOG(1) << "[" << get_name() << "] "
-              << "Received image: " << bgr_frame.cols << "x" << bgr_frame.rows << ", "
-              << msg->data.size() << " bytes, encoding: " << msg->encoding;
+      JOSHUA_LOG(DEBUG) << "Received image: " << bgr_frame.cols << "x" << bgr_frame.rows << ", "
+                        << msg->data.size() << " bytes, encoding: " << msg->encoding;
 
       // Check for 'q' key to quit
       int key = cv::waitKey(1);
       if (key == 'q' || key == 27) {  // 'q' or ESC key
-        LOG(INFO) << "[" << get_name() << "] "
-                  << "Quit key pressed, shutting down...";
+        JOSHUA_LOG(INFO) << "Quit key pressed, shutting down...";
         rclcpp::shutdown();
       }
 
     } catch (const std::exception& e) {
-      LOG(ERROR) << "[" << get_name() << "] "
-                 << "Error processing image: " << e.what();
+      JOSHUA_LOG(ERROR) << "Error processing image: " << e.what();
     }
   }
 
@@ -128,12 +117,10 @@ class CameraSubscriber : public rclcpp::Node {
 // docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base
 // ros2/utils:camera_subscriber <topic_name>
 int main(int argc, char* argv[]) {
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = 1;
-  rclcpp::init(argc, argv);
+  ros2_utils::InitializeRosLogging(argc, argv);
 
   if (argc < 2) {
-    LOG(WARNING) << "No topic provided, using default topic: /camera_1";
+    JOSHUA_LOG(WARNING) << "No topic provided, using default topic: /camera_1";
     argv[1] = "/camera_1";
   }
 

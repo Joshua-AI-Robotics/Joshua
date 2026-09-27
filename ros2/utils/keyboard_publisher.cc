@@ -1,5 +1,4 @@
 #include <fcntl.h>
-#include <glog/logging.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -9,9 +8,12 @@
 #include <std_msgs/msg/string.hpp>
 #include <thread>
 
+#include "ros2/logging.h"
+
 class KeyboardPublisher : public rclcpp::Node {
  public:
   KeyboardPublisher() : Node("keyboard_publisher") {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     publisher_ = this->create_publisher<std_msgs::msg::String>("keyboard_input", 10);
 
     // Set terminal to raw mode for immediate key detection
@@ -20,9 +22,9 @@ class KeyboardPublisher : public rclcpp::Node {
     new_tio_.c_lflag &= (~ICANON & ~ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &new_tio_);
 
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Keyboard publisher started. Press W, A, S, D, arrow keys, or number keys (0-9) "
-                 "(or 'q' to quit)";
+    JOSHUA_LOG(INFO)
+        << "Keyboard publisher started. Press W, A, S, D, arrow keys, or number keys (0-9) "
+           "(or 'q' to quit)";
 
     // Start keyboard input thread
     running_ = true;
@@ -58,26 +60,22 @@ class KeyboardPublisher : public rclcpp::Node {
               switch (arrow_char) {
                 case 'A':  // Up arrow
                   msg.data = "UP";
-                  LOG(INFO) << "[" << get_name() << "] "
-                            << "UP arrow pressed";
+                  JOSHUA_LOG(INFO) << "UP arrow pressed";
                   should_publish = true;
                   break;
                 case 'B':  // Down arrow
                   msg.data = "DOWN";
-                  LOG(INFO) << "[" << get_name() << "] "
-                            << "DOWN arrow pressed";
+                  JOSHUA_LOG(INFO) << "DOWN arrow pressed";
                   should_publish = true;
                   break;
                 case 'C':  // Right arrow
                   msg.data = "RIGHT";
-                  LOG(INFO) << "[" << get_name() << "] "
-                            << "RIGHT arrow pressed";
+                  JOSHUA_LOG(INFO) << "RIGHT arrow pressed";
                   should_publish = true;
                   break;
                 case 'D':  // Left arrow
                   msg.data = "LEFT";
-                  LOG(INFO) << "[" << get_name() << "] "
-                            << "LEFT arrow pressed";
+                  JOSHUA_LOG(INFO) << "LEFT arrow pressed";
                   should_publish = true;
                   break;
               }
@@ -89,35 +87,30 @@ class KeyboardPublisher : public rclcpp::Node {
             case 'w':
             case 'W':
               msg.data = "W";
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "W key pressed";
+              JOSHUA_LOG(INFO) << "W key pressed";
               should_publish = true;
               break;
             case 'a':
             case 'A':
               msg.data = "A";
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "A key pressed";
+              JOSHUA_LOG(INFO) << "A key pressed";
               should_publish = true;
               break;
             case 's':
             case 'S':
               msg.data = "S";
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "S key pressed";
+              JOSHUA_LOG(INFO) << "S key pressed";
               should_publish = true;
               break;
             case 'd':
             case 'D':
               msg.data = "D";
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "D key pressed";
+              JOSHUA_LOG(INFO) << "D key pressed";
               should_publish = true;
               break;
             case 'q':
             case 'Q':
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "Quitting...";
+              JOSHUA_LOG(INFO) << "Quitting...";
               running_ = false;
               rclcpp::shutdown();
               return;
@@ -132,8 +125,7 @@ class KeyboardPublisher : public rclcpp::Node {
             case '8':
             case '9':
               msg.data = std::string(1, input);
-              LOG(INFO) << "[" << get_name() << "] "
-                        << "Number key " << input << " pressed";
+              JOSHUA_LOG(INFO) << "Number key " << input << " pressed";
               should_publish = true;
               break;
             default:
@@ -162,9 +154,7 @@ class KeyboardPublisher : public rclcpp::Node {
 // docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base
 // ros2/utils:keyboard_publisher
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = 1;
-  rclcpp::init(argc, argv);
+  ros2_utils::InitializeRosLogging(argc, argv);
   auto node = std::make_shared<KeyboardPublisher>();
   rclcpp::spin(node);
   rclcpp::shutdown();

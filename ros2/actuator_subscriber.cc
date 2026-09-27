@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include <list>
 #include <memory>
 #include <set>
@@ -11,6 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "robot/action/proto/action_packet.pb.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
@@ -28,6 +27,7 @@ class ActionSubscriber : public rclcpp::Node {
  public:
   ActionSubscriber(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& single_action : config.robot().actions().single_actions()) {
       if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
           static_cast<int>(single_action.node().id()) != node_id) {
@@ -63,9 +63,8 @@ class ActionSubscriber : public rclcpp::Node {
             single_action,
             [this, &actuator](absl::StatusOr<robot::action::ActionPacket> parsed) {
               if (!parsed.ok()) {
-                LOG(ERROR) << "[" << get_name() << "] "
-                           << "Invalid command on '" << actuator.topic
-                           << "': " << parsed.status().ToString();
+                JOSHUA_LOG(ERROR) << "Invalid command on '" << actuator.topic
+                                  << "': " << parsed.status().ToString();
                 return;
               }
               actuator.reusable_packet = *parsed;
@@ -73,16 +72,14 @@ class ActionSubscriber : public rclcpp::Node {
               const auto encoding_status =
                   ros2_utils::ResolvePositionEncoding(actuator.reusable_packet, lower, upper);
               if (!encoding_status.ok()) {
-                LOG(ERROR) << "[" << get_name() << "] "
-                           << "Invalid position on '" << actuator.topic
-                           << "': " << encoding_status.ToString();
+                JOSHUA_LOG(ERROR) << "Invalid position on '" << actuator.topic
+                                  << "': " << encoding_status.ToString();
                 return;
               }
               const auto status = actuator.interface->SetAction(actuator.reusable_packet);
               if (!status.ok()) {
-                LOG(ERROR) << "[" << get_name() << "] "
-                           << "Actuator '" << actuator.topic
-                           << "' rejected command: " << status.ToString();
+                JOSHUA_LOG(ERROR) << "Actuator '" << actuator.topic
+                                  << "' rejected command: " << status.ToString();
               }
             });
         if (!result.ok()) throw std::invalid_argument(result.status().ToString());
@@ -91,14 +88,12 @@ class ActionSubscriber : public rclcpp::Node {
     }
 
     if (actuators_.empty()) {
-      LOG(ERROR) << "[" << get_name() << "] "
-                 << "No actuators found in configuration for node_id " << node_id << "!";
+      JOSHUA_LOG(ERROR) << "No actuators found in configuration for node_id " << node_id << "!";
       return;
     }
 
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Actuator subscriber node started with " << actuators_.size()
-              << " subscriptions for node_id " << node_id << "!";
+    JOSHUA_LOG(INFO) << "Actuator subscriber node started with " << actuators_.size()
+                     << " subscriptions for node_id " << node_id << "!";
   }
 
   ~ActionSubscriber() {
@@ -112,7 +107,7 @@ class ActionSubscriber : public rclcpp::Node {
         teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
         auto status = actuator.interface->SetAction(teardown_packet);
         if (!status.ok()) {
-          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
+          JOSHUA_LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
         }
       });
     }

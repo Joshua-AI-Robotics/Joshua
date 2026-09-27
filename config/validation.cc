@@ -235,6 +235,8 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
+  if (!config::General::Ros2LogMode_IsValid(config.general().ros2_log_mode()))
+    return absl::InvalidArgumentError("Unknown general.ros2_log_mode");
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));

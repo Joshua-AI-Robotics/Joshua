@@ -1,7 +1,5 @@
 #pragma once
 
-#include <glog/logging.h>
-
 #include <csignal>
 #include <memory>
 #include <string>
@@ -9,6 +7,7 @@
 #include "config/config_utils.h"
 #include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 
 namespace ros2_utils {
 
@@ -25,15 +24,14 @@ inline void sigterm_handler(int) noexcept {
 // logger_name is used for usage/error logging.
 template <typename NodeT>
 int RunNode(int argc, char* argv[], const char* logger_name) {
-  if (!google::IsGoogleLoggingInitialized()) google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = 1;
-  rclcpp::init(argc, argv);
+  InitializeLogging(argv[0]);
+  SetLogNodeName(logger_name);
 
   // Ensure external termination results in teardown
   std::signal(SIGTERM, detail::sigterm_handler);
 
   if (argc < 4) {
-    LOG(ERROR) << "Usage: " << logger_name << " <node_name> <node_id> <config_path>";
+    JOSHUA_LOG(ERROR) << "Usage: " << logger_name << " <node_name> <node_id> <config_path>";
     return 1;
   }
 
@@ -44,18 +42,18 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
   auto result = config::config_util::LoadConfig(config_path);
 
   if (!result.ok()) {
-    LOG(ERROR) << "Failed to load config: " << result.status().message();
+    JOSHUA_LOG(ERROR) << "Failed to load config: " << result.status().message();
     return 1;
   }
 
   config::Config config = result.value();
   const auto validation_status = config::ValidateConfig(config);
   if (!validation_status.ok()) {
-    LOG(ERROR) << "Invalid config: " << validation_status;
-    rclcpp::shutdown();
+    JOSHUA_LOG(ERROR) << "Invalid config: " << validation_status;
     return 1;
   }
 
+  InitializeRosLogging(argc, argv, config.general().ros2_log_mode());
   rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
   rclcpp::shutdown();
   return 0;

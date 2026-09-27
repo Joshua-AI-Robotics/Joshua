@@ -182,13 +182,28 @@ and shared runner validation. No hardware is required.
 
 ## C++ node logging
 
-C++ nodes and utilities use glog (`LOG`, with `VLOG(1)` for debug output).
-Entrypoints initialize glog before ROS initialization and send logs to stderr,
-including source file/line; node logs retain the node name. These application
-messages no longer publish through ROS `/rosout`. ROS library diagnostics and
-Python nodes still use their existing logging systems.
+C++ nodes and utilities use `JOSHUA_LOG(INFO) << message` (also DEBUG, WARNING,
+ERROR and FATAL). The wrapper preserves the call site's file, line and function,
+and uses the actual ROS logger name, including node remapping. Configure via:
 
-A returned `absl::Status` does not retain its creation location: the caller's
-log identifies the caller. The stepper SI velocity/effort rejection is additionally
-logged at its origin, so that path emits both the driver location and the node's
-topic context. This does not enable the unsupported hardware capability.
+```protobuf
+general { ros2_log_mode: ROS2_LOG_BOTH }
+```
+
+BOTH is the protobuf default: glog writes to stderr and ROS writes to `/rosout`
+and its configured file logger. ROS console output is disabled process-wide in
+this mode, including ROS library console diagnostics, to avoid duplicate output.
+`ROS2_LOG_ROS` uses normal ROS destinations; `ROS2_LOG_GLOG` uses glog for Joshua
+messages. ROS output flags such as disabling rosout remain honored.
+
+ROS severity settings filter the ROS destination; glog minloglevel filters glog,
+and DEBUG additionally requires glog verbosity >= 1 for that destination. FATAL
+always terminates the process after logging, regardless of backend. Startup and
+post-shutdown messages fall back to glog because ROS routing is unavailable.
+
+The mode covers Joshua C++ node logs, not Python loggers or direct driver/library
+LOG calls. The latter remain glog. A returned status carries no source location;
+the existing stepper diagnostic logs at its origin and the node adds topic context.
+Standalone C++ utilities have no config input and use BOTH. The logging context
+is process-wide, matching Joshua's one-node-per-process launcher; component
+composition would require per-node contexts.

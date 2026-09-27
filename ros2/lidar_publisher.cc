@@ -1,5 +1,3 @@
-#include <glog/logging.h>
-
 #include <cmath>
 #include <memory>
 #include <string>
@@ -10,6 +8,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
@@ -38,6 +37,7 @@ class LidarPublisher : public rclcpp::Node {
  public:
   LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.sensor_type() != robot::perception::SensorType::RANGE_SCAN ||
           static_cast<int>(single_perception.node().id()) != node_id) {
@@ -50,9 +50,8 @@ class LidarPublisher : public rclcpp::Node {
       auto interface = robot::perception::PerceptionFactory::CreatePerception(
           single_perception, config.robot().boards());
       if (!interface.ok()) {
-        LOG(ERROR) << "[" << get_name() << "] "
-                   << "Failed to create perception interface for lidar '" << sensor_name
-                   << "': " << std::string(interface.status().message());
+        JOSHUA_LOG(ERROR) << "Failed to create perception interface for lidar '" << sensor_name
+                          << "': " << std::string(interface.status().message());
         continue;
       }
 
@@ -61,10 +60,9 @@ class LidarPublisher : public rclcpp::Node {
 
       for (const auto& publisher : single_perception.node().publishers()) {
         if (!ValidateLidarPublisher(publisher.ros2_data_type())) {
-          LOG(ERROR) << "[" << get_name() << "] "
-                     << "Invalid publisher config for lidar topic '" << publisher.topic()
-                     << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
-                     << "). Require POINTCLOUD2.";
+          JOSHUA_LOG(ERROR) << "Invalid publisher config for lidar topic '" << publisher.topic()
+                            << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
+                            << "). Require POINTCLOUD2.";
           continue;
         }
 
@@ -80,27 +78,24 @@ class LidarPublisher : public rclcpp::Node {
                   .frame_id = sensor_name.empty() ? "lidar_frame" : sensor_name});
       }
 
-      LOG(INFO) << "[" << get_name() << "] "
-                << "Found lidar '" << sensor_name << "' in configuration for node_id " << node_id
-                << ". Publishing on " << single_perception.node().publishers().size() << " topics";
+      JOSHUA_LOG(INFO) << "Found lidar '" << sensor_name << "' in configuration for node_id "
+                       << node_id << ". Publishing on "
+                       << single_perception.node().publishers().size() << " topics";
     }
 
     if (lidars_.empty()) {
-      LOG(ERROR) << "[" << get_name() << "] "
-                 << "No lidars found in configuration for node_id " << node_id << "!";
+      JOSHUA_LOG(ERROR) << "No lidars found in configuration for node_id " << node_id << "!";
       return;
     }
 
-    LOG(INFO) << "[" << get_name() << "] "
-              << "Lidar publisher node started with " << lidars_.size() << " lidars for node_id "
-              << node_id << "!";
+    JOSHUA_LOG(INFO) << "Lidar publisher node started with " << lidars_.size()
+                     << " lidars for node_id " << node_id << "!";
   }
 
  private:
   void publish_lidar_data() {
     if (lidars_.empty()) {
-      LOG(WARNING) << "[" << get_name() << "] "
-                   << "No lidars initialized, skipping publish cycle.";
+      JOSHUA_LOG(WARNING) << "No lidars initialized, skipping publish cycle.";
       return;
     }
 
@@ -109,24 +104,21 @@ class LidarPublisher : public rclcpp::Node {
         auto packet = lidar.interface->GetData();
 
         if (!packet.ok()) {
-          LOG(WARNING) << "[" << get_name() << "] "
-                       << "Failed to get data from lidar '" << lidar.topic << "'!";
+          JOSHUA_LOG(WARNING) << "Failed to get data from lidar '" << lidar.topic << "'!";
           continue;
         }
 
         const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
         if (!cloud_status.ok()) {
-          LOG(WARNING) << "[" << get_name() << "] "
-                       << "LiDAR '" << lidar.topic
-                       << "' packet has no point cloud: " << cloud_status.ToString();
+          JOSHUA_LOG(WARNING) << "LiDAR '" << lidar.topic
+                              << "' packet has no point cloud: " << cloud_status.ToString();
           continue;
         }
 
         const auto& cloud = packet.value().point_cloud();
         const int num_points = cloud.x_size();
         if (num_points == 0) {
-          LOG(WARNING) << "[" << get_name() << "] "
-                       << "Empty point cloud from '" << lidar.topic << "'!";
+          JOSHUA_LOG(WARNING) << "Empty point cloud from '" << lidar.topic << "'!";
           continue;
         }
 
@@ -174,8 +166,7 @@ class LidarPublisher : public rclcpp::Node {
         lidar.publisher->publish(cloud_msg);
       }
     } catch (const std::exception& e) {
-      LOG(ERROR) << "[" << get_name() << "] "
-                 << "Error publishing lidar data: " << e.what();
+      JOSHUA_LOG(ERROR) << "Error publishing lidar data: " << e.what();
     }
   }
 
