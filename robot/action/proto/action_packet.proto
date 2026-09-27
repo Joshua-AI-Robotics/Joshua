@@ -49,7 +49,7 @@ message ActionPacket {
   uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
   oneof action_type {
-    JointCommand joint = 5;    // Unified actuator motion.
-    PresetCommand preset = 6;  // Preset command
+    JointCommand joint = 4;    // Unified actuator motion.
+    PresetCommand preset = 5;  // Preset command
   }
 }
