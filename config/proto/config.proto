@@ -21,10 +21,17 @@ message General {
     ROBOT_TYPE_MANIPULATOR_ARM = 1;
   }
 
+  enum Ros2LogMode {
+    ROS2_LOG_BOTH = 0;  // Default: glog console plus ROS /rosout and files.
+    ROS2_LOG_ROS = 1;
+    ROS2_LOG_GLOG = 2;
+  }
+
   OperationMode operation_mode = 1;
   RobotType robot_type = 2;
   string name = 3;
   uint64 id = 4;
+  Ros2LogMode ros2_log_mode = 5;
 }
 
 message Config {

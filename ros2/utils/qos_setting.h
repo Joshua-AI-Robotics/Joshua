@@ -1,10 +1,9 @@
 #pragma once
 
-#include <glog/logging.h>
-
 #include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "ros2/proto/node.pb.h"
 
 namespace ros2_utils {
@@ -22,9 +21,9 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
       qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
       break;
     default:
-      LOG(WARNING) << "Invalid reliability policy: "
-                   << ros2::node::QosReliabilityPolicy_Name(qos_setting.reliability_policy())
-                   << ". Using default reliable policy.";
+      JOSHUA_LOG(WARNING) << "Invalid reliability policy: "
+                          << ros2::node::QosReliabilityPolicy_Name(qos_setting.reliability_policy())
+                          << ". Using default reliable policy.";
       qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
       break;
   }
@@ -38,9 +37,9 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
       qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
       break;
     default:
-      LOG(WARNING) << "Invalid durability policy: "
-                   << ros2::node::QosDurabilityPolicy_Name(qos_setting.durability_policy())
-                   << ". Using default volatile policy.";
+      JOSHUA_LOG(WARNING) << "Invalid durability policy: "
+                          << ros2::node::QosDurabilityPolicy_Name(qos_setting.durability_policy())
+                          << ". Using default volatile policy.";
       qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
       break;
   }
@@ -50,7 +49,7 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
   if (qos_setting.depth() > 0) {
     depth = static_cast<size_t>(qos_setting.depth());
   } else {
-    LOG(WARNING) << "Depth is not set. Using default depth 10.";
+    JOSHUA_LOG(WARNING) << "Depth is not set. Using default depth 10.";
   }
 
   switch (qos_setting.history_policy()) {
@@ -61,9 +60,9 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
       qos_profile.keep_all();
       break;
     default:
-      LOG(WARNING) << "Invalid history policy: "
-                   << ros2::node::QosHistoryPolicy_Name(qos_setting.history_policy())
-                   << ". Using default keep last policy.";
+      JOSHUA_LOG(WARNING) << "Invalid history policy: "
+                          << ros2::node::QosHistoryPolicy_Name(qos_setting.history_policy())
+                          << ". Using default keep last policy.";
       qos_profile.keep_last(depth);
       break;
   }
@@ -77,9 +76,9 @@ inline rclcpp::QoS CreateQosSetting(const ros2::node::QosSetting& qos_setting) {
       qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC);
       break;
     default:
-      LOG(WARNING) << "Invalid liveliness policy: "
-                   << ros2::node::QosLivelinessPolicy_Name(qos_setting.liveliness_policy())
-                   << ". Using default liveliness policy.";
+      JOSHUA_LOG(WARNING) << "Invalid liveliness policy: "
+                          << ros2::node::QosLivelinessPolicy_Name(qos_setting.liveliness_policy())
+                          << ". Using default liveliness policy.";
       qos_profile.liveliness(RMW_QOS_POLICY_LIVELINESS_AUTOMATIC);
       break;
   }
