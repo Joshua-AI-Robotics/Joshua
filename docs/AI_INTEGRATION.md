@@ -2,10 +2,11 @@
 
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
+proposed first Model Context Protocol (MCP) release is an optional front end
+for exactly one tested, bounded robot operation. The existing
 [inference host](../ai/README.md) and [data collection](../ai/train/README.md)
-remain separate from the proposed first Model Context Protocol (MCP) release:
-an optional front end for exactly one tested, bounded robot operation. This
-guide records shared design rules and independent proposed follow-ups.
+are outside its scope. This guide records shared design rules and independent
+proposed follow-ups.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
@@ -43,7 +44,7 @@ subsystem or runtime roles.
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
-| MCP front end and operator guide | One bounded robot operation with a tested subsystem interface; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
+| MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
 
 These items describe independent proposed work, not current support or required
 project phases. MCP requires only the tested contract and safeguards relevant
@@ -62,23 +63,25 @@ For that first operation, the guide should tell a new operator:
 - how to inspect the selected preset's operation mode and every declared
   hardware endpoint (including serial paths, network interfaces, and camera
   indices), then run configuration integrity checks before launch through a
-  path that opens no devices. A normal launch must not be presented as a
-  validation-only check;
+  path that opens no devices. If none exists for that preset, the MCP work must
+  provide one; a normal launch is not a validation-only check;
 - how to identify the board and revision as precisely as the preset and merged
   documentation permit, map its declared pins and channels to physical
   terminals and signal grounds, and find the required firmware and manual setup.
   Link the matching board-specific wiring and firmware instructions (for
-  example, the [Teensy 4.1 guide](../firmware/teensy/41/README.md) in the
-  [firmware index](../firmware/README.md)). The MCP adapter must not flash
+  example, the [Teensy 4.1 guide](../firmware/teensy/41/README.md)) and state
+  the selected board's verification status from the
+  [firmware index](../firmware/README.md). The MCP adapter must not flash
   firmware;
-- how to run, stop or cancel the operation, inspect diagnostics, clean up, and
-  locate and use a physical power disconnect independently of software;
-- what Joshua has not verified and the operator must confirm before real
-  motion: each endpoint reaches the intended physical device; the wiring,
+- how to run, stop or cancel the operation, inspect diagnostics, and clean up.
+  Before motion, the guide should require confirmation that a physical
+  disconnect for actuator or driver power is installed and reachable, and
+  explain how to use it without software;
+- before real motion, how the operator confirms facts Joshua has not
+  established: each endpoint reaches the intended physical device; wiring,
   grounds, driver and power settings, and physical operating limits match the
-  connected hardware;
-  the required board revision and flashed firmware build are correct where
-  Joshua cannot report them; and the setup is ready.
+  connected hardware; and the required board revision and flashed firmware
+  build are correct where Joshua cannot report them.
 
 ## MCP constraints
 
