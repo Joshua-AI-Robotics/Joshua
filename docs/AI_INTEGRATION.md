@@ -3,10 +3,10 @@
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
 proposed first Model Context Protocol (MCP) release is an optional front end
-for exactly one tested, bounded robot operation. The existing
-[inference host](../ai/README.md) and [data collection](../ai/train/README.md)
-are outside its scope. This guide records shared design rules and independent
-proposed follow-ups.
+for exactly one tested, bounded robot operation. AI inference, including the
+existing [inference host](../ai/README.md), and
+[data collection](../ai/train/README.md) are outside its scope. This guide
+records shared design rules and independent proposed follow-ups.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
@@ -23,17 +23,20 @@ subsystem or runtime roles.
 
 ## Design rules
 
-1. **Protobuf remains the source of truth.** Tools that handle configuration
-   should use Joshua's existing schema and presets. Read-only inventories
-   should derive facts from source without needing to write a config. Neither
-   should introduce a parallel robot configuration format.
-2. **Operations are defined by their implementing subsystem.** That subsystem
-   should define and test an operation's inputs, outputs, behavior, and failure
-   cases before a shared API or tool wraps it; see the fuller
-   [MCP constraints](#mcp-constraints) for MCP tools.
-3. **Support claims match evidence.** Call a capability supported only when its
-   implementation is merged and evidence demonstrates the stated scope and
-   verification level. Open pull requests are experimental planning evidence.
+1. **Use the existing protobuf schema for robot configuration.** Skills, the
+   UI, and MCP tools that read or write robot configuration must use Joshua's
+   existing protobuf schema and `.pbtxt` configs. Read-only inventories derive
+   facts from merged source files without writing configuration. Do not create
+   a parallel robot configuration format.
+2. **Define each runtime operation in the subsystem that implements it.**
+   Before a shared tool or API exposes an operation, the implementing subsystem
+   must define and test its inputs, outputs, behavior, and failure cases.
+   Cross-cutting tools wrap established operations rather than inventing their
+   contracts; see the fuller [MCP constraints](#mcp-constraints) for MCP tools.
+3. **Describe a capability as supported only after its implementation is
+   merged.** The claim must also match the scope and verification level shown
+   by evidence. Open pull requests can inform plans, but documentation and
+   tools must not present their work as currently available.
 
 ## Proposed follow-ups
 
@@ -41,7 +44,7 @@ subsystem or runtime roles.
 |---|---|---|
 | Supported-component catalog | Source files for merged boards, communication capabilities, perceptions, models, simulations, ROS 2 data types, and representative presets | A source-linked or generated view of current support, without copying facts that can be derived from schemas, manifests, BUILD targets, or presets. |
 | Change-validation skill | Existing subsystem documentation and test commands; use the catalog when available | A workflow that selects relevant checks and states what each result proves, without implementing another validator. |
-| Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result. |
+| Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result without launching it. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
 | MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
@@ -57,36 +60,44 @@ operation.
 
 ### Proposed MCP operator guide
 
-For that first operation, the guide should tell a new operator:
+For that first operation, the guide should assume little hardware experience
+and explain in plain language:
 
 - how to host the adapter, authorize access, and connect an MCP client;
 - how to inspect the selected preset's operation mode and every declared
   hardware endpoint (including serial paths, network interfaces, and camera
-  indices), then run configuration integrity checks before launch through a
-  path that opens no devices. If none exists for that preset, the MCP work must
-  provide one; a normal launch is not a validation-only check;
+  indices), including in a preset named for simulation, then run configuration
+  integrity checks before launch through a path that opens no devices. If none
+  exists for that preset, the MCP follow-up must provide and test one outside
+  the adapter. A normal launch is not a validation-only check, and passing
+  configuration checks does not establish that hardware is ready to move;
 - how to identify the board and revision as precisely as the preset and merged
   documentation permit, map its declared pins and channels to physical
-  terminals and signal grounds, and find the required firmware and manual setup.
+  terminals and signal grounds, and identify required firmware installation or
+  checks and other manual setup.
   Link the matching board-specific wiring and firmware instructions (for
   example, the [Teensy 4.1 guide](../firmware/teensy/41/README.md)) and state
   the selected board's verification status from the
   [firmware index](../firmware/README.md). The MCP adapter must not flash
   firmware;
-- how to run, stop or cancel the operation, inspect diagnostics, and clean up.
-  Before motion, the guide should require confirmation that a physical
-  disconnect for actuator or driver power is installed and reachable, and
-  explain how to use it without software;
 - before real motion, how the operator confirms facts Joshua has not
-  established: each endpoint reaches the intended physical device; wiring,
-  grounds, driver and power settings, and physical operating limits match the
-  connected hardware; and the required board revision and flashed firmware
-  build are correct where Joshua cannot report them.
+  established: a physical disconnect for actuator or driver power is installed
+  and reachable, and the operator knows how to use it without software; each
+  endpoint reaches the intended physical device; wiring, grounds, driver and
+  power settings, and physical operating limits match the connected hardware;
+  and the required board revision and flashed firmware build are correct where
+  Joshua cannot report them;
+- how to run, stop or cancel the operation, inspect diagnostics, and clean up,
+  including when to use the physical disconnect instead of software.
+
+The guide should mark each step Joshua cannot perform or verify as a manual
+operator step. Before real motion, the adapter must request explicit operator
+confirmation of those steps; passing configuration checks does not replace it.
 
 ## MCP constraints
 
-Before MCP exposes an operation, the implementing subsystem should define its
-input, output, state transition, cancellation behavior, errors, observability,
+Before MCP exposes an operation, the implementing subsystem must define and test
+its input, output, state transition, cancellation behavior, errors, observability,
 and operational limits. MCP integration should adapt that interface instead of
 creating a separate runtime state machine.
 
