@@ -45,12 +45,26 @@ cc_library(
 )
 
 cc_library(
+    name = "ethercat_master",
+    srcs = ["ethercat_master.cc"],
+    hdrs = ["ethercat_master.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":ethercat_status",
+        ":ethercat_transport",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_library(
     name = "soem_ethercat_transport",
     srcs = ["soem_ethercat_transport.cc"],
     hdrs = ["soem_ethercat_transport.h"],
     implementation_deps = ["@soem"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
+        ":ethercat_master",
         ":ethercat_transport",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
@@ -75,6 +89,8 @@ cc_test(
     name = "soem_ethercat_transport_test",
     srcs = ["soem_ethercat_transport_test.cc"],
     deps = [
+        ":ethercat_master",
+        ":ethercat_transport",
         ":soem_ethercat_transport",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",

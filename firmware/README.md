@@ -62,7 +62,9 @@ JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
 
 Select `protocol: JOSHUA_WIRE_V2` in the corresponding host `Board` config.
 There is no wire-version auto-detection or fallback. Historical hardware
-verification in the table above applies to **v1**, not these new v2 artifacts.
+verification in the table above applies to **v1**. AM243 v2 UART additionally
+passed [eight real-board probe sessions](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
+on 2026-09-27; Teensy/ESP32 v2 remain hardware-unvalidated.
 The AM243 v2 artifact changes UART only; EtherCAT still runs TI's demo with
 separate state, and UART still has no physical motor output.
 

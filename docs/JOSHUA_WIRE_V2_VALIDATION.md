@@ -86,6 +86,32 @@ board, mode, wiring/power state and command output. A successful run confirms
 only the selected protocol operations, not watchdogs, GPIO timing, ROS 2
 integration or the final board/comm separation architecture.
 
+## Recorded AM243 hardware result — 2026-09-27
+
+LP-AM243 UART validation passed using host and firmware source commit
+`4d594d123ac72fdc8f83aa05fb607c9aebc3975a` (Ubuntu 24.04/Jazzy host).
+The rebuilt `am243_dual_transport_v2.release.appimage.hs_fs` had SHA-256
+`d8612bb2e981a69cadc4e7fce94d31cc76270508927d51ac227dd8efabfa05d2`.
+TI bootloader and application flash verification both succeeded. After the
+operator changed SW4 to normal flash boot and power-cycled, the existing probe
+used XDS110 UART `/dev/ttyACM0` at 115200 baud and identified `am243-dual-v2`,
+board ID 1, one STEP_DIR channel.
+
+Eight sessions passed: two handshake, two configure-only, two exercise at
+`+250` native steps, and two exercise at `-250`. Configuration used the example
+AM243 values (pins 2/3/4, 4000 Hz, 20 us, active-low enable), retained only in
+software by this image. Feedback matched each target with zero reported faults;
+fresh sessions returned initial position zero. Every session ended with a
+successful ESTOP; exercise sessions also acknowledged DISABLE. The port was
+closed at completion. Each pair used one open port; separate probe invocations
+also exercised reopening it.
+
+This was a real UART/firmware test, **not physical motion**: the flashed handler
+has no motor GPIO backend. External motor-power state was not independently
+verified. EtherCAT, watchdogs, power loss during a command, pulse timing and
+ROS 2 integration were not tested. Temporary configs/logs were kept outside
+Git; no additional smoke tool was added.
+
 ## Automated coverage
 
 `serial_v2_validation_test.cc` runs these workflows against the real AM243

@@ -24,9 +24,18 @@ Implementation checkpoint:
   100 ms exchange deadline. The composed board engine and production cyclic
   adapter remain pending. Mismatched serial replies fail closed rather than
   being skipped while waiting for another reply.
-- Steps 4–7 remain pending. AM243 EtherCAT still uses the independent TI demo;
-  no JoshuaWire PDO/CoE profile, owner loop, mailbox, watchdog or cross-transport
-  arbiter is claimed by this checkpoint. V2 has not been hardware-validated.
+- AM243 v2 UART passed eight real-board validation sessions on 2026-09-27;
+  see the [recorded scope and artifact](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27).
+  This does not validate EtherCAT or physical motion.
+- Step 4 foundation: a comm-internal owner worker and startup-only SOEM SDO
+  access are implemented, with shadow images, snapshots, timeout/stop handling
+  and hardware-free regression coverage. It is not factory-wired. SOEM's
+  blocking SDO primitives do not enforce a total deadline, so mailbox access is
+  forbidden after cyclic startup. Runtime bounded mailbox/state scheduling,
+  shared master leases and production timing policy remain unfinished.
+- Steps 5–7 remain pending. AM243 EtherCAT still uses the independent TI demo;
+  no JoshuaWire PDO/CoE profile, firmware watchdog or cross-transport arbiter
+  is claimed by this checkpoint.
 
 The contracts below remain the target design, not a claim that the entire plan
 has landed. See [firmware usage](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone)

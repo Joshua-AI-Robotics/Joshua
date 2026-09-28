@@ -44,8 +44,11 @@ Outputs are named `am243_dual_transport_v2.release.*`. The script also forwards
 arguments to `make`, allowing explicit `CCS_PATH`, `SYSCFG_PATH`, and compiler
 path overrides without editing the SDK. EtherCAT remains the TI demo, not
 JoshuaWire v2. The software-only UART command handler is shared with native
-host/session tests. Historical hardware results here apply to v1; v2 has not
-been flashed or hardware-validated. See the
+host/session tests. V2 was flashed and UART-validated on LP-AM243 on 2026-09-27:
+eight sessions covered reset, identity, configuration, software targets/feedback,
+disable and ESTOP. See the [recorded validation](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
+for the exact artifact and scope; EtherCAT and physical motion were not tested.
+See the
 [v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
 
 ## Flash
@@ -57,12 +60,20 @@ existing TI demo flash configuration to point at:
 out/am243_dual_transport_v1.release.appimage.hs_fs
 ```
 
+For explicit v2, use `out/am243_dual_transport_v2.release.appimage.hs_fs`
+instead, with the same SDK 09 bootloader/application offsets. Verify both
+bootloader and application after flashing; do not use the TI-demo application
+path from the original flash template for a JoshuaWire image.
+
 Flashing remains a deliberate hardware operation and must not happen as part
 of build or test.
 
 ## Verify
 
-After an intentional flash, first run the serial protocol smoke without motor
+For v2, follow the [serial validation guide](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md)
+using `joshua_wire_v2_smoke`. The commands below apply to **v1 only**.
+
+After an intentional v1 flash, first run the serial protocol smoke without motor
 movement:
 
 ```bash

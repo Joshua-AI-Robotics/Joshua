@@ -37,6 +37,11 @@ is the retained TI-demo API, not a correlated JW2 endpoint. `CommTransport` can
 represent either capability, but production factory assembly of paired
 mailbox/cyclic adapters is still pending. UDP remains rejected.
 
+The [EtherCAT owner-worker foundation](ethercat/README.md#owner-worker-foundation-not-factory-wired)
+now provides background process-data exchange and startup-only SDO access,
+but is not connected to this factory yet. Its mailbox gate deliberately closes
+before cyclic operation; it is not the planned JW2 management-message adapter.
+
 Device protocol parsing remains outside this layer. For example, the lidar
 parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`.
