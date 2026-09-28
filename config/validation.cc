@@ -1,5 +1,6 @@
 #include "config/validation.h"
 
+#include <cmath>
 #include <map>
 #include <string>
 #include <utility>
@@ -7,6 +8,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "ros2/utils/packet_parser.h"
 #include "utils/status_macros.h"
 
 namespace config {
@@ -135,6 +137,47 @@ absl::Status ValidateNodeAssignments(const std::vector<DeviceDependencies>& devi
   return absl::OkStatus();
 }
 
+// Validate wire contracts without constructing any driver or opening devices.
+absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
+  std::map<std::string, ros2::data_type::Ros2DataType> topic_types;
+  auto check_topic = [&](std::string topic, ros2::data_type::Ros2DataType type) {
+    if (topic.empty()) return absl::InvalidArgumentError("Numeric endpoint needs a topic");
+    if (topic.front() != '/') topic = "/" + topic;
+    const auto [it, inserted] = topic_types.emplace(topic, type);
+    if (!inserted && it->second != type)
+      return absl::InvalidArgumentError("Conflicting message types on topic " + topic);
+    return absl::OkStatus();
+  };
+  for (const auto& sensor : robot.perceptions().single_perceptions()) {
+    if (sensor.node().node_type() != ros2::node::POSITION_PUBLISHER) continue;
+    for (const auto& pub : sensor.node().publishers()) {
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
+      if (pub.publish_rate_hz() == 0)
+        return absl::InvalidArgumentError("Position publisher requires a positive rate");
+      ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
+    }
+  }
+  for (const auto& action : robot.actions().single_actions()) {
+    if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER) continue;
+    const auto& actuator = action.actuator();
+    for (const auto& sub : action.node().subscriptions()) {
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
+      ABSL_RETURN_IF_ERROR(check_topic(sub.topic(), sub.ros2_data_type()));
+      std::string field = "position";
+      if (sub.ros2_data_type() != ros2::data_type::JOINT_STATE) {
+        ABSL_ASSIGN_OR_RETURN(field, ros2_utils::ParseActionTypeFromTopic(sub.topic()));
+      }
+      if (field == "position" &&
+          (!std::isfinite(actuator.operational_lower_limit()) ||
+           !std::isfinite(actuator.operational_upper_limit()) ||
+           actuator.operational_lower_limit() > actuator.operational_upper_limit() ||
+           !std::isfinite(actuator.operational_upper_limit() - actuator.operational_lower_limit())))
+        return absl::InvalidArgumentError("Invalid actuator operational limits");
+    }
+  }
+  return absl::OkStatus();
+}
+
 // Every declared board reference is resolved, regardless of sensor measurement
 // or driver type. Direct connections need no board reference.
 absl::StatusOr<std::vector<Connection>> ResolveConnections(
@@ -193,6 +236,7 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
 
 absl::Status ValidateConfig(const config::Config& config) {
   const auto& robot = config.robot();
+  ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));

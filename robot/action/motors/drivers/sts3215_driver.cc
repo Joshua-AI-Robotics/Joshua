@@ -3,6 +3,8 @@
 #include <glog/logging.h>
 
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <string>
 #include <thread>
 
@@ -63,39 +65,52 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
           return absl::OkStatus();
       }
 
-    case robot::action::ActionPacket::kComplex: {
-      const auto& complex_action = action_packet.complex();
-      if (complex_action.has_speed()) {
-        auto status = SetSpeed(complex_action.speed());
+    case robot::action::ActionPacket::kJoint: {
+      auto command = action_packet.joint();
+      auto validation = ValidateJointCommand(command, action_config_.actuator_name());
+      if (!validation.ok()) return validation;
+      // Validate every field before issuing any channel writes.
+      if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort()))
+        return absl::UnimplementedError("STS3215 driver has no SI velocity/effort contract");
+      if (command.position_encoding() == JointCommand::POSITION_SI) {
+        if (command.has_position()) {
+          command.set_position(command.position() * (4096.0 / (2.0 * 3.14159265358979323846)));
+          command.set_position_encoding(JointCommand::POSITION_NATIVE);
+        }
+      } else if (command.position_encoding() != JointCommand::POSITION_NATIVE) {
+        return absl::InvalidArgumentError(
+            "Driver requires resolved native or SI position encoding");
+      }
+      if (command.has_effort())
+        return absl::UnimplementedError(
+            "STS3215 driver has no effort control; use presets for torque enable/disable");
+      for (double value : {command.position(), command.velocity(), command.effort()}) {
+        if (!std::isfinite(value) || std::abs(value) > std::numeric_limits<float>::max() ||
+            (value != 0 && static_cast<float>(value) == 0))
+          return absl::OutOfRangeError("STS3215 joint value exceeds native float range");
+      }
+      if (command.has_position() && (command.position() < operational_lower_limit_ ||
+                                     command.position() > operational_upper_limit_))
+        return absl::InvalidArgumentError("STS3215 position is outside operational limits");
+      if ((command.has_velocity() && command.velocity() < 0) ||
+          (command.has_effort() && command.effort() < 0))
+        return absl::InvalidArgumentError("STS3215 requires nonnegative native speed and effort");
+      if (command.has_velocity()) {
+        auto status = SetSpeed(static_cast<float>(command.velocity()));
         if (!status.ok()) return status;
       }
-      if (complex_action.has_torque()) {
-        auto status = SetTorque(complex_action.torque());
+      if (command.has_effort()) {
+        auto status = SetTorque(static_cast<float>(command.effort()));
         if (!status.ok()) return status;
       }
-      if (complex_action.has_position()) {
-        return SetPosition(complex_action.position());
-      }
-      if (complex_action.has_dc()) {
-        LOG(WARNING) << "dc is not supported on STS3215, ignoring";
-      }
+      if (command.has_position()) return SetPosition(static_cast<float>(command.position()));
       return absl::OkStatus();
     }
-
-    case robot::action::ActionPacket::kPosition:
-      return SetPosition(action_packet.position());
-    case robot::action::ActionPacket::kTorque:
-      return SetTorque(action_packet.torque());
-    case robot::action::ActionPacket::kSpeed:
-      return SetSpeed(action_packet.speed());
-    case robot::action::ActionPacket::kDc:
-      LOG(WARNING) << "dc is not supported on STS3215, ignoring";
-      return absl::OkStatus();
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
       LOG(WARNING) << "No action type set in STS3215 ActionPacket [ID: "
                    << action_packet.action_id() << "]";
-      return absl::OkStatus();
+      return absl::InvalidArgumentError("ActionPacket requires joint or preset");
   }
 }
 

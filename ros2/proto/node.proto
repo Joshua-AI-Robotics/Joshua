@@ -59,7 +59,6 @@ message Publisher {
 message Subscription {
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
-  bool normalized = 3;
 }
 
 message Node {

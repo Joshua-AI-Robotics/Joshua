@@ -1,170 +1,98 @@
-# packet_parser
+# Packet parser
 
-Centralized helpers for **ActionPacket** and **PerceptionPacket** protobuf semantics at the ROS2 boundary. Use this module instead of scattering `HasField`, `WhichOneof`, and denormalization logic across nodes.
+`packet_parser.cc` bridges compiled ROS message types and internal packets.
+`packet_parser.py` supplies matching field access for Python consumers.
 
-| Language | Library target | Source |
-|----------|----------------|--------|
-| Python | `//ros2/utils:packet_parser_py` | [`packet_parser.py`](packet_parser.py) |
-| C++ | `//ros2/utils:packet_parser` | [`packet_parser.h`](packet_parser.h), [`packet_parser.cc`](packet_parser.cc) |
+`ActionPacket.joint` is the motion payload for every actuator. Optional position,
+velocity, and effort distinguish omission from zero. `position_encoding` selects
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. The separate `units` field applies only to
+velocity and effort: NATIVE preserves existing driver settings; SI means physical
+velocity and effort. JointState sets SI position encoding and SI velocity/effort
+units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
-Proto definitions:
+STS3215 and stepper support native position/velocity combinations and SI
+position-only commands (radians converted to ticks/degrees). They reject effort;
+use presets to enable/disable torque. TI demo supports native position/velocity/
+effort using its existing firmware scaling, but rejects SI commands. Drivers
+validate the entire payload before writes. Channel failures are returned; a
+multi-field command is not a transactional hardware operation.
 
-- [`robot/action/proto/action_packet.proto`](../../robot/action/proto/action_packet.proto)
-- [`robot/perception/proto/perception_packet.proto`](../../robot/perception/proto/perception_packet.proto)
+Scalar topics retain native values: `/position` maps to position, `/speed` and
+`/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
+maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
+unsupported by runtime motor drivers. The standalone Pybricks tool defines
+native effort as duty percent and requires it to be sent alone.
 
-## What it does
+Normalized positions map through configured operational limits once, then become
+POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
+limits are rejected, never clamped. Native and SI positions are left for drivers.
+Position encoding does not normalize velocity or effort.
+Header metadata does not imply scheduling, clock synchronization, or transforms.
 
-- **Build ActionPacket from Float32** on `/<device_id>/<action_type>` actuator topics
-- **Denormalize** normalized `ActionPacket` positions using operational limits
-- **Extract** scalar action fields for inference / trajectory Float32 publish
-- **Validate** required perception fields when converting driver protos to native ROS messages (`require_perception_*`)
+## Config migration
 
-Perception data on ROS uses **native message types only** (no serialized `PerceptionPacket` on the wire). Actuator commands use **`std_msgs/Float32`** on topics named `/<device_id>/<action_type>` where `action_type` is one of `position`, `torque`, `speed`, `dc`. Set `normalized: true` on the subscription config for `.../position` when the Float32 value is in `[-1, 1]`.
+Replace `action { position: 2004 }` with:
 
-## Actuator topic convention
-
-```text
-/<device_id>/position   →  Float32  →  ActionPacket.position
-/<device_id>/torque     →  Float32  →  ActionPacket.torque
-/<device_id>/speed      →  Float32  →  ActionPacket.speed
-/<device_id>/dc         →  Float32  →  ActionPacket.dc
+```protobuf
+action { joint { joint_name: "sts_motor_1" position: 2004 } }
 ```
 
-`device_id` must match `actuator.actuator_name` in config. Example:
+The optional position marker may be written as `position_encoding: POSITION_NATIVE`. Replace
+complex speed with `joint.velocity`; map physical/native effort only where the
+driver supports it. Torque enable/disable becomes a preset, not effort.
+Duration is no longer part of a command; trajectory waypoints provide timing.
 
-```bash
-ros2 topic pub /sts3215_servo_1/position std_msgs/msg/Float32 "{data: 2048.0}"
+Float32 trajectory publishing accepts one native numeric field, matching its
+topic and joint name. Multi-field, SI, or mismatched payloads are rejected rather
+than silently losing fields or units. The current Float32 trajectory publisher accepts native position encoding only.
+
+Neither normalization nor position encoding belongs to Subscription. The actuator
+node defines fixed contracts: numeric scalar/array position values are native;
+JointState positions and velocity/effort are SI. The adapters populate JointCommand
+encoding/units accordingly. Remove old `normalized` and `position_encoding` fields
+from subscriptions; producers using normalized values must convert before ROS
+publishing. Internal JointCommand retains its explicit position encoding, including
+both normalized ranges for internal producers. Existing SI internal packets must
+set POSITION_SI explicitly; `units: SI` applies only to velocity/effort.
+
+Topic names are always strings. Message structure is selected by ros2_data_type:
+
+```protobuf
+node {
+  id: 1
+  node_type: ACTUATOR_SUBSCRIBER
+  subscriptions {
+    ros2_data_type: JOINT_STATE
+    topic: "esp32_stepper_1/joint_state"
+  }
+}
 ```
 
-## Who uses it
+The message's name/position/velocity/effort arrays belong in the ROS payload, not
+in `topic`. The decoder selects the configured actuator's name and copies all
+present numeric fields into one joint command. Other actuators may subscribe to
+the same topic and select their own entries. The topic suffix does not infer the
+message type. Drivers still reject unsupported field combinations.
 
-| Node | Typical calls |
-|------|----------------|
-| `actuator_subscriber` | `action_packet_from_float`, `parse_action_type_from_topic`, `denormalize_action_packet` |
-| `inference`, `trajectory_publisher` | `extract_scalar_from_action`, `denormalize_position_value` |
-| Encoder / camera / lidar publishers | `require_perception_*` (proto → native ROS) |
+Publishers must also implement the selected type. The position publisher supports
+JointState position feedback. The trajectory publisher supports Float32 and
+JointState: each JointState waypoint publishes one named joint with every supplied
+position/velocity/effort field. Position must explicitly use POSITION_SI and any
+velocity/effort must use units SI; native/normalized values are rejected rather
+than guessed or silently relabeled. Omitted arrays stay empty. The frame is copied;
+a nonzero source stamp is preserved, otherwise ROS publish time is used. Drivers
+still decide which combinations they can execute.
+Internal normalization conversion remains strict and uses operational limits;
+ROS scalar inputs are never inferred to be normalized from their values.
 
-**Out of scope:** hardware drivers (`sts3215_driver`, `stepper_driver`, etc.) still consume fully-formed `ActionPacket` after ROS parsing.
+The inference adapter's separate `ActionCommand.normalized` API is unchanged:
+it converts its legacy [-1, 1] output with its existing clamp policy before ROS
+publishing. That producer API does not use the removed packet/subscription flag.
 
-## Registries (single source of truth)
+## Extending support
 
-Python exports these registries in [`packet_parser.py`](packet_parser.py). Keep them in sync with the C++ implementation when you change behavior.
-
-```python
-ACTION_POSITION_FIELD_PATHS    # position-bearing ActionPacket fields (denormalize)
-ACTION_SCALAR_ONEOF_FIELDS     # float oneof arms for Float32 publish / extract
-ACTION_TOPIC_SUFFIX_TO_FIELD   # /<device_id>/<suffix> allowlist → ActionPacket field
-PERCEPTION_DATA_TYPE_FIELDS    # PerceptionPacket.data_type oneof arms
-```
-
-C++ mirror (no automated contract test yet — update manually in the same PR):
-
-```cpp
-// packet_parser.cc
-kActionTopicSuffixes[]   # must match ACTION_TOPIC_SUFFIX_TO_FIELD keys
-ActionPacketFromFloat()  # add a branch for each new suffix
-```
-
-Contract tests in [`packet_parser_test.py`](packet_parser_test.py) compare these registries to the generated proto descriptors. CI fails if proto and parser drift apart.
-
-Run tests:
-
-```bash
-docker compose run --rm joshua-u22 \
-  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
-```
-
----
-
-## Action items when changing protos
-
-Use this checklist any time you edit `action_packet.proto` or `perception_packet.proto`.
-
-### 1. After editing `action_packet.proto`
-
-| Change | Action |
-|--------|--------|
-| New **float** field on `action_type` oneof (e.g. `acceleration`) | 1. Add to `ACTION_SCALAR_ONEOF_FIELDS`. 2. Add matching entry to `ACTION_TOPIC_SUFFIX_TO_FIELD` (suffix → field name). 3. Update `kActionTopicSuffixes[]` and `ActionPacketFromFloat()` in [`packet_parser.cc`](packet_parser.cc). 4. Run the packet parser test inside the Docker shell. |
-| New **position** field (name contains `position`) on `action_type` or inside `ComplexAction` | Add path to `ACTION_POSITION_FIELD_PATHS` (e.g. `"complex.staging_position"`). Implement handling in `_apply_to_position_sources`, `extract_position_from_action`, and C++ `ApplyToPositionSources`. |
-| New position field **without** `position` in the name | Add path to `ACTION_POSITION_FIELD_PATHS` manually **and** extend `_discover_action_position_field_paths_from_proto()` in the test file so the contract test covers it. |
-| Field that should denormalize when `normalized=true` | Must be listed in `ACTION_POSITION_FIELD_PATHS`. |
-| Non-float oneof arm (e.g. new preset) | No scalar registry change. Update driver logic if actuators must handle it. |
-
-**Verify:**
-
-```bash
-docker compose run --rm joshua-u22 \
-  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
-```
-
-Expected failing tests if you forget a registry update:
-
-- `PacketParserProtoContractTest.test_action_scalar_registry_matches_proto`
-- `PacketParserProtoContractTest.test_action_topic_suffix_registry_matches_scalar_registry`
-- `PacketParserProtoContractTest.test_action_position_registry_matches_proto`
-- `PacketParserProtoContractTest.test_each_action_position_path_is_denormalized`
-
-### 2. After editing `perception_packet.proto`
-
-| Change | Action |
-|--------|--------|
-| New arm on `data_type` oneof (e.g. `imu`) | 1. Add name to `PERCEPTION_DATA_TYPE_FIELDS` (Python). 2. Add `require_perception_*` helper. 3. Register it in `_PERCEPTION_REQUIRE_FIELD_BY_NAME`. 4. Mirror validation in C++ (`RequirePerception*` or `absl::Status` checker). 5. Wire the relevant **publisher** node to call the new helper before publish. |
-| New optional field inside existing message (e.g. `velocity` on `PositionData`) | Parser `require_*` helpers may still pass. Update consumers that need the new field; add behavioral tests if extraction logic changes. |
-
-**Verify:**
-
-```bash
-docker compose run --rm joshua-u22 \
-  bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test
-```
-
-Expected failing tests if you forget:
-
-- `test_perception_data_type_registry_matches_proto`
-- `test_perception_require_helpers_cover_registry`
-
-### 3. C++ parity
-
-Python has contract tests; C++ does not yet. When you change Python registries or helpers, update the matching functions in [`packet_parser.cc`](packet_parser.cc) in the same PR.
-
-### 4. ROS nodes (only if wire format changes)
-
-Registry/parser updates alone are not enough if a **new perception type** needs publishing:
-
-- Add publisher validation (`require_perception_*`)
-- Update configs (`ros2_data_type`, topic naming) if needed
-- Do **not** re-add perception parsing to `actuator_subscriber` unless product requirements change
-
----
-
-## Example: adding `complex.staging_position`
-
-1. Add to `action_packet.proto`:
-
-   ```protobuf
-   optional float staging_position = 6;  // inside ComplexAction
-   ```
-
-2. Update `ACTION_POSITION_FIELD_PATHS`:
-
-   ```python
-   ACTION_POSITION_FIELD_PATHS = (
-       "position",
-       "complex.position",
-       "complex.staging_position",
-   )
-   ```
-
-3. Implement read/write for `"complex.staging_position"` in `_apply_to_position_sources` and `extract_position_from_action` (and C++).
-
-4. Run the packet parser test inside the Docker shell — contract tests should pass once registries and handlers match proto.
-
----
-
-## Error handling
-
-| Python | C++ |
-|--------|-----|
-| Raises `PacketParseError` | Returns `absl::Status` / `absl::StatusOr<T>` |
-
-Callers (ROS nodes) should log and skip the message on parse/validation failure rather than crashing the node.
+Add compiled ROS message dispatch in `VisitPositionMessage`. New drivers consume
+`joint` directly and define unit conversions, supported combinations, and limits.
+Keep C++ topic aliases and Python `ACTION_TOPIC_SUFFIX_TO_FIELD` aligned. Perception
+helpers are unchanged. Build/test execution is left to the operator.
