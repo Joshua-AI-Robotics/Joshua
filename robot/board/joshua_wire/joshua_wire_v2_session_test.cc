@@ -4,14 +4,15 @@
 // concurrent callers, ESTOP and teardown without opening a physical device.
 #include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <thread>
 #include <vector>
 
 #include "firmware/am243/joshua_dual_transport_v1/src/joshua_serial_commands.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
-#include "firmware/common/joshua_wire_v1.h"
 #include "firmware/common/joshua_wire_v2.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
@@ -21,18 +22,20 @@ namespace robot::board {
 namespace {
 using Bytes = std::vector<uint8_t>;
 
-Bytes Command(uint8_t cmd, uint8_t channel = 0) {
-  uint8_t buffer[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_frame(buffer, sizeof(buffer), cmd, channel, nullptr, 0);
-  return Bytes(buffer, buffer + len);
+jw_command_t Command(uint8_t cmd, uint8_t channel = 0) {
+  return {cmd, channel, nullptr, 0};
 }
 
-Bytes Configure() {
-  uint8_t buffer[JW1_MAX_FRAME_LEN];
-  jw_configure_step_dir_t config{};
-  config.max_pulse_rate_hz = 1000;
-  const int len = jw1_encode_configure_channel_step_dir(buffer, sizeof(buffer), 0, &config);
-  return Bytes(buffer, buffer + len);
+jw_command_t Configure() {
+  static const auto payload = [] {
+    std::array<uint8_t, JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN> bytes{};
+    jw_configure_step_dir_t config{};
+    config.max_pulse_rate_hz = 1000;
+    EXPECT_EQ(jw_encode_configure_step_dir_payload(bytes.data(), bytes.size(), &config),
+              bytes.size());
+    return bytes;
+  }();
+  return {JW_CMD_CONFIGURE_CHANNEL, 0, payload.data(), payload.size()};
 }
 
 // Runs the real AM243 serial command implementation and shared firmware session
@@ -43,26 +46,20 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     jw_serial_endpoint_init(&endpoint, 2);
     channel.latch_estop = true;
   }
-  absl::Status Open() override {
-    return absl::OkStatus();
-  }
-  absl::Status Write(const Bytes&) override {
+  absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("No send-only exchange in v2.");
   }
-  absl::StatusOr<Bytes> SendAndReceive(const Bytes&, size_t) override {
-    return absl::UnimplementedError("V2 must use framed Exchange.");
-  }
-  absl::StatusOr<Bytes> Exchange(const Bytes& request) override {
+  absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> request) override {
     EXPECT_EQ(active.fetch_add(1), 0);
     if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    requests.push_back(request);
+    requests.emplace_back(request.begin(), request.end());
     Bytes response(JW2_MAX_FRAME_LEN);
     const int len = jw_serial_endpoint_process(&endpoint,
                                                request.data(),
                                                request.size(),
                                                response.data(),
                                                response.size(),
-                                               JoshuaSerialCommand,
+                                               handler,
                                                JoshuaSerialReset,
                                                &channel);
     --active;
@@ -104,6 +101,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     return response;
   }
   jw_serial_endpoint_t endpoint{};
+  jw_serial_command_handler_t handler = JoshuaSerialCommand;
   JoshuaSerialChannel channel{};
   std::vector<Bytes> requests;
   Bytes retained;
@@ -120,8 +118,8 @@ class V2SessionTest : public ::testing::Test {
   uint32_t session_id = 10;
   JoshuaWireV2Session session{transport, [this] { return ++session_id; }};
 
-  absl::StatusOr<Bytes> Exchange(const Bytes& request) {
-    return session.SendAndReceive(request, 0);
+  absl::StatusOr<Bytes> Exchange(const jw_command_t& request) {
+    return session.Exchange(request);
   }
 };
 
@@ -132,13 +130,13 @@ TEST_F(V2SessionTest, HandshakeGatesAllCommandsAndPropagatesErrors) {
   ASSERT_TRUE(session.Open().ok());
   auto enable = Exchange(Command(JW_CMD_ENABLE));
   ASSERT_TRUE(enable.ok());
-  EXPECT_EQ((*enable)[5], JW_STATUS_ERROR);  // Firmware has not been configured.
+  EXPECT_EQ((*enable)[0], JW_STATUS_ERROR);  // Firmware has not been configured.
   ASSERT_TRUE(Exchange(Configure()).ok());
   ASSERT_TRUE(Exchange(Command(JW_CMD_ENABLE)).ok());
   EXPECT_TRUE(transport->channel.enabled);
   auto identify = Exchange(Command(JW_CMD_IDENTIFY, JW_CHANNEL_NONE));
   ASSERT_TRUE(identify.ok());
-  EXPECT_EQ(identify->size(), JW1_FRAME_LEN(JW_IDENTIFY_RESPONSE_PAYLOAD_LEN));
+  EXPECT_EQ(identify->size(), JW_IDENTIFY_RESPONSE_PAYLOAD_LEN);
   EXPECT_EQ(transport->requests.front()[11], JW_CMD_RESET_SESSION);
 }
 
@@ -148,6 +146,40 @@ TEST_F(V2SessionTest, EveryCorrelationFieldMustMatch) {
     transport->corrupt_field = field;
     EXPECT_EQ(Exchange(Command(JW_CMD_GET_FEEDBACK)).status().code(), absl::StatusCode::kDataLoss);
   }
+}
+
+TEST_F(V2SessionTest, FullV2PayloadRoundTripsWithoutLegacyFrameLimit) {
+  // Echo is test-only: prove both session/endpoint boundaries accept the full
+  // v2 payload, not v1's smaller 32-byte payload or any in-memory v1 envelope.
+  transport->handler = [](void*, const jw_command_t* command, uint8_t* out, size_t cap) -> int {
+    if (cap < command->payload_len) return -1;
+    memcpy(out, command->payload, command->payload_len);
+    return static_cast<int>(command->payload_len);
+  };
+  ASSERT_TRUE(session.Open().ok());
+  const Bytes payload(JW2_MAX_PAYLOAD_LEN, 0xa5);
+  auto response = session.Exchange({0x40, 3, payload.data(), payload.size()});
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, payload);
+  EXPECT_EQ(transport->requests.back().size(), JW2_MAX_FRAME_LEN);
+}
+
+TEST_F(V2SessionTest, InvalidNeutralCommandsDoNotReachTransportOrConsumeIds) {
+  ASSERT_TRUE(session.Open().ok());
+  const uint8_t byte = 0;
+  for (const jw_command_t command :
+       {jw_command_t{JW_CMD_SET_TARGET, 0, nullptr, 1},
+        jw_command_t{JW_CMD_SET_TARGET, 0, &byte, JW2_MAX_PAYLOAD_LEN + 1},
+        jw_command_t{JW_CMD_RESET_SESSION, JW_CHANNEL_NONE, nullptr, 0}}) {
+    EXPECT_EQ(session.Exchange(command).status().code(), absl::StatusCode::kInvalidArgument);
+  }
+  ASSERT_EQ(transport->requests.size(), 1);
+  ASSERT_TRUE(Exchange(Command(JW_CMD_IDENTIFY, JW_CHANNEL_NONE)).ok());
+  jw2_frame_t sent;
+  ASSERT_EQ(
+      jw2_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &sent),
+      0);
+  EXPECT_EQ(sent.message_id, 2);
 }
 
 TEST_F(V2SessionTest, TimeoutAndLateResponseNeverReuseAnId) {
@@ -208,11 +240,11 @@ TEST_F(V2SessionTest, FailedResetAndInvalidIdSourceKeepSessionClosed) {
 
 TEST_F(V2SessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
   JoshuaWireV2Session small(transport, [this] { return ++session_id; }, 5);
-  ASSERT_TRUE(small.Open().ok());                                           // ID 1
-  ASSERT_TRUE(small.SendAndReceive(Configure(), 0).ok());                   // ID 2
-  ASSERT_TRUE(small.SendAndReceive(Command(JW_CMD_ENABLE), 0).ok());        // ID 3
-  ASSERT_TRUE(small.SendAndReceive(Command(JW_CMD_GET_FEEDBACK), 0).ok());  // ID 4
-  auto rotated = small.SendAndReceive(Command(JW_CMD_GET_FEEDBACK), 0);
+  ASSERT_TRUE(small.Open().ok());                                  // ID 1
+  ASSERT_TRUE(small.Exchange(Configure()).ok());                   // ID 2
+  ASSERT_TRUE(small.Exchange(Command(JW_CMD_ENABLE)).ok());        // ID 3
+  ASSERT_TRUE(small.Exchange(Command(JW_CMD_GET_FEEDBACK)).ok());  // ID 4
+  auto rotated = small.Exchange(Command(JW_CMD_GET_FEEDBACK));
   EXPECT_EQ(rotated.status().code(), absl::StatusCode::kFailedPrecondition);
   ASSERT_EQ(transport->requests.size(), 7);
   EXPECT_EQ(transport->requests[4][11], JW_CMD_ESTOP);
@@ -221,19 +253,19 @@ TEST_F(V2SessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
   EXPECT_TRUE(transport->channel.configured);
   EXPECT_FALSE(transport->channel.enabled);
   EXPECT_FALSE(transport->channel.estopped);
-  EXPECT_TRUE(small.SendAndReceive(Command(JW_CMD_ENABLE), 0).ok());
+  EXPECT_TRUE(small.Exchange(Command(JW_CMD_ENABLE)).ok());
   EXPECT_TRUE(transport->channel.enabled);
 }
 
 TEST_F(V2SessionTest, FailedStopAtExhaustionDoesNotResetOrReuseLastId) {
   JoshuaWireV2Session small(transport, [this] { return ++session_id; }, 3);
   ASSERT_TRUE(small.Open().ok());
-  ASSERT_TRUE(small.SendAndReceive(Configure(), 0).ok());
+  ASSERT_TRUE(small.Exchange(Configure()).ok());
   transport->timeout = true;
-  EXPECT_EQ(small.SendAndReceive(Command(JW_CMD_ENABLE), 0).status().code(),
+  EXPECT_EQ(small.Exchange(Command(JW_CMD_ENABLE)).status().code(),
             absl::StatusCode::kDeadlineExceeded);
   const auto count = transport->requests.size();
-  EXPECT_EQ(small.SendAndReceive(Command(JW_CMD_ENABLE), 0).status().code(),
+  EXPECT_EQ(small.Exchange(Command(JW_CMD_ENABLE)).status().code(),
             absl::StatusCode::kFailedPrecondition);
   EXPECT_EQ(transport->requests.size(), count);
 }
@@ -265,7 +297,7 @@ TEST_F(V2SessionTest, EstopStaysLatchedUntilResetAndReconfiguration) {
   EXPECT_FALSE(transport->channel.enabled);
   auto result = Exchange(Command(JW_CMD_ENABLE));
   ASSERT_TRUE(result.ok());
-  EXPECT_EQ((*result)[5], JW_STATUS_ERROR);
+  EXPECT_EQ((*result)[0], JW_STATUS_ERROR);
   ASSERT_TRUE(session.Open().ok());
   EXPECT_FALSE(transport->channel.configured);
   EXPECT_FALSE(transport->channel.estopped);

@@ -171,7 +171,7 @@ absl::Status Serial::Flush() {
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(const std::vector<uint8_t>& request) {
+absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> request) {
   if (request.size() < 7 || request.size() > 64 || request[0] != 0xA5 ||
       static_cast<size_t>(request[1]) + 4 != request.size()) {
     return absl::InvalidArgumentError("Serial Exchange requires a bounded JoshuaWire frame.");

@@ -1,3 +1,5 @@
+// Fixed-length in-memory fake for remaining v1/vendor consumers. No concrete
+// serial dependency or hardware I/O. Prefer fake_transports.h for new clients.
 #pragma once
 
 #include <cstddef>
@@ -6,16 +8,19 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "robot/comm/serial/serial.h"
+#include "robot/comm/interfaces/legacy_message_transport.h"
 
 namespace robot::comm {
 
-// In-memory SerialTransport double for bus-protocol boards under test
-// (docs/BOARD_LAYER_RFC.md §5.6). AtomicRead pops queued responses in FIFO
+// In-memory legacy message double for bus-protocol boards under test.
+// SendAndReceive pops queued responses in FIFO
 // order regardless of the command bytes sent; queue the expected response
 // before triggering the call under test.
-class FakeSerialTransport : public SerialTransport {
+class FakeLegacyMessageTransport : public LegacyMessageTransport {
  public:
+  absl::Status Open() override {
+    return absl::OkStatus();
+  }
   absl::Status Write(const std::vector<uint8_t>& data) override {
     write_calls_++;
     last_written_ = data;
@@ -23,13 +28,13 @@ class FakeSerialTransport : public SerialTransport {
     return write_status_;
   }
 
-  absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
-                                                  size_t expected_response_size) override {
-    atomic_read_calls_++;
+  absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& command,
+                                                      size_t expected_response_size) override {
+    exchange_calls_++;
     last_written_ = command;
     written_.push_back(command);
-    if (!atomic_read_status_.ok()) {
-      return atomic_read_status_;
+    if (!exchange_status_.ok()) {
+      return exchange_status_;
     }
     if (queued_responses_.empty()) {
       return std::vector<uint8_t>(expected_response_size, 0);
@@ -44,9 +49,9 @@ class FakeSerialTransport : public SerialTransport {
   }
 
   int write_calls_ = 0;
-  int atomic_read_calls_ = 0;
+  int exchange_calls_ = 0;
   absl::Status write_status_ = absl::OkStatus();
-  absl::Status atomic_read_status_ = absl::OkStatus();
+  absl::Status exchange_status_ = absl::OkStatus();
   std::vector<uint8_t> last_written_;
   std::vector<std::vector<uint8_t>> written_;
   std::deque<std::vector<uint8_t>> queued_responses_;

@@ -1,6 +1,8 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <map>
+#include <mutex>
 #include <thread>
 
 #include "robot/comm/ethercat/ethercat_transport.h"
@@ -53,6 +55,35 @@ absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMod
                           "EtherCAT config has invalid process data mode");
   }
 }
+absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialConfig& config) {
+  if (config.port().empty()) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no port");
+  }
+
+  if (config.baudrate() == 0) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no baudrate");
+  }
+
+  const std::string& port = config.port();
+  uint32_t baudrate = config.baudrate();
+
+  std::lock_guard<std::mutex> lock(g_serial_mutex);
+  auto& port_res_ptr = g_port_resources[port];
+  if (!port_res_ptr) {
+    port_res_ptr = std::make_unique<PortResources>();
+  }
+
+  auto& serials = port_res_ptr->serials;
+  auto it = serials.find(baudrate);
+  if (it != serials.end()) {
+    return it->second;
+  }
+
+  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
+  serials[baudrate] = serial;
+  return serial;
+}
+
 }  // namespace
 
 absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& comm) {
@@ -64,11 +95,9 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
       if (!comm.has_serial_config()) {
         return absl::InvalidArgumentError("SERIAL comm has no serial_config.");
       }
-      if (comm.transport_type() == TransportType::TRANSPORT_INVALID) {
-        return absl::InvalidArgumentError("Comm has an invalid transport_type.");
-      }
-      if (comm.transport_type() == TransportType::CYCLIC) {
-        return absl::InvalidArgumentError("SERIAL does not provide a cyclic transport.");
+      if (comm.transport_type() != TransportType::BYTE_STREAM &&
+          comm.transport_type() != TransportType::MESSAGE) {
+        return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
       }
       auto serial_or = CreateSerial(comm.serial_config());
       if (!serial_or.ok()) {
@@ -112,36 +141,6 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
 void CommFactory::SetCommTransportFactoryForTesting(
     std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory) {
   g_comm_transport_factory_for_testing = std::move(factory);
-}
-
-absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(
-    const robot::comm::SerialConfig& config) {
-  if (config.port().empty()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no port");
-  }
-
-  if (config.baudrate() == 0) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no baudrate");
-  }
-
-  const std::string& port = config.port();
-  uint32_t baudrate = config.baudrate();
-
-  std::lock_guard<std::mutex> lock(g_serial_mutex);
-  auto& port_res_ptr = g_port_resources[port];
-  if (!port_res_ptr) {
-    port_res_ptr = std::make_unique<PortResources>();
-  }
-
-  auto& serials = port_res_ptr->serials;
-  auto it = serials.find(baudrate);
-  if (it != serials.end()) {
-    return it->second;
-  }
-
-  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
-  serials[baudrate] = serial;
-  return serial;
 }
 
 absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>

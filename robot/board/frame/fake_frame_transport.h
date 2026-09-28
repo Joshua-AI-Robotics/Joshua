@@ -4,11 +4,12 @@
 #include <vector>
 
 #include "robot/board/frame/frame_transport.h"
+#include "robot/comm/interfaces/legacy_message_transport.h"
 
 namespace robot::board {
 
 // In-memory message transport for board tests.
-class FakeFrameTransport : public FrameTransport {
+class FakeFrameTransport : public robot::comm::LegacyMessageTransport {
  public:
   absl::Status Open() override {
     return absl::OkStatus();

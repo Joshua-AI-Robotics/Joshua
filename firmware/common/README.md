@@ -10,9 +10,10 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
 
 ## Contents
 
-- [joshua_wire_commands.h](joshua_wire_commands.h) — version-neutral command
-  IDs, statuses, modes and payload types. `JW_CMD_*` describes an operation,
-  not a wire version; RESET_SESSION is supported only by v2 endpoints.
+- [joshua_wire_commands.h](joshua_wire_commands.h) and `.c` — version-neutral
+  command views (`jw_command_t`), IDs, semantic types and payload-only codecs.
+  `JW_CMD_*` describes an operation, not a wire version; RESET_SESSION is
+  supported only by v2 endpoints. Payload codecs never add headers, IDs or CRCs.
 - [joshua_wire_v1.h](joshua_wire_v1.h) / [joshua_wire_v2.h](joshua_wire_v2.h)
   and their `.c` files — stateless frame codecs. V2 adds session/message IDs.
   Functions named `jw1_encode_*` still produce v1 frames, even when their
@@ -44,20 +45,22 @@ This directory does not yet implement JoshuaWire EtherCAT PDO/CoE endpoints,
 cross-transport arbitration or communication-loss watchdogs. The
 [separation plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md) tracks that work.
 
-## Temporary migration adapters
+## Command and frame boundaries
 
-These are implementation bridges, not the intended final architecture:
+Firmware handlers consume `jw_command_t` and return payload bytes. The serial
+endpoint supplies the selected envelope; the v2 firmware session supplies IDs
+and retry handling. Host channels likewise use neutral commands: the board's
+command client selects the v1 codec or `JoshuaWireV2Session`, which exchanges
+v2 frames directly through comm and returns validated payloads. There are no
+intermediate v1 frames on either v2 path. `jw1_frame_t` remains appropriate in
+the actual v1 codec/path, not as a version-neutral command representation.
 
-- **Firmware serial endpoint:** handlers still accept a `jw1_frame_t` view and
-  return a v1-encoded reply in memory. The endpoint extracts its payload and
-  emits the selected wire version. Replace this conversion when handlers and
-  payload encoders accept version-neutral command/payload views; keep explicit
-  artifact selection and v1/v2 rejection tests. V2 wire bytes never enter the
-  v1 decoder.
-- **Host `JoshuaWireV2Session`:** wraps the existing board engine's in-memory
-  v1 calls. Remove that wrapper interface when the composed board engine uses
-  neutral payload helpers and `MessageTransport::Exchange` directly. Preserve
-  session reset, correlation, ID exhaustion and teardown behavior.
+## Remaining migration work
+
+- The host's full message/cyclic board-engine composition remains pending.
+  Comm interfaces, test fakes and concrete-dependency restrictions now exist,
+  but V1 still uses the separate legacy fixed-size API; removing the payload
+  bridge does not complete the transport migration.
 - **AM243 [serial command handler](../am243/joshua_dual_transport_v1/src/joshua_serial_commands.h):**
   replace the software-only, serial-specific dispatcher when UART, CoE and PDO
   share coordinated channel state and safety handling. Physical motion also
@@ -70,8 +73,8 @@ For manual serial checks after an intentional flash, use the
 defaults to reset/identify/ESTOP only; old board-specific smokes still use v1.
 
 `*_test.cc` files are maintained source, kept beside the code they verify:
-commands tests pin wire values, v1 tests cover legacy framing, and v2 tests
-cover framing, firmware sessions and the serial endpoint. Board-specific native
+commands tests pin wire values, payload bytes and bounds, v1 tests cover legacy
+framing, and v2 tests cover framing, firmware sessions and the serial endpoint. Board-specific native
 tests also compile the real Teensy/ESP32 dispatch with the test-only
 [Arduino substitute](../testing/Arduino.h) and
 [shared test suite](../testing/serial_firmware_test.cc). Those helpers use no

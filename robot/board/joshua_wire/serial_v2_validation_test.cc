@@ -19,17 +19,10 @@ class Firmware : public robot::comm::MessageTransport {
     jw_serial_endpoint_init(&endpoint, 2);
     state.latch_estop = true;
   }
-  absl::Status Open() override {
-    ++opens;
-    return absl::OkStatus();
-  }
-  absl::Status Write(const Bytes&) override {
+  absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("v2 only");
   }
-  absl::StatusOr<Bytes> SendAndReceive(const Bytes&, size_t) override {
-    return absl::UnimplementedError("v2 only");
-  }
-  absl::StatusOr<Bytes> Exchange(const Bytes& bytes) override {
+  absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> bytes) override {
     jw2_frame_t request;
     if (jw2_decode_frame(bytes.data(), bytes.size(), &request) != 0)
       return absl::DataLossError("Not v2");
@@ -62,7 +55,6 @@ class Firmware : public robot::comm::MessageTransport {
   JoshuaSerialChannel state{};
   std::vector<uint8_t> commands;
   std::vector<uint32_t> sessions;
-  int opens = 0;
   int fail_cmd = -1;
   bool wrong_identity = false;
 };
@@ -132,7 +124,6 @@ TEST_F(ValidationTest, ExerciseRequiresAllOptInsBeforeOpening) {
   EXPECT_FALSE(Run().ok());
   options.target_steps = std::numeric_limits<float>::max();
   EXPECT_FALSE(Run().ok());
-  EXPECT_EQ(firmware->opens, 0);
   EXPECT_TRUE(firmware->commands.empty());
 }
 TEST_F(ValidationTest, ExerciseHoldsBeforeEnableAndStopsAfterTarget) {
@@ -198,7 +189,7 @@ TEST_F(ValidationTest, BadConfigurationAndIrrelevantOptionsAreRejected) {
   options.channel = 0;
   board.mutable_channels(0)->mutable_step_dir()->set_enable_pin(2);
   EXPECT_FALSE(Run().ok());
-  EXPECT_EQ(firmware->opens, 0);
+  EXPECT_TRUE(firmware->commands.empty());
 }
 }  // namespace
 }  // namespace robot::board::diagnostics

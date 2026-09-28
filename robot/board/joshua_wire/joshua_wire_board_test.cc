@@ -125,6 +125,20 @@ TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
   EXPECT_EQ(transport_->send_calls_, 2);
 }
 
+TEST_F(JoshuaWireBoardTest, V1EnvelopeStillValidatesCommandAndChannel) {
+  QueueSuccessfulInit();
+  FakeJoshuaWireBoard board;
+  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
+  auto channel = board.OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_DISABLE, 0, JW_STATUS_OK));
+  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kDataLoss);
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
+  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kDataLoss);
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 0, JW_STATUS_OK));
+  EXPECT_TRUE((*channel)->Enable().ok());
+}
+
 TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
   // Multiple motors on one board: config declares two channels on distinct
   // pins, Init() must push CONFIGURE_CHANNEL for each in order, and both

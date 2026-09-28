@@ -1,13 +1,10 @@
-// Implements host-side v2 session lifecycle, request serialization, correlation
-// checks and ID-exhaustion recovery. This temporary adapter translates the
-// existing engine's in-memory v1 commands into v2 wire frames; the underlying
-// MessageTransport owns actual I/O and deadlines, and there is no v1 fallback.
+// Implements v2 session lifecycle, serialization, correlation and ID rotation.
+// Only neutral command payloads cross the public API; only v2 frames reach comm.
 #include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 
 #include <random>
 #include <utility>
 
-#include "firmware/common/joshua_wire_v1.h"
 #include "firmware/common/joshua_wire_v2.h"
 #include "utils/status_macros.h"
 
@@ -84,7 +81,8 @@ absl::Status JoshuaWireV2Session::Open() {
   if (transport_ == nullptr || message_id_limit_ < 3) {
     return absl::InvalidArgumentError("Invalid JoshuaWire v2 session configuration.");
   }
-  ABSL_RETURN_IF_ERROR(transport_->Open());
+  // CommFactory provides an open link; Open here starts a protocol session,
+  // not a second physical connection or transport lifecycle.
   return ResetLocked();
 }
 
@@ -121,18 +119,13 @@ absl::Status JoshuaWireV2Session::Close() {
   return CheckOk(*response);
 }
 
-absl::Status JoshuaWireV2Session::Write(const std::vector<uint8_t>& request) {
-  return absl::UnimplementedError("JoshuaWire v2 requires correlated request/response exchange.");
-}
-
-absl::StatusOr<std::vector<uint8_t>> JoshuaWireV2Session::SendAndReceive(
-    const std::vector<uint8_t>& request, size_t expected_response_size) {
+absl::StatusOr<std::vector<uint8_t>> JoshuaWireV2Session::Exchange(const jw_command_t& command) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!ready_) return absl::FailedPreconditionError("JoshuaWire v2 requires a successful reset.");
-  jw1_frame_t command;
-  if (jw1_decode_frame(request.data(), request.size(), &command) != 0 ||
+  if (command.payload_len > JW2_MAX_PAYLOAD_LEN ||
+      (command.payload_len != 0 && command.payload == nullptr) ||
       command.cmd == JW_CMD_RESET_SESSION) {
-    return absl::InvalidArgumentError("Invalid legacy command payload supplied to v2 session.");
+    return absl::InvalidArgumentError("Invalid command supplied to v2 session.");
   }
   if (next_message_id_ >= message_id_limit_) {
     ABSL_RETURN_IF_ERROR(RotateLocked());
@@ -142,24 +135,13 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireV2Session::SendAndReceive(
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
-  if (payload.size() > JW1_MAX_PAYLOAD_LEN) {
-    return absl::DataLossError("Response exceeds the legacy command payload limit.");
-  }
   if (command.cmd == JW_CMD_CONFIGURE_CHANNEL && CheckOk(payload).ok()) {
-    channel_configs_[command.channel] =
-        std::vector<uint8_t>(command.payload, command.payload + command.payload_len);
+    auto& saved = channel_configs_[command.channel];
+    saved.clear();
+    if (command.payload_len != 0)
+      saved.assign(command.payload, command.payload + command.payload_len);
   }
-  // Only the semantic payload is reused by the existing engine. This session
-  // has already validated v2 correlation and accepted a v2 frame.
-  uint8_t response[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_frame(response,
-                                   sizeof(response),
-                                   command.cmd,
-                                   command.channel,
-                                   payload.data(),
-                                   static_cast<uint8_t>(payload.size()));
-  if (len < 0) return absl::DataLossError("Cannot decode JoshuaWire command response.");
-  return std::vector<uint8_t>(response, response + len);
+  return payload;
 }
 
 }  // namespace robot::board

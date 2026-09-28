@@ -1,3 +1,5 @@
+// Acyclic message capability. Protocol consumers see complete byte messages,
+// never serial ports, mailbox objects or adapter lifecycle methods.
 #pragma once
 
 #include <cstdint>
@@ -5,28 +7,22 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 
 namespace robot::comm {
 
-// Atomic message-oriented communication. Implementations preserve a complete
-// request while waiting for its response so shared links cannot interleave.
+// Created ready-to-use by CommFactory. Each call borrows request storage until
+// it returns; queued implementations must copy it before returning to callers.
+// Implementations serialize shared-link operations and bound exchange I/O.
+// A timeout after transmission does not prove that the command was not applied.
 class MessageTransport {
  public:
   virtual ~MessageTransport() = default;
 
-  // Complete framed exchange with response length determined by the adapter.
-  // Legacy fixed-size vendor exchanges below remain during migration.
-  virtual absl::Status Send(const std::vector<uint8_t>& request) {
-    return Write(request);
-  }
-  virtual absl::StatusOr<std::vector<uint8_t>> Exchange(const std::vector<uint8_t>& request) {
-    return absl::UnimplementedError("This transport does not provide framed Exchange.");
-  }
-
-  virtual absl::Status Open() = 0;
-  virtual absl::Status Write(const std::vector<uint8_t>& message) = 0;
-  virtual absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& request,
-                                                              size_t expected_response_size) = 0;
+  // Send-only protocols do not wait for or invent an acknowledgment.
+  virtual absl::Status Send(absl::Span<const uint8_t> request) = 0;
+  // Adapter determines response length; returned storage belongs to the caller.
+  virtual absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t> request) = 0;
 };
 
 }  // namespace robot::comm

@@ -1,10 +1,6 @@
-// Declares the host-side v2 session adapter used beneath JoshuaWireBoard during
-// migration. Owns session/message IDs, serialization and saved channel configs;
-// the firmware-side counterpart is firmware/common/joshua_wire_v2_firmware_session.h.
-// Existing command helpers are reused in memory, but transport frames are v2.
-// TODO(engine composition): Remove the v1-shaped wrapper interface when the
-// board engine uses neutral payload helpers and MessageTransport::Exchange
-// directly; retain session/correlation safety. See firmware/common/README.md.
+// Host-side v2 session lifecycle, IDs, serialization and saved channel configs.
+// Callers supply neutral commands and receive payloads, not encoded v1 frames.
+// The firmware counterpart is firmware/common/joshua_wire_v2_firmware_session.h.
 #pragma once
 
 #include <cstdint>
@@ -14,15 +10,14 @@
 #include <mutex>
 #include <vector>
 
+#include "firmware/common/joshua_wire_commands.h"
 #include "robot/comm/interfaces/message_transport.h"
 
 namespace robot::board {
 
-// Migration adapter below the existing v1 command-payload engine. Its public
-// fixed-size calls carry v1 encoded payloads in memory; only v2 frames reach the
-// supplied message transport. IDs, reset and response validation are protocol
-// behavior and stay in board/. Comm owns framing, I/O deadlines and bus locks.
-class JoshuaWireV2Session : public robot::comm::MessageTransport {
+// A board-protocol session, not a comm transport. Comm owns actual I/O,
+// deadlines and bus locking; this class owns correlation and reset safety.
+class JoshuaWireV2Session {
  public:
   using SessionIdSource = std::function<uint32_t()>;
   explicit JoshuaWireV2Session(std::shared_ptr<robot::comm::MessageTransport> transport,
@@ -30,13 +25,13 @@ class JoshuaWireV2Session : public robot::comm::MessageTransport {
                                uint32_t message_id_limit = UINT32_MAX);
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
-  absl::Status Open() override;
+  absl::Status Open();
   // Serial calls have a bounded I/O deadline. Close waits for that exchange,
   // sends ESTOP if the session is usable, then rejects retained channel calls.
   absl::Status Close();
-  absl::Status Write(const std::vector<uint8_t>& request) override;
-  absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& request,
-                                                      size_t expected_response_size) override;
+  // The command payload is borrowed for the call; the returned payload is owned.
+  // RESET_SESSION is reserved for Open/rotation, not callable as a normal command.
+  absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command);
 
  private:
   absl::Status ResetLocked();

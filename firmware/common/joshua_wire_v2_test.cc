@@ -1,5 +1,5 @@
 // Hardware-free tests for the shared v2 codec, firmware session and
-// serial migration endpoint: golden bytes, CRC/bounds, version separation,
+// serial endpoint: golden bytes, CRC/bounds, version separation,
 // correlation, reset/reboot and duplicate/stale-request handling.
 #include "firmware/common/joshua_wire_v2.h"
 
@@ -277,8 +277,8 @@ TEST_F(FirmwareSessionTest, HandlerFailureConsumesIdAndWrapIsRejected) {
   EXPECT_GT(Process(Request(6, 2, JW_CMD_ENABLE, 0)), 0);
 }
 
-int LegacyHandler(void*, const jw1_frame_t* frame, uint8_t* out, size_t cap) {
-  return jw1_encode_status_response(out, cap, frame->cmd, frame->channel, JW_STATUS_OK);
+int NeutralHandler(void*, const jw_command_t*, uint8_t* out, size_t cap) {
+  return jw_encode_status_payload(out, cap, JW_STATUS_OK);
 }
 void NoopReset(void*) {}
 
@@ -296,7 +296,7 @@ TEST(JoshuaWireSerialEndpoint, ArtifactVersionIsExplicitAndV1BytesStayIdentical)
                                              request_len,
                                              response,
                                              sizeof(response),
-                                             LegacyHandler,
+                                             NeutralHandler,
                                              NoopReset,
                                              nullptr);
   ASSERT_EQ(len, expected_len);
@@ -307,7 +307,7 @@ TEST(JoshuaWireSerialEndpoint, ArtifactVersionIsExplicitAndV1BytesStayIdentical)
                                        v2.size(),
                                        response,
                                        sizeof(response),
-                                       LegacyHandler,
+                                       NeutralHandler,
                                        NoopReset,
                                        nullptr),
             0);
@@ -317,7 +317,7 @@ TEST(JoshuaWireSerialEndpoint, ArtifactVersionIsExplicitAndV1BytesStayIdentical)
                                        request_len,
                                        response,
                                        sizeof(response),
-                                       LegacyHandler,
+                                       NeutralHandler,
                                        NoopReset,
                                        nullptr),
             0);

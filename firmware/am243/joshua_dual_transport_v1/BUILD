@@ -8,5 +8,5 @@ cc_library(
     srcs = ["src/joshua_serial_commands.c"],
     hdrs = ["src/joshua_serial_commands.h"],
     visibility = ["//robot/board/joshua_wire:__pkg__"],
-    deps = ["//firmware/common:joshua_wire_serial_endpoint"],
+    deps = ["//firmware/common:joshua_wire_commands"],
 )

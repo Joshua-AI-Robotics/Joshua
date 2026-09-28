@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "joshua_serial_commands.h"
+#include "joshua_wire_serial_endpoint.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 

@@ -23,12 +23,12 @@ void JoshuaStepDirReset(void* context) {
 }
 
 int JoshuaStepDirCommand(void* context,
-                         const jw1_frame_t* frame,
+                         const jw_command_t* frame,
                          uint8_t* response,
                          size_t capacity) {
   auto* protocol = static_cast<JoshuaStepDirProtocol*>(context);
   auto reply = [&](jw_status_t status) {
-    return jw1_encode_status_response(response, capacity, frame->cmd, frame->channel, status);
+    return jw_encode_status_payload(response, capacity, status);
   };
   ChannelState* channel = frame->channel < g_num_channels ? &g_channels[frame->channel] : nullptr;
   switch (frame->cmd) {
@@ -43,12 +43,12 @@ int JoshuaStepDirCommand(void* context,
         strncpy(identity.fw_name, protocol->firmware_name, sizeof(identity.fw_name));
       }
       for (uint8_t i = 0; i < g_num_channels; ++i) identity.channel_drives[i] = JW_DRIVE_STEP_DIR;
-      return jw1_encode_identify_response(response, capacity, &identity);
+      return jw_encode_identify_payload(response, capacity, &identity);
     }
     case JW_CMD_CONFIGURE_CHANNEL: {
       jw_configure_step_dir_t config;
       if (channel == nullptr || protocol->estopped ||
-          jw1_decode_configure_channel_step_dir(frame, &config) != 0) {
+          jw_decode_configure_step_dir_payload(frame->payload, frame->payload_len, &config) != 0) {
         return reply(JW_STATUS_ERROR);
       }
       StepDirDisable(channel);
@@ -58,7 +58,8 @@ int JoshuaStepDirCommand(void* context,
     case JW_CMD_SET_TARGET: {
       jw_set_target_t target;
       if (channel == nullptr || !channel->configured || protocol->estopped ||
-          jw1_decode_set_target(frame, &target) != 0 || !isfinite(target.value)) {
+          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) != 0 ||
+          !isfinite(target.value)) {
         return reply(JW_STATUS_ERROR);
       }
       if (target.mode != JW_MODE_POSITION && target.mode != JW_MODE_VELOCITY) {
@@ -72,7 +73,7 @@ int JoshuaStepDirCommand(void* context,
       jw_feedback_t feedback{};
       feedback.position = static_cast<float>(channel->step_dir.position_steps);
       feedback.velocity = channel->target_mode == JW_MODE_VELOCITY ? channel->target_value : 0.0f;
-      return jw1_encode_feedback_response(response, capacity, frame->channel, &feedback);
+      return jw_encode_feedback_payload(response, capacity, &feedback);
     }
     case JW_CMD_ENABLE:
       if (channel == nullptr || !channel->configured || protocol->estopped ||

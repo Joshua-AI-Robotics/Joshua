@@ -33,9 +33,10 @@ so explicitly with `TODO` placeholders rather than staying silent.
 | Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
 | ESP32 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, and protocol-verified on real hardware (IDENTIFY/ENABLE/SET_TARGET all confirmed) — joins the same joshua_wire_v1 family as Teensy. Physical motor rotation not yet observed on this board. | [`esp32/README.md`](esp32/README.md) |
 
-- `common/joshua_wire_commands.h`: version-neutral command IDs (`JW_CMD_*`),
-  statuses, modes, wire board/drive IDs and semantic payload types (`jw_*_t`).
-  Both frame codecs include it. Command IDs do not select a wire version;
+- `common/joshua_wire_commands.{h,c}`: version-neutral command views, IDs
+  (`JW_CMD_*`), semantic types (`jw_*_t`) and payload-only codecs. Both wire
+  versions use the same payload serialization. Command IDs do not select a wire
+  version;
   `JW_CMD_RESET_SESSION` still requires a v2 endpoint. V1 frame-building helpers
   keep their `jw1_*` names because they actually produce/consume v1 frames.
 - `common/joshua_wire_v1.{h,c}`: the shared frame codec between Joshua host

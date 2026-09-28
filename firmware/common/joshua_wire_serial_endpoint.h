@@ -1,9 +1,7 @@
-// Migration adapter for firmware command handlers using v1 payload helpers.
-// Wire version is explicit per artifact; it is never auto-detected/downgraded.
-// Declares the endpoint and callbacks that connect raw frames to board command
-// handlers, using joshua_wire_v2_firmware_session for v2 session state. Owns no UART I/O.
-// TODO(payload migration): Remove the in-memory v1 frame bridge when command
-// handlers use neutral payload views/encoders. See README.md, migration adapters.
+// Firmware endpoint for explicitly selected v1/v2 artifacts. Decodes the wire
+// envelope and dispatches a neutral command view; handlers return payload bytes.
+// Framing and v2 session/correlation live here, not in drive command handlers.
+// Owns no UART I/O and never auto-detects or downgrades the wire version.
 #pragma once
 
 #include "joshua_wire_v1.h"
@@ -20,11 +18,10 @@
 extern "C" {
 #endif
 
-// A handler consumes the unchanged v1 command payload and encodes a v1 reply.
-// The adapter validates that reply and emits its payload with v2 correlation.
-// The v1 view is in-memory only; v2 bytes never enter the v1 frame decoder.
+// Handler returns a response payload byte count, or -1 on failure. The command
+// and its payload are borrowed for this call only. The endpoint owns framing.
 typedef int (*jw_serial_command_handler_t)(void* context,
-                                           const jw1_frame_t* command,
+                                           const jw_command_t* command,
                                            uint8_t* response,
                                            size_t capacity);
 typedef struct {

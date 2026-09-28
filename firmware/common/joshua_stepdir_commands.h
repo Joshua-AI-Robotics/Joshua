@@ -3,7 +3,9 @@
 // through joshua_wire_serial_endpoint; GPIO control stays in backend_stepdir.
 #pragma once
 
-#include "joshua_wire_serial_endpoint.h"
+#include <stdbool.h>
+
+#include "joshua_wire_commands.h"
 
 typedef struct {
   jw_board_id_t board_id;
@@ -15,7 +17,7 @@ typedef struct {
 } JoshuaStepDirProtocol;
 
 int JoshuaStepDirCommand(void* context,
-                         const jw1_frame_t* command,
+                         const jw_command_t* command,
                          uint8_t* response,
                          size_t capacity);
 void JoshuaStepDirReset(void* context);

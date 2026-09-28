@@ -11,7 +11,7 @@
 
 #include <stdbool.h>
 
-#include "joshua_wire_serial_endpoint.h"
+#include "joshua_wire_commands.h"
 
 typedef struct {
   bool configured;
@@ -24,7 +24,7 @@ typedef struct {
 } JoshuaSerialChannel;
 
 int JoshuaSerialCommand(void* context,
-                        const jw1_frame_t* frame,
+                        const jw_command_t* frame,
                         uint8_t* response,
                         size_t capacity);
 void JoshuaSerialReset(void* context);

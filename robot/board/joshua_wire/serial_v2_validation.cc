@@ -1,5 +1,5 @@
 // Implements opt-in diagnostic commands, using JoshuaWireV2Session for all
-// on-wire correlation. Legacy helpers below only encode/decode in-memory views.
+// on-wire correlation. Neutral payload helpers are independent of wire framing.
 #include "robot/board/joshua_wire/serial_v2_validation.h"
 
 #include <cmath>
@@ -8,7 +8,7 @@
 #include <set>
 #include <vector>
 
-#include "firmware/common/joshua_wire_v1.h"
+#include "firmware/common/joshua_wire_commands.h"
 #include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 #include "utils/status_macros.h"
 
@@ -42,29 +42,25 @@ absl::Status RunSession(JoshuaWireV2Session& session,
                         const SerialV2ValidationOptions& options,
                         std::ostream& output,
                         const std::function<bool()>& cancelled) {
-  auto exchange = [&](const uint8_t* bytes, int len) -> absl::StatusOr<std::vector<uint8_t>> {
+  auto exchange = [&](const jw_command_t& command) -> absl::StatusOr<std::vector<uint8_t>> {
     if (cancelled && cancelled()) return absl::CancelledError("Interrupted; stopping session.");
-    if (len <= 0) return absl::InternalError("Cannot encode diagnostic command.");
-    return session.SendAndReceive(std::vector<uint8_t>(bytes, bytes + len), 0);
+    return session.Exchange(command);
   };
-  auto status_command = [&](const uint8_t* bytes, int len) -> absl::Status {
-    ABSL_ASSIGN_OR_RETURN(auto response, exchange(bytes, len));
-    jw1_frame_t frame;
+  auto status_command = [&](uint8_t cmd,
+                            uint8_t channel,
+                            const uint8_t* payload = nullptr,
+                            size_t len = 0) -> absl::Status {
+    ABSL_ASSIGN_OR_RETURN(auto response, exchange({cmd, channel, payload, len}));
     jw_status_t status;
-    if (jw1_decode_frame(response.data(), response.size(), &frame) != 0 ||
-        jw1_decode_status_response(&frame, &status) != 0) {
+    if (jw_decode_status_payload(response.data(), response.size(), &status) != 0) {
       return absl::DataLossError("Malformed status response.");
     }
     if (status != JW_STATUS_OK) return absl::FailedPreconditionError("Firmware rejected command.");
     return absl::OkStatus();
   };
-  uint8_t bytes[JW1_MAX_FRAME_LEN];
-  int len = jw1_encode_identify_request(bytes, sizeof(bytes));
-  ABSL_ASSIGN_OR_RETURN(auto response, exchange(bytes, len));
-  jw1_frame_t frame;
+  ABSL_ASSIGN_OR_RETURN(auto response, exchange({JW_CMD_IDENTIFY, JW_CHANNEL_NONE, nullptr, 0}));
   jw_identify_response_t identity{};
-  if (jw1_decode_frame(response.data(), response.size(), &frame) != 0 ||
-      jw1_decode_identify_response(&frame, &identity) != 0) {
+  if (jw_decode_identify_payload(response.data(), response.size(), &identity) != 0) {
     return absl::DataLossError("Malformed IDENTIFY response.");
   }
   output << "IDENTIFY board_id=" << identity.board_id
@@ -87,18 +83,20 @@ absl::Status RunSession(JoshuaWireV2Session& session,
   config.dir_pin = configured.dir_pin();
   config.enable_pin = configured.enable_pin();
   config.step_pulse_width_us = configured.step_pulse_width_us();
-  len = jw1_encode_configure_channel_step_dir(bytes, sizeof(bytes), options.channel, &config);
-  ABSL_RETURN_IF_ERROR(status_command(bytes, len));
+  const auto channel = static_cast<uint8_t>(options.channel);
+  uint8_t config_payload[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
+  if (jw_encode_configure_step_dir_payload(config_payload, sizeof(config_payload), &config) < 0)
+    return absl::InternalError("Cannot encode channel config.");
+  ABSL_RETURN_IF_ERROR(
+      status_command(JW_CMD_CONFIGURE_CHANNEL, channel, config_payload, sizeof(config_payload)));
   output << "CONFIGURE_CHANNEL OK; no enable sent\n";
 
   auto feedback = [&]() -> absl::StatusOr<jw_feedback_t> {
-    const int size = jw1_encode_get_feedback_request(bytes, sizeof(bytes), options.channel);
-    ABSL_ASSIGN_OR_RETURN(auto reply, exchange(bytes, size));
-    jw1_frame_t decoded;
+    ABSL_ASSIGN_OR_RETURN(auto reply, exchange({JW_CMD_GET_FEEDBACK, channel, nullptr, 0}));
     jw_feedback_t value{};
-    if (jw1_decode_frame(reply.data(), reply.size(), &decoded) != 0 ||
-        jw1_decode_feedback_response(&decoded, &value) != 0 || !std::isfinite(value.position) ||
-        !std::isfinite(value.velocity) || std::abs(value.position) > kMaxMcuPosition) {
+    if (jw_decode_feedback_payload(reply.data(), reply.size(), &value) != 0 ||
+        !std::isfinite(value.position) || !std::isfinite(value.velocity) ||
+        std::abs(value.position) > kMaxMcuPosition) {
       return absl::DataLossError("Malformed/non-finite feedback.");
     }
     output << "FEEDBACK position=" << value.position << " velocity=" << value.velocity
@@ -109,20 +107,20 @@ absl::Status RunSession(JoshuaWireV2Session& session,
   ABSL_ASSIGN_OR_RETURN(auto initial, feedback());
   if (options.mode == "configure") return absl::OkStatus();
   // Set a hold target before enabling, so enabling cannot resume an old target.
-  len = jw1_encode_set_target(
-      bytes, sizeof(bytes), options.channel, JW_MODE_POSITION, initial.position);
-  ABSL_RETURN_IF_ERROR(status_command(bytes, len));
-  len = jw1_encode_enable(bytes, sizeof(bytes), options.channel);
-  ABSL_RETURN_IF_ERROR(status_command(bytes, len));
+  auto target = [&](float value) -> absl::Status {
+    uint8_t payload[JW_SET_TARGET_PAYLOAD_LEN];
+    if (jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, value) < 0)
+      return absl::InternalError("Cannot encode target.");
+    return status_command(JW_CMD_SET_TARGET, channel, payload, sizeof(payload));
+  };
+  ABSL_RETURN_IF_ERROR(target(initial.position));
+  ABSL_RETURN_IF_ERROR(status_command(JW_CMD_ENABLE, channel));
   output << "ENABLE OK\n";
-  len = jw1_encode_set_target(
-      bytes, sizeof(bytes), options.channel, JW_MODE_POSITION, *options.target_steps);
-  ABSL_RETURN_IF_ERROR(status_command(bytes, len));
+  ABSL_RETURN_IF_ERROR(target(*options.target_steps));
   output << "SET_TARGET accepted; this does not prove physical motion or arrival\n";
   ABSL_ASSIGN_OR_RETURN(auto final_feedback, feedback());
   (void)final_feedback;
-  len = jw1_encode_disable(bytes, sizeof(bytes), options.channel);
-  ABSL_RETURN_IF_ERROR(status_command(bytes, len));
+  ABSL_RETURN_IF_ERROR(status_command(JW_CMD_DISABLE, channel));
   output << "DISABLE OK\n";
   return absl::OkStatus();
 }

@@ -19,7 +19,7 @@ void JoshuaSerialReset(void* context) {
 
 // Software-only channel for the existing demo overlay; no GPIO output.
 int JoshuaSerialCommand(void* context,
-                        const jw1_frame_t* frame,
+                        const jw_command_t* frame,
                         uint8_t* response,
                         size_t capacity) {
   JoshuaSerialChannel* channel = (JoshuaSerialChannel*)context;
@@ -33,11 +33,12 @@ int JoshuaSerialCommand(void* context,
       memcpy(identity.fw_name, channel->latch_estop ? "am243-dual-v2" : "am243-dual-v1", 13);
       identity.n_channels = 1;
       identity.channel_drives[0] = JW_DRIVE_STEP_DIR;
-      return jw1_encode_identify_response(response, capacity, &identity);
+      return jw_encode_identify_payload(response, capacity, &identity);
     }
     case JW_CMD_CONFIGURE_CHANNEL:
       if (frame->channel == 0 && !channel->estopped &&
-          jw1_decode_configure_channel_step_dir(frame, &channel->config) == 0) {
+          jw_decode_configure_step_dir_payload(
+              frame->payload, frame->payload_len, &channel->config) == 0) {
         channel->configured = true;
         channel->enabled = false;
         status = JW_STATUS_OK;
@@ -46,7 +47,8 @@ int JoshuaSerialCommand(void* context,
     case JW_CMD_SET_TARGET: {
       jw_set_target_t target;
       if (frame->channel != 0 || !channel->configured || channel->estopped ||
-          jw1_decode_set_target(frame, &target) != 0 || !isfinite(target.value))
+          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) != 0 ||
+          !isfinite(target.value))
         break;
       if (target.mode != JW_MODE_POSITION && target.mode != JW_MODE_VELOCITY) {
         status = JW_STATUS_UNSUPPORTED;
@@ -63,7 +65,7 @@ int JoshuaSerialCommand(void* context,
       memset(&feedback, 0, sizeof(feedback));
       if (channel->target_mode == JW_MODE_POSITION) feedback.position = channel->target_value;
       if (channel->target_mode == JW_MODE_VELOCITY) feedback.velocity = channel->target_value;
-      return jw1_encode_feedback_response(response, capacity, frame->channel, &feedback);
+      return jw_encode_feedback_payload(response, capacity, &feedback);
     }
     case JW_CMD_ENABLE:
       if (frame->channel == 0 && frame->payload_len == 0 && channel->configured &&
@@ -89,5 +91,5 @@ int JoshuaSerialCommand(void* context,
       status = JW_STATUS_UNSUPPORTED;
       break;
   }
-  return jw1_encode_status_response(response, capacity, frame->cmd, frame->channel, status);
+  return jw_encode_status_payload(response, capacity, status);
 }

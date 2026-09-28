@@ -6,6 +6,7 @@
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_transports.h"
 
 namespace robot::comm {
 namespace {
@@ -52,6 +53,39 @@ TEST(CommFactoryTest, CreateCommRejectsMissingEthercatConfig) {
   auto transport_or = CommFactory::CreateComm(comm);
 
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, CapabilitySelectionRejectsMissingOrNullEndpoints) {
+  auto message = std::make_shared<testing::FakeMessageTransport>();
+  CommTransport selected{std::static_pointer_cast<MessageTransport>(message)};
+  ASSERT_TRUE(GetCommTransport<MessageTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  auto cyclic = std::make_shared<testing::FakeCorrelatedCyclicTransport>();
+  selected = std::static_pointer_cast<CorrelatedCyclicTransport>(cyclic);
+  ASSERT_TRUE(GetCommTransport<CorrelatedCyclicTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<MessageTransport>{};
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<CorrelatedCyclicTransport>{};
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, UnsupportedCapabilitiesAreRejectedBeforeOpeningDevices) {
+  robot::comm::Comm serial;
+  serial.set_comm_type(SERIAL);
+  serial.set_transport_type(CYCLIC);
+  serial.mutable_serial_config()->set_port("never-open-this-port");
+  serial.mutable_serial_config()->set_baudrate(115200);
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  serial.set_transport_type(static_cast<TransportType>(999));
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  auto ethercat = MakeEthercatComm();
+  ethercat.set_transport_type(MESSAGE);
+  EXPECT_EQ(CommFactory::CreateComm(ethercat).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {
@@ -101,6 +135,16 @@ TEST_F(CommFactoryEthercatCacheTest, SameInterfaceSharesOneMaster) {
   ASSERT_TRUE(first_or.ok()) << first_or.status();
   ASSERT_TRUE(second_or.ok()) << second_or.status();
   EXPECT_EQ(first_or->get(), second_or->get());
+}
+
+TEST_F(CommFactoryEthercatCacheTest, TiDemoDoesNotAdvertiseCorrelatedCyclicOrMailbox) {
+  auto selected = CommFactory::CreateComm(MakeEthercatComm());
+  ASSERT_TRUE(selected.ok());
+  EXPECT_TRUE(GetCommTransport<ethercat::EthercatTransport>(*selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(GetCommTransport<MessageTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(CommFactoryEthercatCacheTest, DifferentInterfacesGetDifferentMasters) {

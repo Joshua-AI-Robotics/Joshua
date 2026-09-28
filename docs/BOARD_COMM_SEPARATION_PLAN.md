@@ -11,11 +11,18 @@ Implementation checkpoint:
   Teensy 4.1, ESP32 and AM243 UART, and the opt-in host session are implemented.
   Tests cover golden bytes, correlation, reset/reboot, duplicate execution,
   ID exhaustion, concurrent callers, timeouts, late responses and teardown.
-- Step 3 is partial: variable-length message exchange exists, but the legacy
-  fixed-size API and in-memory v1 command-payload bridge remain. Serial framing
-  still lives in `Serial`, with a fixed 100 ms exchange deadline. The final
-  composed board engine, comm visibility restrictions and cyclic capability
-  are not implemented yet. Mismatched serial replies fail closed rather than
+- Shared handlers and host commands now use version-neutral payload codecs.
+  The in-memory v1 bridges have been removed from both v2 paths; v1 wire
+  compatibility and explicit artifact selection are retained. Hardware-free
+  CLI tests exercise the production serial path over allocated pseudo-terminals.
+- Step 3 interfaces/fakes/build boundaries are implemented: `MessageTransport`
+  exposes `Send`/`Exchange`, `CorrelatedCyclicTransport` defines the timed cyclic
+  contract, and test-only fakes cover both. Concrete serial/SOEM targets are
+  comm-internal; factory implementation headers do not propagate to consumers.
+  Legacy fixed-size methods remain isolated in `LegacyMessageTransport` for v1
+  and vendor consumers. Serial framing still lives in `Serial`, with a fixed
+  100 ms exchange deadline. The composed board engine and production cyclic
+  adapter remain pending. Mismatched serial replies fail closed rather than
   being skipped while waiting for another reply.
 - Steps 4–7 remain pending. AM243 EtherCAT still uses the independent TI demo;
   no JoshuaWire PDO/CoE profile, owner loop, mailbox, watchdog or cross-transport

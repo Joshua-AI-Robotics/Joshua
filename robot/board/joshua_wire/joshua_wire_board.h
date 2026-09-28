@@ -7,7 +7,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "firmware/common/joshua_wire_v1.h"
+#include "firmware/common/joshua_wire_commands.h"
 #include "robot/board/frame/frame_transport.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/proto/board.pb.h"
@@ -15,9 +15,9 @@
 
 namespace robot::board {
 
-class JoshuaWireV2Session;
+class JoshuaWireCommandClient;
 
-// Shared host-side implementation of the joshua_wire_v1 board contract:
+// Shared host-side implementation of the JoshuaWire board contract:
 // open a FrameTransport, run the
 // IDENTIFY handshake (board_id, protocol version, per-channel drive all
 // cross-checked against config), push CONFIGURE_CHANNEL for every channel,
@@ -58,7 +58,7 @@ class JoshuaWireBoard : public BoardInterface {
 
  protected:
   // Checked before any transport is opened. Default requires SERIAL — the
-  // only comm type any joshua_wire_v1 board uses today; override if a
+  // only comm type any JoshuaWire board uses today; override if a
   // future variant (e.g. a UDP/W5500 firmware build) needs a different
   // one.
   virtual absl::Status ValidateComm(const robot::comm::Comm& comm,
@@ -72,9 +72,9 @@ class JoshuaWireBoard : public BoardInterface {
   // These two need expected_board_type_/expected_wire_board_id_, so
   // they're methods (not the free functions in the .cc's anonymous
   // namespace that everything else is) — everything they check beyond
-  // that identity fact is generic across every joshua_wire_v1 board.
+  // that identity fact is generic across every JoshuaWire board.
   absl::Status ValidateConfig(const robot::board::Board& config) const;
-  absl::Status IdentifyAndValidate(FrameTransport& transport,
+  absl::Status IdentifyAndValidate(JoshuaWireCommandClient& commands,
                                    const robot::board::Board& config) const;
 
   const robot::board::BoardType expected_board_type_;
@@ -82,8 +82,7 @@ class JoshuaWireBoard : public BoardInterface {
 
   bool initialized_ = false;
   robot::board::Board config_;
-  std::shared_ptr<FrameTransport> transport_;
-  std::shared_ptr<JoshuaWireV2Session> v2_session_;
+  std::shared_ptr<JoshuaWireCommandClient> commands_;
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels_;
 };
 

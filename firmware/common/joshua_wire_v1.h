@@ -8,6 +8,8 @@
 // Am243Board/TeensyBoard/ArduinoBoard) and every Joshua firmware image (as a
 // PlatformIO lib), so the two sides cannot drift silently — see the repo's
 // firmware/common/BUILD and firmware/teensy/41/platformio.ini.
+// Per-command frame helpers delegate payload serialization to the neutral
+// joshua_wire_commands module; jw1_* APIs still consume/produce real v1 frames.
 //
 // Frame format:
 //   [0xA5 sync][len][proto_ver][cmd][channel][payload...][crc16 LE]

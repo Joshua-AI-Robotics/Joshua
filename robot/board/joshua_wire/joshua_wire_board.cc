@@ -5,11 +5,61 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "firmware/common/joshua_wire_v1.h"
 #include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/interfaces/legacy_message_transport.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
+
+// Board-local wire-version selection. Channels operate on neutral commands;
+// only the v1 branch encodes/decodes v1 envelopes. Comm remains byte-oriented.
+class JoshuaWireCommandClient {
+ public:
+  JoshuaWireCommandClient(std::shared_ptr<FrameTransport> transport, bool v2)
+      : transport_(std::move(transport)) {
+    if (v2) session_ = std::make_unique<JoshuaWireV2Session>(transport_);
+  }
+  absl::Status Open() {
+    return session_ ? session_->Open() : absl::OkStatus();
+  }
+  absl::Status Close() {
+    return session_ ? session_->Close() : absl::OkStatus();
+  }
+  uint32_t protocol_version() const {
+    return session_ ? 2 : 1;
+  }
+  absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command) {
+    if (session_) return session_->Exchange(command);
+    ABSL_ASSIGN_OR_RETURN(auto legacy, robot::comm::GetLegacyMessageTransport(transport_));
+    if (command.payload_len > JW1_MAX_PAYLOAD_LEN)
+      return absl::InvalidArgumentError("JoshuaWire v1 payload too large.");
+    uint8_t bytes[JW1_MAX_FRAME_LEN];
+    const int len = jw1_encode_frame(bytes,
+                                     sizeof(bytes),
+                                     command.cmd,
+                                     command.channel,
+                                     command.payload,
+                                     static_cast<uint8_t>(command.payload_len));
+    if (len < 0) return absl::InvalidArgumentError("Invalid JoshuaWire v1 command.");
+    size_t expected = JW_STATUS_RESPONSE_PAYLOAD_LEN;
+    if (command.cmd == JW_CMD_IDENTIFY) expected = JW_IDENTIFY_RESPONSE_PAYLOAD_LEN;
+    if (command.cmd == JW_CMD_GET_FEEDBACK) expected = JW_FEEDBACK_RESPONSE_PAYLOAD_LEN;
+    ABSL_ASSIGN_OR_RETURN(
+        auto response,
+        legacy->SendAndReceive(std::vector<uint8_t>(bytes, bytes + len), JW1_FRAME_LEN(expected)));
+    jw1_frame_t frame;
+    if (jw1_decode_frame(response.data(), response.size(), &frame) != 0 ||
+        frame.cmd != command.cmd || frame.channel != command.channel)
+      return absl::DataLossError("Malformed/mismatched JoshuaWire v1 response.");
+    return std::vector<uint8_t>(frame.payload, frame.payload + frame.payload_len);
+  }
+
+ private:
+  std::shared_ptr<FrameTransport> transport_;
+  std::unique_ptr<JoshuaWireV2Session> session_;
+};
 
 namespace {
 
@@ -26,7 +76,7 @@ absl::Status JwStatusToAbsl(jw_status_t status, const std::string& what) {
 }
 
 // robot.board.DriveInterface -> jw_drive_t, value-for-value (mirrors the
-// comment on jw_drive_t in joshua_wire_v1.h). Used to cross-check IDENTIFY's
+// comment on jw_drive_t in joshua_wire_commands.h). Used to cross-check IDENTIFY's
 // reported per-channel drive against what config declares, generically —
 // adding a wire-side drive here (there already are PWM_DC/SERVO_BUS_UART/
 // CAN/PDO_JOINT slots reserved) needs no change to IdentifyAndValidate.
@@ -45,58 +95,37 @@ absl::StatusOr<jw_drive_t> ToWireDrive(robot::board::DriveInterface drive) {
     default:
       return absl::InvalidArgumentError(absl::StrCat("DriveInterface ",
                                                      robot::board::DriveInterface_Name(drive),
-                                                     " has no joshua_wire_v1 wire-drive mapping."));
+                                                     " has no JoshuaWire wire-drive mapping."));
   }
 }
 
-// One addressable channel over a joshua_wire_v1 frame transport.
+// One addressable channel, independent of the selected wire envelope.
 class JoshuaWireChannel : public BoardChannel {
  public:
-  JoshuaWireChannel(std::shared_ptr<FrameTransport> transport, uint8_t channel_index)
-      : transport_(std::move(transport)), channel_index_(channel_index) {}
+  JoshuaWireChannel(std::shared_ptr<JoshuaWireCommandClient> commands, uint8_t channel_index)
+      : commands_(std::move(commands)), channel_index_(channel_index) {}
 
   absl::Status Enable() override {
-    uint8_t buf[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_enable(buf, sizeof(buf), channel_index_);
-    return SendExpectStatus(buf, len, "Enable");
+    return SendExpectStatus(JW_CMD_ENABLE, nullptr, 0, "Enable");
   }
-
   absl::Status Disable() override {
-    uint8_t buf[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_disable(buf, sizeof(buf), channel_index_);
-    return SendExpectStatus(buf, len, "Disable");
+    return SendExpectStatus(JW_CMD_DISABLE, nullptr, 0, "Disable");
   }
-
   absl::Status SetTarget(TargetMode mode, float value) override {
-    if (mode == TargetMode::kTorque) {
-      // The protocol does not define a continuous torque target.
-      return absl::UnimplementedError(
-          "joshua_wire_v1 channel has no torque target (open-loop drive).");
-    }
+    if (mode == TargetMode::kTorque)
+      return absl::UnimplementedError("JoshuaWire channel has no torque target (open-loop drive).");
     const jw_mode_t wire_mode = mode == TargetMode::kPosition ? JW_MODE_POSITION : JW_MODE_VELOCITY;
-    uint8_t buf[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_set_target(buf, sizeof(buf), channel_index_, wire_mode, value);
-    return SendExpectStatus(buf, len, "SetTarget");
+    uint8_t payload[JW_SET_TARGET_PAYLOAD_LEN];
+    const int len = jw_encode_set_target_payload(payload, sizeof(payload), wire_mode, value);
+    if (len < 0) return absl::InternalError("Cannot encode SET_TARGET payload.");
+    return SendExpectStatus(JW_CMD_SET_TARGET, payload, len, "SetTarget");
   }
-
   absl::StatusOr<ChannelFeedback> ReadFeedback() override {
-    uint8_t buf[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_get_feedback_request(buf, sizeof(buf), channel_index_);
-    if (len < 0) {
-      return absl::InternalError("Failed to encode GET_FEEDBACK request.");
-    }
-    ABSL_ASSIGN_OR_RETURN(
-        auto response,
-        transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW_FEEDBACK_RESPONSE_PAYLOAD_LEN)));
-    jw1_frame_t frame;
-    if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
-      return absl::InternalError("Malformed GET_FEEDBACK response frame.");
-    }
+    ABSL_ASSIGN_OR_RETURN(auto response,
+                          commands_->Exchange({JW_CMD_GET_FEEDBACK, channel_index_, nullptr, 0}));
     jw_feedback_t feedback;
-    if (jw1_decode_feedback_response(&frame, &feedback) != 0) {
+    if (jw_decode_feedback_payload(response.data(), response.size(), &feedback) != 0)
       return absl::InternalError("Malformed GET_FEEDBACK response payload.");
-    }
     ChannelFeedback out;
     out.position = feedback.position;
     out.velocity = feedback.velocity;
@@ -105,36 +134,26 @@ class JoshuaWireChannel : public BoardChannel {
   }
 
  private:
-  absl::Status SendExpectStatus(const uint8_t* buf, int len, const std::string& what) {
-    if (len < 0) {
-      return absl::InternalError(absl::StrCat("Failed to encode ", what, " request."));
-    }
-    ABSL_ASSIGN_OR_RETURN(
-        auto response,
-        transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW_STATUS_RESPONSE_PAYLOAD_LEN)));
-    jw1_frame_t frame;
-    if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
-      return absl::InternalError(absl::StrCat("Malformed ", what, " response frame."));
-    }
+  absl::Status SendExpectStatus(uint8_t cmd,
+                                const uint8_t* payload,
+                                size_t len,
+                                const std::string& what) {
+    ABSL_ASSIGN_OR_RETURN(auto response, commands_->Exchange({cmd, channel_index_, payload, len}));
     jw_status_t status;
-    if (jw1_decode_status_response(&frame, &status) != 0) {
+    if (jw_decode_status_payload(response.data(), response.size(), &status) != 0)
       return absl::InternalError(absl::StrCat("Malformed ", what, " response payload."));
-    }
     return JwStatusToAbsl(status, what);
   }
-
-  std::shared_ptr<FrameTransport> transport_;
+  std::shared_ptr<JoshuaWireCommandClient> commands_;
   const uint8_t channel_index_;
 };
 
-// STEP_DIR is the only drive_config case joshua_wire_v1's CONFIGURE_CHANNEL
-// encoder implements today. Adding a second (e.g. PWM) means adding a case
-// to ConfigureChannel's switch below plus a jw1_encode_configure_channel_*
-// in firmware/common/ — no change anywhere else in this file, or in any
-// board that subclasses JoshuaWireBoard.
-absl::Status ConfigureStepDirChannel(FrameTransport& transport,
-                                     const robot::board::Channel& channel) {
+// STEP_DIR is the only configured drive payload implemented today. Further
+// drives add payload helpers and dispatch here, not new per-board wire codecs.
+absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
+                              const robot::board::Channel& channel) {
+  if (channel.drive_config_case() != robot::board::Channel::kStepDir)
+    return absl::UnimplementedError("Unsupported JoshuaWire channel configuration.");
   jw_configure_step_dir_t config{};
   config.max_pulse_rate_hz = channel.step_dir().max_pulse_rate_hz();
   config.invert_dir = channel.step_dir().invert_dir() ? 1 : 0;
@@ -143,42 +162,18 @@ absl::Status ConfigureStepDirChannel(FrameTransport& transport,
   config.dir_pin = static_cast<uint8_t>(channel.step_dir().dir_pin());
   config.enable_pin = static_cast<uint8_t>(channel.step_dir().enable_pin());
   config.step_pulse_width_us = static_cast<uint16_t>(channel.step_dir().step_pulse_width_us());
-
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_configure_channel_step_dir(
-      buf, sizeof(buf), static_cast<uint8_t>(channel.index()), &config);
-  if (len < 0) {
-    return absl::InternalError("Failed to encode CONFIGURE_CHANNEL request.");
-  }
+  uint8_t payload[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
+  const int len = jw_encode_configure_step_dir_payload(payload, sizeof(payload), &config);
+  if (len < 0) return absl::InternalError("Cannot encode CONFIGURE_CHANNEL payload.");
   ABSL_ASSIGN_OR_RETURN(auto response,
-                        transport.SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                                 JW1_FRAME_LEN(JW_STATUS_RESPONSE_PAYLOAD_LEN)));
-  jw1_frame_t frame;
-  if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
-    return absl::InternalError("Malformed CONFIGURE_CHANNEL response frame.");
-  }
+                        commands.Exchange({JW_CMD_CONFIGURE_CHANNEL,
+                                           static_cast<uint8_t>(channel.index()),
+                                           payload,
+                                           static_cast<size_t>(len)}));
   jw_status_t status;
-  if (jw1_decode_status_response(&frame, &status) != 0) {
+  if (jw_decode_status_payload(response.data(), response.size(), &status) != 0)
     return absl::InternalError("Malformed CONFIGURE_CHANNEL response payload.");
-  }
   return JwStatusToAbsl(status, absl::StrCat("CONFIGURE_CHANNEL(", channel.index(), ")"));
-}
-
-absl::Status ConfigureChannel(FrameTransport& transport, const robot::board::Channel& channel) {
-  switch (channel.drive_config_case()) {
-    case robot::board::Channel::kStepDir:
-      return ConfigureStepDirChannel(transport, channel);
-    default:
-      // ValidateConfig already rejects this before Init() ever opens a
-      // transport; reachable only if a future caller skips that check.
-      return absl::UnimplementedError(
-          absl::StrCat("channel ",
-                       channel.index(),
-                       ": joshua_wire_v1's CONFIGURE_CHANNEL encoder has no support for "
-                       "drive_config case ",
-                       static_cast<int>(channel.drive_config_case()),
-                       " yet."));
-  }
 }
 
 }  // namespace
@@ -225,7 +220,7 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(absl::StrCat(type_name,
                                                    " board '",
                                                    config.name(),
-                                                   "' declares more channels than joshua_wire_v1 "
+                                                   "' declares more channels than JoshuaWire "
                                                    "supports (",
                                                    JW_MAX_CHANNELS,
                                                    ")."));
@@ -245,7 +240,7 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
                        channel.index(),
                        " declares drive ",
                        robot::board::DriveInterface_Name(channel.drive()),
-                       ", but joshua_wire_v1's CONFIGURE_CHANNEL encoder only supports "
+                       ", but JoshuaWire's CONFIGURE_CHANNEL encoder only supports "
                        "STEP_DIR today."));
     }
     for (uint32_t pin : {channel.step_dir().step_pin(),
@@ -280,7 +275,7 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
                                                      config.name(),
                                                      "' channel index ",
                                                      channel.index(),
-                                                     " exceeds joshua_wire_v1's max channel "
+                                                     " exceeds JoshuaWire's max channel "
                                                      "index (",
                                                      JW_MAX_CHANNELS - 1,
                                                      "); it must match the firmware channel "
@@ -300,26 +295,11 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
 
 // Validates the board identity, protocol version, and channel capabilities
 // reported by firmware against configuration.
-absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
+absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& commands,
                                                   const robot::board::Board& config) const {
-  uint8_t request[JW1_MAX_FRAME_LEN];
-  const int request_len = jw1_encode_identify_request(request, sizeof(request));
-  if (request_len < 0) {
-    return absl::InternalError("Failed to encode IDENTIFY request.");
-  }
-  ABSL_ASSIGN_OR_RETURN(
-      auto response,
-      transport.SendAndReceive(std::vector<uint8_t>(request, request + request_len),
-                               JW1_FRAME_LEN(JW_IDENTIFY_RESPONSE_PAYLOAD_LEN)));
-
-  jw1_frame_t frame;
-  if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
-    return absl::UnavailableError(absl::StrCat(
-        "Board '", config.name(), "': malformed IDENTIFY response; check wiring/firmware."));
-  }
-  // V2 session adapter has already validated the on-wire version and IDs;
-  // frame is the unchanged v1 command-payload representation inside this engine.
-  const uint32_t protocol_version = config.protocol() == JOSHUA_WIRE_V2 ? 2 : frame.proto_ver;
+  ABSL_ASSIGN_OR_RETURN(auto response,
+                        commands.Exchange({JW_CMD_IDENTIFY, JW_CHANNEL_NONE, nullptr, 0}));
+  const uint32_t protocol_version = commands.protocol_version();
   if (protocol_version < config.firmware().min_proto_version()) {
     return absl::FailedPreconditionError(absl::StrCat("Board '",
                                                       config.name(),
@@ -332,12 +312,12 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
   }
 
   jw_identify_response_t identify;
-  if (jw1_decode_identify_response(&frame, &identify) != 0) {
+  if (jw_decode_identify_payload(response.data(), response.size(), &identify) != 0) {
     return absl::UnavailableError(
         absl::StrCat("Board '", config.name(), "': malformed IDENTIFY payload."));
   }
-  // board_id mirrors BoardType value-for-value (joshua_wire_v1.h) precisely
-  // so a host can catch "wrong device on this port" — e.g. a stale/
+  // Stable wire IDs (distinct from protobuf values for ESP32) let the host
+  // catch "wrong device on this port" — e.g. a stale/
   // re-enumerated serial path now pointing at a different board type —
   // instead of silently proceeding as long as channel shapes happen to
   // match.
@@ -386,25 +366,20 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
 
   ABSL_ASSIGN_OR_RETURN(auto transport, CreateTransport(config.comm()));
 
-  std::shared_ptr<JoshuaWireV2Session> v2_session;
-  if (config.protocol() == JOSHUA_WIRE_V2) {
-    v2_session = std::make_shared<JoshuaWireV2Session>(std::move(transport));
-    transport = v2_session;
-    ABSL_RETURN_IF_ERROR(transport->Open());
-  }
-
-  ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*transport, config));
+  auto commands = std::make_shared<JoshuaWireCommandClient>(std::move(transport),
+                                                            config.protocol() == JOSHUA_WIRE_V2);
+  ABSL_RETURN_IF_ERROR(commands->Open());
+  ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*commands, config));
 
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels;
   for (const auto& channel_config : config.channels()) {
-    ABSL_RETURN_IF_ERROR(ConfigureChannel(*transport, channel_config));
-    channels[channel_config.index()] = std::make_shared<JoshuaWireChannel>(
-        transport, static_cast<uint8_t>(channel_config.index()));
+    ABSL_RETURN_IF_ERROR(ConfigureChannel(*commands, channel_config));
+    channels[channel_config.index()] =
+        std::make_shared<JoshuaWireChannel>(commands, static_cast<uint8_t>(channel_config.index()));
   }
 
   config_ = config;
-  transport_ = std::move(transport);
-  v2_session_ = std::move(v2_session);
+  commands_ = std::move(commands);
   channels_ = std::move(channels);
   initialized_ = true;
   return absl::OkStatus();
@@ -426,10 +401,9 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 }
 
 absl::Status JoshuaWireBoard::Teardown() {
-  const auto status = v2_session_ ? v2_session_->Close() : absl::OkStatus();
-  v2_session_.reset();
+  const auto status = commands_ ? commands_->Close() : absl::OkStatus();
   channels_.clear();
-  transport_.reset();
+  commands_.reset();
   initialized_ = false;
   return status;
 }

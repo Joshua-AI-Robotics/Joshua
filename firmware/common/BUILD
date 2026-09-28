@@ -3,7 +3,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 # Shared semantic definitions; neither frame version depends on the other.
 cc_library(
     name = "joshua_wire_commands",
+    srcs = ["joshua_wire_commands.c"],
     hdrs = ["joshua_wire_commands.h"],
+    includes = ["."],
     visibility = ["//visibility:public"],
 )
 

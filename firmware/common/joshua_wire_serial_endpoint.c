@@ -1,10 +1,6 @@
-// Implements the firmware migration bridge between explicit v1/v2 wire
-// artifacts and existing v1 command-payload helpers. V2 uses the firmware session
-// and rewraps handler replies with correlation IDs; v2 wire bytes are never
-// passed to the v1 decoder. This file owns no serial hardware I/O.
+// Wire envelope selection and firmware-session dispatch for neutral commands.
+// Handlers consume/produce payloads only; v2 never builds an intermediate v1 frame.
 #include "joshua_wire_serial_endpoint.h"
-
-#include <string.h>
 
 typedef struct {
   jw_serial_command_handler_t handler;
@@ -22,22 +18,9 @@ static int command_adapter(void* context,
                            uint8_t* payload,
                            size_t capacity) {
   command_context_t* command = (command_context_t*)context;
-  jw1_frame_t view;
-  view.proto_ver = JW1_PROTO_VERSION;
-  view.cmd = request->cmd;
-  view.channel = request->channel;
-  view.payload = request->payload;
-  view.payload_len = request->payload_len;
-  uint8_t response[JW1_MAX_FRAME_LEN];
-  const int len = command->handler(command->context, &view, response, sizeof(response));
-  jw1_frame_t decoded;
-  if (len <= 0 || len > JW1_MAX_FRAME_LEN ||
-      jw1_decode_frame(response, (size_t)len, &decoded) != 0 || decoded.cmd != request->cmd ||
-      decoded.channel != request->channel || decoded.payload_len > capacity) {
-    return -1;
-  }
-  memcpy(payload, decoded.payload, decoded.payload_len);
-  return decoded.payload_len;
+  const jw_command_t view = {
+      request->cmd, request->channel, request->payload, request->payload_len};
+  return command->handler(command->context, &view, payload, capacity);
 }
 
 void jw_serial_endpoint_init(jw_serial_endpoint_t* endpoint, uint8_t wire_version) {
@@ -61,7 +44,12 @@ int jw_serial_endpoint_process(jw_serial_endpoint_t* endpoint,
   if (endpoint->wire_version == JW1_PROTO_VERSION) {
     jw1_frame_t frame;
     if (jw1_decode_frame(request, request_len, &frame) != 0) return 0;
-    return handler(context, &frame, response, response_cap);
+    const jw_command_t view = {frame.cmd, frame.channel, frame.payload, frame.payload_len};
+    uint8_t payload[JW1_MAX_PAYLOAD_LEN];
+    const int len = handler(context, &view, payload, sizeof(payload));
+    if (len < 0 || len > JW1_MAX_PAYLOAD_LEN) return -1;
+    return jw1_encode_frame(
+        response, response_cap, frame.cmd, frame.channel, payload, (uint8_t)len);
   }
   if (endpoint->wire_version != JW2_PROTO_VERSION) return -1;
   command_context_t command = {handler, reset, context};

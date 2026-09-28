@@ -4,6 +4,7 @@
 // Structs describe values, not packed wire images: codecs serialize explicitly.
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 // Board-scope commands (IDENTIFY, ESTOP, RESET_SESSION) use this channel byte.
@@ -17,6 +18,18 @@
 #define JW_IDENTIFY_RESPONSE_PAYLOAD_LEN (1 + JW_FW_NAME_LEN + 1 + JW_MAX_CHANNELS)
 #define JW_FEEDBACK_RESPONSE_PAYLOAD_LEN 10
 #define JW_STATUS_RESPONSE_PAYLOAD_LEN 1
+#define JW_SET_TARGET_PAYLOAD_LEN 5
+#define JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN 11
+
+// Borrowed command view, independent of framing, wire version and session IDs.
+// The caller owns payload storage throughout dispatch. Responses are payloads;
+// the endpoint supplies the request's command/channel and any correlation IDs.
+typedef struct {
+  uint8_t cmd;
+  uint8_t channel;
+  const uint8_t* payload;
+  size_t payload_len;
+} jw_command_t;
 
 typedef enum {
   JW_CMD_IDENTIFY = 0x01,
@@ -103,3 +116,31 @@ typedef struct {
   // backend_stepdir.cpp) — not "zero-width pulse".
   uint16_t step_pulse_width_us;
 } jw_configure_step_dir_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Payload-only codecs shared by both frame versions. Encoders return the byte
+// count, decoders return 0; all return -1 for null pointers or invalid size.
+// Decoders require the exact payload length. No frame headers, CRCs or IDs are
+// read/written. Dispatch/session code validates command/channel/correlation;
+// drive handlers retain responsibility for supported modes and safety policy.
+int jw_encode_status_payload(uint8_t* out, size_t cap, jw_status_t status);
+int jw_decode_status_payload(const uint8_t* data, size_t len, jw_status_t* out);
+int jw_encode_identify_payload(uint8_t* out, size_t cap, const jw_identify_response_t* value);
+int jw_decode_identify_payload(const uint8_t* data, size_t len, jw_identify_response_t* out);
+int jw_encode_feedback_payload(uint8_t* out, size_t cap, const jw_feedback_t* value);
+int jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedback_t* out);
+int jw_encode_set_target_payload(uint8_t* out, size_t cap, jw_mode_t mode, float value);
+int jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out);
+int jw_encode_configure_step_dir_payload(uint8_t* out,
+                                         size_t cap,
+                                         const jw_configure_step_dir_t* value);
+int jw_decode_configure_step_dir_payload(const uint8_t* data,
+                                         size_t len,
+                                         jw_configure_step_dir_t* out);
+
+#ifdef __cplusplus
+}
+#endif
