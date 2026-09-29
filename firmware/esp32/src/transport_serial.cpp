@@ -18,7 +18,7 @@ void TransportInit(void) {
   Serial.setTimeout(kByteTimeoutMs);
 }
 
-bool TransportReadFrame(jw1_frame_t* out, uint8_t* frame_buf, size_t frame_buf_cap) {
+size_t TransportReadFrame(uint8_t* frame_buf, size_t frame_buf_cap) {
   if (frame_buf_cap < 2 || Serial.available() == 0) {
     return false;
   }
@@ -52,7 +52,7 @@ bool TransportReadFrame(jw1_frame_t* out, uint8_t* frame_buf, size_t frame_buf_c
   }
 
   const size_t total_len = 2 + remaining;
-  return jw1_decode_frame(frame_buf, total_len, out) == 0;
+  return total_len;
 }
 
 void TransportWriteFrame(const uint8_t* frame, size_t len) {

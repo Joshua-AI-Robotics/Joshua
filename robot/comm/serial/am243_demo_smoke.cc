@@ -7,7 +7,6 @@
 //     <port> [cycles] [channel] [period_ms]
 
 #include <boost/asio/io_context.hpp>
-
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -45,7 +44,7 @@ int ParsePositiveInt(const char* value, int fallback) {
 int ParseChannel(const char* value, int fallback) {
   char* end = nullptr;
   const long parsed = std::strtol(value, &end, 10);
-  if (end == value || *end != '\0' || parsed < 0 || parsed >= JW1_MAX_CHANNELS) {
+  if (end == value || *end != '\0' || parsed < 0 || parsed >= JW_MAX_CHANNELS) {
     return fallback;
   }
   return static_cast<int>(parsed);
@@ -56,35 +55,35 @@ int Fail(const absl::Status& status) {
   return 1;
 }
 
-std::string FirmwareName(const jw1_identify_response_t& identify) {
-  const size_t length = strnlen(identify.fw_name, JW1_FW_NAME_LEN);
+std::string FirmwareName(const jw_identify_response_t& identify) {
+  const size_t length = strnlen(identify.fw_name, JW_FW_NAME_LEN);
   return std::string(identify.fw_name, length);
 }
 
-const char* DriveName(jw1_drive_t drive) {
+const char* DriveName(jw_drive_t drive) {
   switch (drive) {
-    case JW1_DRIVE_STEP_DIR:
+    case JW_DRIVE_STEP_DIR:
       return "STEP_DIR";
-    case JW1_DRIVE_PWM_DC:
+    case JW_DRIVE_PWM_DC:
       return "PWM_DC";
-    case JW1_DRIVE_SERVO_BUS_UART:
+    case JW_DRIVE_SERVO_BUS_UART:
       return "SERVO_BUS_UART";
-    case JW1_DRIVE_CAN:
+    case JW_DRIVE_CAN:
       return "CAN";
-    case JW1_DRIVE_PDO_JOINT:
+    case JW_DRIVE_PDO_JOINT:
       return "PDO_JOINT";
     default:
       return "INVALID";
   }
 }
 
-absl::Status WireStatus(jw1_status_t status, const std::string& operation) {
+absl::Status WireStatus(jw_status_t status, const std::string& operation) {
   switch (status) {
-    case JW1_STATUS_OK:
+    case JW_STATUS_OK:
       return absl::OkStatus();
-    case JW1_STATUS_UNSUPPORTED:
+    case JW_STATUS_UNSUPPORTED:
       return absl::UnimplementedError(operation + ": firmware reports unsupported");
-    case JW1_STATUS_ERROR:
+    case JW_STATUS_ERROR:
     default:
       return absl::InternalError(operation + ": firmware reports error");
   }
@@ -105,8 +104,8 @@ absl::Status ExchangeStatus(robot::comm::Serial* serial,
                             const uint8_t* request,
                             int request_length,
                             const std::string& operation) {
-  auto response_or = Exchange(
-      serial, request, request_length, JW1_FRAME_LEN(JW1_STATUS_RESPONSE_PAYLOAD_LEN));
+  auto response_or =
+      Exchange(serial, request, request_length, JW1_FRAME_LEN(JW_STATUS_RESPONSE_PAYLOAD_LEN));
   if (!response_or.ok()) {
     return response_or.status();
   }
@@ -115,7 +114,7 @@ absl::Status ExchangeStatus(robot::comm::Serial* serial,
   if (jw1_decode_frame(response_or->data(), response_or->size(), &frame) != 0) {
     return absl::InternalError(operation + ": malformed response frame");
   }
-  jw1_status_t status;
+  jw_status_t status;
   if (jw1_decode_status_response(&frame, &status) != 0) {
     return absl::InternalError(operation + ": malformed status response");
   }
@@ -123,7 +122,7 @@ absl::Status ExchangeStatus(robot::comm::Serial* serial,
 }
 
 absl::Status Configure(robot::comm::Serial* serial, uint8_t channel) {
-  const jw1_configure_step_dir_t config = {
+  const jw_configure_step_dir_t config = {
       .max_pulse_rate_hz = 4000,
       .invert_dir = 0,
       .enable_active_low = 1,
@@ -133,24 +132,23 @@ absl::Status Configure(robot::comm::Serial* serial, uint8_t channel) {
       .step_pulse_width_us = 0,
   };
   uint8_t request[JW1_MAX_FRAME_LEN];
-  const int request_length = jw1_encode_configure_channel_step_dir(
-      request, sizeof(request), channel, &config);
+  const int request_length =
+      jw1_encode_configure_channel_step_dir(request, sizeof(request), channel, &config);
   return ExchangeStatus(serial, request, request_length, "CONFIGURE_CHANNEL");
 }
 
 absl::Status SetTarget(robot::comm::Serial* serial, uint8_t channel, float target) {
   uint8_t request[JW1_MAX_FRAME_LEN];
-  const int request_length = jw1_encode_set_target(
-      request, sizeof(request), channel, JW1_MODE_POSITION, target);
+  const int request_length =
+      jw1_encode_set_target(request, sizeof(request), channel, JW_MODE_POSITION, target);
   return ExchangeStatus(serial, request, request_length, "SET_TARGET");
 }
 
-absl::StatusOr<jw1_feedback_t> ReadFeedback(robot::comm::Serial* serial, uint8_t channel) {
+absl::StatusOr<jw_feedback_t> ReadFeedback(robot::comm::Serial* serial, uint8_t channel) {
   uint8_t request[JW1_MAX_FRAME_LEN];
-  const int request_length =
-      jw1_encode_get_feedback_request(request, sizeof(request), channel);
-  auto response_or = Exchange(
-      serial, request, request_length, JW1_FRAME_LEN(JW1_FEEDBACK_RESPONSE_PAYLOAD_LEN));
+  const int request_length = jw1_encode_get_feedback_request(request, sizeof(request), channel);
+  auto response_or =
+      Exchange(serial, request, request_length, JW1_FRAME_LEN(JW_FEEDBACK_RESPONSE_PAYLOAD_LEN));
   if (!response_or.ok()) {
     return response_or.status();
   }
@@ -159,7 +157,7 @@ absl::StatusOr<jw1_feedback_t> ReadFeedback(robot::comm::Serial* serial, uint8_t
   if (jw1_decode_frame(response_or->data(), response_or->size(), &frame) != 0) {
     return absl::InternalError("GET_FEEDBACK: malformed response frame");
   }
-  jw1_feedback_t feedback;
+  jw_feedback_t feedback;
   if (jw1_decode_feedback_response(&frame, &feedback) != 0) {
     return absl::InternalError("GET_FEEDBACK: malformed feedback response");
   }
@@ -183,8 +181,7 @@ int main(int argc, char** argv) {
 
   const std::string port = argv[1];
   const int cycles = argc >= 3 ? ParsePositiveInt(argv[2], 10) : 10;
-  const uint8_t channel =
-      static_cast<uint8_t>(argc >= 4 ? ParseChannel(argv[3], 0) : 0);
+  const uint8_t channel = static_cast<uint8_t>(argc >= 4 ? ParseChannel(argv[3], 0) : 0);
   const int period_ms = argc >= 5 ? ParsePositiveInt(argv[4], 250) : 250;
 
   auto io_context = std::make_shared<boost::asio::io_context>();
@@ -200,7 +197,7 @@ int main(int argc, char** argv) {
   auto identify_response_or = Exchange(&serial,
                                        identify_request,
                                        identify_request_length,
-                                       JW1_FRAME_LEN(JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN));
+                                       JW1_FRAME_LEN(JW_IDENTIFY_RESPONSE_PAYLOAD_LEN));
   if (!identify_response_or.ok()) {
     return Fail(identify_response_or.status());
   }
@@ -210,13 +207,13 @@ int main(int argc, char** argv) {
           identify_response_or->data(), identify_response_or->size(), &identify_frame) != 0) {
     return Fail(absl::InternalError("IDENTIFY: malformed response frame"));
   }
-  jw1_identify_response_t identify;
+  jw_identify_response_t identify;
   if (jw1_decode_identify_response(&identify_frame, &identify) != 0) {
     return Fail(absl::InternalError("IDENTIFY: malformed response payload"));
   }
 
-  std::cout << "serial port=" << port << " baud=" << kBaudrate
-            << " protocol=joshua_wire_v1/" << static_cast<int>(identify_frame.proto_ver) << "\n";
+  std::cout << "serial port=" << port << " baud=" << kBaudrate << " protocol=joshua_wire_v1/"
+            << static_cast<int>(identify_frame.proto_ver) << "\n";
   std::cout << "board id=" << static_cast<int>(identify.board_id) << " firmware=\""
             << FirmwareName(identify) << "\" channels=" << static_cast<int>(identify.n_channels)
             << "\n";
@@ -225,17 +222,17 @@ int main(int argc, char** argv) {
               << " drive=" << DriveName(identify.channel_drives[index]) << "\n";
   }
 
-  if (identify.board_id != JW1_BOARD_AM243) {
+  if (identify.board_id != JW_BOARD_AM243) {
     return Fail(absl::FailedPreconditionError("IDENTIFY did not report an AM243 board"));
   }
-  if (channel >= identify.n_channels || identify.channel_drives[channel] != JW1_DRIVE_STEP_DIR) {
-    return Fail(absl::FailedPreconditionError(
-        "selected channel is not an available STEP_DIR channel"));
+  if (channel >= identify.n_channels || identify.channel_drives[channel] != JW_DRIVE_STEP_DIR) {
+    return Fail(
+        absl::FailedPreconditionError("selected channel is not an available STEP_DIR channel"));
   }
 
   status = Configure(&serial, channel);
-  std::cout << "configure channel=" << static_cast<int>(channel) << " step=2 dir=3 enable=4: "
-            << status << "\n";
+  std::cout << "configure channel=" << static_cast<int>(channel)
+            << " step=2 dir=3 enable=4: " << status << "\n";
   if (!status.ok()) {
     return 1;
   }
@@ -261,11 +258,11 @@ int main(int argc, char** argv) {
     const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::steady_clock::now() - started)
                                 .count();
-    std::cout << std::fixed << std::setprecision(1) << "cycle=" << cycle
-              << " target=" << target << " position=" << feedback_or->position
-              << " velocity=" << feedback_or->velocity << " faults=0x" << std::hex
-              << std::setw(4) << std::setfill('0') << feedback_or->fault_flags << std::dec
-              << std::setfill(' ') << " roundtrip_us=" << elapsed_us << "\n";
+    std::cout << std::fixed << std::setprecision(1) << "cycle=" << cycle << " target=" << target
+              << " position=" << feedback_or->position << " velocity=" << feedback_or->velocity
+              << " faults=0x" << std::hex << std::setw(4) << std::setfill('0')
+              << feedback_or->fault_flags << std::dec << std::setfill(' ')
+              << " roundtrip_us=" << elapsed_us << "\n";
     if (cycle + 1 < cycles) {
       std::this_thread::sleep_for(std::chrono::milliseconds(period_ms));
     }

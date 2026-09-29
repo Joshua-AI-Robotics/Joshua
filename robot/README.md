@@ -50,6 +50,13 @@ selects between backends.
 - `perception/` — camera, encoder, and lidar drivers behind
   `perception/interfaces/`.
 
+AM243 JoshuaWire serial and v2 EtherCAT configurations now use the shared
+`board/joshua_wire/` engine. CommFactory supplies either message-only or paired
+message/cyclic capabilities and owns the NIC lifecycle. The legacy TI-demo
+board/driver path is retired; `board/am243/` retains AM243 factory regression
+coverage, not a separate board implementation. See [JW2 EtherCAT configuration](../config/README.md#joshuawire-v2-over-ethercat)
+for opt-in selection and hardware-validation limits.
+
 ## Non-Goals
 
 - ROS 2 node lifecycle, topics, or message types — see [ros2/](../ros2/README.md).

@@ -21,7 +21,7 @@ namespace robot::board {
 // pairs with.
 class TeensyBoard : public JoshuaWireBoard {
  public:
-  TeensyBoard() : JoshuaWireBoard(robot::board::BoardType::TEENSY41, JW1_BOARD_TEENSY41) {}
+  TeensyBoard() : JoshuaWireBoard(robot::board::BoardType::TEENSY41, JW_BOARD_TEENSY41) {}
 };
 
 }  // namespace robot::board

@@ -1,22 +1,18 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
-    name = "ethercat_transport",
-    hdrs = ["ethercat_transport.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
+    name = "ethercat_types",
+    hdrs = ["ethercat_types.h"],
+    visibility = ["//robot/comm:__subpackages__"],
 )
 
 cc_library(
     name = "ethercat_status",
     srcs = ["ethercat_status.cc"],
     hdrs = ["ethercat_status.h"],
-    visibility = ["//visibility:public"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
-        ":ethercat_transport",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
     ],
 )
@@ -26,56 +22,85 @@ cc_test(
     srcs = ["ethercat_status_test.cc"],
     deps = [
         ":ethercat_status",
-        ":ethercat_transport",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],
 )
 
 cc_library(
-    name = "fake_ethercat_transport",
-    testonly = True,
-    hdrs = ["fake_ethercat_transport.h"],
-    visibility = ["//visibility:public"],
+    name = "ethercat_master",
+    srcs = ["ethercat_master.cc"],
+    hdrs = ["ethercat_master.h"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
-        ":ethercat_transport",
+        ":ethercat_status",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
 )
 
 cc_library(
-    name = "soem_ethercat_transport",
-    srcs = ["soem_ethercat_transport.cc"],
-    hdrs = ["soem_ethercat_transport.h"],
-    visibility = ["//visibility:public"],
+    name = "coe_sdo_transfer",
+    srcs = ["coe_sdo_transfer.cc"],
+    hdrs = ["coe_sdo_transfer.h"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
-        ":ethercat_transport",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
-        "@soem",
     ],
 )
 
-cc_binary(
-    name = "am243_demo_smoke",
-    srcs = ["am243_demo_smoke.cc"],
-    visibility = ["//visibility:public"],
+cc_library(
+    name = "soem_ethercat_backend",
+    srcs = ["soem_ethercat_backend.cc"],
+    hdrs = ["soem_ethercat_backend.h"],
+    implementation_deps = ["@soem"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
-        ":ethercat_status",
-        ":ethercat_transport",
-        ":soem_ethercat_transport",
-        "//robot/board/am243:am243_pdo_codec",
+        ":coe_sdo_transfer",
+        ":ethercat_master",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "joshua_wire_ethercat_transport",
+    srcs = ["joshua_wire_ethercat_transport.cc"],
+    hdrs = ["joshua_wire_ethercat_transport.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":ethercat_master",
+        ":ethercat_types",
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/comm/interfaces:correlated_cyclic_transport",
+        "//robot/comm/interfaces:message_transport",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
     ],
 )
 
 cc_test(
-    name = "soem_ethercat_transport_test",
-    srcs = ["soem_ethercat_transport_test.cc"],
+    name = "soem_ethercat_backend_test",
+    srcs = ["soem_ethercat_backend_test.cc"],
     deps = [
-        ":soem_ethercat_transport",
+        ":coe_sdo_transfer",
+        ":ethercat_master",
+        ":ethercat_types",
+        ":joshua_wire_ethercat_transport",
+        ":soem_ethercat_backend",
+        "//firmware/am243/joshua_dual_transport_v1:commands",
+        "//firmware/common:joshua_ethercat_profile",
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/board/factory:board_factory",
+        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

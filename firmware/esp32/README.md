@@ -42,6 +42,13 @@ proven on Teensy works unchanged here, no ESP32-specific code needed.
 
 ## Status
 
+The hardware results below describe v1. For opt-in v2, build with
+`pio run -e esp32-serial-v2` and select `Board.protocol: JOSHUA_WIRE_V2`.
+The default environment remains v1. Both versions share command dispatch in
+`firmware/common/joshua_stepdir_commands.cpp`; see the
+[v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
+V2 hardware validation has not yet been performed.
+
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
       reused unchanged
@@ -202,7 +209,7 @@ MCU — but treat that as a prediction until it's actually been run.
   IDENTIFY immediately races the ESP32's bootloader boot-log output (a
   different baud rate, reads as noise) and `setup()`. Unlike Teensy 4.1's
   native-USB CDC, ESP32 has no way around this at the transport level, so
-  `Esp32Board::CreateTransport()` (`robot/board/esp32/esp32_board.cc`)
+  `Esp32Board::CreateTransports()` (`robot/board/esp32/esp32_board.cc`)
   overrides the default to sleep ~2s after opening the port before
   returning — long enough for boot to finish before the first
   `AtomicRead` (which already flushes right before writing) sends
@@ -227,8 +234,8 @@ MCU — but treat that as a prediction until it's actually been run.
 ## Related files
 
 - `robot/board/esp32/esp32_board.{h,cc}` — paired host-side board class; a
-  one-line constructor supplying `BoardType::ESP32` and `JW1_BOARD_ESP32`
-  to `JoshuaWireBoard`, plus a `CreateTransport()` override for the
+  one-line constructor supplying `BoardType::ESP32` and `JW_BOARD_ESP32`
+  to `JoshuaWireBoard`, plus a `CreateTransports()` override for the
   post-open settle delay (see Known gaps above) — everything else is
   inherited
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY

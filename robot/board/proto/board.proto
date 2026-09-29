@@ -103,9 +103,7 @@ message FirmwareSpec {
   uint32 min_proto_version = 1;
 }
 
-// Future home of the AM243 PDO mapping selector; mirrors
-// robot.action.Am243PdoMapping until the deprecated actuator-embedded
-// config is removed in Phase 4 (docs/BOARD_LAYER_RFC.md §10).
+// Retired TI-demo schema: retained only to diagnose old configs; never executed.
 enum Am243PdoMapping {
   AM243_PDO_MAPPING_UNSPECIFIED = 0;
   AM243_PDO_MAPPING_TI_DEMO = 1;
@@ -113,6 +111,8 @@ enum Am243PdoMapping {
 }
 
 message Am243Config {
+  // Deprecated and rejected at validation/factory entry points. JoshuaWire v2
+  // endpoint addressing/region assertions belong in comm.ethercat_config.
   uint32 slave_index = 1;
   Am243PdoMapping pdo_mapping = 2;
   // PDO region override (offsets/sizes) so presets can pin regions instead
@@ -123,6 +123,14 @@ message Am243Config {
   uint32 input_size_bytes = 6;
 }
 
+// Explicit wire-version opt-in during the v2 migration. Unspecified preserves
+// serial board behavior (JoshuaWire v1 or Feetech). EtherCAT requires explicit v2.
+enum BoardProtocol {
+  BOARD_PROTOCOL_UNSPECIFIED = 0;
+  JOSHUA_WIRE_V1 = 1;
+  JOSHUA_WIRE_V2 = 2;
+}
+
 message Board {
   string name = 1;  // Referenced by actuators; cache key.
   BoardType board_type = 2;
@@ -130,6 +138,7 @@ message Board {
                                   // (omitted for HOST_GPIO / MOCK).
   repeated Channel channels = 4;  // Drive leg: what each slot drives.
   FirmwareSpec firmware = 5;
+  BoardProtocol protocol = 6;
   oneof board_config {
     Am243Config am243_config = 10;
   }

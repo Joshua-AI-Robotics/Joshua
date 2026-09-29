@@ -1,0 +1,22 @@
+# Reuse SDK toolchain/SysConfig/signing rules, NOT its SSC sources or libraries.
+# The selected SDK example links only RTOS, drivers, board and ICSS FWHAL.
+SDK := $(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)
+TI_SOC_DIR := $(SDK)/examples/industrial_comms/ethercat_slave_beckhoff_ssc_demo
+override FILES_common := joshua_ethercat_soes_am243.c tiescsoc.c joshua_commands.c \
+    joshua_wire_commands.c joshua_wire_v2.c joshua_wire_v2_firmware_session.c \
+    joshua_ethercat_profile.c joshua_ethercat_soes.c esc.c esc_coe.c esc_eep.c ecat_slv.c \
+    ti_drivers_config.c ti_drivers_open_close.c ti_board_config.c \
+    ti_board_open_close.c ti_dpl_config.c ti_pinmux_config.c ti_power_clock_config.c
+override FILES_PATH_common := $(JOSHUA_PATCHED_SOURCE_DIR) \
+    $(JOSHUA_ROOT)/firmware/am243/joshua_dual_transport_v1/src \
+    $(JOSHUA_ROOT)/firmware/common $(JOSHUA_ROOT)/firmware/common/soes \
+    $(SOES_DIR)/soes generated
+include $(TI_SOC_DIR)/am243x-lp/r5fss0-0_freertos/ti-arm-clang/makefile
+# Drop even unused SSC include paths, making accidental dependencies fail.
+INCLUDES := $(filter-out %/beckhoff_stack/stack_sources %/beckhoff_stack/stack_hal,$(INCLUDES))
+INCLUDES += -I$(JOSHUA_ROOT) -I$(JOSHUA_ROOT)/firmware/common \
+    -I$(JOSHUA_ROOT)/firmware/common/soes -I$(SOES_DIR)/soes \
+    -I$(JOSHUA_ROOT)/firmware/am243/joshua_dual_transport_v1/src \
+    -I$(TI_SOC_DIR)/am243x-lp \
+    -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
+    -DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)

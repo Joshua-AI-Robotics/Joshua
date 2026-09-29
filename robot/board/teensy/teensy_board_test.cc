@@ -11,7 +11,7 @@
 #include "robot/comm/proto/comm.pb.h"
 
 // TeensyBoard only supplies two facts to the shared JoshuaWireBoard, as
-// constructor arguments (BoardType::TEENSY41, JW1_BOARD_TEENSY41) —
+// constructor arguments (BoardType::TEENSY41, JW_BOARD_TEENSY41) —
 // everything else (IDENTIFY handshake, CONFIGURE_CHANNEL, multi-channel,
 // ENABLE/SET_TARGET/GET_FEEDBACK, ...) is generic protocol orchestration,
 // tested once in robot/board/joshua_wire/joshua_wire_board_test.cc. These
@@ -20,19 +20,19 @@ namespace robot::board {
 namespace {
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw1_board_id_t board_id = JW1_BOARD_TEENSY41) {
-  jw1_identify_response_t response{};
+                                          jw_board_id_t board_id = JW_BOARD_TEENSY41) {
+  jw_identify_response_t response{};
   response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
-    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
+    response.channel_drives[i] = JW_DRIVE_STEP_DIR;
   }
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
   return std::vector<uint8_t>(buf, buf + len);
 }
 
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw1_status_t status) {
+std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw_status_t status) {
   uint8_t buf[JW1_MAX_FRAME_LEN];
   const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
   return std::vector<uint8_t>(buf, buf + len);
@@ -81,7 +81,7 @@ class TeensyBoardTest : public ::testing::Test {
 
 TEST_F(TeensyBoardTest, InitSucceedsAgainstRealTeensyIdentity) {
   transport_->QueueResponse(MakeIdentifyResponse(1));
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_OK));
+  transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, 0, JW_STATUS_OK));
   TeensyBoard board;
 
   EXPECT_TRUE(board.Init(MakeTeensyBoard()).ok());
@@ -96,10 +96,10 @@ TEST_F(TeensyBoardTest, InitRejectsNonTeensyBoardType) {
 }
 
 TEST_F(TeensyBoardTest, InitRejectsNonTeensyWireBoardId) {
-  // Proves TeensyBoard's constructor actually passed JW1_BOARD_TEENSY41
+  // Proves TeensyBoard's constructor actually passed JW_BOARD_TEENSY41
   // through to JoshuaWireBoard — e.g. a re-enumerated serial path now
   // pointing at an Arduino instead (docs/BOARD_LAYER_RFC.md §7.5).
-  transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_ARDUINO_UNO));
+  transport_->QueueResponse(MakeIdentifyResponse(1, JW_BOARD_ARDUINO_UNO));
   TeensyBoard board;
 
   EXPECT_EQ(board.Init(MakeTeensyBoard()).code(), absl::StatusCode::kFailedPrecondition);

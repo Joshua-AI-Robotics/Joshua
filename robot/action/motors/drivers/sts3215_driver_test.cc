@@ -96,8 +96,8 @@ TEST(Sts3215DriverTest, SetPositionPassesRawTicksThrough) {
   ASSERT_TRUE(driver.SetPosition(2070.0f).ok());
 
   EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
-  // Unlike TiDemoDriver, STS3215 presets already express limits in native
-  // ticks, so the driver does no unit conversion.
+  // STS3215 presets express limits in native ticks, so the driver does no
+  // unit conversion.
   EXPECT_FLOAT_EQ(channel->last_value_, 2070.0f);
 }
 

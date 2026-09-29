@@ -10,8 +10,8 @@ into `JoshuaWireBoard` (`robot/board/joshua_wire/`, docs/BOARD_LAYER_RFC.md
 §7.3) specifically so this board wouldn't need to reimplement them —
 `ArduinoBoard` (`robot/board/arduino/`, not yet created) only needs to
 subclass `JoshuaWireBoard` and pass its identity to the constructor:
-`JoshuaWireBoard(BoardType::ARDUINO_UNO, JW1_BOARD_ARDUINO_UNO)`
-(`JW1_BOARD_ARDUINO_UNO` already reserved in `joshua_wire_v1.h`) — plain
+`JoshuaWireBoard(BoardType::ARDUINO_UNO, JW_BOARD_ARDUINO_UNO)`
+(`JW_BOARD_ARDUINO_UNO` already reserved in `joshua_wire_commands.h`) — plain
 constructor data, not a virtual override, since identity has no behavior
 behind it. See `robot/board/teensy/teensy_board.h` (header-only, no `.cc`
 needed) for exactly how short that subclass is in practice. The firmware side is
