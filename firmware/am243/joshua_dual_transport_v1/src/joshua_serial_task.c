@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "joshua_serial_commands.h"
+#include "joshua_commands.h"
 #include "joshua_wire_serial_endpoint.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
@@ -17,7 +17,7 @@
 
 static uint8_t gJoshuaSerialTaskStack[JOSHUA_SERIAL_TASK_STACK_SIZE] __attribute__((aligned(32)));
 static TaskP_Object gJoshuaSerialTaskObject;
-static JoshuaSerialChannel gJoshuaSerialChannel;
+static JoshuaChannel gJoshuaChannel;
 
 static bool JoshuaUartReadExact(uint8_t* data, size_t size) {
   UART_Transaction transaction;
@@ -65,8 +65,8 @@ static void JoshuaSerialTask(void* args) {
   uint8_t response[JW2_MAX_FRAME_LEN];
   jw_serial_endpoint_t endpoint;
   (void)args;
-  memset(&gJoshuaSerialChannel, 0, sizeof(gJoshuaSerialChannel));
-  gJoshuaSerialChannel.latch_estop = JOSHUA_WIRE_VERSION == 2;
+  memset(&gJoshuaChannel, 0, sizeof(gJoshuaChannel));
+  gJoshuaChannel.latch_estop = JOSHUA_WIRE_VERSION == 2;
   jw_serial_endpoint_init(&endpoint, JOSHUA_WIRE_VERSION);
 
   for (;;) {
@@ -77,9 +77,9 @@ static void JoshuaSerialTask(void* args) {
                                                  request_len,
                                                  response,
                                                  sizeof(response),
-                                                 JoshuaSerialCommand,
-                                                 JoshuaSerialReset,
-                                                 &gJoshuaSerialChannel);
+                                                 JoshuaCommand,
+                                                 JoshuaReset,
+                                                 &gJoshuaChannel);
       if (len > 0) (void)JoshuaUartWrite(response, (size_t)len);
     }
   }

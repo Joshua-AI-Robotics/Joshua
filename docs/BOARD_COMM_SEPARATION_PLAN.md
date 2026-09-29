@@ -1,6 +1,6 @@
 # Board and Comm Separation Plan
 
-Status: **In progress — opt-in serial v2 milestone implemented**
+Status: **In progress — serial v2 and factory-wired EtherCAT host/firmware milestones implemented**
 
 Companion to: [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md),
 [am243_ethercat.md](am243_ethercat.md)
@@ -21,21 +21,64 @@ Implementation checkpoint:
   comm-internal; factory implementation headers do not propagate to consumers.
   Legacy fixed-size methods remain isolated in `LegacyMessageTransport` for v1
   and vendor consumers. Serial framing still lives in `Serial`, with a fixed
-  100 ms exchange deadline. The composed board engine and production cyclic
-  adapter remain pending. Mismatched serial replies fail closed rather than
-  being skipped while waiting for another reply.
+  100 ms exchange deadline. Mismatched serial replies fail closed rather than being
+  skipped while waiting for another reply.
 - AM243 v2 UART passed eight real-board validation sessions on 2026-09-27;
   see the [recorded scope and artifact](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27).
   This does not validate EtherCAT or physical motion.
-- Step 4 foundation: a comm-internal owner worker and startup-only SOEM SDO
-  access are implemented, with shadow images, snapshots, timeout/stop handling
-  and hardware-free regression coverage. It is not factory-wired. SOEM's
-  blocking SDO primitives do not enforce a total deadline, so mailbox access is
-  forbidden after cyclic startup. Runtime bounded mailbox/state scheduling,
-  shared master leases and production timing policy remain unfinished.
-- Steps 5–7 remain pending. AM243 EtherCAT still uses the independent TI demo;
-  no JoshuaWire PDO/CoE profile, firmware watchdog or cross-transport arbiter
-  is claimed by this checkpoint.
+- Step 4 foundation: a comm-internal owner worker, blocking startup SDO and an
+  opt-in incremental runtime CoE path are implemented, with shadow images,
+  snapshots, timeout/stop handling and hardware-free regression coverage.
+  Runtime transfers support unsegmented 1–76 byte objects; each cycle runs
+  process data first and at most one budgeted mailbox or AL-state step.
+  Blocking SOEM SDO remains forbidden after cyclic startup. Dispatched timeout
+  or backend overrun faults the master; this is not a hard-real-time guarantee.
+  Factory wiring, per-NIC master leasing and explicit protobuf timing policy
+  are implemented; real EtherCAT validation remains unfinished. JW2 envelope/session correlation is
+  not supplied by the CoE mailbox counter.
+- Step 5 host portion: shared layout constants, compatibility-gated paired
+  CoE/PDO adapters, verified reset-object readback, generation/ID correlation,
+  cancellation and late-PDO acknowledgment are implemented and hardware-free
+  tested. Endpoints serialize both planes and share master lifetime. They remain
+  comm-internal behind factory capabilities. Mailbox failures and malformed PDO responses
+  conservatively require a new session; already-dispatched SDO cannot be
+  preempted by ESTOP. Each endpoint has a dispatcher, but only the master worker
+  touches SOEM.
+- Step 5 firmware portion: the explicit `am243_ethercat_jw2` artifact implements
+  the shared CoE/PDO profile, session ordering, retained replies and latched
+  command-progress/stale-target software watchdogs. The SDK bridge cross-builds;
+  native tests exercise the real core and paired host adapters together. The
+  fixed mapping and build limits are documented in the
+  [profile README](../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile).
+  This is EtherCAT-only and software-channel-only: no UART protocol task,
+  physical GPIO backend or simultaneous-transport arbiter.
+  Existing UART/TI-demo artifacts retain their behavior. Progress is refreshed
+  by new commands, not repeated PDO snapshots; this is stricter than a traffic
+  watchdog and does not establish packet-arrival freshness or CPU-halt safety.
+- Steps 6–7: BoardFactory selects the shared JoshuaWire engine for AM243 serial
+  and explicit v2 EtherCAT. The legacy TI-demo `Am243Board` and its host runtime
+  path are retired; SOEM I/O is now `SoemEthercatBackend` behind the master. One session allocates IDs across
+  message management and optional cyclic target/feedback. CommFactory supplies
+  both capabilities for `MESSAGE_AND_CYCLIC`, gates all discovered slaves before
+  OP, and leases one owner per NIC. Duplicate endpoint claims, mismatched NIC
+  policies and cross-node NIC ownership are rejected. The last lease stops the
+  owner before permitting reopen; retained closed channels cannot keep it alive.
+  Native tests cover the complete factory/board/adapter/firmware-core path and
+  two-slave teardown. Legacy TI-demo configs are rejected and the demo preset
+  is removed; JW2 endpoint facts and exact optional PDO-region assertions live in comm config.
+  See the [config example](../config/README.md#joshuawire-v2-over-ethercat).
+- AM243 JW2 EtherCAT was flashed and single-board bench-tested on 2026-09-28.
+  Discovery/mapping, factory/engine commands, software feedback, stale-target
+  latching and fresh-session recovery passed. A 1 ms host mailbox deadline
+  failure was also observed; four later sessions passed with wider temporary
+  bench budgets. Longer follow-up attempts failed at both 1 ms and 5 ms, with
+  late register replies observed in capture; the cause is not yet isolated.
+  See the [recorded scope and limits](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+- Remaining: broader EtherCAT timing/failure validation, physical-output safety and
+  transport arbitration; framed-serial extraction and configurable serial
+  deadline/settle policy (ESP32 retains its existing settle hook). Firmware
+  watchdog settings are build-time values, not advertised/verified by the
+  descriptor. No hard-real-time or physical-motion safety claim is made.
 
 The contracts below remain the target design, not a claim that the entire plan
 has landed. See [firmware usage](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone)
@@ -301,6 +344,21 @@ reserved bytes (`uint16`), and frame (`uint8[64]`). Mailbox generations and
 retained-response acknowledgment follow the same publication rules as PDO
 generations.
 
+Layout-v1 details are pinned in
+[`joshua_wire_ethercat.h`](../firmware/common/joshua_wire_ethercat.h): transport
+bitmap bit 0 is serial, bit 1 is CoE management, and bit 2 is correlated PDO.
+PDO transport status 0 means success; nonzero values fail the exchange.
+Frame padding and reserved fields are zero. Artifact IDs are nonempty printable
+ASCII, NUL-padded when shorter than 12 bytes.
+
+The reset object is not a JW2 frame: writing `{operation=1, new_session_id}`
+requests an atomic safe/session reset. Reading that exact pair acknowledges
+completion only after outputs are disabled and both planes' retained responses,
+generations and request history have been cleared. The host then constructs
+the correlated JW2 RESET_SESSION/OK reply for the board engine. This preserves
+the engine's frame interface without inventing an acknowledgment before verified
+readback. Reboot reads session zero. Normal envelopes remain full JW2 frames.
+
 Mailbox exchange is used only for management operations:
 
 ```text
@@ -472,5 +530,5 @@ or flash firmware without explicit hardware confirmation.
   enable.
 - Serial message-only boards retain all JoshuaWire commands.
 - Board targets cannot name concrete serial or SOEM implementations.
-- The retained TI demo remains independently runnable for bring-up and is not
-  mistaken for the JoshuaWire EtherCAT firmware.
+- TI vendor firmware build/flash assets remain distinct from JoshuaWire firmware.
+  The legacy Joshua TI-demo host path is retired; old configs fail explicitly.

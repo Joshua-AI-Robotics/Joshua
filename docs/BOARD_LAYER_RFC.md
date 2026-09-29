@@ -14,9 +14,20 @@ routing, it supersedes the corresponding open question in this RFC.
 
 Implementation checkpoint: opt-in JoshuaWire v2 over serial now exists for
 Teensy 4.1, ESP32 and AM243 UART, with host/firmware correlation and reset tests.
-The separation plan records the remaining EtherCAT and composed-engine work;
-the serial milestone does not complete those architectural phases or hardware
-validation.
+JW2 EtherCAT now has factory-wired paired CoE/PDO adapters, per-NIC owner leases,
+explicit comm timing/addressing and an AM243 software-only firmware profile.
+AM243 serial and JW2 EtherCAT use the same composed JoshuaWire engine;
+The legacy TI-demo `Am243Board`, motor driver, codec, preset and host tools are
+retired. SOEM I/O is named `SoemEthercatBackend` and stays beneath `EthercatMaster`,
+not exposed as an alternative board-facing transport.
+Native tests cover the full factory/engine/adapter/firmware-core path. A limited
+[single-board EtherCAT bench check](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
+passed commands and stale-target recovery, but also exposed a host mailbox
+deadline failure; production timing validation remains open. The separation plan is
+the current checklist; the original generic-engine checklist below is not a
+claim that all remaining RFC proposals have landed. In particular, serial
+framing/settle-policy extraction, physical-output safety and simultaneous
+transport arbitration remain unfinished.
 
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.
@@ -50,7 +61,7 @@ layer deleted.
 
 | Item | State |
 | --- | --- |
-| Comm axis beyond serial for `joshua_wire` boards | blocked — §3 |
+| Comm axis beyond serial for `joshua_wire` boards | JW2 EtherCAT native-tested and single-board bench-tested; broader timing/failure validation open |
 | UDP transport (`ETHERNET_UDP` is in the proto, unimplemented) | open |
 | Perception through the board layer | open |
 | Flash tooling, `FirmwareSpec` check, IDENTIFY capability bits | open |
@@ -58,6 +69,11 @@ layer deleted.
 | ROS 2 vendor-robot boards | open |
 
 ## 3. Problem: the axes re-conflated one level down
+
+The findings below describe the baseline that motivated this RFC. The newer
+implementation checkpoint above resolves F2's AM243 forwarding/flag problem
+through a shared composed JW2 engine; it does not introduce the originally
+proposed `MessageBoard`/`CyclicBoard` class hierarchy.
 
 §1 exists to stop `board × transport` being baked into a type; the landed
 layer does it again in the class hierarchy. `TeensyBoard : public

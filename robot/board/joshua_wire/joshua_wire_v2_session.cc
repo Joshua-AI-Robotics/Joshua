@@ -18,10 +18,15 @@ absl::Status CheckOk(const std::vector<uint8_t>& payload) {
 }
 }  // namespace
 
-JoshuaWireV2Session::JoshuaWireV2Session(std::shared_ptr<robot::comm::MessageTransport> transport,
-                                         SessionIdSource source,
-                                         uint32_t message_id_limit)
+JoshuaWireV2Session::JoshuaWireV2Session(
+    std::shared_ptr<robot::comm::MessageTransport> transport,
+    SessionIdSource source,
+    uint32_t message_id_limit,
+    std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic,
+    absl::Duration cyclic_timeout)
     : transport_(std::move(transport)),
+      cyclic_(std::move(cyclic)),
+      cyclic_timeout_(cyclic_timeout),
       source_(source ? std::move(source) : [] { return std::random_device{}(); }),
       message_id_limit_(message_id_limit) {}
 
@@ -40,7 +45,11 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireV2Session::ExchangeLocked(uint8_t
   else
     ready_ = false;
   const std::vector<uint8_t> request(bytes, bytes + len);
-  auto result = transport_->Exchange(request);
+  // One allocator/lock spans both planes. Message-only transports retain all
+  // commands; paired transports route only target/feedback through cyclic I/O.
+  auto result = cyclic_ && (cmd == JW_CMD_SET_TARGET || cmd == JW_CMD_GET_FEEDBACK)
+                    ? cyclic_->Exchange(request, cyclic_timeout_)
+                    : transport_->Exchange(request);
   if (!result.ok()) {
     return absl::Status(result.status().code(),
                         std::string(result.status().message()) + "; command outcome unknown");
@@ -78,7 +87,9 @@ absl::Status JoshuaWireV2Session::Open() {
   std::lock_guard<std::mutex> lock(mutex_);
   ready_ = false;
   channel_configs_.clear();
-  if (transport_ == nullptr || message_id_limit_ < 3) {
+  if (transport_ == nullptr || message_id_limit_ < 3 ||
+      (cyclic_ &&
+       (cyclic_timeout_ <= absl::ZeroDuration() || cyclic_timeout_ == absl::InfiniteDuration()))) {
     return absl::InvalidArgumentError("Invalid JoshuaWire v2 session configuration.");
   }
   // CommFactory provides an open link; Open here starts a protocol session,

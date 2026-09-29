@@ -1,5 +1,6 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
+#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -17,20 +18,40 @@ namespace robot::board {
 // only the v1 branch encodes/decodes v1 envelopes. Comm remains byte-oriented.
 class JoshuaWireCommandClient {
  public:
-  JoshuaWireCommandClient(std::shared_ptr<FrameTransport> transport, bool v2)
+  JoshuaWireCommandClient(std::shared_ptr<FrameTransport> transport,
+                          bool v2,
+                          const robot::comm::PairedTransports* pair)
       : transport_(std::move(transport)) {
-    if (v2) session_ = std::make_unique<JoshuaWireV2Session>(transport_);
+    if (v2)
+      session_ = std::make_unique<JoshuaWireV2Session>(
+          transport_,
+          JoshuaWireV2Session::SessionIdSource{},
+          UINT32_MAX,
+          pair ? pair->cyclic : nullptr,
+          pair ? pair->response_timeout : absl::ZeroDuration());
+  }
+  ~JoshuaWireCommandClient() {
+    Close().IgnoreError();
   }
   absl::Status Open() {
+    std::lock_guard lock(mutex_);
     return session_ ? session_->Open() : absl::OkStatus();
   }
   absl::Status Close() {
-    return session_ ? session_->Close() : absl::OkStatus();
+    std::lock_guard lock(mutex_);
+    if (closed_) return absl::OkStatus();
+    closed_ = true;
+    auto status = session_ ? session_->Close() : absl::OkStatus();
+    session_.reset();
+    transport_.reset();  // Retained channels no longer keep a NIC lease alive.
+    return status;
   }
   uint32_t protocol_version() const {
     return session_ ? 2 : 1;
   }
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command) {
+    std::lock_guard lock(mutex_);
+    if (closed_) return absl::FailedPreconditionError("JoshuaWire board has been closed.");
     if (session_) return session_->Exchange(command);
     ABSL_ASSIGN_OR_RETURN(auto legacy, robot::comm::GetLegacyMessageTransport(transport_));
     if (command.payload_len > JW1_MAX_PAYLOAD_LEN)
@@ -59,6 +80,8 @@ class JoshuaWireCommandClient {
  private:
   std::shared_ptr<FrameTransport> transport_;
   std::unique_ptr<JoshuaWireV2Session> session_;
+  bool closed_ = false;
+  std::mutex mutex_;
 };
 
 namespace {
@@ -180,21 +203,17 @@ absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
 
 absl::Status JoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
                                            const std::string& board_name) const {
-  if (comm.comm_type() != robot::comm::CommType::SERIAL || !comm.has_serial_config()) {
+  if (comm.transport_type() != robot::comm::TransportType::MESSAGE &&
+      comm.transport_type() != robot::comm::TransportType::MESSAGE_AND_CYCLIC) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Board '", board_name, "' requires SERIAL comm config."));
-  }
-  if (comm.transport_type() != robot::comm::TransportType::MESSAGE) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Board '", board_name, "' requires MESSAGE transport."));
+        absl::StrCat("Board '", board_name, "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
   }
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateTransport(
+absl::StatusOr<robot::comm::CommTransport> JoshuaWireBoard::CreateTransports(
     const robot::comm::Comm& comm) const {
-  ABSL_ASSIGN_OR_RETURN(auto transport, robot::comm::CommFactory::CreateComm(comm));
-  return robot::comm::GetCommTransport<robot::comm::MessageTransport>(transport);
+  return robot::comm::CommFactory::CreateComm(comm);
 }
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
@@ -208,6 +227,11 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
         absl::StrCat("Board '", config.name(), "' is not a ", type_name, " board."));
   }
   ABSL_RETURN_IF_ERROR(ValidateComm(config.comm(), config.name()));
+  if (config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC &&
+      (config.protocol() != JOSHUA_WIRE_V2 || config.has_am243_config()))
+    return absl::InvalidArgumentError(
+        "Paired JoshuaWire requires explicit v2; endpoint fields belong in comm, not "
+        "am243_config.");
   if (!config.has_firmware()) {
     return absl::InvalidArgumentError(absl::StrCat(
         type_name, " board '", config.name(), "' requires a firmware{} spec for IDENTIFY."));
@@ -364,10 +388,19 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
   }
   ABSL_RETURN_IF_ERROR(ValidateConfig(config));
 
-  ABSL_ASSIGN_OR_RETURN(auto transport, CreateTransport(config.comm()));
+  ABSL_ASSIGN_OR_RETURN(auto transports, CreateTransports(config.comm()));
+  ABSL_ASSIGN_OR_RETURN(auto transport,
+                        robot::comm::GetCommTransport<robot::comm::MessageTransport>(transports));
+  const auto* pair = std::get_if<robot::comm::PairedTransports>(&transports);
+  const bool wants_pair = config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
+  if (wants_pair != (pair != nullptr) ||
+      (pair && (!pair->cyclic || pair->response_timeout <= absl::ZeroDuration() ||
+                pair->response_timeout == absl::InfiniteDuration())))
+    return absl::InvalidArgumentError(
+        "Factory capabilities do not match JoshuaWire routing policy.");
 
-  auto commands = std::make_shared<JoshuaWireCommandClient>(std::move(transport),
-                                                            config.protocol() == JOSHUA_WIRE_V2);
+  auto commands = std::make_shared<JoshuaWireCommandClient>(
+      std::move(transport), config.protocol() == JOSHUA_WIRE_V2, pair);
   ABSL_RETURN_IF_ERROR(commands->Open());
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*commands, config));
 

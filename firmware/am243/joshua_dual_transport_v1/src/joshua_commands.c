@@ -1,28 +1,20 @@
-// Implements AM243's software-only serial channel commands and session reset.
-// Extracted from the UART task for reuse by v1/v2 artifacts and native tests;
-// this handler neither drives motor GPIO nor changes the TI EtherCAT demo state.
-// TODO(JoshuaWire v2 EtherCAT migration): Replace this implementation with the
-// shared firmware dispatcher described in joshua_serial_commands.h, rather than
-// duplicating command logic/state for EtherCAT. Physical motion also requires a
-// real motor backend; the software-only feedback here is not measured motion.
-#include "joshua_serial_commands.h"
+// Transport-neutral AM243 command semantics, reused by UART and CoE/PDO.
+// This remains a software channel: feedback is not measured motor motion.
+#include "joshua_commands.h"
 
 #include <math.h>
 #include <string.h>
 
-void JoshuaSerialReset(void* context) {
-  JoshuaSerialChannel* channel = (JoshuaSerialChannel*)context;
+void JoshuaReset(void* context) {
+  JoshuaChannel* channel = (JoshuaChannel*)context;
   const bool latch_estop = channel->latch_estop;
   memset(channel, 0, sizeof(*channel));
   channel->latch_estop = latch_estop;
 }
 
 // Software-only channel for the existing demo overlay; no GPIO output.
-int JoshuaSerialCommand(void* context,
-                        const jw_command_t* frame,
-                        uint8_t* response,
-                        size_t capacity) {
-  JoshuaSerialChannel* channel = (JoshuaSerialChannel*)context;
+int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, size_t capacity) {
+  JoshuaChannel* channel = (JoshuaChannel*)context;
   jw_status_t status = JW_STATUS_ERROR;
   switch (frame->cmd) {
     case JW_CMD_IDENTIFY: {
@@ -63,6 +55,7 @@ int JoshuaSerialCommand(void* context,
       if (frame->channel != 0 || frame->payload_len != 0) break;
       jw_feedback_t feedback;
       memset(&feedback, 0, sizeof(feedback));
+      feedback.fault_flags = channel->fault_flags;
       if (channel->target_mode == JW_MODE_POSITION) feedback.position = channel->target_value;
       if (channel->target_mode == JW_MODE_VELOCITY) feedback.velocity = channel->target_value;
       return jw_encode_feedback_payload(response, capacity, &feedback);

@@ -5,7 +5,7 @@
 // <stdint.h>/<stddef.h>, explicit little-endian byte packing, pure
 // encode/decode functions over caller-provided buffers. One source file is
 // compiled into both the host (as a Bazel cc_library, linked into
-// Am243Board/TeensyBoard/ArduinoBoard) and every Joshua firmware image (as a
+// the shared JoshuaWire board engine) and Joshua firmware images (as a
 // PlatformIO lib), so the two sides cannot drift silently — see the repo's
 // firmware/common/BUILD and firmware/teensy/41/platformio.ini.
 // Per-command frame helpers delegate payload serialization to the neutral

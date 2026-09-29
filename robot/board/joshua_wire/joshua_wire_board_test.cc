@@ -171,9 +171,9 @@ TEST_F(JoshuaWireBoardTest, InitRejectsWrongBoardType) {
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(JoshuaWireBoardTest, InitRejectsNonSerialComm) {
+TEST_F(JoshuaWireBoardTest, InitRejectsUnsupportedCapability) {
   auto config = MakeBoardConfig();
-  config.mutable_comm()->set_comm_type(robot::comm::CommType::ETHERNET_UDP);
+  config.mutable_comm()->set_transport_type(robot::comm::BYTE_STREAM);
   FakeJoshuaWireBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);

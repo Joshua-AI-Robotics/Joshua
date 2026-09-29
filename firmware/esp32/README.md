@@ -209,7 +209,7 @@ MCU — but treat that as a prediction until it's actually been run.
   IDENTIFY immediately races the ESP32's bootloader boot-log output (a
   different baud rate, reads as noise) and `setup()`. Unlike Teensy 4.1's
   native-USB CDC, ESP32 has no way around this at the transport level, so
-  `Esp32Board::CreateTransport()` (`robot/board/esp32/esp32_board.cc`)
+  `Esp32Board::CreateTransports()` (`robot/board/esp32/esp32_board.cc`)
   overrides the default to sleep ~2s after opening the port before
   returning — long enough for boot to finish before the first
   `AtomicRead` (which already flushes right before writing) sends
@@ -235,7 +235,7 @@ MCU — but treat that as a prediction until it's actually been run.
 
 - `robot/board/esp32/esp32_board.{h,cc}` — paired host-side board class; a
   one-line constructor supplying `BoardType::ESP32` and `JW_BOARD_ESP32`
-  to `JoshuaWireBoard`, plus a `CreateTransport()` override for the
+  to `JoshuaWireBoard`, plus a `CreateTransports()` override for the
   post-open settle delay (see Known gaps above) — everything else is
   inherited
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY

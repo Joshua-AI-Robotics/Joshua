@@ -11,7 +11,8 @@
 #include <thread>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_serial_commands.h"
+#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport_v1/src/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "firmware/common/joshua_wire_v2.h"
 #include "gtest/gtest.h"
@@ -60,7 +61,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
                                                response.data(),
                                                response.size(),
                                                handler,
-                                               JoshuaSerialReset,
+                                               JoshuaReset,
                                                &channel);
     --active;
     if (timeout || len == 0) return absl::DeadlineExceededError("Response lost");
@@ -101,8 +102,8 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     return response;
   }
   jw_serial_endpoint_t endpoint{};
-  jw_serial_command_handler_t handler = JoshuaSerialCommand;
-  JoshuaSerialChannel channel{};
+  jw_serial_command_handler_t handler = JoshuaCommand;
+  JoshuaChannel channel{};
   std::vector<Bytes> requests;
   Bytes retained;
   Bytes last_response;
@@ -122,6 +123,52 @@ class V2SessionTest : public ::testing::Test {
     return session.Exchange(request);
   }
 };
+
+class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
+ public:
+  explicit RoutedCyclic(std::shared_ptr<FirmwareTransport> firmware)
+      : firmware(std::move(firmware)) {}
+  absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> request,
+                                 absl::Duration timeout) override {
+    jw2_frame_t frame;
+    EXPECT_EQ(jw2_decode_frame(request.data(), request.size(), &frame), 0);
+    EXPECT_TRUE(frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK);
+    EXPECT_EQ(timeout, absl::Milliseconds(37));
+    commands.push_back(frame.cmd);
+    return firmware->Exchange(request);
+  }
+  std::shared_ptr<FirmwareTransport> firmware;
+  std::vector<uint8_t> commands;
+};
+
+TEST_F(V2SessionTest, PairedRoutingSharesIdsAndPreservesCorrelationAndTimeoutPolicy) {
+  auto cyclic = std::make_shared<RoutedCyclic>(transport);
+  JoshuaWireV2Session routed(
+      transport, [] { return 99; }, UINT32_MAX, cyclic, absl::Milliseconds(37));
+  ASSERT_TRUE(routed.Open().ok());
+  ASSERT_TRUE(routed.Exchange(Configure()).ok());
+  ASSERT_TRUE(routed.Exchange(Command(JW_CMD_ENABLE)).ok());
+  uint8_t payload[5];
+  ASSERT_EQ(jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, 42), 5);
+  ASSERT_TRUE(routed.Exchange({JW_CMD_SET_TARGET, 0, payload, sizeof(payload)}).ok());
+  ASSERT_TRUE(routed.Exchange(Command(JW_CMD_GET_FEEDBACK)).ok());
+  transport->corrupt_field = 1;
+  EXPECT_EQ(routed.Exchange(Command(JW_CMD_GET_FEEDBACK)).status().code(),
+            absl::StatusCode::kDataLoss);
+  transport->corrupt_field = -1;
+  ASSERT_TRUE(routed.Close().ok());
+  EXPECT_EQ(cyclic->commands,
+            (std::vector<uint8_t>{JW_CMD_SET_TARGET, JW_CMD_GET_FEEDBACK, JW_CMD_GET_FEEDBACK}));
+  uint32_t expected = 1;
+  for (const auto& bytes : transport->requests) {
+    jw2_frame_t frame;
+    ASSERT_EQ(jw2_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+    EXPECT_EQ(frame.session_id, 99);
+    EXPECT_EQ(frame.message_id, expected++);
+  }
+  JoshuaWireV2Session invalid(transport, {}, UINT32_MAX, cyclic);
+  EXPECT_EQ(invalid.Open().code(), absl::StatusCode::kInvalidArgument);
+}
 
 TEST_F(V2SessionTest, HandshakeGatesAllCommandsAndPropagatesErrors) {
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(),
@@ -347,5 +394,227 @@ TEST_F(V2SessionTest, ProductionBoardInitializesAndUsesAllSerialChannelCommands)
   EXPECT_EQ(channel->Enable().code(), absl::StatusCode::kFailedPrecondition);
   EXPECT_EQ(transport->requests.size(), count);
 }
+// The AM243 EtherCAT artifact uses this exact portable C core. No SDK, clock,
+// GPIO or extra test utility is needed to exercise its safety state machine.
+uint32_t ProfileU32(const uint8_t* p) {
+  return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
+}
+void ProfilePut32(uint8_t* p, uint32_t value) {
+  for (int i = 0; i < 4; ++i) p[i] = value >> (8 * i);
+}
+class Am243EthercatProfileTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_EQ(JoshuaEthercatProfileInit(&profile, 1000, 500), 0);
+    Reset(7);
+    JoshuaEthercatProfileTick(&profile, 0, true);
+  }
+  void Reset(uint32_t session) {
+    uint8_t object[8] = {1};
+    ProfilePut32(object + 4, session);
+    ASSERT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_SESSION_INDEX, object, 8), 0);
+    session_id = session;
+    next_id = 1;
+    generation = 0;
+  }
+  Bytes Image(bool pdo, uint8_t command, const Bytes& payload = {}, uint8_t channel = 0) {
+    Bytes image(pdo ? 80 : 76, 0);
+    ProfilePut32(image.data(), session_id);
+    ProfilePut32(image.data() + 4, ++generation);
+    const size_t offset = pdo ? 16 : 12;
+    if (pdo) ProfilePut32(image.data() + 8, ProfileU32(profile.input + 8));
+    const int size = jw2_encode_frame(image.data() + offset,
+                                      64,
+                                      session_id,
+                                      next_id++,
+                                      command,
+                                      channel,
+                                      payload.data(),
+                                      payload.size());
+    EXPECT_GT(size, 0);
+    image[offset - 4] = size;
+    return image;
+  }
+  Bytes Management(uint8_t command, const Bytes& payload = {}, uint8_t channel = 0) {
+    auto request = Image(false, command, payload, channel);
+    EXPECT_EQ(
+        JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, request.data(), request.size()),
+        0);
+    jw2_frame_t response;
+    if (jw2_decode_frame(profile.mailbox + 12, profile.mailbox[8], &response) != 0) {
+      ADD_FAILURE() << "missing management reply";
+      return {};
+    }
+    Bytes result(response.payload, response.payload + response.payload_len);
+    EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_ACK_INDEX, request.data() + 4, 4), 0);
+    return result;
+  }
+  void Enable() {
+    EXPECT_EQ(Management(JW_CMD_CONFIGURE_CHANNEL, Bytes(11)), (Bytes{JW_STATUS_OK}));
+    EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{JW_STATUS_OK}));
+    EXPECT_TRUE(profile.channel.enabled);
+  }
+  Bytes Target(float value) {
+    Bytes payload(5);
+    EXPECT_EQ(jw_encode_set_target_payload(payload.data(), payload.size(), JW_MODE_POSITION, value),
+              5);
+    return Image(true, JW_CMD_SET_TARGET, payload);
+  }
+  JoshuaEthercatProfile profile{};
+  uint32_t session_id = 7;
+  uint32_t next_id = 1;
+  uint32_t generation = 0;
+};
+
+TEST_F(Am243EthercatProfileTest, DescriptorResetReadbackAndEstopAreExact) {
+  uint8_t descriptor[36];
+  ASSERT_EQ(JoshuaEthercatProfileRead(&profile, JWEC_DESCRIPTOR_INDEX, descriptor, 36), 0);
+  EXPECT_EQ(Bytes(descriptor, descriptor + 22),
+            (Bytes{'J', 'W', 'E', 'C', 1, 0, 2, 0, 2, 0, 1, 0, 80, 0, 80, 0, 64, 0, 6, 0, 0, 0}));
+  EXPECT_EQ(std::string(reinterpret_cast<char*>(descriptor + 22)), "am243-ec-v2");
+  EXPECT_EQ(JoshuaEthercatProfileRead(&profile, JWEC_DESCRIPTOR_INDEX, descriptor, 35), -1);
+  Enable();
+  EXPECT_EQ(Management(JW_CMD_ESTOP, {}, JW_CHANNEL_NONE), (Bytes{JW_STATUS_OK}));
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_TRUE(profile.channel.estopped);
+  uint8_t object[8] = {1, 0, 0, 0, 7};
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_SESSION_INDEX, object, 8), 0);
+  EXPECT_TRUE(profile.channel.estopped);  // Same-session write cannot erase the latch/history.
+  Reset(8);
+  EXPECT_FALSE(profile.channel.estopped);
+  EXPECT_FALSE(profile.channel.configured);
+  EXPECT_FALSE(profile.channel.enabled);
+  ASSERT_EQ(JoshuaEthercatProfileRead(&profile, JWEC_SESSION_INDEX, object, 8), 0);
+  EXPECT_EQ(Bytes(object, object + 8), (Bytes{1, 0, 0, 0, 8, 0, 0, 0}));
+}
+
+TEST_F(Am243EthercatProfileTest, MailboxRetainedUntilExactAckAndRoutingIsEnforced) {
+  auto first = Image(false, JW_CMD_IDENTIFY, {}, JW_CHANNEL_NONE);
+  ASSERT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, first.data(), 76), 0);
+  Bytes response(profile.mailbox, profile.mailbox + 76);
+  auto second = Image(false, JW_CMD_DISABLE);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, second.data(), 76), -1);
+  EXPECT_EQ(Bytes(profile.mailbox, profile.mailbox + 76), response);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_ACK_INDEX, second.data() + 4, 4), 0);
+  EXPECT_EQ(Bytes(profile.mailbox, profile.mailbox + 76), response);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_ACK_INDEX, first.data() + 4, 4), 0);
+  EXPECT_EQ(ProfileU32(profile.mailbox + 4), 0);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, first.data(), 76), 0);
+  EXPECT_EQ(ProfileU32(profile.mailbox + 4),
+            0);  // Acknowledged duplicate does not resurrect reply.
+  auto wrong_plane = Image(false, JW_CMD_GET_FEEDBACK);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, wrong_plane.data(), 76), -1);
+  wrong_plane = Image(true, JW_CMD_ENABLE);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, wrong_plane.data(), 80), -1);
+}
+
+TEST_F(Am243EthercatProfileTest, PdoExecutesOnceAndDuplicateDoesNotFeedWatchdog) {
+  Enable();
+  auto target = Target(123.0f);
+  ASSERT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
+  EXPECT_FLOAT_EQ(profile.channel.target_value, 123.0f);
+  EXPECT_EQ(ProfileU32(profile.input + 4), generation);
+  EXPECT_EQ(ProfileU32(profile.input + 8), generation);
+  jw2_frame_t request, response;
+  ASSERT_EQ(jw2_decode_frame(target.data() + 16, target[12], &request), 0);
+  ASSERT_EQ(jw2_decode_frame(profile.input + 16, profile.input[12], &response), 0);
+  EXPECT_TRUE(jw2_response_matches(&request, &response));
+  for (uint64_t now : {100, 200, 300, 400}) {
+    JoshuaEthercatProfileTick(&profile, now, true);
+    EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
+    EXPECT_EQ(profile.last_progress_us, 0);
+    EXPECT_EQ(profile.last_target_us, 0);
+    EXPECT_TRUE(profile.channel.enabled);
+  }
+  JoshuaEthercatProfileTick(&profile, 500, true);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_EQ(profile.channel.fault_flags, JOSHUA_ECAT_FAULT_TARGET);
+  EXPECT_FLOAT_EQ(profile.channel.target_value, 0);
+  EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{JW_STATUS_ERROR}));
+}
+
+TEST_F(Am243EthercatProfileTest, FeedbackRefreshesProgressButNotTargetAndFreshTargetsFeedBoth) {
+  Enable();
+  for (uint64_t now : {100, 200, 300, 400}) {
+    JoshuaEthercatProfileTick(&profile, now, true);
+    auto feedback = Image(true, JW_CMD_GET_FEEDBACK);
+    EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, feedback.data(), 80), 0);
+    EXPECT_EQ(profile.last_progress_us, now);
+    EXPECT_EQ(profile.last_target_us, 0);
+  }
+  JoshuaEthercatProfileTick(&profile, 499, true);
+  auto target = Target(42.0f);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
+  JoshuaEthercatProfileTick(&profile, 998, true);
+  EXPECT_TRUE(profile.channel.enabled);
+  JoshuaEthercatProfileTick(&profile, 999, true);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_EQ(profile.channel.fault_flags, JOSHUA_ECAT_FAULT_TARGET);
+}
+
+TEST_F(Am243EthercatProfileTest, CommunicationTimeoutOpLossAndBackwardClockLatchDisabled) {
+  profile.comm_timeout_us = 200;
+  Enable();
+  JoshuaEthercatProfileTick(&profile, 199, true);
+  EXPECT_TRUE(profile.channel.enabled);
+  JoshuaEthercatProfileTick(&profile, 200, true);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_EQ(profile.channel.fault_flags, JOSHUA_ECAT_FAULT_COMM);
+  Reset(8);
+  Enable();
+  JoshuaEthercatProfileTick(&profile, 201, false);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_EQ(profile.channel.fault_flags, JOSHUA_ECAT_FAULT_STATE);
+  Reset(9);
+  EXPECT_EQ(Management(JW_CMD_CONFIGURE_CHANNEL, Bytes(11)), (Bytes{0}));
+  EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{JW_STATUS_ERROR}));  // Cannot enable outside OP.
+  JoshuaEthercatProfileTick(&profile, 202, true);
+  EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{0}));
+  JoshuaEthercatProfileTick(&profile, 201, true);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_TRUE(profile.channel.fault_flags & JOSHUA_ECAT_FAULT_STATE);
+}
+
+TEST_F(Am243EthercatProfileTest, CancellationStopMalformedAndForeignSessionImages) {
+  Enable();
+  Bytes cancel(80, 0);
+  ProfilePut32(cancel.data(), 7);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, cancel.data(), 80), 0);
+  EXPECT_TRUE(profile.channel.enabled);  // Session-bearing generation zero cancels only the slot.
+  auto stale = Target(99.0f);
+  ProfilePut32(stale.data(), 99);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, stale.data(), 80), 0);
+  EXPECT_FLOAT_EQ(profile.channel.target_value, 0);
+  Bytes stop(80, 0);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, stop.data(), 80), 0);
+  EXPECT_FALSE(profile.channel.enabled);
+  Reset(8);
+  Enable();
+  auto malformed = Target(12.0f);
+  malformed.back() = 1;
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, malformed.data(), 80), -1);
+  EXPECT_FALSE(profile.channel.enabled);
+  EXPECT_TRUE(profile.channel.fault_flags & JOSHUA_ECAT_FAULT_PROTOCOL);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, malformed.data(), 79), -1);
+}
+
+TEST_F(Am243EthercatProfileTest, MessageIdsAreGlobalAcrossPlanesAndResetClearsBothReplies) {
+  Enable();
+  auto target = Target(50.0f);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
+  --next_id;  // Reuse PDO message ID through CoE with a new transport generation.
+  auto reused = Image(false, JW_CMD_DISABLE);
+  EXPECT_EQ(JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, reused.data(), 76), -1);
+  EXPECT_TRUE(profile.channel.enabled);
+  Reset(8);
+  EXPECT_EQ(ProfileU32(profile.input), 8);
+  EXPECT_EQ(ProfileU32(profile.input + 4), 0);
+  EXPECT_EQ(ProfileU32(profile.input + 8), 0);
+  EXPECT_EQ(ProfileU32(profile.mailbox + 4), 0);
+  EXPECT_EQ(profile.session.last_message_id, 0);
+  EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
+  EXPECT_FLOAT_EQ(profile.channel.target_value, 0);
+}
+
 }  // namespace
 }  // namespace robot::board

@@ -6,7 +6,7 @@
 #include <sstream>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_serial_commands.h"
+#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -34,8 +34,8 @@ class Firmware : public robot::comm::MessageTransport {
                                                bytes.size(),
                                                response.data(),
                                                response.size(),
-                                               JoshuaSerialCommand,
-                                               JoshuaSerialReset,
+                                               JoshuaCommand,
+                                               JoshuaReset,
                                                &state);
     if (request.cmd == fail_cmd || len <= 0)
       return absl::DeadlineExceededError("lost reply after execution");
@@ -52,7 +52,7 @@ class Firmware : public robot::comm::MessageTransport {
     return response;
   }
   jw_serial_endpoint_t endpoint{};
-  JoshuaSerialChannel state{};
+  JoshuaChannel state{};
   std::vector<uint8_t> commands;
   std::vector<uint32_t> sessions;
   int fail_cmd = -1;

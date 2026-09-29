@@ -28,7 +28,7 @@ absl::Status StepperDriver::Init() {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Stepper driver requires a board channel");
   }
-  // Auto-enables (matches TiDemoDriver, unlike Sts3215Driver): a TB6600's
+  // Auto-enables (unlike Sts3215Driver): a TB6600's
   // ENA pin is a binary holding-torque gate with no real safety case for
   // withholding it on an open-loop stepper the way STS3215's torque-enable
   // register has for a precision servo. Found via real hardware testing —

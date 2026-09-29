@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "firmware/common/joshua_wire_commands.h"
+#include "robot/comm/interfaces/correlated_cyclic_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
 
 namespace robot::board {
@@ -22,11 +23,13 @@ class JoshuaWireV2Session {
   using SessionIdSource = std::function<uint32_t()>;
   explicit JoshuaWireV2Session(std::shared_ptr<robot::comm::MessageTransport> transport,
                                SessionIdSource source = {},
-                               uint32_t message_id_limit = UINT32_MAX);
+                               uint32_t message_id_limit = UINT32_MAX,
+                               std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic = {},
+                               absl::Duration cyclic_timeout = absl::ZeroDuration());
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
   absl::Status Open();
-  // Serial calls have a bounded I/O deadline. Close waits for that exchange,
+  // Transport calls have a bounded I/O deadline. Close waits for that exchange,
   // sends ESTOP if the session is usable, then rejects retained channel calls.
   absl::Status Close();
   // The command payload is borrowed for the call; the returned payload is owned.
@@ -41,6 +44,8 @@ class JoshuaWireV2Session {
                                                       const uint8_t* payload,
                                                       uint8_t payload_len);
   std::shared_ptr<robot::comm::MessageTransport> transport_;
+  std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic_;
+  const absl::Duration cyclic_timeout_;
   SessionIdSource source_;
   const uint32_t message_id_limit_;
   std::mutex mutex_;

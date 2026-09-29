@@ -44,9 +44,10 @@ so explicitly with `TODO` placeholders rather than staying silent.
   Built as a Bazel `cc_library` for the host and as a PlatformIO library
   (`library.json`) for every firmware target — same two files, two
   toolchains, one repo commit.
-- The host-side `Am243Board` supports both this shared codec over serial and
-  the existing TI EtherCAT demo. The dual-transport AM243 overlay builds both
-  into one image while keeping the TI SDK outside the repository.
+- AM243 serial uses the shared `JoshuaWireBoard` engine. The dual-transport
+  firmware overlay still includes TI echo EtherCAT alongside serial, keeping
+  the TI SDK outside the repository, but the TI-demo host path is retired.
+  Current Joshua EtherCAT runtime requires the separate JW2 artifact below.
 
 ## Opt-in JoshuaWire v2 serial milestone
 
@@ -81,6 +82,23 @@ V1 wire encoding is unchanged. Shared command validation now rejects enabling
 unconfigured channels and malformed/non-finite targets. Native Bazel tests
 exercise the actual MCU dispatch with simulated serial/GPIO, plus the AM243
 software handler and host session; no tests flash or move hardware.
+
+## Opt-in AM243 JoshuaWire v2 EtherCAT milestone
+
+The [AM243 overlay](am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+also builds the explicit `am243_ethercat_jw2` artifact. It replaces TI's echo
+profile with JW2 CoE management and 80-byte PDO command/feedback images, one
+shared session, retained responses and latched software watchdogs. UART protocol
+service is absent from this artifact; existing UART/TI-demo artifacts are unchanged.
+
+The production firmware core has native host-interoperability and controlled-clock
+tests. A [single-board EtherCAT bench check](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
+passed factory/engine commands, software feedback and stale-target fault/recovery.
+It also exposed a host mailbox deadline failure with a 1 ms budget; production
+timing validation remains open. There is still no physical motor backend or
+simultaneous transport arbitration.
+Explicit watchdog intervals are required at build time; see the profile README
+for the mapping, build command and safety limits. No flashing is automatic.
 
 ## Layout
 

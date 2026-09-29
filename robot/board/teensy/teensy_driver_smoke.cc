@@ -1,5 +1,5 @@
 // Board-level smoke test for TeensyBoard, bypassing ActionFactory/ROS
-// entirely (mirrors robot/board/am243/am243_driver_smoke.cc). Useful for
+// entirely. Useful for
 // isolating "is it the board/wire-protocol layer" from "is it something in
 // the ActionFactory/ROS/actuator_subscriber stack" when debugging a new
 // Teensy bring-up — this is exactly the tool that found the missing

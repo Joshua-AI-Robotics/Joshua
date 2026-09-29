@@ -19,6 +19,13 @@ cc_test(
 )
 
 # Native builds of the same codecs compiled into MCU firmware.
+cc_library(
+    name = "joshua_wire_ethercat",
+    hdrs = ["joshua_wire_ethercat.h"],
+    visibility = ["//visibility:public"],
+    deps = [":joshua_wire_v2"],
+)
+
 # See README.md for the file map, test boundaries and migration adapters.
 cc_library(
     name = "joshua_wire_v1",

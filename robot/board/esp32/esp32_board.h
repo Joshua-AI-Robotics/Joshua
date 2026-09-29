@@ -11,7 +11,7 @@ namespace robot::board {
 // (docs/BOARD_LAYER_RFC.md §7.2/§7.3, §10 Phase 5). Identity (BoardType,
 // jw_board_id_t) is constructor data, same pattern as
 // robot/board/teensy/teensy_board.h — see JoshuaWireBoard's class comment
-// for why. One real difference from Teensy: CreateTransport() is
+// for why. One real difference from Teensy: CreateTransports() is
 // overridden (see the .cc) to add a post-open settle delay, because most
 // ESP32 dev boards reset when the serial port is opened, unlike Teensy's
 // native-USB CDC. firmware/esp32/ is the one firmware image this board
@@ -28,7 +28,7 @@ class Esp32Board : public JoshuaWireBoard {
   // Overrides the default only to add a post-open settle delay — see the
   // .cc for why: opening the port resets the board on most ESP32 dev
   // boards, unlike Teensy's native-USB CDC.
-  absl::StatusOr<std::shared_ptr<FrameTransport>> CreateTransport(
+  absl::StatusOr<robot::comm::CommTransport> CreateTransports(
       const robot::comm::Comm& comm) const override;
 };
 

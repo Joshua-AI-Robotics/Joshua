@@ -6,9 +6,10 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "robot/board/am243/am243_board.h"
+#include "firmware/common/joshua_wire_commands.h"
 #include "robot/board/esp32/esp32_board.h"
 #include "robot/board/feetech_bus/feetech_bus_board.h"
+#include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
 #include "utils/status_macros.h"
@@ -19,6 +20,7 @@ namespace {
 
 struct CachedBoard {
   robot::board::BoardType board_type;
+  std::string config_key;
   std::shared_ptr<BoardInterface> board;
 };
 
@@ -30,7 +32,14 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::MOCK:
       return std::make_shared<MockBoard>();
     case robot::board::BoardType::AM243:
-      return std::make_shared<Am243Board>();
+      if (config.has_am243_config() ||
+          (config.comm().comm_type() == robot::comm::ETHERCAT &&
+           (config.protocol() != JOSHUA_WIRE_V2 ||
+            config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC)))
+        return absl::InvalidArgumentError(
+            "Legacy AM243 TI-demo path is retired; select explicit JW2 with "
+            "MESSAGE_AND_CYCLIC and comm.ethercat_config endpoint/timing fields.");
+      return std::make_shared<JoshuaWireBoard>(AM243, JW_BOARD_AM243);
     case robot::board::BoardType::FEETECH_BUS:
       return std::make_shared<FeetechBusBoard>();
     case robot::board::BoardType::TEENSY41:
@@ -73,12 +82,15 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
                        robot::board::BoardType_Name(config.board_type()),
                        "; two boards may not share one name."));
     }
+    if (it->second.config_key != config.SerializeAsString())
+      return absl::InvalidArgumentError(
+          "Board name is already cached with a different configuration.");
     return it->second.board;
   }
 
   ABSL_ASSIGN_OR_RETURN(auto board, CreateBoard(config));
   ABSL_RETURN_IF_ERROR(board->Init(config));
-  g_boards[config.name()] = CachedBoard{config.board_type(), board};
+  g_boards[config.name()] = CachedBoard{config.board_type(), config.SerializeAsString(), board};
   return board;
 }
 

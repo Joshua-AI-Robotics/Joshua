@@ -31,7 +31,7 @@ absl::Status ValidateMotorChannel(robot::action::MotorType motor_type,
     case robot::action::MotorType::MOTOR_STEPPER_NEMA17:
       return RequireDrive(motor_type, drive, robot::board::DriveInterface::STEP_DIR);
     case robot::action::MotorType::MOTOR_TI_DEMO:
-      return RequireDrive(motor_type, drive, robot::board::DriveInterface::PDO_JOINT);
+      return absl::InvalidArgumentError("MOTOR_TI_DEMO is retired; configure a supported motor.");
     case robot::action::MotorType::MOTOR_INVALID:
     default:
       return absl::InvalidArgumentError("Actuator has an invalid motor_type.");

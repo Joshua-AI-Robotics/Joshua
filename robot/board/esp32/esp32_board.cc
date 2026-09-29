@@ -22,9 +22,9 @@ namespace robot::board {
 // response — this delay only needs to outlast the boot itself.
 constexpr std::chrono::milliseconds kPostResetSettleDelay(2000);
 
-absl::StatusOr<std::shared_ptr<FrameTransport>> Esp32Board::CreateTransport(
+absl::StatusOr<robot::comm::CommTransport> Esp32Board::CreateTransports(
     const robot::comm::Comm& comm) const {
-  ABSL_ASSIGN_OR_RETURN(auto transport, JoshuaWireBoard::CreateTransport(comm));
+  ABSL_ASSIGN_OR_RETURN(auto transport, JoshuaWireBoard::CreateTransports(comm));
   std::this_thread::sleep_for(kPostResetSettleDelay);
   return transport;
 }

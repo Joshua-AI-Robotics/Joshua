@@ -28,8 +28,14 @@ INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
 JOSHUA_WIRE_VERSION ?= 1
 INCLUDES += -DJOSHUA_WIRE_VERSION=$(JOSHUA_WIRE_VERSION)
 
-JOSHUA_OBJS := joshua_serial_task.obj joshua_serial_commands.obj joshua_wire_commands.obj joshua_wire_v1.obj \
+JOSHUA_OBJS := joshua_serial_task.obj joshua_commands.obj joshua_wire_commands.obj joshua_wire_v1.obj \
 	joshua_wire_v2.obj joshua_wire_v2_firmware_session.obj joshua_wire_serial_endpoint.obj
+ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw2)
+JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire_v2.obj \
+	joshua_wire_v2_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
+INCLUDES += -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
+	-DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)
+endif
 OBJS += $(JOSHUA_OBJS)
 DEPS += $(JOSHUA_OBJS:.obj=.d)
 

@@ -11,61 +11,42 @@
 #include "robot/board/frame/frame_transport.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/proto/board.pb.h"
+#include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
 
 namespace robot::board {
 
 class JoshuaWireCommandClient;
 
-// Shared host-side implementation of the JoshuaWire board contract:
-// open a FrameTransport, run the
-// IDENTIFY handshake (board_id, protocol version, per-channel drive all
-// cross-checked against config), push CONFIGURE_CHANNEL for every channel,
-// then dispatch ENABLE/DISABLE/SET_TARGET/GET_FEEDBACK per channel. Every
-// Joshua-firmware MCU board (Am243Board, TeensyBoard, Esp32Board today;
-// ArduinoBoard, ...) speaks the exact same wire protocol, so this class
-// holds that entire orchestration once — a concrete board subclasses this
-// and supplies only the handful of facts that actually differ per board:
-// which BoardType/jw_board_id_t it is, and (if it ever isn't a plain
-// serial link) how its comm config is validated and its production
-// transport is built.
-//
-// What is NOT generic here, and stays a subclass's problem if it ever
-// needs to differ: every current and planned board on this class (AM243,
-// Teensy, Arduino, ESP32) is a serial FrameTransport speaking STEP_DIR
-// channels, so ValidateComm/CreateTransport below default to exactly that.
-// Esp32Board overrides CreateTransport only to wait out the board's
-// auto-reset after open; the handshake itself is unchanged.
-//
-// Board identity (expected BoardType / jw_board_id_t) is constructor
-// data, not a virtual hook: unlike ValidateComm/CreateTransport
-// below (genuine behavior a future board might need to override), a
-// board's identity is a compile-time-known constant with no logic behind
-// it, so a subclass just passes it to this constructor — no vtable entry,
-// no per-subclass .cc file needed for something that only ever returns a
-// literal. See robot/board/teensy/teensy_board.h for how small that makes
-// a concrete board.
+// Shared JoshuaWire engine: protocol reset, IDENTIFY, channel configuration and
+// command dispatch. Identity is constructor data; transport capabilities come
+// from CommFactory. V2 uses one session/ID allocator across message and optional
+// cyclic endpoints. The session routes target/feedback to cyclic when present,
+// otherwise all commands use messages. No serial/SOEM classes or NIC lifecycle
+// live here. The v1 legacy message seam remains until its separate migration.
+// ESP32 retains a post-open settle hook; moving that policy to serial config is
+// still pending. STEP_DIR is the only implemented configuration payload today.
 class JoshuaWireBoard : public BoardInterface {
  public:
   JoshuaWireBoard(robot::board::BoardType expected_board_type, jw_board_id_t expected_wire_board_id)
       : expected_board_type_(expected_board_type),
         expected_wire_board_id_(expected_wire_board_id) {}
-  ~JoshuaWireBoard() override = default;
+  ~JoshuaWireBoard() override {
+    Teardown().IgnoreError();
+  }
 
   absl::Status Init(const robot::board::Board& config) final;
   absl::StatusOr<std::shared_ptr<BoardChannel>> OpenChannel(uint32_t index) final;
   absl::Status Teardown() final;
 
  protected:
-  // Checked before any transport is opened. Default requires SERIAL — the
-  // only comm type any JoshuaWire board uses today; override if a
-  // future variant (e.g. a UDP/W5500 firmware build) needs a different
-  // one.
+  // Checked before opening: a message-only or paired capability is required.
+  // CommFactory validates the mechanism/config and produces ready endpoints.
   virtual absl::Status ValidateComm(const robot::comm::Comm& comm,
                                     const std::string& board_name) const;
 
-  // Creates the configured message transport through CommFactory.
-  virtual absl::StatusOr<std::shared_ptr<FrameTransport>> CreateTransport(
+  // Factory capabilities, not concrete mechanism implementations.
+  virtual absl::StatusOr<robot::comm::CommTransport> CreateTransports(
       const robot::comm::Comm& comm) const;
 
  private:

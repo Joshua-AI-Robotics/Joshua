@@ -1,4 +1,7 @@
-# JoshuaWire v2 serial validation
+# JoshuaWire v2 validation
+
+The procedure below is for serial. The separate EtherCAT bench result and its
+limits are recorded under [AM243 EtherCAT](#recorded-am243-ethercat-result--2026-09-28).
 
 The manual `//robot/board/joshua_wire:joshua_wire_v2_smoke` tool checks AM243,
 Teensy 4.1 and ESP32 through the production host v2 session and serial transport.
@@ -111,6 +114,104 @@ has no motor GPIO backend. External motor-power state was not independently
 verified. EtherCAT, watchdogs, power loss during a command, pulse timing and
 ROS 2 integration were not tested. Temporary configs/logs were kept outside
 Git; no additional smoke tool was added.
+
+## Recorded AM243 EtherCAT result — 2026-09-28
+
+The separate `am243_ethercat_jw2.release.appimage.hs_fs` was flashed and verified
+on LP-AM243, then booted from OSPI after the operator changed SW4 and power-cycled.
+Application SHA-256:
+`beddbbbca07849c7788c5862684b4b9664e547a67eb5a38ddc06ec0020f8e5b6`.
+The SDK 09 OSPI bootloader was also flash-verified (SHA-256
+`2224299731e4db89aa67637ae0e73b60d408a42a420979196281e1af8c42dd11`).
+Host and firmware came from the working tree based on
+`3e9f268b30c55e390497d551bb931267a86ec16b`, including then-uncommitted
+CoE/PDO profile and factory integration changes; this is not a clean-commit
+release validation. Host: Ubuntu 24.04/Jazzy Docker, dedicated NIC `enp5s0`,
+one slave, split LRD/LWR. Motor power was operator-confirmed disconnected;
+the image has no motor GPIO backend. Firmware watchdog intervals were explicitly
+built as 2000000 µs command progress and 1000000 µs target freshness.
+
+Discovery returned `Joshua AM243 JW2 software channel`, SII vendor `0xe000059d`,
+product `0x4a570002`, revision `0x00020001`, and 640-bit input/output mappings
+(80 bytes each, offsets zero). The 36-byte descriptor passed the host gate:
+`am243-ec-v2`, protocol 2, layout 1, frame limit 64, transport bits 6.
+
+A temporary probe exercised the production BoardFactory → CommFactory →
+JoshuaWire engine → paired CoE/PDO path, without launching ROS nodes. Results:
+
+- One initialization/teardown session passed reset, identity, configuration and
+  ESTOP. Four successful exercise sessions each enabled the software channel,
+  alternated ten targets between +42 and -42 native steps, received matching
+  feedback with zero faults, disabled and tore down successfully.
+- Two stale-target sessions passed. Fresh GET_FEEDBACK commands continued while
+  no new target was supplied; feedback eventually reported position zero and
+  fault `0x2`. ENABLE and SET_TARGET were rejected while latched; DISABLE and
+  teardown succeeded. A subsequent fresh-session exercise cleared the fault
+  and passed. This verifies behavior, not an exact measured trip latency.
+- Retained channel handles rejected commands after every successful teardown.
+  Separate processes reopened the NIC and established fresh sessions.
+
+There was also **one failed exercise session**, not counted among those passes:
+with a 20 ms period and 1 ms process/state/mailbox budgets and scheduling guard,
+a mailbox datagram hit its deadline after SET_TARGET succeeded. The next feedback,
+disable and teardown reported failure/unknown outcome; the next fresh-session
+exercise recovered. No firmware-side stop was independently observed during this
+failure. The logs do not distinguish packet delay/loss from host scheduling.
+
+The final four sessions (three exercise and one watchdog) all passed with a
+temporary bench policy of 20 ms period, 5 ms process/state/mailbox budgets, 2 ms
+scheduling guard, and 1 s operation/response timeouts. This is a limited sample,
+**not a production timing recommendation or a hard-real-time guarantee**. The
+repository's illustrative timing values were not silently changed.
+
+The probe source, configs and logs remain outside Git under
+`/tmp/joshua-am243-ethercat-flash.epDDla/`; no new repository test utility was
+added. Current gaps include long-duration/load timing, cable loss and OP-loss
+observations, multi-slave real-bus behavior, independent command-progress timeout,
+simultaneous transports, ROS 2 integration and physical motor safety. With the
+installed 1 s target limit shorter than the 2 s progress limit, silence trips
+the target watchdog first; it does not independently validate the latter.
+
+### Follow-up timing investigation — 2026-09-28
+
+Longer instrumented attempts **did not establish reliability at either 1 ms or
+5 ms**. Six attempts ended in a register-datagram timeout: three at mailbox
+read-status register `0x080d`, three at AL-state register `0x0130`. The previous
+generic "mailbox" error could refer to either path. Four attempts used unchanged
+transport behavior; one tried socket-local `PACKET_QDISC_BYPASS`, and one tried
+explicit minimum Ethernet frame padding. Neither experiment eliminated failure;
+neither was adopted in production. Attempts requested 500 target/feedback pairs,
+but none completed that soak. Some failed during initialization.
+
+Across those attempts, temporary bounded in-memory tracing recorded 1057
+successful register datagrams (mean 31.0 µs, maximum 66.7 µs) and six failures
+(about 1.01–1.03 ms or 5.02–5.10 ms, according to budget). Failed waits consumed
+only 19–93 µs of thread CPU time. These are instrumented host observations, not
+wire-time measurements or a scheduling guarantee.
+
+A passive capture limited to EtherCAT on `enp5s0` caught two failures. Matching
+replies with working count 1 appeared at the host approximately 1.071 ms and
+5.067 ms after their outgoing packets, just after the master sent shutdown PDOs.
+Thus those replies were late, not permanently absent. Kernel receive timestamps
+cannot distinguish a wire/slave delay from delayed NIC/driver receive processing;
+the correlation with subsequent transmit is evidence to investigate, not proof
+of its cause. A simple application-thread scheduling explanation is insufficient
+without accounting for that receive-path evidence.
+
+The host NIC reported Realtek `r8169`, firmware `rtl8125d-1_0.0.7`, kernel
+`7.0.0-34-generic`, 100 Mb/s link. NIC errors/missed packets and qdisc drops were
+zero; EEE was enabled but inactive. No system-wide NIC settings, timeout defaults
+or firmware were changed. Capture, instrumentation and experimental variants
+remain under the same temporary directory, outside Git.
+
+Production changes only improve diagnostics: register errors include command,
+station, register, size, timing budget, elapsed time and working count; the master
+preserves that detail when reporting a backend overrun. One regression was added
+to the existing test file. Both Compose suites passed all 37 targets. This is
+**not a timeout fix**. Controlled alternate-NIC testing or external wire capture
+is needed to narrow the remaining cause. Cable-loss/OP-loss hardware tests were
+deferred because the baseline itself was failing; no new physical-motion or
+firmware-side shutdown claim is made.
 
 ## Automated coverage
 

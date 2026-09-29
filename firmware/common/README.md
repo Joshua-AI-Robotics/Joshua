@@ -26,6 +26,10 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
 - [joshua_wire_serial_endpoint.h](joshua_wire_serial_endpoint.h) and `.c` —
   connects an explicitly selected v1/v2 artifact to firmware command handlers.
   It receives complete frames; the board-specific UART/USB code owns I/O.
+- [joshua_wire_ethercat.h](joshua_wire_ethercat.h) — shared layout-v1 PDO/CoE
+  sizes, offsets, object indices and transport bits. The host adapters use this
+  contract together with the AM243 profile; this header itself implements no
+  endpoint or watchdog.
 - [joshua_stepdir_commands.h](joshua_stepdir_commands.h) and `.cpp` — shared
   Teensy/ESP32 command handling, calling [backend_stepdir.h](backend_stepdir.h)
   and `.cpp` for physical pin control. Each board supplies `channel_table.h`.
@@ -41,8 +45,10 @@ operations; drive backends control hardware. The same C codec sources build on
 host and MCU. UART drivers stay in board directories, while host link ownership
 and I/O deadlines belong to [robot/comm](../../robot/comm/README.md).
 
-This directory does not yet implement JoshuaWire EtherCAT PDO/CoE endpoints,
-cross-transport arbitration or communication-loss watchdogs. The
+The [AM243 overlay](../am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+implements a separate JW2 EtherCAT profile and software watchdogs outside this
+directory. Shared physical-output safety and cross-transport arbitration remain
+unfinished. The
 [separation plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md) tracks that work.
 
 ## Command and frame boundaries
@@ -57,14 +63,13 @@ the actual v1 codec/path, not as a version-neutral command representation.
 
 ## Remaining migration work
 
-- The host's full message/cyclic board-engine composition remains pending.
-  Comm interfaces, test fakes and concrete-dependency restrictions now exist,
-  but V1 still uses the separate legacy fixed-size API; removing the payload
-  bridge does not complete the transport migration.
-- **AM243 [serial command handler](../am243/joshua_dual_transport_v1/src/joshua_serial_commands.h):**
-  replace the software-only, serial-specific dispatcher when UART, CoE and PDO
-  share coordinated channel state and safety handling. Physical motion also
-  requires a real motor backend; ROS 2 host support alone does not replace it.
+- Host message/cyclic board-engine composition and factory assembly now exist.
+  V1 still uses the separate legacy fixed-size API; framed-serial extraction
+  and configurable serial timing remain unfinished.
+- **AM243 [command handler](../am243/joshua_dual_transport_v1/src/joshua_commands.h):**
+  now transport-neutral and reused by separate UART and EtherCAT artifacts.
+  Simultaneous UART/CoE/PDO ownership still needs an arbiter; physical motion
+  needs a real motor backend. ROS 2 host support alone supplies neither.
 
 ## Tests and builds
 

@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_serial_commands.h"
+#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -93,8 +93,8 @@ class SmokeCliTest : public ::testing::Test {
                                           bytes.size(),
                                           response,
                                           sizeof(response),
-                                          JoshuaSerialCommand,
-                                          JoshuaSerialReset,
+                                          JoshuaCommand,
+                                          JoshuaReset,
                                           &state);
     ASSERT_GT(size, 0);
     if (request.cmd == JW_CMD_ENABLE) {
@@ -184,7 +184,7 @@ class SmokeCliTest : public ::testing::Test {
   pid_t child = -1;
   std::string binary, directory, output;
   jw_serial_endpoint_t endpoint{};
-  JoshuaSerialChannel state{};
+  JoshuaChannel state{};
   Bytes commands;
   std::vector<uint32_t> sessions;
   Fault fault = Fault::kNone;

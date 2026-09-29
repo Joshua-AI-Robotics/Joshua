@@ -1,4 +1,6 @@
-#include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/ethercat/soem_ethercat_backend.h"
+
+#include <sys/socket.h>
 
 #include <algorithm>
 #include <chrono>
@@ -11,11 +13,99 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "robot/comm/ethercat/coe_sdo_transfer.h"
 #include "soem/soem.h"
 
 namespace robot::comm::ethercat {
 
 namespace {
+
+// Do not use ecx_FPRD/FPWR here: ecx_srconfirm may retransmit and give each
+// attempt another receive allowance. Keep one datagram, one steady deadline,
+// and a nonblocking send. No redundant port is supported on this path.
+class MailboxRegisterIo final : public CoeSdoTransfer::RegisterIo {
+ public:
+  MailboxRegisterIo(ecx_contextt& context, uint16_t slave)
+      : context_(context), station_(context.slavelist[slave].configadr) {}
+  absl::Status Read(uint16_t offset, std::vector<uint8_t>& bytes, int budget_us) override {
+    return Datagram(EC_CMD_FPRD, offset, bytes, budget_us);
+  }
+  absl::Status Write(uint16_t offset, const std::vector<uint8_t>& bytes, int budget_us) override {
+    auto copy = bytes;
+    return Datagram(EC_CMD_FPWR, offset, copy, budget_us);
+  }
+
+ private:
+  absl::Status Datagram(uint8_t command,
+                        uint16_t offset,
+                        std::vector<uint8_t>& bytes,
+                        int budget_us) {
+    auto& port = context_.port;
+    if (budget_us <= 0 || port.redport != nullptr || bytes.empty() || bytes.size() > 1024)
+      return absl::InvalidArgumentError("invalid bounded mailbox datagram");
+    const auto started = std::chrono::steady_clock::now();
+    const auto deadline = started + std::chrono::microseconds(budget_us);
+    // This helper serves AL-state reads as well as mailbox transfers. Include
+    // the actual register and timing so a state timeout is not mislabeled as
+    // a slow CoE command. Format only on failure, outside successful I/O.
+    const auto failure = [&](absl::StatusCode code, const char* reason, int wkc) {
+      const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - started)
+                               .count();
+      std::ostringstream message;
+      message << "EtherCAT register datagram " << reason << "; command=0x" << std::hex
+              << unsigned(command) << " station=0x" << station_ << " register=0x" << offset
+              << std::dec << " size=" << bytes.size() << " budget_us=" << budget_us
+              << " elapsed_us=" << elapsed << " wkc=" << wkc;
+      return absl::Status(code, message.str());
+    };
+    const uint8_t idx = ecx_getindex(&port);
+    ecx_setupdatagram(&port,
+                      &port.txbuf[idx],
+                      command,
+                      idx,
+                      station_,
+                      offset,
+                      static_cast<uint16_t>(bytes.size()),
+                      bytes.data());
+    ecx_setbufstat(&port, idx, EC_BUF_TX);
+    if (std::chrono::steady_clock::now() >= deadline) {
+      ecx_setbufstat(&port, idx, EC_BUF_EMPTY);
+      return failure(
+          absl::StatusCode::kDeadlineExceeded, "deadline before send; not executed", EC_NOFRAME);
+    }
+    const auto sent = send(port.sockhandle, port.txbuf[idx], port.txbuflength[idx], MSG_DONTWAIT);
+    int wkc = EC_NOFRAME;
+    if (sent == port.txbuflength[idx]) {
+      // With no redundant port, waitinframe uses one timer and never resends.
+      // Its Linux poll granularity and OS scheduling can still overrun; detect
+      // that below and fail closed rather than accepting an overdue response.
+      const auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(
+                                 deadline - std::chrono::steady_clock::now())
+                                 .count();
+      if (remaining > 0) wkc = ecx_waitinframe(&port, idx, static_cast<int>(remaining));
+    }
+    const bool in_time = std::chrono::steady_clock::now() < deadline;
+    ec_comt header{};
+    if (wkc == 1) std::memcpy(&header, port.rxbuf[idx], sizeof(header));
+    const bool matching = header.command == command && header.index == idx &&
+                          etohs(header.ADP) == station_ && etohs(header.ADO) == offset &&
+                          etohs(header.dlength) == bytes.size();
+    if (wkc == 1 && in_time && matching && command == EC_CMD_FPRD)
+      std::copy_n(&port.rxbuf[idx][EC_HEADERSIZE], bytes.size(), bytes.begin());
+    ecx_setbufstat(&port, idx, EC_BUF_EMPTY);
+    if (sent != port.txbuflength[idx])
+      return failure(absl::StatusCode::kUnavailable, "send failed", wkc);
+    if (!in_time || wkc < 0)
+      return failure(
+          absl::StatusCode::kDeadlineExceeded, "deadline; outcome unknown, no retry", wkc);
+    if (wkc != 1) return failure(absl::StatusCode::kUnavailable, "working count is not one", wkc);
+    if (!matching) return failure(absl::StatusCode::kDataLoss, "header mismatch", wkc);
+    return absl::OkStatus();
+  }
+  ecx_contextt& context_;
+  uint16_t station_;
+};
 
 absl::Status NotInitializedStatus(const std::string& operation) {
   return absl::Status(absl::StatusCode::kFailedPrecondition,
@@ -127,7 +217,7 @@ absl::Status ReopenSoemSocket(ecx_contextt* context, const std::string& interfac
 
 }  // namespace
 
-struct SoemEthercatTransport::State {
+struct SoemEthercatBackend::State {
   ecx_contextt context;
   std::vector<uint8_t> io_map;
   std::vector<SlaveIdentity> slaves;
@@ -136,18 +226,20 @@ struct SoemEthercatTransport::State {
   bool configured = false;
   bool cyclic_started = false;
   bool mailbox_closed = false;
+  CoeSdoTransfer sdo;
+  uint16_t sdo_slave = 0;
 };
 
-SoemEthercatTransport::SoemEthercatTransport() : state_(std::make_unique<State>()) {
+SoemEthercatBackend::SoemEthercatBackend() : state_(std::make_unique<State>()) {
   std::memset(&state_->context, 0, sizeof(state_->context));
 }
 
-SoemEthercatTransport::~SoemEthercatTransport() {
+SoemEthercatBackend::~SoemEthercatBackend() {
   (void)Teardown();
 }
 
-absl::Status SoemEthercatTransport::Init(const std::string& interface_name,
-                                         ProcessDataMode process_data_mode) {
+absl::Status SoemEthercatBackend::Init(const std::string& interface_name,
+                                       ProcessDataMode process_data_mode) {
   if (interface_name.empty()) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "SOEM EtherCAT interface name is empty");
@@ -175,7 +267,7 @@ absl::Status SoemEthercatTransport::Init(const std::string& interface_name,
   return absl::OkStatus();
 }
 
-absl::Status SoemEthercatTransport::ConfigureSlaves() {
+absl::Status SoemEthercatBackend::ConfigureSlaves() {
   if (!state_->initialized) {
     return NotInitializedStatus("ConfigureSlaves");
   }
@@ -249,7 +341,7 @@ absl::Status SoemEthercatTransport::ConfigureSlaves() {
   return absl::OkStatus();
 }
 
-absl::Status SoemEthercatTransport::StartCyclic() {
+absl::Status SoemEthercatBackend::StartCyclic() {
   if (!state_->configured) {
     return NotConfiguredStatus("StartCyclic");
   }
@@ -285,7 +377,7 @@ absl::Status SoemEthercatTransport::StartCyclic() {
                       "SOEM EtherCAT slaves did not reach OPERATIONAL state");
 }
 
-absl::Status SoemEthercatTransport::StopCyclic() {
+absl::Status SoemEthercatBackend::StopCyclic() {
   if (!state_->initialized) {
     return absl::OkStatus();
   }
@@ -299,7 +391,7 @@ absl::Status SoemEthercatTransport::StopCyclic() {
   return absl::OkStatus();
 }
 
-absl::Status SoemEthercatTransport::Teardown() {
+absl::Status SoemEthercatBackend::Teardown() {
   if (!state_->initialized) {
     return absl::OkStatus();
   }
@@ -311,6 +403,8 @@ absl::Status SoemEthercatTransport::Teardown() {
   state_->cyclic_started = false;
   state_->io_map.clear();
   state_->mailbox_closed = false;
+  state_->sdo.Cancel();
+  state_->sdo_slave = 0;
   state_->slaves.clear();
   state_->pdo_regions.clear();
   interface_name_.clear();
@@ -318,14 +412,14 @@ absl::Status SoemEthercatTransport::Teardown() {
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<SlaveIdentity>> SoemEthercatTransport::GetSlaves() const {
+absl::StatusOr<std::vector<SlaveIdentity>> SoemEthercatBackend::GetSlaves() const {
   if (!state_->configured) {
     return NotConfiguredStatus("GetSlaves");
   }
   return state_->slaves;
 }
 
-absl::StatusOr<PdoRegion> SoemEthercatTransport::GetPdoRegion(uint16_t slave_index) const {
+absl::StatusOr<PdoRegion> SoemEthercatBackend::GetPdoRegion(uint16_t slave_index) const {
   if (!state_->configured) {
     return NotConfiguredStatus("GetPdoRegion");
   }
@@ -335,8 +429,8 @@ absl::StatusOr<PdoRegion> SoemEthercatTransport::GetPdoRegion(uint16_t slave_ind
   return state_->pdo_regions[static_cast<size_t>(slave_index - 1)];
 }
 
-absl::Status SoemEthercatTransport::WriteOutputs(const PdoRegion& region,
-                                                 const std::vector<uint8_t>& outputs) {
+absl::Status SoemEthercatBackend::WriteOutputs(const PdoRegion& region,
+                                               const std::vector<uint8_t>& outputs) {
   if (!state_->configured) {
     return NotConfiguredStatus("WriteOutputs");
   }
@@ -359,33 +453,7 @@ absl::Status SoemEthercatTransport::WriteOutputs(const PdoRegion& region,
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<uint8_t>> SoemEthercatTransport::ReadInputs(
-    const PdoRegion& region) const {
-  if (!state_->configured) {
-    return NotConfiguredStatus("ReadInputs");
-  }
-
-  constexpr uint8_t kDefaultGroup = 0;
-  const ec_groupt& group = state_->context.grouplist[kDefaultGroup];
-  absl::Status bounds_status = ValidateRegionBounds(region, group);
-  if (!bounds_status.ok()) {
-    return bounds_status;
-  }
-
-  std::vector<uint8_t> inputs(region.input_size_bytes, 0);
-  if (region.input_size_bytes > 0) {
-    std::copy(group.inputs + region.input_offset_bytes,
-              group.inputs + region.input_offset_bytes + region.input_size_bytes,
-              inputs.begin());
-  }
-  return inputs;
-}
-
-absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData() {
-  return ExchangeProcessData(EC_TIMEOUTRET);
-}
-
-absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData(int timeout_us) {
+absl::StatusOr<ProcessData> SoemEthercatBackend::ExchangeProcessData(int timeout_us) {
   if (timeout_us <= 0) return absl::InvalidArgumentError("process timeout must be positive");
   if (!state_->configured) {
     return NotConfiguredStatus("ExchangeProcessData");
@@ -413,7 +481,7 @@ absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData(int timeo
   return process_data;
 }
 
-absl::Status SoemEthercatTransport::CheckOperational(int timeout_us) {
+absl::Status SoemEthercatBackend::CheckOperational(int timeout_us) {
   if (!state_->cyclic_started) return NotStartedStatus("CheckOperational");
   if (timeout_us <= 0) return absl::InvalidArgumentError("state timeout must be positive");
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(timeout_us);
@@ -423,24 +491,24 @@ absl::Status SoemEthercatTransport::CheckOperational(int timeout_us) {
                                deadline - std::chrono::steady_clock::now())
                                .count();
     if (remaining <= 0) return absl::DeadlineExceededError("AL state check exceeded budget");
-    uint16_t state = 0;
-    const int wkc = ecx_FPRD(&context->port,
-                             context->slavelist[i].configadr,
-                             ECT_REG_ALSTAT,
-                             sizeof(state),
-                             &state,
-                             static_cast<int>(remaining));
-    if (wkc != 1 || etohs(state) != EC_STATE_OPERATIONAL)
+    std::vector<uint8_t> state(2);
+    MailboxRegisterIo io(*context, static_cast<uint16_t>(i));
+    const auto status = io.Read(ECT_REG_ALSTAT, state, static_cast<int>(remaining));
+    if (!status.ok()) return status;
+    if ((uint16_t(state[0]) | (uint16_t(state[1]) << 8)) != EC_STATE_OPERATIONAL)
       return absl::UnavailableError("EtherCAT slave " + std::to_string(i) + " is not OPERATIONAL");
   }
+  if (std::chrono::steady_clock::now() >= deadline)
+    return absl::DeadlineExceededError("AL state check exceeded budget");
   return absl::OkStatus();
 }
 
-absl::Status SoemEthercatTransport::ValidateSdo(SdoAddress address,
-                                                size_t size,
-                                                int timeout_us) const {
+absl::Status SoemEthercatBackend::ValidateSdo(SdoAddress address,
+                                              size_t size,
+                                              int timeout_us,
+                                              bool incremental) const {
   if (!state_->configured) return NotConfiguredStatus("SDO access");
-  if (state_->mailbox_closed)
+  if (state_->mailbox_closed && !incremental)
     return absl::FailedPreconditionError("blocking SOEM SDO is forbidden during cyclic operation");
   if (address.slave == 0 || address.slave > state_->slaves.size() || size == 0 || size > 4096 ||
       timeout_us <= 0)
@@ -451,9 +519,9 @@ absl::Status SoemEthercatTransport::ValidateSdo(SdoAddress address,
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<uint8_t>> SoemEthercatTransport::ReadSdo(SdoAddress address,
-                                                                    size_t capacity,
-                                                                    int timeout_us) {
+absl::StatusOr<std::vector<uint8_t>> SoemEthercatBackend::ReadSdo(SdoAddress address,
+                                                                  size_t capacity,
+                                                                  int timeout_us) {
   const auto valid = ValidateSdo(address, capacity, timeout_us);
   if (!valid.ok()) return valid;
   std::vector<uint8_t> bytes(capacity);
@@ -475,9 +543,9 @@ absl::StatusOr<std::vector<uint8_t>> SoemEthercatTransport::ReadSdo(SdoAddress a
   return bytes;
 }
 
-absl::Status SoemEthercatTransport::WriteSdo(SdoAddress address,
-                                             const std::vector<uint8_t>& bytes,
-                                             int timeout_us) {
+absl::Status SoemEthercatBackend::WriteSdo(SdoAddress address,
+                                           const std::vector<uint8_t>& bytes,
+                                           int timeout_us) {
   const auto valid = ValidateSdo(address, bytes.size(), timeout_us);
   if (!valid.ok()) return valid;
   const int wkc = ecx_SDOwrite(&state_->context,
@@ -492,6 +560,44 @@ absl::Status SoemEthercatTransport::WriteSdo(SdoAddress address,
     return absl::UnavailableError(
         "SOEM SDO write failed (abort or transport failure); outcome unknown");
   return absl::OkStatus();
+}
+
+absl::Status SoemEthercatBackend::BeginSdo(SdoAddress address,
+                                           bool write,
+                                           std::vector<uint8_t> bytes,
+                                           size_t capacity) {
+  const auto valid = ValidateSdo(address, write ? bytes.size() : capacity, 1, true);
+  if (!valid.ok()) return valid;
+  if (state_->sdo_slave != 0) return absl::FailedPreconditionError("runtime SDO already active");
+  auto& slave = state_->context.slavelist[address.slave];
+  if (slave.mbxhandlerstate != ECT_MBXH_NONE || state_->context.port.redport != nullptr)
+    return absl::FailedPreconditionError(
+        "runtime SDO requires exclusive, nonredundant mailbox ownership");
+  const uint8_t counter = static_cast<uint8_t>((slave.mbx_cnt % 7) + 1);
+  const auto status = state_->sdo.Begin({slave.mbx_wo, slave.mbx_ro, slave.mbx_l, slave.mbx_rl},
+                                        address.index,
+                                        address.subindex,
+                                        counter,
+                                        write,
+                                        std::move(bytes),
+                                        capacity);
+  if (!status.ok()) return status;
+  slave.mbx_cnt = counter;
+  state_->sdo_slave = address.slave;
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::optional<std::vector<uint8_t>>> SoemEthercatBackend::StepSdo(int budget_us) {
+  if (state_->sdo_slave == 0) return absl::FailedPreconditionError("no runtime SDO active");
+  MailboxRegisterIo io(state_->context, state_->sdo_slave);
+  auto result = state_->sdo.Step(io, budget_us);
+  if (!result.ok() || result->has_value()) CancelSdo();
+  return result;
+}
+
+void SoemEthercatBackend::CancelSdo() {
+  state_->sdo.Cancel();
+  state_->sdo_slave = 0;
 }
 
 }  // namespace robot::comm::ethercat

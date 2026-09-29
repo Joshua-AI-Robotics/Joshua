@@ -68,8 +68,85 @@ firmware { min_proto_version: 2 }
 This is an explicit selection, not version negotiation. V1 and v2 artifacts
 reject each other's frames. V2 initializes with a fresh session reset, then
 IDENTIFY and CONFIGURE_CHANNEL; initialization leaves channels disabled.
-Feetech and the current AM243 EtherCAT TI-demo path do not accept this selection.
+Feetech does not accept this selection. The AM243 TI-demo host path is retired.
 See [firmware build instructions](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone).
+
+## JoshuaWire v2 over EtherCAT
+
+Select `protocol: JOSHUA_WIRE_V2` and `transport_type: MESSAGE_AND_CYCLIC`.
+The paired endpoint supplies CoE management plus correlated PDO target/feedback;
+`CYCLIC` alone is rejected; the legacy TI-demo host path is retired. Endpoint facts belong in
+`comm.ethercat_config`; do not add `am243_config` to a JW2 board.
+
+Example board fragment (not a hardware-validated timing recommendation):
+
+```text
+name: "am243_jw2"
+board_type: AM243
+protocol: JOSHUA_WIRE_V2
+firmware { min_proto_version: 2 }
+comm {
+  comm_type: ETHERCAT
+  transport_type: MESSAGE_AND_CYCLIC
+  ethercat_config {
+    interface_name: "ethercat0"
+    process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
+    slave_index: 1
+    timing {
+      period_us: 20000
+      process_timeout_us: 1000
+      state_timeout_us: 1000
+      operation_timeout_us: 1000000
+      mailbox_step_budget_us: 1000
+      scheduling_guard_us: 1000
+      response_timeout_us: 1000000
+    }
+  }
+}
+channels {
+  index: 0
+  drive: STEP_DIR
+  step_dir { max_pulse_rate_hz: 1000 step_pin: 2 dir_pin: 3 enable_pin: 4 }
+}
+```
+
+All seven timing fields are required, positive and at most `INT_MAX` microseconds.
+The cycle must exceed `process timeout + max(state timeout, mailbox-step budget)
++ scheduling guard`. Operation/response timeouts must exceed one cycle. Runtime
+mailbox transfers span multiple cycles; these checks establish budget consistency,
+not hard-real-time feasibility. `response_timeout_us` bounds each adapter exchange,
+including its queue wait. It is not a firmware watchdog setting.
+
+For the software-only bring-up example, build the separate
+[AM243 EtherCAT artifact](../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+with deliberately explicit watchdog intervals, e.g. command progress 2000000 µs
+and target freshness 1000000 µs as used by the native integration test. These are
+not motor-safety recommendations. Watchdog intervals are not advertised in the
+current descriptor; confirm the flashed artifact's settings and account for
+management latency before enabling. The host does not replay old targets to
+feed watchdogs: fresh SET_TARGET calls are required while enabled.
+
+An optional `pdo_region` contains all four `output_offset_bytes`,
+`input_offset_bytes`, `output_size_bytes`, `input_size_bytes` values. It is an
+exact assertion against discovery, not permission to reinterpret another slave's
+bytes. JW2 requires 80-byte input/output regions. Without it, discovery supplies
+offsets. Legacy `am243_config`, `am243_ethercat_config` and `MOTOR_TI_DEMO`
+are rejected with migration errors. Their protobuf names/numbers remain allocated
+for diagnostics; they are not executable compatibility paths. The old TI-demo
+preset was removed, not silently converted to a different firmware protocol.
+
+Every discovered slave must pass the JW2 descriptor/mapping check before the bus
+enters OP, including unused slaves (which remain on stop images). Duplicate board
+claims on a slave and mixed timing/protocol policies on a NIC are rejected.
+Consumers of one NIC must run in one node process. The factory caches one master;
+board teardown releases only its endpoint, and the last lease closes the bus.
+
+The host/factory/firmware-core path is native-tested and has a limited
+[single-board EtherCAT bench result](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+Both the 1 ms timing budgets above and a temporary 5 ms policy encountered
+register-datagram deadline failures on that host; do not treat this fragment as
+a validated production timing policy.
+No runnable preset was added and no firmware is flashed by initialization.
 
 ## Sensor configuration
 
