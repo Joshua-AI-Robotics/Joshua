@@ -32,7 +32,8 @@ class CoeSdoTransfer {
 
   // Reads use capacity; writes use bytes. Supports expedited and unsegmented
   // normal transfers up to 76 bytes, covering the plan's largest JW2 envelope.
-  // Counter is the slave's next CoE mailbox counter, in 1..7. No I/O in Begin.
+  // Counter is the master's next transmit mailbox counter for this slave, in
+  // 1..7. The slave's transmit counter is independent. No I/O in Begin.
   absl::Status Begin(Mailbox mailbox,
                      uint16_t index,
                      uint8_t subindex,
@@ -41,7 +42,8 @@ class CoeSdoTransfer {
                      Bytes bytes,
                      size_t capacity);
   // nullopt means pending, Bytes means completed (empty for write), status means
-  // failed. Stale counters are drained; matching malformed replies fail closed.
+  // failed. Retained mailboxes are drained before sending; malformed replies
+  // fail closed. Mailbox counters are not request/response correlation IDs.
   absl::StatusOr<std::optional<Bytes>> Step(RegisterIo& io, int budget_us);
   void Cancel();
 
@@ -52,7 +54,6 @@ class CoeSdoTransfer {
   Mailbox mailbox_{};
   uint16_t index_ = 0;
   uint8_t subindex_ = 0;
-  uint8_t counter_ = 0;
   bool write_ = false;
   size_t capacity_ = 0;
   Bytes request_;

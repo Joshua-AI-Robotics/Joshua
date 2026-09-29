@@ -5,6 +5,18 @@
 #include <math.h>
 #include <string.h>
 
+void JoshuaStop(void* context, uint16_t faults) {
+  JoshuaChannel* channel = (JoshuaChannel*)context;
+  channel->enabled = false;
+  channel->estopped = true;
+  channel->target_value = 0;
+  channel->target_mode = JW_MODE_POSITION;
+  channel->fault_flags |= faults;
+}
+bool JoshuaEnabled(void* context, uint8_t channel) {
+  return channel == 0 && ((JoshuaChannel*)context)->enabled;
+}
+
 void JoshuaReset(void* context) {
   JoshuaChannel* channel = (JoshuaChannel*)context;
   const bool latch_estop = channel->latch_estop;

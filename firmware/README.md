@@ -91,6 +91,17 @@ profile with JW2 CoE management and 80-byte PDO command/feedback images, one
 shared session, retained responses and latched software watchdogs. UART protocol
 service is absent from this artifact; existing UART/TI-demo artifacts are unchanged.
 
+The endpoint and watchdog policy now live in `common/joshua_ethercat_profile`.
+AM243 supplies identity, its TI-stack bridge and drive callbacks. Other boards
+reuse that core and the same host communication implementation; see the
+[firmware porting contract](common/README.md#porting-jw2-ethercat-to-another-board).
+The original AM243 images still link TI's one-hour evaluation stack. A separate
+[SOES candidate](am243/joshua_dual_transport_v1/README.md#opt-in-soes-replacement)
+now builds without that stack and passes native protocol tests. It has been
+flashed and passed discovery/handshake, but [register timeouts still block
+hardware/endurance qualification](../docs/JOSHUA_WIRE_V2_VALIDATION.md#soes-candidate-bring-up--2026-09-28),
+so evaluation-stack retirement remains pending.
+
 The production firmware core has native host-interoperability and controlled-clock
 tests. A [single-board EtherCAT bench check](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
 passed factory/engine commands, software feedback and stale-target fault/recovery.

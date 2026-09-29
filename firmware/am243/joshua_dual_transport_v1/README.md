@@ -72,10 +72,13 @@ Source responsibilities:
 
 - `src/joshua_commands.{h,c}`: transport-neutral software channel operations,
   shared with the UART artifacts (formerly `joshua_serial_commands`).
-- `src/joshua_ethercat_profile.{h,c}`: portable object/PDO protocol, one session
-  across CoE and PDO, retained replies, and latched software watchdogs.
+- [`../../common/joshua_ethercat_profile.h`](../../common/joshua_ethercat_profile.h)
+  and `.c`: shared board/stack-independent object/PDO protocol, one session
+  across CoE and PDO, retained replies, and per-channel freshness watchdogs.
 - `src/joshua_ethercat_ti.{h,c}`: SDK object registration, complete image copies,
-  callback serialization and an independent RTOS watchdog task.
+  callback serialization and an independent RTOS watchdog task. Supplies AM243
+  identity and software-channel callbacks to the shared profile; a different
+  board supplies its own stack/drive adapter, not a new host transport.
 - `patches/jwec_profile.patch`: replaces TI's demo object/PDO setup and dispatch
   in a temporary SDK source copy. TI demo EEPROM-persistence callbacks are not
   installed for this profile; the SDK builds the profile from its new mapping.
@@ -129,6 +132,64 @@ See the [artifact, results and limits](../../../docs/JOSHUA_WIRE_V2_VALIDATION.m
 Software watchdog behavior is not
 proof of physical motor safety, CPU-halt coverage or hard-real-time timing.
 
+### Opt-in SOES replacement
+
+**Flashed; discovery and handshake verified, hardware qualification incomplete.**
+The [SOES bench record](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#soes-candidate-bring-up--2026-09-28)
+documents a corrected host mailbox-counter assumption and remaining 5 ms
+register timeouts; target/watchdog/endurance checks have not passed. The TI
+profiles above remain available until the replacement passes real-board tests
+and a continuous run beyond one hour. No proprietary timeout is patched out.
+
+```bash
+JOSHUA_WIRE_VERSION=2 JOSHUA_ETHERCAT_PROFILE=jw2-soes \
+JOSHUA_COMM_WATCHDOG_US=2000000 JOSHUA_TARGET_WATCHDOG_US=1000000 \
+firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+```
+
+Run with the external SDK/toolchain available in the development container.
+`curl` downloads the hash-verified [SOES revision](../../../third_party/soes/README.md).
+The build uses SDK `09.00.00.03` hardware configuration, RTOS/driver libraries,
+and ICSS FWHAL/PRU firmware, **not** TI's evaluation slave stack or Beckhoff SSC.
+The SDK's SSC example supplies build/SysConfig rules and BSD-licensed board
+initialization only; no SSC source or stack library is compiled/linked.
+
+Outputs are `out/am243_ethercat_jw2_soes.release.*`, including the link map.
+The upstream SOES source archive and LICENSE accompany them; the source patch
+is in `third_party/soes`. Existing TI artifacts are not overwritten.
+
+Production source roles:
+
+- [`../../common/soes/`](../../common/soes/README.md): shared SOES dictionary,
+  JW2 CoE/PDO binding and stack settings; no AM243 dependencies.
+- `src/joshua_ethercat_soes_am243.c`: AM243 boot, PRU register/mailbox/triple-buffer
+  access, read-only RAM SII and independent watchdog task. Reuses the software
+  channel; no UART protocol or motor GPIOs. Polls at an initial 1 ms cadence,
+  which is **not** a validated end-to-end cycle-time guarantee.
+- `Makefile.soes`, `scripts/build_soes.sh`, `patches/soes_soc.patch`: isolated
+  firmware build, pinned dependency download and removal of the unused SSC
+  header from a temporary copy of TI's board initialization source.
+
+The descriptor label is `am243-soes2`, IDENTIFY name `am243-soes-v2`; the layout
+and host transport are unchanged. Bench SII/CoE identity is `0xe000059d` /
+`0x4a570002` / revision `0x00020002`, **not a registered product identity**.
+SII contains four fixed SMs and FMMU types; the master obtains PDO mapping
+through CoE. No standalone ESI is provided. Physical EEPROM is neither loaded
+nor written; runtime identity/mapping writes and segmented CoE writes are rejected.
+
+Before retiring the TI-stack profile, qualify discovery, PREOP/SAFEOP/OP,
+reset/IDENTIFY, both command planes, retry/ack behavior, watchdog expiry,
+OP/link loss and recovery on the AM243. Then run fresh target/feedback traffic
+for **more than 60 minutes without rebooting**, confirming continued commands
+and console uptime. Existing NIC/mailbox reliability issues remain open until
+measured; changing stacks alone is not evidence they are resolved. Native tests
+and a successful image build do not satisfy this gate.
+
+SOES is GPLv2 with its upstream linking exception. TI's hardware interface and
+PRU firmware retain their own licenses and remain external SDK inputs. This is
+not a claim that every part of the AM243 firmware is open source or ready for
+commercial redistribution.
+
 ## Host integration
 
 The [JW2 EtherCAT config](../../../config/README.md#joshuawire-v2-over-ethercat)
@@ -153,6 +214,7 @@ path from the original flash template for a JoshuaWire image.
 
 The separate JW2 EtherCAT profile uses
 `out/am243_ethercat_jw2.release.appimage.hs_fs`; it is not the UART-v2 image.
+The SOES candidate uses `out/am243_ethercat_jw2_soes.release.appimage.hs_fs`.
 
 Flashing remains a deliberate hardware operation and must not happen as part
 of build or test.
@@ -204,5 +266,7 @@ contain TI echo firmware, not JW2 EtherCAT.
 - The dual-transport artifacts expose separate serial and EtherCAT demo state. A later command
   arbiter must unify them before either path controls the same physical motor.
   The separate JW2 EtherCAT artifact avoids simultaneous UART ownership.
-- TI's bundled EtherCAT evaluation stack retains its one-hour runtime limit.
+- TI's bundled EtherCAT evaluation stack retains its one-hour runtime limit
+  in the `ti-demo` and `jw2` artifacts. The `jw2-soes` candidate excludes that
+  stack, but hardware/endurance qualification is required before retirement.
 - No firmware is flashed automatically.

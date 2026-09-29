@@ -33,11 +33,24 @@ settled.
 - Expose process-data access to higher-level drivers without leaking a specific
   master implementation into the action layer.
 
-## AM243 Constraint
+## Board-independent JW2 contract
 
-LP-AM243 bring-up established split LRD/LWR operation; the JW2 backend also
-requires split LRD/LWR and rejects LRW. LRW should only be revisited after
-the board firmware or EEPROM/ESI configuration changes.
+Host EtherCAT communication is selected by protocol capabilities, not board
+model, vendor/product ID or slave-stack implementation. Every conforming board
+uses the same `JoshuaWireEthercatTransport`, owner and SOEM backend. Board
+identity is checked separately by `JoshuaWireBoard`; it is not a comm branch.
+
+Firmware reuses the [shared endpoint](../../../firmware/common/README.md#porting-jw2-ethercat-to-another-board)
+and supplies board/stack adapters and real drive callbacks. SOES versus Beckhoff
+SSC is solely a firmware dependency choice. Regression tests exercise another
+board identity through the unchanged factory/engine/comm path without hardware.
+
+### Current process-data constraint
+
+Layout-v1 currently requires split LRD/LWR and rejects LRW. This policy began
+with LP-AM243 bring-up but applies to every board on this path. A new board must
+support it; any future mode extension must be generic and capability/config
+driven, not a board-model special case.
 
 ## Owner-worker and factory assembly
 
@@ -62,9 +75,12 @@ objects of 1–76 bytes that fit the configured mailbox. Segmented transfers,
 redundant ports and SOEM's separate mailbox handler are unsupported on this
 path. Each step performs at most one configured-station register datagram,
 with nonblocking send, a single receive deadline and no write retransmission.
-Mailbox counter, CoE service, object address, lengths and aborts are checked.
-The counter is not JW2 session/generation correlation; the paired adapter below
-supplies that separately.
+The master advances its transmit mailbox counter independently of the slave's;
+reply counters need not echo request counters. Retained mailboxes are drained
+before sending, and CoE service, object address, lengths and aborts are checked.
+Mailbox repeats are not requested. One outstanding SDO and fault-on-timeout
+prevent reuse of a late reply; the paired adapter below separately checks JW2
+session/generation correlation.
 
 Process data runs first. While mailbox work is pending, mailbox steps alternate
 with AL-state checks, with at most one management step per cycle. Pending

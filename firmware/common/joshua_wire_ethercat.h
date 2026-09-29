@@ -1,4 +1,4 @@
-// JoshuaWire v2 EtherCAT layout-v1 wire contract, shared by host and AM243
+// JoshuaWire v2 EtherCAT layout-v1 wire contract, shared by host and all board
 // firmware endpoints. Constants are byte offsets/sizes, never packed structs.
 // This header does not implement an object dictionary, watchdog or motor I/O.
 #pragma once

@@ -25,6 +25,10 @@ extern "C" {
 
 int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, size_t capacity);
 void JoshuaReset(void* context);
+// EtherCAT safety adapter for this software-only channel. A physical backend
+// must disable hardware synchronously, not merely change these state fields.
+void JoshuaStop(void* context, uint16_t faults);
+bool JoshuaEnabled(void* context, uint8_t channel);
 #ifdef __cplusplus
 }
 #endif

@@ -13,7 +13,8 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_ethercat_profile.h"
+#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_ethercat.h"
 #include "gtest/gtest.h"
 #include "robot/board/factory/board_factory.h"
@@ -582,18 +583,47 @@ TEST(CoeSdoTransferTest, ExpeditedWriteSizesAreExactAndNeverRetried) {
   }
 }
 
-TEST(CoeSdoTransferTest, DrainsRetainedMailboxAndIgnoresWrongCounter) {
+TEST(CoeSdoTransferTest, DrainsRetainedMailboxBeforeSendingWithIndependentReplyCounter) {
   CoeSdoTransfer transfer;
   TestMailboxRegisters io;
   io.incoming.push_back(SdoReply(0x43, {9, 9, 9, 9}));
-  io.after_write.push_back(SdoReply(0x43, {8, 8, 8, 8}, 7));
-  io.after_write.push_back(SdoReply(0x43, {1, 2, 3, 4}));
+  io.after_write.push_back(SdoReply(0x43, {1, 2, 3, 4}, 7));
   ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, 4).ok());
   auto reply = CompleteSdo(transfer, io);
   ASSERT_TRUE(reply.ok());
   ASSERT_TRUE(reply->has_value());
   EXPECT_EQ(**reply, (SdoBytes{1, 2, 3, 4}));
   EXPECT_EQ(io.writes.size(), 1);
+}
+
+TEST(CoeSdoTransferTest, SenderCountersAreIndependentForUploadsAndDownloads) {
+  CoeSdoTransfer transfer;
+  // Reuse the codec across transfers: neither equal counters, sequential slave
+  // counters nor synchronized wraparound are required. Zero is also valid on
+  // receive. Keep the master's own outgoing 1..7 counter unchanged on the wire.
+  for (uint8_t request_counter = 1; request_counter <= 7; ++request_counter) {
+    for (uint8_t response_counter : {7, 1, 5, 0, 3, 6, 2, 4}) {
+      for (uint8_t command : {0x43, 0x41, 0x60}) {
+        SCOPED_TRACE(::testing::Message() << unsigned(request_counter) << '/'
+                                         << unsigned(response_counter) << '/'
+                                         << unsigned(command));
+        TestMailboxRegisters io;
+        const bool write = command == 0x60;
+        const SdoBytes payload(command == 0x41 ? 36 : 4, 0xa5);
+        io.after_write.push_back(SdoReply(command, write ? SdoBytes{} : payload,
+                                         response_counter));
+        ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, request_counter, write,
+                                   write ? payload : SdoBytes{}, write ? 0 : payload.size())
+                        .ok());
+        auto reply = CompleteSdo(transfer, io);
+        ASSERT_TRUE(reply.ok()) << reply.status();
+        ASSERT_TRUE(reply->has_value());
+        EXPECT_EQ(**reply, write ? SdoBytes{} : payload);
+        ASSERT_EQ(io.writes.size(), 1);
+        EXPECT_EQ(io.writes[0][5], 3 | (request_counter << 4));
+      }
+    }
+  }
 }
 
 TEST(CoeSdoTransferTest, BusyMailboxesYieldAndCancellationDoesNotSendAgain) {
@@ -631,7 +661,7 @@ TEST(CoeSdoTransferTest, RejectsOversizedSegmentedAndMalformedResponses) {
   for (int mutation = 0; mutation < 7; ++mutation) {
     CoeSdoTransfer transfer;
     TestMailboxRegisters io;
-    auto malformed = SdoReply(0x41, SdoBytes(36, 0));
+    auto malformed = SdoReply(0x41, SdoBytes(36, 0), 7);
     switch (mutation) {
       case 0:
         malformed[0] = 255;
@@ -652,7 +682,7 @@ TEST(CoeSdoTransferTest, RejectsOversizedSegmentedAndMalformedResponses) {
         malformed[8] = 0x60;
         break;  // Wrong SDO command.
       case 6:
-        malformed[5] = 0x14;
+        malformed[5] = 0x74;
         break;  // Wrong mailbox type.
     }
     io.after_write.push_back(std::move(malformed));
@@ -665,7 +695,7 @@ TEST(CoeSdoTransferTest, RejectsOversizedSegmentedAndMalformedResponses) {
 TEST(CoeSdoTransferTest, ReportsAbortCodeAndDatagramFailureWithoutRetry) {
   CoeSdoTransfer transfer;
   TestMailboxRegisters io;
-  io.after_write.push_back(SdoReply(0x80, {0, 0, 2, 6}));
+  io.after_write.push_back(SdoReply(0x80, {0, 0, 2, 6}, 5));
   ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, 36).ok());
   auto aborted = CompleteSdo(transfer, io);
   EXPECT_EQ(aborted.status().code(), absl::StatusCode::kFailedPrecondition);
@@ -703,7 +733,7 @@ class TestRuntimeIo : public TestMasterIo {
     trace_->Call("sdo_begin");
     if (!trace_->withhold_response)
       registers_.after_write.push_back(SdoReply(
-          write ? 0x60 : 0x41, write ? SdoBytes{} : SdoBytes(capacity, 0x5a), 1, address.index));
+          write ? 0x60 : 0x41, write ? SdoBytes{} : SdoBytes(capacity, 0x5a), 5, address.index));
     return transfer_.Begin(
         kMailbox, address.index, address.subindex, 1, write, std::move(bytes), capacity);
   }
@@ -1418,9 +1448,23 @@ TEST_F(JwecAdapterTest, MalformedMailboxRequiresResetAndConcurrentCyclicCallsSer
 struct FirmwareProfileTrace : IoTrace {
   FirmwareProfileTrace() {
     outputs.assign(160, 0);
-    for (auto& profile : profiles)
-      EXPECT_EQ(JoshuaEthercatProfileInit(&profile, 2000000, 1000000), 0);
+    for (size_t i = 0; i < 2; ++i) {
+      channels[i].latch_estop = true;
+      JoshuaEthercatProfileConfig config{};
+      config.identity.board_id = JW_BOARD_AM243;
+      std::memcpy(config.identity.fw_name, "am243-ec-v2", 11);
+      config.identity.n_channels = 1;
+      config.identity.channel_drives[0] = JW_DRIVE_STEP_DIR;
+      std::memcpy(config.artifact, "am243-ec-v2", 11);
+      config.context = &channels[i];
+      config.command = JoshuaCommand;
+      config.reset = JoshuaReset;
+      config.stop = JoshuaStop;
+      config.enabled = JoshuaEnabled;
+      EXPECT_EQ(JoshuaEthercatProfileInit(&profiles[i], &config, 2000000, 1000000), 0);
+    }
   }
+  JoshuaChannel channels[2]{};
   JoshuaEthercatProfile profiles[2];
   uint16_t incompatible_slave = 0;  // Set before opening the owner.
   std::atomic<int> starts{0};
@@ -1565,8 +1609,8 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   ASSERT_TRUE(endpoint->Exchange(JwecRequest(7, JW_CMD_ESTOP)).ok());
   endpoint->Stop();
   ASSERT_TRUE(master->Stop().ok());
-  EXPECT_FALSE(trace->profiles[0].channel.enabled);
-  EXPECT_TRUE(trace->profiles[0].channel.estopped);
+  EXPECT_FALSE(trace->channels[0].enabled);
+  EXPECT_TRUE(trace->channels[0].estopped);
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
 }
 
@@ -1646,9 +1690,9 @@ TEST_F(JwecFactoryTest, BoardEngineRoutesBothPlanesAndClosingOnePreservesOtherSl
   EXPECT_EQ(feedback->fault_flags, 0);
   ASSERT_TRUE((*second)->Teardown().ok());
   EXPECT_EQ(trace->teardowns, 1);  // Retained board/channel handles hold no NIC lease.
-  for (const auto& profile : trace->profiles) {
-    EXPECT_FALSE(profile.channel.enabled);
-    EXPECT_TRUE(profile.channel.estopped);
+  for (const auto& channel : trace->channels) {
+    EXPECT_FALSE(channel.enabled);
+    EXPECT_TRUE(channel.estopped);
   }
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
 }
@@ -1664,6 +1708,31 @@ TEST_F(JwecFactoryTest, GatesEverySlaveBeforeOpAndFailureIsNotCached) {
   ASSERT_TRUE(retry.ok()) << retry.status();
   EXPECT_EQ(opens, 2);
   EXPECT_EQ(trace->starts, 1);
+}
+
+TEST_F(JwecFactoryTest, DifferentBoardIdentityUsesUnchangedHostCommAndBoardEngine) {
+  // A software-only stand-in, not a claim of EtherCAT hardware on a Teensy.
+  auto& identity = trace->profiles[0].config.identity;
+  identity.board_id = JW_BOARD_TEENSY41;
+  std::memset(identity.fw_name, 0, sizeof(identity.fw_name));
+  std::memcpy(identity.fw_name, "other-board-v2", 14);
+  auto& artifact = trace->profiles[0].config.artifact;
+  std::memset(artifact, 0, sizeof(artifact));
+  std::memcpy(artifact, "other-ec-v2", 12);
+  auto config = PairedBoard();
+  config.set_board_type(robot::board::TEENSY41);
+  auto board = robot::board::BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto channel = (*board)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  ASSERT_TRUE((*channel)->Enable().ok());
+  ASSERT_TRUE((*channel)->SetTarget(robot::board::TargetMode::kPosition, 19).ok());
+  auto feedback = (*channel)->ReadFeedback();
+  ASSERT_TRUE(feedback.ok()) << feedback.status();
+  EXPECT_FLOAT_EQ(feedback->position, 19);
+  EXPECT_EQ(feedback->fault_flags, 0);
+  ASSERT_TRUE((*board)->Teardown().ok());
+  EXPECT_EQ(trace->teardowns, 1);
 }
 
 TEST_F(JwecFactoryTest, RejectsDuplicateClaimsTimingChangesAndLegacyRequests) {

@@ -19,54 +19,84 @@ static void Put32(uint8_t* p, uint32_t v) {
   Put16(p + 2, v >> 16);
 }
 
-int JoshuaEthercatProfileInit(JoshuaEthercatProfile* p, uint32_t comm_us, uint32_t target_us) {
-  if (!p || !comm_us || !target_us) return -1;
+int JoshuaEthercatProfileInit(JoshuaEthercatProfile* p,
+                              const JoshuaEthercatProfileConfig* config,
+                              uint32_t comm_us,
+                              uint32_t target_us) {
+  if (!p || !config || !comm_us || !target_us || !config->command || !config->reset ||
+      !config->stop || !config->enabled || !config->identity.n_channels ||
+      config->identity.n_channels > JW_MAX_CHANNELS || !config->artifact[0])
+    return -1;
+  bool padding = false;
+  for (size_t i = 0; i < sizeof(config->artifact); ++i) {
+    const unsigned char c = (unsigned char)config->artifact[i];
+    if (!c)
+      padding = true;
+    else if (padding || c < 32 || c > 126)
+      return -1;
+  }
   memset(p, 0, sizeof(*p));
+  p->config = *config;
   p->comm_timeout_us = comm_us;
   p->target_timeout_us = target_us;
-  p->channel.latch_estop = true;
+  p->config.reset(p->config.context);
   return 0;
 }
 void JoshuaEthercatProfileFault(JoshuaEthercatProfile* p, uint16_t fault) {
-  p->channel.enabled = false;
-  p->channel.estopped = true;
-  p->channel.target_value = 0;
-  p->channel.target_mode = JW_MODE_POSITION;
-  p->channel.fault_flags |= fault;
+  p->fault_latched = true;
+  p->config.stop(p->config.context, fault);
+}
+static bool AnyEnabled(const JoshuaEthercatProfile* p) {
+  for (uint8_t i = 0; i < p->config.identity.n_channels; ++i)
+    if (p->config.enabled(p->config.context, i)) return true;
+  return false;
 }
 void JoshuaEthercatProfileTick(JoshuaEthercatProfile* p, uint64_t now_us, bool operational) {
   if (now_us < p->now_us) JoshuaEthercatProfileFault(p, JOSHUA_ECAT_FAULT_STATE);
   p->now_us = now_us;
   p->operational = operational;
-  if (!p->channel.enabled) return;
+  if (!AnyEnabled(p)) return;
   uint16_t faults = 0;
   if (!operational) faults |= JOSHUA_ECAT_FAULT_STATE;
   if (now_us - p->last_progress_us >= p->comm_timeout_us) faults |= JOSHUA_ECAT_FAULT_COMM;
-  if (now_us - p->last_target_us >= p->target_timeout_us) faults |= JOSHUA_ECAT_FAULT_TARGET;
+  for (uint8_t i = 0; i < p->config.identity.n_channels; ++i)
+    if (p->config.enabled(p->config.context, i) &&
+        now_us - p->last_target_us[i] >= p->target_timeout_us)
+      faults |= JOSHUA_ECAT_FAULT_TARGET;
   if (faults) JoshuaEthercatProfileFault(p, faults);
 }
 
 static int Command(void* context, const jw2_frame_t* frame, uint8_t* payload, size_t capacity) {
   JoshuaEthercatProfile* p = (JoshuaEthercatProfile*)context;
   jw_command_t command = {frame->cmd, frame->channel, frame->payload, frame->payload_len};
+  if (frame->cmd == JW_CMD_IDENTIFY) {
+    if (frame->channel != JW_CHANNEL_NONE || frame->payload_len)
+      return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+    return jw_encode_identify_payload(payload, capacity, &p->config.identity);
+  }
+  if (frame->cmd != JW_CMD_ESTOP && frame->channel >= p->config.identity.n_channels)
+    return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+  if (p->fault_latched && (frame->cmd == JW_CMD_ENABLE || frame->cmd == JW_CMD_SET_TARGET ||
+                           frame->cmd == JW_CMD_CONFIGURE_CHANNEL))
+    return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
   if (frame->cmd == JW_CMD_ENABLE && !p->operational)
     return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
-  const bool was_enabled = p->channel.enabled;
-  int length = JoshuaCommand(&p->channel, &command, payload, capacity);
-  if (frame->cmd == JW_CMD_IDENTIFY && length == JW_IDENTIFY_RESPONSE_PAYLOAD_LEN) {
-    memset(payload + 1, 0, JW_FW_NAME_LEN);
-    memcpy(payload + 1, "am243-ec-v2", 11);
-  }
+  const bool channel_command = frame->channel < p->config.identity.n_channels;
+  const bool was_enabled = channel_command && p->config.enabled(p->config.context, frame->channel);
+  int length = p->config.command(p->config.context, &command, payload, capacity);
   if (length == 1 && payload[0] == JW_STATUS_OK) {
-    if ((!was_enabled && p->channel.enabled) || frame->cmd == JW_CMD_SET_TARGET)
-      p->last_target_us = p->now_us;
-    if (frame->cmd == JW_CMD_ESTOP) p->channel.target_value = 0;
+    if (channel_command &&
+        ((!was_enabled && p->config.enabled(p->config.context, frame->channel)) ||
+         frame->cmd == JW_CMD_SET_TARGET))
+      p->last_target_us[frame->channel] = p->now_us;
+    if (frame->cmd == JW_CMD_ESTOP) JoshuaEthercatProfileFault(p, 0);
   }
   return length;
 }
 static void ResetChannel(void* context) {
   JoshuaEthercatProfile* p = (JoshuaEthercatProfile*)context;
-  JoshuaReset(&p->channel);
+  p->config.reset(p->config.context);
+  p->fault_latched = false;
 }
 
 // plane 0 is CoE, 1 is PDO. Completion is synchronous after snapshot validation:
@@ -129,9 +159,16 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
 int JoshuaEthercatProfileRead(JoshuaEthercatProfile* p, uint16_t index, uint8_t* out, size_t size) {
   if (!p || !out) return -1;
   if (index == JWEC_DESCRIPTOR_INDEX && size == JWEC_DESCRIPTOR_SIZE) {
-    const uint8_t descriptor[JWEC_DESCRIPTOR_SIZE] = {
-        'J', 'W', 'E', 'C', 1,   0,   2,   0,   2,   0,   1,   0,   80,  0,   80,  0, 64, 0,
-        6,   0,   0,   0,   'a', 'm', '2', '4', '3', '-', 'e', 'c', '-', 'v', '2', 0, 0,  0};
+    uint8_t descriptor[JWEC_DESCRIPTOR_SIZE] = {'J', 'W', 'E', 'C'};
+    Put16(descriptor + 4, JWEC_DESCRIPTOR_VERSION);
+    Put16(descriptor + 6, 2);
+    Put16(descriptor + 8, 2);
+    Put16(descriptor + 10, JWEC_LAYOUT_VERSION);
+    Put16(descriptor + 12, JWEC_PDO_SIZE);
+    Put16(descriptor + 14, JWEC_PDO_SIZE);
+    Put16(descriptor + 16, JW2_MAX_FRAME_LEN);
+    Put32(descriptor + 18, JWEC_TRANSPORT_COE | JWEC_TRANSPORT_PDO);
+    memcpy(descriptor + 22, p->config.artifact, sizeof(p->config.artifact));
     memcpy(out, descriptor, size);
     return 0;
   }
@@ -162,7 +199,8 @@ int JoshuaEthercatProfileWrite(JoshuaEthercatProfile* p,
     memset(p->input, 0, sizeof(p->input));
     memset(p->last_generation, 0, sizeof(p->last_generation));
     memset(p->last_request_len, 0, sizeof(p->last_request_len));
-    p->last_progress_us = p->last_target_us = p->now_us;
+    p->last_progress_us = p->now_us;
+    for (uint8_t i = 0; i < JW_MAX_CHANNELS; ++i) p->last_target_us[i] = p->now_us;
     p->session.session_id = session;  // Reset result published after safe state/history clear.
     Put32(p->input, session);
     return 0;
@@ -182,7 +220,7 @@ int JoshuaEthercatProfilePdo(JoshuaEthercatProfile* p, const uint8_t* output, si
   }
   if (!p->operational) return 0;
   if (!U32(output) && !U32(output + 4)) {
-    if (p->channel.enabled) JoshuaEthercatProfileFault(p, JOSHUA_ECAT_FAULT_STATE);
+    if (AnyEnabled(p)) JoshuaEthercatProfileFault(p, JOSHUA_ECAT_FAULT_STATE);
     return 0;  // Explicit host stop image. Ordinary cancellation retains session.
   }
   if (U32(output) != p->session.session_id) return 0;

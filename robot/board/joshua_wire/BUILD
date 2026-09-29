@@ -96,13 +96,15 @@ cc_test(
         ":joshua_wire_board",
         ":joshua_wire_v2_session",
         "//firmware/am243/joshua_dual_transport_v1:commands",
-        "//firmware/am243/joshua_dual_transport_v1:ethercat_profile",
+        "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_commands",
         "//firmware/common:joshua_wire_ethercat",
         "//firmware/common:joshua_wire_serial_endpoint",
         "//firmware/common:joshua_wire_v2",
+        "//firmware/common/soes:joshua_ethercat_soes",
         "//robot/comm/factory:comm_factory",
         "@googletest//:gtest_main",
+        "@soes",
     ],
 )
 

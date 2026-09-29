@@ -48,7 +48,6 @@ absl::Status CoeSdoTransfer::Begin(Mailbox mailbox,
   mailbox_ = mailbox;
   index_ = index;
   subindex_ = subindex;
-  counter_ = counter;
   write_ = write;
   capacity_ = capacity;
   request_.assign(mailbox.write_size, 0);
@@ -127,7 +126,12 @@ absl::StatusOr<std::optional<CoeSdoTransfer::Bytes>> CoeSdoTransfer::Decode(cons
     return absl::DataLossError("invalid mailbox response size");
   }
   phase_ = Phase::kReadStatus;
-  if (((response[5] >> 4) & 7) != counter_) return std::optional<Bytes>{};
+  // Mailbox counters belong to each sender independently; a response need not
+  // echo the request counter (and zero disables counter checking). This path
+  // neither retransmits writes nor requests mailbox repeats. It drains retained
+  // mailboxes before sending and permits only one outstanding SDO. The owner
+  // faults on a dispatched timeout, preventing a late reply from being reused.
+  // Validate the CoE service/object below; JW2 correlation is checked above us.
   const size_t length = U16(response.data());
   if (length < 10 || length > response.size() - 6 || (response[5] & 0x0f) != 3 ||
       (U16(response.data() + 6) >> 12) != 3 || U16(response.data() + 9) != index_ ||

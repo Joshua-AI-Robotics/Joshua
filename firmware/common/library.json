@@ -5,6 +5,6 @@
   "frameworks": "*",
   "platforms": "*",
   "build": {
-    "srcFilter": ["+<*>", "-<*_test.cc>"]
+    "srcFilter": ["+<*>", "-<*_test.cc>", "-<soes/>"]
   }
 }

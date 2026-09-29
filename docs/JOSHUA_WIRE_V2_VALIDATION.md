@@ -213,6 +213,59 @@ is needed to narrow the remaining cause. Cable-loss/OP-loss hardware tests were
 deferred because the baseline itself was failing; no new physical-motion or
 firmware-side shutdown claim is made.
 
+## SOES candidate bring-up — 2026-09-28
+
+The LP-AM243 was deliberately flashed with
+`am243_ethercat_jw2_soes.release.appimage.hs_fs`, SHA-256
+`424c7d498e35efcbdd0c5d27dc490d0c6dd8e3b81896520bc170c36a1ef10b83`.
+Bootloader/application verification succeeded; after the operator selected OSPI
+boot and power-cycled, the console reported `Joshua JW2 SOES ready`. Sources
+were the working tree based on `7f33853`, not a clean release commit. The image
+excludes TI's evaluation slave-stack library but retains TI's hardware/PRU
+dependencies. Command-progress/target watchdogs were 2 s / 1 s. Motor power
+was operator-confirmed disconnected; the channel remains software-only.
+
+On Ubuntu 24.04/Jazzy Docker through `enp5s0`, discovery found one
+`Joshua AM243 JW2 SOES` slave, vendor/product `0xe000059d` / `0x4a570002`,
+revision `0x00020002`, 80/80-byte PDO regions and a valid `am243-soes2`
+descriptor. This is a bench identity, not a registered product identity.
+
+The first runtime handshake exposed a host CoE interoperability bug: the host
+required the reply mailbox counter to equal its request counter. Capture showed
+a valid reset download acknowledgment with request counter 2 and reply counter
+5. SOES advances its own transmit counter independently. Removing that equality
+requirement allowed reset, IDENTIFY, configuration and teardown to pass. The
+production host now preserves its outgoing counter but validates replies by
+CoE service, object and payload, with retained-mailbox draining, one outstanding
+SDO and fault-on-timeout. Existing tests cover independent/zero reply counters,
+malformed replies, aborts and owner scheduling; no board-specific host branch
+or firmware change was needed.
+
+**Hardware qualification remains incomplete.** An exercise using the temporary
+counter fix failed during ENABLE on AL-state register `0x0130` (5 ms budget,
+5.093 ms elapsed). A subsequent exercise with the production fix again passed
+initialization, then failed during ENABLE on mailbox status `0x080d` (5 ms
+budget, 5.013 ms elapsed). Passive userspace capture observed the matching WKC-1
+reply approximately 5.074 ms after the request; this is not a wire-time
+measurement or proof of the delay's source. Both failures preceded any
+SET_TARGET. ENABLE outcome was unknown; DISABLE and teardown could not confirm
+command completion after the session fault. No firmware-side stop was
+independently observed. The existing timing policy was unchanged: 20 ms period,
+5 ms process/state/mailbox budgets, 2 ms guard, 1 s operation/response timeouts.
+
+A final fresh-session handshake with the production fix passed reset, identity,
+configuration and teardown, confirming protocol recovery after those failures.
+This does not establish watchdog timing or physical-output safety. Both full
+Compose suites (`test-u22`, `test-u24`) passed all 35 targets, including the
+updated EtherCAT target's 57 cases.
+
+The older timing problem therefore persists with SOES. No SOES target/feedback,
+watchdog, link-loss or continuous-over-one-hour pass is claimed, and TI-stack
+retirement remains gated on those checks. Temporary probe/config/capture logs
+are outside Git under `/tmp/joshua-soes-hw.byBEDj/`; successful flash logs are
+under `/tmp/joshua-am243-soes-flash.wQ1oNh/`. No repository hardware test utility
+was added.
+
 ## Automated coverage
 
 `serial_v2_validation_test.cc` runs these workflows against the real AM243

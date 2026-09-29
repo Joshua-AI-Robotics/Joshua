@@ -28,6 +28,17 @@ cc_library(
 
 # See README.md for the file map, test boundaries and migration adapters.
 cc_library(
+    name = "joshua_ethercat_profile",
+    srcs = ["joshua_ethercat_profile.c"],
+    hdrs = ["joshua_ethercat_profile.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire_ethercat",
+        ":joshua_wire_v2_firmware_session",
+    ],
+)
+
+cc_library(
     name = "joshua_wire_v1",
     srcs = ["joshua_wire_v1.c"],
     hdrs = ["joshua_wire_v1.h"],

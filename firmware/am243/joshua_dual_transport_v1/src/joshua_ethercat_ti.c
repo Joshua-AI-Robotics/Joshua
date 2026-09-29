@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "ecSlvApiDef.h"
+#include "joshua_commands.h"
 #include "joshua_ethercat_profile.h"
 
 #if !defined(JOSHUA_COMM_WATCHDOG_US) || !defined(JOSHUA_TARGET_WATCHDOG_US)
@@ -17,6 +18,7 @@
 #endif
 
 static JoshuaEthercatProfile profile;
+static JoshuaChannel channel = {.latch_estop = true};
 static TaskP_Object watchdog_task;
 static uint8_t watchdog_stack[4096] __attribute__((aligned(32)));
 
@@ -108,8 +110,18 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
   return EC_API_SLV_PDO_setFixed(slave, pdo, true);
 }
 uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
-  if (!slave ||
-      JoshuaEthercatProfileInit(&profile, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US))
+  const JoshuaEthercatProfileConfig config = {.identity = {.board_id = JW_BOARD_AM243,
+                                                           .fw_name = "am243-ec-v2",
+                                                           .n_channels = 1,
+                                                           .channel_drives = {JW_DRIVE_STEP_DIR}},
+                                              .artifact = "am243-ec-v2",
+                                              .context = &channel,
+                                              .command = JoshuaCommand,
+                                              .reset = JoshuaReset,
+                                              .stop = JoshuaStop,
+                                              .enabled = JoshuaEnabled};
+  if (!slave || JoshuaEthercatProfileInit(
+                    &profile, &config, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US))
     return EC_API_eERR_INVALID;
   // Distinct evaluation profile, not a registered commercial product identity.
   uint32_t result = EC_API_SLV_setProductCode(slave, 0x4a570002);

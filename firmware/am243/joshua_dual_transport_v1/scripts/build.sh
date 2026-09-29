@@ -6,6 +6,12 @@ FIRMWARE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JOSHUA_ROOT="$(cd "$FIRMWARE_DIR/../../.." && pwd)"
 JOSHUA_WIRE_VERSION="${JOSHUA_WIRE_VERSION:-1}"
 JOSHUA_ETHERCAT_PROFILE="${JOSHUA_ETHERCAT_PROFILE:-ti-demo}"
+if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw2-soes ]]; then
+  if [[ "$JOSHUA_WIRE_VERSION" != 2 ]]; then
+    echo "JW2 SOES requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
+  fi
+  exec bash "$SCRIPT_DIR/build_soes.sh" "$@"
+fi
 case "$JOSHUA_WIRE_VERSION" in
   1|2) ;;
   *) echo "JOSHUA_WIRE_VERSION must be 1 or 2" >&2; exit 2 ;;
@@ -24,7 +30,7 @@ case "$JOSHUA_ETHERCAT_PROFILE" in
     done
     ARTIFACT_NAME="am243_ethercat_jw2"
     ;;
-  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo or jw2" >&2; exit 2 ;;
+  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo, jw2, or jw2-soes" >&2; exit 2 ;;
 esac
 SDK_ROOT="${INDUSTRIAL_COMMUNICATIONS_SDK_PATH:-${HOME}/ti/ind_comms_sdk_am243x_09_00_00_03}"
 TI_PROFILE_DIR="$SDK_ROOT/examples/industrial_comms/ethercat_slave_demo/device_profiles/401_simple"
