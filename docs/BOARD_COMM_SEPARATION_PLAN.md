@@ -18,8 +18,8 @@ timeouts, synchronization, and shared-resource lifetime.
 
 JoshuaWire over EtherCAT uses both native EtherCAT planes:
 
-- `IDENTIFY`, `CONFIGURE_CHANNEL`, `ENABLE`, `DISABLE`, and `ESTOP` use
-  CoE/SDO mailbox request-response.
+- `RESET_SESSION`, `IDENTIFY`, `CONFIGURE_CHANNEL`, `ENABLE`, `DISABLE`, and
+  `ESTOP` use CoE/SDO mailbox request-response.
 - `SET_TARGET` and `GET_FEEDBACK` use correlated request and response slots in
   the cyclic PDO image.
 
@@ -44,6 +44,12 @@ class BoardChannel {
 
 The selected comm determines how those operations travel, but motor drivers do
 not see serial, EtherCAT, SOEM, CoE, SDO, or PDO types.
+
+`ESTOP` remains a board-protocol operation rather than a new public method in
+this migration. The board engine issues it from fail-safe stop and teardown
+paths; cyclic communication loss independently places firmware into its
+latched safe state. A user-facing emergency-stop API is separate work and must
+not be approximated by downcasting `BoardInterface`.
 
 ## 3. JoshuaWire v2 correlation
 
@@ -88,9 +94,15 @@ Protocol rules:
   mailbox responses remain explicitly tagged with the session ID, so a
   retained old response cannot match a request in a new session.
 - Message ID `0` is reserved and never allocated.
+- The host obtains session IDs from an operating-system entropy source. Tests
+  inject a deterministic generator. Failure to obtain entropy fails
+  initialization rather than falling back to a predictable constant.
 - The host allocates IDs monotonically. Before `UINT32_MAX` would wrap, it
   disables channels and establishes a new session, so an ID is never reused
   within one session.
+- Mailbox and PDO envelope generation equals the enclosed JoshuaWire message
+  ID. There is one allocator, not a second independently wrapping generation
+  counter.
 - A response must match session ID, message ID, command, and channel.
 - Stale, duplicate, or mismatched responses do not complete a call.
 - A timed-out ID remains quarantined from late responses until transport state
@@ -115,9 +127,12 @@ Conceptually:
 ```cpp
 class MessageTransport {
  public:
-  virtual absl::Status Send(absl::Span<const uint8_t> request) = 0;
+  virtual absl::Status Send(
+      absl::Span<const uint8_t> request,
+      absl::Duration timeout) = 0;
   virtual absl::StatusOr<std::vector<uint8_t>> Exchange(
-      absl::Span<const uint8_t> request) = 0;
+      absl::Span<const uint8_t> request,
+      absl::Duration timeout) = 0;
 };
 ```
 
@@ -140,6 +155,36 @@ class CorrelatedCyclicTransport {
 
 Only `SET_TARGET` and `GET_FEEDBACK` are accepted by this adapter. The board
 engine rejects any routing table that sends another command through it.
+
+### 4.3 Capability bundle and lease
+
+One configured communication resource may expose more than one interface.
+`CommFactory` therefore returns a lease containing optional capabilities
+rather than a variant containing exactly one transport:
+
+```cpp
+struct CommCapabilities {
+  std::shared_ptr<ByteStream> byte_stream;
+  std::shared_ptr<MessageTransport> message;
+  std::shared_ptr<CorrelatedCyclicTransport> correlated_cyclic;
+};
+
+class CommLease {
+ public:
+  const CommCapabilities& capabilities() const;
+};
+```
+
+The lease keeps the shared serial port or EtherCAT master alive. Destruction of
+one board's lease does not stop a master still used by another board. The
+factory rejects incompatible requests for one EtherCAT interface, including
+different process-data modes, cyclic periods, mailbox budgets, or recovery
+policies.
+
+Configuration declares a set of required transport capabilities rather than
+one mutually exclusive `transport_type`. During migration, the existing
+singular field remains readable and maps to a one-element requirement set.
+EtherCAT JoshuaWire requires both message and correlated-cyclic capabilities.
 
 ## 5. EtherCAT runtime model
 
@@ -171,6 +216,8 @@ sequenceDiagram
 The initial implementation allows one in-flight cyclic request per
 board/slave adapter. One master loop may service several slave PDO regions.
 Concurrent callers targeting the same adapter serialize on its request slot.
+The request generation is the JoshuaWire message ID, so generation wrap uses
+the same new-session procedure as message-ID wrap.
 
 The worker always performs process-data send/receive first. Between cyclic
 deadlines it may service at most one queued mailbox or state-management step.
@@ -247,7 +294,6 @@ The layout-v1 CoE contract is:
 | Index | Subindex | Type/access | Meaning |
 | --- | --- | --- | --- |
 | `0x2000` | `0` | `OCTET_STRING[36]`, RO | compatibility descriptor |
-| `0x2001` | `0` | `OCTET_STRING[8]`, RW | reset-session request/result |
 | `0x2010` | `0` | `OCTET_STRING[76]`, WO | mailbox request envelope |
 | `0x2011` | `0` | `OCTET_STRING[76]`, RO | retained mailbox response envelope |
 | `0x2012` | `0` | `UNSIGNED32`, WO | mailbox response-generation acknowledgment |
@@ -258,8 +304,9 @@ maximum JoshuaWire protocol versions (`uint16` each), PDO layout version
 (`uint16`, value 1), output and input PDO sizes (`uint16`, both 80), maximum
 frame size (`uint16`, 64), supported-transport bitmap (`uint32`), and a
 12-byte NUL-padded firmware artifact ID followed by a zero `uint16` reserved
-field. The 8-byte session object contains an operation (`uint32`, 1 means
-reset) and session ID (`uint32`). Each 76-byte mailbox envelope contains
+field. Supported-transport bitmap bit 0 means JoshuaWire mailbox envelopes and
+bit 1 means correlated JoshuaWire PDO images; all other bits are reserved and
+must be zero in descriptor version 1. Each 76-byte mailbox envelope contains
 session ID (`uint32`), generation (`uint32`), frame length (`uint16`), zero
 reserved bytes (`uint16`), and frame (`uint8[64]`). Mailbox generations and
 retained-response acknowledgment follow the same publication rules as PDO
@@ -268,6 +315,7 @@ generations.
 Mailbox exchange is used only for management operations:
 
 ```text
+RESET_SESSION
 IDENTIFY
 CONFIGURE_CHANNEL
 ENABLE
@@ -275,8 +323,17 @@ DISABLE
 ESTOP
 ```
 
-Mailbox timeouts and serialization belong to the comm adapter. The board
-engine sees only a `MessageTransport`.
+`RESET_SESSION` is an ordinary JoshuaWire v2 request in the `0x2010` envelope,
+not a transport-specific side channel. It is the only request firmware accepts
+when the envelope and frame propose a session different from the active one.
+
+Only one mailbox request is in flight per slave. The host writes `0x2010`,
+then reads `0x2011` until it observes the exact session and generation or the
+deadline expires. Firmware publishes the complete retained response before its
+generation. After consuming or discarding that response, the host writes the
+generation to `0x2012`; firmware then clears it. A zero generation means no
+published response. Mailbox timeouts, polling, and serialization belong to the
+comm adapter. The board engine sees only a `MessageTransport`.
 
 At startup, before session reset or channel enable, the host reads `0x2000` and
 requires JoshuaWire v2, PDO layout v1, exact 80-byte PDO mappings, a 64-byte
@@ -287,9 +344,12 @@ the matching firmware artifact. Firmware is built and flashed separately from
 the host; each firmware artifact only needs to implement the transport set
 declared in its compatibility descriptor, not every Joshua transport.
 
-`ESTOP` is also reflected as latched firmware safety state. Loss or staleness
-of cyclic traffic must place outputs into the documented safe/disabled state;
-mailbox delivery alone is not the motor-safety mechanism.
+`ESTOP` is also reflected as latched firmware safety state. Transport status
+in PDO layout v1 is `0` for ready, `1` for malformed envelope, `2` for
+unsupported cyclic command, `3` for session mismatch, and `4` for firmware
+internal error; all other values are reserved. Loss or staleness of cyclic
+traffic must place outputs into the documented safe/disabled state; mailbox
+delivery alone is not the motor-safety mechanism.
 
 ## 7. Board engine and factory assembly
 
@@ -317,7 +377,9 @@ flowchart LR
 
 [`CommFactory`](../robot/comm/factory/comm_factory.cc) creates ready-to-use
 serial or EtherCAT adapters and owns configure/start/stop, master caching,
-serialization, and shared-resource leases.
+serialization, and shared-resource leases. Its returned lease may expose
+multiple capabilities from the same underlying resource; it does not require
+callers to create separate EtherCAT masters for CoE and PDO.
 
 [`BoardFactory`](../robot/board/factory/board_factory.cc) resolves these axes
 independently:
@@ -334,6 +396,11 @@ message-protocol adapter.
 
 Add explicit board protocol selection so the factory does not reconstruct a
 hidden `board_type × comm_type` matrix.
+
+Replace the singular required transport selection with a capability set.
+Existing configs using one `transport_type` remain accepted during migration;
+new EtherCAT JoshuaWire configs explicitly require message and
+correlated-cyclic capabilities.
 
 Move EtherCAT endpoint facts—slave index and optional PDO region overrides—from
 AM243 board configuration into
@@ -367,20 +434,46 @@ The firmware must:
 
 Document or generate the matching ESI and PDO mapping.
 
-## 10. Migration sequence
+## 10. Stacked implementation PRs
 
-1. Update this design and the board-layer RFC with the v2 and dual-plane
-   contracts.
-2. Add JoshuaWire v2 beside v1, including correlation tests and response-ID
-   propagation through existing serial firmware.
-3. Add message and correlated-cyclic comm interfaces, fakes, and BUILD
-   visibility rules.
-4. Add SOEM CoE/SDO support and the single-owner background cyclic loop.
-5. Implement the host PDO codec and Joshua-controlled AM243 firmware/profile.
-6. Compose the JoshuaWire board engine and migrate AM243 after serial v2 is
-   stable.
-7. Remove `Am243Board::serial_mode_` and board-layer dependencies on concrete
-   serial/SOEM implementations.
+The design update is PR 0. Implementation is split into nine reviewable PRs.
+Every PR keeps tests green and preserves the retained TI demo.
+
+1. **Communication seams and configuration.** Finalize `MessageTransport`,
+   `CorrelatedCyclicTransport`, capability leases, fakes, configuration
+   migration, and BUILD visibility. Adapt existing users without changing wire
+   behavior.
+2. **JoshuaWire v2 codec and correlation primitives.** Add the shared v2 C
+   codec beside v1, session/message-ID allocation, exact golden bytes, response
+   matching, and shared mailbox/PDO layout assertions. No endpoint switches
+   protocol in this PR.
+3. **Composed board engine and serial v2 host.** Add board identity as data,
+   protocol selection, command routing, the reset handshake, and deadline-based
+   serial framed reads. Keep explicit v1 support.
+4. **Serial firmware and board migration.** Add v2 to Teensy, ESP32, and AM243
+   serial firmware; propagate response IDs; move serial settle delay into comm
+   config; migrate factory assembly; and remove Teensy/ESP32 board subclasses.
+   This PR completes the serial-v2-stable milestone.
+5. **Single-owner EtherCAT runtime.** Add the background master loop, bounded
+   work queues, lifecycle, shared leases, stop priority, teardown cancellation,
+   and timing tests. Keep the TI demo usable through a compatibility adapter.
+6. **CoE/SDO mailbox transport.** Add worker-owned SDO operations,
+   compatibility validation, mailbox publication/acknowledgment, reset-session
+   exchange, and slow-mailbox deadline tests.
+7. **Correlated PDO transport.** Add the 80-byte host codec, process-image
+   shadows, generation publication and acknowledgment, cancellation,
+   outcome-unknown timeout handling, and cyclic routing tests.
+8. **Joshua-controlled AM243 firmware/profile.** Add the CoE object dictionary,
+   correlated PDO handling, watchdog and ESTOP safe state, ESI/PDO mapping, and
+   host/firmware layout tests. This remains a separate artifact from the TI
+   demo.
+9. **EtherCAT integration and cleanup.** Compose mailbox and PDO capabilities
+   in `BoardFactory`, apply the compatibility gate, migrate AM243, remove
+   `Am243Board::serial_mode_` and board dependencies on serial/SOEM, and run
+   both Compose CI task services.
+
+PRs 1–4 are the host/serial spine. PRs 5–9 form the EtherCAT stack. PR 8 may be
+developed in parallel from PR 2's frozen wire contract, but lands before PR 9.
 
 ## 11. Verification
 
@@ -405,6 +498,9 @@ Required host and shared-codec tests:
 - Slow and timed-out mailbox operations do not violate cyclic deadlines.
 - Only the background master loop performs process-data exchange.
 - Shared EtherCAT master lifetime across multiple board/slave adapters.
+- One EtherCAT lease exposes mailbox and correlated-cyclic capabilities
+  without opening a second master; incompatible shared-master timing requests
+  are rejected.
 - Serial routes all commands through message exchange; Teensy and ESP32 do not
   require a cyclic transport.
 
@@ -427,6 +523,7 @@ or flash firmware without explicit hardware confirmation.
   satisfying new requests.
 - EtherCAT management commands use CoE/SDO.
 - EtherCAT `SET_TARGET` and `GET_FEEDBACK` use correlated PDO slots.
+- One EtherCAT communication lease supplies both planes from one master.
 - One background loop exclusively owns each EtherCAT master's process-data
   exchange.
 - Timeout, teardown, stale responses, and message-ID wrap are deterministic
