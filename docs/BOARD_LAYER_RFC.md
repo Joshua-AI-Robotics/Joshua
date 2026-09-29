@@ -25,9 +25,11 @@ Native tests cover the full factory/engine/adapter/firmware-core path. A limited
 passed commands and stale-target recovery, but also exposed a host mailbox
 deadline failure; production timing validation remains open. The separation plan is
 the current checklist; the original generic-engine checklist below is not a
-claim that all remaining RFC proposals have landed. In particular, serial
-framing/settle-policy extraction, physical-output safety and simultaneous
-transport arbitration remain unfinished.
+claim that all remaining RFC proposals have landed. Serial framing now lives in
+a comm-internal adapter; exchange/settle timing comes from serial config and
+the ESP32 board sleep is removed. Physical-output safety and simultaneous
+transport arbitration remain unfinished. The older checklist below is historical
+where superseded by the separation plan's implementation checkpoint.
 
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.

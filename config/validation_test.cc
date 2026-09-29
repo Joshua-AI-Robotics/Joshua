@@ -154,6 +154,32 @@ TEST(ValidationTest, RejectsIncompleteSensorDefinitions) {
   sensor->clear_sts3215_encoder_config();
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+
+TEST(ValidationTest, RejectsInvalidSerialTimingWithoutHardware) {
+  auto config = MakeConfig();
+  auto* serial = config.mutable_robot()->mutable_boards(0)->mutable_comm()->mutable_serial_config();
+  serial->set_exchange_timeout_ms(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_exchange_timeout_ms(250);
+  serial->set_post_open_settle_ms(2000);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
+  auto config = MakeConfig();
+  auto* robot = config.mutable_robot();
+  auto second_board = robot->boards(0);
+  second_board.set_name("second");
+  second_board.mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(100);
+  *robot->add_boards() = second_board;
+  auto sensor = robot->perceptions().single_perceptions(0);
+  sensor.set_sensor_name("second_joint");
+  sensor.mutable_sts3215_encoder_config()->set_board_name("second");
+  *robot->mutable_perceptions()->add_single_perceptions() = sensor;
+  EXPECT_TRUE(ValidateConfig(config).ok());  // Explicit 100 equals the legacy default.
+  robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(2000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
 TEST(ValidationTest, RejectsDriverAndMeasurementMismatchBeforeResourceResolution) {
   auto config = MakeConfig();
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);

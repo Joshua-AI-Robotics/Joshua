@@ -35,6 +35,13 @@ message SerialConfig {
   uint64 id = 1;
   string port = 2;
   uint64 baudrate = 3;
+  // JoshuaWire framed exchange deadline, including bus-lock wait and write/read.
+  // Omitted preserves 100 ms; explicit zero is invalid. Legacy fixed-size I/O
+  // retains its existing timing until those consumers migrate.
+  optional uint32 exchange_timeout_ms = 4;
+  // Wait once after physical open, before exposing any capability. Zero means
+  // no delay. Set 2000 for USB bridges that reset the MCU on open (e.g. CP2102).
+  uint32 post_open_settle_ms = 5;
 }
 
 message UdpConfig {

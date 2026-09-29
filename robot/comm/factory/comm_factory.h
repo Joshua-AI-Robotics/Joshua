@@ -54,6 +54,7 @@ class CommFactory {
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
   // Pure validation, safe before opening hardware and usable by config checks.
   static absl::Status ValidatePairedEthercatConfig(const robot::comm::EthercatConfig& config);
+  static absl::Status ValidateSerialConfig(const robot::comm::SerialConfig& config);
 
   // Replaces the result of CreateComm without changing the consumer call
   // path or opening hardware. Pass nullptr to restore production behavior.

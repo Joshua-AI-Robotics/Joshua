@@ -71,6 +71,33 @@ IDENTIFY and CONFIGURE_CHANNEL; initialization leaves channels disabled.
 Feetech does not accept this selection. The AM243 TI-demo host path is retired.
 See [firmware build instructions](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone).
 
+### Serial timing
+
+Serial timing belongs in `comm.serial_config`, independently of board identity:
+
+```text
+serial_config {
+  port: "/dev/ttyUSB0"
+  baudrate: 115200
+  exchange_timeout_ms: 100
+  post_open_settle_ms: 2000
+}
+```
+
+The framed JoshuaWire exchange timeout includes waiting for the shared bus lock,
+writing and receiving a complete frame. Omitted means 100 ms; explicit values
+must be 1..INT_MAX milliseconds. Fixed-length v1/vendor operations retain their
+existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
+and runs once after physical open, not per request or session reset. All users
+of one port must agree on baudrate and timing; omitted timeout and explicit
+100 ms are equivalent. Invalid/conflicting settings fail before another open.
+
+**ESP32 config migration:** the board-specific 2-second sleep has been removed.
+For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
+as in the checked-in ESP32 example. Native USB or other links may need a
+different value; board type no longer guesses it. The manual v2 probe's
+`--settle_ms` remains an additional diagnostic wait, not a runtime setting.
+
 ## JoshuaWire v2 over EtherCAT
 
 Select `protocol: JOSHUA_WIRE_V2` and `transport_type: MESSAGE_AND_CYCLIC`.

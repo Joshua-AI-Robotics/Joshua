@@ -109,8 +109,9 @@ the actual v1 codec/path, not as a version-neutral command representation.
 ## Remaining migration work
 
 - Host message/cyclic board-engine composition and factory assembly now exist.
-  V1 still uses the separate legacy fixed-size API; framed-serial extraction
-  and configurable serial timing remain unfinished.
+  Framed-serial extraction and configurable serial exchange/settle timing are
+  implemented. V1 still uses the separate legacy fixed-size API and its existing
+  timing; firmware wire formats are unchanged.
 - **AM243 [command handler](../am243/joshua_dual_transport_v1/src/joshua_commands.h):**
   now transport-neutral and reused by separate UART and EtherCAT artifacts.
   Simultaneous UART/CoE/PDO ownership still needs an arbiter; physical motion

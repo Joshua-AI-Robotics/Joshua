@@ -7,12 +7,15 @@
 
 #include <cerrno>
 #include <chrono>
+#include <climits>
 #include <cstring>
+#include <thread>
 
 namespace robot::comm {
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
                std::string uart_port,
-               int uart_baudrate)
+               int uart_baudrate,
+               std::chrono::milliseconds post_open_settle)
     : io_context_(io), uart_port_(uart_port), uart_baudrate_(uart_baudrate) {
   try {
     serial_ = std::make_unique<boost::asio::serial_port>(*io_context_, uart_port_);
@@ -25,6 +28,7 @@ Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
         boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
     serial_->set_option(boost::asio::serial_port_base::flow_control(
         boost::asio::serial_port_base::flow_control::none));
+    std::this_thread::sleep_for(post_open_settle);
   } catch (const boost::system::system_error& e) {
     LOG(ERROR) << e.what();
     throw std::runtime_error("Error opening serial port.");
@@ -51,7 +55,7 @@ absl::Status Serial::Open() {
 }
 
 absl::Status Serial::Write(const std::vector<uint8_t>& data) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::timed_mutex> lock(mutex_);
   if (!serial_->is_open()) {
     LOG(ERROR) << "Error: Serial port not open for writing.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for writing.");
@@ -66,7 +70,7 @@ absl::Status Serial::Write(const std::vector<uint8_t>& data) {
 }
 
 absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::timed_mutex> lock(mutex_);
   if (!serial_->is_open()) {
     LOG(ERROR) << "Error: Serial port not open for reading.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for reading.");
@@ -112,7 +116,7 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
 
 absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_t>& command,
                                                         size_t expected_response_size) {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::timed_mutex> lock(mutex_);
 
   if (!serial_->is_open()) {
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for query.");
@@ -159,7 +163,7 @@ absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_
 }
 
 absl::Status Serial::Flush() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::timed_mutex> lock(mutex_);
   if (!serial_->is_open()) {
     LOG(ERROR) << "Error: Serial port not open for flushing.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for flushing.");
@@ -171,12 +175,15 @@ absl::Status Serial::Flush() {
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> request) {
-  if (request.size() < 7 || request.size() > 64 || request[0] != 0xA5 ||
-      static_cast<size_t>(request[1]) + 4 != request.size()) {
-    return absl::InvalidArgumentError("Serial Exchange requires a bounded JoshuaWire frame.");
-  }
-  std::lock_guard<std::mutex> lock(mutex_);
+absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
+                                   std::chrono::milliseconds timeout,
+                                   const std::function<absl::StatusOr<bool>(uint8_t)>& consume) {
+  if (request.empty() || timeout.count() <= 0 || timeout.count() > INT_MAX || !consume)
+    return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
+  if (!lock.try_lock_until(deadline))
+    return absl::DeadlineExceededError("Serial bus busy; request not sent.");
   if (!serial_->is_open()) return absl::FailedPreconditionError("Serial port is closed.");
   const int fd = serial_->native_handle();
   const int flags = fcntl(fd, F_GETFL);
@@ -193,7 +200,6 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
   if (tcflush(fd, TCIFLUSH) != 0) {
     return absl::UnavailableError("Cannot flush serial input before exchange.");
   }
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
       const auto remaining = deadline - std::chrono::steady_clock::now();
@@ -201,17 +207,19 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
         return absl::DeadlineExceededError("Serial framed exchange timed out; outcome unknown.");
       }
       pollfd descriptor{fd, events, 0};
-      const int timeout =
+      const int poll_timeout =
           static_cast<int>(
               std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count()) +
           1;
-      const int result = poll(&descriptor, 1, timeout);
+      const int result = poll(&descriptor, 1, poll_timeout);
       if (result < 0 && errno == EINTR) continue;
       if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
         return absl::UnavailableError(
             "Serial framed exchange lost its connection; outcome unknown.");
       }
-      if (result > 0 && (descriptor.revents & events)) return absl::OkStatus();
+      if (result > 0 && (descriptor.revents & events) &&
+          std::chrono::steady_clock::now() < deadline)
+        return absl::OkStatus();
     }
   };
   size_t written = 0;
@@ -223,8 +231,6 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
     if (count <= 0) return absl::UnavailableError("Serial framed write failed; outcome unknown.");
     written += static_cast<size_t>(count);
   }
-  std::vector<uint8_t> response;
-  size_t total = 0;
   for (;;) {
     auto status = wait(POLLIN);
     if (!status.ok()) return status;
@@ -232,15 +238,9 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
     const ssize_t count = read(fd, &byte, 1);
     if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
     if (count <= 0) return absl::UnavailableError("Serial framed read failed; outcome unknown.");
-    if (response.empty() && byte != 0xA5) continue;
-    response.push_back(byte);
-    if (response.size() == 2) {
-      total = static_cast<size_t>(byte) + 4;
-      if (total < 7 || total > 64) {
-        return absl::DataLossError("Serial response frame length is invalid; outcome unknown.");
-      }
-    }
-    if (total != 0 && response.size() == total) return response;
+    auto complete = consume(byte);
+    if (!complete.ok()) return complete.status();
+    if (*complete) return absl::OkStatus();
   }
 }
 

@@ -157,13 +157,20 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 }
 
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
+  std::map<std::string, robot::comm::SerialConfig> policies;
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
     const auto& serial = connection.comm.serial_config();
-    if (serial.port().empty() || serial.baudrate() == 0) {
-      return absl::InvalidArgumentError(
-          absl::StrCat(connection.owner, ": serial comm requires a port and baudrate."));
+    auto status = robot::comm::CommFactory::ValidateSerialConfig(serial);
+    if (!status.ok()) {
+      return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
     }
+    auto normalized = serial;
+    normalized.clear_id();
+    if (!normalized.has_exchange_timeout_ms()) normalized.set_exchange_timeout_ms(100);
+    const auto [it, inserted] = policies.emplace(serial.port(), normalized);
+    if (!inserted && it->second.SerializeAsString() != normalized.SerializeAsString())
+      return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
   }
   return absl::OkStatus();
 }

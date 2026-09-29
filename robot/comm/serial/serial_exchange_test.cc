@@ -1,4 +1,4 @@
-// Tests Linux Serial::Exchange through allocated pseudo-terminals, never real
+// Tests the framed serial adapter through allocated pseudo-terminals, never real
 // serial devices. Covers variable-length/fragmented frames, stale-input flush,
 // bounded read deadlines, invalid lengths and disconnects; protocol-level
 // session/correlation behavior is tested by joshua_wire_v2_session_test.cc.
@@ -10,10 +10,12 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "firmware/common/joshua_wire_v2.h"
 #include "gtest/gtest.h"
+#include "robot/comm/serial/framed_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 
 namespace robot::comm {
@@ -24,7 +26,8 @@ class SerialExchangeTest : public ::testing::Test {
  protected:
   int master = -1;
   std::shared_ptr<boost::asio::io_context> io = std::make_shared<boost::asio::io_context>();
-  std::unique_ptr<Serial> serial;
+  std::shared_ptr<Serial> link;
+  std::unique_ptr<FramedSerialTransport> serial;
   Bytes request;
   void SetUp() override {
     // An allocated PTY only: no real /dev/ttyACM*, ttyUSB* or NIC is opened.
@@ -32,13 +35,15 @@ class SerialExchangeTest : public ::testing::Test {
     ASSERT_GE(master, 0);
     ASSERT_EQ(grantpt(master), 0);
     ASSERT_EQ(unlockpt(master), 0);
-    serial = std::make_unique<Serial>(io, ptsname(master), 115200);
+    link = std::make_shared<Serial>(io, ptsname(master), 115200);
+    serial = std::make_unique<FramedSerialTransport>(link, std::chrono::milliseconds(100));
     request.resize(JW2_MAX_FRAME_LEN);
     const int len = jw2_encode_frame(request.data(), request.size(), 100, 5, 1, 0xff, nullptr, 0);
     request.resize(len);
   }
   void TearDown() override {
     serial.reset();
+    link.reset();
     if (master >= 0) close(master);
   }
   bool ReadRequest() {
@@ -125,6 +130,83 @@ TEST_F(SerialExchangeTest, InvalidLengthsAndDisconnectFail) {
   master = -1;
   EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kUnavailable);
   EXPECT_EQ(serial->Exchange({}).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
+  serial = std::make_unique<FramedSerialTransport>(link, std::chrono::milliseconds(25));
+  const auto start = std::chrono::steady_clock::now();
+  EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kDeadlineExceeded);
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  EXPECT_GE(elapsed, std::chrono::milliseconds(25));
+  EXPECT_LT(elapsed, std::chrono::seconds(1));
+  ASSERT_TRUE(ReadRequest());
+  serial = std::make_unique<FramedSerialTransport>(link, std::chrono::milliseconds(500));
+  auto response = Reply(1);
+  auto device = std::async(std::launch::async, [&] {
+    if (!ReadRequest()) return false;
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    return write(master, response.data(), response.size()) == static_cast<ssize_t>(response.size());
+  });
+  auto actual = serial->Exchange(request);
+  EXPECT_TRUE(device.get());
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
+}
+
+TEST_F(SerialExchangeTest, BusLockWaitIsBoundedAndExpiredRequestIsNotSent) {
+  FramedSerialTransport slow(link, std::chrono::milliseconds(300));
+  FramedSerialTransport fast(link, std::chrono::milliseconds(25));
+  auto first = std::async(std::launch::async, [&] { return slow.Exchange(request); });
+  ASSERT_TRUE(ReadRequest());  // The first transaction now owns the physical bus.
+  auto second = fast.Exchange(request);
+  EXPECT_EQ(second.status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(second.status().message().find("not sent"), std::string::npos);
+  pollfd descriptor{master, POLLIN, 0};
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+  EXPECT_EQ(first.get().status().code(), absl::StatusCode::kDeadlineExceeded);
+}
+
+TEST_F(SerialExchangeTest, RawMechanismDoesNotKnowJoshuaWireFraming) {
+  request = {0x42};
+  auto device = std::async(std::launch::async, [&] {
+    if (!ReadRequest()) return false;
+    const uint8_t response[] = {0x10, 0x20};
+    return write(master, response, sizeof(response)) == sizeof(response);
+  });
+  Bytes response;
+  auto status = link->ExchangeUntil(
+      request, std::chrono::milliseconds(100), [&](uint8_t byte) -> absl::StatusOr<bool> {
+        response.push_back(byte);
+        return response.size() == 2;
+      });
+  EXPECT_TRUE(device.get());
+  EXPECT_TRUE(status.ok()) << status;
+  EXPECT_EQ(response, (Bytes{0x10, 0x20}));
+}
+
+TEST_F(SerialExchangeTest, InvalidDeadlineDoesNotWrite) {
+  for (auto timeout : {std::chrono::milliseconds(0), std::chrono::milliseconds(-1)}) {
+    FramedSerialTransport invalid(link, timeout);
+    EXPECT_EQ(invalid.Exchange(request).status().code(), absl::StatusCode::kInvalidArgument);
+  }
+  pollfd descriptor{master, POLLIN, 0};
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+}
+
+TEST_F(SerialExchangeTest, LegacyAndSendOnlyBytesAreForwardedUnchanged) {
+  // Vendor/v1 callers still supply their exact response length, not JW framing.
+  request = {0xff, 0xff, 0x01, 0x02};
+  const Bytes response = {0xff, 0xff, 0x01, 0x00, 0x03};
+  auto device = std::async(std::launch::async, [&] {
+    if (!ReadRequest()) return false;
+    return write(master, response.data(), response.size()) == static_cast<ssize_t>(response.size());
+  });
+  auto actual = serial->SendAndReceive(request, response.size());
+  EXPECT_TRUE(device.get());
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
+  EXPECT_TRUE(serial->Send(request).ok());
+  EXPECT_TRUE(ReadRequest());
 }
 }  // namespace
 }  // namespace robot::comm

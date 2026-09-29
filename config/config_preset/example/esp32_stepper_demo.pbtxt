@@ -40,7 +40,11 @@ robot {
       # (CP2102/CH340/...), not native USB CDC like Teensy 4.1 — check
       # `ls /dev/ttyUSB*` (or /dev/ttyACM* if your board does have native
       # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
-      serial_config { port: "/dev/ttyUSB0" baudrate: 115200 }
+      serial_config {
+        port: "/dev/ttyUSB0"
+        baudrate: 115200
+        post_open_settle_ms: 2000
+      }
     }
     firmware {
       min_proto_version: 1

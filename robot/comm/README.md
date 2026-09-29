@@ -53,23 +53,28 @@ Device protocol parsing remains outside this layer. For example, the lidar
 parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`.
 
-### Transitional serial v2 exchange
+### Framed serial exchange
 
 `MessageTransport::Exchange` accepts a request and returns a variable-length
 response. Fixed-size `SendAndReceive`, `Write` and legacy `Open` live separately
 in [`LegacyMessageTransport`](interfaces/legacy_message_transport.h), used only
 by remaining v1/vendor consumers. New adapters need not implement those methods.
 Remove that compatibility seam after those consumers gain framed adapters.
-Serial currently
-implements `Exchange` with JoshuaWire's sync/length framing, a 64-byte cap, and
-one 100 ms deadline spanning write and read. It flushes stale input before each
-request and serializes exchanges on the bus mutex. CRC, version, and correlation
-validation belong to the board's v2 session. A mismatched reply fails
-the operation (outcome unknown), rather than waiting for another reply.
+[`FramedSerialTransport`](serial/framed_serial_transport.h) owns JoshuaWire's
+sync/length framing and 64-byte cap. It wraps the same physical `Serial` used
+by byte-stream consumers and forwards the legacy fixed-size methods unchanged.
+`Serial::ExchangeUntil` supplies a protocol-independent byte transaction and
+one deadline spanning bus-lock wait, write and read. Stale input is flushed
+before transmission. CRC, version, and correlation validation belong to the
+board's v2 session; mismatches fail closed rather than being retried.
 
-This framing implementation is transitional: the separate framed-serial adapter,
-configurable serial deadlines/settle policy remain pending under the
-board/comm separation plan. EtherCAT timing is explicit in comm config.
+`SerialConfig.exchange_timeout_ms` defaults to 100 when omitted; explicit zero
+is rejected. `post_open_settle_ms` defaults to zero and is applied once per
+physical open, before either capability is returned. The factory reuses the
+port only if baudrate and timing policy agree. ESP32 USB bridges that reset
+on open need an explicit settle value (the example uses 2000 ms); no board
+class supplies a hidden sleep. These timing settings do not change the legacy
+fixed-size read/write deadlines. See [config migration](../../config/README.md#serial-timing).
 
 ### Dependencies and tests
 

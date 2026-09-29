@@ -20,9 +20,13 @@ Implementation checkpoint:
   contract, and test-only fakes cover both. Concrete serial/SOEM targets are
   comm-internal; factory implementation headers do not propagate to consumers.
   Legacy fixed-size methods remain isolated in `LegacyMessageTransport` for v1
-  and vendor consumers. Serial framing still lives in `Serial`, with a fixed
-  100 ms exchange deadline. Mismatched serial replies fail closed rather than being
-  skipped while waiting for another reply.
+  and vendor consumers. `FramedSerialTransport` owns JoshuaWire serial framing;
+  `Serial` owns protocol-independent byte I/O and bus locking. Serial config now
+  supplies exchange timeout (100 ms when omitted) and once-per-open settle delay
+  (zero when omitted). The ESP32 preset explicitly preserves its 2000 ms delay;
+  the board-specific sleep is removed. Mismatched serial replies fail closed
+  rather than being skipped while waiting for another reply. Legacy fixed-size
+  I/O timing remains unchanged.
 - AM243 v2 UART passed eight real-board validation sessions on 2026-09-27;
   see the [recorded scope and artifact](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27).
   This does not validate EtherCAT or physical motion.
@@ -75,8 +79,7 @@ Implementation checkpoint:
   late register replies observed in capture; the cause is not yet isolated.
   See the [recorded scope and limits](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
 - Remaining: broader EtherCAT timing/failure validation, physical-output safety and
-  transport arbitration; framed-serial extraction and configurable serial
-  deadline/settle policy (ESP32 retains its existing settle hook). Firmware
+  transport arbitration. Firmware
   watchdog settings are build-time values, not advertised/verified by the
   descriptor. No hard-real-time or physical-motion safety claim is made.
 

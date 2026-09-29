@@ -1,5 +1,11 @@
 #include "robot/comm/factory/comm_factory.h"
 
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <climits>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -101,6 +107,71 @@ TEST(CommFactoryTest, LegacyEthercatIsRejectedBeforeOpeningBackend) {
 TEST(CommFactoryTest, PairedEthercatRejectsIncompleteConfigBeforeOpeningBackend) {
   auto result = CommFactory::CreateComm(MakeEthercatComm());
   EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, InvalidSerialTimingIsRejectedBeforeOpeningPort) {
+  Comm comm;
+  comm.set_comm_type(SERIAL);
+  comm.set_transport_type(MESSAGE);
+  auto* config = comm.mutable_serial_config();
+  config->set_port("never-open-this-port");
+  config->set_baudrate(115200);
+  EXPECT_TRUE(CommFactory::ValidateSerialConfig(*config).ok());
+  config->set_exchange_timeout_ms(0);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_exchange_timeout_ms(UINT32_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->clear_exchange_timeout_ms();
+  config->set_post_open_settle_ms(UINT32_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->clear_post_open_settle_ms();
+  config->set_baudrate(UINT64_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, SerialPtyHonorsTimingAndSharesOnePhysicalOpen) {
+  const int master = posix_openpt(O_RDWR | O_NOCTTY);
+  ASSERT_GE(master, 0);
+  struct CloseFd {
+    int fd;
+    ~CloseFd() {
+      close(fd);
+    }
+  } cleanup{master};
+  ASSERT_EQ(grantpt(master), 0);
+  ASSERT_EQ(unlockpt(master), 0);
+  Comm comm;
+  comm.set_comm_type(SERIAL);
+  comm.set_transport_type(MESSAGE);
+  auto* config = comm.mutable_serial_config();
+  config->set_port(ptsname(master));
+  config->set_baudrate(115200);
+  config->set_post_open_settle_ms(60);
+  config->set_exchange_timeout_ms(30);
+  const auto opened = std::chrono::steady_clock::now();
+  auto selected = CommFactory::CreateComm(comm);
+  ASSERT_TRUE(selected.ok()) << selected.status();
+  EXPECT_GE(std::chrono::steady_clock::now() - opened, std::chrono::milliseconds(60));
+  auto message = GetCommTransport<MessageTransport>(*selected);
+  ASSERT_TRUE(message.ok());
+  const std::vector<uint8_t> frame = {0xa5, 3, 1, 1, 0, 0, 0};
+  const auto start = std::chrono::steady_clock::now();
+  EXPECT_EQ((*message)->Exchange(frame).status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_GE(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(30));
+  comm.set_transport_type(BYTE_STREAM);
+  auto first = CommFactory::CreateComm(comm);
+  auto second = CommFactory::CreateComm(comm);
+  ASSERT_TRUE(first.ok());
+  ASSERT_TRUE(second.ok());
+  EXPECT_EQ(*GetCommTransport<ByteStream>(*first), *GetCommTransport<ByteStream>(*second));
+  config->set_exchange_timeout_ms(31);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_exchange_timeout_ms(30);
+  config->set_post_open_settle_ms(0);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_post_open_settle_ms(60);
+  config->set_baudrate(9600);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 }  // namespace

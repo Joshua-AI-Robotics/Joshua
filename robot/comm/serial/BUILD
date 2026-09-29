@@ -7,9 +7,9 @@ cc_library(
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         "//robot/comm/interfaces:byte_stream",
-        "//robot/comm/interfaces:legacy_message_transport",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
         "@boost.asio",
         "@glog",
     ],
@@ -28,10 +28,24 @@ cc_binary(
     ],
 )
 
+cc_library(
+    name = "framed_serial_transport",
+    srcs = ["framed_serial_transport.cc"],
+    hdrs = ["framed_serial_transport.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":serial",
+        "//robot/comm/interfaces:legacy_message_transport",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
 cc_test(
     name = "serial_exchange_test",
     srcs = ["serial_exchange_test.cc"],
     deps = [
+        ":framed_serial_transport",
         ":serial",
         "//firmware/common:joshua_wire_v2",
         "@boost.asio",
