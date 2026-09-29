@@ -55,8 +55,10 @@ position sensor (`POSITION`). Examples are the
 | Concrete publishers and inference | Camera publishes `Image`, lidar publishes `PointCloud2`, position publishes `Float32`. Inference decodes `Image` and `Float32` observations and publishes `Float32` commands. | [Camera](../ros2/camera_publisher.cc), [lidar](../ros2/lidar_publisher.cc), [position](../ros2/position_publishers.h), [inference decoder](../ai/inference/observation_codec.py), [inference host](../ai/inference/host.py). |
 
 The [preset validation test](../config/config_preset/config_preset_validation_test.cc)
-loads and semantically checks every checked-in preset without opening devices.
-Factory and driver tests exercise selected behavior with test doubles. These
-software checks do not prove that a preset's physical wiring, firmware, or
-motion path is ready. See [configuration guidance](../config/README.md) and
+loads every checked-in preset and runs `config::ValidateConfig` without opening
+devices. That check does not construct boards or verify that every declared
+board and transport is implemented. Factory and driver tests exercise selected
+behavior with test doubles. These software checks do not prove that a preset's
+physical wiring, firmware, or motion path is ready. See
+[configuration guidance](../config/README.md) and
 [simulation prerequisites](../simulation/README.md) before using an example.
