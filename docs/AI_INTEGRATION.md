@@ -40,6 +40,12 @@ subsystem or runtime roles.
    merged.** The claim must also match the scope and verification level shown
    by evidence. Open pull requests can inform plans, but documentation and
    tools must not present their work as currently available.
+4. **Make setup and operation accessible through prompts.** Users should be
+   able to set up and operate supported robots through prompts. The frontend
+   gathers intent and shows progress; Joshua's binary and backend handle
+   software installation, dependencies, configuration, validation, and
+   execution. Physical setup and required operator confirmation remain guided
+   human steps.
 
 ## Proposed follow-ups
 
