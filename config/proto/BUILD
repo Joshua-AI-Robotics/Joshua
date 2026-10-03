@@ -9,9 +9,22 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         ":ai_proto",
+        ":robot_clock_proto",
         ":robot_proto",
         "//simulation/proto:simulation_proto",
     ],
+)
+
+proto_library(
+    name = "robot_clock_proto",
+    srcs = ["robot_clock.proto"],
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "robot_clock_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":robot_clock_proto"],
 )
 
 proto_library(
@@ -29,11 +42,11 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    visibility = ["//visibility:public"],
     deps = [
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
     ],
-    visibility = ["//visibility:public"],
 )
 
 proto_library(
