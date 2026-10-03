@@ -8,6 +8,14 @@
 const double now = joshua::RobotTime();
 ```
 
+Actuator and perception drivers already include their shared interface headers.
+Those headers expose this utility and import `RobotTime` into `robot::action`
+and `robot::perception`, respectively. Driver implementations in those namespaces
+can call `RobotTime()` directly without another include or a per-driver Bazel
+dependency. The dependency is declared on the shared interface targets. The
+interfaces add no clock member, wrapper method, or initialization; both names
+refer to the same global function. Other helpers can include the utility directly.
+
 Each process owns one clock. Helpers, node callbacks and worker threads all
 reach that object; no module context or clock pointer is needed. Separate
 processes have separate objects. A common configuration and external clock

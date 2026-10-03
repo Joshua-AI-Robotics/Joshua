@@ -7,9 +7,14 @@
 #include <vector>
 
 #include "robot/action/interfaces/action_interface.h"
+#include "utils/robot_time.h"
 
 // Abstract actuator interface.
 namespace robot::action {
+// Expose the process-global clock to drivers through their shared interface.
+// This declaration adds no per-driver clock state or initialization.
+using ::joshua::RobotTime;
+
 class ActuatorInterface : public ActionInterface {
  public:
   ActuatorInterface() = default;
