@@ -115,6 +115,124 @@ verified. EtherCAT, watchdogs, power loss during a command, pulse timing and
 ROS 2 integration were not tested. Temporary configs/logs were kept outside
 Git; no additional smoke tool was added.
 
+## Recorded Teensy 4.1 hardware result — 2026-10-04
+
+Native USB serial validation passed using host and firmware source commit
+`a62eaea618d02e3d5a4a88f3bb8663f4eac0e499` (Ubuntu 24.04/Jazzy Docker).
+The connected board initially answered a CRC-valid v1 IDENTIFY request; the
+v2 reset probe rejected its non-v2 response. After separate operator approval,
+`teensy41-serial-v2` was rebuilt and flashed. Automatic bootloader entry failed;
+the operator pressed PROGRAM, and a second upload found HalfKay, programmed
+successfully and rebooted into the application. Firmware HEX SHA-256:
+`88300e3eb0b0027a26a246f1bdfe45c173c4263be8d11b0c6ee118c816935f73`.
+Build tools were PlatformIO Core 6.1.18, Teensy platform 5.2.0 and Arduino
+framework 1.162.0; no tracked firmware source changes were needed.
+
+The production host session/framed-serial path identified `teensy-serial-v2`,
+board ID 2, one STEP_DIR channel, through
+`/dev/serial/by-id/usb-Teensyduino_USB_Serial_15104350-if00` (`/dev/ttyACM0`),
+configured at 115200 baud (native USB ignores baud). Motor power was
+operator-confirmed disconnected and the serial port free. Channel 0 used the
+reference pins STEP 2, DIR 3, ENABLE 4, 4000 Hz maximum, 20 µs pulse width and
+active-low enable. Runtime timing defaults remained unchanged: 100 ms exchange
+timeout and no post-open settle delay. Every successful probe also used
+`--settle_ms=0`, without the diagnostic tool's extra default wait.
+
+Eight sessions passed: two handshake, two configure-only, two exercise with an
+absolute target of +10 native steps, then two handshake after reopening the
+port. Every session acknowledged RESET_SESSION, IDENTIFY and ESTOP; both
+exercise sessions also acknowledged ENABLE, SET_TARGET and DISABLE. All
+feedback reported zero faults. Immediate exercise feedback advanced from 0 to
+1 and from 1 to 2 commanded steps; the probe deliberately does not wait for
+arrival at +10. Fresh session reset clears configuration and stops outputs but
+does not zero Teensy's accumulated step count. Each pair reused one open port;
+separate probe processes also verified port reopening. The port was closed at
+completion, with the last ESTOP acknowledged.
+
+The initial eight sessions validate the selected real USB/firmware protocol
+operations, **not powered motion, encoder feedback or GPIO pulse timing**.
+They included no independent output-level measurement, ROS 2 run,
+cable-loss/watchdog test, stale-ID/retry hardware probe, endurance run or
+power-cycle recovery test. The firmware reboot
+after flashing and subsequent fresh sessions were tested. Temporary configs,
+identify-only probe, build/upload logs and session logs remain outside Git at
+`/tmp/joshua-teensy-jw2.XBWH5t/`; no repository test utility was added.
+
+### Powered Teensy motor bench — 2026-10-04
+
+After separate operator confirmation of the powered motor setup, reference
+TB6600 wiring, secured/unloaded motor and accessible physical power cutoff, a
+temporary C++ bench used the same production CommFactory, framed serial adapter,
+JoshuaWireV2Session and shared payload codecs. Firmware and host source commit
+were unchanged from the serial result above. This was not a ROS 2/launcher or
+motor-driver integration test. The bench executable, code, configuration and log
+remain under `/tmp/joshua-teensy-jw2.XBWH5t/`, outside the repository.
+
+Channel 0 retained pins 2/3/4, active-low enable and 20 µs pulses; the temporary
+protobuf configuration reduced the maximum rate to 100 pulses/s. The sequence
+reset and identified, configured while disabled, read the initial count and
+set a hold target before enabling. It then commanded +89 native steps relative
+to that count, polled feedback for arrival with a 3-second leg deadline, paused
+2 seconds, returned to the initial count and disabled. At the reference 1/16
+microstepping, 89 pulses correspond to approximately 10°; actual shaft angle
+depends on the installed drive settings and any gearing.
+
+The run passed all command/status checks: feedback went from 2 to 91 in
+0.886474 seconds and back to 2 in 0.886530 seconds, with no reported faults.
+The count remained 2 after a 200 ms disabled check. Final DISABLE and ESTOP
+cleanup both returned OK, and the serial port closed. This remains commanded
+step-count evidence, not encoder or independent pulse measurements. The
+operator independently confirmed that the motor visibly moved forward, paused
+and returned smoothly. This establishes a limited powered JW2 motion bench
+pass, not measured shaft-angle accuracy, ROS 2 integration, communication-loss
+safety or pulse-timing validation.
+
+## Recorded ESP32 hardware result — 2026-10-04
+
+UART/USB-bridge validation passed using host and firmware source commit
+`a62eaea618d02e3d5a4a88f3bb8663f4eac0e499` (Ubuntu 24.04/Jazzy Docker).
+The connected board initially timed out on JW2 reset and did not return a
+CRC-valid v1 IDENTIFY response at 115200 baud; its previous application version
+was not established. A bootloader identification confirmed ESP32-D0WD-V3,
+revision v3.1, through the CP2102 bridge. After separate operator approval,
+`esp32-serial-v2` was rebuilt and uploaded to that exact port. The bootloader,
+partition table, boot-app image and application transfers all passed esptool's
+data-hash verification, followed by a hardware reset through RTS. Local
+application BIN SHA-256:
+`aa6cbf9a03c34fbc69c42e6a420e58b7aa10548aaf04fd6729cec457cf2a0335`.
+Build tools were PlatformIO Core 6.1.18, Espressif32 platform 7.1.3, Arduino
+framework `4.20017.260907+sha.dcc1105b`, Xtensa GCC `8.4.0+2021r2-patch5` and
+esptool 4.11.0. No tracked firmware source changes were needed.
+
+The production host session/framed-serial path identified `esp32-serial-v2`,
+wire board ID 8, one STEP_DIR channel, at 115200 baud through
+`/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0`
+(`/dev/ttyUSB0`). Motor power was operator-confirmed disconnected and the serial
+port free. Channel 0 used the reference GPIOs 25/26/27, 4000 Hz maximum, 20 µs
+pulse width and active-low enable. Exchange timing retained its 100 ms default;
+the temporary protobuf configuration explicitly set `post_open_settle_ms: 2000`.
+Each probe used `--settle_ms=0`, so the only post-open wait came from the
+production serial configuration, not an extra diagnostic or board-specific delay.
+
+Eight sessions passed: two handshake, two configure-only, two exercise at an
+absolute target of +10 native steps, then two handshake after reopening the
+port. Every session acknowledged RESET_SESSION, IDENTIFY and ESTOP; both
+exercise sessions also acknowledged ENABLE, SET_TARGET and DISABLE. Configure
+feedback was position zero; both exercise replies reported position 10 and
+zero faults. The second exercise session started at count 10 and accepted the
+same hold/target value, so it did not demonstrate another displacement. Fresh
+session reset clears configuration but retains the accumulated step count.
+Each pair reused one open port, and separate processes also verified port
+reopening. Final ESTOP was acknowledged and the port was closed.
+
+These are real USB/UART and firmware command results, not powered motion,
+encoder feedback, independent GPIO pulse measurements or ROS 2 integration.
+No cable-loss/watchdog, stale-ID/retry hardware probe, endurance or manual
+power-cycle recovery test was performed. The post-flash reset and subsequent
+fresh sessions were tested. Temporary configs, identify-only probe and
+build/upload/session logs remain outside Git at
+`/tmp/joshua-esp32-jw2.iaWZjj/`; no new repository test utility was added.
+
 ## Recorded AM243 EtherCAT result — 2026-09-28
 
 The separate `am243_ethercat_jw2.release.appimage.hs_fs` was flashed and verified
@@ -262,9 +380,42 @@ updated EtherCAT target's 57 cases.
 The older timing problem therefore persists with SOES. No SOES target/feedback,
 watchdog, link-loss or continuous-over-one-hour pass is claimed, and TI-stack
 retirement remains gated on those checks. Temporary probe/config/capture logs
-are outside Git under `/tmp/joshua-soes-hw.byBEDj/`; successful flash logs are
-under `/tmp/joshua-am243-soes-flash.wQ1oNh/`. No repository hardware test utility
-was added.
+were kept outside Git under `/tmp/joshua-soes-hw.byBEDj/`; successful flash logs
+were under `/tmp/joshua-am243-soes-flash.wQ1oNh/`. No repository hardware test
+utility was added. These temporary paths are historical, not durable artifacts.
+
+### Receive-path controls and decision to defer qualification
+
+Subsequent operator-confirmed diagnostics used the same SOES image and timing
+policy, with motor power disconnected and no ENABLE or SET_TARGET commands.
+The results below preserve the recorded session outcomes; the temporary probe
+and capture logs were no longer present when work resumed on 2026-10-04.
+
+- IRQ/NAPI tracing showed prompt host-worker wakeups, early receive polls and
+  then a gap in NIC polling until the next transmission delivered a late reply.
+  The NIC supplied no hardware receive timestamps, so exact wire arrival was
+  not measured.
+- Two runs using the kernel's continuous NAPI polling mode completed 500
+  disabled-channel GET_FEEDBACK calls each, with successful initialization and
+  teardown. Across both runs, 2222 PDO exchanges, 2110 AL-state reads and 110
+  mailbox register operations succeeded. Polling consumed approximately one
+  CPU core; it was restored after the experiment and was not adopted as a
+  runtime policy. Returning to the original mode reproduced a 5 ms timeout.
+- Disabling only IRQ deferral did not fix the stalls. A later A/B/A test with
+  both `napi_defer_hard_irqs` and `gro_flush_timeout` set to zero also failed:
+  both changed-setting runs failed initialization with PDO working count 1
+  instead of 3. Read replies reached the kernel in about 44 microseconds;
+  write replies appeared after 5.12–5.15 ms, following the next transmission.
+  Original-setting controls failed AL-state reads. Capture reported no drops.
+  Both settings and the polling mode were restored, and test/tracing processes
+  were stopped.
+
+The host NIC/driver interrupt path is the leading suspect, rather than a proven
+specific driver defect. The operator chose to stop investigating this NIC.
+Joshua retains its configured 5 ms bench budgets and has no NIC-specific polling
+or timeout workaround. Hardware qualification is deferred pending a suitable
+NIC. The disabled-channel diagnostic passes do not qualify SOES target handling,
+watchdogs, OP/link-loss recovery or the continuous-over-one-hour retirement gate.
 
 ## Automated coverage
 

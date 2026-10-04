@@ -6,6 +6,14 @@ See [configuration](../config/README.md#joshuawire-v2-over-ethercat) and the
 The TI-demo host path, codec, driver, smoke targets and preset are retired.
 Firmware build/flash assets below remain as historical bring-up material.
 
+The remaining bench timing issue is suspected on the **master PC's Realtek
+NIC/driver receive path** (`enp5s0`, `r8169`). The same SOES slave completed
+1000 disabled-channel feedback calls with continuous host receive polling;
+restoring interrupt-driven reception reproduced the failures. The exact cause
+is unproven. Investigation on that NIC is deferred, with settings restored and
+hardware qualification still pending. See the [EtherCAT transport note](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue)
+and [validation evidence](JOSHUA_WIRE_V2_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
+
 ## Historical TI-Demo Hardware State
 
 - Target board: LP-AM243.

@@ -76,12 +76,23 @@ Implementation checkpoint:
   latching and fresh-session recovery passed. A 1 ms host mailbox deadline
   failure was also observed; four later sessions passed with wider temporary
   bench budgets. Longer follow-up attempts failed at both 1 ms and 5 ms, with
-  late register replies observed in capture; the cause is not yet isolated.
+  late register replies observed in capture. Later SOES receive-polling controls
+  implicated the host NIC/driver interrupt path; the exact cause is unproven and
+  further investigation on that NIC was stopped by operator decision.
   See the [recorded scope and limits](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
 - Remaining: broader EtherCAT timing/failure validation, physical-output safety and
   transport arbitration. Firmware
   watchdog settings are build-time values, not advertised/verified by the
   descriptor. No hard-real-time or physical-motion safety claim is made.
+
+Current completion boundary: the software migration steps and required native
+regression coverage are implemented, including serial framing/timing extraction
+in commit `a62eaea`. EtherCAT hardware qualification remains pending on a suitable
+NIC. The separate SOES retirement gate still requires target/feedback, watchdog,
+OP/link-loss recovery and a continuous run longer than one hour. Successful
+disabled-channel polling diagnostics do not satisfy those checks. Physical motor
+integration and simultaneous UART/EtherCAT arbitration remain separate work;
+the existing single-transport, software-channel artifacts do not implement them.
 
 The contracts below remain the target design, not a claim that the entire plan
 has landed. See [firmware usage](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone)

@@ -1,9 +1,10 @@
-# ESP32 — joshua_wire_v1 STEP/DIR firmware
+# ESP32 — JoshuaWire STEP/DIR firmware
 
 Joshua-owned firmware (not a vendor demo) for an ESP32 driving STEP/DIR
 channels — a TB6600 in the reference wiring, but this firmware only ever
 toggles STEP/DIR/ENA pins; it never names the stepper drive chip
-(docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` over UART/USB-serial
+(docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` by default, with a
+separate opt-in v2 artifact, over UART/USB-serial
 — the same wire protocol and shared drive backend as `firmware/teensy/41/`,
 not the Wi-Fi/UDP transport variant `docs/BOARD_LAYER_RFC.md` originally
 speculated ESP32 might prove (that needs a `robot::comm::UdpTransport` that
@@ -14,20 +15,20 @@ Paired host-side class: `robot/board/esp32/esp32_board.h` (header-only).
 
 ```text
 firmware/esp32/
-  platformio.ini        one env (esp32-serial); board = esp32dev by
+  platformio.ini        explicit esp32-serial (v1) / esp32-serial-v2 envs;
+                        board = esp32dev by
                         default — change this one line for a different
                         ESP32 variant (S3, C3, S2, ...); -I src so
                         firmware/common/ libraries can see this project's
                         own channel_table.h
   src/
-    main.cpp             setup()/loop(), command dispatch — identical to
-                          firmware/teensy/41/'s except HandleIdentify()'s
-                          board_id
+    main.cpp             setup()/loop(), shared endpoint/command dispatch;
+                          supplies ESP32 identity and artifact name
     channel_table.c       channel *count* per firmware image (compile-time);
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
+    transport_serial.{h,cpp} serial frame boundaries for both wire versions
 ```
 
 `joshua_wire_v1.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
@@ -47,7 +48,12 @@ The hardware results below describe v1. For opt-in v2, build with
 The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
-V2 hardware validation has not yet been performed.
+V2 passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
+on 2026-10-04: reset/identify, configuration, enable/target/feedback,
+disable/ESTOP and port reopening. Motor power was disconnected; powered v2
+motion, independent pulse timing and the ROS 2 path remain unvalidated. The
+host used an explicit 2000 ms serial post-open settle delay and no extra probe
+wait. The checklist below remains the historical v1 result.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
@@ -199,22 +205,15 @@ MCU — but treat that as a prediction until it's actually been run.
 
 ## Known gaps / Troubleshooting
 
-- **First IDENTIFY after flashing/opening the port fails with "malformed
-  IDENTIFY response"**: expected on most ESP32 dev boards, not a wiring or
-  firmware bug. Opening a serial port on Linux asserts DTR, and the
-  CP2102/CH340 USB-serial bridge most ESP32 boards use routes DTR (and
-  RTS) into an RC circuit on EN/GPIO0 — the same auto-reset-into-bootloader
-  mechanism `esptool.py` itself relies on to flash without a BOOT-button
-  press. So simply *connecting* reboots the board, and a host that sends
-  IDENTIFY immediately races the ESP32's bootloader boot-log output (a
-  different baud rate, reads as noise) and `setup()`. Unlike Teensy 4.1's
-  native-USB CDC, ESP32 has no way around this at the transport level, so
-  `Esp32Board::CreateTransports()` (`robot/board/esp32/esp32_board.cc`)
-  overrides the default to sleep ~2s after opening the port before
-  returning — long enough for boot to finish before the first
-  `AtomicRead` (which already flushes right before writing) sends
-  IDENTIFY. If this still fails on a slower-booting board/variant, that
-  delay is the first thing to increase.
+- **First command after opening serial fails:** a USB-to-UART bridge's
+  DTR/RTS auto-reset circuit can reset the MCU on open, racing startup and boot
+  output. The host now uses `comm.serial_config.post_open_settle_ms: 2000`
+  explicitly, as in the example preset and the v2 bench configuration. This
+  wait belongs to physical link opening in CommFactory/Serial, not Esp32Board;
+  the previous board-specific sleep was removed. The exchange flushes stale
+  input before sending. The v2 bench passed with this configured wait and
+  `--settle_ms=0`; this does not prove that all ESP32 variants need exactly
+  two seconds. See [serial timing](../../config/README.md#serial-timing).
 - Wiring/motion (the "Full command path" status item above) is still
   unverified against real hardware — the protocol handshake and command
   dispatch are confirmed, but nobody has wired up a TB6600/motor and
@@ -233,11 +232,10 @@ MCU — but treat that as a prediction until it's actually been run.
 
 ## Related files
 
-- `robot/board/esp32/esp32_board.{h,cc}` — paired host-side board class; a
+- `robot/board/esp32/esp32_board.h` — paired header-only host board class; a
   one-line constructor supplying `BoardType::ESP32` and `JW_BOARD_ESP32`
-  to `JoshuaWireBoard`, plus a `CreateTransports()` override for the
-  post-open settle delay (see Known gaps above) — everything else is
-  inherited
+  to `JoshuaWireBoard`. Transport creation and protocol handling are inherited;
+  post-open settling belongs in serial config, not this class.
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
   joshua_wire_v1 host board (Teensy, ESP32, Arduino later) runs through

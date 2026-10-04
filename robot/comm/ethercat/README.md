@@ -128,6 +128,27 @@ which the master retains when reporting a backend overrun.
 Regression cases and a test-local I/O backend live in the existing
 `soem_ethercat_backend_test.cc`; no additional test utility is needed.
 
+## Known master-side NIC timing issue
+
+The AM243 bench host's Realtek RTL8125 NIC (`enp5s0`, `r8169` driver,
+kernel `7.0.0-34-generic`) intermittently delayed received replies beyond the
+5 ms bench deadline during normal interrupt-driven operation. The leading
+suspect is the **master PC's NIC/driver receive and interrupt path**. A specific
+driver or hardware defect has not been proven, and slave-side interactions
+have not been conclusively excluded.
+
+With the same AM243 SOES slave and firmware, changing only host reception to
+continuous NAPI polling completed two runs of 500 disabled-channel feedback
+calls, including initialization and teardown. Restoring normal reception
+reproduced the timeout. Disabling software interrupt coalescing did not fix it.
+Polling consumed approximately one CPU core and was used only for diagnosis;
+all NIC settings were restored and Joshua has no NIC-specific workaround.
+
+Further investigation on this NIC was stopped by operator decision. SOES
+hardware qualification remains pending on a suitable NIC, including target
+commands, watchdogs, link/OP-loss recovery and the over-one-hour retirement
+check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
+
 ## Paired JoshuaWire v2 adapters
 
 [`joshua_wire_ethercat_transport.h`](joshua_wire_ethercat_transport.h) / `.cc`

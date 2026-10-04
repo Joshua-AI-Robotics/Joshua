@@ -1,17 +1,17 @@
-# Teensy 4.1 — joshua_wire_v1 STEP/DIR firmware
+# Teensy 4.1 — JoshuaWire STEP/DIR firmware
 
 Joshua-owned firmware (not a vendor demo) for a Teensy 4.1 driving STEP/DIR
 channels — a TB6600 in the reference wiring, but this firmware only ever
 toggles STEP/DIR/ENA pins; it never names the stepper drive chip
 (docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` over native USB
-serial. Paired host-side class: `robot/board/teensy/teensy_board.h`
-(header-only).
+serial by default, with a separate opt-in v2 artifact. Paired host-side class:
+`robot/board/teensy/teensy_board.h` (header-only).
 
 ## Layout
 
 ```text
 firmware/teensy/41/
-  platformio.ini        one env per wiring variant (today: teensy41-serial);
+  platformio.ini        explicit teensy41-serial (v1) / teensy41-serial-v2 envs;
                         -I src in build_flags so firmware/common/
                         libraries (below) can see this project's own
                         channel_table.h
@@ -21,7 +21,7 @@ firmware/teensy/41/
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
+    transport_serial.{h,cpp} serial frame boundaries for both wire versions
 ```
 
 `joshua_wire_v1.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
@@ -42,7 +42,15 @@ The hardware results below describe v1. For opt-in v2, build with
 The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
-V2 hardware validation has not yet been performed.
+V2 passed [eight real native USB serial sessions](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
+on 2026-10-04: reset/identify, configuration, enable/target/feedback,
+disable/ESTOP and port reopening, with no post-open wait. Motor power was
+disconnected during those sessions. A subsequent
+[powered v2 bench](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
+passed 89 native steps forward and back at 100 pulses/s, with smooth physical
+motion confirmed by the operator and DISABLE/ESTOP acknowledged. Independent
+pulse timing and the v2 ROS 2 path remain unvalidated. The checklist below
+remains the historical v1 result.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`)
