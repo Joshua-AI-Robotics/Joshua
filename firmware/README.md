@@ -61,20 +61,12 @@ pio run -d firmware/esp32 -e esp32-serial-v2
 JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
 ```
 
-Select `protocol: JOSHUA_WIRE_V2` in the corresponding host `Board` config.
-There is no wire-version auto-detection or fallback. Historical hardware
-verification in the table above applies to **v1**. AM243 v2 UART additionally
-passed [eight real-board probe sessions](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
-on 2026-09-27. Teensy 4.1 v2 passed
-[eight native USB serial sessions](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
-on 2026-10-04 with motor power disconnected. A subsequent
-[powered JW2 motor bench](../docs/JOSHUA_WIRE_V2_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
-passed a slow forward-and-return move, with smooth physical motion confirmed
-by the operator. This did not test ROS 2 integration or independent pulse timing.
-ESP32 v2 also passed
-[eight UART/USB-bridge serial sessions](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
-on 2026-10-04 with motor power disconnected and the configured 2000 ms
-post-open settle delay. ESP32 powered motion remains unvalidated.
+Select `protocol: JOSHUA_WIRE_V2` in the host Board configuration.
+Version selection is explicit; there is no auto-detection or fallback.
+[Serial validation](../docs/JOSHUA_WIRE_V2_VALIDATION.md#hardware-validation-status)
+passed on AM243 UART, Teensy 4.1 and ESP32. Teensy also passed a powered
+forward/return bench; ESP32 powered motion and the v2 ROS 2 path remain untested.
+The table above records historical v1 results.
 The AM243 v2 artifact changes UART only; EtherCAT still runs TI's demo with
 separate state, and UART still has no physical motor output.
 

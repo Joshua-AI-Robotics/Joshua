@@ -117,16 +117,10 @@ socket racing an old owner's teardown. These guarantees are process-local;
 config validation also requires NIC consumers to share one ROS node process.
 Never run an unrelated master on the same NIC.
 
-There is no new hardware smoke utility or runnable preset. The
-[documented config example](../../../config/README.md#joshuawire-v2-over-ethercat)
-is opt-in. A [single-board bench result](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
-now covers the production factory/engine path, including a recorded 1 ms mailbox
-deadline failure. Longer follow-up attempts also failed at 5 ms; capture observed
-late replies to both mailbox-status and AL-state reads. Broader real-bus timing
-validation remains open. Register failures now include address/timing/WKC details,
-which the master retains when reporting a backend overrun.
-Regression cases and a test-local I/O backend live in the existing
-`soem_ethercat_backend_test.cc`; no additional test utility is needed.
+Use the [config example](../../../config/README.md#joshuawire-v2-over-ethercat)
+for explicit timing/address selection. Register failures include address,
+elapsed time, budget and working count. Native regression coverage lives in
+`soem_ethercat_backend_test.cc`; real-bus qualification is incomplete.
 
 ## Known master-side NIC timing issue
 
@@ -144,8 +138,7 @@ reproduced the timeout. Disabling software interrupt coalescing did not fix it.
 Polling consumed approximately one CPU core and was used only for diagnosis;
 all NIC settings were restored and Joshua has no NIC-specific workaround.
 
-Further investigation on this NIC was stopped by operator decision. SOES
-hardware qualification remains pending on a suitable NIC, including target
+SOES hardware qualification remains pending on a suitable NIC, including target
 commands, watchdogs, link/OP-loss recovery and the over-one-hour retirement
 check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
 

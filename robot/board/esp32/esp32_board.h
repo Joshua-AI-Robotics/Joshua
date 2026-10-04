@@ -1,6 +1,6 @@
 #pragma once
 
-#include "firmware/common/joshua_wire_v1.h"
+#include "firmware/common/joshua_wire_commands.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/proto/board.pb.h"
 

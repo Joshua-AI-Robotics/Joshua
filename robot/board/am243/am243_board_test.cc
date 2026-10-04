@@ -7,10 +7,10 @@
 #include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
 #include "robot/board/factory/board_factory.h"
-#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_legacy_message_transport.h"
 
 namespace robot::board {
 namespace {
@@ -82,7 +82,7 @@ robot::board::Board MakeAm243EthercatBoard() {
 class Am243BoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    serial_transport_ = std::make_shared<FakeFrameTransport>();
+    serial_transport_ = std::make_shared<robot::comm::FakeLegacyMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm& comm) -> absl::StatusOr<robot::comm::CommTransport> {
           if (comm.comm_type() == robot::comm::CommType::SERIAL) {
@@ -100,7 +100,7 @@ class Am243BoardTest : public ::testing::Test {
     robot::comm::CommFactory::ResetEthercatTransportCacheForTesting();
   }
 
-  std::shared_ptr<FakeFrameTransport> serial_transport_;
+  std::shared_ptr<robot::comm::FakeLegacyMessageTransport> serial_transport_;
 };
 
 TEST_F(Am243BoardTest, InitSucceedsAgainstAm243Identity) {

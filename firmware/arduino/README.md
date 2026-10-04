@@ -3,7 +3,7 @@
 **Placeholder.** Not built yet — tracked in `docs/BOARD_LAYER_RFC.md` §10
 Phase 5 as a real future board, not retired by Teensy 4.1 being the first
 one built. Same architecture as `firmware/teensy/41/`: same
-`joshua_wire_v1` codec, same `StepperDriver`, same `FrameTransport` seam.
+shared JoshuaWire codecs, the same `StepperDriver` and comm message interface.
 The host board class is now genuinely small: `TeensyBoard`'s IDENTIFY
 handshake, `CONFIGURE_CHANNEL` push, and channel dispatch were extracted
 into `JoshuaWireBoard` (`robot/board/joshua_wire/`, docs/BOARD_LAYER_RFC.md

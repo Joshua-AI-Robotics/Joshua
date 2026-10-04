@@ -43,14 +43,10 @@ The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
 V2 passed [eight real native USB serial sessions](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
-on 2026-10-04: reset/identify, configuration, enable/target/feedback,
-disable/ESTOP and port reopening, with no post-open wait. Motor power was
-disconnected during those sessions. A subsequent
+on 2026-10-04 with motor power disconnected and no post-open wait. A subsequent
 [powered v2 bench](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
-passed 89 native steps forward and back at 100 pulses/s, with smooth physical
-motion confirmed by the operator and DISABLE/ESTOP acknowledged. Independent
-pulse timing and the v2 ROS 2 path remain unvalidated. The checklist below
-remains the historical v1 result.
+passed smooth forward-and-return motion. Independent pulse timing and the v2
+ROS 2 path remain unvalidated. The checklist below records historical v1 results.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`)

@@ -1,102 +1,43 @@
 # Board and Comm Separation Plan
 
-Status: **In progress — serial v2 and factory-wired EtherCAT host/firmware milestones implemented**
+Status: **Software migration implemented; EtherCAT hardware qualification open.**
 
-Companion to: [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md),
-[am243_ethercat.md](am243_ethercat.md)
+Companion to [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) and
+[AM243 EtherCAT](am243_ethercat.md).
 
-Implementation checkpoint:
+## Implementation status
 
-- Step 2: shared C v2 codec/firmware session, explicit v1/v2 serial artifacts for
-  Teensy 4.1, ESP32 and AM243 UART, and the opt-in host session are implemented.
-  Tests cover golden bytes, correlation, reset/reboot, duplicate execution,
-  ID exhaustion, concurrent callers, timeouts, late responses and teardown.
-- Shared handlers and host commands now use version-neutral payload codecs.
-  The in-memory v1 bridges have been removed from both v2 paths; v1 wire
-  compatibility and explicit artifact selection are retained. Hardware-free
-  CLI tests exercise the production serial path over allocated pseudo-terminals.
-- Step 3 interfaces/fakes/build boundaries are implemented: `MessageTransport`
-  exposes `Send`/`Exchange`, `CorrelatedCyclicTransport` defines the timed cyclic
-  contract, and test-only fakes cover both. Concrete serial/SOEM targets are
-  comm-internal; factory implementation headers do not propagate to consumers.
-  Legacy fixed-size methods remain isolated in `LegacyMessageTransport` for v1
-  and vendor consumers. `FramedSerialTransport` owns JoshuaWire serial framing;
-  `Serial` owns protocol-independent byte I/O and bus locking. Serial config now
-  supplies exchange timeout (100 ms when omitted) and once-per-open settle delay
-  (zero when omitted). The ESP32 preset explicitly preserves its 2000 ms delay;
-  the board-specific sleep is removed. Mismatched serial replies fail closed
-  rather than being skipped while waiting for another reply. Legacy fixed-size
-  I/O timing remains unchanged.
-- AM243 v2 UART passed eight real-board validation sessions on 2026-09-27;
-  see the [recorded scope and artifact](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27).
-  This does not validate EtherCAT or physical motion.
-- Step 4 foundation: a comm-internal owner worker, blocking startup SDO and an
-  opt-in incremental runtime CoE path are implemented, with shadow images,
-  snapshots, timeout/stop handling and hardware-free regression coverage.
-  Runtime transfers support unsegmented 1–76 byte objects; each cycle runs
-  process data first and at most one budgeted mailbox or AL-state step.
-  Blocking SOEM SDO remains forbidden after cyclic startup. Dispatched timeout
-  or backend overrun faults the master; this is not a hard-real-time guarantee.
-  Factory wiring, per-NIC master leasing and explicit protobuf timing policy
-  are implemented; real EtherCAT validation remains unfinished. JW2 envelope/session correlation is
-  not supplied by the CoE mailbox counter.
-- Step 5 host portion: shared layout constants, compatibility-gated paired
-  CoE/PDO adapters, verified reset-object readback, generation/ID correlation,
-  cancellation and late-PDO acknowledgment are implemented and hardware-free
-  tested. Endpoints serialize both planes and share master lifetime. They remain
-  comm-internal behind factory capabilities. Mailbox failures and malformed PDO responses
-  conservatively require a new session; already-dispatched SDO cannot be
-  preempted by ESTOP. Each endpoint has a dispatcher, but only the master worker
-  touches SOEM.
-- Step 5 firmware portion: the explicit `am243_ethercat_jw2` artifact implements
-  the shared CoE/PDO profile, session ordering, retained replies and latched
-  command-progress/stale-target software watchdogs. The SDK bridge cross-builds;
-  native tests exercise the real core and paired host adapters together. The
-  fixed mapping and build limits are documented in the
-  [profile README](../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile).
-  This is EtherCAT-only and software-channel-only: no UART protocol task,
-  physical GPIO backend or simultaneous-transport arbiter.
-  Existing UART/TI-demo artifacts retain their behavior. Progress is refreshed
-  by new commands, not repeated PDO snapshots; this is stricter than a traffic
-  watchdog and does not establish packet-arrival freshness or CPU-halt safety.
-- Steps 6–7: BoardFactory selects the shared JoshuaWire engine for AM243 serial
-  and explicit v2 EtherCAT. The legacy TI-demo `Am243Board` and its host runtime
-  path are retired; SOEM I/O is now `SoemEthercatBackend` behind the master. One session allocates IDs across
-  message management and optional cyclic target/feedback. CommFactory supplies
-  both capabilities for `MESSAGE_AND_CYCLIC`, gates all discovered slaves before
-  OP, and leases one owner per NIC. Duplicate endpoint claims, mismatched NIC
-  policies and cross-node NIC ownership are rejected. The last lease stops the
-  owner before permitting reopen; retained closed channels cannot keep it alive.
-  Native tests cover the complete factory/board/adapter/firmware-core path and
-  two-slave teardown. Legacy TI-demo configs are rejected and the demo preset
-  is removed; JW2 endpoint facts and exact optional PDO-region assertions live in comm config.
-  See the [config example](../config/README.md#joshuawire-v2-over-ethercat).
-- AM243 JW2 EtherCAT was flashed and single-board bench-tested on 2026-09-28.
-  Discovery/mapping, factory/engine commands, software feedback, stale-target
-  latching and fresh-session recovery passed. A 1 ms host mailbox deadline
-  failure was also observed; four later sessions passed with wider temporary
-  bench budgets. Longer follow-up attempts failed at both 1 ms and 5 ms, with
-  late register replies observed in capture. Later SOES receive-polling controls
-  implicated the host NIC/driver interrupt path; the exact cause is unproven and
-  further investigation on that NIC was stopped by operator decision.
-  See the [recorded scope and limits](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
-- Remaining: broader EtherCAT timing/failure validation, physical-output safety and
-  transport arbitration. Firmware
-  watchdog settings are build-time values, not advertised/verified by the
-  descriptor. No hard-real-time or physical-motion safety claim is made.
+| Plan step | Implemented |
+| --- | --- |
+| 2: JW2 correlation | Shared C codecs, host/firmware sessions, neutral command payloads and explicit v1/v2 serial artifacts |
+| 3: comm boundaries | Message/correlated-cyclic interfaces, comm-internal adapters, serial framing and configurable exchange/settle timing |
+| 4: EtherCAT owner | Per-NIC worker/leases, PDO shadows/snapshots, bounded incremental runtime CoE and explicit timing policy |
+| 5: paired endpoint | Compatibility gate, verified reset, shared CoE/PDO session, retained replies and firmware watchdog core |
+| 6–7: factory/engine wiring | Shared JoshuaWire engine, paired capability assembly and multi-board ownership checks; legacy TI-demo host path retired |
 
-Current completion boundary: the software migration steps and required native
-regression coverage are implemented, including serial framing/timing extraction
-in commit `a62eaea`. EtherCAT hardware qualification remains pending on a suitable
-NIC. The separate SOES retirement gate still requires target/feedback, watchdog,
-OP/link-loss recovery and a continuous run longer than one hour. Successful
-disabled-channel polling diagnostics do not satisfy those checks. Physical motor
-integration and simultaneous UART/EtherCAT arbitration remain separate work;
-the existing single-transport, software-channel artifacts do not implement them.
+Native regression coverage includes correlation, retries, ID exhaustion, late
+replies, timeouts, teardown, factory boundaries and two-slave sharing. Serial
+v1 and vendor consumers retain their fixed-length compatibility interface.
+Serial timing comes from protobuf config, not board-specific sleeps.
 
-The contracts below remain the target design, not a claim that the entire plan
-has landed. See [firmware usage](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone)
-and [host config](../config/README.md#joshuawire-serial-protocol-selection).
+[Hardware results](JOSHUA_WIRE_V2_VALIDATION.md#hardware-validation-status):
+AM243 UART, Teensy and ESP32 passed basic JW2 serial checks; Teensy also passed
+a limited powered-motion bench. The TI-stack AM243 EtherCAT profile passed
+software-channel targets and stale-target recovery, but host register deadlines
+failed in longer runs. The SOES candidate passes discovery/handshake; its
+qualification remains blocked by the
+[master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+
+Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
+OP/link-loss recovery and the separately approved SOES run longer than one hour
+before evaluation-stack retirement. Disabled-channel polling diagnostics do not
+satisfy these gates. AM243 firmware has no physical motor backend; simultaneous
+UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
+separate work. The single-transport artifacts do not claim those capabilities.
+
+The contracts below define the target design; software tests and limited bench
+passes do not establish hard-real-time behavior or physical-output safety.
+See [firmware usage](../firmware/README.md) and [configuration](../config/README.md).
 
 ## 1. Goal
 

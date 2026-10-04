@@ -5,17 +5,12 @@
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_legacy_message_transport.h"
 
-// TeensyBoard only supplies two facts to the shared JoshuaWireBoard, as
-// constructor arguments (BoardType::TEENSY41, JW_BOARD_TEENSY41) —
-// everything else (IDENTIFY handshake, CONFIGURE_CHANNEL, multi-channel,
-// ENABLE/SET_TARGET/GET_FEEDBACK, ...) is generic protocol orchestration,
-// tested once in robot/board/joshua_wire/joshua_wire_board_test.cc. These
-// tests only prove Teensy's identity is wired to the right values.
+// Identity wiring; shared protocol behavior is covered by JoshuaWireBoardTest.
 namespace robot::board {
 namespace {
 
@@ -64,7 +59,7 @@ robot::board::Board MakeTeensyBoard() {
 class TeensyBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeFrameTransport>();
+    transport_ = std::make_shared<robot::comm::FakeLegacyMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -76,7 +71,7 @@ class TeensyBoardTest : public ::testing::Test {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
-  std::shared_ptr<FakeFrameTransport> transport_;
+  std::shared_ptr<robot::comm::FakeLegacyMessageTransport> transport_;
 };
 
 TEST_F(TeensyBoardTest, InitSucceedsAgainstRealTeensyIdentity) {

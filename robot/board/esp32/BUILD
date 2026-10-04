@@ -5,7 +5,7 @@ cc_library(
     hdrs = ["esp32_board.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//firmware/common:joshua_wire_v1",
+        "//firmware/common:joshua_wire_commands",
         "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/proto:board_cc_proto",
     ],
@@ -28,10 +28,10 @@ cc_test(
     deps = [
         ":esp32_board",
         "//firmware/common:joshua_wire_v1",
-        "//robot/board/frame:fake_frame_transport",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/testing:fake_legacy_message_transport",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

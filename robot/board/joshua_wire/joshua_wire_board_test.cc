@@ -5,21 +5,15 @@
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_legacy_message_transport.h"
 
 namespace robot::board {
 namespace {
 
-// Exercises JoshuaWireBoard's generic protocol orchestration through a
-// minimal concrete subclass — deliberately identifying as ARDUINO_UNO, not
-// TEENSY41, so these tests can't be mistaken for "the Teensy tests in
-// disguise": they prove the base class works for a board other than the
-// one it was first extracted from (docs/BOARD_LAYER_RFC.md §7.3). Teensy-
-// specific behavior (there is none beyond identity today) belongs in
-// robot/board/teensy/teensy_board_test.cc instead.
+// A distinct identity exercises the shared engine independently of Teensy.
 class FakeJoshuaWireBoard : public JoshuaWireBoard {
  public:
   FakeJoshuaWireBoard()
@@ -89,7 +83,7 @@ robot::board::Board MakeBoardConfig() {
 class JoshuaWireBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeFrameTransport>();
+    transport_ = std::make_shared<robot::comm::FakeLegacyMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -112,7 +106,7 @@ class JoshuaWireBoardTest : public ::testing::Test {
     }
   }
 
-  std::shared_ptr<FakeFrameTransport> transport_;
+  std::shared_ptr<robot::comm::FakeLegacyMessageTransport> transport_;
 };
 
 TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
@@ -122,7 +116,7 @@ TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
   auto status = board.Init(MakeBoardConfig());
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->send_calls_, 2);
+  EXPECT_EQ(transport_->exchange_calls_, 2);
 }
 
 TEST_F(JoshuaWireBoardTest, V1EnvelopeStillValidatesCommandAndChannel) {
@@ -151,7 +145,7 @@ TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
   auto status = board.Init(config);
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->send_calls_, 3);  // 1 IDENTIFY + 2 CONFIGURE_CHANNEL.
+  EXPECT_EQ(transport_->exchange_calls_, 3);  // 1 IDENTIFY + 2 CONFIGURE_CHANNEL.
 
   auto channel0 = board.OpenChannel(0);
   auto channel1 = board.OpenChannel(1);
@@ -160,7 +154,7 @@ TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
 
   transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
   EXPECT_TRUE((*channel1)->Enable().ok());
-  EXPECT_EQ(transport_->last_sent_[4], 1);  // Reached the wire as channel 1, not 0.
+  EXPECT_EQ(transport_->last_written_[4], 1);  // Reached the wire as channel 1, not 0.
 }
 
 TEST_F(JoshuaWireBoardTest, InitRejectsWrongBoardType) {
@@ -223,8 +217,8 @@ TEST_F(JoshuaWireBoardTest, ConfigureChannelSendsStepPulseWidthOnTheWire) {
   // CONFIGURE_CHANNEL payload: max_pulse_rate_hz(4) + invert_dir(1) +
   // enable_active_low(1) + step_pin(1) + dir_pin(1) + enable_pin(1) +
   // step_pulse_width_us(2, LE) — starts at last_sent_[5].
-  ASSERT_EQ(transport_->sent_.size(), 2u);
-  const auto& configure_frame = transport_->sent_[1];
+  ASSERT_EQ(transport_->written_.size(), 2u);
+  const auto& configure_frame = transport_->written_[1];
   ASSERT_EQ(configure_frame[3], JW_CMD_CONFIGURE_CHANNEL);
   EXPECT_EQ(configure_frame[14], 0xf4);  // 500 & 0xFF
   EXPECT_EQ(configure_frame[15], 0x01);  // 500 >> 8
@@ -277,8 +271,8 @@ TEST_F(JoshuaWireBoardTest, OpenChannelEnableSendsEnableFrame) {
   auto status = (*channel)->Enable();
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_sent_[3], JW_CMD_ENABLE);
-  EXPECT_EQ(transport_->last_sent_[4], 0);
+  EXPECT_EQ(transport_->last_written_[3], JW_CMD_ENABLE);
+  EXPECT_EQ(transport_->last_written_[4], 0);
 }
 
 TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
@@ -292,8 +286,8 @@ TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
   auto status = (*channel)->SetTarget(TargetMode::kPosition, 1234.0f);
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_sent_[3], JW_CMD_SET_TARGET);
-  EXPECT_EQ(transport_->last_sent_[5], JW_MODE_POSITION);
+  EXPECT_EQ(transport_->last_written_[3], JW_CMD_SET_TARGET);
+  EXPECT_EQ(transport_->last_written_[5], JW_MODE_POSITION);
 }
 
 TEST_F(JoshuaWireBoardTest, SetTargetTorqueIsUnimplementedWithoutTouchingWire) {
@@ -302,11 +296,11 @@ TEST_F(JoshuaWireBoardTest, SetTargetTorqueIsUnimplementedWithoutTouchingWire) {
   ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
   auto channel = board.OpenChannel(0);
   ASSERT_TRUE(channel.ok());
-  const int calls_before = transport_->send_calls_;
+  const int calls_before = transport_->exchange_calls_;
 
   EXPECT_EQ((*channel)->SetTarget(TargetMode::kTorque, 1.0f).code(),
             absl::StatusCode::kUnimplemented);
-  EXPECT_EQ(transport_->send_calls_, calls_before);
+  EXPECT_EQ(transport_->exchange_calls_, calls_before);
 }
 
 TEST_F(JoshuaWireBoardTest, ReadFeedbackDecodesPositionAndVelocity) {

@@ -6,9 +6,7 @@ toggles STEP/DIR/ENA pins; it never names the stepper drive chip
 (docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` by default, with a
 separate opt-in v2 artifact, over UART/USB-serial
 — the same wire protocol and shared drive backend as `firmware/teensy/41/`,
-not the Wi-Fi/UDP transport variant `docs/BOARD_LAYER_RFC.md` originally
-speculated ESP32 might prove (that needs a `robot::comm::UdpTransport` that
-doesn't exist yet — see `robot/board/frame/frame_transport.h`'s TODO).
+not Wi-Fi/UDP; that host transport remains unimplemented.
 Paired host-side class: `robot/board/esp32/esp32_board.h` (header-only).
 
 ## Layout
@@ -49,11 +47,10 @@ The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
 V2 passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
-on 2026-10-04: reset/identify, configuration, enable/target/feedback,
-disable/ESTOP and port reopening. Motor power was disconnected; powered v2
+on 2026-10-04 with motor power disconnected. Powered v2
 motion, independent pulse timing and the ROS 2 path remain unvalidated. The
-host used an explicit 2000 ms serial post-open settle delay and no extra probe
-wait. The checklist below remains the historical v1 result.
+host used the configured 2000 ms post-open settle delay. The checklist below
+records historical v1 results.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`

@@ -12,24 +12,13 @@ separation now lives in
 document makes a newer explicit decision about plane composition or command
 routing, it supersedes the corresponding open question in this RFC.
 
-Implementation checkpoint: opt-in JoshuaWire v2 over serial now exists for
-Teensy 4.1, ESP32 and AM243 UART, with host/firmware correlation and reset tests.
-JW2 EtherCAT now has factory-wired paired CoE/PDO adapters, per-NIC owner leases,
-explicit comm timing/addressing and an AM243 software-only firmware profile.
-AM243 serial and JW2 EtherCAT use the same composed JoshuaWire engine;
-The legacy TI-demo `Am243Board`, motor driver, codec, preset and host tools are
-retired. SOEM I/O is named `SoemEthercatBackend` and stays beneath `EthercatMaster`,
-not exposed as an alternative board-facing transport.
-Native tests cover the full factory/engine/adapter/firmware-core path. A limited
-[single-board EtherCAT bench check](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
-passed commands and stale-target recovery, but also exposed a host mailbox
-deadline failure; production timing validation remains open. The separation plan is
-the current checklist; the original generic-engine checklist below is not a
-claim that all remaining RFC proposals have landed. Serial framing now lives in
-a comm-internal adapter; exchange/settle timing comes from serial config and
-the ESP32 board sleep is removed. Physical-output safety and simultaneous
-transport arbitration remain unfinished. The older checklist below is historical
-where superseded by the separation plan's implementation checkpoint.
+The [separation plan's implementation status](BOARD_COMM_SEPARATION_PLAN.md#implementation-status)
+is the current checklist. It covers the shared JW2 engine, serial framing/timing
+and factory-wired CoE/PDO endpoints; the legacy TI-demo host path is retired.
+[Validation results](JOSHUA_WIRE_V2_VALIDATION.md#hardware-validation-status)
+distinguish native coverage, serial/motion bench passes and unfinished EtherCAT
+qualification. The original findings and proposal below are historical where
+superseded by that plan.
 
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.
@@ -72,10 +61,9 @@ layer deleted.
 
 ## 3. Problem: the axes re-conflated one level down
 
-The findings below describe the baseline that motivated this RFC. The newer
-implementation checkpoint above resolves F2's AM243 forwarding/flag problem
-through a shared composed JW2 engine; it does not introduce the originally
-proposed `MessageBoard`/`CyclicBoard` class hierarchy.
+The findings and source paths below describe the pre-migration baseline in Git.
+The separation plan resolves F2's forwarding/flag problem through a shared JW2
+engine, not the originally proposed `MessageBoard`/`CyclicBoard` hierarchy.
 
 §1 exists to stop `board × transport` being baked into a type; the landed
 layer does it again in the class hierarchy. `TeensyBoard : public

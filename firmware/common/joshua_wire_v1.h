@@ -63,8 +63,8 @@ int jw1_encode_frame(uint8_t* buf,
                      uint8_t payload_len);
 
 // Validates sync/len/crc in `buf` (exactly one frame's worth of bytes —
-// slicing a byte stream into frames is the transport's job, e.g.
-// SerialFrameTransport) and fills `out`. Returns 0 on success, -1 on a
+// slicing a byte stream into frames is the transport's job) and fills `out`.
+// Returns 0 on success, -1 on a
 // null `buf`/`out`, or a framing or CRC error.
 int jw1_decode_frame(const uint8_t* buf, size_t len, jw1_frame_t* out);
 

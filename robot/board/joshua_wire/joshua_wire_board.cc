@@ -10,6 +10,8 @@
 #include "robot/board/joshua_wire/joshua_wire_v2_session.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/legacy_message_transport.h"
+#include "robot/comm/interfaces/message_transport.h"
+#include "robot/comm/proto/comm.pb.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -18,7 +20,7 @@ namespace robot::board {
 // only the v1 branch encodes/decodes v1 envelopes. Comm remains byte-oriented.
 class JoshuaWireCommandClient {
  public:
-  JoshuaWireCommandClient(std::shared_ptr<FrameTransport> transport,
+  JoshuaWireCommandClient(std::shared_ptr<robot::comm::MessageTransport> transport,
                           bool v2,
                           const robot::comm::PairedTransports* pair)
       : transport_(std::move(transport)) {
@@ -78,7 +80,7 @@ class JoshuaWireCommandClient {
   }
 
  private:
-  std::shared_ptr<FrameTransport> transport_;
+  std::shared_ptr<robot::comm::MessageTransport> transport_;
   std::unique_ptr<JoshuaWireV2Session> session_;
   bool closed_ = false;
   std::mutex mutex_;
@@ -201,21 +203,6 @@ absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
 
 }  // namespace
 
-absl::Status JoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
-                                           const std::string& board_name) const {
-  if (comm.transport_type() != robot::comm::TransportType::MESSAGE &&
-      comm.transport_type() != robot::comm::TransportType::MESSAGE_AND_CYCLIC) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Board '", board_name, "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
-  }
-  return absl::OkStatus();
-}
-
-absl::StatusOr<robot::comm::CommTransport> JoshuaWireBoard::CreateTransports(
-    const robot::comm::Comm& comm) const {
-  return robot::comm::CommFactory::CreateComm(comm);
-}
-
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
   if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED && config.protocol() != JOSHUA_WIRE_V1 &&
       config.protocol() != JOSHUA_WIRE_V2) {
@@ -226,7 +213,11 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not a ", type_name, " board."));
   }
-  ABSL_RETURN_IF_ERROR(ValidateComm(config.comm(), config.name()));
+  if (config.comm().transport_type() != robot::comm::MESSAGE &&
+      config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Board '", config.name(), "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
+  }
   if (config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC &&
       (config.protocol() != JOSHUA_WIRE_V2 || config.has_am243_config()))
     return absl::InvalidArgumentError(
@@ -388,7 +379,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
   }
   ABSL_RETURN_IF_ERROR(ValidateConfig(config));
 
-  ABSL_ASSIGN_OR_RETURN(auto transports, CreateTransports(config.comm()));
+  ABSL_ASSIGN_OR_RETURN(auto transports, robot::comm::CommFactory::CreateComm(config.comm()));
   ABSL_ASSIGN_OR_RETURN(auto transport,
                         robot::comm::GetCommTransport<robot::comm::MessageTransport>(transports));
   const auto* pair = std::get_if<robot::comm::PairedTransports>(&transports);
@@ -411,7 +402,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
         std::make_shared<JoshuaWireChannel>(commands, static_cast<uint8_t>(channel_config.index()));
   }
 
-  config_ = config;
+  name_ = config.name();
   commands_ = std::move(commands);
   channels_ = std::move(channels);
   initialized_ = true;
@@ -424,11 +415,8 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
   }
   auto it = channels_.find(index);
   if (it == channels_.end()) {
-    return absl::NotFoundError(absl::StrCat("Board '",
-                                            config_.name(),
-                                            "' has no channel ",
-                                            index,
-                                            "; declare it in the board's channels{}."));
+    return absl::NotFoundError(absl::StrCat(
+        "Board '", name_, "' has no channel ", index, "; declare it in the board's channels{}."));
   }
   return it->second;
 }
