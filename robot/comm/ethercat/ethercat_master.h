@@ -1,4 +1,4 @@
-// Comm-internal owner loop for the JW2 EtherCAT adapters. Clients publish
+// Comm-internal owner loop for the JW EtherCAT adapters. Clients publish
 // complete output shadows and wait for input snapshots; only the worker uses I/O.
 // CommFactory owns assembly; boards only see message/cyclic capabilities.
 #pragma once

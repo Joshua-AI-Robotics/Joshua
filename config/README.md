@@ -61,7 +61,7 @@ For a serial AM243, Teensy 4.1, or ESP32 running the matching **v2 firmware
 artifact**, add these fields inside its `Board` entry:
 
 ```text
-protocol: JOSHUA_WIRE_V2
+protocol: JOSHUA_WIRE
 firmware { min_proto_version: 2 }
 ```
 
@@ -98,19 +98,19 @@ as in the checked-in ESP32 example. Native USB or other links may need a
 different value; board type no longer guesses it. The manual v2 probe's
 `--settle_ms` remains an additional diagnostic wait, not a runtime setting.
 
-## JoshuaWire v2 over EtherCAT
+## JoshuaWire over EtherCAT
 
-Select `protocol: JOSHUA_WIRE_V2` and `transport_type: MESSAGE_AND_CYCLIC`.
+Select `protocol: JOSHUA_WIRE` and `transport_type: MESSAGE_AND_CYCLIC`.
 The paired endpoint supplies CoE management plus correlated PDO target/feedback;
 `CYCLIC` alone is rejected; the legacy TI-demo host path is retired. Endpoint facts belong in
-`comm.ethercat_config`; do not add `am243_config` to a JW2 board.
+`comm.ethercat_config`; do not add `am243_config` to a JW board.
 
 Example board fragment (not a hardware-validated timing recommendation):
 
 ```text
-name: "am243_jw2"
+name: "am243_jw"
 board_type: AM243
-protocol: JOSHUA_WIRE_V2
+protocol: JOSHUA_WIRE
 firmware { min_proto_version: 2 }
 comm {
   comm_type: ETHERCAT
@@ -145,7 +145,7 @@ not hard-real-time feasibility. `response_timeout_us` bounds each adapter exchan
 including its queue wait. It is not a firmware watchdog setting.
 
 For the software-only bring-up example, build the separate
-[AM243 EtherCAT artifact](../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+[AM243 EtherCAT artifact](../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
 with deliberately explicit watchdog intervals, e.g. command progress 2000000 µs
 and target freshness 1000000 µs as used by the native integration test. These are
 not motor-safety recommendations. Watchdog intervals are not advertised in the
@@ -156,20 +156,20 @@ feed watchdogs: fresh SET_TARGET calls are required while enabled.
 An optional `pdo_region` contains all four `output_offset_bytes`,
 `input_offset_bytes`, `output_size_bytes`, `input_size_bytes` values. It is an
 exact assertion against discovery, not permission to reinterpret another slave's
-bytes. JW2 requires 80-byte input/output regions. Without it, discovery supplies
+bytes. JW requires 80-byte input/output regions. Without it, discovery supplies
 offsets. Legacy `am243_config`, `am243_ethercat_config` and `MOTOR_TI_DEMO`
 are rejected with migration errors. Their protobuf names/numbers remain allocated
 for diagnostics; they are not executable compatibility paths. The old TI-demo
 preset was removed, not silently converted to a different firmware protocol.
 
-Every discovered slave must pass the JW2 descriptor/mapping check before the bus
+Every discovered slave must pass the JW descriptor/mapping check before the bus
 enters OP, including unused slaves (which remain on stop images). Duplicate board
 claims on a slave and mixed timing/protocol policies on a NIC are rejected.
 Consumers of one NIC must run in one node process. The factory caches one master;
 board teardown releases only its endpoint, and the last lease closes the bus.
 
 The host/factory/firmware-core path is native-tested and has a limited
-[single-board EtherCAT bench result](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+[single-board EtherCAT bench result](../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
 Both the 1 ms timing budgets above and a temporary 5 ms policy encountered
 register-datagram deadline failures on that host; do not treat this fragment as
 a validated production timing policy.

@@ -1,4 +1,4 @@
-// Incremental CoE SDO transfer for the JW2-sized mailbox objects. This is a
+// Incremental CoE SDO transfer for the JW-sized mailbox objects. This is a
 // transport codec/state machine, not a board protocol or test utility. Each
 // Step performs at most one bounded register operation; it never retries writes.
 #pragma once
@@ -31,7 +31,7 @@ class CoeSdoTransfer {
   };
 
   // Reads use capacity; writes use bytes. Supports expedited and unsegmented
-  // normal transfers up to 76 bytes, covering the plan's largest JW2 envelope.
+  // normal transfers up to 76 bytes, covering the plan's largest JW envelope.
   // Counter is the master's next transmit mailbox counter for this slave, in
   // 1..7. The slave's transmit counter is independent. No I/O in Begin.
   absl::Status Begin(Mailbox mailbox,

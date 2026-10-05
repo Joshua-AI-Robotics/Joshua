@@ -30,10 +30,10 @@ class SerialFirmwareTest : public ::testing::Test {
     }
   }
   Bytes Frame(uint8_t cmd, uint8_t channel, const Bytes& payload = {}) {
-    Bytes bytes(JW2_MAX_FRAME_LEN);
+    Bytes bytes(JW_MAX_FRAME_LEN);
     const int len =
         JOSHUA_WIRE_VERSION == 2
-            ? jw2_encode_frame(bytes.data(),
+            ? jw_encode_frame(bytes.data(),
                                bytes.size(),
                                session,
                                ++id,
@@ -57,14 +57,14 @@ class SerialFirmwareTest : public ::testing::Test {
     const auto request = Frame(cmd, channel, payload);
     const auto response = Run(request);
     if (JOSHUA_WIRE_VERSION == 2) {
-      jw2_frame_t sent;
-      jw2_frame_t reply;
-      EXPECT_EQ(jw2_decode_frame(request.data(), request.size(), &sent), 0);
-      if (jw2_decode_frame(response.data(), response.size(), &reply) != 0) {
+      jw_frame_t sent;
+      jw_frame_t reply;
+      EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &sent), 0);
+      if (jw_decode_frame(response.data(), response.size(), &reply) != 0) {
         ADD_FAILURE() << "Invalid firmware response";
         return {};
       }
-      EXPECT_TRUE(jw2_response_matches(&sent, &reply));
+      EXPECT_TRUE(jw_response_matches(&sent, &reply));
       return Bytes(reply.payload, reply.payload + reply.payload_len);
     }
     jw1_frame_t reply;
@@ -116,11 +116,11 @@ TEST_F(SerialFirmwareTest, RejectsOtherVersionBadCrcAndTruncatedInput) {
   corrupted = bytes;
   corrupted.resize(5);
   EXPECT_TRUE(Run(corrupted).empty());
-  uint8_t other[JW2_MAX_FRAME_LEN];
+  uint8_t other[JW_MAX_FRAME_LEN];
   const int len =
       JOSHUA_WIRE_VERSION == 2
           ? jw1_encode_enable(other, sizeof(other), 0)
-          : jw2_encode_frame(other, sizeof(other), 50, 1, JW_CMD_RESET_SESSION, 0xff, nullptr, 0);
+          : jw_encode_frame(other, sizeof(other), 50, 1, JW_CMD_RESET_SESSION, 0xff, nullptr, 0);
   EXPECT_TRUE(Run(Bytes(other, other + len)).empty());
   EXPECT_FALSE(Run(bytes).empty());
 }

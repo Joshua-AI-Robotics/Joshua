@@ -1,4 +1,4 @@
-// TI SDK 09 bridge for the explicitly selected JW2 EtherCAT-only artifact.
+// TI SDK 09 bridge for the explicitly selected JW EtherCAT-only artifact.
 // Installs the object dictionary and fixed PDO mapping; no automatic flashing.
 #pragma once
 #include "ecSlvApi.h"

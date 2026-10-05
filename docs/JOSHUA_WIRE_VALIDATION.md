@@ -1,6 +1,6 @@
-# JoshuaWire v2 validation
+# JoshuaWire validation
 
-Use `//robot/board/joshua_wire:joshua_wire_v2_smoke` for serial checks on AM243,
+Use `//robot/board/joshua_wire:joshua_wire_smoke` for serial checks on AM243,
 Teensy 4.1 and ESP32. It uses the production host session and serial transport,
 but does not launch ROS 2, flash firmware or test EtherCAT.
 
@@ -14,7 +14,7 @@ and cleanup sends board-wide ESTOP. Loss of holding torque can be hazardous.
 
 `--confirm_hardware` acknowledges setup; it is not a wiring check or interlock.
 The probe opens only the selected board and does not honor
-`general.operation_mode`. It requires explicit `protocol: JOSHUA_WIRE_V2`
+`general.operation_mode`. It requires explicit `protocol: JOSHUA_WIRE`
 and never falls back to v1. Older board-specific smokes use v1 and send targets.
 
 Serial firmware has no communication-loss watchdog. Cleanup attempts ESTOP after
@@ -31,15 +31,15 @@ Inside the [Docker development environment](../CONTRIBUTING.md#development-setup
 ```bash
 bazel build --config=u24 --config=x86-base \
   --@rules_python//python/config_settings:python_version=3.12 \
-  //robot/board/joshua_wire:joshua_wire_v2_smoke
+  //robot/board/joshua_wire:joshua_wire_smoke
 ```
 
 For Humble, use `u22` and Python `3.10`. Prepare a local board configuration
-with `protocol: JOSHUA_WIRE_V2` and `firmware { min_proto_version: 2 }`.
+with `protocol: JOSHUA_WIRE` and `firmware { min_proto_version: 2 }`.
 Review the device path, identity, channel pins and [serial timing](../config/README.md#serial-timing).
 
 ```bash
-bazel-bin/robot/board/joshua_wire/joshua_wire_v2_smoke \
+bazel-bin/robot/board/joshua_wire/joshua_wire_smoke \
   --config=/path/to/reviewed-v2.pbtxt --board=board_name --dry_run
 ```
 
@@ -87,7 +87,7 @@ Artifact: `am243_dual_transport_v2.release.appimage.hs_fs`, SHA-256
 `d8612bb2e981a69cadc4e7fce94d31cc76270508927d51ac227dd8efabfa05d2`.
 Bootloader/application flash verification passed.
 
-XDS110 UART at 115200 baud identified `am243-dual-v2`, board ID 1, one
+XDS110 UART at 115200 baud identified `am243-dual`, board ID 1, one
 STEP_DIR channel. Eight sessions passed: two handshake, two configure-only,
 and four exercise sessions at +250/-250 native steps. Feedback matched targets
 with zero faults. Fresh resets returned position zero; every session acknowledged
@@ -98,13 +98,13 @@ independently verified. EtherCAT, watchdogs and ROS 2 were not tested.
 ### Recorded Teensy 4.1 hardware result — 2026-10-04
 
 Host/firmware source: `a62eaea618d02e3d5a4a88f3bb8663f4eac0e499`.
-Artifact: `teensy41-serial-v2` HEX, SHA-256
+Artifact: `teensy41-serial` HEX, SHA-256
 `88300e3eb0b0027a26a246f1bdfe45c173c4263be8d11b0c6ee118c816935f73`.
 Build: PlatformIO 6.1.18, Teensy platform 5.2.0, Arduino framework 1.162.0.
 The board initially ran v1; an approved flash via HalfKay succeeded after
 manual PROGRAM-button entry.
 
-Native USB identified `teensy-serial-v2`, board ID 2, one STEP_DIR channel.
+Native USB identified `teensy-serial`, board ID 2, one STEP_DIR channel.
 Motor power was confirmed disconnected. Channel 0 used STEP/DIR/ENABLE pins
 2/3/4, 4000 Hz maximum, 20 µs pulse width and active-low enable. Eight sessions
 passed: two handshake, two configure-only, two exercise at +10 steps, then two
@@ -116,7 +116,7 @@ with no post-open or extra diagnostic wait.
 #### Powered Teensy motor bench — 2026-10-04
 
 With separately confirmed powered hardware, a temporary bench used CommFactory,
-JoshuaWireV2Session and shared codecs. At 100 pulses/s it held the initial count,
+JoshuaWireSession and shared codecs. At 100 pulses/s it held the initial count,
 enabled, moved 89 steps forward, waited two seconds, returned and disabled.
 Each leg had a three-second arrival deadline. Counts went 2 → 91 → 2; each leg
 took approximately 0.89 seconds. The operator observed smooth forward-and-return
@@ -126,7 +126,7 @@ This was not a ROS 2/motor-driver test or an independent angle/pulse measurement
 ### Recorded ESP32 hardware result — 2026-10-04
 
 Host/firmware source: `a62eaea618d02e3d5a4a88f3bb8663f4eac0e499`.
-Artifact: `esp32-serial-v2` BIN, SHA-256
+Artifact: `esp32-serial` BIN, SHA-256
 `aa6cbf9a03c34fbc69c42e6a420e58b7aa10548aaf04fd6729cec457cf2a0335`.
 Build: PlatformIO 6.1.18, Espressif32 7.1.3, Arduino framework
 `4.20017.260907+sha.dcc1105b`, Xtensa GCC `8.4.0+2021r2-patch5`.
@@ -134,7 +134,7 @@ The previous application did not answer either probe; bootloader identification
 confirmed ESP32-D0WD-V3 revision v3.1. Approved upload with esptool 4.11.0
 verified all transferred images and reset the board through RTS.
 
-CP2102 UART at 115200 baud identified `esp32-serial-v2`, wire board ID 8,
+CP2102 UART at 115200 baud identified `esp32-serial`, wire board ID 8,
 one STEP_DIR channel. Motor power was confirmed disconnected. Channel 0 used
 GPIOs 25/26/27, 4000 Hz maximum, 20 µs pulse width and active-low enable.
 Eight sessions passed: two handshake, two configure-only, two exercise at +10
@@ -150,7 +150,7 @@ Each completed probe closed its port.
 
 ## Recorded AM243 EtherCAT result — 2026-09-28
 
-Artifact: `am243_ethercat_jw2.release.appimage.hs_fs`, SHA-256
+Artifact: `am243_ethercat_jw.release.appimage.hs_fs`, SHA-256
 `beddbbbca07849c7788c5862684b4b9664e547a67eb5a38ddc06ec0020f8e5b6`.
 Source: working tree based on `3e9f268`, not a clean release validation.
 The approved flash verified successfully. The AM243 software-only channel ran
@@ -175,14 +175,14 @@ safety remain untested.
 
 ## SOES candidate bring-up — 2026-09-28
 
-Artifact: `am243_ethercat_jw2_soes.release.appimage.hs_fs`, SHA-256
+Artifact: `am243_ethercat_jw_soes.release.appimage.hs_fs`, SHA-256
 `424c7d498e35efcbdd0c5d27dc490d0c6dd8e3b81896520bc170c36a1ef10b83`.
 Source: working tree based on `7f33853`, not a clean release validation.
 Approved flash verification passed. This image excludes TI's evaluation slave
 stack but retains external TI hardware/PRU dependencies. Watchdogs remained
 2 s / 1 s, and motor power was confirmed disconnected.
 
-Discovery returned `Joshua AM243 JW2 SOES`, valid `am243-soes2` descriptor,
+Discovery returned `Joshua AM243 JW SOES`, valid `am243-soes2` descriptor,
 80/80-byte PDOs and bench vendor/product/revision
 `0xe000059d/0x4a570002/0x00020002`; these are not registered product IDs.
 Bring-up exposed and fixed a generic host CoE bug: slave reply counters advance
@@ -209,8 +209,8 @@ repository artifacts. See [transport limitations](../robot/comm/ethercat/README.
 
 ## Automated coverage
 
-`serial_v2_validation_test` exercises the real AM243 software handler in memory.
-`joshua_wire_v2_smoke_test` runs the CLI against it over a Linux pseudo-terminal,
+`serial_validation_test` exercises the real AM243 software handler in memory.
+`joshua_wire_smoke_test` runs the CLI against it over a Linux pseudo-terminal,
 covering handshake, configure/exercise, sessions, safety gates, lost replies,
 correlation and SIGTERM cleanup. Session/transport tests cover framing, stale
 replies, firmware retries, ID rotation and teardown. Native tests use no hardware
@@ -221,7 +221,7 @@ Run the CLI test inside the matching dev container:
 ```bash
 bazel test --config=u24 --config=x86-base \
   --@rules_python//python/config_settings:python_version=3.12 \
-  //robot/board/joshua_wire:joshua_wire_v2_smoke_test
+  //robot/board/joshua_wire:joshua_wire_smoke_test
 ```
 
 Full regression: `docker compose run --rm test-u22` and `test-u24`.

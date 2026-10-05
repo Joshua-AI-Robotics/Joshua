@@ -14,7 +14,7 @@
 #include "joshua_ethercat_profile.h"
 
 #if !defined(JOSHUA_COMM_WATCHDOG_US) || !defined(JOSHUA_TARGET_WATCHDOG_US)
-#error "Explicit nonzero watchdog limits are required for the JW2 EtherCAT artifact"
+#error "Explicit nonzero watchdog limits are required for the JW EtherCAT artifact"
 #endif
 
 static JoshuaEthercatProfile profile;
@@ -87,7 +87,7 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
   uint32_t result = EC_API_SLV_CoE_odAddArray(
       slave,
       object_index,
-      output ? "JW2 output image" : "JW2 input image",
+      output ? "JW output image" : "JW input image",
       20,
       DEFTYPE_UNSIGNED32,
       32,
@@ -98,13 +98,13 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
       NULL);
   if (result) return result;
   EC_API_SLV_Pdo_t* pdo = NULL;
-  result = EC_API_SLV_PDO_create(slave, output ? "JW2 RxPDO" : "JW2 TxPDO", pdo_index, &pdo);
+  result = EC_API_SLV_PDO_create(slave, output ? "JW RxPDO" : "JW TxPDO", pdo_index, &pdo);
   if (result) return result;
   for (uint8_t sub = 1; sub <= 20; ++sub) {
     EC_API_SLV_SCoE_ObjEntry_t* entry = NULL;
     result = EC_API_SLV_CoE_getObjectEntry(slave, object_index, sub, &entry);
     if (result) return result;
-    result = EC_API_SLV_PDO_createEntry(slave, pdo, "JW2 image word", entry);
+    result = EC_API_SLV_PDO_createEntry(slave, pdo, "JW image word", entry);
     if (result) return result;
   }
   return EC_API_SLV_PDO_setFixed(slave, pdo, true);
@@ -128,7 +128,7 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   if (result) return result;
   result = EC_API_SLV_setRevisionNumber(slave, 0x00020001);
   if (result) return result;
-  result = EC_API_SLV_setProductName(slave, "Joshua AM243 JW2 software channel");
+  result = EC_API_SLV_setProductName(slave, "Joshua AM243 JW software channel");
   if (result) return result;
   result = AddObject(
       slave, JWEC_DESCRIPTOR_INDEX, "JWEC descriptor", DEFTYPE_OCTETSTRING, 36, ACCESS_READ);
@@ -154,7 +154,7 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   EC_API_SLV_cbRegisterStopOuputHandler(slave, NULL, StopOutput);
   TaskP_Params params;
   TaskP_Params_init(&params);
-  params.name = "jw2_watchdog";
+  params.name = "jw_watchdog";
   params.stack = watchdog_stack;
   params.stackSize = sizeof(watchdog_stack);
   params.priority = TaskP_PRIORITY_HIGHEST - 2;

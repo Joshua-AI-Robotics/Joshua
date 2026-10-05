@@ -1,9 +1,9 @@
-// JoshuaWire v2 EtherCAT layout-v1 wire contract, shared by host and all board
+// JoshuaWire EtherCAT layout-v1 wire contract, shared by host and all board
 // firmware endpoints. Constants are byte offsets/sizes, never packed structs.
 // This header does not implement an object dictionary, watchdog or motor I/O.
 #pragma once
 
-#include "joshua_wire_v2.h"
+#include "joshua_wire.h"
 
 #define JWEC_DESCRIPTOR_INDEX 0x2000
 #define JWEC_SESSION_INDEX 0x2001

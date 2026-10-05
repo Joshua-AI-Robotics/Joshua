@@ -22,17 +22,17 @@ Current combinations are:
 | --- | --- | --- | --- |
 | Serial | yes | yes | no |
 | UDP | no | planned | no |
-| EtherCAT | no | JW2 paired only | JW2 paired only |
+| EtherCAT | no | JW paired only | JW paired only |
 
 `ByteStream` provides ordered bytes without boundaries.
 [`MessageTransport`](interfaces/message_transport.h) exposes only `Send` and
 `Exchange` over borrowed byte spans; the adapter supplies response framing and
 returns owned bytes. Factory-created message adapters are ready to use, so a
-JW2 session reset does not reopen the physical link.
+JW session reset does not reopen the physical link.
 
 [`CorrelatedCyclicTransport`](interfaces/correlated_cyclic_transport.h) is a
 separate interface with a finite exchange timeout and correlation/stop contract.
-Its JW2 EtherCAT adapter is supplied together with a message endpoint when
+Its JW EtherCAT adapter is supplied together with a message endpoint when
 `transport_type: MESSAGE_AND_CYCLIC` is selected.
 The legacy TI-demo API has been retired. `CommTransport` can
 represent either capability or `PairedTransports`, which holds both and the
@@ -42,11 +42,11 @@ The [EtherCAT owner worker](ethercat/README.md#owner-worker-and-factory-assembly
 now provides background process-data exchange, blocking startup SDO and an
 explicitly budgeted incremental runtime SDO path for unsegmented objects up to
 76 bytes. Blocking SDO closes before
-cyclic operation. The [paired JW2 adapter](ethercat/README.md#paired-joshuawire-v2-adapters)
+cyclic operation. The [paired JW adapter](ethercat/README.md#paired-joshuawire-v2-adapters)
 adds the compatibility gate, reset-object handshake, CoE management envelopes,
 PDO correlation and shared endpoint lifetime. Factory assembly validates all
 discovered slaves before OP, then leases one endpoint per configured slave on a
-shared NIC owner. The separate AM243 JW2 firmware profile implements this
+shared NIC owner. The separate AM243 JW firmware profile implements this
 contract; it is not the TI demo. See [config selection](../../config/README.md#joshuawire-v2-over-ethercat).
 
 Device protocol parsing remains outside this layer. For example, the lidar

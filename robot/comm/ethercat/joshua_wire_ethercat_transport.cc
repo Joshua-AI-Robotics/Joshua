@@ -33,7 +33,7 @@ bool ValidTimeout(Microseconds t) {
 }
 absl::Status Expired() {
   return absl::DeadlineExceededError(
-      "JW2 exchange cancelled/expired after dispatch; outcome unknown");
+      "JW exchange cancelled/expired after dispatch; outcome unknown");
 }
 Bytes Envelope(bool pdo,
                uint32_t session,
@@ -52,17 +52,17 @@ Bytes Envelope(bool pdo,
 }
 absl::StatusOr<Bytes> Response(absl::Span<const uint8_t> image,
                                bool pdo,
-                               const jw2_frame_t& request) {
+                               const jw_frame_t& request) {
   const size_t offset = pdo ? JWEC_PDO_FRAME_OFFSET : JWEC_MAILBOX_FRAME_OFFSET;
   const size_t length = U16(image.data() + offset - 4);
-  if (length < JW2_FRAME_OVERHEAD || length > JW2_MAX_FRAME_LEN ||
+  if (length < JW_FRAME_OVERHEAD || length > JW_MAX_FRAME_LEN ||
       U16(image.data() + offset - 2) != 0 ||
       !std::all_of(image.begin() + offset + length, image.end(), [](uint8_t v) { return v == 0; }))
-    return absl::DataLossError("invalid JW2 envelope length, status/reserved bits or padding");
-  jw2_frame_t response;
-  if (jw2_decode_frame(image.data() + offset, length, &response) != 0 ||
-      !jw2_response_matches(&request, &response))
-    return absl::DataLossError("uncorrelated JW2 response; outcome unknown");
+    return absl::DataLossError("invalid JW envelope length, status/reserved bits or padding");
+  jw_frame_t response;
+  if (jw_decode_frame(image.data() + offset, length, &response) != 0 ||
+      !jw_response_matches(&request, &response))
+    return absl::DataLossError("uncorrelated JW response; outcome unknown");
   return Bytes(image.begin() + offset, image.begin() + offset + length);
 }
 absl::StatusOr<absl::Span<const uint8_t>> Input(const EthercatMaster::Snapshot& snapshot,
@@ -70,7 +70,7 @@ absl::StatusOr<absl::Span<const uint8_t>> Input(const EthercatMaster::Snapshot& 
   const auto& bytes = snapshot.data.inputs;
   if (region.input_offset_bytes > bytes.size() ||
       JWEC_PDO_SIZE > bytes.size() - region.input_offset_bytes)
-    return absl::DataLossError("truncated JW2 PDO snapshot");
+    return absl::DataLossError("truncated JW PDO snapshot");
   return absl::Span<const uint8_t>(bytes.data() + region.input_offset_bytes, JWEC_PDO_SIZE);
 }
 }  // namespace
@@ -100,7 +100,7 @@ absl::Status ValidateJoshuaWireEthercatProfile(absl::Span<const uint8_t> d,
             d[3] == 'C' && U16(d.data() + 4) == JWEC_DESCRIPTOR_VERSION && U16(d.data() + 6) <= 2 &&
             U16(d.data() + 8) >= 2 && U16(d.data() + 10) == JWEC_LAYOUT_VERSION &&
             U16(d.data() + 12) == JWEC_PDO_SIZE && U16(d.data() + 14) == JWEC_PDO_SIZE &&
-            U16(d.data() + 16) == JW2_MAX_FRAME_LEN && U16(d.data() + 34) == 0 &&
+            U16(d.data() + 16) == JW_MAX_FRAME_LEN && U16(d.data() + 34) == 0 &&
             (U32(d.data() + 18) & required) == required;
   } else
     observed << "descriptor bytes=" << d.size() << " artifact=<unavailable>";
@@ -136,7 +136,7 @@ absl::StatusOr<std::shared_ptr<JoshuaWireEthercatTransport>> JoshuaWireEthercatT
   if (!master || slave == 0 || slave > master->regions().size() ||
       !ValidTimeout(options.exchange_timeout) || !ValidTimeout(options.poll_interval) ||
       options.poll_interval >= options.exchange_timeout)
-    return absl::InvalidArgumentError("invalid JW2 endpoint, timeout or polling policy");
+    return absl::InvalidArgumentError("invalid JW endpoint, timeout or polling policy");
   auto status = master->ClaimEndpoint(slave);
   if (!status.ok()) return status;
   auto descriptor = master->ReadSdo(
@@ -161,7 +161,7 @@ JoshuaWireEthercatTransport::Bytes JoshuaWireEthercatTransport::StopImage() {
   return Bytes(JWEC_PDO_SIZE, 0);
 }
 absl::Status JoshuaWireEthercatTransport::Send(absl::Span<const uint8_t>) {
-  return absl::UnimplementedError("JW2 EtherCAT requires acknowledged Exchange, not Send");
+  return absl::UnimplementedError("JW EtherCAT requires acknowledged Exchange, not Send");
 }
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Exchange(absl::Span<const uint8_t> request) {
   return Submit(request, false, options_.exchange_timeout);
@@ -176,15 +176,15 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Exchange(absl::Span<const uin
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8_t> request,
                                                           bool cyclic,
                                                           Microseconds timeout) {
-  jw2_frame_t frame;
-  if (!ValidTimeout(timeout) || jw2_decode_frame(request.data(), request.size(), &frame) != 0)
-    return absl::InvalidArgumentError("invalid JW2 frame or timeout");
+  jw_frame_t frame;
+  if (!ValidTimeout(timeout) || jw_decode_frame(request.data(), request.size(), &frame) != 0)
+    return absl::InvalidArgumentError("invalid JW frame or timeout");
   const bool cyclic_command = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;
   const bool management = frame.cmd == JW_CMD_IDENTIFY || frame.cmd == JW_CMD_CONFIGURE_CHANNEL ||
                           frame.cmd == JW_CMD_ENABLE || frame.cmd == JW_CMD_DISABLE ||
                           frame.cmd == JW_CMD_ESTOP || frame.cmd == JW_CMD_RESET_SESSION;
   if ((cyclic && !cyclic_command) || (!cyclic && !management))
-    return absl::InvalidArgumentError("JW2 command routed to wrong EtherCAT plane");
+    return absl::InvalidArgumentError("JW command routed to wrong EtherCAT plane");
   if (frame.cmd == JW_CMD_RESET_SESSION &&
       (frame.channel != JW_CHANNEL_NONE || frame.payload_len != 0))
     return absl::InvalidArgumentError("invalid reset-session frame");
@@ -193,7 +193,7 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
   work->cyclic = cyclic;
   work->deadline = Clock::now() + timeout;
   std::unique_lock lock(mutex_);
-  if (stopping_) return absl::CancelledError("JW2 endpoint stopped");
+  if (stopping_) return absl::CancelledError("JW endpoint stopped");
   if (frame.cmd == JW_CMD_ESTOP) {
     // Drop queued normal work and cancel a cyclic waiter before queuing ESTOP.
     // An in-progress SDO is not interrupted/retried; its finite deadline applies.
@@ -204,14 +204,14 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
       FinishLocked(active_, absl::CancelledError("ESTOP; outcome unknown"));
     (void)master_->SetOutputs(slave_, StopImage());
   }
-  if (queue_.size() >= 64) return absl::ResourceExhaustedError("JW2 endpoint queue full");
+  if (queue_.size() >= 64) return absl::ResourceExhaustedError("JW endpoint queue full");
   queue_.push_back(work);
   cv_.notify_all();
   if (!cv_.wait_until(lock, work->deadline, [&] { return work->done; })) {
     FinishLocked(work,
                  work->dispatched
                      ? Expired()
-                     : absl::DeadlineExceededError("JW2 expired in queue; not executed"));
+                     : absl::DeadlineExceededError("JW expired in queue; not executed"));
     if (work->dispatched && work->cyclic) (void)master_->SetOutputs(slave_, StopImage());
     cv_.notify_all();
   }
@@ -228,9 +228,9 @@ void JoshuaWireEthercatTransport::Stop() {
   {
     std::lock_guard lock(mutex_);
     stopping_ = true;
-    if (active_) FinishLocked(active_, absl::CancelledError("JW2 stopped; outcome unknown"));
+    if (active_) FinishLocked(active_, absl::CancelledError("JW stopped; outcome unknown"));
     for (const auto& work : queue_)
-      FinishLocked(work, absl::CancelledError("JW2 stopped before dispatch"));
+      FinishLocked(work, absl::CancelledError("JW stopped before dispatch"));
     queue_.clear();
     (void)master_->SetOutputs(slave_, StopImage());
   }
@@ -275,7 +275,7 @@ void JoshuaWireEthercatTransport::Run() {
         queue_.pop_front();
         if (work->done) continue;
         if (Clock::now() >= work->deadline) {
-          FinishLocked(work, absl::DeadlineExceededError("JW2 expired in queue; not executed"));
+          FinishLocked(work, absl::DeadlineExceededError("JW expired in queue; not executed"));
           cv_.notify_all();
           continue;
         }
@@ -299,16 +299,16 @@ void JoshuaWireEthercatTransport::Run() {
 }
 
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Execute(const std::shared_ptr<Work>& work) {
-  jw2_frame_t frame;
-  (void)jw2_decode_frame(work->request.data(), work->request.size(), &frame);
+  jw_frame_t frame;
+  (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
   if (frame.cmd == JW_CMD_RESET_SESSION) return Reset(work);
   if (needs_reset_ || frame.session_id != session_)
-    return absl::FailedPreconditionError("JW2 EtherCAT requires a new verified reset session");
+    return absl::FailedPreconditionError("JW EtherCAT requires a new verified reset session");
   if (frame.message_id <= last_message_)
-    return absl::FailedPreconditionError("JW2 message ID reused or out of order");
+    return absl::FailedPreconditionError("JW message ID reused or out of order");
   if (generation_ == UINT32_MAX || (generation_ == UINT32_MAX - 1 && frame.cmd != JW_CMD_ESTOP))
     return absl::ResourceExhaustedError(
-        "JW2 generation exhausted; disable and establish new session");
+        "JW generation exhausted; disable and establish new session");
   last_message_ = frame.message_id;
   const auto generation = ++generation_;
   auto result = work->cyclic ? Cyclic(work, generation) : Mailbox(work, generation);
@@ -321,8 +321,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Execute(const std::shared_ptr
 }
 
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<Work>& work) {
-  jw2_frame_t frame;
-  (void)jw2_decode_frame(work->request.data(), work->request.size(), &frame);
+  jw_frame_t frame;
+  (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
   if (frame.session_id == session_)
     return absl::FailedPreconditionError("reset must propose a different nonzero session");
   needs_reset_ = true;
@@ -348,9 +348,9 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<W
       pdo_ack_ = 0;
       needs_reset_ = false;
       Invalidate();
-      Bytes response(JW2_MAX_FRAME_LEN);
+      Bytes response(JW_MAX_FRAME_LEN);
       const uint8_t ok = JW_STATUS_OK;
-      const int size = jw2_encode_response(response.data(), response.size(), &frame, &ok, 1);
+      const int size = jw_encode_response(response.data(), response.size(), &frame, &ok, 1);
       response.resize(size);
       return response;
     }
@@ -361,8 +361,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<W
 
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Mailbox(const std::shared_ptr<Work>& work,
                                                            uint32_t generation) {
-  jw2_frame_t frame;
-  (void)jw2_decode_frame(work->request.data(), work->request.size(), &frame);
+  jw_frame_t frame;
+  (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
   // Reset may precede StartCyclic, when there is no output shadow to publish.
   // Before management enables anything, replace the startup all-zero stop
   // image with this session's idle image. ESTOP keeps the explicit stop image.
@@ -400,8 +400,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Cyclic(const std::shared_ptr<
                                                           uint32_t generation) {
   auto status = Publish(work, Envelope(true, session_, generation, pdo_ack_, work->request));
   if (!status.ok()) return status;
-  jw2_frame_t frame;
-  (void)jw2_decode_frame(work->request.data(), work->request.size(), &frame);
+  jw_frame_t frame;
+  (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
   Microseconds remaining;
   bool saw_session = false;
   while ((remaining = Remaining(work)).count() > 0) {

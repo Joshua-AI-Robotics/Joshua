@@ -6,10 +6,9 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
-#include "firmware/common/joshua_wire_v1.h"
-#include "robot/board/joshua_wire/joshua_wire_v2_session.h"
+#include "firmware/common/joshua_wire.h"
+#include "robot/board/joshua_wire/joshua_wire_session.h"
 #include "robot/comm/factory/comm_factory.h"
-#include "robot/comm/interfaces/legacy_message_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "utils/status_macros.h"
@@ -21,13 +20,11 @@ namespace robot::board {
 class JoshuaWireCommandClient {
  public:
   JoshuaWireCommandClient(std::shared_ptr<robot::comm::MessageTransport> transport,
-                          bool v2,
                           const robot::comm::PairedTransports* pair)
       : transport_(std::move(transport)) {
-    if (v2)
-      session_ = std::make_unique<JoshuaWireV2Session>(
+    session_ = std::make_unique<JoshuaWireSession>(
           transport_,
-          JoshuaWireV2Session::SessionIdSource{},
+          JoshuaWireSession::SessionIdSource{},
           UINT32_MAX,
           pair ? pair->cyclic : nullptr,
           pair ? pair->response_timeout : absl::ZeroDuration());
@@ -37,7 +34,7 @@ class JoshuaWireCommandClient {
   }
   absl::Status Open() {
     std::lock_guard lock(mutex_);
-    return session_ ? session_->Open() : absl::OkStatus();
+    return session_->Open();
   }
   absl::Status Close() {
     std::lock_guard lock(mutex_);
@@ -49,39 +46,17 @@ class JoshuaWireCommandClient {
     return status;
   }
   uint32_t protocol_version() const {
-    return session_ ? 2 : 1;
+    return JW_PROTO_VERSION;
   }
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command) {
     std::lock_guard lock(mutex_);
     if (closed_) return absl::FailedPreconditionError("JoshuaWire board has been closed.");
-    if (session_) return session_->Exchange(command);
-    ABSL_ASSIGN_OR_RETURN(auto legacy, robot::comm::GetLegacyMessageTransport(transport_));
-    if (command.payload_len > JW1_MAX_PAYLOAD_LEN)
-      return absl::InvalidArgumentError("JoshuaWire v1 payload too large.");
-    uint8_t bytes[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_frame(bytes,
-                                     sizeof(bytes),
-                                     command.cmd,
-                                     command.channel,
-                                     command.payload,
-                                     static_cast<uint8_t>(command.payload_len));
-    if (len < 0) return absl::InvalidArgumentError("Invalid JoshuaWire v1 command.");
-    size_t expected = JW_STATUS_RESPONSE_PAYLOAD_LEN;
-    if (command.cmd == JW_CMD_IDENTIFY) expected = JW_IDENTIFY_RESPONSE_PAYLOAD_LEN;
-    if (command.cmd == JW_CMD_GET_FEEDBACK) expected = JW_FEEDBACK_RESPONSE_PAYLOAD_LEN;
-    ABSL_ASSIGN_OR_RETURN(
-        auto response,
-        legacy->SendAndReceive(std::vector<uint8_t>(bytes, bytes + len), JW1_FRAME_LEN(expected)));
-    jw1_frame_t frame;
-    if (jw1_decode_frame(response.data(), response.size(), &frame) != 0 ||
-        frame.cmd != command.cmd || frame.channel != command.channel)
-      return absl::DataLossError("Malformed/mismatched JoshuaWire v1 response.");
-    return std::vector<uint8_t>(frame.payload, frame.payload + frame.payload_len);
+    return session_->Exchange(command);
   }
 
  private:
   std::shared_ptr<robot::comm::MessageTransport> transport_;
-  std::unique_ptr<JoshuaWireV2Session> session_;
+  std::unique_ptr<JoshuaWireSession> session_;
   bool closed_ = false;
   std::mutex mutex_;
 };
@@ -204,8 +179,8 @@ absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
 }  // namespace
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
-  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED && config.protocol() != JOSHUA_WIRE_V1 &&
-      config.protocol() != JOSHUA_WIRE_V2) {
+  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED &&
+      config.protocol() != JOSHUA_WIRE) {
     return absl::InvalidArgumentError("Unsupported JoshuaWire board protocol.");
   }
   const std::string type_name = robot::board::BoardType_Name(expected_board_type_);
@@ -219,9 +194,9 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
         "Board '", config.name(), "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
   }
   if (config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC &&
-      (config.protocol() != JOSHUA_WIRE_V2 || config.has_am243_config()))
+      config.has_am243_config())
     return absl::InvalidArgumentError(
-        "Paired JoshuaWire requires explicit v2; endpoint fields belong in comm, not "
+        "JoshuaWire endpoint fields belong in comm, not "
         "am243_config.");
   if (!config.has_firmware()) {
     return absl::InvalidArgumentError(absl::StrCat(
@@ -391,7 +366,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
         "Factory capabilities do not match JoshuaWire routing policy.");
 
   auto commands = std::make_shared<JoshuaWireCommandClient>(
-      std::move(transport), config.protocol() == JOSHUA_WIRE_V2, pair);
+      std::move(transport), pair);
   ABSL_RETURN_IF_ERROR(commands->Open());
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*commands, config));
 

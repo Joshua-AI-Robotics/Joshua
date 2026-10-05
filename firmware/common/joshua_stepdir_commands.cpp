@@ -91,7 +91,7 @@ int JoshuaStepDirCommand(void* context,
         return reply(JW_STATUS_ERROR);
       }
       for (uint8_t i = 0; i < g_num_channels; ++i) StepDirDisable(&g_channels[i]);
-      protocol->estopped = protocol->latch_estop;
+      protocol->estopped = true;
       return reply(JW_STATUS_OK);
     default:
       return reply(JW_STATUS_UNSUPPORTED);

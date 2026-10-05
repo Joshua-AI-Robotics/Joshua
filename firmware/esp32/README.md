@@ -13,7 +13,7 @@ Paired host-side class: `robot/board/esp32/esp32_board.h` (header-only).
 
 ```text
 firmware/esp32/
-  platformio.ini        explicit esp32-serial (v1) / esp32-serial-v2 envs;
+  platformio.ini        explicit esp32-serial (v1) / esp32-serial envs;
                         board = esp32dev by
                         default — change this one line for a different
                         ESP32 variant (S3, C3, S2, ...); -I src so
@@ -42,11 +42,11 @@ proven on Teensy works unchanged here, no ESP32-specific code needed.
 ## Status
 
 The hardware results below describe v1. For opt-in v2, build with
-`pio run -e esp32-serial-v2` and select `Board.protocol: JOSHUA_WIRE_V2`.
+`pio run -e esp32-serial` and select `Board.protocol: JOSHUA_WIRE`.
 The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
-V2 passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
+V2 passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
 on 2026-10-04 with motor power disconnected. Powered v2
 motion, independent pulse timing and the ROS 2 path remain unvalidated. The
 host used the configured 2000 ms post-open settle delay. The checklist below

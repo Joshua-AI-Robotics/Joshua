@@ -4,7 +4,7 @@ JOSHUA_PATCHED_SOURCE_DIR ?= $(CURDIR)/patched
 
 include $(TI_PROJECT_DIR)/makefile
 
-JOSHUA_SOURCE_DIR := $(JOSHUA_ROOT)/firmware/am243/joshua_dual_transport_v1/src
+JOSHUA_SOURCE_DIR := $(JOSHUA_ROOT)/firmware/am243/joshua_dual_transport/src
 JOSHUA_COMMON_DIR := $(JOSHUA_ROOT)/firmware/common
 TI_PROFILE_DIR := $(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)/examples/industrial_comms/ethercat_slave_demo/device_profiles/401_simple
 TI_DEMO_DIR := $(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)/examples/industrial_comms/ethercat_slave_demo
@@ -29,10 +29,10 @@ JOSHUA_WIRE_VERSION ?= 1
 INCLUDES += -DJOSHUA_WIRE_VERSION=$(JOSHUA_WIRE_VERSION)
 
 JOSHUA_OBJS := joshua_serial_task.obj joshua_commands.obj joshua_wire_commands.obj joshua_wire_v1.obj \
-	joshua_wire_v2.obj joshua_wire_v2_firmware_session.obj joshua_wire_serial_endpoint.obj
-ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw2)
-JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire_v2.obj \
-	joshua_wire_v2_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
+	joshua_wire.obj joshua_wire_firmware_session.obj joshua_wire_serial_endpoint.obj
+ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw)
+JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire.obj \
+	joshua_wire_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
 INCLUDES += -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
 	-DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)
 endif

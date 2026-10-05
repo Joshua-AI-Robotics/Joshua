@@ -100,14 +100,14 @@ static void BuildSii(void) {
     sii[offset + 7] = (uint8_t)(i + 1);
   }
   // General category: SDO + SDO information, no Complete Access/dynamic mapping;
-  // MII ports 0/1 and split LRD/LWR, matching the ICSS ESC and JW2 contract.
+  // MII ports 0/1 and split LRD/LWR, matching the ICSS ESC and JW contract.
   Put16(172, 30);
   Put16(174, 16);
   sii[179] = 1;  // Device name is string 1 below.
   sii[180] = 0x05;
   sii[181] = 0x03;
   sii[187] = 0x02;
-  static const char name[] = "Joshua AM243 JW2 SOES";
+  static const char name[] = "Joshua AM243 JW SOES";
   const size_t string_words = (sizeof(name) + 2) / 2;
   Put16(208, 10);
   Put16(210, string_words);
@@ -218,7 +218,7 @@ static void Run(void* ignored) {
   DebugP_assert(JoshuaEthercatProfileInit(
                     &profile, &config, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US) == 0);
   DebugP_assert(xTaskCreateStatic(Watchdog,
-                                  "jw2_watchdog",
+                                  "jw_watchdog",
                                   1024,
                                   NULL,
                                   configMAX_PRIORITIES - 2,
@@ -256,12 +256,12 @@ static void Run(void* ignored) {
                                     .eeprom_handler = EEP_process};
   DebugP_assert(JoshuaSoesInit(&binding) == 0);
   tiesc_ethphyDisablePowerDown();
-  DebugP_log("Joshua JW2 SOES ready; software-only channel, fixed SII, no TI slave stack\r\n");
+  DebugP_log("Joshua JW SOES ready; software-only channel, fixed SII, no TI slave stack\r\n");
   uint64_t next_log = ClockP_getTimeUsec() + 60000000;
   for (;;) {
     JoshuaSoesPoll();
     if (ClockP_getTimeUsec() >= next_log) {
-      DebugP_log("JW2 SOES uptime=%u s AL=0x%02x error=0x%04x\r\n",
+      DebugP_log("JW SOES uptime=%u s AL=0x%02x error=0x%04x\r\n",
                  (unsigned)(ClockP_getTimeUsec() / 1000000),
                  ESCvar.ALstatus,
                  ESCvar.ALerror);
@@ -275,7 +275,7 @@ int main(void) {
   Board_init();
   DebugP_assert(
       xTaskCreateStatic(
-          Run, "jw2_soes", 4096, NULL, configMAX_PRIORITIES - 3, main_stack, &main_task) != NULL);
+          Run, "jw_soes", 4096, NULL, configMAX_PRIORITIES - 3, main_stack, &main_task) != NULL);
   vTaskStartScheduler();
   DebugP_assertNoLog(0);
   return 0;

@@ -28,7 +28,7 @@ so explicitly with `TODO` placeholders rather than staying silent.
 | Board | Status | README |
 | --- | --- | --- |
 | AM243 (LP-AM243, TI EtherCAT demo) | Hello World + EtherCAT slave demo built, flashed, verified on real hardware. Vendor firmware — metadata only, stays as-is. | [`am243/ti_ethercat_simple_demo_v1/README.md`](am243/ti_ethercat_simple_demo_v1/README.md) |
-| AM243 (LP-AM243, EtherCAT + `joshua_wire_v1`) | Built, flashed, and verified over both transports. Serial is a motion-safe software channel with no GPIO output. | [`am243/joshua_dual_transport_v1/README.md`](am243/joshua_dual_transport_v1/README.md) |
+| AM243 (LP-AM243, EtherCAT + `joshua_wire_v1`) | Built, flashed, and verified over both transports. Serial is a motion-safe software channel with no GPIO output. | [`am243/joshua_dual_transport/README.md`](am243/joshua_dual_transport/README.md) |
 | Teensy 4.1 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, verified end to end on real hardware, including physical motor rotation through the real production path. | [`teensy/41/README.md`](teensy/41/README.md) |
 | Arduino (STEP/DIR over `joshua_wire_v1`) | Not started — real future board (`docs/BOARD_LAYER_RFC.md` §10 Phase 5), not retired by Teensy being first. | [`arduino/README.md`](arduino/README.md) |
 | ESP32 (STEP/DIR over `joshua_wire_v1`) | Built, flashed, and protocol-verified on real hardware (IDENTIFY/ENABLE/SET_TARGET all confirmed) — joins the same joshua_wire_v1 family as Teensy. Physical motor rotation not yet observed on this board. | [`esp32/README.md`](esp32/README.md) |
@@ -47,23 +47,23 @@ so explicitly with `TODO` placeholders rather than staying silent.
 - AM243 serial uses the shared `JoshuaWireBoard` engine. The dual-transport
   firmware overlay still includes TI echo EtherCAT alongside serial, keeping
   the TI SDK outside the repository, but the TI-demo host path is retired.
-  Current Joshua EtherCAT runtime requires the separate JW2 artifact below.
+  Current Joshua EtherCAT runtime requires the separate JW artifact below.
 
-## Opt-in JoshuaWire v2 serial milestone
+## Opt-in JoshuaWire serial milestone
 
 The existing v1 artifacts remain the defaults. Separate v2 artifacts now use
-the shared `common/joshua_wire_v2` codec and firmware session on Teensy 4.1,
+the shared `common/joshua_wire` codec and firmware session on Teensy 4.1,
 ESP32, and AM243 UART. Build without flashing:
 
 ```bash
-pio run -d firmware/teensy/41 -e teensy41-serial-v2
-pio run -d firmware/esp32 -e esp32-serial-v2
-JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+pio run -d firmware/teensy/41 -e teensy41-serial
+pio run -d firmware/esp32 -e esp32-serial
+JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
-Select `protocol: JOSHUA_WIRE_V2` in the host Board configuration.
+Select `protocol: JOSHUA_WIRE` in the host Board configuration.
 Version selection is explicit; there is no auto-detection or fallback.
-[Serial validation](../docs/JOSHUA_WIRE_V2_VALIDATION.md#hardware-validation-status)
+[Serial validation](../docs/JOSHUA_WIRE_VALIDATION.md#hardware-validation-status)
 passed on AM243 UART, Teensy 4.1 and ESP32. Teensy also passed a powered
 forward/return bench; ESP32 powered motion and the v2 ROS 2 path remain untested.
 The table above records historical v1 results.
@@ -84,27 +84,27 @@ unconfigured channels and malformed/non-finite targets. Native Bazel tests
 exercise the actual MCU dispatch with simulated serial/GPIO, plus the AM243
 software handler and host session; no tests flash or move hardware.
 
-## Opt-in AM243 JoshuaWire v2 EtherCAT milestone
+## Opt-in AM243 JoshuaWire EtherCAT milestone
 
-The [AM243 overlay](am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
-also builds the explicit `am243_ethercat_jw2` artifact. It replaces TI's echo
-profile with JW2 CoE management and 80-byte PDO command/feedback images, one
+The [AM243 overlay](am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
+also builds the explicit `am243_ethercat_jw` artifact. It replaces TI's echo
+profile with JW CoE management and 80-byte PDO command/feedback images, one
 shared session, retained responses and latched software watchdogs. UART protocol
 service is absent from this artifact; existing UART/TI-demo artifacts are unchanged.
 
 The endpoint and watchdog policy now live in `common/joshua_ethercat_profile`.
 AM243 supplies identity, its TI-stack bridge and drive callbacks. Other boards
 reuse that core and the same host communication implementation; see the
-[firmware porting contract](common/README.md#porting-jw2-ethercat-to-another-board).
+[firmware porting contract](common/README.md#porting-jw-ethercat-to-another-board).
 The original AM243 images still link TI's one-hour evaluation stack. A separate
-[SOES candidate](am243/joshua_dual_transport_v1/README.md#opt-in-soes-replacement)
+[SOES candidate](am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
 now builds without that stack and passes native protocol tests. It has been
 flashed and passed discovery/handshake, but [register timeouts still block
-hardware/endurance qualification](../docs/JOSHUA_WIRE_V2_VALIDATION.md#soes-candidate-bring-up--2026-09-28),
+hardware/endurance qualification](../docs/JOSHUA_WIRE_VALIDATION.md#soes-candidate-bring-up--2026-09-28),
 so evaluation-stack retirement remains pending.
 
 The production firmware core has native host-interoperability and controlled-clock
-tests. A [single-board EtherCAT bench check](../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
+tests. A [single-board EtherCAT bench check](../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
 passed factory/engine commands, software feedback and stale-target fault/recovery.
 It also exposed a host mailbox deadline failure with a 1 ms budget; production
 timing validation remains open. There is still no physical motor backend or

@@ -15,19 +15,6 @@ cc_library(
     ],
 )
 
-cc_binary(
-    name = "am243_demo_smoke",
-    srcs = ["am243_demo_smoke.cc"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":serial",
-        "//firmware/common:joshua_wire_v1",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-        "@boost.asio",
-    ],
-)
-
 cc_library(
     name = "framed_serial_transport",
     srcs = ["framed_serial_transport.cc"],
@@ -47,7 +34,7 @@ cc_test(
     deps = [
         ":framed_serial_transport",
         ":serial",
-        "//firmware/common:joshua_wire_v2",
+        "//firmware/common:joshua_wire",
         "@boost.asio",
         "@googletest//:gtest_main",
     ],

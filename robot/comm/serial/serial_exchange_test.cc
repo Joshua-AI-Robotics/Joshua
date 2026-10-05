@@ -1,7 +1,7 @@
 // Tests the framed serial adapter through allocated pseudo-terminals, never real
 // serial devices. Covers variable-length/fragmented frames, stale-input flush,
 // bounded read deadlines, invalid lengths and disconnects; protocol-level
-// session/correlation behavior is tested by joshua_wire_v2_session_test.cc.
+// session/correlation behavior is tested by joshua_wire_session_test.cc.
 #include <fcntl.h>
 #include <poll.h>
 #include <stdlib.h>
@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-#include "firmware/common/joshua_wire_v2.h"
+#include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
 #include "robot/comm/serial/framed_serial_transport.h"
 #include "robot/comm/serial/serial.h"
@@ -37,8 +37,8 @@ class SerialExchangeTest : public ::testing::Test {
     ASSERT_EQ(unlockpt(master), 0);
     link = std::make_shared<Serial>(io, ptsname(master), 115200);
     serial = std::make_unique<FramedSerialTransport>(link, std::chrono::milliseconds(100));
-    request.resize(JW2_MAX_FRAME_LEN);
-    const int len = jw2_encode_frame(request.data(), request.size(), 100, 5, 1, 0xff, nullptr, 0);
+    request.resize(JW_MAX_FRAME_LEN);
+    const int len = jw_encode_frame(request.data(), request.size(), 100, 5, 1, 0xff, nullptr, 0);
     request.resize(len);
   }
   void TearDown() override {
@@ -58,9 +58,9 @@ class SerialExchangeTest : public ::testing::Test {
     return observed == request;
   }
   Bytes Reply(size_t payload_size) {
-    Bytes bytes(JW2_MAX_FRAME_LEN);
+    Bytes bytes(JW_MAX_FRAME_LEN);
     Bytes payload(payload_size, 42);
-    const int len = jw2_encode_frame(
+    const int len = jw_encode_frame(
         bytes.data(), bytes.size(), 100, 5, 1, 0xff, payload.data(), payload.size());
     bytes.resize(len);
     return bytes;

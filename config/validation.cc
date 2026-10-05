@@ -211,16 +211,16 @@ absl::Status ValidateEthercatBoards(
     const bool paired = comm.transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
     if (paired) {
       ABSL_RETURN_IF_ERROR(robot::comm::CommFactory::ValidatePairedEthercatConfig(ec));
-      if (board.protocol() != robot::board::JOSHUA_WIRE_V2 || board.has_am243_config())
+      if (board.protocol() != robot::board::JOSHUA_WIRE || board.has_am243_config())
         return absl::InvalidArgumentError(
-            "Paired EtherCAT requires explicit JW2 and endpoint config in comm");
+            "Paired EtherCAT requires explicit JW and endpoint config in comm");
       if (!endpoints.emplace(std::make_pair(ec.interface_name(), ec.slave_index()), board.name())
                .second)
         return absl::InvalidArgumentError(
             "Multiple boards declare the same EtherCAT slave endpoint");
     } else {
       return absl::InvalidArgumentError(
-          "Legacy TI-demo EtherCAT is retired; explicit JW2 with MESSAGE_AND_CYCLIC is required");
+          "Legacy TI-demo EtherCAT is retired; explicit JW with MESSAGE_AND_CYCLIC is required");
     }
     const std::string policy = std::to_string(comm.transport_type()) + ":" +
                                std::to_string(ec.process_data_mode()) + ":" +

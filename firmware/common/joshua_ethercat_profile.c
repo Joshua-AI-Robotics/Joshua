@@ -66,7 +66,7 @@ void JoshuaEthercatProfileTick(JoshuaEthercatProfile* p, uint64_t now_us, bool o
   if (faults) JoshuaEthercatProfileFault(p, faults);
 }
 
-static int Command(void* context, const jw2_frame_t* frame, uint8_t* payload, size_t capacity) {
+static int Command(void* context, const jw_frame_t* frame, uint8_t* payload, size_t capacity) {
   JoshuaEthercatProfile* p = (JoshuaEthercatProfile*)context;
   jw_command_t command = {frame->cmd, frame->channel, frame->payload, frame->payload_len};
   if (frame->cmd == JW_CMD_IDENTIFY) {
@@ -107,12 +107,12 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   const uint16_t length = U16(bytes + offset - 4);
   if (U32(bytes) != p->session.session_id || !p->session.session_id) return 0;
   if (!generation) return length == 0 && U16(bytes + offset - 2) == 0 ? 0 : -1;
-  if (length < JW2_FRAME_OVERHEAD || length > JW2_MAX_FRAME_LEN || U16(bytes + offset - 2))
+  if (length < JW_FRAME_OVERHEAD || length > JW_MAX_FRAME_LEN || U16(bytes + offset - 2))
     return -1;
-  for (size_t i = offset + length; i < offset + JW2_MAX_FRAME_LEN; ++i)
+  for (size_t i = offset + length; i < offset + JW_MAX_FRAME_LEN; ++i)
     if (bytes[i]) return -1;
-  jw2_frame_t frame;
-  if (jw2_decode_frame(bytes + offset, length, &frame) != 0 ||
+  jw_frame_t frame;
+  if (jw_decode_frame(bytes + offset, length, &frame) != 0 ||
       frame.session_id != p->session.session_id)
     return -1;
   const bool cyclic = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;
@@ -133,8 +133,8 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   const size_t gen_offset = plane ? 8 : 4;
   if (U32(response + gen_offset)) return -1;  // Must acknowledge retained reply first.
   if (frame.message_id <= p->session.last_message_id) return -1;
-  uint8_t frame_reply[JW2_MAX_FRAME_LEN];
-  const int reply_len = jw2_firmware_session_process(&p->session,
+  uint8_t frame_reply[JW_MAX_FRAME_LEN];
+  const int reply_len = jw_firmware_session_process(&p->session,
                                                      bytes + offset,
                                                      length,
                                                      frame_reply,
@@ -166,7 +166,7 @@ int JoshuaEthercatProfileRead(JoshuaEthercatProfile* p, uint16_t index, uint8_t*
     Put16(descriptor + 10, JWEC_LAYOUT_VERSION);
     Put16(descriptor + 12, JWEC_PDO_SIZE);
     Put16(descriptor + 14, JWEC_PDO_SIZE);
-    Put16(descriptor + 16, JW2_MAX_FRAME_LEN);
+    Put16(descriptor + 16, JW_MAX_FRAME_LEN);
     Put32(descriptor + 18, JWEC_TRANSPORT_COE | JWEC_TRANSPORT_PDO);
     memcpy(descriptor + 22, p->config.artifact, sizeof(p->config.artifact));
     memcpy(out, descriptor, size);
@@ -194,7 +194,7 @@ int JoshuaEthercatProfileWrite(JoshuaEthercatProfile* p,
     if (session == p->session.session_id)
       return 0;  // Idempotent object write, not a reset/replay hole.
     ResetChannel(p);
-    jw2_firmware_session_init(&p->session);
+    jw_firmware_session_init(&p->session);
     memset(p->mailbox, 0, sizeof(p->mailbox));
     memset(p->input, 0, sizeof(p->input));
     memset(p->last_generation, 0, sizeof(p->last_generation));

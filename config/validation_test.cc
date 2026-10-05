@@ -215,7 +215,7 @@ config::Config MakeEthercatConfig() {
   auto config = MakeConfig();
   auto* b = config.mutable_robot()->mutable_boards(0);
   b->set_board_type(robot::board::AM243);
-  b->set_protocol(robot::board::JOSHUA_WIRE_V2);
+  b->set_protocol(robot::board::JOSHUA_WIRE);
   auto* c = b->mutable_comm();
   c->set_comm_type(robot::comm::ETHERCAT);
   c->set_transport_type(robot::comm::MESSAGE_AND_CYCLIC);

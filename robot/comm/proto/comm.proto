@@ -17,7 +17,7 @@ enum TransportType {
   BYTE_STREAM = 1;
   MESSAGE = 2;
   CYCLIC = 3;  // Generic capability; standalone EtherCAT/TI-demo use is retired.
-  // Paired management/correlated-cyclic capabilities (JW2 EtherCAT today).
+  // Paired management/correlated-cyclic capabilities (JW EtherCAT today).
   MESSAGE_AND_CYCLIC = 4;
 }
 

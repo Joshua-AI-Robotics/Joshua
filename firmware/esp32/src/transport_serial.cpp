@@ -29,12 +29,12 @@ size_t TransportReadFrame(uint8_t* frame_buf, size_t frame_buf_cap) {
   int sync_byte = -1;
   while (Serial.available() > 0) {
     sync_byte = Serial.read();
-    if (sync_byte == JW1_SYNC_BYTE) {
+    if (sync_byte == JW_SYNC_BYTE) {
       break;
     }
     sync_byte = -1;
   }
-  if (sync_byte != JW1_SYNC_BYTE) {
+  if (sync_byte != JW_SYNC_BYTE) {
     return false;
   }
   frame_buf[0] = static_cast<uint8_t>(sync_byte);

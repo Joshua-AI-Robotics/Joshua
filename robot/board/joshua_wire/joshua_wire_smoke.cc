@@ -1,4 +1,4 @@
-// Manual serial-v2 validation entry point. No hardware is opened for help,
+// Manual serial validation entry point. No hardware is opened for help,
 // dry-run or invalid options. Real I/O requires explicit hardware confirmation.
 #include <gflags/gflags.h>
 
@@ -9,7 +9,7 @@
 
 #include "absl/strings/numbers.h"
 #include "config/config_utils.h"
-#include "robot/board/joshua_wire/serial_v2_validation.h"
+#include "robot/board/joshua_wire/serial_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "utils/status_macros.h"
 
@@ -96,7 +96,7 @@ absl::Status Run() {
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage(
-      "Manual JoshuaWire v2 serial probe. Default: reset/identify/ESTOP only. Use --dry_run "
+      "Manual JoshuaWire serial probe. Default: reset/identify/ESTOP only. Use --dry_run "
       "first.");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (argc != 1) {

@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "joshua_wire_v1.h"
+#include "joshua_wire.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,8 +1,8 @@
 # AM243 EtherCAT
 
-The runtime now uses the separate [JoshuaWire v2 EtherCAT profile](../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile).
+The runtime now uses the separate [JoshuaWire EtherCAT profile](../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile).
 See [configuration](../config/README.md#joshuawire-v2-over-ethercat) and the
-[bench results and unresolved timing issue](JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+[bench results and unresolved timing issue](JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
 The TI-demo host path, codec, driver, smoke targets and preset are retired.
 Firmware build/flash assets below remain as historical bring-up material.
 
@@ -94,8 +94,8 @@ Known setup bumps from bring-up:
 
 ## Current Runtime Boundaries
 
-AM243 serial and JW2 EtherCAT both use the shared `JoshuaWireBoard` engine.
-Serial v1/v2 support is retained. EtherCAT requires explicit JW2 selection,
+AM243 serial and JW EtherCAT both use the shared `JoshuaWireBoard` engine.
+Serial v1/v2 support is retained. EtherCAT requires explicit JW selection,
 `MESSAGE_AND_CYCLIC`, and the matching firmware; old TI-demo configs fail with
 migration errors, not automatic protocol conversion.
 
@@ -105,12 +105,12 @@ above that master and supply management/cyclic capabilities to the board.
 Only the master worker accesses SOEM. Motor drivers see `BoardChannel`,
 never a NIC or raw PDO backend.
 
-The JW2 profile uses 80-byte PDOs and CoE management objects, not the TI demo's
+The JW profile uses 80-byte PDOs and CoE management objects, not the TI demo's
 8-byte seed/echo mapping. The firmware remains software-channel-only; these
 checks do not establish motor-output safety. No replacement hardware test
-utility or runnable JW2 preset was added to the repository.
+utility or runnable JW preset was added to the repository.
 
 The serial example `config/config_preset/example/am243_serial_demo.pbtxt`
-remains. Use the [v2 serial validation guide](JOSHUA_WIRE_V2_VALIDATION.md)
+remains. Use the [v2 serial validation guide](JOSHUA_WIRE_VALIDATION.md)
 for the maintained serial probe. Firmware flashing is always a separate,
 operator-confirmed action.

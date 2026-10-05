@@ -106,14 +106,14 @@ full SOEM master scan trace and expected slave identity
 (`firmware/am243/ti_ethercat_simple_demo_v1.md` has the expected identity
 fields). The old Joshua TI-demo host smoke target is retired. Current Joshua
 EtherCAT runtime requires the separate
-[JW2 profile](../joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile),
+[JW profile](../joshua_dual_transport/README.md#opt-in-jw-ethercat-profile),
 not this vendor image.
 
 ## Wiring / Pinout
 
 Not applicable — AM243 communicates over EtherCAT (a NIC-to-NIC Ethernet
 link, not a channel-table pinout contract), and this firmware does not expose
-JoshuaWire commands. Use the separate Joshua firmware for serial or JW2 EtherCAT.
+JoshuaWire commands. Use the separate Joshua firmware for serial or JW EtherCAT.
 
 ## Known gaps / Troubleshooting
 
@@ -129,7 +129,7 @@ JoshuaWire commands. Use the separate Joshua firmware for serial or JW2 EtherCAT
 
 ## Related files
 
-- [JoshuaWire profile](../joshua_dual_transport_v1/README.md) — current Joshua host integration
+- [JoshuaWire profile](../joshua_dual_transport/README.md) — current Joshua host integration
 - `firmware/am243/ti_ethercat_simple_demo_v1.md` — firmware record
   (provenance, expected slave identity)
 - `scripts/activate.sh` — create and activate the Python venv

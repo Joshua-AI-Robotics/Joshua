@@ -1,4 +1,4 @@
-// Fixed JW2 layout-v1 SOES configuration. Board SII must use these same settings.
+// Fixed JW layout-v1 SOES configuration. Board SII must use these same settings.
 #pragma once
 #define USE_FOE 0
 #define USE_EOE 0

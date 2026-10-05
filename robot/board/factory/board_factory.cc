@@ -34,10 +34,10 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
     case robot::board::BoardType::AM243:
       if (config.has_am243_config() ||
           (config.comm().comm_type() == robot::comm::ETHERCAT &&
-           (config.protocol() != JOSHUA_WIRE_V2 ||
+           (config.protocol() != JOSHUA_WIRE ||
             config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC)))
         return absl::InvalidArgumentError(
-            "Legacy AM243 TI-demo path is retired; select explicit JW2 with "
+            "Legacy AM243 TI-demo path is retired; select explicit JW with "
             "MESSAGE_AND_CYCLIC and comm.ethercat_config endpoint/timing fields.");
       return std::make_shared<JoshuaWireBoard>(AM243, JW_BOARD_AM243);
     case robot::board::BoardType::FEETECH_BUS:

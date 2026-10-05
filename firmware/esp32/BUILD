@@ -2,9 +2,8 @@
 # STEP/DIR sources with fake Arduino I/O. PlatformIO builds the MCU artifacts.
 load("@rules_cc//cc:defs.bzl", "cc_test")
 
-[
-    cc_test(
-        name = "serial_v%d_test" % version,
+cc_test(
+        name = "serial_test",
         srcs = [
             "src/channel_table.c",
             "src/channel_table.h",
@@ -15,7 +14,6 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
             "//firmware/testing:serial_firmware_test.cc",
         ],
         defines = [
-            "JOSHUA_WIRE_VERSION=%d" % version,
             "EXPECTED_BOARD_ID=8",
         ],
         includes = ["src"],
@@ -24,9 +22,4 @@ load("@rules_cc//cc:defs.bzl", "cc_test")
             "//firmware/testing:arduino",
             "@googletest//:gtest_main",
         ],
-    )
-    for version in [
-        1,
-        2,
-    ]
-]
+)

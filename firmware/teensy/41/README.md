@@ -11,7 +11,7 @@ serial by default, with a separate opt-in v2 artifact. Paired host-side class:
 
 ```text
 firmware/teensy/41/
-  platformio.ini        explicit teensy41-serial (v1) / teensy41-serial-v2 envs;
+  platformio.ini        explicit teensy41-serial (v1) / teensy41-serial envs;
                         -I src in build_flags so firmware/common/
                         libraries (below) can see this project's own
                         channel_table.h
@@ -38,13 +38,13 @@ the same way rather than copy-pasted per firmware.
 ## Status
 
 The hardware results below describe v1. For opt-in v2, build with
-`pio run -e teensy41-serial-v2` and select `Board.protocol: JOSHUA_WIRE_V2`.
+`pio run -e teensy41-serial` and select `Board.protocol: JOSHUA_WIRE`.
 The default environment remains v1. Both versions share command dispatch in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
-V2 passed [eight real native USB serial sessions](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
+V2 passed [eight real native USB serial sessions](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
 on 2026-10-04 with motor power disconnected and no post-open wait. A subsequent
-[powered v2 bench](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
+[powered v2 bench](../../../docs/JOSHUA_WIRE_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
 passed smooth forward-and-return motion. Independent pulse timing and the v2
 ROS 2 path remain unvalidated. The checklist below records historical v1 results.
 

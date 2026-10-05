@@ -111,7 +111,7 @@ enum Am243PdoMapping {
 }
 
 message Am243Config {
-  // Deprecated and rejected at validation/factory entry points. JoshuaWire v2
+  // Deprecated and rejected at validation/factory entry points. JoshuaWire
   // endpoint addressing/region assertions belong in comm.ethercat_config.
   uint32 slave_index = 1;
   Am243PdoMapping pdo_mapping = 2;
@@ -123,12 +123,13 @@ message Am243Config {
   uint32 input_size_bytes = 6;
 }
 
-// Explicit wire-version opt-in during the v2 migration. Unspecified preserves
-// serial board behavior (JoshuaWire v1 or Feetech). EtherCAT requires explicit v2.
+// JoshuaWire 0.0.2 is the sole Joshua protocol; unspecified selects it on
+// Joshua boards. Vendor boards retain their own protocol.
 enum BoardProtocol {
   BOARD_PROTOCOL_UNSPECIFIED = 0;
-  JOSHUA_WIRE_V1 = 1;
-  JOSHUA_WIRE_V2 = 2;
+  reserved 1;
+  reserved "JOSHUA_WIRE_V1", "JOSHUA_WIRE_V2";
+  JOSHUA_WIRE = 2;  // Preserve the validated protocol's protobuf value.
 }
 
 message Board {

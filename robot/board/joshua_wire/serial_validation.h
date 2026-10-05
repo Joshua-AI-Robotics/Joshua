@@ -1,4 +1,4 @@
-// Diagnostic workflow for the serial-v2 smoke CLI, separate from runtime code.
+// Diagnostic workflow for the serial smoke CLI, separate from runtime code.
 // Preflight is hardware-free; Run uses the production host session over the
 // supplied transport. Tests supply an in-memory firmware endpoint.
 #pragma once

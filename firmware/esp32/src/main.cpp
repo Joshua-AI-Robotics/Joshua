@@ -10,20 +10,19 @@
 namespace {
 jw_serial_endpoint_t endpoint;
 JoshuaStepDirProtocol protocol{JW_BOARD_ESP32,
-                               JOSHUA_WIRE_VERSION == 2 ? "esp32-serial-v2" : nullptr,
-                               JOSHUA_WIRE_VERSION == 2,
+                               "esp32-serial",
                                false};
 }  // namespace
 
 void setup() {
   TransportInit();
   for (uint8_t i = 0; i < g_num_channels; ++i) StepDirInit(&g_channels[i]);
-  jw_serial_endpoint_init(&endpoint, JOSHUA_WIRE_VERSION);
+  jw_serial_endpoint_init(&endpoint);
 }
 
 void loop() {
-  uint8_t request[JW2_MAX_FRAME_LEN];
-  uint8_t response[JW2_MAX_FRAME_LEN];
+  uint8_t request[JW_MAX_FRAME_LEN];
+  uint8_t response[JW_MAX_FRAME_LEN];
   const size_t request_len = TransportReadFrame(request, sizeof(request));
   if (request_len != 0) {
     const int len = jw_serial_endpoint_process(&endpoint,

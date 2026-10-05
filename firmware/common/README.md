@@ -14,15 +14,15 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
   command views (`jw_command_t`), IDs, semantic types and payload-only codecs.
   `JW_CMD_*` describes an operation, not a wire version; RESET_SESSION is
   supported only by v2 endpoints. Payload codecs never add headers, IDs or CRCs.
-- [joshua_wire_v1.h](joshua_wire_v1.h) / [joshua_wire_v2.h](joshua_wire_v2.h)
+- [joshua_wire_v1.h](joshua_wire_v1.h) / [joshua_wire.h](joshua_wire.h)
   and their `.c` files — stateless frame codecs. V2 adds session/message IDs.
   Functions named `jw1_encode_*` still produce v1 frames, even when their
   arguments use the shared `jw_*_t` types.
-- [joshua_wire_v2_firmware_session.h](joshua_wire_v2_firmware_session.h)
+- [joshua_wire_firmware_session.h](joshua_wire_firmware_session.h)
   and `.c` — firmware-side reset, request history and duplicate suppression.
   This is state used by a dispatch loop, not a thread or network service.
   Its host-side counterpart is
-  [JoshuaWireV2Session](../../robot/board/joshua_wire/joshua_wire_v2_session.h).
+  [JoshuaWireSession](../../robot/board/joshua_wire/joshua_wire_session.h).
 - [joshua_wire_serial_endpoint.h](joshua_wire_serial_endpoint.h) and `.c` —
   connects an explicitly selected v1/v2 artifact to firmware command handlers.
   It receives complete frames; the board-specific UART/USB code owns I/O.
@@ -52,12 +52,12 @@ operations; drive backends control hardware. The same C codec sources build on
 host and MCU. UART drivers stay in board directories, while host link ownership
 and I/O deadlines belong to [robot/comm](../../robot/comm/README.md).
 
-The [AM243 overlay](../am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+The [AM243 overlay](../am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
 adapts this shared EtherCAT profile to its TI stack and software-only channel.
 Physical-output safety and cross-transport arbitration remain unfinished. The
 [separation plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md) tracks that work.
 
-## Porting JW2 EtherCAT to another board
+## Porting JW EtherCAT to another board
 
 The host checks the JWEC protocol/layout/capabilities, not a vendor/product ID
 or artifact name. A new conforming board does not require a new comm adapter.
@@ -84,7 +84,7 @@ registration there; existing model configurations use the same comm path.
    and monotonic microseconds. Call `Tick` periodically independently of command
    arrival and on OP loss. Callbacks must be bounded, nonblocking and must not
    re-enter the profile. Publish reset readback only after reset completes.
-5. Configure the host's slave index, paired JW2 transport and explicit timing
+5. Configure the host's slave index, paired JW transport and explicit timing
    budgets. Layout-v1 currently requires split LRD/LWR support; other layouts or
    capabilities require a versioned generic extension, never board-name checks.
 6. Validate identity, reset, both command planes, duplicates, per-channel
@@ -101,7 +101,7 @@ validation remain separate work; no fully open firmware claim is made here.
 Firmware handlers consume `jw_command_t` and return payload bytes. The serial
 endpoint supplies the selected envelope; the v2 firmware session supplies IDs
 and retry handling. Host channels likewise use neutral commands: the board's
-command client selects the v1 codec or `JoshuaWireV2Session`, which exchanges
+command client selects the v1 codec or `JoshuaWireSession`, which exchanges
 v2 frames directly through comm and returns validated payloads. There are no
 intermediate v1 frames on either v2 path. `jw1_frame_t` remains appropriate in
 the actual v1 codec/path, not as a version-neutral command representation.
@@ -112,7 +112,7 @@ the actual v1 codec/path, not as a version-neutral command representation.
   Framed-serial extraction and configurable serial exchange/settle timing are
   implemented. V1 still uses the separate legacy fixed-size API and its existing
   timing; firmware wire formats are unchanged.
-- **AM243 [command handler](../am243/joshua_dual_transport_v1/src/joshua_commands.h):**
+- **AM243 [command handler](../am243/joshua_dual_transport/src/joshua_commands.h):**
   now transport-neutral and reused by separate UART and EtherCAT artifacts.
   Simultaneous UART/CoE/PDO ownership still needs an arbiter; physical motion
   needs a real motor backend. ROS 2 host support alone supplies neither.
@@ -120,7 +120,7 @@ the actual v1 codec/path, not as a version-neutral command representation.
 ## Tests and builds
 
 For manual serial checks after an intentional flash, use the
-[v2 validation guide](../../docs/JOSHUA_WIRE_V2_VALIDATION.md). The shared probe
+[v2 validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md). The shared probe
 defaults to reset/identify/ESTOP only; old board-specific smokes still use v1.
 
 `*_test.cc` files are maintained source, kept beside the code they verify:

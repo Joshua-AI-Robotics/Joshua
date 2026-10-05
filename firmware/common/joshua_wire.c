@@ -1,7 +1,7 @@
-// Implements the stateless JoshuaWire v2 codec shared by host and firmware:
+// Implements the stateless JoshuaWire codec shared by host and firmware:
 // frame encoding/decoding, CRC and correlation-field comparison. Session
 // lifetime, request history and command execution are handled by its callers.
-#include "joshua_wire_v2.h"
+#include "joshua_wire.h"
 
 #include <string.h>
 
@@ -25,7 +25,7 @@ static uint32_t get_u32(const uint8_t* in) {
          ((uint32_t)in[3] << 24);
 }
 
-int jw2_encode_frame(uint8_t* buf,
+int jw_encode_frame(uint8_t* buf,
                      size_t cap,
                      uint32_t session_id,
                      uint32_t message_id,
@@ -33,14 +33,14 @@ int jw2_encode_frame(uint8_t* buf,
                      uint8_t channel,
                      const uint8_t* payload,
                      uint8_t payload_len) {
-  const size_t total = JW2_FRAME_OVERHEAD + (size_t)payload_len;
-  if (buf == NULL || session_id == 0 || message_id == 0 || payload_len > JW2_MAX_PAYLOAD_LEN ||
+  const size_t total = JW_FRAME_OVERHEAD + (size_t)payload_len;
+  if (buf == NULL || session_id == 0 || message_id == 0 || payload_len > JW_MAX_PAYLOAD_LEN ||
       cap < total || (payload_len != 0 && payload == NULL)) {
     return -1;
   }
-  buf[0] = JW2_SYNC_BYTE;
-  buf[1] = JW2_HEADER_BODY_LEN + payload_len;
-  buf[2] = JW2_PROTO_VERSION;
+  buf[0] = JW_SYNC_BYTE;
+  buf[1] = JW_HEADER_BODY_LEN + payload_len;
+  buf[2] = JW_PROTO_VERSION;
   put_u32(buf + 3, session_id);
   put_u32(buf + 7, message_id);
   buf[11] = cmd;
@@ -52,9 +52,9 @@ int jw2_encode_frame(uint8_t* buf,
   return (int)total;
 }
 
-int jw2_decode_frame(const uint8_t* buf, size_t len, jw2_frame_t* out) {
-  if (buf == NULL || out == NULL || len < JW2_FRAME_OVERHEAD || len > JW2_MAX_FRAME_LEN ||
-      buf[0] != JW2_SYNC_BYTE || buf[2] != JW2_PROTO_VERSION || buf[1] < JW2_HEADER_BODY_LEN ||
+int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
+  if (buf == NULL || out == NULL || len < JW_FRAME_OVERHEAD || len > JW_MAX_FRAME_LEN ||
+      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION || buf[1] < JW_HEADER_BODY_LEN ||
       (size_t)buf[1] + 4 != len) {
     return -1;
   }
@@ -68,17 +68,17 @@ int jw2_decode_frame(const uint8_t* buf, size_t len, jw2_frame_t* out) {
   out->cmd = buf[11];
   out->channel = buf[12];
   out->payload = buf + 13;
-  out->payload_len = buf[1] - JW2_HEADER_BODY_LEN;
+  out->payload_len = buf[1] - JW_HEADER_BODY_LEN;
   return 0;
 }
 
-int jw2_encode_response(uint8_t* buf,
+int jw_encode_response(uint8_t* buf,
                         size_t cap,
-                        const jw2_frame_t* request,
+                        const jw_frame_t* request,
                         const uint8_t* payload,
                         uint8_t payload_len) {
-  if (request == NULL || request->proto_ver != JW2_PROTO_VERSION) return -1;
-  return jw2_encode_frame(buf,
+  if (request == NULL || request->proto_ver != JW_PROTO_VERSION) return -1;
+  return jw_encode_frame(buf,
                           cap,
                           request->session_id,
                           request->message_id,
@@ -88,9 +88,9 @@ int jw2_encode_response(uint8_t* buf,
                           payload_len);
 }
 
-int jw2_response_matches(const jw2_frame_t* request, const jw2_frame_t* response) {
-  return request != NULL && response != NULL && request->proto_ver == JW2_PROTO_VERSION &&
-         response->proto_ver == JW2_PROTO_VERSION && request->session_id != 0 &&
+int jw_response_matches(const jw_frame_t* request, const jw_frame_t* response) {
+  return request != NULL && response != NULL && request->proto_ver == JW_PROTO_VERSION &&
+         response->proto_ver == JW_PROTO_VERSION && request->session_id != 0 &&
          request->message_id != 0 && request->session_id == response->session_id &&
          request->message_id == response->message_id && request->cmd == response->cmd &&
          request->channel == response->channel;

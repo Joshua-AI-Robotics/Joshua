@@ -6,9 +6,9 @@ FIRMWARE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JOSHUA_ROOT="$(cd "$FIRMWARE_DIR/../../.." && pwd)"
 JOSHUA_WIRE_VERSION="${JOSHUA_WIRE_VERSION:-1}"
 JOSHUA_ETHERCAT_PROFILE="${JOSHUA_ETHERCAT_PROFILE:-ti-demo}"
-if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw2-soes ]]; then
+if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw-soes ]]; then
   if [[ "$JOSHUA_WIRE_VERSION" != 2 ]]; then
-    echo "JW2 SOES requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
+    echo "JW SOES requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
   fi
   exec bash "$SCRIPT_DIR/build_soes.sh" "$@"
 fi
@@ -18,9 +18,9 @@ case "$JOSHUA_WIRE_VERSION" in
 esac
 case "$JOSHUA_ETHERCAT_PROFILE" in
   ti-demo) ARTIFACT_NAME="am243_dual_transport_v${JOSHUA_WIRE_VERSION}" ;;
-  jw2)
+  jw)
     if [[ "$JOSHUA_WIRE_VERSION" != 2 ]]; then
-      echo "JW2 EtherCAT requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
+      echo "JW EtherCAT requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
     fi
     for watchdog in JOSHUA_COMM_WATCHDOG_US JOSHUA_TARGET_WATCHDOG_US; do
       value="${!watchdog:-}"
@@ -28,9 +28,9 @@ case "$JOSHUA_ETHERCAT_PROFILE" in
         echo "$watchdog must be explicitly supplied, 10000..999999999 microseconds" >&2; exit 2
       fi
     done
-    ARTIFACT_NAME="am243_ethercat_jw2"
+    ARTIFACT_NAME="am243_ethercat_jw"
     ;;
-  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo, jw2, or jw2-soes" >&2; exit 2 ;;
+  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo, jw, or jw-soes" >&2; exit 2 ;;
 esac
 SDK_ROOT="${INDUSTRIAL_COMMUNICATIONS_SDK_PATH:-${HOME}/ti/ind_comms_sdk_am243x_09_00_00_03}"
 TI_PROFILE_DIR="$SDK_ROOT/examples/industrial_comms/ethercat_slave_demo/device_profiles/401_simple"
@@ -51,7 +51,7 @@ cp "$TI_PROJECT_DIR/linker.cmd" "$BUILD_ROOT/build/linker.cmd"
 cp "$TI_PROFILE_DIR/am243x-lp/r5fss0-0_freertos/example.syscfg" "$BUILD_ROOT/example.syscfg"
 cp "$TI_PROFILE_DIR/EtherCAT_Slave_Simple.c" "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c"
 cp "$SDK_ROOT/mcu_plus_sdk/tools/boot/xipGen/xipGen.out" "$BUILD_ROOT/xipGen.out"
-if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw2 ]]; then
+if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw ]]; then
   cp "$TI_PROFILE_DIR/ecSlvSimple.c" "$BUILD_ROOT/patched/ecSlvSimple.c"
   patch --fuzz=0 "$BUILD_ROOT/patched/ecSlvSimple.c" < "$FIRMWARE_DIR/patches/jwec_profile.patch"
 else

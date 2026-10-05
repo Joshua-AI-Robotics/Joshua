@@ -41,7 +41,7 @@ static size_t JoshuaReadFrame(uint8_t* buffer, size_t capacity) {
     if (!JoshuaUartReadExact(&byte, 1U)) {
       return false;
     }
-    if (byte == JW1_SYNC_BYTE) {
+    if (byte == JW_SYNC_BYTE) {
       break;
     }
   }
@@ -61,13 +61,12 @@ static size_t JoshuaReadFrame(uint8_t* buffer, size_t capacity) {
 }
 
 static void JoshuaSerialTask(void* args) {
-  uint8_t request[JW2_MAX_FRAME_LEN];
-  uint8_t response[JW2_MAX_FRAME_LEN];
+  uint8_t request[JW_MAX_FRAME_LEN];
+  uint8_t response[JW_MAX_FRAME_LEN];
   jw_serial_endpoint_t endpoint;
   (void)args;
   memset(&gJoshuaChannel, 0, sizeof(gJoshuaChannel));
-  gJoshuaChannel.latch_estop = JOSHUA_WIRE_VERSION == 2;
-  jw_serial_endpoint_init(&endpoint, JOSHUA_WIRE_VERSION);
+  jw_serial_endpoint_init(&endpoint);
 
   for (;;) {
     const size_t request_len = JoshuaReadFrame(request, sizeof(request));

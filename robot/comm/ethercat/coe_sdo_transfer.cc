@@ -131,7 +131,7 @@ absl::StatusOr<std::optional<CoeSdoTransfer::Bytes>> CoeSdoTransfer::Decode(cons
   // neither retransmits writes nor requests mailbox repeats. It drains retained
   // mailboxes before sending and permits only one outstanding SDO. The owner
   // faults on a dispatched timeout, preventing a late reply from being reused.
-  // Validate the CoE service/object below; JW2 correlation is checked above us.
+  // Validate the CoE service/object below; JW correlation is checked above us.
   const size_t length = U16(response.data());
   if (length < 10 || length > response.size() - 6 || (response[5] & 0x0f) != 3 ||
       (U16(response.data() + 6) >> 12) != 3 || U16(response.data() + 9) != index_ ||

@@ -43,9 +43,9 @@ fi
 mkdir -p "$FIRMWARE_DIR/out"
 for suffix in out map appimage appimage.hs_fs; do
   cp "$BUILD_ROOT/build/ethercat_slave_beckhoff_ssc_demo.release.$suffix" \
-    "$FIRMWARE_DIR/out/am243_ethercat_jw2_soes.release.$suffix"
+    "$FIRMWARE_DIR/out/am243_ethercat_jw_soes.release.$suffix"
 done
 # Preserve exact dependency source + its license alongside the distributable.
 cp "$BUILD_ROOT/soes.tar.gz" "$FIRMWARE_DIR/out/SOES-$SOES_REV.tar.gz"
 cp "$SOES_DIR/LICENSE" "$FIRMWARE_DIR/out/SOES-LICENSE"
-echo "Built am243_ethercat_jw2_soes (not flashed; hardware qualification pending)."
+echo "Built am243_ethercat_jw_soes (not flashed; hardware qualification pending)."

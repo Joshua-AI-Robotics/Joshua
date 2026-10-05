@@ -23,7 +23,7 @@ cc_library(
     name = "joshua_wire_ethercat",
     hdrs = ["joshua_wire_ethercat.h"],
     visibility = ["//visibility:public"],
-    deps = [":joshua_wire_v2"],
+    deps = [":joshua_wire"],
 )
 
 # See README.md for the file map, test boundaries and migration adapters.
@@ -34,51 +34,33 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":joshua_wire_ethercat",
-        ":joshua_wire_v2_firmware_session",
+        ":joshua_wire_firmware_session",
     ],
 )
 
 cc_library(
-    name = "joshua_wire_v1",
-    srcs = ["joshua_wire_v1.c"],
-    hdrs = ["joshua_wire_v1.h"],
-    visibility = ["//visibility:public"],
-    deps = [":joshua_wire_commands"],
-)
-
-cc_test(
-    name = "joshua_wire_v1_test",
-    srcs = ["joshua_wire_v1_test.cc"],
-    deps = [
-        ":joshua_wire_v1",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "joshua_wire_v2",
-    srcs = ["joshua_wire_v2.c"],
-    hdrs = ["joshua_wire_v2.h"],
+    name = "joshua_wire",
+    srcs = ["joshua_wire.c"],
+    hdrs = ["joshua_wire.h"],
     visibility = ["//visibility:public"],
     deps = [":joshua_wire_commands"],
 )
 
 cc_library(
-    name = "joshua_wire_v2_firmware_session",
-    srcs = ["joshua_wire_v2_firmware_session.c"],
-    hdrs = ["joshua_wire_v2_firmware_session.h"],
+    name = "joshua_wire_firmware_session",
+    srcs = ["joshua_wire_firmware_session.c"],
+    hdrs = ["joshua_wire_firmware_session.h"],
     visibility = ["//visibility:public"],
-    deps = [":joshua_wire_v2"],
+    deps = [":joshua_wire"],
 )
 
 cc_test(
-    name = "joshua_wire_v2_test",
-    srcs = ["joshua_wire_v2_test.cc"],
+    name = "joshua_wire_test",
+    srcs = ["joshua_wire_test.cc"],
     deps = [
         ":joshua_wire_serial_endpoint",
-        ":joshua_wire_v1",
-        ":joshua_wire_v2",
-        ":joshua_wire_v2_firmware_session",
+        ":joshua_wire",
+        ":joshua_wire_firmware_session",
         "@googletest//:gtest_main",
     ],
 )
@@ -90,8 +72,7 @@ cc_library(
     includes = ["."],
     visibility = ["//visibility:public"],
     deps = [
-        ":joshua_wire_v1",
-        ":joshua_wire_v2_firmware_session",
+        ":joshua_wire_firmware_session",
     ],
 )
 

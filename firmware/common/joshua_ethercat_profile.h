@@ -1,4 +1,4 @@
-// Board/stack-independent JW2 EtherCAT endpoint: CoE/PDO correlation, session
+// Board/stack-independent JW EtherCAT endpoint: CoE/PDO correlation, session
 // ownership and watchdog policy. A board supplies identity and drive callbacks;
 // its stack adapter supplies complete snapshots, serialization and a clock.
 // No vendor SDK, allocation, threads or GPIO dependencies.
@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 #include "joshua_wire_ethercat.h"
-#include "joshua_wire_v2_firmware_session.h"
+#include "joshua_wire_firmware_session.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,10 +37,10 @@ typedef struct {
 
 typedef struct {
   JoshuaEthercatProfileConfig config;
-  jw2_firmware_session_t session;
+  jw_firmware_session_t session;
   uint8_t mailbox[JWEC_MAILBOX_SIZE];
   uint8_t input[JWEC_PDO_SIZE];
-  uint8_t last_request[2][JW2_MAX_FRAME_LEN];
+  uint8_t last_request[2][JW_MAX_FRAME_LEN];
   uint8_t last_request_len[2];
   uint32_t last_generation[2];
   uint64_t now_us;

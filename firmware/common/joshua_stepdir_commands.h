@@ -10,9 +10,6 @@
 typedef struct {
   jw_board_id_t board_id;
   const char* firmware_name;
-  // A v2 ESTOP stays latched until a new session. Legacy v1 behavior is
-  // retained by setting latch_estop to false in that artifact.
-  bool latch_estop;
   bool estopped;
 } JoshuaStepDirProtocol;
 

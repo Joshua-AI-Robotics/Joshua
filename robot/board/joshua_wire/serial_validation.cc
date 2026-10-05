@@ -1,6 +1,6 @@
-// Implements opt-in diagnostic commands, using JoshuaWireV2Session for all
+// Implements opt-in diagnostic commands, using JoshuaWireSession for all
 // on-wire correlation. Neutral payload helpers are independent of wire framing.
-#include "robot/board/joshua_wire/serial_v2_validation.h"
+#include "robot/board/joshua_wire/serial_validation.h"
 
 #include <cmath>
 #include <cstring>
@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "firmware/common/joshua_wire_commands.h"
-#include "robot/board/joshua_wire/joshua_wire_v2_session.h"
+#include "robot/board/joshua_wire/joshua_wire_session.h"
 #include "utils/status_macros.h"
 
 namespace robot::board::diagnostics {
@@ -37,7 +37,7 @@ const Channel* SelectedChannel(const Board& board, int index) {
   return nullptr;
 }
 
-absl::Status RunSession(JoshuaWireV2Session& session,
+absl::Status RunSession(JoshuaWireSession& session,
                         const Board& board,
                         const SerialV2ValidationOptions& options,
                         std::ostream& output,
@@ -128,13 +128,13 @@ absl::Status RunSession(JoshuaWireV2Session& session,
 
 absl::Status ValidateSerialV2Options(const Board& board, const SerialV2ValidationOptions& options) {
   if (WireBoardId(board.board_type()) < 0 || board.name().empty() ||
-      board.protocol() != JOSHUA_WIRE_V2 || board.firmware().min_proto_version() > 2 ||
+      board.protocol() != JOSHUA_WIRE || board.firmware().min_proto_version() > 2 ||
       board.comm().comm_type() != robot::comm::SERIAL ||
       board.comm().transport_type() != robot::comm::MESSAGE || !board.comm().has_serial_config() ||
       board.comm().serial_config().port().empty() || board.comm().serial_config().baudrate() == 0 ||
       board.comm().serial_config().baudrate() > std::numeric_limits<int>::max()) {
     return absl::InvalidArgumentError(
-        "Select a named AM243/TEENSY41/ESP32 board with explicit JOSHUA_WIRE_V2 and SERIAL/MESSAGE "
+        "Select a named AM243/TEENSY41/ESP32 board with explicit JOSHUA_WIRE and SERIAL/MESSAGE "
         "config.");
   }
   if (options.sessions < 1 || options.sessions > 10 || options.settle_ms < 0 ||
@@ -188,7 +188,7 @@ absl::Status RunSerialV2Validation(const Board& board,
                                    std::function<bool()> cancelled) {
   ABSL_RETURN_IF_ERROR(ValidateSerialV2Options(board, options));
   if (!transport) return absl::InvalidArgumentError("Missing message transport.");
-  JoshuaWireV2Session session(std::move(transport));
+  JoshuaWireSession session(std::move(transport));
   for (int i = 0; i < options.sessions; ++i) {
     if (cancelled && cancelled()) return absl::CancelledError("Interrupted before reset.");
     ABSL_RETURN_IF_ERROR(session.Open());

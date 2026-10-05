@@ -2,7 +2,7 @@
 // A loopback transport runs the real AM243 software command handler and shared
 // firmware endpoint to test correlation, failure/reconnect, ID exhaustion,
 // concurrent callers, ESTOP and teardown without opening a physical device.
-#include "robot/board/joshua_wire/joshua_wire_v2_session.h"
+#include "robot/board/joshua_wire/joshua_wire_session.h"
 
 #include <array>
 #include <atomic>
@@ -11,10 +11,10 @@
 #include <thread>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
-#include "firmware/common/joshua_wire_v2.h"
+#include "firmware/common/joshua_wire.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
@@ -73,8 +73,7 @@ jw_command_t Configure() {
 class FirmwareTransport : public robot::comm::MessageTransport {
  public:
   FirmwareTransport() {
-    jw_serial_endpoint_init(&endpoint, 2);
-    channel.latch_estop = true;
+    jw_serial_endpoint_init(&endpoint);
   }
   absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("No send-only exchange in v2.");
@@ -83,7 +82,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     EXPECT_EQ(active.fetch_add(1), 0);
     if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     requests.emplace_back(request.begin(), request.end());
-    Bytes response(JW2_MAX_FRAME_LEN);
+    Bytes response(JW_MAX_FRAME_LEN);
     const int len = jw_serial_endpoint_process(&endpoint,
                                                request.data(),
                                                request.size(),
@@ -98,8 +97,8 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     response.resize(len);
     if (!retained.empty()) return retained;
     if (corrupt_field >= 0) {
-      jw2_frame_t frame;
-      EXPECT_EQ(jw2_decode_frame(response.data(), response.size(), &frame), 0);
+      jw_frame_t frame;
+      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &frame), 0);
       const Bytes payload(frame.payload, frame.payload + frame.payload_len);
       switch (corrupt_field) {
         case 0:
@@ -115,8 +114,8 @@ class FirmwareTransport : public robot::comm::MessageTransport {
           ++frame.channel;
           break;
       }
-      Bytes altered(JW2_MAX_FRAME_LEN);
-      const int size = jw2_encode_frame(altered.data(),
+      Bytes altered(JW_MAX_FRAME_LEN);
+      const int size = jw_encode_frame(altered.data(),
                                         altered.size(),
                                         frame.session_id,
                                         frame.message_id,
@@ -146,7 +145,7 @@ class V2SessionTest : public ::testing::Test {
  protected:
   std::shared_ptr<FirmwareTransport> transport = std::make_shared<FirmwareTransport>();
   uint32_t session_id = 10;
-  JoshuaWireV2Session session{transport, [this] { return ++session_id; }};
+  JoshuaWireSession session{transport, [this] { return ++session_id; }};
 
   absl::StatusOr<Bytes> Exchange(const jw_command_t& request) {
     return session.Exchange(request);
@@ -159,8 +158,8 @@ class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
       : firmware(std::move(firmware)) {}
   absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> request,
                                  absl::Duration timeout) override {
-    jw2_frame_t frame;
-    EXPECT_EQ(jw2_decode_frame(request.data(), request.size(), &frame), 0);
+    jw_frame_t frame;
+    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), 0);
     EXPECT_TRUE(frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK);
     EXPECT_EQ(timeout, absl::Milliseconds(37));
     commands.push_back(frame.cmd);
@@ -172,7 +171,7 @@ class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
 
 TEST_F(V2SessionTest, PairedRoutingSharesIdsAndPreservesCorrelationAndTimeoutPolicy) {
   auto cyclic = std::make_shared<RoutedCyclic>(transport);
-  JoshuaWireV2Session routed(
+  JoshuaWireSession routed(
       transport, [] { return 99; }, UINT32_MAX, cyclic, absl::Milliseconds(37));
   ASSERT_TRUE(routed.Open().ok());
   ASSERT_TRUE(routed.Exchange(Configure()).ok());
@@ -190,12 +189,12 @@ TEST_F(V2SessionTest, PairedRoutingSharesIdsAndPreservesCorrelationAndTimeoutPol
             (std::vector<uint8_t>{JW_CMD_SET_TARGET, JW_CMD_GET_FEEDBACK, JW_CMD_GET_FEEDBACK}));
   uint32_t expected = 1;
   for (const auto& bytes : transport->requests) {
-    jw2_frame_t frame;
-    ASSERT_EQ(jw2_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+    jw_frame_t frame;
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), 0);
     EXPECT_EQ(frame.session_id, 99);
     EXPECT_EQ(frame.message_id, expected++);
   }
-  JoshuaWireV2Session invalid(transport, {}, UINT32_MAX, cyclic);
+  JoshuaWireSession invalid(transport, {}, UINT32_MAX, cyclic);
   EXPECT_EQ(invalid.Open().code(), absl::StatusCode::kInvalidArgument);
 }
 
@@ -233,11 +232,11 @@ TEST_F(V2SessionTest, FullV2PayloadRoundTripsWithoutLegacyFrameLimit) {
     return static_cast<int>(command->payload_len);
   };
   ASSERT_TRUE(session.Open().ok());
-  const Bytes payload(JW2_MAX_PAYLOAD_LEN, 0xa5);
+  const Bytes payload(JW_MAX_PAYLOAD_LEN, 0xa5);
   auto response = session.Exchange({0x40, 3, payload.data(), payload.size()});
   ASSERT_TRUE(response.ok()) << response.status();
   EXPECT_EQ(*response, payload);
-  EXPECT_EQ(transport->requests.back().size(), JW2_MAX_FRAME_LEN);
+  EXPECT_EQ(transport->requests.back().size(), JW_MAX_FRAME_LEN);
 }
 
 TEST_F(V2SessionTest, InvalidNeutralCommandsDoNotReachTransportOrConsumeIds) {
@@ -245,15 +244,15 @@ TEST_F(V2SessionTest, InvalidNeutralCommandsDoNotReachTransportOrConsumeIds) {
   const uint8_t byte = 0;
   for (const jw_command_t command :
        {jw_command_t{JW_CMD_SET_TARGET, 0, nullptr, 1},
-        jw_command_t{JW_CMD_SET_TARGET, 0, &byte, JW2_MAX_PAYLOAD_LEN + 1},
+        jw_command_t{JW_CMD_SET_TARGET, 0, &byte, JW_MAX_PAYLOAD_LEN + 1},
         jw_command_t{JW_CMD_RESET_SESSION, JW_CHANNEL_NONE, nullptr, 0}}) {
     EXPECT_EQ(session.Exchange(command).status().code(), absl::StatusCode::kInvalidArgument);
   }
   ASSERT_EQ(transport->requests.size(), 1);
   ASSERT_TRUE(Exchange(Command(JW_CMD_IDENTIFY, JW_CHANNEL_NONE)).ok());
-  jw2_frame_t sent;
+  jw_frame_t sent;
   ASSERT_EQ(
-      jw2_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &sent),
+      jw_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &sent),
       0);
   EXPECT_EQ(sent.message_id, 2);
 }
@@ -264,19 +263,19 @@ TEST_F(V2SessionTest, TimeoutAndLateResponseNeverReuseAnId) {
   transport->timeout = true;
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDeadlineExceeded);
   EXPECT_TRUE(transport->channel.enabled);  // Request executed; response was lost.
-  jw2_frame_t timed_out;
+  jw_frame_t timed_out;
   const auto request = transport->requests.back();
-  ASSERT_EQ(jw2_decode_frame(request.data(), request.size(), &timed_out), 0);
+  ASSERT_EQ(jw_decode_frame(request.data(), request.size(), &timed_out), 0);
   transport->timeout = false;
-  transport->retained.resize(JW2_MAX_FRAME_LEN);
+  transport->retained.resize(JW_MAX_FRAME_LEN);
   const uint8_t ok = 0;
-  const int len = jw2_encode_response(
+  const int len = jw_encode_response(
       transport->retained.data(), transport->retained.size(), &timed_out, &ok, 1);
   transport->retained.resize(len);
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDataLoss);
-  jw2_frame_t next;
+  jw_frame_t next;
   ASSERT_EQ(
-      jw2_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &next),
+      jw_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &next),
       0);
   EXPECT_GT(next.message_id, timed_out.message_id);
   transport->retained.clear();
@@ -294,7 +293,7 @@ TEST_F(V2SessionTest, ReconnectAndFirmwareRebootRequireFreshReset) {
   transport->retained = old_response;
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDataLoss);
   transport->retained.clear();
-  jw_serial_endpoint_init(&transport->endpoint, 2);
+  jw_serial_endpoint_init(&transport->endpoint);
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDeadlineExceeded);
   ASSERT_TRUE(session.Open().ok());
   EXPECT_TRUE(Exchange(Configure()).ok());
@@ -306,16 +305,16 @@ TEST_F(V2SessionTest, FailedResetAndInvalidIdSourceKeepSessionClosed) {
   const auto count = transport->requests.size();
   EXPECT_EQ(Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
   EXPECT_EQ(transport->requests.size(), count);
-  JoshuaWireV2Session zero(transport, [] { return 0; });
+  JoshuaWireSession zero(transport, [] { return 0; });
   EXPECT_EQ(zero.Open().code(), absl::StatusCode::kUnavailable);
   transport->timeout = false;
-  JoshuaWireV2Session repeated(transport, [] { return 100; });
+  JoshuaWireSession repeated(transport, [] { return 100; });
   EXPECT_TRUE(repeated.Open().ok());
   EXPECT_EQ(repeated.Open().code(), absl::StatusCode::kUnavailable);
 }
 
 TEST_F(V2SessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
-  JoshuaWireV2Session small(transport, [this] { return ++session_id; }, 5);
+  JoshuaWireSession small(transport, [this] { return ++session_id; }, 5);
   ASSERT_TRUE(small.Open().ok());                                  // ID 1
   ASSERT_TRUE(small.Exchange(Configure()).ok());                   // ID 2
   ASSERT_TRUE(small.Exchange(Command(JW_CMD_ENABLE)).ok());        // ID 3
@@ -334,7 +333,7 @@ TEST_F(V2SessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
 }
 
 TEST_F(V2SessionTest, FailedStopAtExhaustionDoesNotResetOrReuseLastId) {
-  JoshuaWireV2Session small(transport, [this] { return ++session_id; }, 3);
+  JoshuaWireSession small(transport, [this] { return ++session_id; }, 3);
   ASSERT_TRUE(small.Open().ok());
   ASSERT_TRUE(small.Exchange(Configure()).ok());
   transport->timeout = true;
@@ -358,8 +357,8 @@ TEST_F(V2SessionTest, ConcurrentCallersSerializeAcrossChannels) {
   for (auto& thread : threads) thread.join();
   uint32_t expected = 1;
   for (const auto& bytes : transport->requests) {
-    jw2_frame_t frame;
-    ASSERT_EQ(jw2_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+    jw_frame_t frame;
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), 0);
     EXPECT_EQ(frame.message_id, expected++);
   }
 }
@@ -391,9 +390,9 @@ TEST_F(V2SessionTest, ProductionBoardInitializesAndUsesAllSerialChannelCommands)
     }
   } reset_factory;
   Board config;
-  config.set_name("serial_v2");
+  config.set_name("serial");
   config.set_board_type(AM243);
-  config.set_protocol(JOSHUA_WIRE_V2);
+  config.set_protocol(JOSHUA_WIRE);
   config.mutable_firmware()->set_min_proto_version(2);
   auto* comm = config.mutable_comm();
   comm->set_comm_type(robot::comm::SERIAL);
@@ -434,7 +433,6 @@ void ProfilePut32(uint8_t* p, uint32_t value) {
 class Am243EthercatProfileTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    channel.latch_estop = true;
     config.identity.board_id = JW_BOARD_AM243;
     std::memcpy(config.identity.fw_name, "am243-ec-v2", 11);
     config.identity.n_channels = 1;
@@ -463,7 +461,7 @@ class Am243EthercatProfileTest : public ::testing::Test {
     ProfilePut32(image.data() + 4, ++generation);
     const size_t offset = pdo ? 16 : 12;
     if (pdo) ProfilePut32(image.data() + 8, ProfileU32(profile.input + 8));
-    const int size = jw2_encode_frame(image.data() + offset,
+    const int size = jw_encode_frame(image.data() + offset,
                                       64,
                                       session_id,
                                       next_id++,
@@ -480,8 +478,8 @@ class Am243EthercatProfileTest : public ::testing::Test {
     EXPECT_EQ(
         JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, request.data(), request.size()),
         0);
-    jw2_frame_t response;
-    if (jw2_decode_frame(profile.mailbox + 12, profile.mailbox[8], &response) != 0) {
+    jw_frame_t response;
+    if (jw_decode_frame(profile.mailbox + 12, profile.mailbox[8], &response) != 0) {
       ADD_FAILURE() << "missing management reply";
       return {};
     }
@@ -557,10 +555,10 @@ TEST_F(Am243EthercatProfileTest, PdoExecutesOnceAndDuplicateDoesNotFeedWatchdog)
   EXPECT_FLOAT_EQ(channel.target_value, 123.0f);
   EXPECT_EQ(ProfileU32(profile.input + 4), generation);
   EXPECT_EQ(ProfileU32(profile.input + 8), generation);
-  jw2_frame_t request, response;
-  ASSERT_EQ(jw2_decode_frame(target.data() + 16, target[12], &request), 0);
-  ASSERT_EQ(jw2_decode_frame(profile.input + 16, profile.input[12], &response), 0);
-  EXPECT_TRUE(jw2_response_matches(&request, &response));
+  jw_frame_t request, response;
+  ASSERT_EQ(jw_decode_frame(target.data() + 16, target[12], &request), 0);
+  ASSERT_EQ(jw_decode_frame(profile.input + 16, profile.input[12], &response), 0);
+  EXPECT_TRUE(jw_response_matches(&request, &response));
   for (uint64_t now : {100, 200, 300, 400}) {
     JoshuaEthercatProfileTick(&profile, now, true);
     EXPECT_EQ(JoshuaEthercatProfilePdo(&profile, target.data(), 80), 0);
@@ -676,7 +674,6 @@ TEST_F(Am243EthercatProfileTest, IndependentChannelsCannotKeepEachOthersTargetsA
   // Test-local two-channel drive backend, using the existing software channel
   // semantics. The shared profile knows neither the model nor this storage.
   JoshuaChannel channels[2]{};
-  for (auto& c : channels) c.latch_estop = true;
   config.context = channels;
   config.identity.board_id = JW_BOARD_TEENSY41;
   config.identity.n_channels = 2;
@@ -830,8 +827,8 @@ class SoesProfileTest : public Am243EthercatProfileTest {
       const auto uploaded = Upload(JWEC_RESPONSE_INDEX);
       ASSERT_EQ(uploaded.size(), 16 + 76);
       EXPECT_EQ(uploaded[8], 0x41);
-      jw2_frame_t reply;
-      ASSERT_EQ(jw2_decode_frame(uploaded.data() + 28, uploaded[24], &reply), 0);
+      jw_frame_t reply;
+      ASSERT_EQ(jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply), 0);
       ASSERT_EQ(reply.payload_len, 1);
       EXPECT_EQ(reply.payload[0], JW_STATUS_OK);
       EXPECT_EQ(Download(JWEC_ACK_INDEX, Bytes(image.begin() + 4, image.begin() + 8))[8], 0x60);

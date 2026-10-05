@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_ethercat.h"
 #include "gtest/gtest.h"
@@ -544,7 +544,7 @@ TEST(CoeSdoTransferTest, ReadGoldenRequestAndExpeditedReply) {
   EXPECT_EQ(transfer.Step(io, 500).status().code(), absl::StatusCode::kFailedPrecondition);
 }
 
-TEST(CoeSdoTransferTest, NormalUploadAndDownloadCoverFullJw2Envelope) {
+TEST(CoeSdoTransferTest, NormalUploadAndDownloadCoverFullJwEnvelope) {
   const SdoBytes payload(76, 0xa5);
   for (bool write : {false, true}) {
     CoeSdoTransfer transfer;
@@ -916,18 +916,18 @@ SdoBytes JwecRequest(uint32_t id,
                      uint8_t channel = JW_CHANNEL_NONE) {
   SdoBytes frame(64);
   frame.resize(
-      jw2_encode_frame(frame.data(), frame.size(), session, id, command, channel, nullptr, 0));
+      jw_encode_frame(frame.data(), frame.size(), session, id, command, channel, nullptr, 0));
   return frame;
 }
 SdoBytes JwecReply(const SdoBytes& request, int mutation = 0) {
-  jw2_frame_t frame;
-  EXPECT_EQ(jw2_decode_frame(request.data(), request.size(), &frame), 0);
+  jw_frame_t frame;
+  EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), 0);
   if (mutation == 1) ++frame.message_id;
   if (mutation == 2) frame.cmd = JW_CMD_ENABLE;
   if (mutation == 3) frame.channel = 2;
   SdoBytes response(64);
   const uint8_t ok = JW_STATUS_OK;
-  response.resize(jw2_encode_response(response.data(), response.size(), &frame, &ok, 1));
+  response.resize(jw_encode_response(response.data(), response.size(), &frame, &ok, 1));
   if (mutation == 4) response.back() ^= 1;
   return response;
 }
@@ -1118,7 +1118,7 @@ TEST(JwecProfileTest, ExactDescriptorAndActionableMismatchDiagnostics) {
     if (offset == 34) d[offset] = 1;
     auto status = ValidateJoshuaWireEthercatProfile(d, region, 6);
     EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition) << offset;
-    EXPECT_NE(status.message().find("test-jw2"), std::string::npos);
+    EXPECT_NE(status.message().find("test-jw"), std::string::npos);
     EXPECT_NE(status.message().find("Build and flash"), std::string::npos);
     EXPECT_NE(status.message().find("PDO 80/80"), std::string::npos);
   }
@@ -1449,7 +1449,6 @@ struct FirmwareProfileTrace : IoTrace {
   FirmwareProfileTrace() {
     outputs.assign(160, 0);
     for (size_t i = 0; i < 2; ++i) {
-      channels[i].latch_estop = true;
       JoshuaEthercatProfileConfig config{};
       config.identity.board_id = JW_BOARD_AM243;
       std::memcpy(config.identity.fw_name, "am243-ec-v2", 11);
@@ -1570,8 +1569,8 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   ASSERT_TRUE(endpoint->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION)).ok());
   auto identity = endpoint->Exchange(JwecRequest(2, JW_CMD_IDENTIFY));
   ASSERT_TRUE(identity.ok()) << identity.status();
-  jw2_frame_t frame;
-  ASSERT_EQ(jw2_decode_frame(identity->data(), identity->size(), &frame), 0);
+  jw_frame_t frame;
+  ASSERT_EQ(jw_decode_frame(identity->data(), identity->size(), &frame), 0);
   jw_identify_response_t value;
   ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &value), 0);
   EXPECT_EQ(value.board_id, JW_BOARD_AM243);
@@ -1582,14 +1581,14 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
                   .ok());
   auto command = [&](uint32_t id, uint8_t cmd, const SdoBytes& payload = SdoBytes{}) {
     SdoBytes bytes(64);
-    bytes.resize(jw2_encode_frame(
+    bytes.resize(jw_encode_frame(
         bytes.data(), bytes.size(), 7, id, cmd, 0, payload.data(), payload.size()));
     return bytes;
   };
   ASSERT_TRUE(endpoint->Exchange(command(3, JW_CMD_CONFIGURE_CHANNEL, SdoBytes(11))).ok());
   auto enabled = endpoint->Exchange(command(4, JW_CMD_ENABLE));
   ASSERT_TRUE(enabled.ok()) << enabled.status();
-  ASSERT_EQ(jw2_decode_frame(enabled->data(), enabled->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(enabled->data(), enabled->size(), &frame), 0);
   ASSERT_EQ(frame.payload_len, 1);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
   SdoBytes target(5);
@@ -1597,11 +1596,11 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
             5);
   auto set = endpoint->Exchange(command(5, JW_CMD_SET_TARGET, target), absl::Seconds(1));
   ASSERT_TRUE(set.ok()) << set.status();
-  ASSERT_EQ(jw2_decode_frame(set->data(), set->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(set->data(), set->size(), &frame), 0);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
   auto feedback = endpoint->Exchange(command(6, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
   ASSERT_TRUE(feedback.ok()) << feedback.status();
-  ASSERT_EQ(jw2_decode_frame(feedback->data(), feedback->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(feedback->data(), feedback->size(), &frame), 0);
   jw_feedback_t motion;
   ASSERT_EQ(jw_decode_feedback_payload(frame.payload, frame.payload_len, &motion), 0);
   EXPECT_FLOAT_EQ(motion.position, 123.0f);
@@ -1618,9 +1617,9 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
 // core, reusing the existing I/O seam. No new smoke utility or hardware access.
 robot::board::Board PairedBoard(uint32_t slave = 1) {
   robot::board::Board b;
-  b.set_name("jw2_" + std::to_string(slave));
+  b.set_name("jw_" + std::to_string(slave));
   b.set_board_type(robot::board::AM243);
-  b.set_protocol(robot::board::JOSHUA_WIRE_V2);
+  b.set_protocol(robot::board::JOSHUA_WIRE);
   b.mutable_firmware()->set_min_proto_version(2);
   auto* c = b.mutable_comm();
   c->set_comm_type(ETHERCAT);

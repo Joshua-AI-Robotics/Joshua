@@ -1,12 +1,12 @@
-// Hardware-free safety-gate and workflow tests for the manual serial-v2 tool.
+// Hardware-free safety-gate and workflow tests for the manual serial tool.
 // Exchanges run the actual AM243 software-only handler and firmware endpoint.
-#include "robot/board/joshua_wire/serial_v2_validation.h"
+#include "robot/board/joshua_wire/serial_validation.h"
 
 #include <limits>
 #include <sstream>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -16,19 +16,18 @@ using Bytes = std::vector<uint8_t>;
 class Firmware : public robot::comm::MessageTransport {
  public:
   Firmware() {
-    jw_serial_endpoint_init(&endpoint, 2);
-    state.latch_estop = true;
+    jw_serial_endpoint_init(&endpoint);
   }
   absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("v2 only");
   }
   absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> bytes) override {
-    jw2_frame_t request;
-    if (jw2_decode_frame(bytes.data(), bytes.size(), &request) != 0)
+    jw_frame_t request;
+    if (jw_decode_frame(bytes.data(), bytes.size(), &request) != 0)
       return absl::DataLossError("Not v2");
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
-    Bytes response(JW2_MAX_FRAME_LEN);
+    Bytes response(JW_MAX_FRAME_LEN);
     const int len = jw_serial_endpoint_process(&endpoint,
                                                bytes.data(),
                                                bytes.size(),
@@ -41,12 +40,12 @@ class Firmware : public robot::comm::MessageTransport {
       return absl::DeadlineExceededError("lost reply after execution");
     response.resize(len);
     if (request.cmd == JW_CMD_IDENTIFY && wrong_identity) {
-      jw2_frame_t reply;
-      EXPECT_EQ(jw2_decode_frame(response.data(), response.size(), &reply), 0);
+      jw_frame_t reply;
+      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &reply), 0);
       Bytes payload(reply.payload, reply.payload + reply.payload_len);
       payload[0] = JW_BOARD_ESP32;
-      response.resize(JW2_MAX_FRAME_LEN);
-      response.resize(jw2_encode_response(
+      response.resize(JW_MAX_FRAME_LEN);
+      response.resize(jw_encode_response(
           response.data(), response.size(), &request, payload.data(), payload.size()));
     }
     return response;
@@ -68,7 +67,7 @@ class ValidationTest : public ::testing::Test {
   void SetUp() override {
     board.set_name("test");
     board.set_board_type(AM243);
-    board.set_protocol(JOSHUA_WIRE_V2);
+    board.set_protocol(JOSHUA_WIRE);
     board.mutable_firmware()->set_min_proto_version(2);
     auto* comm = board.mutable_comm();
     comm->set_comm_type(robot::comm::SERIAL);
@@ -181,7 +180,7 @@ TEST_F(ValidationTest, BadConfigurationAndIrrelevantOptionsAreRejected) {
   options.allow_enable = false;
   board.set_protocol(JOSHUA_WIRE_V1);
   EXPECT_FALSE(Run().ok());
-  board.set_protocol(JOSHUA_WIRE_V2);
+  board.set_protocol(JOSHUA_WIRE);
   board.mutable_comm()->set_comm_type(robot::comm::ETHERCAT);
   EXPECT_FALSE(Run().ok());
   board.mutable_comm()->set_comm_type(robot::comm::SERIAL);

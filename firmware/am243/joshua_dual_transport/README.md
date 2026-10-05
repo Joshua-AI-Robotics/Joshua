@@ -28,7 +28,7 @@ required beyond `patch`, `make`, and the existing TI toolchain.
 ## Build
 
 ```bash
-firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
 Artifacts are written under the ignored `out/` directory. The build uses a
@@ -37,35 +37,35 @@ temporary working tree and leaves TI SDK sources unchanged.
 For the opt-in v2 **UART** artifact, build with:
 
 ```bash
-JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+JOSHUA_WIRE_VERSION=2 firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
 Outputs are named `am243_dual_transport_v2.release.*`. The script also forwards
 arguments to `make`, allowing explicit `CCS_PATH`, `SYSCFG_PATH`, and compiler
 path overrides without editing the SDK. EtherCAT remains the TI demo, not
-JoshuaWire v2. The software-only UART command handler is shared with native
+JoshuaWire. The software-only UART command handler is shared with native
 host/session tests. V2 was flashed and UART-validated on LP-AM243 on 2026-09-27:
 eight sessions covered reset, identity, configuration, software targets/feedback,
-disable and ESTOP. See the [recorded validation](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
+disable and ESTOP. See the [recorded validation](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
 for the exact artifact and scope; EtherCAT and physical motion were not tested.
 See the
 [v2 milestone and safety limits](../../README.md#opt-in-joshuawire-v2-serial-milestone).
 
-### Opt-in JW2 EtherCAT profile
+### Opt-in JW EtherCAT profile
 
-The same overlay also builds a separate **EtherCAT-only** JoshuaWire v2 artifact:
+The same overlay also builds a separate **EtherCAT-only** JoshuaWire artifact:
 
 ```bash
-JOSHUA_WIRE_VERSION=2 JOSHUA_ETHERCAT_PROFILE=jw2 \
+JOSHUA_WIRE_VERSION=2 JOSHUA_ETHERCAT_PROFILE=jw \
 JOSHUA_COMM_WATCHDOG_US=500000 JOSHUA_TARGET_WATCHDOG_US=250000 \
-firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
 Those intervals are software-demo examples, not validated motor-safety limits.
 Both must be explicit (10000–999999999 microseconds); there are no watchdog
-defaults. Outputs are `out/am243_ethercat_jw2.release.*`. The default profile
+defaults. Outputs are `out/am243_ethercat_jw.release.*`. The default profile
 remains `ti-demo`, preserving both existing UART artifacts and TI's echo PDOs.
-The JW2 profile starts no UART protocol task; the console remains available for
+The JW profile starts no UART protocol task; the console remains available for
 SDK logs. It has one software-only channel and **no STEP/DIR GPIO backend**.
 
 Source responsibilities:
@@ -83,7 +83,7 @@ Source responsibilities:
   in a temporary SDK source copy. TI demo EEPROM-persistence callbacks are not
   installed for this profile; the SDK builds the profile from its new mapping.
 
-The descriptor reports `am243-ec-v2`, JW2/layout-v1, 80-byte input/output images
+The descriptor reports `am243-ec-v2`, JW/layout-v1, 80-byte input/output images
 and transport bits `6` (CoE + PDO). The matching fixed mapping is:
 
 | Direction | PDO | Mapped entries | Size |
@@ -128,23 +128,23 @@ the host's paired CoE/PDO adapters. This profile was flashed and bench-tested on
 LP-AM243 on 2026-09-28: discovery, factory/engine commands, software feedback,
 stale-target latching and fresh-session recovery passed. One 1 ms host mailbox
 deadline failure was also observed; broader timing validation remains open.
-See the [artifact, results and limits](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+See the [artifact, results and limits](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
 Software watchdog behavior is not
 proof of physical motor safety, CPU-halt coverage or hard-real-time timing.
 
 ### Opt-in SOES replacement
 
 **Flashed; discovery and handshake verified, hardware qualification incomplete.**
-The [SOES bench record](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#soes-candidate-bring-up--2026-09-28)
+The [SOES bench record](../../../docs/JOSHUA_WIRE_VALIDATION.md#soes-candidate-bring-up--2026-09-28)
 documents a corrected host mailbox-counter assumption and remaining 5 ms
 register timeouts; target/watchdog/endurance checks have not passed. The TI
 profiles above remain available until the replacement passes real-board tests
 and a continuous run beyond one hour. No proprietary timeout is patched out.
 
 ```bash
-JOSHUA_WIRE_VERSION=2 JOSHUA_ETHERCAT_PROFILE=jw2-soes \
+JOSHUA_WIRE_VERSION=2 JOSHUA_ETHERCAT_PROFILE=jw-soes \
 JOSHUA_COMM_WATCHDOG_US=2000000 JOSHUA_TARGET_WATCHDOG_US=1000000 \
-firmware/am243/joshua_dual_transport_v1/scripts/build.sh
+firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
 Run with the external SDK/toolchain available in the development container.
@@ -154,14 +154,14 @@ and ICSS FWHAL/PRU firmware, **not** TI's evaluation slave stack or Beckhoff SSC
 The SDK's SSC example supplies build/SysConfig rules and BSD-licensed board
 initialization only; no SSC source or stack library is compiled/linked.
 
-Outputs are `out/am243_ethercat_jw2_soes.release.*`, including the link map.
+Outputs are `out/am243_ethercat_jw_soes.release.*`, including the link map.
 The upstream SOES source archive and LICENSE accompany them; the source patch
 is in `third_party/soes`. Existing TI artifacts are not overwritten.
 
 Production source roles:
 
 - [`../../common/soes/`](../../common/soes/README.md): shared SOES dictionary,
-  JW2 CoE/PDO binding and stack settings; no AM243 dependencies.
+  JW CoE/PDO binding and stack settings; no AM243 dependencies.
 - `src/joshua_ethercat_soes_am243.c`: AM243 boot, PRU register/mailbox/triple-buffer
   access, read-only RAM SII and independent watchdog task. Reuses the software
   channel; no UART protocol or motor GPIOs. Polls at an initial 1 ms cadence,
@@ -192,7 +192,7 @@ commercial redistribution.
 
 ## Host integration
 
-The [JW2 EtherCAT config](../../../config/README.md#joshuawire-v2-over-ethercat)
+The [JW EtherCAT config](../../../config/README.md#joshuawire-v2-over-ethercat)
 now selects paired adapters through CommFactory and the shared board engine.
 Native integration tests run that entire path against this production firmware
 core. The recorded single-board bench check also exercises SDK callbacks, but
@@ -212,17 +212,17 @@ instead, with the same SDK 09 bootloader/application offsets. Verify both
 bootloader and application after flashing; do not use the TI-demo application
 path from the original flash template for a JoshuaWire image.
 
-The separate JW2 EtherCAT profile uses
-`out/am243_ethercat_jw2.release.appimage.hs_fs`; it is not the UART-v2 image.
-The SOES candidate uses `out/am243_ethercat_jw2_soes.release.appimage.hs_fs`.
+The separate JW EtherCAT profile uses
+`out/am243_ethercat_jw.release.appimage.hs_fs`; it is not the UART-v2 image.
+The SOES candidate uses `out/am243_ethercat_jw_soes.release.appimage.hs_fs`.
 
 Flashing remains a deliberate hardware operation and must not happen as part
 of build or test.
 
 ## Verify
 
-For v2, follow the [serial validation guide](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md)
-using `joshua_wire_v2_smoke`. The commands below apply to **v1 only**.
+For v2, follow the [serial validation guide](../../../docs/JOSHUA_WIRE_VALIDATION.md)
+using `joshua_wire_smoke`. The commands below apply to **v1 only**.
 
 After an intentional v1 flash, first run the serial protocol smoke without motor
 movement:
@@ -245,9 +245,9 @@ disable channel=0: OK
 ```
 
 The former TI-demo host EtherCAT smoke/codec path is retired. To use current
-Joshua EtherCAT runtime, explicitly build and flash the separate JW2 profile
+Joshua EtherCAT runtime, explicitly build and flash the separate JW profile
 and follow its config/validation references above; UART-v1/v2 artifacts still
-contain TI echo firmware, not JW2 EtherCAT.
+contain TI echo firmware, not JW EtherCAT.
 
 ## Wiring / Pinout
 
@@ -265,8 +265,8 @@ contain TI echo firmware, not JW2 EtherCAT.
   the first request and are flushed by Joshua's host transport.
 - The dual-transport artifacts expose separate serial and EtherCAT demo state. A later command
   arbiter must unify them before either path controls the same physical motor.
-  The separate JW2 EtherCAT artifact avoids simultaneous UART ownership.
+  The separate JW EtherCAT artifact avoids simultaneous UART ownership.
 - TI's bundled EtherCAT evaluation stack retains its one-hour runtime limit
-  in the `ti-demo` and `jw2` artifacts. The `jw2-soes` candidate excludes that
+  in the `ti-demo` and `jw` artifacts. The `jw-soes` candidate excludes that
   stack, but hardware/endurance qualification is required before retirement.
 - No firmware is flashed automatically.

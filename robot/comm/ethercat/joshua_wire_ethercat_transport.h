@@ -1,4 +1,4 @@
-// Paired JW2 CoE/PDO adapters for one compatibility-gated slave. The endpoint
+// Paired JW CoE/PDO adapters for one compatibility-gated slave. The endpoint
 // worker serializes protocol requests and consumes copied master snapshots;
 // only EthercatMaster's worker performs bus I/O. No motor semantics live here.
 #pragma once

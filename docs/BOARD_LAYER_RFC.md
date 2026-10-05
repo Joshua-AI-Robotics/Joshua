@@ -5,7 +5,7 @@ Companion to: [ARCHITECTURE.md](ARCHITECTURE.md),
 [am243_ethercat.md](am243_ethercat.md),
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md)
 
-The detailed implementation plan for JoshuaWire v2 correlation, EtherCAT
+The detailed implementation plan for JoshuaWire correlation, EtherCAT
 CoE/SDO management commands, correlated PDO commands, and board/comm dependency
 separation now lives in
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md). Where that
@@ -13,9 +13,9 @@ document makes a newer explicit decision about plane composition or command
 routing, it supersedes the corresponding open question in this RFC.
 
 The [separation plan's implementation status](BOARD_COMM_SEPARATION_PLAN.md#implementation-status)
-is the current checklist. It covers the shared JW2 engine, serial framing/timing
+is the current checklist. It covers the shared JW engine, serial framing/timing
 and factory-wired CoE/PDO endpoints; the legacy TI-demo host path is retired.
-[Validation results](JOSHUA_WIRE_V2_VALIDATION.md#hardware-validation-status)
+[Validation results](JOSHUA_WIRE_VALIDATION.md#hardware-validation-status)
 distinguish native coverage, serial/motion bench passes and unfinished EtherCAT
 qualification. The original findings and proposal below are historical where
 superseded by that plan.
@@ -52,7 +52,7 @@ layer deleted.
 
 | Item | State |
 | --- | --- |
-| Comm axis beyond serial for `joshua_wire` boards | JW2 EtherCAT native-tested and single-board bench-tested; broader timing/failure validation open |
+| Comm axis beyond serial for `joshua_wire` boards | JW EtherCAT native-tested and single-board bench-tested; broader timing/failure validation open |
 | UDP transport (`ETHERNET_UDP` is in the proto, unimplemented) | open |
 | Perception through the board layer | open |
 | Flash tooling, `FirmwareSpec` check, IDENTIFY capability bits | open |
@@ -62,7 +62,7 @@ layer deleted.
 ## 3. Problem: the axes re-conflated one level down
 
 The findings and source paths below describe the pre-migration baseline in Git.
-The separation plan resolves F2's forwarding/flag problem through a shared JW2
+The separation plan resolves F2's forwarding/flag problem through a shared JW
 engine, not the originally proposed `MessageBoard`/`CyclicBoard` hierarchy.
 
 §1 exists to stop `board × transport` being baked into a type; the landed

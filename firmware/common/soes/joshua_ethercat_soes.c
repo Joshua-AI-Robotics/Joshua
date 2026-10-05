@@ -1,4 +1,4 @@
-// Fixed CoE dictionary and PDO callbacks for JW2 on SOES. ESC access and board
+// Fixed CoE dictionary and PDO callbacks for JW on SOES. ESC access and board
 // startup are supplied elsewhere; all command semantics stay in the profile.
 #include "joshua_ethercat_soes.h"
 
@@ -8,7 +8,7 @@
 #include "esc_coe.h"
 
 CC_STATIC_ASSERT(MAX_RXPDO_SIZE == JWEC_PDO_SIZE && MAX_TXPDO_SIZE == JWEC_PDO_SIZE,
-                 "SOES options must match the JW2 PDO contract");
+                 "SOES options must match the JW PDO contract");
 
 static JoshuaSoesConfig port;
 static uint32_t identity[4];
@@ -29,7 +29,7 @@ static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
 #define TXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_RO | ATYPE_TXPDO, 0, input + 4 * ((s) - 1))
 static const _objd device_type[] = {CONST(0, DTYPE_UNSIGNED32, 32, 0)};
 static const _objd device_name[] = {
-    ENTRY(0, DTYPE_VISIBLE_STRING, 9 * 8, ATYPE_RO, 0, "Joshua JW2")};
+    ENTRY(0, DTYPE_VISIBLE_STRING, 9 * 8, ATYPE_RO, 0, "Joshua JW")};
 static const _objd device_identity[] = {COUNT(4),
                                         ENTRY(1, DTYPE_UNSIGNED32, 32, ATYPE_RO, 0, &identity[0]),
                                         ENTRY(2, DTYPE_UNSIGNED32, 32, ATYPE_RO, 0, &identity[1]),
@@ -59,8 +59,8 @@ const _objectlist SDOobjects[] = {
     OBJECT(0x1000, OTYPE_VAR, 0, "Device type", device_type),
     OBJECT(0x1008, OTYPE_VAR, 0, "Device name", device_name),
     OBJECT(0x1018, OTYPE_RECORD, 4, "Identity", device_identity),
-    OBJECT(0x1600, OTYPE_RECORD, 20, "JW2 RxPDO", rxmap),
-    OBJECT(0x1a00, OTYPE_RECORD, 20, "JW2 TxPDO", txmap),
+    OBJECT(0x1600, OTYPE_RECORD, 20, "JW RxPDO", rxmap),
+    OBJECT(0x1a00, OTYPE_RECORD, 20, "JW TxPDO", txmap),
     OBJECT(0x1c00, OTYPE_ARRAY, 4, "Sync managers", sm_types),
     OBJECT(0x1c12, OTYPE_ARRAY, 1, "Rx assignment", rxassign),
     OBJECT(0x1c13, OTYPE_ARRAY, 1, "Tx assignment", txassign),
@@ -69,8 +69,8 @@ const _objectlist SDOobjects[] = {
     OBJECT(JWEC_REQUEST_INDEX, OTYPE_VAR, 0, "JWEC request", od_request),
     OBJECT(JWEC_RESPONSE_INDEX, OTYPE_VAR, 0, "JWEC response", od_response),
     OBJECT(JWEC_ACK_INDEX, OTYPE_VAR, 0, "JWEC ack", od_ack),
-    OBJECT(0x6000, OTYPE_ARRAY, 20, "JW2 input image", txwords),
-    OBJECT(0x7000, OTYPE_ARRAY, 20, "JW2 output image", rxwords),
+    OBJECT(0x6000, OTYPE_ARRAY, 20, "JW input image", txwords),
+    OBJECT(0x7000, OTYPE_ARRAY, 20, "JW output image", rxwords),
     OBJECT(0xffff, 0, 0, NULL, NULL)};
 
 static void TickLocked(void) {
@@ -109,7 +109,7 @@ static uint32_t BeforeDownload(
   size_t expected;
   if (sub || !Writable(index, &expected)) return ABORT_UNSUPPORTED;
   if (size != expected) return ABORT_TYPEMISMATCH;
-  // Every JW2 object fits one 512-byte mailbox. Reject partial/segmented writes
+  // Every JW object fits one 512-byte mailbox. Reject partial/segmented writes
   // before SOES copies any data, including a declared length with high bits set
   // (the upstream parser truncates the normal-download length to 16 bits).
   const _COEsdo* sdo = (const _COEsdo*)MBX;

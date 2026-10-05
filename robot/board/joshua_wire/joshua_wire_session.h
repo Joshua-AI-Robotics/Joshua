@@ -1,6 +1,6 @@
 // Host-side v2 session lifecycle, IDs, serialization and saved channel configs.
 // Callers supply neutral commands and receive payloads, not encoded v1 frames.
-// The firmware counterpart is firmware/common/joshua_wire_v2_firmware_session.h.
+// The firmware counterpart is firmware/common/joshua_wire_firmware_session.h.
 #pragma once
 
 #include <cstdint>
@@ -18,10 +18,10 @@ namespace robot::board {
 
 // A board-protocol session, not a comm transport. Comm owns actual I/O,
 // deadlines and bus locking; this class owns correlation and reset safety.
-class JoshuaWireV2Session {
+class JoshuaWireSession {
  public:
   using SessionIdSource = std::function<uint32_t()>;
-  explicit JoshuaWireV2Session(std::shared_ptr<robot::comm::MessageTransport> transport,
+  explicit JoshuaWireSession(std::shared_ptr<robot::comm::MessageTransport> transport,
                                SessionIdSource source = {},
                                uint32_t message_id_limit = UINT32_MAX,
                                std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic = {},

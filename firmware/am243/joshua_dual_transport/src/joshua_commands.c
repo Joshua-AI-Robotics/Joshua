@@ -19,9 +19,7 @@ bool JoshuaEnabled(void* context, uint8_t channel) {
 
 void JoshuaReset(void* context) {
   JoshuaChannel* channel = (JoshuaChannel*)context;
-  const bool latch_estop = channel->latch_estop;
   memset(channel, 0, sizeof(*channel));
-  channel->latch_estop = latch_estop;
 }
 
 // Software-only channel for the existing demo overlay; no GPIO output.
@@ -34,7 +32,7 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
       jw_identify_response_t identity;
       memset(&identity, 0, sizeof(identity));
       identity.board_id = JW_BOARD_AM243;
-      memcpy(identity.fw_name, channel->latch_estop ? "am243-dual-v2" : "am243-dual-v1", 13);
+      memcpy(identity.fw_name, "am243-dual", 11);
       identity.n_channels = 1;
       identity.channel_drives[0] = JW_DRIVE_STEP_DIR;
       return jw_encode_identify_payload(response, capacity, &identity);
@@ -88,7 +86,7 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
     case JW_CMD_ESTOP:
       if (frame->channel == JW_CHANNEL_NONE && frame->payload_len == 0) {
         channel->enabled = false;
-        channel->estopped = channel->latch_estop;
+        channel->estopped = true;
         status = JW_STATUS_OK;
       }
       break;

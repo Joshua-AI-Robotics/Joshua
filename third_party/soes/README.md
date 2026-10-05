@@ -12,4 +12,4 @@ licensed dependencies of the AM243 port.
 `upload_size.patch` makes the storage passed to SOES's `size_t *` upload hooks
 actually `size_t`, avoiding an out-of-bounds access on 64-bit native builds.
 The same patch is applied by Bazel and the AM243 firmware build. Joshua's compiler
-shim and fixed JW2 mailbox/PDO settings live in `firmware/common/soes`.
+shim and fixed JW mailbox/PDO settings live in `firmware/common/soes`.

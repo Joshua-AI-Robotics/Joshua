@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport_v1/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -37,9 +37,9 @@ class SmokeCliTest : public ::testing::Test {
     ASSERT_NE(runfiles, nullptr);
     ASSERT_NE(workspace, nullptr);
     binary =
-        std::string(runfiles) + "/" + workspace + "/robot/board/joshua_wire/joshua_wire_v2_smoke";
+        std::string(runfiles) + "/" + workspace + "/robot/board/joshua_wire/joshua_wire_smoke";
     ASSERT_EQ(access(binary.c_str(), X_OK), 0);
-    std::string pattern = std::string(tmp) + "/jw2-cli-XXXXXX";
+    std::string pattern = std::string(tmp) + "/jw-cli-XXXXXX";
     ASSERT_NE(mkdtemp(pattern.data()), nullptr);
     directory = pattern;
     master = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
@@ -56,7 +56,7 @@ class SmokeCliTest : public ::testing::Test {
     cfmakeraw(&attributes);
     ASSERT_EQ(tcsetattr(slave, TCSANOW, &attributes), 0);
     std::ofstream config(directory + "/config.pbtxt");
-    config << "robot { boards { name: \"pty\" board_type: AM243 protocol: JOSHUA_WIRE_V2 "
+    config << "robot { boards { name: \"pty\" board_type: AM243 protocol: JOSHUA_WIRE "
               "firmware { min_proto_version: 2 } "
               "comm { comm_type: SERIAL transport_type: MESSAGE serial_config { port: \""
            << port
@@ -64,8 +64,7 @@ class SmokeCliTest : public ::testing::Test {
               "step_pin: 2 dir_pin: 3 enable_pin: 4 max_pulse_rate_hz: 1000 } } } }";
     config.close();
     ASSERT_TRUE(config.good());
-    jw_serial_endpoint_init(&endpoint, 2);
-    state.latch_estop = true;
+    jw_serial_endpoint_init(&endpoint);
   }
 
   void TearDown() override {
@@ -83,11 +82,11 @@ class SmokeCliTest : public ::testing::Test {
   }
 
   void Respond(const Bytes& bytes) {
-    jw2_frame_t request{};
-    ASSERT_EQ(jw2_decode_frame(bytes.data(), bytes.size(), &request), 0);
+    jw_frame_t request{};
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &request), 0);
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
-    uint8_t response[JW2_MAX_FRAME_LEN];
+    uint8_t response[JW_MAX_FRAME_LEN];
     int size = jw_serial_endpoint_process(&endpoint,
                                           bytes.data(),
                                           bytes.size(),
@@ -106,12 +105,12 @@ class SmokeCliTest : public ::testing::Test {
     }
     if (fault == Fault::kLostEstopReply && request.cmd == JW_CMD_ESTOP) return;
     if (fault == Fault::kWrongMessageId && request.cmd == JW_CMD_IDENTIFY) {
-      jw2_frame_t reply{};
-      ASSERT_EQ(jw2_decode_frame(response, size, &reply), 0);
+      jw_frame_t reply{};
+      ASSERT_EQ(jw_decode_frame(response, size, &reply), 0);
       const Bytes payload(reply.payload, reply.payload + reply.payload_len);
       ++request.message_id;
       size =
-          jw2_encode_response(response, sizeof(response), &request, payload.data(), payload.size());
+          jw_encode_response(response, sizeof(response), &request, payload.data(), payload.size());
       ASSERT_GT(size, 0);
     }
     // Exercise serial sync recovery as well as normal v2 response decoding.
@@ -159,10 +158,10 @@ class SmokeCliTest : public ::testing::Test {
       ASSERT_GT(count, 0);
       pending.insert(pending.end(), buffer, buffer + count);
       while (pending.size() >= 2) {
-        ASSERT_EQ(pending[0], JW2_SYNC_BYTE);
+        ASSERT_EQ(pending[0], JW_SYNC_BYTE);
         const size_t length = pending[1] + 4;
-        ASSERT_GE(length, JW2_FRAME_OVERHEAD);
-        ASSERT_LE(length, JW2_MAX_FRAME_LEN);
+        ASSERT_GE(length, JW_FRAME_OVERHEAD);
+        ASSERT_LE(length, JW_MAX_FRAME_LEN);
         if (pending.size() < length) break;
         Respond(Bytes(pending.begin(), pending.begin() + length));
         ASSERT_FALSE(HasFatalFailure());

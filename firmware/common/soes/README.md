@@ -1,4 +1,4 @@
-# JW2 binding for SOES
+# JW binding for SOES
 
 This is the board-independent slave-stack adapter. The host still uses the
 same JoshuaWire EtherCAT transport, with SOEM underneath. Changing the slave
@@ -31,11 +31,11 @@ The [pinned SOES dependency](../../../third_party/soes/README.md) is fetched at
 build time, not vendored into Joshua. PlatformIO excludes this directory unless
 a board explicitly integrates SOES. Its license is not Joshua's Apache license.
 
-The existing `joshua_wire_v2_session_test` suite exercises the real SOES CoE
+The existing `joshua_wire_session_test` suite exercises the real SOES CoE
 parser/dictionary and PDO pack/unpack functions using memory-backed ESC access.
 It covers descriptor/identity/reset, access and length rejection, command
 execution, duplicate retention, target expiry and OP loss. It does **not**
 validate an ESC hardware driver or timing on a real EtherCAT bus.
 
-The initial [AM243 port](../../am243/joshua_dual_transport_v1/README.md#opt-in-soes-replacement)
+The initial [AM243 port](../../am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
 builds, but hardware qualification and evaluation-stack retirement are pending.

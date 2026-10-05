@@ -227,7 +227,7 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
         return CreatePairedEthercat(comm.ethercat_config());
       }
       return absl::InvalidArgumentError(
-          "Legacy TI-demo EtherCAT is retired; select MESSAGE_AND_CYCLIC with explicit JW2 "
+          "Legacy TI-demo EtherCAT is retired; select MESSAGE_AND_CYCLIC with explicit JW "
           "board protocol, matching firmware and comm.ethercat_config endpoint/timing fields.");
     }
     case CommType::ETHERNET_UDP:
@@ -296,7 +296,7 @@ absl::Status CommFactory::ValidatePairedEthercatConfig(const EthercatConfig& con
         "EtherCAT timing budgets do not fit the cycle/response deadlines");
   if (config.has_pdo_region() && (config.pdo_region().output_size_bytes() != JWEC_PDO_SIZE ||
                                   config.pdo_region().input_size_bytes() != JWEC_PDO_SIZE))
-    return absl::InvalidArgumentError("JW2 layout-v1 requires 80-byte PDO region assertions");
+    return absl::InvalidArgumentError("JW layout-v1 requires 80-byte PDO region assertions");
   return absl::OkStatus();
 }
 }  // namespace robot::comm

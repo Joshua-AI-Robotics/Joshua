@@ -54,7 +54,7 @@ AM243 JoshuaWire serial and v2 EtherCAT configurations now use the shared
 `board/joshua_wire/` engine. CommFactory supplies either message-only or paired
 message/cyclic capabilities and owns the NIC lifecycle. The legacy TI-demo
 board/driver path is retired; `board/am243/` retains AM243 factory regression
-coverage, not a separate board implementation. See [JW2 EtherCAT configuration](../config/README.md#joshuawire-v2-over-ethercat)
+coverage, not a separate board implementation. See [JW EtherCAT configuration](../config/README.md#joshuawire-v2-over-ethercat)
 for opt-in selection and hardware-validation limits.
 
 ## Non-Goals

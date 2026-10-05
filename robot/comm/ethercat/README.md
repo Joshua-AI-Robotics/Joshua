@@ -7,10 +7,10 @@ drivers that consume a transport abstraction.
 Boards consume only `MessageTransport` and `CorrelatedCyclicTransport` from
 CommFactory. Internally, the layers are:
 
-- `JoshuaWireEthercatTransport`: one JW2 CoE/PDO endpoint per slave.
+- `JoshuaWireEthercatTransport`: one JW CoE/PDO endpoint per slave.
 - `EthercatMaster`: one bus owner/worker per NIC, shared by those endpoints.
 - `SoemEthercatBackend` (`soem_ethercat_backend.{h,cc}`): synchronous SOEM I/O
-  behind the internal `EthercatMasterIo` interface. Not an alternative to JW2.
+  behind the internal `EthercatMasterIo` interface. Not an alternative to JW.
 - `ethercat_types.h`: private discovery metadata and process-data snapshots;
   `ethercat_status.*`: generic region/working-count validation.
 
@@ -18,7 +18,7 @@ The former `SoemEthercatTransport` name and public `EthercatTransport` API
 are retired, together with the TI-demo board/driver, echo codec, legacy host
 smoke tools and preset. There are no compatibility aliases. Vendor firmware
 build/flash assets remain for historical bring-up; runtime requires the
-separate JW2 profile. Serial v1/v2 behavior is unchanged.
+separate JW profile. Serial v1/v2 behavior is unchanged.
 
 SOEM is dual-licensed under GPLv3 or a commercial license. Treat the pinned
 dependency as a production-capable master library only after Joshua's license
@@ -33,14 +33,14 @@ settled.
 - Expose process-data access to higher-level drivers without leaking a specific
   master implementation into the action layer.
 
-## Board-independent JW2 contract
+## Board-independent JW contract
 
 Host EtherCAT communication is selected by protocol capabilities, not board
 model, vendor/product ID or slave-stack implementation. Every conforming board
 uses the same `JoshuaWireEthercatTransport`, owner and SOEM backend. Board
 identity is checked separately by `JoshuaWireBoard`; it is not a comm branch.
 
-Firmware reuses the [shared endpoint](../../../firmware/common/README.md#porting-jw2-ethercat-to-another-board)
+Firmware reuses the [shared endpoint](../../../firmware/common/README.md#porting-jw-ethercat-to-another-board)
 and supplies board/stack adapters and real drive callbacks. SOES versus Beckhoff
 SSC is solely a firmware dependency choice. Regression tests exercise another
 board identity through the unchanged factory/engine/comm path without hardware.
@@ -58,7 +58,7 @@ driven, not a board-model special case.
 `EthercatMaster` and its backend seam, `EthercatMasterIo`. The worker alone
 initializes, configures, starts, exchanges, checks AL state and tears down the
 backend. Callers supply complete output shadows and receive copied input
-snapshots with a sequence number. JW2 request correlation belongs to the endpoint above it.
+snapshots with a sequence number. JW request correlation belongs to the endpoint above it.
 Before entering OP, the caller must supply a protocol-validated stop image for
 every slave; that image is also sent best-effort before shutdown. Zero bytes
 are not assumed safe for arbitrary firmware.
@@ -79,7 +79,7 @@ The master advances its transmit mailbox counter independently of the slave's;
 reply counters need not echo request counters. Retained mailboxes are drained
 before sending, and CoE service, object address, lengths and aborts are checked.
 Mailbox repeats are not requested. One outstanding SDO and fault-on-timeout
-prevent reuse of a late reply; the paired adapter below separately checks JW2
+prevent reuse of a late reply; the paired adapter below separately checks JW
 session/generation correlation.
 
 Process data runs first. While mailbox work is pending, mailbox steps alternate
@@ -101,10 +101,10 @@ hard-real-time guarantee or proof of safe motor outputs. Firmware watchdogs,
 real-time scheduling and real EtherCAT validation remain necessary.
 
 The factory selects this path only for `MESSAGE_AND_CYCLIC`; standalone
-`ETHERCAT + CYCLIC` is rejected with a retirement/migration error. JW2 config carries the slave
+`ETHERCAT + CYCLIC` is rejected with a retirement/migration error. JW config carries the slave
 index, optional exact PDO region assertion and explicit timing policy. All
 users of one NIC must agree on that policy. The first acquisition discovers
-and compatibility-gates **every** slave before OP; mixed vendor/JW2 buses are
+and compatibility-gates **every** slave before OP; mixed vendor/JW buses are
 rejected, even when an incompatible slave is not requested by a board.
 
 The factory creates one owner and one endpoint per discovered slave. All begin
@@ -140,9 +140,9 @@ all NIC settings were restored and Joshua has no NIC-specific workaround.
 
 SOES hardware qualification remains pending on a suitable NIC, including target
 commands, watchdogs, link/OP-loss recovery and the over-one-hour retirement
-check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_V2_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
+check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
 
-## Paired JoshuaWire v2 adapters
+## Paired JoshuaWire adapters
 
 [`joshua_wire_ethercat_transport.h`](joshua_wire_ethercat_transport.h) / `.cc`
 implement both `MessageTransport` and `CorrelatedCyclicTransport` for one slave.
@@ -150,13 +150,13 @@ Open claims the slave once per master lifetime and reads the 36-byte `JWEC`
 descriptor before any reset or command. It requires protocol v2, layout v1,
 80/80-byte PDO regions, a 64-byte frame limit, and CoE/PDO capability bits.
 Errors report the observed artifact/profile and request a separate build/flash;
-the TI demo is not accepted as JW2 firmware. The factory gates every
+the TI demo is not accepted as JW firmware. The factory gates every
 slave before entering OP and supplies validated stop images for the whole bus.
 
 The shared [wire constants](../../../firmware/common/joshua_wire_ethercat.h)
 define little-endian layout offsets and CoE indices. The adapter writes the
 8-byte reset object, verifies its readback, then supplies the corresponding
-JW2 reset acknowledgment. Firmware must publish that readback only after its
+JW reset acknowledgment. Firmware must publish that readback only after its
 safety/session reset completes. No normal command is allowed before this step.
 
 Each endpoint has a small dispatcher thread and one bounded queue shared by
@@ -184,7 +184,7 @@ SDO and snapshot waits release it. The master never calls endpoint code, so no
 reverse lock acquisition exists. This extra dispatcher is not a second SOEM
 owner and does not provide a hard-real-time scheduling guarantee.
 
-The separate [AM243 firmware profile](../../../firmware/am243/joshua_dual_transport_v1/README.md#opt-in-jw2-ethercat-profile)
+The separate [AM243 firmware profile](../../../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
 now implements this contract, including software command-progress/target
 watchdogs. An existing test runs these adapters against its actual portable
 core. Management exchanges publish an active-session idle image before sending
@@ -192,7 +192,7 @@ commands, including when reset preceded cyclic startup; otherwise the initial
 all-zero stop image would immediately disable a newly enabled channel.
 
 The shared board engine now routes management to messages and target/feedback
-to cyclic exchange, using one JW2 session/ID allocator. Existing tests cover
+to cyclic exchange, using one JW session/ID allocator. Existing tests cover
 the full BoardFactory/CommFactory path against the firmware core, two-slave
 sharing, failed startup, duplicate claims and retained-channel teardown.
 Single-board bench checks also passed software targets/feedback and stale-target
