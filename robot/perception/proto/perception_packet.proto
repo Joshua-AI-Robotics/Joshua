@@ -43,12 +43,14 @@ message PointCloudData {
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
   string perception_id = 1;
-  int64 timestamp_ns = 2;
+  // TODO(hmoon): Sync the timestamp unit and source across the system.
+  uint64 timestamp_ns = 2;
+  uint64 sequence_id = 3;  // Monotonically increasing sequence number for the perception packet.
 
   oneof data_type {
-    ImageData image = 3;
-    PositionData position = 4;
-    SensorData sensor = 5;
-    PointCloudData point_cloud = 6;
+    ImageData image = 4;
+    PositionData position = 5;
+    SensorData sensor = 6;
+    PointCloudData point_cloud = 7;
   }
 }

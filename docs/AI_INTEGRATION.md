@@ -2,6 +2,8 @@
 
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
+current implementations and example presets are indexed in the
+[supported-component catalog](SUPPORTED_COMPONENTS.md). The
 proposed first Model Context Protocol (MCP) release is an optional front end
 for exactly one tested, bounded robot operation. AI inference, including the
 existing [inference host](../ai/README.md), and
@@ -38,12 +40,17 @@ subsystem or runtime roles.
    merged.** The claim must also match the scope and verification level shown
    by evidence. Open pull requests can inform plans, but documentation and
    tools must not present their work as currently available.
+4. **Make setup and operation accessible through prompts.** Users should be
+   able to set up and operate supported robots through prompts. The frontend
+   gathers intent and shows progress; Joshua's binary and backend handle
+   software installation, dependencies, configuration, validation, and
+   execution. Physical setup and required operator confirmation remain guided
+   human steps.
 
 ## Proposed follow-ups
 
 | Change | Start from | Intended result |
 |---|---|---|
-| Supported-component catalog | Source files for merged boards, communication capabilities, perceptions, models, simulations, ROS 2 data types, and representative presets | A source-linked or generated view of current support, without copying facts that can be derived from schemas, manifests, BUILD targets, or presets. |
 | Change-validation skill | Existing subsystem documentation and test commands; use the catalog when available | A workflow that selects relevant checks and states what each result proves, without implementing another validator. |
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result without launching it. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |

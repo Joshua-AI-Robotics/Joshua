@@ -32,7 +32,8 @@ def main(argv: list[str]) -> int:
     driver.init()
 
     packet = action_packet_pb2.ActionPacket()
-    packet.position = angle
+    packet.joint.joint_name = spec.port
+    packet.joint.position = angle
     driver.set_action(packet)
     time.sleep(1.0)
 

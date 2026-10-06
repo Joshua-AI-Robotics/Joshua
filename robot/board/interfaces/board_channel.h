@@ -31,6 +31,11 @@ class BoardChannel {
   virtual absl::Status Enable() = 0;
   virtual absl::Status Disable() = 0;
   // A board that cannot do a mode returns UnimplementedError from it.
+  // TODO(hmoon): Add a transport-independent structured command with optional
+  // fields and explicit control semantics (velocity target vs position speed
+  // limit). Expose supported combinations per channel and reject unsupported
+  // fields before writes. Preserve a combined command through the board boundary
+  // instead of splitting it into SetTarget calls that can overwrite each other.
   virtual absl::Status SetTarget(TargetMode mode, float value) = 0;
   virtual absl::StatusOr<ChannelFeedback> ReadFeedback() = 0;
 };
