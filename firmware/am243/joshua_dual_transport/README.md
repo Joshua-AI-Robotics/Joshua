@@ -41,6 +41,12 @@ Joshua EtherCAT runtime. The shared software-only UART handler passed eight
 serial sessions on 2026-09-27; see the [recorded validation](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
 for the original artifact and scope. See [JW limits](../../README.md#joshuawire-serial).
 
+The [JW 0.0.2 UART reflash on 2026-10-05](../../../docs/JOSHUA_WIRE_VALIDATION.md#am243-jw-002-uart-reflash--2026-10-05)
+verified bootloader and application flash, then passed ten production-host
+sessions including configuration, software targets at +250/-250, feedback,
+ENABLE/DISABLE and ESTOP. The first connection and reopening passed without
+a post-open wait. This run did not test the separate JW EtherCAT image.
+
 ### Opt-in JW EtherCAT profile
 
 The same overlay also builds a separate **EtherCAT-only** JoshuaWire artifact:

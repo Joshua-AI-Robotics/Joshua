@@ -20,7 +20,7 @@ firmware/teensy/41/
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    transport_serial.{h,cpp} serial frame boundaries for both wire versions
+    transport_serial.{h,cpp} JW serial frame boundaries
 ```
 
 `joshua_wire.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
@@ -45,6 +45,12 @@ on 2026-10-04 with motor power disconnected and no post-open wait. A subsequent
 [powered JW bench](../../../docs/JOSHUA_WIRE_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
 passed smooth forward-and-return motion. Independent pulse timing and the
 ROS 2 path remain unvalidated. The checklist below records historical pre-migration results.
+
+The [JW 0.0.2 reflash on 2026-10-05](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-teensy-41-jw-002-reflash--2026-10-05)
+passed eight reset/identify/ESTOP sessions across four port openings, including
+the first connection after each of two uploads with no post-open wait.
+Configure-only feedback had zero position, velocity and faults. No enable or
+target commands were sent; the ESP32 stale-reply issue was not reproduced.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`)
@@ -237,8 +243,7 @@ they vary (some are current-then-microstep, some the reverse).
   else is inherited, see below
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
-  joshua_wire host board (Teensy today, Arduino/ESP32 later) runs
-  through unchanged (docs/BOARD_LAYER_RFC.md §7.3)
+  JoshuaWire host board runs through unchanged (docs/BOARD_LAYER_RFC.md §7.3)
 - `robot/board/teensy/teensy_driver_smoke.cc` — board-level smoke test,
   bypasses ActionFactory/ROS entirely (`bazel run
   //robot/board/teensy:teensy_driver_smoke -- /dev/ttyACM0`)

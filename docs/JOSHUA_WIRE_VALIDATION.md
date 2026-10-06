@@ -76,7 +76,6 @@ current build and tool names appear above and in the firmware READMEs.
 The operator reconfirmed serial validation on all three boards and EtherCAT
 validation on AM243 on 2026-10-05. This does not extend the recorded bench scope.
 
-
 These are limited bench results, not production safety or timing qualification.
 All serial checks used the Ubuntu 24.04/Jazzy host container.
 
@@ -101,6 +100,43 @@ with zero faults. Fresh resets returned position zero; every session acknowledge
 ESTOP, and exercise sessions acknowledged DISABLE. Separate invocations reopened
 the port. This image has no motor GPIO backend; external motor power was not
 independently verified. EtherCAT, watchdogs and ROS 2 were not tested.
+
+### AM243 JW 0.0.2 UART reflash — 2026-10-05
+
+The operator confirmed the connected LP-AM243 in UART flashing mode and
+power-cycled it; a fresh read on XDS110 `/dev/ttyACM0` showed the ROM `C`
+prompt. Firmware source is commit `ac1c960ae3f19ddf3cb009aab950d4e339fc9240`
+with documentation-only working-tree changes. The Ubuntu 24/Jazzy container
+built the default UART/TI-demo image using Industrial Communications SDK
+09.00.00.03 and the configured external TI tools.
+
+Application: `am243_dual_transport_jw.release.appimage.hs_fs`, SHA-256
+`ff5eca884d47c9c1ad3115c8eea0cbe487b9bee52338064e2c03fd9abc7d0c7e`.
+SDK OSPI bootloader SHA-256:
+`2224299731e4db89aa67637ae0e73b60d408a42a420979196281e1af8c42dd11`.
+TI `uart_uniflash.py` loaded the flash writer, wrote PHY tuning data, then
+flashed and verified the bootloader at `0x0` and application at `0x80000`.
+All operations succeeded; external SDK files were not changed.
+
+After the operator restored OSPI boot mode and power-cycled, the production
+`joshua_wire_smoke` identified `am243-dual`, board ID 1 and one STEP_DIR
+channel on XDS110 serial `S24L0464`, `/dev/ttyACM0`, at 115200 baud. Ten fresh
+sessions across five physical port openings passed: two first-connection
+handshake, two configure-only, two exercise at +250 native steps, two exercise
+at -250, then two handshake after reopening. All ten RESET/IDENTIFY/ESTOP
+sequences, six configurations, four ENABLE and four DISABLE commands succeeded.
+All ten feedback replies had zero faults and velocity zero; the four target
+feedback replies matched +250/+250/-250/-250. Fresh resets returned position
+zero. Runtime exchange timeout was 100 ms with no configured or extra
+post-open delay. No stale-reply failure was observed in this sample.
+
+This image's channel is software-only and drives no motor GPIOs; target
+feedback is software state, not measured motion. Final ESTOP was acknowledged
+and all probe ports closed. The UART image retains TI's demo EtherCAT profile;
+the separate JW EtherCAT artifact was neither flashed nor tested in this run.
+Endurance, malformed/stale hardware requests and communication-loss behavior
+were not tested. Original bench captures were temporary local files, not
+repository artifacts.
 
 ### Recorded Teensy 4.1 hardware result — 2026-10-04
 
@@ -129,6 +165,35 @@ Each leg had a three-second arrival deadline. Counts went 2 → 91 → 2; each l
 took approximately 0.89 seconds. The operator observed smooth forward-and-return
 motion. Final DISABLE/ESTOP succeeded; the disabled count stayed stable.
 This was not a ROS 2/motor-driver test or an independent angle/pulse measurement.
+
+### Recorded Teensy 4.1 JW 0.0.2 reflash — 2026-10-05
+
+The operator confirmed Teensy connected and requested flashing before testing.
+Source: clean commit `ac1c960ae3f19ddf3cb009aab950d4e339fc9240` before adding
+this result. PlatformIO built `teensy41-serial` with Teensy platform 5.2.0,
+Arduino framework 1.162.0 and ARM GCC 15.2.1. Application HEX SHA-256:
+`a11e17c2f93fe0607c9592eb3908a03864194ed0fd84a9c22a182cb646ad0380`.
+Two uploads completed through HalfKay using Teensy Loader CLI 2.2.
+
+The Ubuntu 24/Jazzy production `joshua_wire_smoke` identified `teensy-serial`,
+board ID 2 and one STEP_DIR channel on native USB `/dev/ttyACM0`, USB serial
+`15104350`. Eight sessions across four physical port openings passed:
+two handshake sessions after each upload, two configure-only sessions, then
+two handshake sessions after reopening. All eight RESET/IDENTIFY/ESTOP
+sequences succeeded. Configuration used pins 2/3/4, maximum 4000 Hz, 20 µs
+pulse width and active-low enable. Both feedback replies reported position 0,
+velocity 0 and faults 0. The runtime exchange timeout was 100 ms, with no
+configured or extra post-open wait. Neither first connection reproduced the
+ESP32 stale-reply issue; these two observations do not establish endurance or
+exhaustive startup qualification.
+
+No ENABLE or SET_TARGET commands were sent. Motor-power state was not newly
+confirmed in this run; powered motion was not tested. Final ESTOP was
+acknowledged and the port closed.
+
+The repeat upload required restarting the uploader after entry into HalfKay.
+Probes began after native USB serial re-enumerated. Original bench captures
+were temporary local files, not repository artifacts.
 
 ### Recorded ESP32 hardware result — 2026-10-04
 
@@ -211,8 +276,41 @@ with the normal wait. The final recovery acknowledged ESTOP and closed the
 port. The two longer-wait passes do not qualify a timing workaround: normal-wait
 attempts also passed intermittently. No code, preset timing, correlation policy
 or upload-setting changes were made for this retest; the cause remains unresolved.
-Temporary evidence logs use `/tmp/joshua-jw-retest-*`; the captured failure is
-`/tmp/joshua-jw-retest-sixth.trace`.
+Original syscall traces and bench captures were temporary local files, not
+repository artifacts.
+
+### ESP32 reconnect and byte-capture retest — 2026-10-05
+
+After the operator reconnected ESP32, two production handshake sessions passed
+before uploading. Two further uploads of the same BIN (SHA-256 above), at
+default 460800 upload baud, each immediately preceded a first-connection
+production probe. One first connection passed; the other acknowledged RESET
+but rejected uncorrelated IDENTIFY/ESTOP replies. Both used the configured
+2000 ms post-open wait, no extra wait and 100 ms exchange deadline. Firmware
+and host source: `ac1c960`, with documentation-only working-tree changes.
+
+A third upload preceded an independent temporary Python diagnostic that sent
+one RESET, one IDENTIFY and one ESTOP, with fresh session/message IDs and valid
+CRC. It read in chunks throughout a 100 ms window per request, rather than
+returning at the first frame. The RESET window captured 26265 bytes containing
+1541 identical CRC-valid RESET replies for the new session/message ID 1.
+The IDENTIFY window captured 70 more of those RESET replies followed by one
+correctly correlated IDENTIFY reply for message ID 2. The ESTOP window contained
+one correctly correlated ESTOP reply for message ID 3. The diagnostic marked
+IDENTIFY failed because its first valid reply was uncorrelated; finding a later
+matching reply did not turn that result into a pass.
+
+This independently reproduces duplicated/stale received data while also showing
+that a valid IDENTIFY reply can arrive behind it. It does not establish whether
+duplication starts in firmware, the bridge or the host receive path. Chunked
+reads and full-window collection alter the diagnostic's timing; it is not a
+production transport qualification or adopted workaround.
+
+Closing/reopening afterward passed two fresh production handshake sessions.
+Final ESTOP was acknowledged and the port closed. All checks sent only RESET,
+IDENTIFY and ESTOP; no configuration, enable or target commands were sent.
+No code, preset timing or correlation policy changed. The diagnostic script,
+logs and traces were temporary local files, not repository artifacts.
 
 ## Recorded AM243 EtherCAT result — 2026-09-28
 

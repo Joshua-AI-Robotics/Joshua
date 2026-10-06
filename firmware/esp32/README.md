@@ -25,7 +25,7 @@ firmware/esp32/
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    transport_serial.{h,cpp} serial frame boundaries for both wire versions
+    transport_serial.{h,cpp} JW serial frame boundaries
 ```
 
 `joshua_wire.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
@@ -59,6 +59,10 @@ The [same-day retest](../../docs/JOSHUA_WIRE_VALIDATION.md#esp32-post-upload-iss
 reproduced the failure on two of four first connections with the normal wait;
 both recovered after reopening. Two longer-wait attempts passed, which does
 not establish a fix.
+
+An [independent byte-capture retest](../../docs/JOSHUA_WIRE_VALIDATION.md#esp32-reconnect-and-byte-capture-retest--2026-10-05)
+also reproduced duplicated RESET replies after one request, with a valid
+IDENTIFY reply behind stale data. The duplication's origin remains unproven.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
