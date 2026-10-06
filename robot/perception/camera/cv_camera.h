@@ -10,14 +10,15 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "robot/perception/interfaces/camera_interface.h"
+#include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {
 
-// TODO: Update the ID, and logic.
+// Image sensor backed by an OpenCV capture device.
 class CvCamera : public CameraInterface {
  public:
-  CvCamera(const robot::perception::SinglePerception& camera_config);
+  explicit CvCamera(const robot::perception::SinglePerception& camera_config);
   ~CvCamera() override;
 
   absl::Status Init() override;
