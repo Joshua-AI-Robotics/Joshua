@@ -4,9 +4,14 @@
 #   bazel run //launcher:joshua_main -- \
 #     --config=config/config_preset/so100/trajectory_example.pbtxt
 #
-# Topics use Float32 on /<device_id>/position. Positions are raw
-# servo ticks: first all joints to span midpoint, then coordinated poses inside
-# the ±10% band (20% of operational span), with all motors moving together.
+# Topics use sensor_msgs/msg/JointState on /<device_id>/joint_state.
+# Positions use SI radians with the current driver conversion: ticks * 2*pi/4096.
+# This preserves the original servo targets; zero is the raw encoder origin,
+# not a calibrated robot-model joint zero. Limits and idle positions remain ticks.
+# Position-only commands: SI velocity/effort are unsupported by this driver.
+# First all joints move to span midpoint, then poses inside the ±10% band.
+# Each message contains one named joint; equal-time waypoints dispatch sequentially.
+# The six-second trajectory repeats; shutdown moves to configured idle positions.
 
 general {
   operation_mode: MODE_TEST
@@ -38,8 +43,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_1/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_1/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -66,8 +71,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_2/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_2/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -94,8 +99,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_3/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_3/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -122,8 +127,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_4/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_4/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -150,8 +155,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_5/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_5/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -178,8 +183,8 @@ robot {
         node_type: ACTUATOR_SUBSCRIBER
         qos_setting { depth: 10 }
         subscriptions {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_6/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_6/joint_state"
         }
       }
       action_type: ACTUATOR
@@ -209,70 +214,70 @@ robot {
         node_type: TRAJECTORY_PUBLISHER
         qos_setting { depth: 10 }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_1/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_1/joint_state"
         }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_2/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_2/joint_state"
         }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_3/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_3/joint_state"
         }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_4/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_4/joint_state"
         }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_5/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_5/joint_state"
         }
         publishers {
-          ros2_data_type: FLOAT32
-          topic: "sts_motor_6/position"
+          ros2_data_type: JOINT_STATE
+          topic: "sts_motor_6/joint_state"
         }
       }
       trajectory {
-        # Midpoint of each joint's operational span (raw ticks).
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2004.0 } } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2006.0 } } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1907.0 } } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1896.0 } } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1929.0 } } }
-        waypoints { timestamp_sec: 0.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2515.0 } } }
+        # Midpoint of each joint's operational span, converted from ticks to radians.
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_1/joint_state" action { joint { joint_name: "sts_motor_1" position_encoding: POSITION_SI units: SI position: 3.0740974989228249 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_2/joint_state" action { joint { joint_name: "sts_motor_2" position_encoding: POSITION_SI units: SI position: 3.0771654604985961 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_3/joint_state" action { joint { joint_name: "sts_motor_3" position_encoding: POSITION_SI units: SI position: 2.9253013624979176 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_4/joint_state" action { joint { joint_name: "sts_motor_4" position_encoding: POSITION_SI units: SI position: 2.9084275738311756 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_5/joint_state" action { joint { joint_name: "sts_motor_5" position_encoding: POSITION_SI units: SI position: 2.9590489398314017 } } }
+        waypoints { timestamp_sec: 0.0 topic: "sts_motor_6/joint_state" action { joint { joint_name: "sts_motor_6" position_encoding: POSITION_SI units: SI position: 3.8579616815323874 } } }
 
         # Pose A: all joints move together within ±10% band (20% total span).
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2210.0 } } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 1776.0 } } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 2128.0 } } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1650.0 } } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 2134.0 } } }
-        waypoints { timestamp_sec: 1.5 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2371.0 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_1/joint_state" action { joint { joint_name: "sts_motor_1" position_encoding: POSITION_SI units: SI position: 3.3900975412272669 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_2/joint_state" action { joint { joint_name: "sts_motor_2" position_encoding: POSITION_SI units: SI position: 2.7243498792848988 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_3/joint_state" action { joint { joint_name: "sts_motor_3" position_encoding: POSITION_SI units: SI position: 3.2643111166206444 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_4/joint_state" action { joint { joint_name: "sts_motor_4" position_encoding: POSITION_SI units: SI position: 2.5310683000113081 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_5/joint_state" action { joint { joint_name: "sts_motor_5" position_encoding: POSITION_SI units: SI position: 3.2735150013479584 } } }
+        waypoints { timestamp_sec: 1.5 topic: "sts_motor_6/joint_state" action { joint { joint_name: "sts_motor_6" position_encoding: POSITION_SI units: SI position: 3.6370684480768554 } } }
 
         # Pose B: simultaneous opposite corners in band.
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 1797.0 } } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2236.0 } } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1685.0 } } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 2142.0 } } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1723.0 } } }
-        waypoints { timestamp_sec: 3.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2659.0 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_1/joint_state" action { joint { joint_name: "sts_motor_1" position_encoding: POSITION_SI units: SI position: 2.7565634758304971 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_2/joint_state" action { joint { joint_name: "sts_motor_2" position_encoding: POSITION_SI units: SI position: 3.4299810417122938 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_3/joint_state" action { joint { joint_name: "sts_motor_3" position_encoding: POSITION_SI units: SI position: 2.5847576275873054 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_4/joint_state" action { joint { joint_name: "sts_motor_4" position_encoding: POSITION_SI units: SI position: 3.2857868476510435 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_5/joint_state" action { joint { joint_name: "sts_motor_5" position_encoding: POSITION_SI units: SI position: 2.6430488975269597 } } }
+        waypoints { timestamp_sec: 3.0 topic: "sts_motor_6/joint_state" action { joint { joint_name: "sts_motor_6" position_encoding: POSITION_SI units: SI position: 4.0788549149879199 } } }
 
         # Pose C: mixed offsets, all joints at once.
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2100.0 } } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 1850.0 } } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 2050.0 } } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1800.0 } } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 2080.0 } } }
-        waypoints { timestamp_sec: 4.5 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2450.0 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_1/joint_state" action { joint { joint_name: "sts_motor_1" position_encoding: POSITION_SI units: SI position: 3.2213596545598464 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_2/joint_state" action { joint { joint_name: "sts_motor_2" position_encoding: POSITION_SI units: SI position: 2.8378644575884362 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_3/joint_state" action { joint { joint_name: "sts_motor_3" position_encoding: POSITION_SI units: SI position: 3.1446606151655643 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_4/joint_state" action { joint { joint_name: "sts_motor_4" position_encoding: POSITION_SI units: SI position: 2.7611654181941541 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_5/joint_state" action { joint { joint_name: "sts_motor_5" position_encoding: POSITION_SI units: SI position: 3.1906800388021335 } } }
+        waypoints { timestamp_sec: 4.5 topic: "sts_motor_6/joint_state" action { joint { joint_name: "sts_motor_6" position_encoding: POSITION_SI units: SI position: 3.7582529303198209 } } }
 
         # Return to midpoint together.
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_1/position" action { joint { joint_name: "sts_motor_1" position: 2004.0 } } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_2/position" action { joint { joint_name: "sts_motor_2" position: 2006.0 } } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_3/position" action { joint { joint_name: "sts_motor_3" position: 1907.0 } } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_4/position" action { joint { joint_name: "sts_motor_4" position: 1896.0 } } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_5/position" action { joint { joint_name: "sts_motor_5" position: 1929.0 } } }
-        waypoints { timestamp_sec: 6.0 topic: "sts_motor_6/position" action { joint { joint_name: "sts_motor_6" position: 2515.0 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_1/joint_state" action { joint { joint_name: "sts_motor_1" position_encoding: POSITION_SI units: SI position: 3.0740974989228249 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_2/joint_state" action { joint { joint_name: "sts_motor_2" position_encoding: POSITION_SI units: SI position: 3.0771654604985961 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_3/joint_state" action { joint { joint_name: "sts_motor_3" position_encoding: POSITION_SI units: SI position: 2.9253013624979176 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_4/joint_state" action { joint { joint_name: "sts_motor_4" position_encoding: POSITION_SI units: SI position: 2.9084275738311756 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_5/joint_state" action { joint { joint_name: "sts_motor_5" position_encoding: POSITION_SI units: SI position: 2.9590489398314017 } } }
+        waypoints { timestamp_sec: 6.0 topic: "sts_motor_6/joint_state" action { joint { joint_name: "sts_motor_6" position_encoding: POSITION_SI units: SI position: 3.8579616815323874 } } }
       }
     }
   }
