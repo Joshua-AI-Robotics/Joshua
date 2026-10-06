@@ -75,3 +75,13 @@ was transmitted for the expired cycle. StopCyclic and teardown returned OK.
 This verifies the delayed-dispatch path against a real TI-demo slave under an
 injected host delay. It does not establish production scheduling bounds,
 physical motor stop timing or qualification of other NICs/slave images.
+
+## Incremental CoE
+
+`CoeSdoTransfer` performs at most one register datagram per step and never
+retries a published write. `SoemEthercatBackend` implements Begin/Step/Cancel;
+`EthercatMaster` schedules these steps within the declared mailbox budget and
+guard while cyclic exchange continues. Missing support or insufficient slack
+is rejected. Mailbox counters, malformed responses, abort codes, cancellation
+and deadline overruns are covered by register fakes. The legacy TI adapter
+remains separate until factory integration.
