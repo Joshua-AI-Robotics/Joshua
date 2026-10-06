@@ -107,37 +107,14 @@ The paired endpoint supplies CoE management plus correlated PDO target/feedback;
 `CYCLIC` alone is rejected; the legacy TI-demo host path is retired. Endpoint facts belong in
 `comm.ethercat_config`; do not add `am243_config` to a JW board.
 
-Example board fragment (not a hardware-validated timing recommendation):
-
-```text
-name: "am243_jw"
-board_type: AM243
-protocol: JOSHUA_WIRE
-firmware { min_proto_version: 2 }
-comm {
-  comm_type: ETHERCAT
-  transport_type: MESSAGE_AND_CYCLIC
-  ethercat_config {
-    interface_name: "ethercat0"
-    process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
-    slave_index: 1
-    timing {
-      period_us: 20000
-      process_timeout_us: 1000
-      state_timeout_us: 1000
-      operation_timeout_us: 1000000
-      mailbox_step_budget_us: 1000
-      scheduling_guard_us: 1000
-      response_timeout_us: 1000000
-    }
-  }
-}
-channels {
-  index: 0
-  drive: STEP_DIR
-  step_dir { max_pulse_rate_hz: 1000 step_pin: 2 dir_pin: 3 enable_pin: 4 }
-}
-```
+The complete [AM243 JW EtherCAT example](config_preset/example/am243_jw_ethercat_demo.pbtxt)
+configures one software-only STEP_DIR channel and a Float32 position-command
+subscriber on `am243_jw_joint_1/position`. Replace `ethercat0` with the intended
+NIC and confirm `slave_index` before running: this preset opens a real bus.
+It requires the separate `jw` or `jw-soes` EtherCAT firmware; the default
+UART/TI echo image is incompatible. The current AM243 channel does not drive
+STEP/DIR GPIOs. Its timing values are illustrative and require qualification
+on the intended hardware.
 
 All seven timing fields are required, positive and at most `INT_MAX` microseconds.
 The cycle must exceed `process timeout + max(state timeout, mailbox-step budget)
@@ -173,7 +150,8 @@ board teardown releases only its endpoint, and the last lease closes the bus.
 The example timing budgets are illustrative, not a qualified production policy.
 Account for the [master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue)
 and qualify deadlines on the intended host and slave hardware.
-No runnable preset was added and no firmware is flashed by initialization.
+Initialization does not flash firmware. The preset is covered by parsing and
+semantic validation tests, which do not open hardware.
 
 ## Sensor configuration
 
