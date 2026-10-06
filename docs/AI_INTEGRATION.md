@@ -1,18 +1,11 @@
 # AI integration
 
-Joshua already connects protobuf configuration, ROS 2 runtime components,
-model adapters, data collection, simulation, and contributor workflows. The
-current implementations and example presets are indexed in the
-[supported-component catalog](SUPPORTED_COMPONENTS.md). The
-proposed first motion-capable Model Context Protocol (MCP) release is an optional
-front end for exactly one tested, bounded robot operation. AI inference,
-including the existing [inference host](../ai/README.md), and
-[data collection](../ai/train/README.md) are outside its scope. This guide
-records shared design rules and independent proposed follow-ups.
+## Vision
 
-Any contributor may propose these changes. Reviews should include people
-familiar with the affected implementation; this does not create exclusive
-subsystem or runtime roles.
+Joshua should help people use robotics to accelerate work they already
+understand, without requiring robotics expertise. The audience includes
+laboratory specialists, manufacturing operators, researchers, and prototype
+builders.
 
 ## Requirements
 
@@ -38,13 +31,6 @@ subsystem or runtime roles.
 
 Early checkpoints can use a prepared, supported environment. A complete
 fresh-host installation journey remains a separate release gate.
-
-## Vision
-
-Joshua should help people use robotics to accelerate work they already
-understand, without requiring robotics expertise. The audience includes
-laboratory specialists, manufacturing operators, researchers, and prototype
-builders.
 
 ## Interface
 
@@ -103,6 +89,20 @@ Agree on the first robot, task, client, and feedback contract before writing
 implementation designs in follow-up PRs.
 
 ## Relevant current capabilities
+
+Joshua already connects protobuf configuration, ROS 2 runtime components,
+model adapters, data collection, simulation, and contributor workflows. The
+current implementations and example presets are indexed in the
+[supported-component catalog](SUPPORTED_COMPONENTS.md). The
+proposed first motion-capable Model Context Protocol (MCP) release is an optional
+front end for exactly one tested, bounded robot operation. AI inference,
+including the existing [inference host](../ai/README.md), and
+[data collection](../ai/train/README.md) are outside its scope. This guide
+records shared design rules and independent proposed follow-ups.
+
+Any contributor may propose these changes. Reviews should include people
+familiar with the affected implementation; this does not create exclusive
+subsystem or runtime roles.
 
 | Area | Current implementation | Limitation |
 |---|---|---|
