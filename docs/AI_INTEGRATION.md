@@ -4,8 +4,8 @@ Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
 current implementations and example presets are indexed in the
 [supported-component catalog](SUPPORTED_COMPONENTS.md). The
-proposed first Model Context Protocol (MCP) release is an optional front end
-for exactly one tested, bounded robot operation. AI inference, including the
+proposed first motion-capable Model Context Protocol (MCP) release is an optional
+front end for exactly one tested, bounded robot operation. AI inference, including the
 existing [inference host](../ai/README.md), and
 [data collection](../ai/train/README.md) are outside its scope. This guide
 records shared design rules and independent proposed follow-ups.
@@ -13,6 +13,82 @@ records shared design rules and independent proposed follow-ups.
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
 subsystem or runtime roles.
+
+## Vision and interface
+
+Joshua should help people use robotics to accelerate work they already
+understand, without requiring robotics expertise. The audience includes
+laboratory specialists, manufacturing operators, researchers, and prototype
+builders.
+
+Start with an MCP layer connected to an existing AI IDE or compatible chat
+application. Joshua's packaged runtime and backend handle software preparation,
+configuration, device access, and execution. A dedicated chat interface can
+follow if needed.
+
+**User → Chat → MCP → Joshua backend → Robot**
+
+Connecting supported hardware should be guided. Adding new hardware requires
+implementation, testing, documentation, and release through the relevant
+subsystem.
+
+## Checkpoints and requirements
+
+| Checkpoint | Requirements | Evidence of completion |
+| --- | --- | --- |
+| **1. Connect and inspect through MCP** | A working client connection, installed-version/device information, configuration validation, capability descriptions, and clear errors. | An AI IDE connects to Joshua and inspects the selected configuration without starting hardware. |
+| **2. Execute one verified robot task** | One bounded operation, direct operator confirmation, measured feedback with known units/freshness, progress, cancellation, and fault handling. | A task runs through MCP on one robot; measured outcomes and timeout, cancellation, and failure cases are verified. |
+| **3. Compose, repeat, and vary actions through chat** | The LLM resolves an ordered group of supported actions, parameters, variations, and repetition count. A validated execution path performs bounded repetition and records outcomes. | A user defines and refines one group through chat, then runs the requested repetitions and variations with accurate completion records. |
+| **4. Reach 100% hardware coverage** | Extend tested MCP integration and applicable feedback across every implemented board, transport, actuator, and sensor path. | Every implemented hardware path demonstrated through MCP. Missing or unverified integrations keep this checkpoint open. |
+
+Ship checkpoints 1–3 incrementally using one supported environment and robot.
+Inspection errors are visible from checkpoint 1; operation feedback is required
+in checkpoint 2. The LLM handles action composition and refinement in checkpoint
+3, while Joshua enforces operation limits and reliable execution. Start with a
+small sequence and bounded repetition; a dedicated experiment framework can
+follow if needed.
+
+Hardware coverage can expand in parallel. Checkpoint 4 requires 100% coverage
+of implemented paths in the runtime version under review. New hardware
+additions include their corresponding MCP integration and verification.
+A complete fresh-host installation journey remains a separate release gate.
+
+## Example: Repeat a defined base-joint movement
+
+An illustrative future task is to exercise **Bench Arm A's base joint** for
+**100 return cycles**, using angles supported by that arm.
+
+Joshua resolves a vague request into a preview: **move from 0° to 45° and back
+to 0°; that is one cycle. Repeat 100 times at the selected supported speed.**
+Measured feedback must confirm each endpoint within the agreed tolerance;
+missing feedback or a fault ends the task through its defined stop behavior.
+
+The user can save this as “Base movement test,” then say “Run it 20 times” or
+“Make it slower.” The backend validates the revised task and handles repetition.
+Saved tasks reference configured hardware and tested operations; an optional
+script interface can follow later.
+
+For checkpoint 3, a user could say, “Group the supported rotation, extension,
+and return movements. Repeat the group ten times at each of three approved
+speeds.” The LLM clarifies those movements and previews the resolved sequence.
+Repetition executes through a bounded backend operation or reviewed workflow
+calling supported operations, with an explicitly defined run/authorization
+scope. Record each completed group and variation.
+
+## Linked implementation designs
+
+| Area | High-level design | First decisions |
+| --- | --- | --- |
+| Checkpoints 1, 2, and 4 | [Hardware and MCP](ai-integration/HARDWARE_MCP_DESIGN.md) | Inspection, first operation, runtime ownership, and full hardware coverage |
+| Checkpoints 2–3 | [Reusable tasks](ai-integration/REUSABLE_TASKS_DESIGN.md) | Identity, movement, cycle definition, refinement, and bounded execution |
+| Checkpoints 1–2 | [Observability](ai-integration/OBSERVABILITY_DESIGN.md) | Feedback source, units, freshness, completion evidence, and faults |
+| Checkpoint 3 | [Action groups and experiments](ai-integration/EXPERIMENT_DESIGN.md) | LLM composition, parameter variations, bounded replay, and result records |
+
+These briefs connect the direction to proposed PR scopes. Agree on the first
+robot, task, and feedback contract, then refine the relevant design before
+implementation. Start with inspection and validation, then the first verified
+operation, followed by reusable action groups. Expand hardware coverage
+alongside those releases.
 
 ## Relevant current capabilities
 
