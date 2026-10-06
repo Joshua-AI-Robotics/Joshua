@@ -124,23 +124,14 @@ elapsed time, budget and working count. Native regression coverage lives in
 
 ## Known master-side NIC timing issue
 
-The AM243 bench host's Realtek RTL8125 NIC (`enp5s0`, `r8169` driver,
-kernel `7.0.0-34-generic`) intermittently delayed received replies beyond the
-5 ms bench deadline during normal interrupt-driven operation. The leading
-suspect is the **master PC's NIC/driver receive and interrupt path**. A specific
-driver or hardware defect has not been proven, and slave-side interactions
-have not been conclusively excluded.
+Register receive deadlines can fail on Realtek RTL8125/`r8169` hosts. The
+NIC/driver receive and interrupt path is a leading suspect; a specific defect
+has not been proven and slave-side interactions have not been excluded.
+Joshua has no NIC-specific polling or interrupt-coalescing workaround.
 
-With the same AM243 SOES slave and firmware, changing only host reception to
-continuous NAPI polling completed two runs of 500 disabled-channel feedback
-calls, including initialization and teardown. Restoring normal reception
-reproduced the timeout. Disabling software interrupt coalescing did not fix it.
-Polling consumed approximately one CPU core and was used only for diagnosis;
-all NIC settings were restored and Joshua has no NIC-specific workaround.
-
-SOES hardware qualification remains pending on a suitable NIC, including target
-commands, watchdogs, link/OP-loss recovery and the over-one-hour retirement
-check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_VALIDATION.md#receive-path-controls-and-decision-to-defer-qualification).
+Hardware qualification requires a suitable NIC and explicit target, watchdog,
+link/OP-loss and endurance checks. Diagnostic polling does not qualify a
+production timing policy or the over-one-hour evaluation-stack retirement gate.
 
 ## Paired JoshuaWire adapters
 
@@ -195,9 +186,8 @@ The shared board engine now routes management to messages and target/feedback
 to cyclic exchange, using one JW session/ID allocator. Existing tests cover
 the full BoardFactory/CommFactory path against the firmware core, two-slave
 sharing, failed startup, duplicate claims and retained-channel teardown.
-Single-board bench checks also passed software targets/feedback and stale-target
-fault/recovery. Physical-output safety, cross-transport arbitration and broader
-real-bus timing/failure validation remain pending.
+Physical-output safety, cross-transport arbitration and real-bus timing/failure
+qualification remain pending.
 
 ## Non-Goals
 

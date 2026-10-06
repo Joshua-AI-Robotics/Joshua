@@ -35,8 +35,8 @@ firmware/esp32/
 same reasoning as `firmware/teensy/41/README.md`: `joshua_wire` because
 host and firmware must agree on the wire format for a given commit;
 `backend_stepdir` because STEP/DIR/ENA pulse generation is a fact about the
-driver chip, not the MCU — the same `digitalWrite`-based source already
-proven on Teensy works unchanged here, no ESP32-specific code needed.
+driver chip, not the MCU — Teensy and ESP32 share the same
+`digitalWrite`-based implementation.
 
 ## Status
 
@@ -44,35 +44,8 @@ Build with `pio run -e esp32-serial` and select `Board.protocol: JOSHUA_WIRE`.
 JW 0.0.2 is the default and only Joshua protocol. Command dispatch lives in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [JW protocol and limits](../README.md#joshuawire-serial).
-The validated correlated protocol passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
-on 2026-10-04 with motor power disconnected. Powered JW
-motion, independent pulse timing and the ROS 2 path remain unvalidated. The
-host used the configured 2000 ms post-open settle delay. The checklist below
-records historical pre-migration results.
-
-The [JW 0.0.2 reflash on 2026-10-05](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-jw-002-reflash--2026-10-05)
-passed eight protocol sessions after reopening the port, with motor power off.
-The first port open immediately after upload repeatedly returned stale RESET
-replies, preventing correlated IDENTIFY/ESTOP; reopening recovered. The cause
-remains unresolved, and initial post-upload reliability is not qualified.
-The [same-day retest](../../docs/JOSHUA_WIRE_VALIDATION.md#esp32-post-upload-issue-retest--2026-10-05)
-reproduced the failure on two of four first connections with the normal wait;
-both recovered after reopening. Two longer-wait attempts passed, which does
-not establish a fix.
-
-An [independent byte-capture retest](../../docs/JOSHUA_WIRE_VALIDATION.md#esp32-reconnect-and-byte-capture-retest--2026-10-05)
-also reproduced duplicated RESET replies after one request, with a valid
-IDENTIFY reply behind stale data. The duplication's origin remains unproven.
-
-- [x] Toolchain installed (PlatformIO via `pipx`)
-- [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
-      reused unchanged
-- [x] Firmware flashed (`pio run --target upload`, real ESP32-D0WD-V3)
-- [x] Board enumerates (`/dev/ttyUSB0`, CP2102 bridge)
-- [x] Protocol/handshake verified against the host (`esp32_driver_smoke`:
-      IDENTIFY, ENABLE, and 5 alternating SET_TARGETs all `OK`)
-- ⬜ Full command path verified end to end (`joshua_main` + ROS 2 +
-      physical motor rotation — not yet run against real wiring)
+Use the [serial validation procedure](../../docs/JOSHUA_WIRE_VALIDATION.md)
+for reset/identify/ESTOP checks before enabling channels.
 
 ## Prerequisites
 
@@ -204,29 +177,21 @@ TB6600 VCC/GND      ──► bench PSU, sized to the motor's rated current;
                         opto-isolated inputs.
 ```
 
-**Not yet confirmed against real hardware** — this wiring hasn't had the
-Teensy bring-up's actual verification pass yet (see Status above). The
-`PUL-`/`DIR-`/`ENA-` ground-return requirement and the DIP-switch caveat
-that cost the most debugging time on the Teensy bring-up
-(`firmware/teensy/41/README.md`'s Wiring / Pinout section) almost
-certainly apply here too, since they're facts about the TB6600, not the
-MCU — but treat that as a prediction until it's actually been run.
+Check the `PUL-`/`DIR-`/`ENA-` ground returns and the driver's DIP-switch
+table before powered operation. See the shared
+[wiring guidance](../teensy/41/README.md#wiring--pinout).
 
 ## Known gaps / Troubleshooting
 
-- **First command after opening serial fails:** a USB-to-UART bridge's
-  DTR/RTS auto-reset circuit can reset the MCU on open, racing startup and boot
-  output. The host now uses `comm.serial_config.post_open_settle_ms: 2000`
-  explicitly, as in the example preset and the JW bench configuration. This
-  wait belongs to physical link opening in CommFactory/Serial, not Esp32Board;
-  the previous board-specific sleep was removed. The exchange flushes stale
-  input before sending. The JW bench passed with this configured wait and
-  `--settle_ms=0`; this does not prove that all ESP32 variants need exactly
-  two seconds. See [serial timing](../../config/README.md#serial-timing).
-- Wiring/motion (the "Full command path" status item above) is still
-  unverified against real hardware — the protocol handshake and command
-  dispatch are confirmed, but nobody has wired up a TB6600/motor and
-  watched it turn on this board yet, unlike Teensy's bring-up.
+- **Startup and stale replies:** CP2102 connections can return duplicate or
+  stale replies on the first open after upload. Correlation failures report
+  unknown command outcomes; the cause remains unresolved. Reopening may
+  recover, but is not a guaranteed fix or an automatic retry policy.
+- A USB-to-UART bridge's DTR/RTS circuit can reset the MCU on open. Configure
+  `comm.serial_config.post_open_settle_ms` for the board; the example uses
+  2000 ms. This wait belongs to physical link opening, not Esp32Board, and
+  does not guarantee that boot output or stale replies have cleared. See
+  [serial timing](../../config/README.md#serial-timing).
 - `board = esp32dev` in `platformio.ini` targets a generic ESP32 DevKitC-
   class board. If your board is a different variant (S3, C3, S2, an
   ESP32-WROVER module, ...), that one line likely needs to change —
@@ -257,6 +222,4 @@ MCU — but treat that as a prediction until it's actually been run.
 - `firmware/common/backend_stepdir.{h,cpp}` — the shared STEP/DIR/ENA
   drive backend, reused as-is
 - `config/config_preset/example/esp32_stepper_demo.pbtxt` — example preset
-- `firmware/teensy/41/README.md` — the worked example this board mirrors,
-  including the fuller debugging notes from that board's first real
-  hardware pass
+- `firmware/teensy/41/README.md` — shared STEP/DIR backend and wiring guidance

@@ -4,14 +4,9 @@
 # firmware/teensy/41/, a different firmware image
 # (firmware/esp32/, joins the same JoshuaWire 0.0.2 family).
 #
-# PROTOCOL VERIFIED, MOTION NOT YET — firmware/esp32/ is flashed and the
-# JoshuaWire 0.0.2 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
-# against real hardware (firmware/esp32/README.md Status). Unlike
-# teensy_stepper_demo.pbtxt, nobody has wired this exact preset to a
-# TB6600/motor and confirmed it turns yet. Port, pins, and microstepping
-# below are reasonable starting defaults, not confirmed-working motion
-# values — check them against your actual driver before trusting them,
-# and update this comment (and firmware/esp32/README.md) once you have.
+# Review the serial port, GPIO pins and microstepping against the actual
+# board and driver wiring before enabling channels or commanding motion.
+# See firmware/esp32/README.md for wiring and startup limitations.
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \

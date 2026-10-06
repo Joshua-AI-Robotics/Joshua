@@ -30,12 +30,12 @@ former JW2 code, APIs and build targets now use the unversioned JW name.
 The validated wire revision remains `2`, including CRC, session/message IDs,
 command payloads and EtherCAT layout. Vendor TI-demo metadata remains separate.
 
-| Board/path | Status | README |
+| Board/path | Implementation | README |
 | --- | --- | --- |
-| AM243 UART | Serial protocol validated; software channel with no GPIO output | [AM243](am243/joshua_dual_transport/README.md) |
-| AM243 JW EtherCAT, TI stack | Protocol and watchdog bench validated; software-only channel | [AM243 EtherCAT profile](am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile) |
-| Teensy 4.1 serial | Protocol validated; powered forward/return bench passed | [Teensy](teensy/41/README.md) |
-| ESP32 serial | Protocol validated; powered motion remains untested | [ESP32](esp32/README.md) |
+| AM243 UART | Software channel; no GPIO output | [AM243](am243/joshua_dual_transport/README.md) |
+| AM243 JW EtherCAT, TI stack | Software channel with watchdogs; no GPIO output | [AM243 EtherCAT profile](am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile) |
+| Teensy 4.1 serial | STEP/DIR GPIO backend; native USB serial | [Teensy](teensy/41/README.md) |
+| ESP32 serial | STEP/DIR GPIO backend; UART/USB bridge | [ESP32](esp32/README.md) |
 | Arduino | Not started | [Arduino](arduino/README.md) |
 | AM243 vendor TI EtherCAT demo | Historical vendor bring-up metadata | [TI demo](am243/ti_ethercat_simple_demo_v1/README.md) |
 
@@ -54,9 +54,8 @@ host Board config. Omitted protocol selects JW for Joshua boards; vendor boards
 retain their own protocol. There is no auto-detection or fallback to JW1.
 Existing explicit `JOSHUA_WIRE_V2` configs must use `JOSHUA_WIRE`.
 
-[Serial validation](../docs/JOSHUA_WIRE_VALIDATION.md#hardware-validation-status)
-passed on AM243 UART, Teensy 4.1 and ESP32. Teensy also passed a powered
-forward/return bench; ESP32 powered motion and the ROS 2 path remain untested.
+Use the [serial validation procedure](../docs/JOSHUA_WIRE_VALIDATION.md)
+for operator-confirmed hardware checks.
 The AM243 default image serves JW on UART; EtherCAT still runs TI's demo with
 separate state and no physical motor output. Use the separate JW EtherCAT
 artifact below for Joshua EtherCAT runtime.
@@ -86,17 +85,14 @@ reuse that core and the same host communication implementation; see the
 [firmware porting contract](common/README.md#porting-jw-ethercat-to-another-board).
 The original AM243 images still link TI's one-hour evaluation stack. A separate
 [SOES candidate](am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
-now builds without that stack and passes native protocol tests. It has been
-flashed and passed discovery/handshake, but [register timeouts still block
-hardware/endurance qualification](../docs/JOSHUA_WIRE_VALIDATION.md#soes-candidate-bring-up--2026-09-28),
-so evaluation-stack retirement remains pending.
+builds without that stack and has native protocol coverage. Hardware timing
+and endurance qualification remain open, including the
+[master-side NIC timing issue](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+Evaluation-stack retirement remains pending.
 
 The production firmware core has native host-interoperability and controlled-clock
-tests. A [single-board EtherCAT bench check](../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28)
-passed factory/engine commands, software feedback and stale-target fault/recovery.
-It also exposed a host mailbox deadline failure with a 1 ms budget; production
-timing validation remains open. There is still no physical motor backend or
-simultaneous transport arbitration.
+tests. There is still no physical motor backend or simultaneous transport
+arbitration. Native coverage does not establish production timing or motor safety.
 Explicit watchdog intervals are required at build time; see the profile README
 for the mapping, build command and safety limits. No flashing is automatic.
 
@@ -113,7 +109,7 @@ firmware/
   am243/        # TI demo metadata plus Joshua's dual-transport source overlay
   teensy/41/    # Joshua-owned firmware for the Teensy 4.1
   arduino/      # not started — placeholder README only
-  esp32/        # Joshua-owned firmware for ESP32, flashed & protocol-verified
+  esp32/        # Joshua-owned UART STEP/DIR firmware
 ```
 
 Firmware variants should be explicit build artifacts. A board may support more

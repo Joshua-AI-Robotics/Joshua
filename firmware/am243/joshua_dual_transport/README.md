@@ -5,13 +5,9 @@ JoshuaWire (JW) `0.0.2` on UART0 at 115200 baud. The build layers Joshua-owned s
 and a small patch over the externally installed TI Industrial Communications
 SDK; it does not modify or vendor the SDK.
 
-The LP-AM243 image implements dual EtherCAT and serial transports for testing
-and verification. The image has been built and flashed on the LP-AM243, the
-serial protocol (IDENTIFY, CONFIGURE, ENABLE, SET_TARGET, GET_FEEDBACK) has
-been exercised, and EtherCAT reaches OPERATIONAL with the serial task active.
-This milestone is intentionally motion-safe: the serial channel reports
-`STEP_DIR` and implements the command/response protocol in software but does
-not drive STEP/DIR GPIOs or move motors.
+The default image serves JW UART alongside TI's EtherCAT echo demo. Its
+serial channel reports `STEP_DIR` and implements command/response handling
+in software; it does not drive STEP/DIR GPIOs or move motors.
 
 ## Prerequisites
 
@@ -37,15 +33,8 @@ temporary working tree and leaves TI SDK sources unchanged.
 The default UART outputs are `am243_dual_transport_jw.release.*`. The script
 forwards arguments to `make`, allowing compiler/tool path overrides. EtherCAT
 in this image remains TI's echo demo; use the separate JW profile below for
-Joshua EtherCAT runtime. The shared software-only UART handler passed eight
-serial sessions on 2026-09-27; see the [recorded validation](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-hardware-result--2026-09-27)
-for the original artifact and scope. See [JW limits](../../README.md#joshuawire-serial).
-
-The [JW 0.0.2 UART reflash on 2026-10-05](../../../docs/JOSHUA_WIRE_VALIDATION.md#am243-jw-002-uart-reflash--2026-10-05)
-verified bootloader and application flash, then passed ten production-host
-sessions including configuration, software targets at +250/-250, feedback,
-ENABLE/DISABLE and ESTOP. The first connection and reopening passed without
-a post-open wait. This run did not test the separate JW EtherCAT image.
+Joshua EtherCAT runtime. See [JW limits](../../README.md#joshuawire-serial)
+and the [serial validation procedure](../../../docs/JOSHUA_WIRE_VALIDATION.md).
 
 ### Opt-in JW EtherCAT profile
 
@@ -120,22 +109,18 @@ only cancels the command slot. Replies remain until the matching acknowledgment;
 duplicates never execute again or refresh watchdogs.
 
 Native tests exercise the production core with a controlled clock and through
-the host's paired CoE/PDO adapters. This profile was flashed and bench-tested on
-LP-AM243 on 2026-09-28: discovery, factory/engine commands, software feedback,
-stale-target latching and fresh-session recovery passed. One 1 ms host mailbox
-deadline failure was also observed; broader timing validation remains open.
-See the [artifact, results and limits](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
-Software watchdog behavior is not
-proof of physical motor safety, CPU-halt coverage or hard-real-time timing.
+the host's paired CoE/PDO adapters. Production Ethernet timing requires hardware
+qualification. Software watchdog behavior does not establish physical motor
+safety, CPU-halt coverage or hard-real-time timing.
 
 ### Opt-in SOES replacement
 
-**Flashed; discovery and handshake verified, hardware qualification incomplete.**
-The [SOES bench record](../../../docs/JOSHUA_WIRE_VALIDATION.md#soes-candidate-bring-up--2026-09-28)
-documents a corrected host mailbox-counter assumption and remaining 5 ms
-register timeouts; target/watchdog/endurance checks have not passed. The TI
-profiles above remain available until the replacement passes real-board tests
-and a continuous run beyond one hour. No proprietary timeout is patched out.
+**Candidate; hardware qualification incomplete.**
+Register receive deadlines remain affected by the
+[master-side NIC timing issue](../../../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+The TI profiles remain available until the replacement passes real-board
+qualification and a continuous run beyond one hour. No proprietary timeout
+is patched out.
 
 ```bash
 JOSHUA_ETHERCAT_PROFILE=jw-soes \
@@ -191,8 +176,8 @@ commercial redistribution.
 The [JW EtherCAT config](../../../config/README.md#joshuawire-over-ethercat)
 now selects paired adapters through CommFactory and the shared board engine.
 Native integration tests run that entire path against this production firmware
-core. The recorded single-board bench check also exercises SDK callbacks, but
-does not establish production Ethernet timing or physical-output safety.
+core. Native coverage does not establish production Ethernet timing or
+physical-output safety.
 
 ## Flash
 
@@ -223,8 +208,8 @@ validation references above; the default UART image contains TI echo EtherCAT.
 
 ## Wiring / Pinout
 
-- XDS110 UART console/protocol: `/dev/ttyACM0`, 115200 8-N-1 on the verified
-  LP-AM243 setup.
+- XDS110 UART console/protocol: 115200 8-N-1; the example uses `/dev/ttyACM0`.
+  Check the actual port after connecting the board.
 - EtherCAT: existing LP-AM243 IN/OUT ports and TI demo wiring.
 - STEP/DIR pins are accepted and retained by the serial protocol but are not
   driven in this milestone.

@@ -170,11 +170,9 @@ claims on a slave and mixed timing/protocol policies on a NIC are rejected.
 Consumers of one NIC must run in one node process. The factory caches one master;
 board teardown releases only its endpoint, and the last lease closes the bus.
 
-The host/factory/firmware-core path is native-tested and has a limited
-[single-board EtherCAT bench result](../docs/JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
-Both the 1 ms timing budgets above and a temporary 5 ms policy encountered
-register-datagram deadline failures on that host; do not treat this fragment as
-a validated production timing policy.
+The example timing budgets are illustrative, not a qualified production policy.
+Account for the [master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue)
+and qualify deadlines on the intended host and slave hardware.
 No runnable preset was added and no firmware is flashed by initialization.
 
 ## Sensor configuration

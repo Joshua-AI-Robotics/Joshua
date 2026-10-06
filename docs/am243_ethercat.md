@@ -2,7 +2,7 @@
 
 The runtime now uses the separate [JoshuaWire EtherCAT profile](../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile).
 See [configuration](../config/README.md#joshuawire-over-ethercat) and the
-[bench results and unresolved timing issue](JOSHUA_WIRE_VALIDATION.md#recorded-am243-ethercat-result--2026-09-28).
+[communication contract](../robot/comm/ethercat/README.md).
 The TI-demo host path, codec, driver, smoke targets and preset are retired.
 Firmware build/flash assets below remain as historical bring-up material.
 

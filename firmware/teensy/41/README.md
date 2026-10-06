@@ -40,32 +40,8 @@ Build with `pio run -e teensy41-serial` and select `Board.protocol: JOSHUA_WIRE`
 JW 0.0.2 is the default and only Joshua protocol. Command dispatch lives in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
 [JW protocol and limits](../../README.md#joshuawire-serial).
-The validated correlated protocol passed [eight real native USB serial sessions](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-teensy-41-hardware-result--2026-10-04)
-on 2026-10-04 with motor power disconnected and no post-open wait. A subsequent
-[powered JW bench](../../../docs/JOSHUA_WIRE_VALIDATION.md#powered-teensy-motor-bench--2026-10-04)
-passed smooth forward-and-return motion. Independent pulse timing and the
-ROS 2 path remain unvalidated. The checklist below records historical pre-migration results.
-
-The [JW 0.0.2 reflash on 2026-10-05](../../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-teensy-41-jw-002-reflash--2026-10-05)
-passed eight reset/identify/ESTOP sessions across four port openings, including
-the first connection after each of two uploads with no post-open wait.
-Configure-only feedback had zero position, velocity and faults. No enable or
-target commands were sent; the ESP32 stale-reply issue was not reproduced.
-
-- [x] Toolchain installed (PlatformIO via `pipx`)
-- [x] Firmware built (`pio run`)
-- [x] Firmware flashed (`pio run --target upload`)
-- [x] Board enumerates (`/dev/ttyACM0`, `lsusb` shows "Teensyduino Serial")
-- [x] IDENTIFY handshake verified against real hardware — returned
-      `board_id=TEENSY41`, `n_channels=1`, `channel_drives[0]=STEP_DIR`
-      (`fw_name` is sent zeroed; no host code reads it — see Wiring /
-      Pinout below and `docs/BOARD_LAYER_RFC.md` §7.5)
-- [x] Full command path verified end to end — a `ros2 topic pub` of 10
-      degrees produced 89 real STEP pulses, confirmed via an independent
-      `GET_FEEDBACK` query returning `position=89.0`
-- [x] **Motor physically rotates**, wired to a real TB6600, driven through
-      the real production path (`launcher:joshua_main` +
-      `ros2 topic pub`).
+Use the [serial validation procedure](../../../docs/JOSHUA_WIRE_VALIDATION.md)
+for reset/identify/ESTOP checks before enabling channels.
 
 ## Prerequisites
 

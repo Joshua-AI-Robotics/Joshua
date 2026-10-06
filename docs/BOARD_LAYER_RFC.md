@@ -15,10 +15,9 @@ routing, it supersedes the corresponding open question in this RFC.
 The [separation plan's implementation status](BOARD_COMM_SEPARATION_PLAN.md#implementation-status)
 is the current checklist. It covers the shared JW engine, serial framing/timing
 and factory-wired CoE/PDO endpoints; the legacy TI-demo host path is retired.
-[Validation results](JOSHUA_WIRE_VALIDATION.md#hardware-validation-status)
-distinguish native coverage, serial/motion bench passes and unfinished EtherCAT
-qualification. The original findings and proposal below are historical where
-superseded by that plan.
+The [serial validation procedure](JOSHUA_WIRE_VALIDATION.md) describes manual
+checks; EtherCAT hardware qualification remains open. The original findings
+and proposal below are historical where superseded by that plan.
 
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.
@@ -52,7 +51,7 @@ layer deleted.
 
 | Item | State |
 | --- | --- |
-| Comm axis beyond serial for `joshua_wire` boards | JW EtherCAT native-tested and single-board bench-tested; broader timing/failure validation open |
+| Comm axis beyond serial for `joshua_wire` boards | JW EtherCAT implemented with native coverage; hardware timing/failure qualification open |
 | UDP transport (`ETHERNET_UDP` is in the proto, unimplemented) | open |
 | Perception through the board layer | open |
 | Flash tooling, `FirmwareSpec` check, IDENTIFY capability bits | open |

@@ -19,12 +19,8 @@ Native regression coverage includes correlation, retries, ID exhaustion, late
 replies, timeouts, teardown, factory boundaries and two-slave sharing. Vendor consumers retain their fixed-length compatibility interface.
 Serial timing comes from protobuf config, not board-specific sleeps.
 
-[Hardware results](JOSHUA_WIRE_VALIDATION.md#hardware-validation-status):
-AM243 UART, Teensy and ESP32 passed basic JW serial checks; Teensy also passed
-a limited powered-motion bench. The TI-stack AM243 EtherCAT profile passed
-software-channel targets and stale-target recovery, but host register deadlines
-failed in longer runs. The SOES candidate passes discovery/handshake; its
-qualification remains blocked by the
+Use the [serial validation procedure](JOSHUA_WIRE_VALIDATION.md) for manual
+hardware checks. EtherCAT qualification is affected by the
 [master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
 
 Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
@@ -34,8 +30,8 @@ satisfy these gates. AM243 firmware has no physical motor backend; simultaneous
 UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
 separate work. The single-transport artifacts do not claim those capabilities.
 
-The contracts below define the target design; software tests and limited bench
-passes do not establish hard-real-time behavior or physical-output safety.
+The contracts below define the target design; software coverage does not
+establish hard-real-time behavior or physical-output safety.
 See [firmware usage](../firmware/README.md) and [configuration](../config/README.md).
 
 ## 1. Goal
