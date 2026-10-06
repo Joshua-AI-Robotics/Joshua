@@ -1,17 +1,16 @@
-# Teensy 4.1 — joshua_wire_v1 STEP/DIR firmware
+# Teensy 4.1 — JoshuaWire STEP/DIR firmware
 
 Joshua-owned firmware (not a vendor demo) for a Teensy 4.1 driving STEP/DIR
 channels — a TB6600 in the reference wiring, but this firmware only ever
 toggles STEP/DIR/ENA pins; it never names the stepper drive chip
-(docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` over native USB
-serial. Paired host-side class: `robot/board/teensy/teensy_board.h`
-(header-only).
+(docs/BOARD_LAYER_RFC.md §5.2). Speaks JoshuaWire (JW) `0.0.2` over native USB serial. Paired host-side class:
+`robot/board/teensy/teensy_board.h` (header-only).
 
 ## Layout
 
 ```text
 firmware/teensy/41/
-  platformio.ini        one env per wiring variant (today: teensy41-serial);
+  platformio.ini        teensy41-serial environment (JW 0.0.2);
                         -I src in build_flags so firmware/common/
                         libraries (below) can see this project's own
                         channel_table.h
@@ -21,14 +20,14 @@ firmware/teensy/41/
                           pin numbers are host-configured, not here — see
                           Wiring / Pinout below (docs/BOARD_LAYER_RFC.md §7.5)
     channel_table.h
-    transport_serial.{h,cpp} joshua_wire_v1 framing over Serial
+    transport_serial.{h,cpp} JW serial frame boundaries
 ```
 
-`joshua_wire_v1.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
+`joshua_wire.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
 `platformio.ini` pulls them in directly from `firmware/common/` via
 `lib_deps = symlink://../../common` (docs/BOARD_LAYER_RFC.md §7.3, revised):
-`joshua_wire_v1` because host and firmware must agree on the wire format for
-a given commit (`//firmware/common:joshua_wire_v1` in Bazel builds the same
+`joshua_wire` because host and firmware must agree on the wire format for
+a given commit (`//firmware/common:joshua_wire` in Bazel builds the same
 two files for the host side); `backend_stepdir` because STEP/DIR/ENA pulse
 generation is a physical fact about the driver chip, not an MCU-vendor fact
 — the same `digitalWrite`-based source works unchanged on any
@@ -37,20 +36,12 @@ the same way rather than copy-pasted per firmware.
 
 ## Status
 
-- [x] Toolchain installed (PlatformIO via `pipx`)
-- [x] Firmware built (`pio run`)
-- [x] Firmware flashed (`pio run --target upload`)
-- [x] Board enumerates (`/dev/ttyACM0`, `lsusb` shows "Teensyduino Serial")
-- [x] IDENTIFY handshake verified against real hardware — returned
-      `board_id=TEENSY41`, `n_channels=1`, `channel_drives[0]=STEP_DIR`
-      (`fw_name` is sent zeroed; no host code reads it — see Wiring /
-      Pinout below and `docs/BOARD_LAYER_RFC.md` §7.5)
-- [x] Full command path verified end to end — a `ros2 topic pub` of 10
-      degrees produced 89 real STEP pulses, confirmed via an independent
-      `GET_FEEDBACK` query returning `position=89.0`
-- [x] **Motor physically rotates**, wired to a real TB6600, driven through
-      the real production path (`launcher:joshua_main` +
-      `ros2 topic pub`).
+Build with `pio run -e teensy41-serial` and select `Board.protocol: JOSHUA_WIRE`.
+JW 0.0.2 is the default and only Joshua protocol. Command dispatch lives in
+`firmware/common/joshua_stepdir_commands.cpp`; see the
+[JW protocol and limits](../../README.md#joshuawire-serial).
+Use the [serial validation procedure](../../../docs/JOSHUA_WIRE_VALIDATION.md)
+for reset/identify/ESTOP checks before enabling channels.
 
 ## Prerequisites
 
@@ -90,7 +81,7 @@ cd firmware/teensy/41
 pio run
 ```
 
-This pulls `firmware/common/joshua_wire_v1.{h,c}` in via the `symlink://`
+This pulls `firmware/common/joshua_wire.{h,c}` in via the `symlink://`
 `lib_deps` entry and compiles it alongside `src/*.cpp`/`*.c` for the
 `teensy41-serial` environment. First run also downloads the `teensy`
 platform, ARM toolchain, and Arduino framework (a few hundred MB).
@@ -224,15 +215,14 @@ they vary (some are current-then-microstep, some the reverse).
 
 - `robot/board/teensy/teensy_board.h` — paired host-side board class;
   header-only, a one-line constructor passing Teensy's identity
-  (`TEENSY41`, `JW1_BOARD_TEENSY41`) up to `JoshuaWireBoard` — everything
+  (`TEENSY41`, `JW_BOARD_TEENSY41`) up to `JoshuaWireBoard` — everything
   else is inherited, see below
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
-  joshua_wire_v1 host board (Teensy today, Arduino/ESP32 later) runs
-  through unchanged (docs/BOARD_LAYER_RFC.md §7.3)
+  JoshuaWire host board runs through unchanged (docs/BOARD_LAYER_RFC.md §7.3)
 - `robot/board/teensy/teensy_driver_smoke.cc` — board-level smoke test,
   bypasses ActionFactory/ROS entirely (`bazel run
   //robot/board/teensy:teensy_driver_smoke -- /dev/ttyACM0`)
 - `robot/action/motors/drivers/stepper_driver.*` — paired motor driver
-- `firmware/common/joshua_wire_v1.{h,c}` — the shared wire codec
+- `firmware/common/joshua_wire.{h,c}` — the shared wire codec
 - `config/config_preset/example/teensy_stepper_demo.pbtxt` — example preset

@@ -12,7 +12,7 @@
 // times, printing every status. A working board/firmware/wiring chain
 // prints "OK" for every line and the motor visibly moves; any failure
 // (wrong firmware, bad wiring, unplugged board) surfaces as a non-OK
-// status with an actionable message from LegacyJoshuaWireBoard/JoshuaWireChannel
+// status with an actionable message from JoshuaWireBoard/JoshuaWireChannel
 // (robot/board/joshua_wire/), which Esp32Board is a thin subclass of.
 #include <glog/logging.h>
 
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port(port);
   comm->mutable_serial_config()->set_baudrate(115200);
+  comm->mutable_serial_config()->set_post_open_settle_ms(2000);
   config.mutable_firmware()->set_min_proto_version(1);
   auto* channel = config.add_channels();
   channel->set_index(0);

@@ -1,167 +1,54 @@
-// firmware/teensy/41 — Joshua's own firmware protocol (joshua_wire_v1) on a
-// Teensy 4.1, driving TB6600 (or any STEP/DIR drive) channels declared in
-// channel_table.c (docs/BOARD_LAYER_RFC.md §7). No joint names, no limits,
-// no robot identity here — this binary is "N STEP_DIR channels speaking
-// joshua_wire_v1", nothing else; per-robot facts live in the host .pbtxt.
+// Serial firmware artifact using JoshuaWire 0.0.2.
 #include <Arduino.h>
-#include <string.h>
 
 #include "backend_stepdir.h"
 #include "channel_table.h"
-#include "joshua_wire_v1.h"
+#include "joshua_stepdir_commands.h"
+#include "joshua_wire_endpoint.h"
 #include "transport_serial.h"
 
+#if !defined(JOSHUA_TRANSPORT_SERIAL)
+#error "Select an explicit serial firmware build profile"
+#endif
+
 namespace {
-
-ChannelState* LookupChannel(uint8_t index) {
-  if (index >= g_num_channels) {
-    return nullptr;
-  }
-  return &g_channels[index];
-}
-
-void RespondStatus(uint8_t cmd, uint8_t channel, jw1_status_t status) {
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
-  if (len > 0) {
-    TransportWriteFrame(buf, static_cast<size_t>(len));
-  }
-}
-
-void HandleIdentify() {
-  jw1_identify_response_t response;
-  memset(&response, 0, sizeof(response));
-  response.board_id = JW1_BOARD_TEENSY41;
-  // fw_name intentionally left zeroed: no host code checks it
-  // (docs/BOARD_LAYER_RFC.md §7.5) — proto_ver + per-channel drive type
-  // are the real compatibility gate.
-  response.n_channels = g_num_channels;
-  for (uint8_t i = 0; i < g_num_channels; i++) {
-    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
-  }
-
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
-  if (len > 0) {
-    TransportWriteFrame(buf, static_cast<size_t>(len));
-  }
-}
-
-void HandleConfigureChannel(const jw1_frame_t& frame) {
-  ChannelState* channel = LookupChannel(frame.channel);
-  jw1_configure_step_dir_t config;
-  if (channel == nullptr || jw1_decode_configure_channel_step_dir(&frame, &config) != 0) {
-    RespondStatus(JW1_CMD_CONFIGURE_CHANNEL, frame.channel, JW1_STATUS_ERROR);
-    return;
-  }
-  StepDirConfigure(channel, &config);
-  RespondStatus(JW1_CMD_CONFIGURE_CHANNEL, frame.channel, JW1_STATUS_OK);
-}
-
-void HandleSetTarget(const jw1_frame_t& frame) {
-  ChannelState* channel = LookupChannel(frame.channel);
-  jw1_set_target_t target;
-  if (channel == nullptr || jw1_decode_set_target(&frame, &target) != 0) {
-    RespondStatus(JW1_CMD_SET_TARGET, frame.channel, JW1_STATUS_ERROR);
-    return;
-  }
-  StepDirSetTarget(channel, target.mode, target.value);
-  RespondStatus(JW1_CMD_SET_TARGET, frame.channel, JW1_STATUS_OK);
-}
-
-void HandleGetFeedback(const jw1_frame_t& frame) {
-  ChannelState* channel = LookupChannel(frame.channel);
-  if (channel == nullptr) {
-    RespondStatus(JW1_CMD_GET_FEEDBACK, frame.channel, JW1_STATUS_ERROR);
-    return;
-  }
-  jw1_feedback_t feedback;
-  feedback.position = static_cast<float>(channel->step_dir.position_steps);
-  // Open-loop: no tachometer. Reports the last commanded velocity target
-  // when in velocity mode, 0 otherwise — an approximation, not a
-  // measurement.
-  feedback.velocity = channel->target_mode == JW1_MODE_VELOCITY ? channel->target_value : 0.0f;
-  feedback.fault_flags = 0;
-
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_feedback_response(buf, sizeof(buf), frame.channel, &feedback);
-  if (len > 0) {
-    TransportWriteFrame(buf, static_cast<size_t>(len));
-  }
-}
-
-void HandleEnable(const jw1_frame_t& frame) {
-  ChannelState* channel = LookupChannel(frame.channel);
-  if (channel == nullptr) {
-    RespondStatus(JW1_CMD_ENABLE, frame.channel, JW1_STATUS_ERROR);
-    return;
-  }
-  StepDirEnable(channel);
-  RespondStatus(JW1_CMD_ENABLE, frame.channel, JW1_STATUS_OK);
-}
-
-void HandleDisable(const jw1_frame_t& frame) {
-  ChannelState* channel = LookupChannel(frame.channel);
-  if (channel == nullptr) {
-    RespondStatus(JW1_CMD_DISABLE, frame.channel, JW1_STATUS_ERROR);
-    return;
-  }
-  StepDirDisable(channel);
-  RespondStatus(JW1_CMD_DISABLE, frame.channel, JW1_STATUS_OK);
-}
-
-void HandleEstop(const jw1_frame_t& frame) {
-  for (uint8_t i = 0; i < g_num_channels; i++) {
-    StepDirDisable(&g_channels[i]);
-  }
-  RespondStatus(JW1_CMD_ESTOP, frame.channel, JW1_STATUS_OK);
-}
-
-void Dispatch(const jw1_frame_t& frame) {
-  switch (frame.cmd) {
-    case JW1_CMD_IDENTIFY:
-      HandleIdentify();
-      return;
-    case JW1_CMD_CONFIGURE_CHANNEL:
-      HandleConfigureChannel(frame);
-      return;
-    case JW1_CMD_SET_TARGET:
-      HandleSetTarget(frame);
-      return;
-    case JW1_CMD_GET_FEEDBACK:
-      HandleGetFeedback(frame);
-      return;
-    case JW1_CMD_ENABLE:
-      HandleEnable(frame);
-      return;
-    case JW1_CMD_DISABLE:
-      HandleDisable(frame);
-      return;
-    case JW1_CMD_ESTOP:
-      HandleEstop(frame);
-      return;
-    default:
-      RespondStatus(frame.cmd, frame.channel, JW1_STATUS_UNSUPPORTED);
-      return;
-  }
-}
-
+jw_endpoint_t endpoint;
+SerialTransport serial;
+frame_transport_t transport;
+uint8_t response[JW_MAX_FRAME_LEN];
+size_t pending_response_length;
+JoshuaStepDirProtocol protocol{JW_BOARD_TEENSY41, "teensy-serial", false};
 }  // namespace
 
 void setup() {
-  TransportInit();
-  for (uint8_t i = 0; i < g_num_channels; i++) {
-    StepDirInit(&g_channels[i]);
-  }
+  transport = TransportSerialInit(&serial, {115200, 20});
+  for (uint8_t i = 0; i < g_num_channels; ++i) StepDirInit(&g_channels[i]);
+  jw_endpoint_init(&endpoint);
+  pending_response_length = 0;
 }
 
 void loop() {
-  uint8_t frame_buf[JW1_MAX_FRAME_LEN];
-  jw1_frame_t frame;
-  if (TransportReadFrame(&frame, frame_buf, sizeof(frame_buf))) {
-    Dispatch(frame);
+  // Do not consume another request or execute this command again while its
+  // response is awaiting acceptance. The endpoint itself performs no I/O.
+  if (pending_response_length == 0) {
+    uint8_t request[JW_MAX_FRAME_LEN];
+    size_t request_length = 0;
+    if (transport.poll_receive(transport.context, request, sizeof(request), &request_length) ==
+        FRAME_OK) {
+      const int length = jw_endpoint_process(&endpoint,
+                                             request,
+                                             request_length,
+                                             response,
+                                             sizeof(response),
+                                             JoshuaStepDirCommand,
+                                             JoshuaStepDirReset,
+                                             &protocol);
+      if (length > 0) pending_response_length = static_cast<size_t>(length);
+    }
   }
-  for (uint8_t i = 0; i < g_num_channels; i++) {
-    StepDirService(&g_channels[i]);
+  if (pending_response_length != 0 &&
+      transport.try_send(transport.context, response, pending_response_length) == FRAME_OK) {
+    pending_response_length = 0;
   }
+  for (uint8_t i = 0; i < g_num_channels; ++i) StepDirService(&g_channels[i]);
 }
