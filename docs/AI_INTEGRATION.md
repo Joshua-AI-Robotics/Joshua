@@ -30,7 +30,8 @@ subsystem or runtime roles.
   or restarts require fresh confirmation.
 - **Show what actually happened.** Use correctly associated, fresh measured
   feedback with known units and tolerances. Report progress, completed actions,
-  timeouts, and faults; cancellation remains available without the model.
+  timeouts, and faults. Missing feedback or a fault invokes the task's defined
+  stop behavior; cancellation remains available without the model.
 - **Demonstrate hardware coverage.** Each implemented hardware path needs
   applicable MCP integration and verification. Record missing evidence as a gap
   rather than presenting that path as covered.
@@ -98,14 +99,8 @@ missing or unverified paths keep this checkpoint open. New hardware can merge
 first, with its MCP integration following the relevant merged contract in the
 same or a linked PR. Track that gap until integration and verification land.
 
-## Further design detail
-
-The [hardware and MCP](ai-integration/HARDWARE_MCP_DESIGN.md),
-[reusable task](ai-integration/REUSABLE_TASKS_DESIGN.md),
-[observability](ai-integration/OBSERVABILITY_DESIGN.md), and
-[action group](ai-integration/EXPERIMENT_DESIGN.md) briefs outline follow-up PRs.
-Agree on the first robot, task, client, and feedback contract, then refine the
-relevant design before implementation.
+Agree on the first robot, task, client, and feedback contract before writing
+implementation designs in follow-up PRs.
 
 ## Relevant current capabilities
 
