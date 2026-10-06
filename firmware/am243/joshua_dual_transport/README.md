@@ -158,13 +158,23 @@ SII contains four fixed SMs and FMMU types; the master obtains PDO mapping
 through CoE. No standalone ESI is provided. Physical EEPROM is neither loaded
 nor written; runtime identity/mapping writes and segmented CoE writes are rejected.
 
-Before retiring the TI-stack profile, qualify discovery, PREOP/SAFEOP/OP,
-reset/IDENTIFY, both command planes, retry/ack behavior, watchdog expiry,
-OP/link loss and recovery on the AM243. Then run fresh target/feedback traffic
-for **more than 60 minutes without rebooting**, confirming continued commands
-and console uptime. Existing NIC/mailbox reliability issues remain open until
-measured; changing stacks alone is not evidence they are resolved. Native tests
-and a successful image build do not satisfy this gate.
+#### TODO: Retire TI-stack profiles after SOES qualification
+
+Keep `JOSHUA_ETHERCAT_PROFILE=jw` available as a comparison implementation
+during SOES bring-up. Retirement requires:
+
+- [ ] Resolve the master-side NIC receive timing issue on the intended host.
+- [ ] Qualify SOES discovery, PREOP/SAFEOP/OP, reset/IDENTIFY, both command
+  planes, retry/ack behavior, watchdog expiry, OP/link loss and recovery.
+- [ ] Run fresh SOES target/feedback traffic for **more than 60 minutes without
+  rebooting**, confirming continued commands and console uptime.
+- [ ] Remove the TI-stack JW EtherCAT profile and its adapter/build assets.
+- [ ] Make the default JW UART image UART-only, removing its TI EtherCAT demo
+  dependency so current runtime images no longer link the evaluation slave stack.
+
+Changing stacks alone does not resolve host timing issues; native tests and a
+successful image build do not satisfy hardware qualification. TI SDK hardware
+and PRU dependencies remain external inputs after slave-stack retirement.
 
 SOES is GPLv2 with its upstream linking exception. TI's hardware interface and
 PRU firmware retain their own licenses and remain external SDK inputs. This is

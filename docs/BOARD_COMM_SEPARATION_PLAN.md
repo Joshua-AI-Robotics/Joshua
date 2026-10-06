@@ -26,7 +26,9 @@ hardware checks. EtherCAT qualification is affected by the
 Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
 OP/link-loss recovery and the separately approved SOES run longer than one hour
 before evaluation-stack retirement. Disabled-channel polling diagnostics do not
-satisfy these gates. AM243 firmware has no physical motor backend; simultaneous
+satisfy these gates. Track TI profile removal and conversion of the default UART
+image to UART-only in the [firmware retirement TODO](../firmware/am243/joshua_dual_transport/README.md#todo-retire-ti-stack-profiles-after-soes-qualification).
+AM243 firmware has no physical motor backend; simultaneous
 UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
 separate work. The single-transport artifacts do not claim those capabilities.
 
