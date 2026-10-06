@@ -73,6 +73,7 @@ cc_test(
         ":joshua_wire_board",
         ":joshua_wire_session",
         "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_profiles",
         "//robot/comm/factory:comm_factory",

@@ -26,16 +26,23 @@ FILES_PATH := \
 
 INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
 
-JOSHUA_OBJECTS := transport_uart.obj serial_frame_assembler.obj serial_frame_transport.obj joshua_serial_task.obj joshua_commands.obj joshua_wire.obj \
-    joshua_wire_commands.obj joshua_wire_profiles.obj joshua_wire_firmware_session.obj \
-    joshua_wire_endpoint.obj joshua_device_runtime.obj joshua_wire_stream.obj
-# SysConfig supplies RNG/SA2UL configuration for a fresh hardware boot identity.
+JOSHUA_OBJS := transport_uart.obj serial_frame_assembler.obj serial_frame_transport.obj joshua_wire_stream.obj joshua_serial_task.obj \
+	joshua_commands.obj joshua_wire_commands.obj joshua_wire_profiles.obj \
+	joshua_wire_resources.obj joshua_device_runtime.obj joshua_wire.obj \
+	joshua_wire_firmware_session.obj joshua_wire_endpoint.obj
+ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw)
+JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire.obj \
+	joshua_wire_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
+INCLUDES += -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
+	-DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)
+endif
+# SysConfig supplies the UART boot identity hardware RNG.
 LIBS += -lsecurity.am243x.r5f.ti-arm-clang.$(ConfigName).lib
 LIBS_PATH += -Wl,-i$(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)/mcu_plus_sdk/source/security/lib
-OBJS += $(JOSHUA_OBJECTS)
-DEPS += $(JOSHUA_OBJECTS:.obj=.d)
+OBJS += $(JOSHUA_OBJS)
+DEPS += $(JOSHUA_OBJS:.obj=.d)
 
 vpath %.c
 vpath %.c $(FILES_PATH)
 
-$(OUTNAME): $(JOSHUA_OBJECTS)
+$(OUTNAME): $(JOSHUA_OBJS)

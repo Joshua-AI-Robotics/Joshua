@@ -77,3 +77,21 @@ Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
   reusing a constant boot identity.
 - TI's external evaluation stack retains its vendor runtime restrictions.
 - This revision requires separate physical flashing/handshake verification.
+
+## Opt-in JW EtherCAT profile
+
+Set `JOSHUA_ETHERCAT_PROFILE=jw`, `JOSHUA_COMM_WATCHDOG_US` and
+`JOSHUA_TARGET_WATCHDOG_US` explicitly before running `scripts/build.sh`. Both
+watchdog values must be 10000..999999999 microseconds. This selects the shared
+JW descriptor, session, CoE mailbox and correlated 80-byte PDO profile through
+the TI stack. Its channel remains software-only. The artifact is
+`out/am243_ethercat_jw.release.appimage`, distinct from the UART/TI-demo artifact.
+
+Native tests use the production firmware profile and command handler to cover
+retained replies, cross-plane IDs, duplicate handling, watchdog expiry,
+operational-state loss and host interoperability. They do not qualify real
+EtherCAT timing or physical motor outputs.
+
+TODO: retain this TI-stack JW profile until the separate SOES replacement has
+completed AM243 hardware qualification and endurance testing, then review its
+retirement.
