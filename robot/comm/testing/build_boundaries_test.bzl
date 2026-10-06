@@ -7,7 +7,7 @@ def _transport_boundary_test_impl(ctx):
         for header in library[CcInfo].compilation_context.headers.to_list():
             path = header.short_path
             if ("robot/comm/serial/" in path or
-                "robot/comm/ethercat/soem_" in path or
+                "robot/comm/ethercat/" in path or
                 "/include/soem/" in path):
                 fail("%s exposes private implementation header %s" % (library.label, path))
     executable = ctx.actions.declare_file(ctx.label.name + ".sh")
