@@ -26,7 +26,7 @@
 #pragma once
 
 #include "channel_table.h"
-#include "joshua_wire_v1.h"
+#include "joshua_wire_commands.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,10 +42,10 @@ void StepDirInit(ChannelState* channel);
 // called again), then disables the channel as a safe default until an
 // explicit Enable() arrives. Enable()/SetTarget() are no-ops before this
 // has run at least once (see ChannelState.configured in channel_table.h).
-void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config);
+void StepDirConfigure(ChannelState* channel, const jw_configure_step_dir_t* config);
 void StepDirEnable(ChannelState* channel);
 void StepDirDisable(ChannelState* channel);
-void StepDirSetTarget(ChannelState* channel, jw1_mode_t mode, float value);
+void StepDirSetTarget(ChannelState* channel, jw_mode_t mode, float value);
 
 // Call every loop() iteration for every channel: issues at most one pulse
 // per call, throttled to step_dir.config.max_pulse_rate_hz. No acceleration ramp in

@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "joshua_wire_v1.h"
+#include "joshua_wire_commands.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,11 +27,11 @@ extern "C" {
 // its own analogous struct here (e.g. a PWM backend's duty cycle and timer
 // handle), not these fields.
 typedef struct {
-  jw1_configure_step_dir_t config;  // Pushed by CONFIGURE_CHANNEL at host Init();
-                                    // includes step_pin/dir_pin/enable_pin.
-  long position_steps;              // Open-loop: counted pulses, not measured.
-  unsigned long last_step_us;       // micros() timestamp of the last pulse, for
-                                    // max_pulse_rate_hz throttling.
+  jw_configure_step_dir_t config;  // Pushed by CONFIGURE_CHANNEL at host Init();
+                                   // includes step_pin/dir_pin/enable_pin.
+  long position_steps;             // Open-loop: counted pulses, not measured.
+  unsigned long last_step_us;      // micros() timestamp of the last pulse, for
+                                   // max_pulse_rate_hz throttling.
 } StepDirState;
 
 typedef struct {
@@ -39,7 +39,7 @@ typedef struct {
   // nothing above this line assumes STEP_DIR.
   bool configured;  // False until the first CONFIGURE_CHANNEL.
   bool enabled;
-  jw1_mode_t target_mode;
+  jw_mode_t target_mode;
   float target_value;  // Native unit; meaning is backend-defined (steps /
                        // steps-per-sec for STEP_DIR).
 

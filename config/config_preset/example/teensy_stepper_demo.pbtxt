@@ -1,8 +1,7 @@
-# Single NEMA17 stepper on a Teensy 4.1 (TB6600 drive) via joshua_wire_v1
-# over native USB serial (docs/BOARD_LAYER_RFC.md §10 Phase 5). Verified
-# end to end on real hardware, including physical motor rotation — see
+# Single NEMA17 stepper on a Teensy 4.1 (TB6600 drive) via JoshuaWire 0.0.2
+# over native USB serial (docs/BOARD_LAYER_RFC.md §10 Phase 5). See
 # firmware/teensy/41/README.md's Wiring / Pinout section for the wiring
-# diagram and DIP switch notes before wiring a second board.
+# diagram and DIP switch notes before enabling channels or commanding motion.
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \
@@ -24,13 +23,14 @@ robot {
   boards {
     name: "stepper_bus"
     board_type: TEENSY41
+    protocol: JOSHUA_WIRE
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
       serial_config { port: "/dev/ttyACM0" baudrate: 115200 }
     }
     firmware {
-      min_proto_version: 1
+      min_proto_version: 2
     }
     channels {
       index: 0

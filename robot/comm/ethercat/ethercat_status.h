@@ -1,7 +1,7 @@
 #pragma once
 
 #include "absl/status/status.h"
-#include "robot/comm/ethercat/ethercat_transport.h"
+#include "robot/comm/ethercat/ethercat_types.h"
 
 namespace robot::comm::ethercat {
 

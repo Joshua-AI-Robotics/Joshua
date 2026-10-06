@@ -1,21 +1,25 @@
 #include "robot/comm/factory/comm_factory.h"
 
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <climits>
 #include <memory>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
-#include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_transports.h"
 
 namespace robot::comm {
 namespace {
 
-using robot::comm::ethercat::FakeEthercatTransport;
-
 robot::comm::Comm MakeEthercatComm() {
   robot::comm::Comm comm;
   comm.set_comm_type(robot::comm::CommType::ETHERCAT);
-  comm.set_transport_type(robot::comm::TransportType::CYCLIC);
+  comm.set_transport_type(robot::comm::TransportType::MESSAGE_AND_CYCLIC);
   auto* config = comm.mutable_ethercat_config();
   config->set_interface_name("joshua-no-such-ethercat-iface0");
   config->set_process_data_mode(
@@ -47,105 +51,127 @@ TEST(CommFactoryTest, CreateCommRejectsUnsupportedMechanismCapabilityPair) {
 TEST(CommFactoryTest, CreateCommRejectsMissingEthercatConfig) {
   robot::comm::Comm comm;
   comm.set_comm_type(robot::comm::CommType::ETHERCAT);
-  comm.set_transport_type(robot::comm::TransportType::CYCLIC);
+  comm.set_transport_type(robot::comm::TransportType::MESSAGE_AND_CYCLIC);
 
   auto transport_or = CommFactory::CreateComm(comm);
 
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {
+TEST(CommFactoryTest, CapabilitySelectionRejectsMissingOrNullEndpoints) {
+  auto message = std::make_shared<testing::FakeMessageTransport>();
+  CommTransport selected{std::static_pointer_cast<MessageTransport>(message)};
+  ASSERT_TRUE(GetCommTransport<MessageTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  auto cyclic = std::make_shared<testing::FakeCorrelatedCyclicTransport>();
+  selected = std::static_pointer_cast<CorrelatedCyclicTransport>(cyclic);
+  ASSERT_TRUE(GetCommTransport<CorrelatedCyclicTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = PairedTransports{message, cyclic, absl::Milliseconds(100)};
+  ASSERT_TRUE(GetCommTransport<MessageTransport>(selected).ok());
+  ASSERT_TRUE(GetCommTransport<CorrelatedCyclicTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<ByteStream>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<MessageTransport>{};
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<CorrelatedCyclicTransport>{};
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, UnsupportedCapabilitiesAreRejectedBeforeOpeningDevices) {
+  robot::comm::Comm serial;
+  serial.set_comm_type(SERIAL);
+  serial.set_transport_type(CYCLIC);
+  serial.mutable_serial_config()->set_port("never-open-this-port");
+  serial.mutable_serial_config()->set_baudrate(115200);
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  serial.set_transport_type(static_cast<TransportType>(999));
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  auto ethercat = MakeEthercatComm();
+  ethercat.set_transport_type(MESSAGE);
+  EXPECT_EQ(CommFactory::CreateComm(ethercat).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, LegacyEthercatIsRejectedBeforeOpeningBackend) {
   auto comm = MakeEthercatComm();
-  comm.mutable_ethercat_config()->clear_interface_name();
-
-  auto transport_or = CommFactory::CreateEthercat(comm.ethercat_config());
-
-  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+  comm.set_transport_type(CYCLIC);
+  auto result = CommFactory::CreateComm(comm);
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(result.status().message().find("retired"), std::string::npos);
 }
 
-TEST(CommFactoryTest, CreateEthercatTransportRejectsInvalidProcessDataMode) {
-  auto comm = MakeEthercatComm();
-  comm.mutable_ethercat_config()->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_INVALID);
-
-  auto transport_or = CommFactory::CreateEthercat(comm.ethercat_config());
-
-  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+TEST(CommFactoryTest, PairedEthercatRejectsIncompleteConfigBeforeOpeningBackend) {
+  auto result = CommFactory::CreateComm(MakeEthercatComm());
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(CommFactoryTest, CreateEthercatTransportReportsUnavailableForMissingInterface) {
-  auto comm = MakeEthercatComm();
-  auto transport_or = CommFactory::CreateEthercat(comm.ethercat_config());
-
-  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kUnavailable);
+TEST(CommFactoryTest, InvalidSerialTimingIsRejectedBeforeOpeningPort) {
+  Comm comm;
+  comm.set_comm_type(SERIAL);
+  comm.set_transport_type(MESSAGE);
+  auto* config = comm.mutable_serial_config();
+  config->set_port("never-open-this-port");
+  config->set_baudrate(115200);
+  EXPECT_TRUE(CommFactory::ValidateSerialConfig(*config).ok());
+  config->set_exchange_timeout_ms(0);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_exchange_timeout_ms(UINT32_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->clear_exchange_timeout_ms();
+  config->set_post_open_settle_ms(UINT32_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->clear_post_open_settle_ms();
+  config->set_baudrate(UINT64_MAX);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-class CommFactoryEthercatCacheTest : public ::testing::Test {
- protected:
-  void SetUp() override {
-    CommFactory::SetEthercatTransportFactoryForTesting(
-        [] { return std::make_shared<FakeEthercatTransport>(); });
-  }
-
-  void TearDown() override {
-    CommFactory::SetEthercatTransportFactoryForTesting(nullptr);
-    CommFactory::ResetEthercatTransportCacheForTesting();
-  }
-};
-
-TEST_F(CommFactoryEthercatCacheTest, SameInterfaceSharesOneMaster) {
-  auto comm = MakeEthercatComm();
-  auto first_or = CommFactory::CreateEthercat(comm.ethercat_config());
-  auto second_or = CommFactory::CreateEthercat(comm.ethercat_config());
-
-  ASSERT_TRUE(first_or.ok()) << first_or.status();
-  ASSERT_TRUE(second_or.ok()) << second_or.status();
-  EXPECT_EQ(first_or->get(), second_or->get());
-}
-
-TEST_F(CommFactoryEthercatCacheTest, DifferentInterfacesGetDifferentMasters) {
-  auto first_comm = MakeEthercatComm();
-  auto first_or = CommFactory::CreateEthercat(first_comm.ethercat_config());
-  auto other_comm = MakeEthercatComm();
-  other_comm.mutable_ethercat_config()->set_interface_name("joshua-no-such-ethercat-iface1");
-  auto second_or = CommFactory::CreateEthercat(other_comm.ethercat_config());
-
-  ASSERT_TRUE(first_or.ok()) << first_or.status();
-  ASSERT_TRUE(second_or.ok()) << second_or.status();
-  EXPECT_NE(first_or->get(), second_or->get());
-}
-
-TEST_F(CommFactoryEthercatCacheTest, RejectsProcessDataModeChangeOnOpenInterface) {
-  auto first_comm = MakeEthercatComm();
-  auto first_or = CommFactory::CreateEthercat(first_comm.ethercat_config());
-  ASSERT_TRUE(first_or.ok()) << first_or.status();
-
-  auto lrw_comm = MakeEthercatComm();
-  lrw_comm.mutable_ethercat_config()->set_process_data_mode(
-      robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_LRW);
-  auto second_or = CommFactory::CreateEthercat(lrw_comm.ethercat_config());
-
-  EXPECT_EQ(second_or.status().code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(CommFactoryEthercatCacheTest, FailedInitIsNotCached) {
-  int factory_calls = 0;
-  CommFactory::SetEthercatTransportFactoryForTesting([&factory_calls] {
-    factory_calls++;
-    auto transport = std::make_shared<FakeEthercatTransport>();
-    if (factory_calls == 1) {
-      transport->init_status_ = absl::Status(absl::StatusCode::kUnavailable, "no NIC");
+TEST(CommFactoryTest, SerialPtyHonorsTimingAndSharesOnePhysicalOpen) {
+  const int master = posix_openpt(O_RDWR | O_NOCTTY);
+  ASSERT_GE(master, 0);
+  struct CloseFd {
+    int fd;
+    ~CloseFd() {
+      close(fd);
     }
-    return transport;
-  });
-
-  auto comm = MakeEthercatComm();
-  auto failed_or = CommFactory::CreateEthercat(comm.ethercat_config());
-  EXPECT_EQ(failed_or.status().code(), absl::StatusCode::kUnavailable);
-
-  auto retry_or = CommFactory::CreateEthercat(comm.ethercat_config());
-  EXPECT_TRUE(retry_or.ok()) << retry_or.status();
-  EXPECT_EQ(factory_calls, 2);
+  } cleanup{master};
+  ASSERT_EQ(grantpt(master), 0);
+  ASSERT_EQ(unlockpt(master), 0);
+  Comm comm;
+  comm.set_comm_type(SERIAL);
+  comm.set_transport_type(MESSAGE);
+  auto* config = comm.mutable_serial_config();
+  config->set_port(ptsname(master));
+  config->set_baudrate(115200);
+  config->set_post_open_settle_ms(60);
+  config->set_exchange_timeout_ms(30);
+  const auto opened = std::chrono::steady_clock::now();
+  auto selected = CommFactory::CreateComm(comm);
+  ASSERT_TRUE(selected.ok()) << selected.status();
+  EXPECT_GE(std::chrono::steady_clock::now() - opened, std::chrono::milliseconds(60));
+  auto message = GetCommTransport<MessageTransport>(*selected);
+  ASSERT_TRUE(message.ok());
+  const std::vector<uint8_t> frame = {0xa5, 3, 1, 1, 0, 0, 0};
+  const auto start = std::chrono::steady_clock::now();
+  EXPECT_EQ((*message)->Exchange(frame).status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_GE(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(30));
+  comm.set_transport_type(BYTE_STREAM);
+  auto first = CommFactory::CreateComm(comm);
+  auto second = CommFactory::CreateComm(comm);
+  ASSERT_TRUE(first.ok());
+  ASSERT_TRUE(second.ok());
+  EXPECT_EQ(*GetCommTransport<ByteStream>(*first), *GetCommTransport<ByteStream>(*second));
+  config->set_exchange_timeout_ms(31);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_exchange_timeout_ms(30);
+  config->set_post_open_settle_ms(0);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  config->set_post_open_settle_ms(60);
+  config->set_baudrate(9600);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
 }  // namespace

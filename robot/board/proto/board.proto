@@ -20,7 +20,7 @@ enum BoardType {
                     // servo's own MCU.
   HOST_GPIO = 5;    // No external controller; host pins drive the motor.
   MOCK = 6;         // Tests; channels are in-memory fakes.
-  ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire_v1
+  ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire
                     // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
 }
 
@@ -103,9 +103,7 @@ message FirmwareSpec {
   uint32 min_proto_version = 1;
 }
 
-// Future home of the AM243 PDO mapping selector; mirrors
-// robot.action.Am243PdoMapping until the deprecated actuator-embedded
-// config is removed in Phase 4 (docs/BOARD_LAYER_RFC.md §10).
+// Retired TI-demo schema: retained only to diagnose old configs; never executed.
 enum Am243PdoMapping {
   AM243_PDO_MAPPING_UNSPECIFIED = 0;
   AM243_PDO_MAPPING_TI_DEMO = 1;
@@ -113,6 +111,8 @@ enum Am243PdoMapping {
 }
 
 message Am243Config {
+  // Deprecated and rejected at validation/factory entry points. JoshuaWire
+  // endpoint addressing/region assertions belong in comm.ethercat_config.
   uint32 slave_index = 1;
   Am243PdoMapping pdo_mapping = 2;
   // PDO region override (offsets/sizes) so presets can pin regions instead
@@ -123,6 +123,15 @@ message Am243Config {
   uint32 input_size_bytes = 6;
 }
 
+// JoshuaWire 0.0.2 is the sole Joshua protocol; unspecified selects it on
+// Joshua boards. Vendor boards retain their own protocol.
+enum BoardProtocol {
+  BOARD_PROTOCOL_UNSPECIFIED = 0;
+  reserved 1;
+  reserved "JOSHUA_WIRE_V1", "JOSHUA_WIRE_V2";
+  JOSHUA_WIRE = 2;  // Preserve the validated protocol's protobuf value.
+}
+
 message Board {
   string name = 1;  // Referenced by actuators; cache key.
   BoardType board_type = 2;
@@ -130,6 +139,7 @@ message Board {
                                   // (omitted for HOST_GPIO / MOCK).
   repeated Channel channels = 4;  // Drive leg: what each slot drives.
   FirmwareSpec firmware = 5;
+  BoardProtocol protocol = 6;
   oneof board_config {
     Am243Config am243_config = 10;
   }

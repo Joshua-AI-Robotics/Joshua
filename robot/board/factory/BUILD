@@ -7,10 +7,11 @@ cc_library(
     hdrs = ["board_factory.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//robot/board/am243:am243_board",
+        "//firmware/common:joshua_wire_commands",
         "//robot/board/esp32:esp32_board",
         "//robot/board/feetech_bus:feetech_bus_board",
         "//robot/board/interfaces:board_interfaces",
+        "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/mock:mock_board",
         "//robot/board/proto:board_cc_proto",
         "//robot/board/teensy:teensy_board",

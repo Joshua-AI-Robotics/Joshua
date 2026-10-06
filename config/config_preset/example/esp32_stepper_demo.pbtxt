@@ -1,17 +1,12 @@
 # Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
-# via joshua_wire_v1 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
+# via JoshuaWire 0.0.2 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
 # Phase 5) — same wire protocol and shared drive backend as
 # firmware/teensy/41/, a different firmware image
-# (firmware/esp32/, joins the same joshua_wire_v1 family).
+# (firmware/esp32/, joins the same JoshuaWire 0.0.2 family).
 #
-# PROTOCOL VERIFIED, MOTION NOT YET — firmware/esp32/ is flashed and the
-# joshua_wire_v1 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
-# against real hardware (firmware/esp32/README.md Status). Unlike
-# teensy_stepper_demo.pbtxt, nobody has wired this exact preset to a
-# TB6600/motor and confirmed it turns yet. Port, pins, and microstepping
-# below are reasonable starting defaults, not confirmed-working motion
-# values — check them against your actual driver before trusting them,
-# and update this comment (and firmware/esp32/README.md) once you have.
+# Review the serial port, GPIO pins and microstepping against the actual
+# board and driver wiring before enabling channels or commanding motion.
+# See firmware/esp32/README.md for wiring and startup limitations.
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \
@@ -33,6 +28,7 @@ robot {
   boards {
     name: "esp32_stepper_bus"
     board_type: ESP32
+    protocol: JOSHUA_WIRE
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
@@ -40,10 +36,14 @@ robot {
       # (CP2102/CH340/...), not native USB CDC like Teensy 4.1 — check
       # `ls /dev/ttyUSB*` (or /dev/ttyACM* if your board does have native
       # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
-      serial_config { port: "/dev/ttyUSB0" baudrate: 115200 }
+      serial_config {
+        port: "/dev/ttyUSB0"
+        baudrate: 115200
+        post_open_settle_ms: 2000
+      }
     }
     firmware {
-      min_proto_version: 1
+      min_proto_version: 2
     }
     channels {
       index: 0

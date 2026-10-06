@@ -1,9 +1,40 @@
 # Board and Comm Separation Plan
 
-Status: **Proposed**
+Status: **Software migration implemented; EtherCAT hardware qualification open.**
 
-Companion to: [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md),
-[am243_ethercat.md](am243_ethercat.md)
+Companion to [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) and
+[AM243 EtherCAT](am243_ethercat.md).
+
+## Implementation status
+
+| Plan step | Implemented |
+| --- | --- |
+| 2: JW correlation | Shared C codecs, host/firmware sessions, neutral command payloads and one JW 0.0.2 serial artifact per board |
+| 3: comm boundaries | Message/correlated-cyclic interfaces, comm-internal adapters, serial framing and configurable exchange/settle timing |
+| 4: EtherCAT owner | Per-NIC worker/leases, PDO shadows/snapshots, bounded incremental runtime CoE and explicit timing policy |
+| 5: paired endpoint | Compatibility gate, verified reset, shared CoE/PDO session, retained replies and firmware watchdog core |
+| 6–7: factory/engine wiring | Shared JoshuaWire engine, paired capability assembly and multi-board ownership checks; legacy TI-demo host path retired |
+
+Native regression coverage includes correlation, retries, ID exhaustion, late
+replies, timeouts, teardown, factory boundaries and two-slave sharing. Vendor consumers retain their fixed-length compatibility interface.
+Serial timing comes from protobuf config, not board-specific sleeps.
+
+Use the [serial validation procedure](JOSHUA_WIRE_VALIDATION.md) for manual
+hardware checks. EtherCAT qualification is affected by the
+[master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+
+Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
+OP/link-loss recovery and the separately approved SOES run longer than one hour
+before evaluation-stack retirement. Disabled-channel polling diagnostics do not
+satisfy these gates. Track TI profile removal and conversion of the default UART
+image to UART-only in the [firmware retirement TODO](../firmware/am243/joshua_dual_transport/README.md#todo-retire-ti-stack-profiles-after-soes-qualification).
+AM243 firmware has no physical motor backend; simultaneous
+UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
+separate work. The single-transport artifacts do not claim those capabilities.
+
+The contracts below define the target design; software coverage does not
+establish hard-real-time behavior or physical-output safety.
+See [firmware usage](../firmware/README.md) and [configuration](../config/README.md).
 
 ## 1. Goal
 
@@ -45,14 +76,14 @@ class BoardChannel {
 The selected comm determines how those operations travel, but motor drivers do
 not see serial, EtherCAT, SOEM, CoE, SDO, or PDO types.
 
-## 3. JoshuaWire v2 correlation
+## 3. JoshuaWire correlation
 
-JoshuaWire v2 adds nonzero, little-endian `uint32_t session_id` and
+JoshuaWire adds nonzero, little-endian `uint32_t session_id` and
 `uint32_t message_id` fields to every request. Every response echoes both
 fields. The session ID is established by the reset handshake below; it is not
 a board identity or a value that persists across reboot.
 
-The v2 frame is:
+The JW 0.0.2 frame (on-wire revision 2) is:
 
 ```text
 [sync][len][proto_ver][session_id_le][message_id_le][cmd][channel][payload...][crc16_le]
@@ -70,7 +101,7 @@ typedef struct {
   uint8_t channel;
   const uint8_t* payload;
   uint8_t payload_len;
-} jw2_frame_t;
+} jw_frame_t;
 ```
 
 Protocol rules:
@@ -95,9 +126,9 @@ Protocol rules:
 - Stale, duplicate, or mismatched responses do not complete a call.
 - A timed-out ID remains quarantined from late responses until transport state
   has advanced past that response.
-- JoshuaWire v1 remains available during migration. Current firmware and
-  presets move to v2 only after both endpoints support it; v1 wire bytes are
-  not silently reinterpreted as v2.
+- JW1 is removed after serial validation on AM243, Teensy and ESP32 and
+  EtherCAT validation on AM243. JW2 is now named JW, release `0.0.2`, with
+  unchanged wire revision `2`; old frame bytes remain rejected.
 
 ## 4. Communication seams
 
@@ -158,7 +189,7 @@ sequenceDiagram
   participant Firmware
 
   Caller->>BoardEngine: SET_TARGET or GET_FEEDBACK
-  BoardEngine->>CyclicAdapter: Exchange JoshuaWire v2 frame
+  BoardEngine->>CyclicAdapter: Exchange JoshuaWire frame
   CyclicAdapter->>CyclicAdapter: Reserve request slot
   MasterLoop->>Firmware: Exchange output PDO
   Firmware->>Firmware: Process new message ID once
@@ -190,7 +221,7 @@ then tears down the master. Locks are acquired only in lifecycle → work-queue
 caller notification and never waits for a caller, eliminating reverse-order
 and callback deadlocks.
 
-JoshuaWire v2 frames are bounded to 64 bytes, including framing and CRC. PDO
+JoshuaWire frames are bounded to 64 bytes, including framing and CRC. PDO
 layout version 1 uses fixed 80-byte output and input images with these
 little-endian offsets:
 
@@ -240,7 +271,7 @@ failure, loss of OPERATIONAL state, or a stopped loop fails pending calls.
 
 The SOEM adapter gains CoE/SDO read and write operations. Joshua-controlled
 AM243 firmware exposes object-dictionary entries for request and response
-JoshuaWire v2 frames.
+JoshuaWire frames.
 
 The layout-v1 CoE contract is:
 
@@ -265,6 +296,21 @@ reserved bytes (`uint16`), and frame (`uint8[64]`). Mailbox generations and
 retained-response acknowledgment follow the same publication rules as PDO
 generations.
 
+Layout-v1 details are pinned in
+[`joshua_wire_ethercat.h`](../firmware/common/joshua_wire_ethercat.h): transport
+bitmap bit 0 is serial, bit 1 is CoE management, and bit 2 is correlated PDO.
+PDO transport status 0 means success; nonzero values fail the exchange.
+Frame padding and reserved fields are zero. Artifact IDs are nonempty printable
+ASCII, NUL-padded when shorter than 12 bytes.
+
+The reset object is not a JW frame: writing `{operation=1, new_session_id}`
+requests an atomic safe/session reset. Reading that exact pair acknowledges
+completion only after outputs are disabled and both planes' retained responses,
+generations and request history have been cleared. The host then constructs
+the correlated JW RESET_SESSION/OK reply for the board engine. This preserves
+the engine's frame interface without inventing an acknowledgment before verified
+readback. Reboot reads session zero. Normal envelopes remain full JW frames.
+
 Mailbox exchange is used only for management operations:
 
 ```text
@@ -279,7 +325,7 @@ Mailbox timeouts and serialization belong to the comm adapter. The board
 engine sees only a `MessageTransport`.
 
 At startup, before session reset or channel enable, the host reads `0x2000` and
-requires JoshuaWire v2, PDO layout v1, exact 80-byte PDO mappings, a 64-byte
+requires JoshuaWire, PDO layout v1, exact 80-byte PDO mappings, a 64-byte
 frame limit, and the transports required by the selected configuration. A
 mismatch fails initialization with the observed artifact ID and expected
 protocol/layout/size/transport values, plus an instruction to build and flash
@@ -353,7 +399,7 @@ modifying the retained TI demo.
 
 The firmware must:
 
-- Implement the JoshuaWire v2 codec and echo session and request IDs in every
+- Implement the JoshuaWire codec and echo session and request IDs in every
   response.
 - Implement reset-session and clear retained/de-duplication state on reboot.
 - Expose CoE object-dictionary entries for management requests and responses.
@@ -369,15 +415,15 @@ Document or generate the matching ESI and PDO mapping.
 
 ## 10. Migration sequence
 
-1. Update this design and the board-layer RFC with the v2 and dual-plane
+1. Update this design and the board-layer RFC with the correlated and dual-plane
    contracts.
-2. Add JoshuaWire v2 beside v1, including correlation tests and response-ID
+2. Implement the correlated JoshuaWire session, including correlation tests and response-ID
    propagation through existing serial firmware.
 3. Add message and correlated-cyclic comm interfaces, fakes, and BUILD
    visibility rules.
 4. Add SOEM CoE/SDO support and the single-owner background cyclic loop.
 5. Implement the host PDO codec and Joshua-controlled AM243 firmware/profile.
-6. Compose the JoshuaWire board engine and migrate AM243 after serial v2 is
+6. Compose the JoshuaWire board engine and migrate AM243 after correlated serial is
    stable.
 7. Remove `Am243Board::serial_mode_` and board-layer dependencies on concrete
    serial/SOEM implementations.
@@ -386,8 +432,8 @@ Document or generate the matching ESI and PDO mapping.
 
 Required host and shared-codec tests:
 
-- JoshuaWire v2 exact golden bytes and CRC coverage.
-- v1/v2 compatibility and explicit version rejection.
+- JoshuaWire exact golden bytes and CRC coverage.
+- Golden JW frames and explicit legacy-version rejection.
 - Every response echoes its session and request IDs.
 - Message-ID exhaustion starts a new session rather than reusing an ID.
 - Reboot, reconnect, retained PDO/mailbox response, and reset-session behavior.
@@ -422,7 +468,7 @@ or flash firmware without explicit hardware confirmation.
 ## 12. Acceptance criteria
 
 - Motor drivers remain unchanged and depend only on `BoardChannel`.
-- JoshuaWire v2 works over serial with correlated responses.
+- JoshuaWire works over serial with correlated responses.
 - Session reset prevents pre-reboot, pre-reconnect, and retained responses from
   satisfying new requests.
 - EtherCAT management commands use CoE/SDO.
@@ -436,5 +482,5 @@ or flash firmware without explicit hardware confirmation.
   enable.
 - Serial message-only boards retain all JoshuaWire commands.
 - Board targets cannot name concrete serial or SOEM implementations.
-- The retained TI demo remains independently runnable for bring-up and is not
-  mistaken for the JoshuaWire EtherCAT firmware.
+- TI vendor firmware build/flash assets remain distinct from JoshuaWire firmware.
+  The legacy Joshua TI-demo host path is retired; old configs fail explicitly.

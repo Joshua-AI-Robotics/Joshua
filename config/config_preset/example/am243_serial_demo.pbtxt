@@ -1,4 +1,4 @@
-# Single NEMA17 stepper controlled by an AM243 over joshua_wire_v1 serial.
+# Single NEMA17 stepper controlled by an AM243 over JoshuaWire 0.0.2 serial.
 # The AM243 host class reuses the same shared serial/frame implementation as
 # Teensy and other Joshua-firmware boards. This preset opens a real serial
 # device and may move hardware; verify the port, pins, and wiring first.
@@ -14,12 +14,13 @@ robot {
   boards {
     name: "am243_stepper_bus"
     board_type: AM243
+    protocol: JOSHUA_WIRE
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
       serial_config { port: "/dev/ttyACM0" baudrate: 115200 }
     }
-    firmware { min_proto_version: 1 }
+    firmware { min_proto_version: 2 }
     channels {
       index: 0
       drive: STEP_DIR
