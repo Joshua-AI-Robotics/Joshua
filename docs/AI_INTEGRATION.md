@@ -61,13 +61,16 @@ subsystem.
 
 These scenarios describe the intended experience as the checkpoints ship.
 
-### Set up supported hardware
+### Set up hardware
 
 “Help me set up this arm.” Joshua should prepare the software and configuration,
 guide the user through physical connections and required checks, and explain
 which actions are available. If the hardware type is not implemented, Joshua
-should identify that gap and point to the contributor integration process. A
-new hardware type needs implementation, testing, documentation, and release.
+should start a guided integration wizard through chat. It gathers hardware
+details, identifies reusable components and missing support, and walks through
+configuration, implementation, testing, and documentation. The wizard shows
+progress and required human steps. Verification and release are required before
+presenting the hardware as supported.
 
 ### Connect to an existing robot
 
