@@ -57,6 +57,36 @@ Connecting supported hardware should be guided. Adding new hardware requires
 implementation, testing, documentation, and release through the relevant
 subsystem.
 
+## User scenarios
+
+These scenarios describe the intended experience as the checkpoints ship.
+
+### Set up supported hardware
+
+“Help me set up this arm.” Joshua should prepare the software and configuration,
+guide the user through physical connections and required checks, and explain
+which actions are available. If the hardware type is not implemented, Joshua
+should identify that gap and point to the contributor integration process. A
+new hardware type needs implementation, testing, documentation, and release.
+
+### Connect to an existing robot
+
+“Connect to Arm A and run my saved movement.” Joshua should reuse the robot's
+configuration, check its current connection and capabilities, and ask for any
+missing or changed details. It previews the resolved task, obtains fresh
+operator readiness confirmation before motion, and shows progress and stop
+controls. The user should not need to repeat software setup for each session.
+
+### Conduct an experiment
+
+“Repeat the saved movement 100 times at two supported speeds and compare
+positioning accuracy.” Joshua should clarify the movement, cycle count, speeds,
+and measurement, then preview the complete bounded plan for operator approval.
+The backend executes the repetitions, records completed cycles and measured
+endpoint error, and reports interruptions. If the required feedback is
+unavailable, Joshua should explain what is missing. The user can refine and
+reuse the task through chat.
+
 ## Checkpoints
 
 Ship the first three checkpoints using one supported environment and robot.
