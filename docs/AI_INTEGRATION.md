@@ -5,8 +5,8 @@ model adapters, data collection, simulation, and contributor workflows. The
 current implementations and example presets are indexed in the
 [supported-component catalog](SUPPORTED_COMPONENTS.md). The
 proposed first motion-capable Model Context Protocol (MCP) release is an optional
-front end for exactly one tested, bounded robot operation. AI inference, including the
-existing [inference host](../ai/README.md), and
+front end for exactly one tested, bounded robot operation. AI inference,
+including the existing [inference host](../ai/README.md), and
 [data collection](../ai/train/README.md) are outside its scope. This guide
 records shared design rules and independent proposed follow-ups.
 
@@ -14,17 +14,41 @@ Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
 subsystem or runtime roles.
 
-## Vision and interface
+## Requirements
+
+- **Joshua owns preparation and execution.** Chat gathers and refines intent;
+  the binary and backend handle software setup, configuration, device access,
+  and execution. MCP wraps tested subsystem operations.
+- **Use the existing robot configuration.** Hardware identity, wiring,
+  calibration, and limits come from protobuf configuration. Capability claims
+  match the installed version and merged, verified implementations.
+- **Make every task explicit and bounded.** Resolve the target, movement,
+  units, speed, repetition count, and any variations into a validated plan.
+- **Get direct operator confirmation.** Before real motion, the person
+  responsible for the hardware confirms readiness through a channel the model
+  cannot supply or bypass. Approval covers the complete bounded plan; changes
+  or restarts require fresh confirmation.
+- **Show what actually happened.** Use correctly associated, fresh measured
+  feedback with known units and tolerances. Report progress, completed actions,
+  timeouts, and faults; cancellation remains available without the model.
+- **Demonstrate hardware coverage.** Each implemented hardware path needs
+  applicable MCP integration and verification. Record missing evidence as a gap
+  rather than presenting that path as covered.
+
+Early checkpoints can use a prepared, supported environment. A complete
+fresh-host installation journey remains a separate release gate.
+
+## Vision
 
 Joshua should help people use robotics to accelerate work they already
 understand, without requiring robotics expertise. The audience includes
 laboratory specialists, manufacturing operators, researchers, and prototype
 builders.
 
-Start with an MCP layer connected to an existing AI IDE or compatible chat
-application. Joshua's packaged runtime and backend handle software preparation,
-configuration, device access, and execution. A dedicated chat interface can
-follow if needed.
+## Interface
+
+Start with an existing AI IDE or compatible chat application connected through
+MCP. A dedicated Joshua chat interface can follow if needed.
 
 **User → Chat → MCP → Joshua backend → Robot**
 
@@ -32,65 +56,56 @@ Connecting supported hardware should be guided. Adding new hardware requires
 implementation, testing, documentation, and release through the relevant
 subsystem.
 
-## Checkpoints and requirements
+## Checkpoints
 
-| Checkpoint | Requirements | Evidence of completion |
-| --- | --- | --- |
-| **1. Connect and inspect through MCP** | A working client connection, installed-version and configured-device information, configuration validation, capability descriptions, and clear errors. | An AI IDE connects to Joshua and inspects the selected configuration without opening devices. |
-| **2. Execute one verified robot task** | One bounded operation, direct operator confirmation, measured feedback with known units/freshness, progress, cancellation, and fault handling. | A task runs through MCP on one robot; measured outcomes and timeout, cancellation, and failure cases are verified. |
-| **3. Compose, repeat, and vary actions through chat** | The LLM resolves an ordered group of supported actions, parameters, variations, and repetition count. A validated execution path performs bounded repetition and records outcomes. | A user defines and refines one group through chat, then runs the requested repetitions and variations with accurate completion records. |
-| **4. Reach 100% hardware coverage** | Extend tested MCP integration and applicable feedback across every implemented board, transport, actuator, and sensor path. | Every implemented hardware path demonstrated through MCP. Missing or unverified integrations keep this checkpoint open. |
+Ship the first three checkpoints using one supported environment and robot.
+Expand hardware coverage alongside them.
 
-Ship checkpoints 1–3 incrementally using one supported environment and robot.
-Inspection errors are visible from checkpoint 1; operation feedback is required
-in checkpoint 2. The LLM handles action composition and refinement in checkpoint
-3, while Joshua enforces operation limits and reliable execution. Start with a
-small sequence and bounded repetition; a dedicated experiment framework can
-follow if needed.
+### 1. Connect and inspect through MCP
 
-Hardware coverage can expand in parallel. Checkpoint 4 requires 100% coverage
-of implemented paths in the runtime version under review. Track new hardware paths as coverage gaps until their applicable MCP integration
-and verification land. Integration follows the relevant merged MCP contract in
-the same or a linked PR; a hardware PR can merge before that follow-up, while
-checkpoint 4 remains open.
-A complete fresh-host installation journey remains a separate release gate.
+A user connects an AI IDE or chat client and asks, “What can this setup do, and
+is my configuration valid?” Joshua reports its installed version, configured
+devices, supported capabilities, and validation errors without opening devices.
+This establishes a working client connection and inspection flow. Live
+connection probes are separate approved backend steps that respect device
+ownership.
 
-## Example: Repeat a defined base-joint movement
+### 2. Execute one verified robot task
 
-An illustrative future task is to exercise **Bench Arm A's base joint** for
-**100 return cycles**, using angles supported by that arm.
+The user requests one supported movement on a named robot. For example, the
+preview defines a base-joint cycle as **0° → 45° → 0°**, at a supported speed
+and within that arm's calibrated limits. After direct operator confirmation,
+Joshua executes it, shows progress, and uses measured feedback to verify each
+endpoint. The demonstration covers success, timeout, cancellation, and fault
+handling.
 
-Joshua resolves a vague request into a preview: **move from 0° to 45° and back
-to 0°; that is one cycle. Repeat 100 times at the selected supported speed.**
-Measured feedback must confirm each endpoint within the agreed tolerance;
-missing feedback or a fault ends the task through its defined stop behavior.
+### 3. Compose, repeat, and vary actions through chat
 
-The user can save this as “Base movement test,” then say “Run it 20 times” or
-“Make it slower.” The backend validates the revised task and handles repetition.
-Saved tasks reference configured hardware and tested operations; an optional
-script interface can follow later.
+The user saves that movement as “Base movement test,” asks for **100 cycles**,
+and later refines it to “20 cycles” or “slower.” They can also group supported
+movements and repeat the group with finite parameter variations. The LLM
+clarifies the request and previews the full plan; the backend validates and
+executes it as one bounded, operator-approved run. Results show which actions,
+cycles, and variations completed. Start with one useful sequence before
+considering a dedicated experiment framework.
 
-For checkpoint 3, a user could say, “Group the supported rotation, extension,
-and return movements. Repeat the group ten times at each of three approved
-speeds.” The LLM clarifies those movements and previews the resolved sequence.
-The backend validates and executes the complete resolved plan as one bounded,
-operator-approved run, using supported operations. Changed parameters or a
-restart require fresh confirmation. Record each completed group and variation.
+### 4. Reach 100% hardware coverage
 
-## Linked implementation designs
+The same inspection and applicable operation/feedback flows work across every
+implemented board, transport, actuator, and sensor path in the runtime version
+under review. Each path has recorded demonstration and verification evidence;
+missing or unverified paths keep this checkpoint open. New hardware can merge
+first, with its MCP integration following the relevant merged contract in the
+same or a linked PR. Track that gap until integration and verification land.
 
-| Area | High-level design | First decisions |
-| --- | --- | --- |
-| Checkpoints 1, 2, and 4 | [Hardware and MCP](ai-integration/HARDWARE_MCP_DESIGN.md) | Inspection, first operation, runtime ownership, and full hardware coverage |
-| Checkpoints 2–3 | [Reusable tasks](ai-integration/REUSABLE_TASKS_DESIGN.md) | Identity, movement, cycle definition, refinement, and bounded execution |
-| Checkpoints 1–2 | [Observability](ai-integration/OBSERVABILITY_DESIGN.md) | Feedback source, units, freshness, completion evidence, and faults |
-| Checkpoint 3 | [Action groups and experiments](ai-integration/EXPERIMENT_DESIGN.md) | LLM composition, parameter variations, bounded replay, and result records |
+## Further design detail
 
-These briefs connect the direction to proposed PR scopes. Agree on the first
-robot, task, and feedback contract, then refine the relevant design before
-implementation. Start with inspection and validation, then the first verified
-operation, followed by reusable action groups. Expand hardware coverage
-alongside those releases.
+The [hardware and MCP](ai-integration/HARDWARE_MCP_DESIGN.md),
+[reusable task](ai-integration/REUSABLE_TASKS_DESIGN.md),
+[observability](ai-integration/OBSERVABILITY_DESIGN.md), and
+[action group](ai-integration/EXPERIMENT_DESIGN.md) briefs outline follow-up PRs.
+Agree on the first robot, task, client, and feedback contract, then refine the
+relevant design before implementation.
 
 ## Relevant current capabilities
 
