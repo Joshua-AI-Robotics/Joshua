@@ -2,10 +2,24 @@
 
 ## Vision
 
-Joshua should help people use robotics to accelerate work they already
-understand, without requiring robotics expertise. The audience includes
-laboratory specialists, manufacturing operators, researchers, and prototype
-builders.
+Joshua's purpose is to help people apply robotics to work they already
+understand, without requiring robotics expertise. These principles guide its
+development:
+
+- **Use chat to express intent.** Let users describe and refine their goals
+  using their own domain knowledge.
+- **Keep complexity in Joshua.** The binary and backend own software
+  preparation, configuration, device access, and execution. Guide users through
+  the physical steps that remain theirs.
+- **Build reusable capabilities.** Integrate hardware through tested contracts
+  so supported actions can be composed, repeated, and adapted across tasks.
+- **Verify real outcomes.** Establish task success through measured robot
+  feedback and make progress, failures, and missing evidence visible.
+- **Keep the operator in control.** Require direct human readiness confirmation
+  before real motion and provide stop controls that remain usable without the
+  model.
+- **Ship useful increments.** Prove one complete workflow, then expand toward
+  100% coverage of implemented hardware paths.
 
 ## Requirements
 
