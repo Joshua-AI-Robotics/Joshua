@@ -83,6 +83,18 @@ system_libs(name = "local_deps")
 
 ros2_libs(name = "ros2_deps")
 
+# Slave stack; independent of the host-side SOEM dependency below.
+http_archive(
+    name = "soes",
+    build_file = "//third_party/soes:BUILD.bazel",
+    patch_args = ["-p1"],
+    patches = ["//third_party/soes:upload_size.patch"],
+    sha256 = "da67ea126244b92072f423631cc4c4d6891d1880bb70d065b24acf5230423ac6",
+    strip_prefix = "SOES-6ef7b9415e936c061ad30626ca00004bdde2ac62",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/OpenEtherCATsociety/SOES/tar.gz/6ef7b9415e936c061ad30626ca00004bdde2ac62"],
+)
+
 http_archive(
     name = "soem",
     build_file = "//third_party/soem:BUILD.bazel",

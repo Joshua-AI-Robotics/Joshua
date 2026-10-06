@@ -70,6 +70,8 @@ cc_test(
     name = "joshua_wire_session_test",
     srcs = ["joshua_wire_session_test.cc"],
     deps = [
+        "//firmware/common/soes:joshua_ethercat_soes",
+        "//third_party/soes",
         ":joshua_wire_board",
         ":joshua_wire_session",
         "//firmware/am243/joshua_dual_transport:software_backend",
