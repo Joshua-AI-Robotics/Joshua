@@ -1,11 +1,10 @@
-// Firmware endpoint for explicitly selected v1/v2 artifacts. Decodes the wire
+// Firmware endpoint for JoshuaWire 0.0.2. Decodes the wire
 // envelope and dispatches a neutral command view; handlers return payload bytes.
-// Framing and v2 session/correlation live here, not in drive command handlers.
+// Framing and session/correlation live here, not in drive command handlers.
 // Owns no UART I/O and never auto-detects or downgrades the wire version.
 #pragma once
 
 #include "joshua_wire_firmware_session.h"
-
 
 #ifdef __cplusplus
 extern "C" {

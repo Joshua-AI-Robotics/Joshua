@@ -19,12 +19,12 @@ class Firmware : public robot::comm::MessageTransport {
     jw_serial_endpoint_init(&endpoint);
   }
   absl::Status Send(absl::Span<const uint8_t>) override {
-    return absl::UnimplementedError("v2 only");
+    return absl::UnimplementedError("JW only");
   }
   absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> bytes) override {
     jw_frame_t request;
     if (jw_decode_frame(bytes.data(), bytes.size(), &request) != 0)
-      return absl::DataLossError("Not v2");
+      return absl::DataLossError("Not JW");
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
     Bytes response(JW_MAX_FRAME_LEN);
@@ -61,7 +61,7 @@ class Firmware : public robot::comm::MessageTransport {
 class ValidationTest : public ::testing::Test {
  protected:
   Board board;
-  SerialV2ValidationOptions options;
+  SerialValidationOptions options;
   std::shared_ptr<Firmware> firmware = std::make_shared<Firmware>();
   std::ostringstream output;
   void SetUp() override {
@@ -84,7 +84,7 @@ class ValidationTest : public ::testing::Test {
     step->set_enable_pin(4);
   }
   absl::Status Run(std::function<bool()> cancelled = {}) {
-    return RunSerialV2Validation(board, options, firmware, output, std::move(cancelled));
+    return RunSerialValidation(board, options, firmware, output, std::move(cancelled));
   }
   void Exercise() {
     options.mode = "exercise";
@@ -178,7 +178,7 @@ TEST_F(ValidationTest, BadConfigurationAndIrrelevantOptionsAreRejected) {
   options.allow_enable = true;
   EXPECT_FALSE(Run().ok());
   options.allow_enable = false;
-  board.set_protocol(JOSHUA_WIRE_V1);
+  board.set_protocol(static_cast<BoardProtocol>(1));
   EXPECT_FALSE(Run().ok());
   board.set_protocol(JOSHUA_WIRE);
   board.mutable_comm()->set_comm_type(robot::comm::ETHERCAT);

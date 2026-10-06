@@ -25,9 +25,9 @@ typedef struct {
 // and returns its length or -1. It must not write beyond capacity. reset must
 // disable all outputs and invalidate channel configuration before returning.
 typedef int (*jw_command_handler_t)(void* context,
-                                     const jw_frame_t* request,
-                                     uint8_t* payload,
-                                     size_t capacity);
+                                    const jw_frame_t* request,
+                                    uint8_t* payload,
+                                    size_t capacity);
 typedef void (*jw_reset_handler_t)(void* context);
 
 void jw_firmware_session_init(jw_firmware_session_t* session);
@@ -41,13 +41,13 @@ void jw_firmware_session_init(jw_firmware_session_t* session);
 // A different-session reset is accepted by contract: session IDs provide
 // correlation, not authentication or protection against injected resets.
 int jw_firmware_session_process(jw_firmware_session_t* session,
-                                 const uint8_t* request,
-                                 size_t request_len,
-                                 uint8_t* response,
-                                 size_t response_cap,
-                                 jw_command_handler_t handler,
-                                 jw_reset_handler_t reset,
-                                 void* context);
+                                const uint8_t* request,
+                                size_t request_len,
+                                uint8_t* response,
+                                size_t response_cap,
+                                jw_command_handler_t handler,
+                                jw_reset_handler_t reset,
+                                void* context);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-# Arduino — joshua_wire_v1 STEP/DIR firmware (not started)
+# Arduino — joshua_wire STEP/DIR firmware (not started)
 
 **Placeholder.** Not built yet — tracked in `docs/BOARD_LAYER_RFC.md` §10
 Phase 5 as a real future board, not retired by Teensy 4.1 being the first
@@ -17,7 +17,7 @@ behind it. See `robot/board/teensy/teensy_board.h` (header-only, no `.cc`
 needed) for exactly how short that subclass is in practice. The firmware side is
 smaller than it looks too: `backend_stepdir.{h,cpp}` (STEP/DIR/ENA pulse
 generation) is shared from `firmware/common/` the same way
-`joshua_wire_v1` is (§7.3 ④) — plain Arduino-framework calls, no
+`joshua_wire` is (§7.3 ④) — plain Arduino-framework calls, no
 Teensy-specific API, so it needs no changes to work here. The genuinely
 new work is `main.cpp`'s dispatch loop, `channel_table.{h,c}`, and a
 transport module. Follow `firmware/teensy/41/` as the worked example when
@@ -30,7 +30,7 @@ TODO — expected to mirror `firmware/teensy/41/`:
 ```text
 firmware/arduino/
   platformio.ini          lib_deps = symlink://../../common (pulls in
-                          joshua_wire_v1 AND backend_stepdir — see below);
+                          joshua_wire AND backend_stepdir — see below);
                           needs build_flags = ... -I src, same reason as
                           firmware/teensy/41/platformio.ini
   src/
@@ -104,7 +104,7 @@ TODO — will be host-configured via `StepDirConfig.step_pin`/`dir_pin`/
 ## Related files
 
 - `firmware/teensy/41/` — the worked example this board should mirror
-- `firmware/common/joshua_wire_v1.{h,c}` — the shared wire codec (reused
+- `firmware/common/joshua_wire.{h,c}` — the shared wire codec (reused
   as-is, no changes needed)
 - `firmware/common/backend_stepdir.{h,cpp}` — the shared STEP/DIR/ENA
   drive backend (reused as-is, no changes needed — see the note at the

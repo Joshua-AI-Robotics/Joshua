@@ -1,11 +1,11 @@
 # Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
-# via joshua_wire_v1 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
+# via JoshuaWire 0.0.2 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
 # Phase 5) — same wire protocol and shared drive backend as
 # firmware/teensy/41/, a different firmware image
-# (firmware/esp32/, joins the same joshua_wire_v1 family).
+# (firmware/esp32/, joins the same JoshuaWire 0.0.2 family).
 #
 # PROTOCOL VERIFIED, MOTION NOT YET — firmware/esp32/ is flashed and the
-# joshua_wire_v1 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
+# JoshuaWire 0.0.2 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
 # against real hardware (firmware/esp32/README.md Status). Unlike
 # teensy_stepper_demo.pbtxt, nobody has wired this exact preset to a
 # TB6600/motor and confirmed it turns yet. Port, pins, and microstepping
@@ -33,6 +33,7 @@ robot {
   boards {
     name: "esp32_stepper_bus"
     board_type: ESP32
+    protocol: JOSHUA_WIRE
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
@@ -47,7 +48,7 @@ robot {
       }
     }
     firmware {
-      min_proto_version: 1
+      min_proto_version: 2
     }
     channels {
       index: 0

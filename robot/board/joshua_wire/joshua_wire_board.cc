@@ -15,19 +15,19 @@
 
 namespace robot::board {
 
-// Board-local wire-version selection. Channels operate on neutral commands;
-// only the v1 branch encodes/decodes v1 envelopes. Comm remains byte-oriented.
+// Board-local correlated session. Channels operate on neutral commands;
+// comm remains byte-oriented.
 class JoshuaWireCommandClient {
  public:
   JoshuaWireCommandClient(std::shared_ptr<robot::comm::MessageTransport> transport,
                           const robot::comm::PairedTransports* pair)
       : transport_(std::move(transport)) {
-    session_ = std::make_unique<JoshuaWireSession>(
-          transport_,
-          JoshuaWireSession::SessionIdSource{},
-          UINT32_MAX,
-          pair ? pair->cyclic : nullptr,
-          pair ? pair->response_timeout : absl::ZeroDuration());
+    session_ =
+        std::make_unique<JoshuaWireSession>(transport_,
+                                            JoshuaWireSession::SessionIdSource{},
+                                            UINT32_MAX,
+                                            pair ? pair->cyclic : nullptr,
+                                            pair ? pair->response_timeout : absl::ZeroDuration());
   }
   ~JoshuaWireCommandClient() {
     Close().IgnoreError();
@@ -179,8 +179,7 @@ absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
 }  // namespace
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
-  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED &&
-      config.protocol() != JOSHUA_WIRE) {
+  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED && config.protocol() != JOSHUA_WIRE) {
     return absl::InvalidArgumentError("Unsupported JoshuaWire board protocol.");
   }
   const std::string type_name = robot::board::BoardType_Name(expected_board_type_);
@@ -365,8 +364,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
     return absl::InvalidArgumentError(
         "Factory capabilities do not match JoshuaWire routing policy.");
 
-  auto commands = std::make_shared<JoshuaWireCommandClient>(
-      std::move(transport), pair);
+  auto commands = std::make_shared<JoshuaWireCommandClient>(std::move(transport), pair);
   ABSL_RETURN_IF_ERROR(commands->Open());
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*commands, config));
 

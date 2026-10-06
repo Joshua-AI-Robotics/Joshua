@@ -1,4 +1,4 @@
-// Shared native test suite compiled for Teensy/ESP32 and each wire version.
+// Shared native test suite compiled for Teensy/ESP32 and JoshuaWire.
 // Calls the actual setup/loop and serial/STEP_DIR code with fake Arduino I/O
 // to verify dispatch, frame rejection, retry behavior and safe reset/ESTOP.
 #include <Arduino.h>
@@ -25,24 +25,12 @@ class SerialFirmwareTest : public ::testing::Test {
     memset(g_channels, 0, sizeof(ChannelState) * g_num_channels);
     pin_writes = 0;
     setup();
-    if (JOSHUA_WIRE_VERSION == 2) {
-      ASSERT_EQ(Send(JW_CMD_RESET_SESSION, 0xff), Bytes{0});
-    }
+    ASSERT_EQ(Send(JW_CMD_RESET_SESSION, 0xff), Bytes{0});
   }
   Bytes Frame(uint8_t cmd, uint8_t channel, const Bytes& payload = {}) {
     Bytes bytes(JW_MAX_FRAME_LEN);
-    const int len =
-        JOSHUA_WIRE_VERSION == 2
-            ? jw_encode_frame(bytes.data(),
-                               bytes.size(),
-                               session,
-                               ++id,
-                               cmd,
-                               channel,
-                               payload.data(),
-                               payload.size())
-            : jw1_encode_frame(
-                  bytes.data(), bytes.size(), cmd, channel, payload.data(), payload.size());
+    const int len = jw_encode_frame(
+        bytes.data(), bytes.size(), session, ++id, cmd, channel, payload.data(), payload.size());
     EXPECT_GT(len, 0);
     bytes.resize(len);
     return bytes;
@@ -56,24 +44,14 @@ class SerialFirmwareTest : public ::testing::Test {
   Bytes Send(uint8_t cmd, uint8_t channel, const Bytes& payload = {}) {
     const auto request = Frame(cmd, channel, payload);
     const auto response = Run(request);
-    if (JOSHUA_WIRE_VERSION == 2) {
-      jw_frame_t sent;
-      jw_frame_t reply;
-      EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &sent), 0);
-      if (jw_decode_frame(response.data(), response.size(), &reply) != 0) {
-        ADD_FAILURE() << "Invalid firmware response";
-        return {};
-      }
-      EXPECT_TRUE(jw_response_matches(&sent, &reply));
-      return Bytes(reply.payload, reply.payload + reply.payload_len);
-    }
-    jw1_frame_t reply;
-    if (jw1_decode_frame(response.data(), response.size(), &reply) != 0) {
+    jw_frame_t sent;
+    jw_frame_t reply;
+    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &sent), 0);
+    if (jw_decode_frame(response.data(), response.size(), &reply) != 0) {
       ADD_FAILURE() << "Invalid firmware response";
       return {};
     }
-    EXPECT_EQ(reply.cmd, cmd);
-    EXPECT_EQ(reply.channel, channel);
+    EXPECT_TRUE(jw_response_matches(&sent, &reply));
     return Bytes(reply.payload, reply.payload + reply.payload_len);
   }
   Bytes ConfigPayload() {
@@ -83,9 +61,9 @@ class SerialFirmwareTest : public ::testing::Test {
     config.step_pin = 2;
     config.dir_pin = 3;
     config.enable_pin = 4;
-    uint8_t encoded[JW1_MAX_FRAME_LEN];
-    const int len = jw1_encode_configure_channel_step_dir(encoded, sizeof(encoded), 0, &config);
-    return Bytes(encoded + 5, encoded + len - 2);
+    uint8_t encoded[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
+    const int len = jw_encode_configure_step_dir_payload(encoded, sizeof(encoded), &config);
+    return Bytes(encoded, encoded + len);
   }
 };
 
@@ -116,17 +94,12 @@ TEST_F(SerialFirmwareTest, RejectsOtherVersionBadCrcAndTruncatedInput) {
   corrupted = bytes;
   corrupted.resize(5);
   EXPECT_TRUE(Run(corrupted).empty());
-  uint8_t other[JW_MAX_FRAME_LEN];
-  const int len =
-      JOSHUA_WIRE_VERSION == 2
-          ? jw1_encode_enable(other, sizeof(other), 0)
-          : jw_encode_frame(other, sizeof(other), 50, 1, JW_CMD_RESET_SESSION, 0xff, nullptr, 0);
-  EXPECT_TRUE(Run(Bytes(other, other + len)).empty());
+  // Independent legacy ENABLE fixture: valid v1 CRC, rejected by JW.
+  EXPECT_TRUE(Run(Bytes{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04}).empty());
   EXPECT_FALSE(Run(bytes).empty());
 }
 
-TEST_F(SerialFirmwareTest, V2DuplicateResetAndEstopDoNotRestartMotion) {
-  if (JOSHUA_WIRE_VERSION != 2) GTEST_SKIP() << "v2 session semantics";
+TEST_F(SerialFirmwareTest, DuplicateResetAndEstopDoNotRestartMotion) {
   EXPECT_EQ(Send(JW_CMD_CONFIGURE_CHANNEL, 0, ConfigPayload()), Bytes{JW_STATUS_OK});
   const auto enable = Frame(JW_CMD_ENABLE, 0);
   const auto response = Run(enable);
@@ -149,7 +122,6 @@ TEST_F(SerialFirmwareTest, V2DuplicateResetAndEstopDoNotRestartMotion) {
 }
 
 TEST_F(SerialFirmwareTest, ResetWhileEnabledDisablesOldPinsBeforeForgettingThem) {
-  if (JOSHUA_WIRE_VERSION != 2) GTEST_SKIP() << "v2 session semantics";
   EXPECT_EQ(Send(JW_CMD_CONFIGURE_CHANNEL, 0, ConfigPayload()), Bytes{JW_STATUS_OK});
   EXPECT_EQ(Send(JW_CMD_ENABLE, 0), Bytes{JW_STATUS_OK});
   ++session;

@@ -14,7 +14,7 @@
 #include "robot/comm/interfaces/message_transport.h"
 
 namespace robot::board::diagnostics {
-struct SerialV2ValidationOptions {
+struct SerialValidationOptions {
   std::string mode = "handshake";  // handshake, configure, exercise
   int channel = -1;
   std::optional<float> target_steps;
@@ -24,14 +24,14 @@ struct SerialV2ValidationOptions {
 };
 
 // Call before opening a port. Configuration modes use only the selected channel.
-absl::Status ValidateSerialV2Options(const Board& board, const SerialV2ValidationOptions& options);
+absl::Status ValidateSerialOptions(const Board& board, const SerialValidationOptions& options);
 
 // Each session resets, checks identity, optionally exercises a channel, and
 // attempts ESTOP on exit. Repeated sessions do not physically reopen the port.
 // Cancellation is checked between exchanges; cleanup still attempts ESTOP.
-absl::Status RunSerialV2Validation(const Board& board,
-                                   const SerialV2ValidationOptions& options,
-                                   std::shared_ptr<robot::comm::MessageTransport> transport,
-                                   std::ostream& output,
-                                   std::function<bool()> cancelled = {});
+absl::Status RunSerialValidation(const Board& board,
+                                 const SerialValidationOptions& options,
+                                 std::shared_ptr<robot::comm::MessageTransport> transport,
+                                 std::ostream& output,
+                                 std::function<bool()> cancelled = {});
 }  // namespace robot::board::diagnostics

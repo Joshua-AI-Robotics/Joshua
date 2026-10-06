@@ -9,6 +9,7 @@
 
 #include "absl/strings/numbers.h"
 #include "config/config_utils.h"
+#include "firmware/common/joshua_wire.h"
 #include "robot/board/joshua_wire/serial_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "utils/status_macros.h"
@@ -48,7 +49,7 @@ absl::Status Run() {
     board = &candidate;
   }
   if (board == nullptr) return absl::NotFoundError("Board is not in config.robot.boards.");
-  SerialV2ValidationOptions options;
+  SerialValidationOptions options;
   options.mode = FLAGS_mode;
   options.channel = FLAGS_channel;
   options.allow_enable = FLAGS_allow_enable;
@@ -60,11 +61,11 @@ absl::Status Run() {
       return absl::InvalidArgumentError("Invalid target_steps.");
     options.target_steps = target;
   }
-  ABSL_RETURN_IF_ERROR(ValidateSerialV2Options(*board, options));
+  ABSL_RETURN_IF_ERROR(ValidateSerialOptions(*board, options));
   std::cout << "board=" << board->name() << " port=" << board->comm().serial_config().port()
             << " baud=" << board->comm().serial_config().baudrate()
-            << " protocol=v2 mode=" << options.mode << " sessions=" << options.sessions
-            << " settle_ms=" << options.settle_ms << '\n';
+            << " protocol=JW version=" << JW_VERSION_STRING << " mode=" << options.mode
+            << " sessions=" << options.sessions << " settle_ms=" << options.settle_ms << '\n';
   std::cout << "Reset clears ALL channel configuration; cleanup sends board-wide ESTOP.\n"
             << "No watchdog: lost communication/process termination can leave outputs enabled.\n";
   if (options.mode != "handshake") {
@@ -89,7 +90,7 @@ absl::Status Run() {
   for (int elapsed = 0; elapsed < options.settle_ms && !interrupted; elapsed += 10) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  return RunSerialV2Validation(
+  return RunSerialValidation(
       *board, options, std::move(transport), std::cout, [] { return interrupted != 0; });
 }
 }  // namespace

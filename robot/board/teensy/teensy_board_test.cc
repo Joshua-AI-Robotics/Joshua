@@ -3,34 +3,36 @@
 #include <memory>
 
 #include "absl/status/status.h"
-#include "firmware/common/joshua_wire_v1.h"
+#include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
+#include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/testing/fake_legacy_message_transport.h"
 
 // Identity wiring; shared protocol behavior is covered by JoshuaWireBoardTest.
 namespace robot::board {
 namespace {
 
-std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw_board_id_t board_id = JW_BOARD_TEENSY41) {
+FakeJoshuaWireTransport::Response MakeIdentifyResponse(uint8_t n_channels,
+                                                       jw_board_id_t board_id = JW_BOARD_TEENSY41) {
   jw_identify_response_t response{};
   response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
     response.channel_drives[i] = JW_DRIVE_STEP_DIR;
   }
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
-  return std::vector<uint8_t>(buf, buf + len);
+  uint8_t buf[JW_MAX_FRAME_LEN];
+  const int len = jw_encode_identify_payload(buf, sizeof(buf), &response);
+  return {JW_CMD_IDENTIFY, JW_CHANNEL_NONE, std::vector<uint8_t>(buf, buf + len)};
 }
 
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw_status_t status) {
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
-  return std::vector<uint8_t>(buf, buf + len);
+FakeJoshuaWireTransport::Response MakeStatusResponse(uint8_t cmd,
+                                                     uint8_t channel,
+                                                     jw_status_t status) {
+  uint8_t buf[JW_MAX_FRAME_LEN];
+  const int len = jw_encode_status_payload(buf, sizeof(buf), status);
+  return {cmd, channel, std::vector<uint8_t>(buf, buf + len)};
 }
 
 robot::board::Board MakeTeensyBoard() {
@@ -42,7 +44,7 @@ robot::board::Board MakeTeensyBoard() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
-  board.mutable_firmware()->set_min_proto_version(1);
+  board.mutable_firmware()->set_min_proto_version(JW_PROTO_VERSION);
 
   auto* channel = board.add_channels();
   channel->set_index(0);
@@ -59,7 +61,7 @@ robot::board::Board MakeTeensyBoard() {
 class TeensyBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<robot::comm::FakeLegacyMessageTransport>();
+    transport_ = std::make_shared<FakeJoshuaWireTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -71,7 +73,7 @@ class TeensyBoardTest : public ::testing::Test {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
-  std::shared_ptr<robot::comm::FakeLegacyMessageTransport> transport_;
+  std::shared_ptr<FakeJoshuaWireTransport> transport_;
 };
 
 TEST_F(TeensyBoardTest, InitSucceedsAgainstRealTeensyIdentity) {

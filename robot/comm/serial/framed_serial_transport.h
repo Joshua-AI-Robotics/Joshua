@@ -1,6 +1,6 @@
 // Comm-internal JoshuaWire serial message boundaries. Serial owns the physical
 // port/transaction deadline; board sessions own CRC, version and correlation.
-// Legacy fixed-length forwarding preserves v1/vendor consumers during migration.
+// Legacy fixed-length forwarding preserves vendor consumers.
 #pragma once
 
 #include <chrono>

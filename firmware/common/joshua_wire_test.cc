@@ -1,4 +1,4 @@
-// Hardware-free tests for the shared v2 codec, firmware session and
+// Hardware-free tests for the shared JW codec, firmware session and
 // serial endpoint: golden bytes, CRC/bounds, version separation,
 // correlation, reset/reboot and duplicate/stale-request handling.
 #include "firmware/common/joshua_wire.h"
@@ -7,9 +7,8 @@
 #include <cstring>
 #include <vector>
 
-#include "firmware/common/joshua_wire_serial_endpoint.h"
-#include "firmware/common/joshua_wire_v1.h"
 #include "firmware/common/joshua_wire_firmware_session.h"
+#include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
 namespace {
@@ -19,19 +18,19 @@ Bytes Request(
     uint32_t session, uint32_t id, uint8_t cmd, uint8_t channel = 0xFF, const Bytes& payload = {}) {
   Bytes bytes(JW_MAX_FRAME_LEN);
   const int len = jw_encode_frame(bytes.data(),
-                                   bytes.size(),
-                                   session,
-                                   id,
-                                   cmd,
-                                   channel,
-                                   payload.data(),
-                                   static_cast<uint8_t>(payload.size()));
+                                  bytes.size(),
+                                  session,
+                                  id,
+                                  cmd,
+                                  channel,
+                                  payload.data(),
+                                  static_cast<uint8_t>(payload.size()));
   EXPECT_GT(len, 0);
   bytes.resize(len > 0 ? len : 0);
   return bytes;
 }
 
-TEST(JoshuaWire, ConfigureCommandAndPayloadAreSharedWithV1) {
+TEST(JoshuaWire, ConfigurePayloadMatchesIndependentGoldenBytes) {
   jw_configure_step_dir_t config{};
   config.max_pulse_rate_hz = 1000;
   config.enable_active_low = 1;
@@ -39,21 +38,21 @@ TEST(JoshuaWire, ConfigureCommandAndPayloadAreSharedWithV1) {
   config.dir_pin = 3;
   config.enable_pin = 4;
   config.step_pulse_width_us = 20;
-  uint8_t encoded[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_configure_channel_step_dir(encoded, sizeof(encoded), 0, &config);
-  ASSERT_GT(len, 0);
-  jw1_frame_t v1;
-  ASSERT_EQ(jw1_decode_frame(encoded, len, &v1), 0);
+  uint8_t encoded[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
+  const int len = jw_encode_configure_step_dir_payload(encoded, sizeof(encoded), &config);
+  ASSERT_EQ(len, sizeof(encoded));
   const Bytes expected{0xe8, 0x03, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x14, 0x00};
-  EXPECT_EQ(v1.cmd, JW_CMD_CONFIGURE_CHANNEL);
-  EXPECT_EQ(Bytes(v1.payload, v1.payload + v1.payload_len), expected);
+  EXPECT_EQ(Bytes(encoded, encoded + len), expected);
   const auto bytes = Request(100, 2, JW_CMD_CONFIGURE_CHANNEL, 0, expected);
-  jw_frame_t v2;
-  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &v2), 0);
-  EXPECT_EQ(v2.cmd, v1.cmd);
-  EXPECT_EQ(Bytes(v2.payload, v2.payload + v2.payload_len), expected);
-  EXPECT_EQ(v1.proto_ver, 1);
-  EXPECT_EQ(v2.proto_ver, 2);
+  jw_frame_t frame;
+  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+  EXPECT_EQ(frame.cmd, JW_CMD_CONFIGURE_CHANNEL);
+  EXPECT_EQ(Bytes(frame.payload, frame.payload + frame.payload_len), expected);
+  EXPECT_EQ(frame.proto_ver, 2);
+  EXPECT_STREQ(JW_VERSION_STRING, "0.0.2");
+  EXPECT_EQ(JW_VERSION_MAJOR, 0);
+  EXPECT_EQ(JW_VERSION_MINOR, 0);
+  EXPECT_EQ(JW_VERSION_PATCH, 2);
 }
 
 TEST(JoshuaWire, ResetAndTargetMatchIndependentGoldenBytes) {
@@ -114,11 +113,8 @@ TEST(JoshuaWire, BoundsVersionsAndReservedIdsAreRejected) {
   EXPECT_EQ(jw_encode_frame(buffer.data(), 64, 1, 0, 3, 0, nullptr, 0), -1);
   EXPECT_EQ(jw_encode_frame(buffer.data(), 64, 1, 1, 3, 0, nullptr, 1), -1);
   EXPECT_EQ(jw_encode_frame(nullptr, 64, 1, 1, 3, 0, nullptr, 0), -1);
-  auto v2 = Request(1, 1, JW_CMD_ENABLE, 0);
-  jw1_frame_t legacy;
-  EXPECT_EQ(jw1_decode_frame(v2.data(), v2.size(), &legacy), -1);
-  const int v1_len = jw1_encode_enable(buffer.data(), buffer.size(), 0);
-  EXPECT_EQ(jw_decode_frame(buffer.data(), v1_len, &decoded), -1);
+  const Bytes legacy{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04};
+  EXPECT_EQ(jw_decode_frame(legacy.data(), legacy.size(), &decoded), -1);
 }
 
 TEST(JoshuaWire, ResponseCopiesAndMatchesAllCorrelationFields) {
@@ -183,13 +179,13 @@ class FirmwareSessionTest : public ::testing::Test {
   int Process(const Bytes& request) {
     response.resize(JW_MAX_FRAME_LEN);
     const int len = jw_firmware_session_process(&session,
-                                                 request.data(),
-                                                 request.size(),
-                                                 response.data(),
-                                                 response.size(),
-                                                 Handle,
-                                                 Reset,
-                                                 &device);
+                                                request.data(),
+                                                request.size(),
+                                                response.data(),
+                                                response.size(),
+                                                Handle,
+                                                Reset,
+                                                &device);
     response.resize(len > 0 ? len : 0);
     return len;
   }
@@ -282,44 +278,32 @@ int NeutralHandler(void*, const jw_command_t*, uint8_t* out, size_t cap) {
 }
 void NoopReset(void*) {}
 
-TEST(JoshuaWireSerialEndpoint, ArtifactVersionIsExplicitAndV1BytesStayIdentical) {
-  uint8_t request[JW1_MAX_FRAME_LEN];
-  uint8_t response[JW_MAX_FRAME_LEN];
-  const int request_len = jw1_encode_enable(request, sizeof(request), 0);
-  uint8_t expected[JW1_MAX_FRAME_LEN];
-  const int expected_len =
-      jw1_encode_status_response(expected, sizeof(expected), 5, 0, JW_STATUS_OK);
+TEST(JoshuaWireSerialEndpoint, RejectsLegacyFramesAndRequiresReset) {
   jw_serial_endpoint_t endpoint;
-  jw_serial_endpoint_init(&endpoint, 1);
-  const int len = jw_serial_endpoint_process(&endpoint,
-                                             request,
-                                             request_len,
-                                             response,
-                                             sizeof(response),
-                                             NeutralHandler,
-                                             NoopReset,
-                                             nullptr);
-  ASSERT_EQ(len, expected_len);
-  EXPECT_EQ(Bytes(response, response + len), Bytes(expected, expected + expected_len));
-  const auto v2 = Request(1, 1, JW_CMD_RESET_SESSION);
-  EXPECT_EQ(jw_serial_endpoint_process(&endpoint,
-                                       v2.data(),
-                                       v2.size(),
-                                       response,
-                                       sizeof(response),
-                                       NeutralHandler,
-                                       NoopReset,
-                                       nullptr),
-            0);
   jw_serial_endpoint_init(&endpoint);
-  EXPECT_EQ(jw_serial_endpoint_process(&endpoint,
-                                       request,
-                                       request_len,
-                                       response,
-                                       sizeof(response),
-                                       NeutralHandler,
-                                       NoopReset,
-                                       nullptr),
-            0);
+  uint8_t response[JW_MAX_FRAME_LEN];
+  const Bytes legacy{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04};
+  auto process = [&](const Bytes& request) {
+    return jw_serial_endpoint_process(&endpoint,
+                                      request.data(),
+                                      request.size(),
+                                      response,
+                                      sizeof(response),
+                                      NeutralHandler,
+                                      NoopReset,
+                                      nullptr);
+  };
+  EXPECT_EQ(process(legacy), 0);
+  EXPECT_EQ(process(Request(1, 1, JW_CMD_ENABLE, 0)), 0);
+  EXPECT_GT(process(Request(1, 1, JW_CMD_RESET_SESSION)), 0);
+  const auto request = Request(1, 2, JW_CMD_ENABLE, 0);
+  const int length = process(request);
+  ASSERT_GT(length, 0);
+  jw_frame_t sent, reply;
+  ASSERT_EQ(jw_decode_frame(request.data(), request.size(), &sent), 0);
+  ASSERT_EQ(jw_decode_frame(response, length, &reply), 0);
+  EXPECT_TRUE(jw_response_matches(&sent, &reply));
+  EXPECT_EQ(reply.payload[0], JW_STATUS_OK);
+  EXPECT_EQ(process(legacy), 0);
 }
 }  // namespace

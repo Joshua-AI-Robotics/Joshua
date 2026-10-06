@@ -9,15 +9,14 @@ Companion to [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) and
 
 | Plan step | Implemented |
 | --- | --- |
-| 2: JW correlation | Shared C codecs, host/firmware sessions, neutral command payloads and explicit v1/v2 serial artifacts |
+| 2: JW correlation | Shared C codecs, host/firmware sessions, neutral command payloads and one JW 0.0.2 serial artifact per board |
 | 3: comm boundaries | Message/correlated-cyclic interfaces, comm-internal adapters, serial framing and configurable exchange/settle timing |
 | 4: EtherCAT owner | Per-NIC worker/leases, PDO shadows/snapshots, bounded incremental runtime CoE and explicit timing policy |
 | 5: paired endpoint | Compatibility gate, verified reset, shared CoE/PDO session, retained replies and firmware watchdog core |
 | 6–7: factory/engine wiring | Shared JoshuaWire engine, paired capability assembly and multi-board ownership checks; legacy TI-demo host path retired |
 
 Native regression coverage includes correlation, retries, ID exhaustion, late
-replies, timeouts, teardown, factory boundaries and two-slave sharing. Serial
-v1 and vendor consumers retain their fixed-length compatibility interface.
+replies, timeouts, teardown, factory boundaries and two-slave sharing. Vendor consumers retain their fixed-length compatibility interface.
 Serial timing comes from protobuf config, not board-specific sleeps.
 
 [Hardware results](JOSHUA_WIRE_VALIDATION.md#hardware-validation-status):
@@ -86,7 +85,7 @@ JoshuaWire adds nonzero, little-endian `uint32_t session_id` and
 fields. The session ID is established by the reset handshake below; it is not
 a board identity or a value that persists across reboot.
 
-The v2 frame is:
+The JW 0.0.2 frame (on-wire revision 2) is:
 
 ```text
 [sync][len][proto_ver][session_id_le][message_id_le][cmd][channel][payload...][crc16_le]
@@ -129,9 +128,9 @@ Protocol rules:
 - Stale, duplicate, or mismatched responses do not complete a call.
 - A timed-out ID remains quarantined from late responses until transport state
   has advanced past that response.
-- JoshuaWire v1 remains available during migration. Current firmware and
-  presets move to v2 only after both endpoints support it; v1 wire bytes are
-  not silently reinterpreted as v2.
+- JW1 is removed after serial validation on AM243, Teensy and ESP32 and
+  EtherCAT validation on AM243. JW2 is now named JW, release `0.0.2`, with
+  unchanged wire revision `2`; old frame bytes remain rejected.
 
 ## 4. Communication seams
 
@@ -418,15 +417,15 @@ Document or generate the matching ESI and PDO mapping.
 
 ## 10. Migration sequence
 
-1. Update this design and the board-layer RFC with the v2 and dual-plane
+1. Update this design and the board-layer RFC with the correlated and dual-plane
    contracts.
-2. Add JoshuaWire beside v1, including correlation tests and response-ID
+2. Implement the correlated JoshuaWire session, including correlation tests and response-ID
    propagation through existing serial firmware.
 3. Add message and correlated-cyclic comm interfaces, fakes, and BUILD
    visibility rules.
 4. Add SOEM CoE/SDO support and the single-owner background cyclic loop.
 5. Implement the host PDO codec and Joshua-controlled AM243 firmware/profile.
-6. Compose the JoshuaWire board engine and migrate AM243 after serial v2 is
+6. Compose the JoshuaWire board engine and migrate AM243 after correlated serial is
    stable.
 7. Remove `Am243Board::serial_mode_` and board-layer dependencies on concrete
    serial/SOEM implementations.
@@ -436,7 +435,7 @@ Document or generate the matching ESI and PDO mapping.
 Required host and shared-codec tests:
 
 - JoshuaWire exact golden bytes and CRC coverage.
-- v1/v2 compatibility and explicit version rejection.
+- Golden JW frames and explicit legacy-version rejection.
 - Every response echoes its session and request IDs.
 - Message-ID exhaustion starts a new session rather than reusing an ID.
 - Reboot, reconnect, retained PDO/mailbox response, and reset-session behavior.

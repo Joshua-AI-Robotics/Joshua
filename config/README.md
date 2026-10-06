@@ -56,20 +56,22 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
 
 ## JoshuaWire serial protocol selection
 
-Existing board configs keep their current protocol when `protocol` is omitted.
-For a serial AM243, Teensy 4.1, or ESP32 running the matching **v2 firmware
-artifact**, add these fields inside its `Board` entry:
+JoshuaWire (JW) `0.0.2` is the sole Joshua protocol. Omitted `protocol`
+selects JW for AM243, Teensy 4.1 and ESP32 serial boards. Prefer explicit fields
+inside the `Board` entry:
 
 ```text
 protocol: JOSHUA_WIRE
 firmware { min_proto_version: 2 }
 ```
 
-This is an explicit selection, not version negotiation. V1 and v2 artifacts
-reject each other's frames. V2 initializes with a fresh session reset, then
+The semantic release version is `0.0.2`; `min_proto_version` checks the on-wire
+revision, which remains `2`. JW1 support is removed. Rename explicit
+`JOSHUA_WIRE_V2` configs to `JOSHUA_WIRE` and update old minimums to `2`.
+JW initializes with a fresh session reset, then
 IDENTIFY and CONFIGURE_CHANNEL; initialization leaves channels disabled.
 Feetech does not accept this selection. The AM243 TI-demo host path is retired.
-See [firmware build instructions](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone).
+See [firmware build instructions](../firmware/README.md#joshuawire-serial).
 
 ### Serial timing
 
@@ -86,7 +88,7 @@ serial_config {
 
 The framed JoshuaWire exchange timeout includes waiting for the shared bus lock,
 writing and receiving a complete frame. Omitted means 100 ms; explicit values
-must be 1..INT_MAX milliseconds. Fixed-length v1/vendor operations retain their
+must be 1..INT_MAX milliseconds. Fixed-length vendor operations retain their
 existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
 and runs once after physical open, not per request or session reset. All users
 of one port must agree on baudrate and timing; omitted timeout and explicit
@@ -95,7 +97,7 @@ of one port must agree on baudrate and timing; omitted timeout and explicit
 **ESP32 config migration:** the board-specific 2-second sleep has been removed.
 For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
 as in the checked-in ESP32 example. Native USB or other links may need a
-different value; board type no longer guesses it. The manual v2 probe's
+different value; board type no longer guesses it. The manual JW probe's
 `--settle_ms` remains an additional diagnostic wait, not a runtime setting.
 
 ## JoshuaWire over EtherCAT

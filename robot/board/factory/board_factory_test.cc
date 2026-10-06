@@ -79,7 +79,7 @@ TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
 }
 
 TEST_F(BoardFactoryTest, Esp32IsPortedAndRejectsAMockShapedConfig) {
-  // ESP32 is implemented (same joshua_wire_v1 family as Teensy); a config
+  // ESP32 is implemented (same joshua_wire family as Teensy); a config
   // shaped for MockBoard (STEP_DIR channel, no comm) fails Esp32Board's own
   // validation rather than falling into UnportedBoardTypesReportUnimplemented.
   robot::board::Board board = MakeMockBoard("esp32_bus_1", 1);

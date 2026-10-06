@@ -329,8 +329,9 @@ TEST(EthercatMasterTest, QueuedTimeoutIsNeverDispatched) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto first =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto first = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = master->WriteSdo({1, 0x2010, 0}, {1}, 10ms);
   trace->Release();
@@ -349,8 +350,9 @@ TEST(EthercatMasterTest, DispatchedTimeoutFaultsMasterAndDiscardsLateSuccess) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto pending =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 100ms); });
+  auto pending = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 100ms);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = pending.get();
   EXPECT_EQ(expired.status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -368,11 +370,13 @@ TEST(EthercatMasterTest, StopWakesSdoWaitersBeforeBlockedBackendReturns) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto active =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto active = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
+  });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto active_ready = active.wait_for(500ms);
   const auto queued_ready = queued.wait_for(500ms);
@@ -425,11 +429,13 @@ TEST(EthercatMasterTest, SdoQueuedDuringStartupCannotBypassCyclicGate) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto start =
-      std::async(std::launch::async, [&] { return master->StartCyclic({{0, 0}, {0, 0}}); });
+  auto start = std::async(std::launch::async, [&] {
+    return master->StartCyclic({{0, 0}, {0, 0}});
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   trace->Release();
   EXPECT_TRUE(start.get().ok());
   EXPECT_EQ(queued.get().status().code(), absl::StatusCode::kFailedPrecondition);
@@ -604,16 +610,21 @@ TEST(CoeSdoTransferTest, SenderCountersAreIndependentForUploadsAndDownloads) {
   for (uint8_t request_counter = 1; request_counter <= 7; ++request_counter) {
     for (uint8_t response_counter : {7, 1, 5, 0, 3, 6, 2, 4}) {
       for (uint8_t command : {0x43, 0x41, 0x60}) {
-        SCOPED_TRACE(::testing::Message() << unsigned(request_counter) << '/'
-                                         << unsigned(response_counter) << '/'
-                                         << unsigned(command));
+        SCOPED_TRACE(::testing::Message()
+                     << unsigned(request_counter) << '/' << unsigned(response_counter) << '/'
+                     << unsigned(command));
         TestMailboxRegisters io;
         const bool write = command == 0x60;
         const SdoBytes payload(command == 0x41 ? 36 : 4, 0xa5);
-        io.after_write.push_back(SdoReply(command, write ? SdoBytes{} : payload,
-                                         response_counter));
-        ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, request_counter, write,
-                                   write ? payload : SdoBytes{}, write ? 0 : payload.size())
+        io.after_write.push_back(SdoReply(command, write ? SdoBytes{} : payload, response_counter));
+        ASSERT_TRUE(transfer
+                        .Begin(kMailbox,
+                               0x2000,
+                               0,
+                               request_counter,
+                               write,
+                               write ? payload : SdoBytes{},
+                               write ? 0 : payload.size())
                         .ok());
         auto reply = CompleteSdo(transfer, io);
         ASSERT_TRUE(reply.ok()) << reply.status();
@@ -823,8 +834,9 @@ TEST(EthercatMasterTest, StalledRuntimeMailboxKeepsCyclingUntilDeadlineThenFails
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto pending =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 400ms); });
+  auto pending = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 400ms);
+  });
   uint64_t sequence = 0;
   for (int i = 0; i < 8; ++i) {
     auto cycle = master->WaitForCycle(sequence, 100ms);
@@ -849,11 +861,13 @@ TEST(EthercatMasterTest, RuntimeStopCancelsTransferAndQueuedCalls) {
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto active =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto active = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
+  });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto woke = active.wait_for(200ms);
   trace->Release();
@@ -1451,10 +1465,10 @@ struct FirmwareProfileTrace : IoTrace {
     for (size_t i = 0; i < 2; ++i) {
       JoshuaEthercatProfileConfig config{};
       config.identity.board_id = JW_BOARD_AM243;
-      std::memcpy(config.identity.fw_name, "am243-ec-v2", 11);
+      std::memcpy(config.identity.fw_name, "am243-ec-jw", 11);
       config.identity.n_channels = 1;
       config.identity.channel_drives[0] = JW_DRIVE_STEP_DIR;
-      std::memcpy(config.artifact, "am243-ec-v2", 11);
+      std::memcpy(config.artifact, "am243-ec-jw", 11);
       config.context = &channels[i];
       config.command = JoshuaCommand;
       config.reset = JoshuaReset;
@@ -1574,15 +1588,15 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   jw_identify_response_t value;
   ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &value), 0);
   EXPECT_EQ(value.board_id, JW_BOARD_AM243);
-  EXPECT_EQ(std::string(value.fw_name), "am243-ec-v2");
+  EXPECT_EQ(std::string(value.fw_name), "am243-ec-jw");
   ASSERT_TRUE(master
                   ->StartCyclic({JoshuaWireEthercatTransport::StopImage(),
                                  JoshuaWireEthercatTransport::StopImage()})
                   .ok());
   auto command = [&](uint32_t id, uint8_t cmd, const SdoBytes& payload = SdoBytes{}) {
     SdoBytes bytes(64);
-    bytes.resize(jw_encode_frame(
-        bytes.data(), bytes.size(), 7, id, cmd, 0, payload.data(), payload.size()));
+    bytes.resize(
+        jw_encode_frame(bytes.data(), bytes.size(), 7, id, cmd, 0, payload.data(), payload.size()));
     return bytes;
   };
   ASSERT_TRUE(endpoint->Exchange(command(3, JW_CMD_CONFIGURE_CHANNEL, SdoBytes(11))).ok());
@@ -1714,10 +1728,10 @@ TEST_F(JwecFactoryTest, DifferentBoardIdentityUsesUnchangedHostCommAndBoardEngin
   auto& identity = trace->profiles[0].config.identity;
   identity.board_id = JW_BOARD_TEENSY41;
   std::memset(identity.fw_name, 0, sizeof(identity.fw_name));
-  std::memcpy(identity.fw_name, "other-board-v2", 14);
+  std::memcpy(identity.fw_name, "other-board-jw", 14);
   auto& artifact = trace->profiles[0].config.artifact;
   std::memset(artifact, 0, sizeof(artifact));
-  std::memcpy(artifact, "other-ec-v2", 12);
+  std::memcpy(artifact, "other-ec-jw", 12);
   auto config = PairedBoard();
   config.set_board_type(robot::board::TEENSY41);
   auto board = robot::board::BoardFactory::GetOrCreate(config);

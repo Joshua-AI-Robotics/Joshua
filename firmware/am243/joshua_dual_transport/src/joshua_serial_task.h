@@ -12,7 +12,7 @@ extern "C" {
  * @brief Helpers for the Joshua serial transport task.
  *
  * JoshuaSerialStart() starts the serial TaskP thread that handles incoming and
- * outgoing `joshua_wire_v1` frames. Return value convention:
+ * outgoing `joshua_wire` frames. Return value convention:
  *   - 0 on success
  *   - negative error code on failure (e.g. thread creation failure)
  *

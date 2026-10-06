@@ -58,9 +58,9 @@ cc_test(
     name = "joshua_wire_test",
     srcs = ["joshua_wire_test.cc"],
     deps = [
-        ":joshua_wire_serial_endpoint",
         ":joshua_wire",
         ":joshua_wire_firmware_session",
+        ":joshua_wire_serial_endpoint",
         "@googletest//:gtest_main",
     ],
 )

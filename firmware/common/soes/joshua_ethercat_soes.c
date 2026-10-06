@@ -25,8 +25,8 @@ static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
       M(16), M(17), M(18), M(19), M(20)
 #define RXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x70000020u + ((s) << 8))
 #define TXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x60000020u + ((s) << 8))
-#define RXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_WO | ATYPE_RXPDO, 0, output + 4 * ((s) - 1))
-#define TXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_RO | ATYPE_TXPDO, 0, input + 4 * ((s) - 1))
+#define RXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_WO | ATYPE_RXPDO, 0, output + 4 * ((s)-1))
+#define TXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_RO | ATYPE_TXPDO, 0, input + 4 * ((s)-1))
 static const _objd device_type[] = {CONST(0, DTYPE_UNSIGNED32, 32, 0)};
 static const _objd device_name[] = {
     ENTRY(0, DTYPE_VISIBLE_STRING, 9 * 8, ATYPE_RO, 0, "Joshua JW")};

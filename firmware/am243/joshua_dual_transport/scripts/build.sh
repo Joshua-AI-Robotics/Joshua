@@ -4,24 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIRMWARE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JOSHUA_ROOT="$(cd "$FIRMWARE_DIR/../../.." && pwd)"
-JOSHUA_WIRE_VERSION="${JOSHUA_WIRE_VERSION:-1}"
 JOSHUA_ETHERCAT_PROFILE="${JOSHUA_ETHERCAT_PROFILE:-ti-demo}"
 if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw-soes ]]; then
-  if [[ "$JOSHUA_WIRE_VERSION" != 2 ]]; then
-    echo "JW SOES requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
-  fi
   exec bash "$SCRIPT_DIR/build_soes.sh" "$@"
 fi
-case "$JOSHUA_WIRE_VERSION" in
-  1|2) ;;
-  *) echo "JOSHUA_WIRE_VERSION must be 1 or 2" >&2; exit 2 ;;
-esac
 case "$JOSHUA_ETHERCAT_PROFILE" in
-  ti-demo) ARTIFACT_NAME="am243_dual_transport_v${JOSHUA_WIRE_VERSION}" ;;
+  ti-demo) ARTIFACT_NAME="am243_dual_transport_jw" ;;
   jw)
-    if [[ "$JOSHUA_WIRE_VERSION" != 2 ]]; then
-      echo "JW EtherCAT requires JOSHUA_WIRE_VERSION=2" >&2; exit 2
-    fi
     for watchdog in JOSHUA_COMM_WATCHDOG_US JOSHUA_TARGET_WATCHDOG_US; do
       value="${!watchdog:-}"
       if [[ ! "$value" =~ ^[1-9][0-9]{0,8}$ ]] || (( value < 10000 )); then
@@ -62,7 +51,6 @@ make -C "$BUILD_ROOT/build" -f "$FIRMWARE_DIR/Makefile" all \
   INDUSTRIAL_COMMUNICATIONS_SDK_PATH="$SDK_ROOT" \
   TI_PROJECT_DIR="$TI_PROJECT_DIR" \
   JOSHUA_ROOT="$JOSHUA_ROOT" \
-  JOSHUA_WIRE_VERSION="$JOSHUA_WIRE_VERSION" \
   JOSHUA_ETHERCAT_PROFILE="$JOSHUA_ETHERCAT_PROFILE" \
   JOSHUA_COMM_WATCHDOG_US="${JOSHUA_COMM_WATCHDOG_US:-0}" \
   JOSHUA_TARGET_WATCHDOG_US="${JOSHUA_TARGET_WATCHDOG_US:-0}" \

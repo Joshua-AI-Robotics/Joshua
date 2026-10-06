@@ -1,4 +1,4 @@
-# JoshuaWire validation
+# JoshuaWire 0.0.2 validation
 
 Use `//robot/board/joshua_wire:joshua_wire_smoke` for serial checks on AM243,
 Teensy 4.1 and ESP32. It uses the production host session and serial transport,
@@ -15,7 +15,7 @@ and cleanup sends board-wide ESTOP. Loss of holding torque can be hazardous.
 `--confirm_hardware` acknowledges setup; it is not a wiring check or interlock.
 The probe opens only the selected board and does not honor
 `general.operation_mode`. It requires explicit `protocol: JOSHUA_WIRE`
-and never falls back to v1. Older board-specific smokes use v1 and send targets.
+and never falls back to JW1. The older JW1 smoke tool is removed.
 
 Serial firmware has no communication-loss watchdog. Cleanup attempts ESTOP after
 command failure or SIGINT/SIGTERM, but a lost link, crash or SIGKILL can prevent
@@ -40,7 +40,7 @@ Review the device path, identity, channel pins and [serial timing](../config/REA
 
 ```bash
 bazel-bin/robot/board/joshua_wire/joshua_wire_smoke \
-  --config=/path/to/reviewed-v2.pbtxt --board=board_name --dry_run
+  --config=/path/to/reviewed-jw.pbtxt --board=board_name --dry_run
 ```
 
 Invalid options and missing hardware confirmation are rejected before opening
@@ -49,7 +49,7 @@ zero to test only the configured runtime post-open delay.
 
 ## Hardware sequence (human-confirmed setup only)
 
-1. Deliberately flash the matching [v2 artifact](../firmware/README.md#opt-in-joshuawire-v2-serial-milestone).
+1. Deliberately flash the matching [JW artifact](../firmware/README.md#joshuawire-serial).
    AM243 UART has a software-only channel; Teensy/ESP32 can drive GPIO.
 2. Replace `--dry_run` with `--confirm_hardware`. The default handshake runs
    RESET_SESSION, IDENTIFY and ESTOP, without configuring or enabling channels.
@@ -70,6 +70,13 @@ programs, configurations and captures outside the repository.
 
 ## Hardware validation status
 
+JW 0.0.2 is the renamed validated JW2 protocol, with the same on-wire bytes.
+The records below retain the actual historical artifact names and hashes;
+current build and tool names appear above and in the firmware READMEs.
+The operator reconfirmed serial validation on all three boards and EtherCAT
+validation on AM243 on 2026-10-05. This does not extend the recorded bench scope.
+
+
 These are limited bench results, not production safety or timing qualification.
 All serial checks used the Ubuntu 24.04/Jazzy host container.
 
@@ -77,7 +84,7 @@ All serial checks used the Ubuntu 24.04/Jazzy host container.
 | --- | --- | --- | --- |
 | AM243 UART | Passed | Software-only channel | Physical backend, ROS 2 integration |
 | Teensy 4.1 native USB | Passed | Forward/return observed | ROS 2 integration, pulse timing, link-loss safety |
-| ESP32 CP2102 UART | Passed | Not tested | Powered motion, ROS 2 integration, pulse timing, link-loss safety |
+| ESP32 CP2102 UART | Passed after reopening | Not tested | Initial post-upload stale replies, powered motion, ROS 2 integration, pulse timing, link-loss safety |
 | AM243 EtherCAT/SOES | Bring-up only | Software-only channel | Timing/failure/endurance qualification |
 
 ### Recorded AM243 hardware result — 2026-09-27
@@ -87,7 +94,7 @@ Artifact: `am243_dual_transport_v2.release.appimage.hs_fs`, SHA-256
 `d8612bb2e981a69cadc4e7fce94d31cc76270508927d51ac227dd8efabfa05d2`.
 Bootloader/application flash verification passed.
 
-XDS110 UART at 115200 baud identified `am243-dual`, board ID 1, one
+XDS110 UART at 115200 baud identified `am243-dual-v2`, board ID 1, one
 STEP_DIR channel. Eight sessions passed: two handshake, two configure-only,
 and four exercise sessions at +250/-250 native steps. Feedback matched targets
 with zero faults. Fresh resets returned position zero; every session acknowledged
@@ -98,13 +105,13 @@ independently verified. EtherCAT, watchdogs and ROS 2 were not tested.
 ### Recorded Teensy 4.1 hardware result — 2026-10-04
 
 Host/firmware source: `a62eaea618d02e3d5a4a88f3bb8663f4eac0e499`.
-Artifact: `teensy41-serial` HEX, SHA-256
+Artifact: `teensy41-serial-v2` HEX, SHA-256
 `88300e3eb0b0027a26a246f1bdfe45c173c4263be8d11b0c6ee118c816935f73`.
 Build: PlatformIO 6.1.18, Teensy platform 5.2.0, Arduino framework 1.162.0.
 The board initially ran v1; an approved flash via HalfKay succeeded after
 manual PROGRAM-button entry.
 
-Native USB identified `teensy-serial`, board ID 2, one STEP_DIR channel.
+Native USB identified `teensy-serial-v2`, board ID 2, one STEP_DIR channel.
 Motor power was confirmed disconnected. Channel 0 used STEP/DIR/ENABLE pins
 2/3/4, 4000 Hz maximum, 20 µs pulse width and active-low enable. Eight sessions
 passed: two handshake, two configure-only, two exercise at +10 steps, then two
@@ -116,7 +123,7 @@ with no post-open or extra diagnostic wait.
 #### Powered Teensy motor bench — 2026-10-04
 
 With separately confirmed powered hardware, a temporary bench used CommFactory,
-JoshuaWireSession and shared codecs. At 100 pulses/s it held the initial count,
+JoshuaWireV2Session and shared codecs. At 100 pulses/s it held the initial count,
 enabled, moved 89 steps forward, waited two seconds, returned and disabled.
 Each leg had a three-second arrival deadline. Counts went 2 → 91 → 2; each leg
 took approximately 0.89 seconds. The operator observed smooth forward-and-return
@@ -126,7 +133,7 @@ This was not a ROS 2/motor-driver test or an independent angle/pulse measurement
 ### Recorded ESP32 hardware result — 2026-10-04
 
 Host/firmware source: `a62eaea618d02e3d5a4a88f3bb8663f4eac0e499`.
-Artifact: `esp32-serial` BIN, SHA-256
+Artifact: `esp32-serial-v2` BIN, SHA-256
 `aa6cbf9a03c34fbc69c42e6a420e58b7aa10548aaf04fd6729cec457cf2a0335`.
 Build: PlatformIO 6.1.18, Espressif32 7.1.3, Arduino framework
 `4.20017.260907+sha.dcc1105b`, Xtensa GCC `8.4.0+2021r2-patch5`.
@@ -134,7 +141,7 @@ The previous application did not answer either probe; bootloader identification
 confirmed ESP32-D0WD-V3 revision v3.1. Approved upload with esptool 4.11.0
 verified all transferred images and reset the board through RTS.
 
-CP2102 UART at 115200 baud identified `esp32-serial`, wire board ID 8,
+CP2102 UART at 115200 baud identified `esp32-serial-v2`, wire board ID 8,
 one STEP_DIR channel. Motor power was confirmed disconnected. Channel 0 used
 GPIOs 25/26/27, 4000 Hz maximum, 20 µs pulse width and active-low enable.
 Eight sessions passed: two handshake, two configure-only, two exercise at +10
@@ -144,13 +151,72 @@ session accepted the same target, not a second displacement. Fresh resets
 retained the count. Runtime exchange timeout was 100 ms; configured post-open
 settling was 2000 ms with no extra diagnostic wait. Powered motion was not tested.
 
+### Recorded ESP32 JW 0.0.2 reflash — 2026-10-05
+
+The operator confirmed the connected ESP32 setup with motor power disconnected.
+The JW consolidation working tree (based on `15f1aca`) built and uploaded
+`esp32-serial` using PlatformIO and esptool 4.11.0. The bootloader identified
+ESP32-D0WD-V3 revision v3.1; esptool verified all transferred image hashes.
+Input application BIN SHA-256:
+`ab513c736e849451c70246e5178593b5726205cdf3c321ce3e011b188b78aa67`.
+
+The production `joshua_wire_smoke` in Ubuntu 24/Jazzy identified
+`esp32-serial`, wire board ID 8, and one STEP_DIR channel on CP2102
+`/dev/ttyUSB0`. The final sequence passed eight fresh sessions across four
+physical port openings: two handshake, two configure-only, two exercise with
+a zero-step hold target, then two handshake after reopening. Both ENABLE and
+DISABLE replies and all eight ESTOP cleanups were acknowledged; all feedback
+reported position/velocity zero and no faults. GPIOs 25/26/27, 4000 Hz maximum,
+20 µs pulse width, active-low enable, 100 ms exchange timeout and the configured
+2000 ms post-open settle were used. Extra diagnostic settle was zero.
+Powered motion and physical pulse timing were not tested.
+
+**Post-upload caveat:** the first port open after each of three uploads failed
+correlation after a successful RESET. A syscall trace captured stale replies
+for reset/message ID 1 in response to IDENTIFY/message ID 2 and ESTOP/message
+ID 3. No ENABLE or target commands were sent in those failed probes, and ESTOP
+was unconfirmed. Closing/reopening recovered; the complete eight-session
+sequence passed twice with the same BIN. Uploading at 115200 instead of the
+default 460800 also reproduced the failure, so upload speed was not a fix.
+The cause remains unresolved. No automatic retry, correlation bypass, runtime
+setting change or upload-speed change was adopted. Initial post-upload
+reliability is not qualified by the subsequent passing sessions.
+
 Serial results above do not cover manual power-cycle recovery, stale-ID/retry
 hardware probes, endurance, communication-loss safety or independent GPIO timing.
 Each completed probe closed its port.
 
+### ESP32 post-upload issue retest — 2026-10-05
+
+Six additional uploads of the same BIN (SHA-256 above) used the default
+460800 upload baud, followed immediately by the production handshake probe.
+Motor power remained disconnected; only RESET_SESSION, IDENTIFY and ESTOP
+were sent. The exchange timeout remained 100 ms.
+
+| Total post-open wait | First connections | Passed | Failed correlation |
+| --- | --- | --- | --- |
+| Configured 2000 ms, no extra wait | 4 | 2 | 2 |
+| Configured 2000 ms + diagnostic 4000 ms | 2 | 2 | 0 |
+
+One normal-wait failure occurred without syscall tracing; the other was
+captured with timestamped `strace`. The captured run transmitted message IDs
+1/2/3 for RESET/IDENTIFY/ESTOP, but received the same CRC-valid RESET reply
+for message ID 1 each time. The RESET exchange also read 1620 bytes preceding
+the valid reply. This reproduces the earlier failure and does not establish
+whether the stale replies originate in firmware or the UART/USB receive path.
+Traced and untraced first connections both passed in other trials.
+
+After each failure, closing/reopening passed two fresh handshake sessions
+with the normal wait. The final recovery acknowledged ESTOP and closed the
+port. The two longer-wait passes do not qualify a timing workaround: normal-wait
+attempts also passed intermittently. No code, preset timing, correlation policy
+or upload-setting changes were made for this retest; the cause remains unresolved.
+Temporary evidence logs use `/tmp/joshua-jw-retest-*`; the captured failure is
+`/tmp/joshua-jw-retest-sixth.trace`.
+
 ## Recorded AM243 EtherCAT result — 2026-09-28
 
-Artifact: `am243_ethercat_jw.release.appimage.hs_fs`, SHA-256
+Artifact: `am243_ethercat_jw2.release.appimage.hs_fs`, SHA-256
 `beddbbbca07849c7788c5862684b4b9664e547a67eb5a38ddc06ec0020f8e5b6`.
 Source: working tree based on `3e9f268`, not a clean release validation.
 The approved flash verified successfully. The AM243 software-only channel ran
@@ -175,14 +241,14 @@ safety remain untested.
 
 ## SOES candidate bring-up — 2026-09-28
 
-Artifact: `am243_ethercat_jw_soes.release.appimage.hs_fs`, SHA-256
+Artifact: `am243_ethercat_jw2_soes.release.appimage.hs_fs`, SHA-256
 `424c7d498e35efcbdd0c5d27dc490d0c6dd8e3b81896520bc170c36a1ef10b83`.
 Source: working tree based on `7f33853`, not a clean release validation.
 Approved flash verification passed. This image excludes TI's evaluation slave
 stack but retains external TI hardware/PRU dependencies. Watchdogs remained
 2 s / 1 s, and motor power was confirmed disconnected.
 
-Discovery returned `Joshua AM243 JW SOES`, valid `am243-soes2` descriptor,
+Discovery returned `Joshua AM243 JW2 SOES`, valid `am243-soes2` descriptor,
 80/80-byte PDOs and bench vendor/product/revision
 `0xe000059d/0x4a570002/0x00020002`; these are not registered product IDs.
 Bring-up exposed and fixed a generic host CoE bug: slave reply counters advance

@@ -20,7 +20,7 @@ enum BoardType {
                     // servo's own MCU.
   HOST_GPIO = 5;    // No external controller; host pins drive the motor.
   MOCK = 6;         // Tests; channels are in-memory fakes.
-  ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire_v1
+  ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire
                     // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
 }
 

@@ -1,5 +1,5 @@
 // Version-neutral JoshuaWire command IDs, semantic types and payload definitions.
-// Shared by host and MCU firmware for both v1 and v2; wire-version selection,
+// Shared by host and MCU firmware using JoshuaWire 0.0.2; framing,
 // frame layouts and session state belong to their respective codec/endpoint.
 // Structs describe values, not packed wire images: codecs serialize explicitly.
 #pragma once
@@ -39,7 +39,7 @@ typedef enum {
   JW_CMD_ENABLE = 0x05,
   JW_CMD_DISABLE = 0x06,
   JW_CMD_ESTOP = 0x07,
-  // Requires session/message correlation; supported by v2 endpoints only.
+  // Requires session/message correlation; required before normal commands.
   JW_CMD_RESET_SESSION = 0x08,
 } jw_cmd_t;
 

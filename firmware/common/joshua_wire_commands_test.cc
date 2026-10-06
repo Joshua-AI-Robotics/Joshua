@@ -1,5 +1,5 @@
 // Pins version-neutral command values independently of either frame codec.
-// Including only the semantic header verifies it has no v1/v2 dependency.
+// Including only the semantic header verifies it has no frame/session dependency.
 #include "firmware/common/joshua_wire_commands.h"
 
 #include <algorithm>

@@ -3,8 +3,7 @@
 Joshua-owned firmware (not a vendor demo) for an ESP32 driving STEP/DIR
 channels — a TB6600 in the reference wiring, but this firmware only ever
 toggles STEP/DIR/ENA pins; it never names the stepper drive chip
-(docs/BOARD_LAYER_RFC.md §5.2). Speaks `joshua_wire_v1` by default, with a
-separate opt-in v2 artifact, over UART/USB-serial
+(docs/BOARD_LAYER_RFC.md §5.2). Speaks JoshuaWire (JW) `0.0.2` over UART/USB-serial
 — the same wire protocol and shared drive backend as `firmware/teensy/41/`,
 not Wi-Fi/UDP; that host transport remains unimplemented.
 Paired host-side class: `robot/board/esp32/esp32_board.h` (header-only).
@@ -13,7 +12,7 @@ Paired host-side class: `robot/board/esp32/esp32_board.h` (header-only).
 
 ```text
 firmware/esp32/
-  platformio.ini        explicit esp32-serial (v1) / esp32-serial envs;
+  platformio.ini        esp32-serial environment (JW 0.0.2);
                         board = esp32dev by
                         default — change this one line for a different
                         ESP32 variant (S3, C3, S2, ...); -I src so
@@ -29,11 +28,11 @@ firmware/esp32/
     transport_serial.{h,cpp} serial frame boundaries for both wire versions
 ```
 
-`joshua_wire_v1.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
+`joshua_wire.{h,c}` and `backend_stepdir.{h,cpp}` are not copied here —
 `platformio.ini` pulls them in directly from `firmware/common/` via
 `lib_deps = symlink://../common` (one `..` shorter than Teensy's
 `../../common`, since this directory has no chip-revision subdirectory) —
-same reasoning as `firmware/teensy/41/README.md`: `joshua_wire_v1` because
+same reasoning as `firmware/teensy/41/README.md`: `joshua_wire` because
 host and firmware must agree on the wire format for a given commit;
 `backend_stepdir` because STEP/DIR/ENA pulse generation is a fact about the
 driver chip, not the MCU — the same `digitalWrite`-based source already
@@ -41,16 +40,25 @@ proven on Teensy works unchanged here, no ESP32-specific code needed.
 
 ## Status
 
-The hardware results below describe v1. For opt-in v2, build with
-`pio run -e esp32-serial` and select `Board.protocol: JOSHUA_WIRE`.
-The default environment remains v1. Both versions share command dispatch in
+Build with `pio run -e esp32-serial` and select `Board.protocol: JOSHUA_WIRE`.
+JW 0.0.2 is the default and only Joshua protocol. Command dispatch lives in
 `firmware/common/joshua_stepdir_commands.cpp`; see the
-[v2 milestone and safety limits](../README.md#opt-in-joshuawire-v2-serial-milestone).
-V2 passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
-on 2026-10-04 with motor power disconnected. Powered v2
+[JW protocol and limits](../README.md#joshuawire-serial).
+The validated correlated protocol passed [eight real UART/USB-bridge sessions](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-hardware-result--2026-10-04)
+on 2026-10-04 with motor power disconnected. Powered JW
 motion, independent pulse timing and the ROS 2 path remain unvalidated. The
 host used the configured 2000 ms post-open settle delay. The checklist below
-records historical v1 results.
+records historical pre-migration results.
+
+The [JW 0.0.2 reflash on 2026-10-05](../../docs/JOSHUA_WIRE_VALIDATION.md#recorded-esp32-jw-002-reflash--2026-10-05)
+passed eight protocol sessions after reopening the port, with motor power off.
+The first port open immediately after upload repeatedly returned stale RESET
+replies, preventing correlated IDENTIFY/ESTOP; reopening recovered. The cause
+remains unresolved, and initial post-upload reliability is not qualified.
+The [same-day retest](../../docs/JOSHUA_WIRE_VALIDATION.md#esp32-post-upload-issue-retest--2026-10-05)
+reproduced the failure on two of four first connections with the normal wait;
+both recovered after reopening. Two longer-wait attempts passed, which does
+not establish a fix.
 
 - [x] Toolchain installed (PlatformIO via `pipx`)
 - [x] Firmware built (`pio run`) — clean build, all of `firmware/common/`
@@ -99,7 +107,7 @@ cd firmware/esp32
 pio run
 ```
 
-This pulls `firmware/common/joshua_wire_v1.{h,c}` and
+This pulls `firmware/common/joshua_wire.{h,c}` and
 `firmware/common/backend_stepdir.{h,cpp}` in via the `symlink://` `lib_deps`
 entry and compiles them alongside `src/*.cpp`/`*.c` for the `esp32-serial`
 environment. First run also downloads the `espressif32` platform, Xtensa
@@ -205,10 +213,10 @@ MCU — but treat that as a prediction until it's actually been run.
 - **First command after opening serial fails:** a USB-to-UART bridge's
   DTR/RTS auto-reset circuit can reset the MCU on open, racing startup and boot
   output. The host now uses `comm.serial_config.post_open_settle_ms: 2000`
-  explicitly, as in the example preset and the v2 bench configuration. This
+  explicitly, as in the example preset and the JW bench configuration. This
   wait belongs to physical link opening in CommFactory/Serial, not Esp32Board;
   the previous board-specific sleep was removed. The exchange flushes stale
-  input before sending. The v2 bench passed with this configured wait and
+  input before sending. The JW bench passed with this configured wait and
   `--settle_ms=0`; this does not prove that all ESP32 variants need exactly
   two seconds. See [serial timing](../../config/README.md#serial-timing).
 - Wiring/motion (the "Full command path" status item above) is still
@@ -235,13 +243,13 @@ MCU — but treat that as a prediction until it's actually been run.
   post-open settling belongs in serial config, not this class.
 - `robot/board/joshua_wire/joshua_wire_board.*` — the shared IDENTIFY
   handshake, `CONFIGURE_CHANNEL` push, and channel dispatch every
-  joshua_wire_v1 host board (Teensy, ESP32, Arduino later) runs through
+  joshua_wire host board (Teensy, ESP32, Arduino later) runs through
   unchanged (docs/BOARD_LAYER_RFC.md §7.3)
 - `robot/board/esp32/esp32_driver_smoke.cc` — board-level smoke test,
   bypasses ActionFactory/ROS entirely (`bazel run
   //robot/board/esp32:esp32_driver_smoke -- /dev/ttyUSB0`)
 - `robot/action/motors/drivers/stepper_driver.*` — paired motor driver
-- `firmware/common/joshua_wire_v1.{h,c}` — the shared wire codec
+- `firmware/common/joshua_wire.{h,c}` — the shared wire codec
 - `firmware/common/backend_stepdir.{h,cpp}` — the shared STEP/DIR/ENA
   drive backend, reused as-is
 - `config/config_preset/example/esp32_stepper_demo.pbtxt` — example preset

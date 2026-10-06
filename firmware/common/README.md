@@ -2,8 +2,9 @@
 
 Shared command definitions and codecs connect the [host board layer](../../robot/README.md)
 to Joshua's [MCU firmware](../README.md). Board firmware also uses the command
-dispatcher and STEP/DIR backend here. Start with `joshua_wire_commands.h`, then
-the codec for the wire version you are working on.
+dispatcher and STEP/DIR backend here. JoshuaWire (JW) is version `0.0.2` and is the sole Joshua protocol.
+Start with `joshua_wire_commands.h`, then `joshua_wire.h`. The on-wire
+revision remains `2`; the release version does not change validated frame bytes.
 
 The STEP/DIR backend can move real motors when compiled into firmware. See the
 [hardware-safety rules](../../AGENTS.md#hardware-safety--read-this-first).
@@ -13,18 +14,16 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
 - [joshua_wire_commands.h](joshua_wire_commands.h) and `.c` — version-neutral
   command views (`jw_command_t`), IDs, semantic types and payload-only codecs.
   `JW_CMD_*` describes an operation, not a wire version; RESET_SESSION is
-  supported only by v2 endpoints. Payload codecs never add headers, IDs or CRCs.
-- [joshua_wire_v1.h](joshua_wire_v1.h) / [joshua_wire.h](joshua_wire.h)
-  and their `.c` files — stateless frame codecs. V2 adds session/message IDs.
-  Functions named `jw1_encode_*` still produce v1 frames, even when their
-  arguments use the shared `jw_*_t` types.
+  required before normal commands. Payload codecs never add headers, IDs or CRCs.
+- [joshua_wire.h](joshua_wire.h) and `.c` — stateless correlated frame codec,
+  `jw_*` functions and `JW_*` limits/version constants. The JW1 codec is removed.
 - [joshua_wire_firmware_session.h](joshua_wire_firmware_session.h)
   and `.c` — firmware-side reset, request history and duplicate suppression.
   This is state used by a dispatch loop, not a thread or network service.
   Its host-side counterpart is
   [JoshuaWireSession](../../robot/board/joshua_wire/joshua_wire_session.h).
 - [joshua_wire_serial_endpoint.h](joshua_wire_serial_endpoint.h) and `.c` —
-  connects an explicitly selected v1/v2 artifact to firmware command handlers.
+  connects the JW session to firmware command handlers.
   It receives complete frames; the board-specific UART/USB code owns I/O.
 - [joshua_wire_ethercat.h](joshua_wire_ethercat.h) — shared layout-v1 PDO/CoE
   sizes, offsets, object indices and transport bits. The host adapters use this
@@ -41,7 +40,7 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
   Teensy/ESP32 command handling, calling [backend_stepdir.h](backend_stepdir.h)
   and `.cpp` for physical pin control. Each board supplies `channel_table.h`.
 
-For a v2 serial request, follow the board's receive loop into the serial
+For a JW serial request, follow the board's receive loop into the serial
 endpoint, then the firmware session, then the command handler and drive backend.
 The response carries the same session/message IDs back to the host.
 
@@ -99,19 +98,16 @@ validation remain separate work; no fully open firmware claim is made here.
 ## Command and frame boundaries
 
 Firmware handlers consume `jw_command_t` and return payload bytes. The serial
-endpoint supplies the selected envelope; the v2 firmware session supplies IDs
-and retry handling. Host channels likewise use neutral commands: the board's
-command client selects the v1 codec or `JoshuaWireSession`, which exchanges
-v2 frames directly through comm and returns validated payloads. There are no
-intermediate v1 frames on either v2 path. `jw1_frame_t` remains appropriate in
-the actual v1 codec/path, not as a version-neutral command representation.
+endpoint and firmware session supply framing, correlation and retry handling.
+Host channels use `JoshuaWireSession`, which exchanges JW frames directly
+through comm and returns validated payloads. Vendor protocols retain their
+separate fixed-size transport API; JoshuaWire does not use it.
 
 ## Remaining migration work
 
 - Host message/cyclic board-engine composition and factory assembly now exist.
   Framed-serial extraction and configurable serial exchange/settle timing are
-  implemented. V1 still uses the separate legacy fixed-size API and its existing
-  timing; firmware wire formats are unchanged.
+  implemented. Serial and EtherCAT both use the same correlated JW protocol.
 - **AM243 [command handler](../am243/joshua_dual_transport/src/joshua_commands.h):**
   now transport-neutral and reused by separate UART and EtherCAT artifacts.
   Simultaneous UART/CoE/PDO ownership still needs an arbiter; physical motion
@@ -120,12 +116,12 @@ the actual v1 codec/path, not as a version-neutral command representation.
 ## Tests and builds
 
 For manual serial checks after an intentional flash, use the
-[v2 validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md). The shared probe
-defaults to reset/identify/ESTOP only; old board-specific smokes still use v1.
+[JW validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md). The shared probe
+defaults to reset/identify/ESTOP only; the old JW1 smoke tool is removed.
 
 `*_test.cc` files are maintained source, kept beside the code they verify:
-commands tests pin wire values, payload bytes and bounds, v1 tests cover legacy
-framing, and v2 tests cover framing, firmware sessions and the serial endpoint. Board-specific native
+commands tests pin wire values, payload bytes and bounds; JW tests cover golden
+frames, legacy-frame rejection, firmware sessions and the serial endpoint. Board-specific native
 tests also compile the real Teensy/ESP32 dispatch with the test-only
 [Arduino substitute](../testing/Arduino.h) and
 [shared test suite](../testing/serial_firmware_test.cc). Those helpers use no

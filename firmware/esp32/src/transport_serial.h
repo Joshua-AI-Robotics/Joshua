@@ -1,4 +1,4 @@
-// UART/USB-serial framing shared by explicit JoshuaWire v1/v2 artifacts
+// UART/USB-serial framing shared by JoshuaWire artifacts
 // (docs/BOARD_LAYER_RFC.md §7.3 — the [JOSHUA_TRANSPORT_SERIAL] variant of
 // the transport seam). A future UDP/Wi-Fi variant implements the same two
 // functions over a different physical link with zero changes to

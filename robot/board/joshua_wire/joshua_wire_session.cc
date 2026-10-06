@@ -1,5 +1,5 @@
-// Implements v2 session lifecycle, serialization, correlation and ID rotation.
-// Only neutral command payloads cross the public API; only v2 frames reach comm.
+// Implements JW session lifecycle, serialization, correlation and ID rotation.
+// Only neutral command payloads cross the public API; only JW frames reach comm.
 #include "robot/board/joshua_wire/joshua_wire_session.h"
 
 #include <random>
@@ -18,12 +18,11 @@ absl::Status CheckOk(const std::vector<uint8_t>& payload) {
 }
 }  // namespace
 
-JoshuaWireSession::JoshuaWireSession(
-    std::shared_ptr<robot::comm::MessageTransport> transport,
-    SessionIdSource source,
-    uint32_t message_id_limit,
-    std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic,
-    absl::Duration cyclic_timeout)
+JoshuaWireSession::JoshuaWireSession(std::shared_ptr<robot::comm::MessageTransport> transport,
+                                     SessionIdSource source,
+                                     uint32_t message_id_limit,
+                                     std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic,
+                                     absl::Duration cyclic_timeout)
     : transport_(std::move(transport)),
       cyclic_(std::move(cyclic)),
       cyclic_timeout_(cyclic_timeout),
@@ -31,9 +30,9 @@ JoshuaWireSession::JoshuaWireSession(
       message_id_limit_(message_id_limit) {}
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t cmd,
-                                                                         uint8_t channel,
-                                                                         const uint8_t* payload,
-                                                                         uint8_t payload_len) {
+                                                                       uint8_t channel,
+                                                                       const uint8_t* payload,
+                                                                       uint8_t payload_len) {
   uint8_t bytes[JW_MAX_FRAME_LEN];
   const int len = jw_encode_frame(
       bytes, sizeof(bytes), session_id_, next_message_id_, cmd, channel, payload, payload_len);
@@ -136,7 +135,7 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
   if (command.payload_len > JW_MAX_PAYLOAD_LEN ||
       (command.payload_len != 0 && command.payload == nullptr) ||
       command.cmd == JW_CMD_RESET_SESSION) {
-    return absl::InvalidArgumentError("Invalid command supplied to v2 session.");
+    return absl::InvalidArgumentError("Invalid command supplied to JW session.");
   }
   if (next_message_id_ >= message_id_limit_) {
     ABSL_RETURN_IF_ERROR(RotateLocked());

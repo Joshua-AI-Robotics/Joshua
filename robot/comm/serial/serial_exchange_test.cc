@@ -194,7 +194,7 @@ TEST_F(SerialExchangeTest, InvalidDeadlineDoesNotWrite) {
 }
 
 TEST_F(SerialExchangeTest, LegacyAndSendOnlyBytesAreForwardedUnchanged) {
-  // Vendor/v1 callers still supply their exact response length, not JW framing.
+  // Vendor callers still supply their exact response length, not JW framing.
   request = {0xff, 0xff, 0x01, 0x02};
   const Bytes response = {0xff, 0xff, 0x01, 0x00, 0x03};
   auto device = std::async(std::launch::async, [&] {

@@ -25,7 +25,7 @@ PRUICSS_Handle pruIcss1Handle;
 uint8_t* pEEPROM;
 extern const unsigned char tiesc_eeprom[];  // External SDK's ESC boot configuration.
 static JoshuaEthercatProfile profile;
-static JoshuaChannel channel = {.latch_estop = true};
+static JoshuaChannel channel;
 static uint8_t sii[TIESC_EEPROM_SIZE];
 static StackType_t main_stack[4096] __attribute__((aligned(32)));
 static StackType_t watchdog_stack[1024] __attribute__((aligned(32)));
@@ -206,10 +206,10 @@ static void Run(void* ignored) {
   Drivers_open();
   DebugP_assert(Board_driversOpen() == SystemP_SUCCESS);
   const JoshuaEthercatProfileConfig config = {.identity = {.board_id = JW_BOARD_AM243,
-                                                           .fw_name = "am243-soes-v2",
+                                                           .fw_name = "am243-soes-jw",
                                                            .n_channels = 1,
                                                            .channel_drives = {JW_DRIVE_STEP_DIR}},
-                                              .artifact = "am243-soes2",
+                                              .artifact = "am243-soes",
                                               .context = &channel,
                                               .command = JoshuaCommand,
                                               .reset = JoshuaReset,
@@ -273,9 +273,9 @@ static void Run(void* ignored) {
 int main(void) {
   System_init();
   Board_init();
-  DebugP_assert(
-      xTaskCreateStatic(
-          Run, "jw_soes", 4096, NULL, configMAX_PRIORITIES - 3, main_stack, &main_task) != NULL);
+  DebugP_assert(xTaskCreateStatic(
+                    Run, "jw_soes", 4096, NULL, configMAX_PRIORITIES - 3, main_stack, &main_task) !=
+                NULL);
   vTaskStartScheduler();
   DebugP_assertNoLog(0);
   return 0;

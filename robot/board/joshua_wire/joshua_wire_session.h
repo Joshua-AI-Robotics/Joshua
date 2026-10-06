@@ -1,5 +1,5 @@
-// Host-side v2 session lifecycle, IDs, serialization and saved channel configs.
-// Callers supply neutral commands and receive payloads, not encoded v1 frames.
+// Host-side JW session lifecycle, IDs, serialization and saved channel configs.
+// Callers supply neutral commands and receive validated payloads.
 // The firmware counterpart is firmware/common/joshua_wire_firmware_session.h.
 #pragma once
 
@@ -22,10 +22,10 @@ class JoshuaWireSession {
  public:
   using SessionIdSource = std::function<uint32_t()>;
   explicit JoshuaWireSession(std::shared_ptr<robot::comm::MessageTransport> transport,
-                               SessionIdSource source = {},
-                               uint32_t message_id_limit = UINT32_MAX,
-                               std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic = {},
-                               absl::Duration cyclic_timeout = absl::ZeroDuration());
+                             SessionIdSource source = {},
+                             uint32_t message_id_limit = UINT32_MAX,
+                             std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic = {},
+                             absl::Duration cyclic_timeout = absl::ZeroDuration());
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
   absl::Status Open();

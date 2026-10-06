@@ -18,7 +18,7 @@
 #endif
 
 static JoshuaEthercatProfile profile;
-static JoshuaChannel channel = {.latch_estop = true};
+static JoshuaChannel channel;
 static TaskP_Object watchdog_task;
 static uint8_t watchdog_stack[4096] __attribute__((aligned(32)));
 
@@ -111,10 +111,10 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
 }
 uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   const JoshuaEthercatProfileConfig config = {.identity = {.board_id = JW_BOARD_AM243,
-                                                           .fw_name = "am243-ec-v2",
+                                                           .fw_name = "am243-ec-jw",
                                                            .n_channels = 1,
                                                            .channel_drives = {JW_DRIVE_STEP_DIR}},
-                                              .artifact = "am243-ec-v2",
+                                              .artifact = "am243-ec-jw",
                                               .context = &channel,
                                               .command = JoshuaCommand,
                                               .reset = JoshuaReset,

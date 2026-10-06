@@ -17,9 +17,8 @@ class JoshuaWireCommandClient;
 
 // Shared JoshuaWire engine: protocol reset, IDENTIFY, channel configuration and
 // command dispatch. CommFactory supplies message-only or paired message/cyclic
-// capabilities. V2 shares one session across both planes; v1 uses fixed-length
-// exchanges. Link lifecycle and timing belong to comm. Only STEP_DIR channel
-// configuration is implemented.
+// capabilities. JW shares one session across both planes. Link lifecycle and timing belong to comm.
+// Only STEP_DIR channel configuration is implemented.
 class JoshuaWireBoard : public BoardInterface {
  public:
   JoshuaWireBoard(robot::board::BoardType expected_board_type, jw_board_id_t expected_wire_board_id)

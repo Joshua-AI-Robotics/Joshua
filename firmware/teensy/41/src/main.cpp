@@ -1,4 +1,4 @@
-// Serial firmware artifact: JOSHUA_WIRE_VERSION selects v1 or v2 explicitly.
+// Serial firmware artifact using JoshuaWire 0.0.2.
 #include <Arduino.h>
 
 #include "backend_stepdir.h"
@@ -9,9 +9,7 @@
 
 namespace {
 jw_serial_endpoint_t endpoint;
-JoshuaStepDirProtocol protocol{JW_BOARD_TEENSY41,
-                               "teensy-serial",
-                               false};
+JoshuaStepDirProtocol protocol{JW_BOARD_TEENSY41, "teensy-serial", false};
 }  // namespace
 
 void setup() {

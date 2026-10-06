@@ -40,24 +40,24 @@ typedef struct {
 } jw_frame_t;
 
 // Returns the encoded length, or -1 for invalid arguments/capacity. Decode
-// accepts exactly one v2 frame, rejects all other versions, and borrows payload
+// accepts exactly one JW frame, rejects all other versions, and borrows payload
 // storage from buf. Neither operation allocates memory.
 int jw_encode_frame(uint8_t* buf,
-                     size_t cap,
-                     uint32_t session_id,
-                     uint32_t message_id,
-                     uint8_t cmd,
-                     uint8_t channel,
-                     const uint8_t* payload,
-                     uint8_t payload_len);
+                    size_t cap,
+                    uint32_t session_id,
+                    uint32_t message_id,
+                    uint8_t cmd,
+                    uint8_t channel,
+                    const uint8_t* payload,
+                    uint8_t payload_len);
 int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out);
 
 // Responses always copy all four correlation fields from the request.
 int jw_encode_response(uint8_t* buf,
-                        size_t cap,
-                        const jw_frame_t* request,
-                        const uint8_t* payload,
-                        uint8_t payload_len);
+                       size_t cap,
+                       const jw_frame_t* request,
+                       const uint8_t* payload,
+                       uint8_t payload_len);
 int jw_response_matches(const jw_frame_t* request, const jw_frame_t* response);
 
 #ifdef __cplusplus

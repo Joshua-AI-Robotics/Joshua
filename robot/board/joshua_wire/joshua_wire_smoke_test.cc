@@ -36,8 +36,7 @@ class SmokeCliTest : public ::testing::Test {
     ASSERT_NE(tmp, nullptr);
     ASSERT_NE(runfiles, nullptr);
     ASSERT_NE(workspace, nullptr);
-    binary =
-        std::string(runfiles) + "/" + workspace + "/robot/board/joshua_wire/joshua_wire_smoke";
+    binary = std::string(runfiles) + "/" + workspace + "/robot/board/joshua_wire/joshua_wire_smoke";
     ASSERT_EQ(access(binary.c_str(), X_OK), 0);
     std::string pattern = std::string(tmp) + "/jw-cli-XXXXXX";
     ASSERT_NE(mkdtemp(pattern.data()), nullptr);
@@ -113,7 +112,7 @@ class SmokeCliTest : public ::testing::Test {
           jw_encode_response(response, sizeof(response), &request, payload.data(), payload.size());
       ASSERT_GT(size, 0);
     }
-    // Exercise serial sync recovery as well as normal v2 response decoding.
+    // Exercise serial sync recovery as well as normal JW response decoding.
     const uint8_t noise[] = {0x12, 0x34};
     ASSERT_EQ(write(master, noise, sizeof(noise)), sizeof(noise));
     for (int i = 0; i < size; ++i) ASSERT_EQ(write(master, response + i, 1), 1);

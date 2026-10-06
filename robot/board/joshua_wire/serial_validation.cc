@@ -39,7 +39,7 @@ const Channel* SelectedChannel(const Board& board, int index) {
 
 absl::Status RunSession(JoshuaWireSession& session,
                         const Board& board,
-                        const SerialV2ValidationOptions& options,
+                        const SerialValidationOptions& options,
                         std::ostream& output,
                         const std::function<bool()>& cancelled) {
   auto exchange = [&](const jw_command_t& command) -> absl::StatusOr<std::vector<uint8_t>> {
@@ -126,7 +126,7 @@ absl::Status RunSession(JoshuaWireSession& session,
 }
 }  // namespace
 
-absl::Status ValidateSerialV2Options(const Board& board, const SerialV2ValidationOptions& options) {
+absl::Status ValidateSerialOptions(const Board& board, const SerialValidationOptions& options) {
   if (WireBoardId(board.board_type()) < 0 || board.name().empty() ||
       board.protocol() != JOSHUA_WIRE || board.firmware().min_proto_version() > 2 ||
       board.comm().comm_type() != robot::comm::SERIAL ||
@@ -181,12 +181,12 @@ absl::Status ValidateSerialV2Options(const Board& board, const SerialV2Validatio
   return absl::OkStatus();
 }
 
-absl::Status RunSerialV2Validation(const Board& board,
-                                   const SerialV2ValidationOptions& options,
-                                   std::shared_ptr<robot::comm::MessageTransport> transport,
-                                   std::ostream& output,
-                                   std::function<bool()> cancelled) {
-  ABSL_RETURN_IF_ERROR(ValidateSerialV2Options(board, options));
+absl::Status RunSerialValidation(const Board& board,
+                                 const SerialValidationOptions& options,
+                                 std::shared_ptr<robot::comm::MessageTransport> transport,
+                                 std::ostream& output,
+                                 std::function<bool()> cancelled) {
+  ABSL_RETURN_IF_ERROR(ValidateSerialOptions(board, options));
   if (!transport) return absl::InvalidArgumentError("Missing message transport.");
   JoshuaWireSession session(std::move(transport));
   for (int i = 0; i < options.sessions; ++i) {

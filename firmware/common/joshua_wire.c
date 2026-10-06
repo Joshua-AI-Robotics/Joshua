@@ -26,13 +26,13 @@ static uint32_t get_u32(const uint8_t* in) {
 }
 
 int jw_encode_frame(uint8_t* buf,
-                     size_t cap,
-                     uint32_t session_id,
-                     uint32_t message_id,
-                     uint8_t cmd,
-                     uint8_t channel,
-                     const uint8_t* payload,
-                     uint8_t payload_len) {
+                    size_t cap,
+                    uint32_t session_id,
+                    uint32_t message_id,
+                    uint8_t cmd,
+                    uint8_t channel,
+                    const uint8_t* payload,
+                    uint8_t payload_len) {
   const size_t total = JW_FRAME_OVERHEAD + (size_t)payload_len;
   if (buf == NULL || session_id == 0 || message_id == 0 || payload_len > JW_MAX_PAYLOAD_LEN ||
       cap < total || (payload_len != 0 && payload == NULL)) {
@@ -73,19 +73,19 @@ int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
 }
 
 int jw_encode_response(uint8_t* buf,
-                        size_t cap,
-                        const jw_frame_t* request,
-                        const uint8_t* payload,
-                        uint8_t payload_len) {
+                       size_t cap,
+                       const jw_frame_t* request,
+                       const uint8_t* payload,
+                       uint8_t payload_len) {
   if (request == NULL || request->proto_ver != JW_PROTO_VERSION) return -1;
   return jw_encode_frame(buf,
-                          cap,
-                          request->session_id,
-                          request->message_id,
-                          request->cmd,
-                          request->channel,
-                          payload,
-                          payload_len);
+                         cap,
+                         request->session_id,
+                         request->message_id,
+                         request->cmd,
+                         request->channel,
+                         payload,
+                         payload_len);
 }
 
 int jw_response_matches(const jw_frame_t* request, const jw_frame_t* response) {

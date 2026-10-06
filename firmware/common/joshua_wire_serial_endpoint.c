@@ -1,5 +1,5 @@
 // Wire envelope selection and firmware-session dispatch for neutral commands.
-// Handlers consume/produce payloads only; v2 never builds an intermediate v1 frame.
+// Handlers consume/produce payloads only; the session owns the correlated envelope.
 #include "joshua_wire_serial_endpoint.h"
 
 typedef struct {
@@ -42,11 +42,11 @@ int jw_serial_endpoint_process(jw_serial_endpoint_t* endpoint,
   }
   command_context_t command = {handler, reset, context};
   return jw_firmware_session_process(&endpoint->session,
-                                      request,
-                                      request_len,
-                                      response,
-                                      response_cap,
-                                      command_adapter,
-                                      reset_adapter,
-                                      &command);
+                                     request,
+                                     request_len,
+                                     response,
+                                     response_cap,
+                                     command_adapter,
+                                     reset_adapter,
+                                     &command);
 }

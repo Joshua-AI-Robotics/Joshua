@@ -107,8 +107,7 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   const uint16_t length = U16(bytes + offset - 4);
   if (U32(bytes) != p->session.session_id || !p->session.session_id) return 0;
   if (!generation) return length == 0 && U16(bytes + offset - 2) == 0 ? 0 : -1;
-  if (length < JW_FRAME_OVERHEAD || length > JW_MAX_FRAME_LEN || U16(bytes + offset - 2))
-    return -1;
+  if (length < JW_FRAME_OVERHEAD || length > JW_MAX_FRAME_LEN || U16(bytes + offset - 2)) return -1;
   for (size_t i = offset + length; i < offset + JW_MAX_FRAME_LEN; ++i)
     if (bytes[i]) return -1;
   jw_frame_t frame;
@@ -135,13 +134,13 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   if (frame.message_id <= p->session.last_message_id) return -1;
   uint8_t frame_reply[JW_MAX_FRAME_LEN];
   const int reply_len = jw_firmware_session_process(&p->session,
-                                                     bytes + offset,
-                                                     length,
-                                                     frame_reply,
-                                                     sizeof(frame_reply),
-                                                     Command,
-                                                     ResetChannel,
-                                                     p);
+                                                    bytes + offset,
+                                                    length,
+                                                    frame_reply,
+                                                    sizeof(frame_reply),
+                                                    Command,
+                                                    ResetChannel,
+                                                    p);
   if (reply_len <= 0) return -1;
   p->last_generation[plane] = generation;
   p->last_request_len[plane] = (uint8_t)length;

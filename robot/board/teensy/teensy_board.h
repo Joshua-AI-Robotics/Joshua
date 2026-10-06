@@ -6,7 +6,7 @@
 
 namespace robot::board {
 
-// Teensy 4.1 identity for the shared JoshuaWire v1/v2 engine.
+// Teensy 4.1 identity for the shared JoshuaWire engine.
 class TeensyBoard : public JoshuaWireBoard {
  public:
   TeensyBoard() : JoshuaWireBoard(robot::board::BoardType::TEENSY41, JW_BOARD_TEENSY41) {}

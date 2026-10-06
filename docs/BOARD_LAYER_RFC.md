@@ -44,7 +44,7 @@ driver.
 **Landed:** the protos, both board interfaces, `BoardFactory` and
 `ValidateMotorChannel`;
 AM243 over EtherCAT *and* serial; the Feetech/STS3215 bus board and so100
-actuator presets; the `joshua_wire_v1` C codec shared host↔firmware with
+actuator presets; the `joshua_wire` C codec shared host↔firmware with
 golden-byte tests; Teensy 4.1 and ESP32, hardware-verified; the Python robot
 layer deleted.
 
@@ -113,7 +113,7 @@ class CyclicTransport {  // fixed image swapped every cycle; no per-request resp
 One engine per plane — `MessageBoard(identity, transport)` and
 `CyclicBoard(identity, transport, layout)` — replaces every per-board class.
 **Identity** is the data saying which board this is: `board_type`, channel
-count, expected firmware version, the `jw1_*` enum values. Passing it to the
+count, expected firmware version, the `JW_*` enum values. Passing it to the
 constructor rather than encoding it in the type is what removes `TeensyBoard`
 and `Esp32Board`. `BoardFactory` then resolves three axes independently instead
 of switching on one, so adding EtherCAT to a Teensy is a `.pbtxt` edit.
@@ -183,7 +183,7 @@ as those files are touched.
 | §5.3 | the two board interfaces, unit convention, instance caching | §1 (still true) |
 | §5.5 | comm vs drive legs, motor↔drive validation | §1 (still true) |
 | §5.6 | boards without a separate MCU (Feetech, HOST_GPIO) | archived — behaviour unchanged |
-| §7.2 / §7.3 | `joshua_wire_v1` framing, shared-codec rules | archived; superseded by §4 |
+| §7.2 / §7.3 | `joshua_wire` framing, shared-codec rules | archived; superseded by §4 |
 | §7.5 | the firmware channel table | archived — behaviour unchanged |
 | §12.7 | torque semantics on `BoardChannel` | resolved in phase 4; see `board_channel.h` |
 | §10 Phase N | the old rollout checklist | §5 |

@@ -27,11 +27,11 @@ cc_test(
     srcs = ["teensy_board_test.cc"],
     deps = [
         ":teensy_board",
-        "//firmware/common:joshua_wire_v1",
+        "//firmware/common:joshua_wire",
+        "//robot/board/joshua_wire/testing:fake_joshua_wire_transport",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/proto:comm_cc_proto",
-        "//robot/comm/testing:fake_legacy_message_transport",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

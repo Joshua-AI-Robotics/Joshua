@@ -30,7 +30,7 @@ class Serial : public ByteStream {
 
   absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
                                                   size_t expected_response_size);
-  // Compatibility for the existing comm-local v1 diagnostic.
+  // Compatibility for the comm-local vendor protocols.
   absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& request,
                                                       size_t expected_response_size) {
     return AtomicRead(request, expected_response_size);

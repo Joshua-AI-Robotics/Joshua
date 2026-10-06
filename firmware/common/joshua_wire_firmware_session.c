@@ -1,4 +1,4 @@
-// Implements firmware-side session state above the stateless v2 codec:
+// Implements firmware-side session state above the stateless JW codec:
 // reset gating, monotonically increasing request IDs and cached retry replies.
 // Board callbacks perform reset/command actions in the firmware dispatch loop.
 #include "joshua_wire_firmware_session.h"
@@ -10,13 +10,13 @@ void jw_firmware_session_init(jw_firmware_session_t* session) {
 }
 
 int jw_firmware_session_process(jw_firmware_session_t* session,
-                                 const uint8_t* request,
-                                 size_t request_len,
-                                 uint8_t* response,
-                                 size_t response_cap,
-                                 jw_command_handler_t handler,
-                                 jw_reset_handler_t reset,
-                                 void* context) {
+                                const uint8_t* request,
+                                size_t request_len,
+                                uint8_t* response,
+                                size_t response_cap,
+                                jw_command_handler_t handler,
+                                jw_reset_handler_t reset,
+                                void* context) {
   if (session == NULL || response == NULL || response_cap < JW_MAX_FRAME_LEN || handler == NULL ||
       reset == NULL) {
     return -1;

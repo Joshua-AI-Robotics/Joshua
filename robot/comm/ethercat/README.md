@@ -18,7 +18,7 @@ The former `SoemEthercatTransport` name and public `EthercatTransport` API
 are retired, together with the TI-demo board/driver, echo codec, legacy host
 smoke tools and preset. There are no compatibility aliases. Vendor firmware
 build/flash assets remain for historical bring-up; runtime requires the
-separate JW profile. Serial v1/v2 behavior is unchanged.
+separate JW profile. Serial uses the same JW 0.0.2 correlated protocol.
 
 SOEM is dual-licensed under GPLv3 or a commercial license. Treat the pinned
 dependency as a production-capable master library only after Joshua's license
@@ -117,7 +117,7 @@ socket racing an old owner's teardown. These guarantees are process-local;
 config validation also requires NIC consumers to share one ROS node process.
 Never run an unrelated master on the same NIC.
 
-Use the [config example](../../../config/README.md#joshuawire-v2-over-ethercat)
+Use the [config example](../../../config/README.md#joshuawire-over-ethercat)
 for explicit timing/address selection. Register failures include address,
 elapsed time, budget and working count. Native regression coverage lives in
 `soem_ethercat_backend_test.cc`; real-bus qualification is incomplete.
@@ -147,7 +147,7 @@ check. See the [recorded evidence and limits](../../../docs/JOSHUA_WIRE_VALIDATI
 [`joshua_wire_ethercat_transport.h`](joshua_wire_ethercat_transport.h) / `.cc`
 implement both `MessageTransport` and `CorrelatedCyclicTransport` for one slave.
 Open claims the slave once per master lifetime and reads the 36-byte `JWEC`
-descriptor before any reset or command. It requires protocol v2, layout v1,
+descriptor before any reset or command. It requires wire revision 2 (JW 0.0.2), layout v1,
 80/80-byte PDO regions, a 64-byte frame limit, and CoE/PDO capability bits.
 Errors report the observed artifact/profile and request a separate build/flash;
 the TI demo is not accepted as JW firmware. The factory gates every

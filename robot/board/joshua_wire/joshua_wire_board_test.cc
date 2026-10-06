@@ -3,12 +3,12 @@
 #include <memory>
 
 #include "absl/status/status.h"
-#include "firmware/common/joshua_wire_v1.h"
+#include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
+#include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/testing/fake_legacy_message_transport.h"
 
 namespace robot::board {
 namespace {
@@ -20,33 +20,35 @@ class FakeJoshuaWireBoard : public JoshuaWireBoard {
       : JoshuaWireBoard(robot::board::BoardType::ARDUINO_UNO, JW_BOARD_ARDUINO_UNO) {}
 };
 
-std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw_board_id_t board_id = JW_BOARD_ARDUINO_UNO) {
+FakeJoshuaWireTransport::Response MakeIdentifyResponse(
+    uint8_t n_channels, jw_board_id_t board_id = JW_BOARD_ARDUINO_UNO) {
   jw_identify_response_t response{};
   response.board_id = board_id;
   response.n_channels = n_channels;
   for (uint8_t i = 0; i < n_channels; i++) {
     response.channel_drives[i] = JW_DRIVE_STEP_DIR;
   }
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
-  return std::vector<uint8_t>(buf, buf + len);
+  uint8_t buf[JW_MAX_FRAME_LEN];
+  const int len = jw_encode_identify_payload(buf, sizeof(buf), &response);
+  return {JW_CMD_IDENTIFY, JW_CHANNEL_NONE, std::vector<uint8_t>(buf, buf + len)};
 }
 
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw_status_t status) {
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
-  return std::vector<uint8_t>(buf, buf + len);
+FakeJoshuaWireTransport::Response MakeStatusResponse(uint8_t cmd,
+                                                     uint8_t channel,
+                                                     jw_status_t status) {
+  uint8_t buf[JW_MAX_FRAME_LEN];
+  const int len = jw_encode_status_payload(buf, sizeof(buf), status);
+  return {cmd, channel, std::vector<uint8_t>(buf, buf + len)};
 }
 
-std::vector<uint8_t> MakeFeedbackResponse(uint8_t channel,
-                                          float position,
-                                          float velocity,
-                                          uint16_t fault_flags) {
+FakeJoshuaWireTransport::Response MakeFeedbackResponse(uint8_t channel,
+                                                       float position,
+                                                       float velocity,
+                                                       uint16_t fault_flags) {
   jw_feedback_t feedback{position, velocity, fault_flags};
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_feedback_response(buf, sizeof(buf), channel, &feedback);
-  return std::vector<uint8_t>(buf, buf + len);
+  uint8_t buf[JW_MAX_FRAME_LEN];
+  const int len = jw_encode_feedback_payload(buf, sizeof(buf), &feedback);
+  return {JW_CMD_GET_FEEDBACK, channel, std::vector<uint8_t>(buf, buf + len)};
 }
 
 void AddStepDirChannel(robot::board::Board* board,
@@ -74,7 +76,7 @@ robot::board::Board MakeBoardConfig() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
-  board.mutable_firmware()->set_min_proto_version(1);
+  board.mutable_firmware()->set_min_proto_version(JW_PROTO_VERSION);
 
   AddStepDirChannel(&board, /*index=*/0, /*step_pin=*/2, /*dir_pin=*/3, /*enable_pin=*/4);
   return board;
@@ -83,7 +85,7 @@ robot::board::Board MakeBoardConfig() {
 class JoshuaWireBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<robot::comm::FakeLegacyMessageTransport>();
+    transport_ = std::make_shared<FakeJoshuaWireTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -95,7 +97,7 @@ class JoshuaWireBoardTest : public ::testing::Test {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
-  // Init() always does IDENTIFY then one CONFIGURE_CHANNEL per configured
+  // Init() does RESET_SESSION, IDENTIFY, then CONFIGURE_CHANNEL per configured
   // channel (in config.channels() order, i.e. index 0, 1, ...); tests that
   // expect Init to succeed must queue IDENTIFY plus one CONFIGURE_CHANNEL
   // reply per channel actually declared in the config passed to Init().
@@ -106,7 +108,7 @@ class JoshuaWireBoardTest : public ::testing::Test {
     }
   }
 
-  std::shared_ptr<robot::comm::FakeLegacyMessageTransport> transport_;
+  std::shared_ptr<FakeJoshuaWireTransport> transport_;
 };
 
 TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
@@ -116,10 +118,16 @@ TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
   auto status = board.Init(MakeBoardConfig());
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_calls_, 2);
+  EXPECT_EQ(transport_->exchange_calls_, 3);
+  ASSERT_EQ(transport_->written_.size(), 3u);
+  jw_frame_t reset;
+  ASSERT_EQ(jw_decode_frame(transport_->written_[0].data(), transport_->written_[0].size(), &reset),
+            0);
+  EXPECT_EQ(reset.cmd, JW_CMD_RESET_SESSION);
+  EXPECT_EQ(reset.proto_ver, JW_PROTO_VERSION);
 }
 
-TEST_F(JoshuaWireBoardTest, V1EnvelopeStillValidatesCommandAndChannel) {
+TEST_F(JoshuaWireBoardTest, EnvelopeValidatesCommandAndChannel) {
   QueueSuccessfulInit();
   FakeJoshuaWireBoard board;
   ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
@@ -145,7 +153,7 @@ TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
   auto status = board.Init(config);
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_calls_, 3);  // 1 IDENTIFY + 2 CONFIGURE_CHANNEL.
+  EXPECT_EQ(transport_->exchange_calls_, 4);  // RESET + IDENTIFY + 2 CONFIGURE_CHANNEL.
 
   auto channel0 = board.OpenChannel(0);
   auto channel1 = board.OpenChannel(1);
@@ -154,7 +162,15 @@ TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
 
   transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
   EXPECT_TRUE((*channel1)->Enable().ok());
-  EXPECT_EQ(transport_->last_written_[4], 1);  // Reached the wire as channel 1, not 0.
+  EXPECT_EQ(transport_->last_written_[12], 1);  // Reached the wire as channel 1, not 0.
+}
+
+TEST_F(JoshuaWireBoardTest, RetiredProtocolValueIsRejectedBeforeTransportAccess) {
+  auto config = MakeBoardConfig();
+  config.set_protocol(static_cast<BoardProtocol>(1));
+  FakeJoshuaWireBoard board;
+  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(transport_->exchange_calls_, 0);
 }
 
 TEST_F(JoshuaWireBoardTest, InitRejectsWrongBoardType) {
@@ -216,12 +232,12 @@ TEST_F(JoshuaWireBoardTest, ConfigureChannelSendsStepPulseWidthOnTheWire) {
 
   // CONFIGURE_CHANNEL payload: max_pulse_rate_hz(4) + invert_dir(1) +
   // enable_active_low(1) + step_pin(1) + dir_pin(1) + enable_pin(1) +
-  // step_pulse_width_us(2, LE) — starts at last_sent_[5].
-  ASSERT_EQ(transport_->written_.size(), 2u);
-  const auto& configure_frame = transport_->written_[1];
-  ASSERT_EQ(configure_frame[3], JW_CMD_CONFIGURE_CHANNEL);
-  EXPECT_EQ(configure_frame[14], 0xf4);  // 500 & 0xFF
-  EXPECT_EQ(configure_frame[15], 0x01);  // 500 >> 8
+  // step_pulse_width_us(2, LE) — starts at byte 13.
+  ASSERT_EQ(transport_->written_.size(), 3u);
+  const auto& configure_frame = transport_->written_[2];
+  ASSERT_EQ(configure_frame[11], JW_CMD_CONFIGURE_CHANNEL);
+  EXPECT_EQ(configure_frame[22], 0xf4);  // 500 & 0xFF
+  EXPECT_EQ(configure_frame[23], 0x01);  // 500 >> 8
 }
 
 TEST_F(JoshuaWireBoardTest, InitRejectsDuplicateChannelIndex) {
@@ -271,8 +287,8 @@ TEST_F(JoshuaWireBoardTest, OpenChannelEnableSendsEnableFrame) {
   auto status = (*channel)->Enable();
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_written_[3], JW_CMD_ENABLE);
-  EXPECT_EQ(transport_->last_written_[4], 0);
+  EXPECT_EQ(transport_->last_written_[11], JW_CMD_ENABLE);
+  EXPECT_EQ(transport_->last_written_[12], 0);
 }
 
 TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
@@ -286,8 +302,8 @@ TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
   auto status = (*channel)->SetTarget(TargetMode::kPosition, 1234.0f);
 
   ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_written_[3], JW_CMD_SET_TARGET);
-  EXPECT_EQ(transport_->last_written_[5], JW_MODE_POSITION);
+  EXPECT_EQ(transport_->last_written_[11], JW_CMD_SET_TARGET);
+  EXPECT_EQ(transport_->last_written_[13], JW_MODE_POSITION);
 }
 
 TEST_F(JoshuaWireBoardTest, SetTargetTorqueIsUnimplementedWithoutTouchingWire) {
