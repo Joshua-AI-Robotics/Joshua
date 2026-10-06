@@ -1,6 +1,5 @@
 // Public capability factory. Concrete serial/SOEM classes stay in the .cc.
-// The EthercatTransport alternative is the retained TI-demo API, not the new
-// correlated cyclic capability; production v2 EtherCAT adapters remain pending.
+// Paired message/cyclic endpoints share one resource lease; bus I/O stays private.
 #pragma once
 
 #include <functional>
@@ -11,13 +10,16 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/interfaces/byte_stream.h"
 #include "robot/comm/interfaces/correlated_cyclic_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 
 namespace robot::comm {
+
+namespace ethercat {
+class EthercatMasterIo;
+}
 
 struct PairedTransports {
   std::shared_ptr<MessageTransport> message;
@@ -28,8 +30,7 @@ struct PairedTransports {
 using CommTransport = std::variant<std::shared_ptr<ByteStream>,
                                    std::shared_ptr<MessageTransport>,
                                    std::shared_ptr<CorrelatedCyclicTransport>,
-                                   PairedTransports,
-                                   std::shared_ptr<robot::comm::ethercat::EthercatTransport>>;
+                                   PairedTransports>;
 
 template <typename Transport>
 absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport& transport) {
@@ -50,8 +51,11 @@ absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport&
 
 class CommFactory {
  public:
-  // Serial connections are shared per port; a conflicting baud rate is rejected.
+  // Serial connections share one port and must agree on baud rate and timing.
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
+  // Pure validation, safe before opening hardware and usable by config checks.
+  static absl::Status ValidatePairedEthercatConfig(const robot::comm::EthercatConfig& config);
+  static absl::Status ValidateSerialConfig(const robot::comm::SerialConfig& config);
 
   // Replaces the result of CreateComm without changing the consumer call
   // path or opening hardware. Pass nullptr to restore production behavior.
@@ -63,19 +67,13 @@ class CommFactory {
   // For tests.
   static void ResetSerialTransportCacheForTesting();
 
-  // Returns a cached instance per interface name — an EtherCAT NIC has
-  // exactly one master, and two ecx_init()s on one NIC fight over the raw
-  // socket. Later calls return the same transport and fail if they request a
-  // different process-data mode.
-  static absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>> CreateEthercat(
-      const robot::comm::EthercatConfig& config);
+  // Comm-internal backend injection. The abstract type is forward-declared so
+  // no owner-worker/concrete implementation headers escape this public seam.
+  static void SetEthercatMasterIoFactoryForTesting(
+      std::function<std::unique_ptr<ethercat::EthercatMasterIo>()> factory);
 
-  // Replaces the SOEM transport constructor so cache semantics are testable
-  // without a NIC. Pass nullptr to restore the default. For tests.
-  static void SetEthercatTransportFactoryForTesting(
-      std::function<std::shared_ptr<robot::comm::ethercat::EthercatTransport>()> factory);
-
-  // Tears down and forgets every cached EtherCAT transport. For tests.
+  // Stops cached owners; entries remain reserved until their last lease is
+  // released. For tests.
   static void ResetEthercatTransportCacheForTesting();
 
   ~CommFactory() = default;

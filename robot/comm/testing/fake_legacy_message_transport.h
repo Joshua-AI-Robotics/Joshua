@@ -1,4 +1,4 @@
-// Fixed-length in-memory fake for remaining v1/vendor consumers. No concrete
+// Fixed-length in-memory fake for vendor consumers. No concrete
 // serial dependency or hardware I/O. Prefer fake_transports.h for new clients.
 #pragma once
 

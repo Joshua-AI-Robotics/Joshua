@@ -17,10 +17,12 @@
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_ethercat.h"
 #include "gtest/gtest.h"
+#include "robot/board/factory/board_factory.h"
 #include "robot/comm/ethercat/coe_sdo_transfer.h"
 #include "robot/comm/ethercat/ethercat_master.h"
 #include "robot/comm/ethercat/ethercat_types.h"
 #include "robot/comm/ethercat/joshua_wire_ethercat_transport.h"
+#include "robot/comm/factory/comm_factory.h"
 
 namespace robot::comm::ethercat {
 namespace {
@@ -1623,6 +1625,214 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   EXPECT_FALSE(trace->channels[0].enabled);
   EXPECT_TRUE(trace->channels[0].estopped);
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
+}
+
+// Full config -> BoardFactory -> CommFactory -> adapters -> production firmware
+// core, reusing the existing I/O seam. No new smoke utility or hardware access.
+robot::board::Board PairedBoard(uint32_t slave = 1) {
+  robot::board::Board b;
+  b.set_name("jw_" + std::to_string(slave));
+  b.set_board_type(robot::board::AM243);
+  b.set_protocol(robot::board::JOSHUA_WIRE);
+  b.mutable_firmware()->set_min_proto_version(2);
+  auto* c = b.mutable_comm();
+  c->set_comm_type(ETHERCAT);
+  c->set_transport_type(MESSAGE_AND_CYCLIC);
+  auto* ec = c->mutable_ethercat_config();
+  ec->set_interface_name("test-only");
+  ec->set_slave_index(slave);
+  ec->set_process_data_mode(ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
+  auto* t = ec->mutable_timing();
+  t->set_period_us(20000);
+  t->set_process_timeout_us(1000);
+  t->set_state_timeout_us(1000);
+  t->set_operation_timeout_us(1000000);
+  t->set_mailbox_step_budget_us(1000);
+  t->set_scheduling_guard_us(1000);
+  t->set_response_timeout_us(1000000);
+  auto* channel = b.add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::STEP_DIR);
+  channel->mutable_step_dir()->set_max_pulse_rate_hz(1000);
+  return b;
+}
+
+class JwecFactoryTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    CommFactory::SetEthercatMasterIoFactoryForTesting([this] {
+      ++opens;
+      return std::make_unique<FirmwareProfileIo>(trace);
+    });
+  }
+  void TearDown() override {
+    robot::board::BoardFactory::ResetForTesting();
+    CommFactory::ResetEthercatTransportCacheForTesting();
+    CommFactory::SetEthercatMasterIoFactoryForTesting(nullptr);
+  }
+  std::shared_ptr<FirmwareProfileTrace> trace = std::make_shared<FirmwareProfileTrace>();
+  int opens = 0;
+};
+
+TEST_F(JwecFactoryTest, BoardEngineRoutesBothPlanesAndClosingOnePreservesOtherSlave) {
+  auto first = robot::board::BoardFactory::GetOrCreate(PairedBoard());
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto second = robot::board::BoardFactory::GetOrCreate(PairedBoard(2));
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(opens, 1);
+  EXPECT_EQ(trace->starts, 1);
+  auto a = (*first)->OpenChannel(0);
+  auto b = (*second)->OpenChannel(0);
+  ASSERT_TRUE(a.ok());
+  ASSERT_TRUE(b.ok());
+  ASSERT_TRUE((*a)->Enable().ok());
+  ASSERT_TRUE((*a)->SetTarget(robot::board::TargetMode::kPosition, 42).ok());
+  auto feedback = (*a)->ReadFeedback();
+  ASSERT_TRUE(feedback.ok()) << feedback.status();
+  EXPECT_FLOAT_EQ(feedback->position, 42);
+  EXPECT_EQ(feedback->fault_flags, 0);
+  ASSERT_TRUE((*a)->Disable().ok());
+  ASSERT_TRUE((*first)->Teardown().ok());
+  EXPECT_EQ(trace->teardowns, 0);
+  EXPECT_EQ((*a)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+  ASSERT_TRUE((*b)->Enable().ok());
+  ASSERT_TRUE((*b)->SetTarget(robot::board::TargetMode::kVelocity, 7).ok());
+  feedback = (*b)->ReadFeedback();
+  ASSERT_TRUE(feedback.ok());
+  EXPECT_FLOAT_EQ(feedback->velocity, 7);
+  EXPECT_EQ(feedback->fault_flags, 0);
+  ASSERT_TRUE((*second)->Teardown().ok());
+  EXPECT_EQ(trace->teardowns, 1);  // Retained board/channel handles hold no NIC lease.
+  for (const auto& channel : trace->channels) {
+    EXPECT_FALSE(channel.enabled);
+    EXPECT_TRUE(channel.estopped);
+  }
+  for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
+}
+
+TEST_F(JwecFactoryTest, GatesEverySlaveBeforeOpAndFailureIsNotCached) {
+  trace->incompatible_slave = 2;
+  auto rejected = CommFactory::CreateComm(PairedBoard().comm());
+  EXPECT_EQ(rejected.status().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(trace->starts, 0);
+  EXPECT_EQ(trace->teardowns, 1);
+  trace->incompatible_slave = 0;
+  auto retry = CommFactory::CreateComm(PairedBoard().comm());
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  EXPECT_EQ(opens, 2);
+  EXPECT_EQ(trace->starts, 1);
+}
+
+TEST_F(JwecFactoryTest, DifferentBoardIdentityUsesUnchangedHostCommAndBoardEngine) {
+  // A software-only stand-in, not a claim of EtherCAT hardware on a Teensy.
+  auto& identity = trace->profiles[0].config.identity;
+  identity.board_id = JW_BOARD_TEENSY41;
+  std::memset(identity.fw_name, 0, sizeof(identity.fw_name));
+  std::memcpy(identity.fw_name, "other-board-jw", 14);
+  auto& artifact = trace->profiles[0].config.artifact;
+  std::memset(artifact, 0, sizeof(artifact));
+  std::memcpy(artifact, "other-ec-jw", 12);
+  auto config = PairedBoard();
+  config.set_board_type(robot::board::TEENSY41);
+  auto board = robot::board::BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto channel = (*board)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  ASSERT_TRUE((*channel)->Enable().ok());
+  ASSERT_TRUE((*channel)->SetTarget(robot::board::TargetMode::kPosition, 19).ok());
+  auto feedback = (*channel)->ReadFeedback();
+  ASSERT_TRUE(feedback.ok()) << feedback.status();
+  EXPECT_FLOAT_EQ(feedback->position, 19);
+  EXPECT_EQ(feedback->fault_flags, 0);
+  ASSERT_TRUE((*board)->Teardown().ok());
+  EXPECT_EQ(trace->teardowns, 1);
+}
+
+TEST_F(JwecFactoryTest, RejectsDuplicateClaimsTimingChangesAndLegacyRequests) {
+  auto config = PairedBoard();
+  auto first = CommFactory::CreateComm(config.comm());
+  ASSERT_TRUE(first.ok()) << first.status();
+  EXPECT_EQ(CommFactory::CreateComm(config.comm()).status().code(),
+            absl::StatusCode::kAlreadyExists);
+  auto other = PairedBoard(2);
+  other.mutable_comm()->mutable_ethercat_config()->mutable_timing()->set_period_us(30000);
+  EXPECT_EQ(CommFactory::CreateComm(other.comm()).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  auto legacy = config.comm();
+  legacy.set_transport_type(CYCLIC);
+  EXPECT_EQ(CommFactory::CreateComm(legacy).status().code(), absl::StatusCode::kInvalidArgument);
+  auto second = CommFactory::CreateComm(PairedBoard(2).comm());
+  ASSERT_TRUE(second.ok());
+  first = absl::CancelledError("release first lease");
+  EXPECT_EQ(CommFactory::CreateComm(config.comm()).status().code(),
+            absl::StatusCode::kAlreadyExists);
+  EXPECT_EQ(trace->teardowns, 0);
+  second = absl::CancelledError("release last lease");
+  EXPECT_EQ(trace->teardowns, 1);
+  auto reopened = CommFactory::CreateComm(config.comm());
+  ASSERT_TRUE(reopened.ok()) << reopened.status();
+  EXPECT_EQ(opens, 2);
+}
+
+TEST_F(JwecFactoryTest, RegionAssertionsFailBeforeOpAndSlaveRangeNeverTruncates) {
+  auto config = PairedBoard();
+  config.mutable_comm()->mutable_ethercat_config()->set_slave_index(65536);
+  EXPECT_EQ(CommFactory::CreateComm(config.comm()).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(opens, 0);
+  config.mutable_comm()->mutable_ethercat_config()->set_slave_index(3);
+  EXPECT_EQ(CommFactory::CreateComm(config.comm()).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(trace->starts, 0);
+  config = PairedBoard();
+  auto* region = config.mutable_comm()->mutable_ethercat_config()->mutable_pdo_region();
+  region->set_output_size_bytes(80);
+  region->set_input_size_bytes(80);
+  region->set_input_offset_bytes(1);
+  EXPECT_EQ(CommFactory::CreateComm(config.comm()).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(trace->starts, 0);
+  region->set_input_offset_bytes(0);
+  EXPECT_TRUE(CommFactory::CreateComm(config.comm()).ok());
+}
+
+TEST_F(JwecFactoryTest, ReopenWaitsForLastOwnerToFinishClosingTheNic) {
+  auto first = CommFactory::CreateComm(PairedBoard().comm());
+  ASSERT_TRUE(first.ok());
+  {
+    std::lock_guard lock(trace->mutex);
+    trace->hold = "teardown";
+  }
+  auto closing = std::async(std::launch::async, [owner = std::move(*first)]() mutable {
+    owner = std::shared_ptr<MessageTransport>{};
+  });
+  ASSERT_TRUE(trace->WaitEntered());
+  auto reopening =
+      std::async(std::launch::async, [] { return CommFactory::CreateComm(PairedBoard().comm()); });
+  EXPECT_EQ(reopening.wait_for(10ms), std::future_status::timeout);
+  trace->Release();
+  closing.get();
+  auto second = reopening.get();
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(opens, 2);
+  EXPECT_EQ(trace->teardowns, 1);
+}
+
+TEST_F(JwecFactoryTest, InvalidBoardPolicyDoesNotOpenNicAndFailedIdentifyReleasesLease) {
+  auto config = PairedBoard();
+  config.clear_protocol();
+  EXPECT_FALSE(robot::board::BoardFactory::GetOrCreate(config).ok());
+  config = PairedBoard();
+  config.mutable_am243_config()->set_slave_index(1);
+  EXPECT_FALSE(robot::board::BoardFactory::GetOrCreate(config).ok());
+  EXPECT_EQ(opens, 0);
+  config = PairedBoard();
+  config.mutable_channels(0)->set_index(1);  // Real firmware exposes channel zero only.
+  EXPECT_FALSE(robot::board::BoardFactory::GetOrCreate(config).ok());
+  EXPECT_EQ(trace->teardowns, 1);
+  auto retry = robot::board::BoardFactory::GetOrCreate(PairedBoard());
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  EXPECT_EQ(opens, 2);
 }
 
 }  // namespace

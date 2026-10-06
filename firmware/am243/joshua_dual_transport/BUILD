@@ -1,5 +1,8 @@
+# Builds the AM243 software-only command handler for native host/session
+# tests without the TI SDK. The MCU firmware image is built by Makefile instead.
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
+# Compiles the actual software-only command handler without the TI SDK.
 cc_library(
     name = "commands",
     srcs = ["src/joshua_commands.c"],

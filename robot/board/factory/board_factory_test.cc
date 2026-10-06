@@ -33,6 +33,13 @@ TEST_F(BoardFactoryTest, SameNameSharesOneInstance) {
   EXPECT_EQ(board_a->get(), board_b->get());
 }
 
+TEST_F(BoardFactoryTest, SameNameCannotSilentlyChangeEndpointOrChannelPolicy) {
+  auto config = MakeMockBoard("same", 1);
+  ASSERT_TRUE(BoardFactory::GetOrCreate(config).ok());
+  config.mutable_comm()->mutable_ethercat_config()->set_slave_index(2);
+  EXPECT_EQ(BoardFactory::GetOrCreate(config).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST_F(BoardFactoryTest, DifferentNamesGetDifferentInstances) {
   auto board_a = BoardFactory::GetOrCreate(MakeMockBoard("bridge_1", 1));
   auto board_b = BoardFactory::GetOrCreate(MakeMockBoard("bridge_2", 1));
@@ -72,7 +79,7 @@ TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
 }
 
 TEST_F(BoardFactoryTest, Esp32IsPortedAndRejectsAMockShapedConfig) {
-  // ESP32 is implemented (same joshua_wire_v1 family as Teensy); a config
+  // ESP32 is implemented (same joshua_wire family as Teensy); a config
   // shaped for MockBoard (STEP_DIR channel, no comm) fails Esp32Board's own
   // validation rather than falling into UnportedBoardTypesReportUnimplemented.
   robot::board::Board board = MakeMockBoard("esp32_bus_1", 1);

@@ -1,0 +1,87 @@
+# AM243 software-only channel over JoshuaWire 0.0.2 EtherCAT.
+# This preset opens a real NIC. Replace ethercat0 and confirm the slave index
+# before running. It requires the separate jw or jw-soes EtherCAT firmware;
+# the default UART/TI echo image is incompatible. See config/README.md.
+# Current AM243 JW images do not drive STEP/DIR GPIOs. Pin identifiers below
+# configure the software channel only.
+# Timing budgets are illustrative; the master NIC receive issue remains open.
+# Build with explicit firmware watchdogs, for example command progress 2000000
+# us and target freshness 1000000 us. Fresh targets must continue while enabled;
+# feedback polling alone does not prevent stale-target ESTOP.
+
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "am243_jw_ethercat_demo"
+  id: 243
+}
+
+robot {
+  boards {
+    name: "am243_jw_bus"
+    board_type: AM243
+    protocol: JOSHUA_WIRE
+    firmware { min_proto_version: 2 }
+    comm {
+      comm_type: ETHERCAT
+      transport_type: MESSAGE_AND_CYCLIC
+      ethercat_config {
+        interface_name: "ethercat0"
+        process_data_mode: ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR
+        slave_index: 1
+        timing {
+          period_us: 20000
+          process_timeout_us: 1000
+          state_timeout_us: 1000
+          operation_timeout_us: 1000000
+          mailbox_step_budget_us: 1000
+          scheduling_guard_us: 1000
+          response_timeout_us: 1000000
+        }
+      }
+    }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir {
+        max_pulse_rate_hz: 1000
+        invert_dir: false
+        enable_active_low: true
+        step_pin: 2
+        dir_pin: 3
+        enable_pin: 4
+        step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: FLOAT32
+          topic: "am243_jw_joint_1/position"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "am243_jw_joint_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "am243_jw_bus"
+        channel: 0
+        physical_lower_limit: -180
+        physical_upper_limit: 180
+        operational_lower_limit: -90
+        operational_upper_limit: 90
+        stepper_config {
+          steps_per_degree: 8.888889
+          gear_ratio: 1.0
+          idle_position: 0
+        }
+      }
+    }
+  }
+}
