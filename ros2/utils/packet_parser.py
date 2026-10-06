@@ -5,31 +5,22 @@ See ros2/utils/packet_parser.md for usage and proto change checklist.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from robot.action.proto import action_packet_pb2
 from robot.perception.proto import perception_packet_pb2
 
-# Registries synced with action_packet.proto / perception_packet.proto.
-# Contract tests in packet_parser_test.py fail if proto adds fields not listed here.
-ACTION_POSITION_FIELD_PATHS = (
-    "position",
-    "complex.position",
-)
-ACTION_SCALAR_ONEOF_FIELDS = (
-    "position",
-    "speed",
-    "torque",
-    "dc",
-)
-# Last path segment of /<device_id>/<action_type> Float32 actuator topics.
-# Must stay in sync with ACTION_SCALAR_ONEOF_FIELDS and C++ kActionTopicSuffixes.
-# See ros2/utils/packet_parser.md — contract tests fail if proto/registries drift.
+# Numeric topic aliases for the unified motion payload.
+ACTION_POSITION_FIELD_PATHS = ("joint.position",)
+ACTION_JOINT_FIELDS = ("position", "velocity", "effort")
 ACTION_TOPIC_SUFFIX_TO_FIELD = {
     "position": "position",
-    "torque": "torque",
-    "speed": "speed",
-    "dc": "dc",
+    "speed": "velocity",
+    "velocity": "velocity",
+    "torque": "effort",
+    "effort": "effort",
+    "dc": "effort",
 }
 PERCEPTION_DATA_TYPE_FIELDS = (
     "image",
@@ -44,7 +35,7 @@ class PacketParseError(ValueError):
 
 
 def parse_action_type_from_topic(topic: str) -> str:
-    """Return ActionPacket oneof field name from /<device_id>/<action_type> topic."""
+    """Return JointCommand field name from /<device_id>/<action_type> topic."""
     suffix = topic.rstrip("/").rsplit("/", 1)[-1].lower()
     field = ACTION_TOPIC_SUFFIX_TO_FIELD.get(suffix)
     if field is None:
@@ -70,14 +61,27 @@ def action_packet_from_float(
     value: float,
     topic: str,
     *,
-    normalized: bool = False,
+    position_encoding: int = action_packet_pb2.JointCommand.POSITION_NATIVE,
 ) -> action_packet_pb2.ActionPacket:
     """Build ActionPacket from a Float32 actuator command topic and value."""
     field = parse_action_type_from_topic(topic)
+    if not math.isfinite(value):
+        raise PacketParseError("Command must be finite")
+    if (
+        position_encoding
+        not in action_packet_pb2.JointCommand.PositionEncoding.values()
+    ):
+        raise PacketParseError("Unknown position encoding")
+    if (
+        position_encoding != action_packet_pb2.JointCommand.POSITION_NATIVE
+        and field != "position"
+    ):
+        raise PacketParseError("Position encoding applies only to position topics")
     packet = action_packet_pb2.ActionPacket()
+    packet.joint.joint_name = device_id_from_topic(topic)
     if field == "position":
-        packet.normalized = normalized
-    setattr(packet, field, float(value))
+        packet.joint.position_encoding = position_encoding
+    setattr(packet.joint, field, float(value))
     return packet
 
 
@@ -88,66 +92,80 @@ def map_normalized_position(value: float, lower: float, upper: float) -> float:
 
 
 def denormalize_position_value(value: float, lower: float, upper: float) -> float:
-    """Map normalized position to raw ticks and clamp to operational limits."""
+    """Inference adapter's legacy [-1, 1] clamp policy, not packet decoding."""
     position = map_normalized_position(value, lower, upper)
     return max(lower, min(upper, position))
 
 
-def _apply_to_position_sources(
-    packet: action_packet_pb2.ActionPacket,
-    transform,
-) -> None:
-    for path in ACTION_POSITION_FIELD_PATHS:
-        if path == "position":
-            if packet.WhichOneof("action_type") == "position":
-                packet.position = transform(packet.position)
-        elif path == "complex.position":
-            if packet.WhichOneof(
-                "action_type"
-            ) == "complex" and packet.complex.HasField("position"):
-                packet.complex.position = transform(packet.complex.position)
-        else:
-            raise ValueError(f"Unhandled ACTION_POSITION_FIELD_PATHS entry: {path}")
-
-
-def denormalize_action_packet(
+def resolve_position_encoding(
     packet: action_packet_pb2.ActionPacket,
     lower: float,
     upper: float,
 ) -> action_packet_pb2.ActionPacket:
-    if not packet.normalized:
+    if not packet.HasField("joint"):
         return packet
-
-    def denorm(value: float) -> float:
-        return denormalize_position_value(value, lower, upper)
-
-    _apply_to_position_sources(packet, denorm)
+    joint = packet.joint
+    encoding = joint.position_encoding
+    if encoding not in action_packet_pb2.JointCommand.PositionEncoding.values():
+        raise PacketParseError("Unknown position encoding")
+    if joint.HasField("position") and not math.isfinite(joint.position):
+        raise PacketParseError("Position must be finite")
+    if encoding in (
+        action_packet_pb2.JointCommand.POSITION_NATIVE,
+        action_packet_pb2.JointCommand.POSITION_SI,
+    ):
+        return packet
+    if not joint.HasField("position"):
+        raise PacketParseError("Normalized encoding requires position")
+    if not math.isfinite(lower) or not math.isfinite(upper) or lower >= upper:
+        raise PacketParseError(
+            "Normalization requires finite increasing operational limits"
+        )
+    minimum = (
+        0.0
+        if encoding == action_packet_pb2.JointCommand.POSITION_NORMALIZED_ZERO_ONE
+        else -1.0
+    )
+    if not minimum <= joint.position <= 1.0:
+        raise PacketParseError("Position outside configured normalized range")
+    fraction = (joint.position - minimum) / (1.0 - minimum)
+    value = (1.0 - fraction) * lower + fraction * upper
+    if not math.isfinite(value):
+        raise PacketParseError("Converted position must be finite")
+    joint.position = value
+    joint.position_encoding = action_packet_pb2.JointCommand.POSITION_NATIVE
     return packet
 
 
 def extract_position_from_action(packet: action_packet_pb2.ActionPacket) -> float:
-    for path in ACTION_POSITION_FIELD_PATHS:
-        if path == "position" and packet.WhichOneof("action_type") == "position":
-            return float(packet.position)
-        if (
-            path == "complex.position"
-            and packet.WhichOneof("action_type") == "complex"
-            and packet.complex.HasField("position")
-        ):
-            return float(packet.complex.position)
-    raise PacketParseError(
-        "ActionPacket has no position field "
-        f"(expected one of: {', '.join(ACTION_POSITION_FIELD_PATHS)})"
-    )
+    if packet.HasField("joint") and packet.joint.HasField("position"):
+        return float(packet.joint.position)
+    raise PacketParseError("ActionPacket has no joint.position")
 
 
 def extract_scalar_from_action(
     packet: action_packet_pb2.ActionPacket,
+    topic: Optional[str] = None,
 ) -> Optional[float]:
-    which = packet.WhichOneof("action_type")
-    if which not in ACTION_SCALAR_ONEOF_FIELDS:
+    # A Float32 topic cannot carry a multi-field command or SI metadata.
+    if (
+        not packet.HasField("joint")
+        or packet.joint.units != action_packet_pb2.JointCommand.NATIVE
+        or packet.joint.position_encoding
+        != action_packet_pb2.JointCommand.POSITION_NATIVE
+    ):
         return None
-    return float(getattr(packet, which))
+    fields = [field for field in ACTION_JOINT_FIELDS if packet.joint.HasField(field)]
+    if len(fields) != 1:
+        return None
+    if topic is not None:
+        if (
+            parse_action_type_from_topic(topic) != fields[0]
+            or device_id_from_topic(topic) != packet.joint.joint_name
+        ):
+            return None
+    value = float(getattr(packet.joint, fields[0]))
+    return value if math.isfinite(value) else None
 
 
 def require_perception_position(

@@ -84,6 +84,9 @@ void StepDirDisable(ChannelState* channel) {
   digitalWrite(channel->step_dir.config.enable_pin, inactive_level);
 }
 
+// TODO(hmoon): Accept and validate a complete structured command before updating
+// channel state. Retain a position target and its speed limit together; separate
+// velocity mode must not overwrite or masquerade as a position speed setting.
 void StepDirSetTarget(ChannelState* channel, jw_mode_t mode, float value) {
   channel->target_mode = mode;
   channel->target_value = value;
@@ -93,6 +96,10 @@ void StepDirService(ChannelState* channel) {
   if (!channel->enabled) {
     return;
   }
+  // TODO(hmoon): Derive pulse timing from requested steps/second (or the active
+  // position move's speed limit), bounded by max_pulse_rate_hz. Velocity currently
+  // uses only sign/zero below. Define zero/stop behavior and acceleration limits;
+  // keep pulse scheduling nonblocking across channels and stop at position targets.
   const unsigned long min_interval_us = MinPulseIntervalUs(*channel);
   if (min_interval_us == 0) {
     return;  // Not yet configured via CONFIGURE_CHANNEL.

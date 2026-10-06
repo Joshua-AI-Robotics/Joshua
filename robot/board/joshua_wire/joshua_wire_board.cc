@@ -112,6 +112,10 @@ class JoshuaWireChannel : public BoardChannel {
     return SendExpectStatus(JW_CMD_DISABLE, nullptr, 0, "Disable");
   }
   absl::Status SetTarget(TargetMode mode, float value) override {
+    // TODO(hmoon): Encode the structured BoardChannel command once the versioned
+    // wire contract exists. Check firmware capabilities before sending combined
+    // fields. Use exhaustive mode dispatch: the current position/otherwise-
+    // velocity mapping must not reinterpret future modes as velocity.
     if (mode == TargetMode::kTorque)
       return absl::UnimplementedError("JoshuaWire channel has no torque target (open-loop drive).");
     const jw_mode_t wire_mode = mode == TargetMode::kPosition ? JW_MODE_POSITION : JW_MODE_VELOCITY;

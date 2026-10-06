@@ -95,6 +95,12 @@ typedef struct {
   uint16_t fault_flags;
 } jw_feedback_t;
 
+// TODO(hmoon): Add a versioned multi-field command and advertise capabilities
+// during identification. Preserve field presence (omitted != zero), native units,
+// and control semantics, including position with a speed limit. Update host and
+// firmware codecs together; retain or explicitly reject legacy single-target
+// commands rather than silently reinterpreting their payload. Validate the full
+// command before applying it; allow future supported fields without dropping them.
 typedef struct {
   jw_mode_t mode;
   float value;

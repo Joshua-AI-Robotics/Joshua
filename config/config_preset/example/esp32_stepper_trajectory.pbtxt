@@ -1,0 +1,229 @@
+# JointState trajectory example; positions use SI radians.
+# Uses the same board, serial port, pins, limits and step conversion as
+# esp32_stepper_demo.pbtxt. This preset commands real hardware automatically.
+# Waypoint positions are SI radians; board/actuator limits remain native degrees.
+# Timestamps schedule targets, not arrival deadlines. No interpolation or homing.
+# Position-only waypoints can execute. The final two waypoints require SI velocity
+# support in the driver and a defined firmware position/speed command contract;
+# until implemented, the driver rejects those commands (see TODO below).
+# The configured loop ends at 3.5 seconds; it does not wait for the final move.
+#
+# Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
+# via JoshuaWire 0.0.2 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
+# Phase 5) — same wire protocol and shared drive backend as
+# firmware/teensy/41/, a different firmware image
+# (firmware/esp32/, joins the same JoshuaWire 0.0.2 family).
+#
+# PROTOCOL VERIFIED, MOTION NOT YET — firmware/esp32/ is flashed and the
+# JoshuaWire 0.0.2 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
+# against real hardware (firmware/esp32/README.md Status). Unlike
+# teensy_stepper_demo.pbtxt, nobody has wired this exact preset to a
+# TB6600/motor and confirmed it turns yet. Port, pins, and microstepping
+# below are reasonable starting defaults, not confirmed-working motion
+# values — check them against your actual driver before trusting them,
+# and update this comment (and firmware/esp32/README.md) once you have.
+#
+# Launch:
+#   bazel run //launcher:joshua_main -- \
+#     --config=config/config_preset/example/esp32_stepper_trajectory.pbtxt
+#
+# Topic: /esp32_stepper_1/joint_state, sensor_msgs/JointState.
+# Positions are radians (0 to 2*pi maps to the configured 0-to-360-degree limits).
+# Move speed is currently fixed by max_pulse_rate_hz below.
+
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "esp32_stepper_trajectory"
+  id: 32
+}
+
+robot {
+  boards {
+    name: "esp32_stepper_bus"
+    board_type: ESP32
+    protocol: JOSHUA_WIRE
+    comm {
+      comm_type: SERIAL
+      transport_type: MESSAGE
+      # Most ESP32 dev boards enumerate through a USB-to-UART bridge chip
+      # (CP2102/CH340/...), not native USB CDC like Teensy 4.1 — check
+      # `ls /dev/ttyUSB*` (or /dev/ttyACM* if your board does have native
+      # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
+      serial_config {
+        port: "/dev/ttyUSB0"
+        baudrate: 115200
+        post_open_settle_ms: 2000
+      }
+    }
+    firmware {
+      min_proto_version: 2
+    }
+    channels {
+      index: 0
+      drive: STEP_DIR
+      step_dir {
+        max_pulse_rate_hz: 4000
+        invert_dir: false
+        enable_active_low: true
+        # GPIO pins on the ESP32, matching whatever the board is physically
+        # wired to (docs/BOARD_LAYER_RFC.md §7.5 — pins are host-configured,
+        # not baked into the firmware image). 25/26/27 are ordinary
+        # general-purpose output pins on a standard ESP32 DevKitC-style
+        # board (not strapping pins, not input-only, not the default
+        # I2C/UART/flash pins) — a reasonable starting choice, not a
+        # requirement; rewire and edit here freely.
+        step_pin: 25
+        dir_pin: 26
+        enable_pin: 27
+        # STEP pulse HIGH width. Left at firmware's own default (20us,
+        # tuned for a TB6600's opto-isolated 3.3V-driven input on the
+        # Teensy bring-up) as a starting point — set this explicitly if
+        # your driver chip needs something different.
+        step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1
+        node_type: ACTUATOR_SUBSCRIBER
+        qos_setting { depth: 10 }
+        subscriptions {
+          ros2_data_type: JOINT_STATE
+          topic: "esp32_stepper_1/joint_state"
+        }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "esp32_stepper_1"
+        id: 1
+        motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "esp32_stepper_bus"
+        channel: 0
+        physical_lower_limit: 0
+        physical_upper_limit: 360
+        operational_lower_limit: 0
+        operational_upper_limit: 360
+        stepper_config {
+          # 1.8-degree/step NEMA17 at 1/16 microstepping: 200 * 16 / 360.
+          # Must match your driver's actual DIP-switch/microstepping
+          # setting, same as the Teensy preset.
+          steps_per_degree: 8.888889
+          gear_ratio: 1.0
+          idle_position: 0
+        }
+      }
+    }
+  }
+
+  trajectories {
+    single_trajectories {
+      node {
+        id: 2
+        node_type: TRAJECTORY_PUBLISHER
+        qos_setting { depth: 10 }
+        publishers {
+          ros2_data_type: JOINT_STATE
+          topic: "esp32_stepper_1/joint_state"
+        }
+      }
+      trajectory {
+        waypoints {
+          timestamp_sec: 0.0
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 0.0
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 0.5
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 1.5707963267948966  # 90 degrees
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 1.0
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 3.141592653589793  # 180 degrees
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 1.5
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 1.5707963267948966  # 90 degrees
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 2
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 0.0
+            }
+          }
+        }
+        # TODO(hmoon): Support combined position/velocity trajectory commands:
+        # The stepper driver currently rejects SI velocity. Define its control
+        # semantics and add firmware/protocol support before enabling these moves.
+        # ESP32 currently replaces velocity with position and uses max_pulse_rate_hz
+        # for pulse timing; a JointState velocity is not automatically a speed limit.
+        # Waypoint timestamps schedule dispatch, not arrival; allow final-move time
+        # before restarting the loop. A 90-degree move over 1.5 s requires 60 deg/s.
+        waypoints {
+          timestamp_sec: 2.5
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 1.5707963267948966  # 90 degrees
+              velocity: 2.6179938779914944  # 150 degrees/s; currently unsupported
+            }
+          }
+        }
+        waypoints {
+          timestamp_sec: 3.5
+          topic: "esp32_stepper_1/joint_state"
+          action {
+            joint {
+              joint_name: "esp32_stepper_1"
+              position_encoding: POSITION_SI
+              units: SI
+              position: 3.141592653589793  # 180 degrees
+              velocity: 2.6179938779914944  # 150 degrees/s; currently unsupported
+            }
+          }
+        }
+      }
+    }
+  }
+}

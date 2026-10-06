@@ -40,7 +40,8 @@ class PybricksMotorDriverTest(unittest.TestCase):
         self.assertEqual(transport.connected, ["hub-1"])
 
         packet = action_packet_pb2.ActionPacket()
-        packet.position = 42.0
+        packet.joint.joint_name = spec.port
+        packet.joint.position = 42.0
         driver.set_action(packet)
         self.assertEqual(transport.commands, [("hub-1", "A", 42.0)])
 

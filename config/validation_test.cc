@@ -2,6 +2,7 @@
 
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
+#include "ros2/utils/packet_parser.h"
 
 namespace config {
 namespace {
@@ -304,6 +305,38 @@ TEST(ValidationTest, EthercatNicCannotBeSplitAcrossNodeProcesses) {
       ->mutable_node()
       ->set_id(1);
   EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, PositionEndpointOnlyNeedsSupportedTypeAndRate) {
+  auto config = MakeConfig();
+  auto* pub = config.mutable_robot()
+                  ->mutable_perceptions()
+                  ->mutable_single_perceptions(0)
+                  ->mutable_node()
+                  ->add_publishers();
+  pub->set_topic("joint/position");
+  pub->set_publish_rate_hz(30);
+  pub->set_ros2_data_type(ros2::data_type::FLOAT64);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  pub->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  pub->set_ros2_data_type(ros2::data_type::IMAGE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  pub->set_ros2_data_type(ros2::data_type::BOOL);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+TEST(ValidationTest, JointStateValidatesStructureAndLeavesCapabilitiesToDriver) {
+  robot::action::Actuator actuator;
+  actuator.set_actuator_name("joint");
+  ros2::node::Subscription sub;
+  sub.set_topic("/joint_commands");
+  sub.set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  actuator.set_motor_type(robot::action::MOTOR_TI_DEMO);
+  EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  actuator.set_motor_type(robot::action::MOTOR_STEPPER_NEMA17);
+  EXPECT_TRUE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
+  actuator.clear_actuator_name();
+  EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
 }
 }  // namespace
 }  // namespace config

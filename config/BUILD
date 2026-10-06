@@ -20,6 +20,7 @@ cc_library(
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
         "//robot/comm/factory:comm_factory",
+        "//ros2/utils:packet_parser",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
@@ -33,6 +34,7 @@ cc_test(
     deps = [
         ":validation",
         "//config/proto:config_cc_proto",
+        "//ros2/utils:packet_parser",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
         "@protobuf",

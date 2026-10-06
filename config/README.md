@@ -197,3 +197,25 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 There is no central sensor-to-publisher allowlist; node validation checks that
 node types are specified and each node ID has one consistent type.
+
+
+Position publishers and actuator subscribers select compiled ROS message types
+using the existing `ros2_data_type` field. No field mappings are required.
+See [typed ROS messages](../ros2/README.md#typed-position-and-actuator-messages)
+for supported types, fixed conversion rules, JointState units and names, and
+hardware/model constraints. Unsupported message/driver combinations are rejected
+before hardware initialization; existing Float32 presets remain compatible.
+
+## Actuator motion packets
+
+Trajectory actions use `action { joint { joint_name: "sts_motor_1" position: 2004 } }`.
+`JointCommand` replaces scalar and complex action packets. Native units remain
+the default, preserving existing config limits and numeric topic values. See
+[packet contracts](../ros2/utils/packet_parser.md) for SI units, driver capability
+limits, torque-enable presets, and migration details.
+
+ROS endpoints contain only their topic string and `ros2_data_type`. The selected
+node defines the interpretation: actuator scalar position topics use native units,
+while JointState uses SI and selects the configured actuator by message name.
+Position encoding remains inside JointCommand for internal consumers. Scalar
+producers must convert normalized outputs before publishing.

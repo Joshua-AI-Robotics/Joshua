@@ -72,3 +72,33 @@ Adding a motor type, board, or transport should mean **one new file in one
 layer**, not a new enum value threaded through several. Communication mechanism
 and capability boundaries are described in [comm/README.md](comm/README.md).
 EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
+
+## Joint commands
+
+`ActionPacket.joint` is the motion payload for every actuator. Optional position,
+velocity, and effort distinguish omission from zero. `position_encoding` selects
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. The separate `units` field applies only to
+velocity and effort: NATIVE preserves existing driver settings; SI means physical
+velocity and effort. JointState sets SI position encoding and SI velocity/effort
+units explicitly, preserving joint name, frame, timestamp, and supplied fields.
+
+STS3215 and stepper support native position/velocity combinations and SI
+position-only commands (radians converted to ticks/degrees). They reject effort;
+use presets to enable/disable torque. The legacy TI demo motor driver is retired;
+AM243 examples use the stepper driver over JoshuaWire. Drivers validate the entire payload before writes. Shared interface validation checks only
+name, field presence, enum validity and finiteness; each driver's implementation
+owns supported combinations, SI conversions, float range and operational limits.
+Channel failures are returned; a
+multi-field command is not a transactional hardware operation.
+
+Scalar topics retain native values: `/position` maps to position, `/speed` and
+`/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
+maps to enable/disable presets. `/dc` remains unsupported by runtime motor drivers. The standalone Pybricks tool defines
+native effort as duty percent and requires it to be sent alone.
+
+Normalized positions map through configured operational limits once, then become
+POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
+limits are rejected, never clamped. Native and SI positions are left for drivers.
+Position encoding does not normalize velocity or effort.
+Header metadata does not imply scheduling, clock synchronization, or transforms.
