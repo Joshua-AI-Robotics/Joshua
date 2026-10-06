@@ -58,3 +58,14 @@ guard while cyclic exchange continues. Missing support or insufficient slack
 is rejected. Mailbox counters, malformed responses, abort codes, cancellation
 and deadline overruns are covered by register fakes. The legacy TI adapter
 remains separate until factory integration.
+
+## Paired JW endpoint
+
+`JoshuaWireEthercatTransport` exposes management message and correlated cyclic
+capabilities for one compatibility-gated slave. The adapter checks the exact
+descriptor/PDO region before session reset, retains replies until exact
+acknowledgement, and validates session/message/command/channel correlation on
+both planes. Timeout, cancellation and late replies invalidate or quarantine
+the session instead of reporting unproven command execution. All bus I/O still
+belongs to the master worker. Factory assembly is introduced in the integration
+stage; the native adapter suite uses copied register/PDO data.

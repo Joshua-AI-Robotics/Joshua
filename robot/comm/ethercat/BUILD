@@ -136,8 +136,27 @@ cc_test(
         ":coe_sdo_transfer",
         ":ethercat_master",
         ":ethercat_types",
+        ":joshua_wire_ethercat_transport",
         ":soem_ethercat_backend",
         "//firmware/common:joshua_wire_ethercat",
         "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "joshua_wire_ethercat_transport",
+    srcs = ["joshua_wire_ethercat_transport.cc"],
+    hdrs = ["joshua_wire_ethercat_transport.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":ethercat_master",
+        ":ethercat_types",
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/comm/interfaces:correlated_cyclic_transport",
+        "//robot/comm/interfaces:message_transport",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
     ],
 )
