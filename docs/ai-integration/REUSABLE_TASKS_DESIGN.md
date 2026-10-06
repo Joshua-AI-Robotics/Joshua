@@ -31,10 +31,11 @@ The LLM proposes task parameters and, later, ordered action groups. Start by
 reusing existing operation schemas and readable saved parameters. A new general
 task language is not required for the first proof.
 
-Reliable repetition uses a bounded backend operation or reviewed workflow
-calling supported operations. Its run scope, authorization, progress,
-cancellation, and failure behavior must be defined. Execution reuses the
-authoritative backend lifecycle; the MCP adapter stays thin.
+Reliable repetition runs the complete validated plan as one bounded backend
+operation or backend workflow using supported operations. The operator approves
+that run, including its parameters, variations, and repetition budget. Changes
+and restarts require fresh confirmation. Progress, cancellation, and failure
+behavior reuse the authoritative backend lifecycle; the MCP adapter stays thin.
 
 ## Suggested PR scopes
 

@@ -36,7 +36,7 @@ subsystem.
 
 | Checkpoint | Requirements | Evidence of completion |
 | --- | --- | --- |
-| **1. Connect and inspect through MCP** | A working client connection, installed-version/device information, configuration validation, capability descriptions, and clear errors. | An AI IDE connects to Joshua and inspects the selected configuration without starting hardware. |
+| **1. Connect and inspect through MCP** | A working client connection, installed-version and configured-device information, configuration validation, capability descriptions, and clear errors. | An AI IDE connects to Joshua and inspects the selected configuration without opening devices. |
 | **2. Execute one verified robot task** | One bounded operation, direct operator confirmation, measured feedback with known units/freshness, progress, cancellation, and fault handling. | A task runs through MCP on one robot; measured outcomes and timeout, cancellation, and failure cases are verified. |
 | **3. Compose, repeat, and vary actions through chat** | The LLM resolves an ordered group of supported actions, parameters, variations, and repetition count. A validated execution path performs bounded repetition and records outcomes. | A user defines and refines one group through chat, then runs the requested repetitions and variations with accurate completion records. |
 | **4. Reach 100% hardware coverage** | Extend tested MCP integration and applicable feedback across every implemented board, transport, actuator, and sensor path. | Every implemented hardware path demonstrated through MCP. Missing or unverified integrations keep this checkpoint open. |
@@ -49,8 +49,10 @@ small sequence and bounded repetition; a dedicated experiment framework can
 follow if needed.
 
 Hardware coverage can expand in parallel. Checkpoint 4 requires 100% coverage
-of implemented paths in the runtime version under review. New hardware
-additions include their corresponding MCP integration and verification.
+of implemented paths in the runtime version under review. Track new hardware paths as coverage gaps until their applicable MCP integration
+and verification land. Integration follows the relevant merged MCP contract in
+the same or a linked PR; a hardware PR can merge before that follow-up, while
+checkpoint 4 remains open.
 A complete fresh-host installation journey remains a separate release gate.
 
 ## Example: Repeat a defined base-joint movement
@@ -71,9 +73,9 @@ script interface can follow later.
 For checkpoint 3, a user could say, “Group the supported rotation, extension,
 and return movements. Repeat the group ten times at each of three approved
 speeds.” The LLM clarifies those movements and previews the resolved sequence.
-Repetition executes through a bounded backend operation or reviewed workflow
-calling supported operations, with an explicitly defined run/authorization
-scope. Record each completed group and variation.
+The backend validates and executes the complete resolved plan as one bounded,
+operator-approved run, using supported operations. Changed parameters or a
+restart require fresh confirmation. Record each completed group and variation.
 
 ## Linked implementation designs
 
@@ -131,7 +133,7 @@ alongside those releases.
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result without launching it. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
-| MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
+| MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Start with read-only inspection; then stabilize one tested subsystem operation and add its motion-capable adapter and guide. |
 
 These items describe independent proposed work, not current support or required
 project phases. MCP requires only the tested contract and safeguards relevant

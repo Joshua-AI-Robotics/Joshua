@@ -20,11 +20,14 @@ Repeat the group ten times at each of three approved speeds.” Joshua resolves
 each instruction to a supported operation and checks the full plan before a
 real-motion run.
 
-For a short prototype, the client may sequence existing MCP operations under
-their documented run and authorization rules. Reliable repetition uses a
-bounded backend operation or reviewed workflow calling those operations, with
-explicit run scope, operator confirmation, progress, cancellation, and failure
-behavior. Feedback determines which actions and groups completed.
+A short client prototype may demonstrate distinct operations, each with its
+required confirmation; this does not demonstrate unattended repetition. For
+reliable repetition, the backend validates the complete resolved group,
+variations, and repetition budget as one bounded run. The operator approves
+that plan once; changes or restarts require fresh confirmation. Execute through
+a tested backend operation or backend workflow using supported operations and
+existing progress, cancellation, and failure contracts. Feedback determines
+which actions and groups completed.
 
 Keep the first execution path small. Use existing operation schemas and saved
 parameters; add only the replay support required by the example. A dedicated
