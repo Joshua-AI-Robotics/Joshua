@@ -14,7 +14,7 @@
 #include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire.h"
-#include "firmware/common/joshua_wire_serial_endpoint.h"
+#include "firmware/common/joshua_wire_endpoint.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
@@ -73,7 +73,7 @@ jw_command_t Configure() {
 class FirmwareTransport : public robot::comm::MessageTransport {
  public:
   FirmwareTransport() {
-    jw_serial_endpoint_init(&endpoint);
+    jw_endpoint_init(&endpoint);
   }
   absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("No send-only exchange in JW.");
@@ -83,14 +83,14 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     requests.emplace_back(request.begin(), request.end());
     Bytes response(JW_MAX_FRAME_LEN);
-    const int len = jw_serial_endpoint_process(&endpoint,
-                                               request.data(),
-                                               request.size(),
-                                               response.data(),
-                                               response.size(),
-                                               handler,
-                                               JoshuaReset,
-                                               &channel);
+    const int len = jw_endpoint_process(&endpoint,
+                                        request.data(),
+                                        request.size(),
+                                        response.data(),
+                                        response.size(),
+                                        handler,
+                                        JoshuaReset,
+                                        &channel);
     --active;
     if (timeout || len == 0) return absl::DeadlineExceededError("Response lost");
     if (len < 0) return absl::InternalError("Firmware handler failed");
@@ -129,8 +129,8 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     last_response = response;
     return response;
   }
-  jw_serial_endpoint_t endpoint{};
-  jw_serial_command_handler_t handler = JoshuaCommand;
+  jw_endpoint_t endpoint{};
+  jw_command_handler_fn handler = JoshuaCommand;
   JoshuaChannel channel{};
   std::vector<Bytes> requests;
   Bytes retained;
@@ -293,7 +293,7 @@ TEST_F(JoshuaWireSessionTest, ReconnectAndFirmwareRebootRequireFreshReset) {
   transport->retained = old_response;
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDataLoss);
   transport->retained.clear();
-  jw_serial_endpoint_init(&transport->endpoint);
+  jw_endpoint_init(&transport->endpoint);
   EXPECT_EQ(Exchange(Command(JW_CMD_ENABLE)).status().code(), absl::StatusCode::kDeadlineExceeded);
   ASSERT_TRUE(session.Open().ok());
   EXPECT_TRUE(Exchange(Configure()).ok());
@@ -314,8 +314,7 @@ TEST_F(JoshuaWireSessionTest, FailedResetAndInvalidIdSourceKeepSessionClosed) {
 }
 
 TEST_F(JoshuaWireSessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
-  JoshuaWireSession small(
-      transport, [this] { return ++session_id; }, 5);
+  JoshuaWireSession small(transport, [this] { return ++session_id; }, 5);
   ASSERT_TRUE(small.Open().ok());                                  // ID 1
   ASSERT_TRUE(small.Exchange(Configure()).ok());                   // ID 2
   ASSERT_TRUE(small.Exchange(Command(JW_CMD_ENABLE)).ok());        // ID 3
@@ -334,8 +333,7 @@ TEST_F(JoshuaWireSessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration)
 }
 
 TEST_F(JoshuaWireSessionTest, FailedStopAtExhaustionDoesNotResetOrReuseLastId) {
-  JoshuaWireSession small(
-      transport, [this] { return ++session_id; }, 3);
+  JoshuaWireSession small(transport, [this] { return ++session_id; }, 3);
   ASSERT_TRUE(small.Open().ok());
   ASSERT_TRUE(small.Exchange(Configure()).ok());
   transport->timeout = true;

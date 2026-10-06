@@ -1,9 +1,9 @@
-// Ordered, single-flight firmware session endpoint for serial JoshuaWire.
+// Ordered, single-flight firmware session endpoint for JoshuaWire.
 // Declares active-session/request history, cached replies and board callbacks.
 // Remembers requests to prevent re-execution; owns no I/O or worker thread.
 // Call from one dispatch loop (or externally serialize the entire call). PDO
 // generations, cross-plane arbitration and watchdogs belong to the EtherCAT
-// endpoint; this serial endpoint does not provide those guarantees.
+// profile; the session alone does not provide those guarantees.
 #pragma once
 
 #include "joshua_wire.h"

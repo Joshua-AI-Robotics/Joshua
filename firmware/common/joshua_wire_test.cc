@@ -1,5 +1,5 @@
 // Hardware-free tests for the shared JW codec, firmware session and
-// serial endpoint: golden bytes, CRC/bounds, version separation,
+// shared endpoint: golden bytes, CRC/bounds, version separation,
 // correlation, reset/reboot and duplicate/stale-request handling.
 #include "firmware/common/joshua_wire.h"
 
@@ -7,8 +7,8 @@
 #include <cstring>
 #include <vector>
 
+#include "firmware/common/joshua_wire_endpoint.h"
 #include "firmware/common/joshua_wire_firmware_session.h"
-#include "firmware/common/joshua_wire_serial_endpoint.h"
 #include "gtest/gtest.h"
 
 namespace {
@@ -278,20 +278,20 @@ int NeutralHandler(void*, const jw_command_t*, uint8_t* out, size_t cap) {
 }
 void NoopReset(void*) {}
 
-TEST(JoshuaWireSerialEndpoint, RejectsLegacyFramesAndRequiresReset) {
-  jw_serial_endpoint_t endpoint;
-  jw_serial_endpoint_init(&endpoint);
+TEST(JoshuaWireEndpoint, RejectsLegacyFramesAndRequiresReset) {
+  jw_endpoint_t endpoint;
+  jw_endpoint_init(&endpoint);
   uint8_t response[JW_MAX_FRAME_LEN];
   const Bytes legacy{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04};
   auto process = [&](const Bytes& request) {
-    return jw_serial_endpoint_process(&endpoint,
-                                      request.data(),
-                                      request.size(),
-                                      response,
-                                      sizeof(response),
-                                      NeutralHandler,
-                                      NoopReset,
-                                      nullptr);
+    return jw_endpoint_process(&endpoint,
+                               request.data(),
+                               request.size(),
+                               response,
+                               sizeof(response),
+                               NeutralHandler,
+                               NoopReset,
+                               nullptr);
   };
   EXPECT_EQ(process(legacy), 0);
   EXPECT_EQ(process(Request(1, 1, JW_CMD_ENABLE, 0)), 0);

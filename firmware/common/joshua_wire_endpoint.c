@@ -1,9 +1,9 @@
 // Wire envelope selection and firmware-session dispatch for neutral commands.
 // Handlers consume/produce payloads only; the session owns the correlated envelope.
-#include "joshua_wire_serial_endpoint.h"
+#include "joshua_wire_endpoint.h"
 
 typedef struct {
-  jw_serial_command_handler_t handler;
+  jw_command_handler_fn handler;
   jw_reset_handler_t reset;
   void* context;
 } command_context_t;
@@ -23,19 +23,19 @@ static int command_adapter(void* context,
   return command->handler(command->context, &view, payload, capacity);
 }
 
-void jw_serial_endpoint_init(jw_serial_endpoint_t* endpoint) {
+void jw_endpoint_init(jw_endpoint_t* endpoint) {
   if (endpoint == NULL) return;
   jw_firmware_session_init(&endpoint->session);
 }
 
-int jw_serial_endpoint_process(jw_serial_endpoint_t* endpoint,
-                               const uint8_t* request,
-                               size_t request_len,
-                               uint8_t* response,
-                               size_t response_cap,
-                               jw_serial_command_handler_t handler,
-                               jw_reset_handler_t reset,
-                               void* context) {
+int jw_endpoint_process(jw_endpoint_t* endpoint,
+                        const uint8_t* request,
+                        size_t request_len,
+                        uint8_t* response,
+                        size_t response_cap,
+                        jw_command_handler_fn handler,
+                        jw_reset_handler_t reset,
+                        void* context) {
   if (endpoint == NULL || handler == NULL || reset == NULL || response == NULL ||
       response_cap < JW_MAX_FRAME_LEN) {
     return -1;

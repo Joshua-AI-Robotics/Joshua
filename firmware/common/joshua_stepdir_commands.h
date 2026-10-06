@@ -1,6 +1,6 @@
 // Declares shared STEP/DIR command/reset callbacks and board identity/ESTOP
 // state for Teensy and ESP32. JoshuaWire reuses these command semantics
-// through joshua_wire_serial_endpoint; GPIO control stays in backend_stepdir.
+// through joshua_wire_endpoint; GPIO control stays in backend_stepdir.
 #pragma once
 
 #include <stdbool.h>

@@ -36,7 +36,7 @@ cc_test(
     data = [":joshua_wire_smoke"],
     deps = [
         "//firmware/am243/joshua_dual_transport:commands",
-        "//firmware/common:joshua_wire_serial_endpoint",
+        "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
 )
@@ -47,7 +47,7 @@ cc_test(
     deps = [
         ":serial_validation",
         "//firmware/am243/joshua_dual_transport:commands",
-        "//firmware/common:joshua_wire_serial_endpoint",
+        "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
 )
@@ -98,8 +98,8 @@ cc_test(
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire",
         "//firmware/common:joshua_wire_commands",
+        "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_ethercat",
-        "//firmware/common:joshua_wire_serial_endpoint",
         "//firmware/common/soes:joshua_ethercat_soes",
         "//robot/comm/factory:comm_factory",
         "@googletest//:gtest_main",

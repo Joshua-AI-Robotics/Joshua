@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
-#include "firmware/common/joshua_wire_serial_endpoint.h"
+#include "firmware/common/joshua_wire_endpoint.h"
 #include "gtest/gtest.h"
 
 extern char** environ;
@@ -63,7 +63,7 @@ class SmokeCliTest : public ::testing::Test {
               "step_pin: 2 dir_pin: 3 enable_pin: 4 max_pulse_rate_hz: 1000 } } } }";
     config.close();
     ASSERT_TRUE(config.good());
-    jw_serial_endpoint_init(&endpoint);
+    jw_endpoint_init(&endpoint);
   }
 
   void TearDown() override {
@@ -86,14 +86,14 @@ class SmokeCliTest : public ::testing::Test {
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
     uint8_t response[JW_MAX_FRAME_LEN];
-    int size = jw_serial_endpoint_process(&endpoint,
-                                          bytes.data(),
-                                          bytes.size(),
-                                          response,
-                                          sizeof(response),
-                                          JoshuaCommand,
-                                          JoshuaReset,
-                                          &state);
+    int size = jw_endpoint_process(&endpoint,
+                                   bytes.data(),
+                                   bytes.size(),
+                                   response,
+                                   sizeof(response),
+                                   JoshuaCommand,
+                                   JoshuaReset,
+                                   &state);
     ASSERT_GT(size, 0);
     if (request.cmd == JW_CMD_ENABLE) {
       saw_enabled = state.enabled;
@@ -181,7 +181,7 @@ class SmokeCliTest : public ::testing::Test {
   int master = -1, slave = -1, exit_code = -1;
   pid_t child = -1;
   std::string binary, directory, output;
-  jw_serial_endpoint_t endpoint{};
+  jw_endpoint_t endpoint{};
   JoshuaChannel state{};
   Bytes commands;
   std::vector<uint32_t> sessions;

@@ -1,7 +1,7 @@
 // Implements the shared Teensy/ESP32 command dispatcher using backend_stepdir.
 // Handles channel configuration, targets, feedback and enable/ESTOP behavior;
 // session reset disables old pins before invalidating their configuration.
-// Wire decoding and duplicate-request handling belong to the serial endpoint.
+// Wire decoding and duplicate-request handling belong to the shared JW endpoint.
 #include "joshua_stepdir_commands.h"
 
 #include <math.h>

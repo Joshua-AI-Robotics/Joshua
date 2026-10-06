@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
-#include "firmware/common/joshua_wire_serial_endpoint.h"
+#include "firmware/common/joshua_wire_endpoint.h"
 #include "gtest/gtest.h"
 
 namespace robot::board::diagnostics {
@@ -16,7 +16,7 @@ using Bytes = std::vector<uint8_t>;
 class Firmware : public robot::comm::MessageTransport {
  public:
   Firmware() {
-    jw_serial_endpoint_init(&endpoint);
+    jw_endpoint_init(&endpoint);
   }
   absl::Status Send(absl::Span<const uint8_t>) override {
     return absl::UnimplementedError("JW only");
@@ -28,14 +28,14 @@ class Firmware : public robot::comm::MessageTransport {
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
     Bytes response(JW_MAX_FRAME_LEN);
-    const int len = jw_serial_endpoint_process(&endpoint,
-                                               bytes.data(),
-                                               bytes.size(),
-                                               response.data(),
-                                               response.size(),
-                                               JoshuaCommand,
-                                               JoshuaReset,
-                                               &state);
+    const int len = jw_endpoint_process(&endpoint,
+                                        bytes.data(),
+                                        bytes.size(),
+                                        response.data(),
+                                        response.size(),
+                                        JoshuaCommand,
+                                        JoshuaReset,
+                                        &state);
     if (request.cmd == fail_cmd || len <= 0)
       return absl::DeadlineExceededError("lost reply after execution");
     response.resize(len);
@@ -50,7 +50,7 @@ class Firmware : public robot::comm::MessageTransport {
     }
     return response;
   }
-  jw_serial_endpoint_t endpoint{};
+  jw_endpoint_t endpoint{};
   JoshuaChannel state{};
   std::vector<uint8_t> commands;
   std::vector<uint32_t> sessions;

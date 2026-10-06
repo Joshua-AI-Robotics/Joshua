@@ -26,8 +26,9 @@ FILES_PATH := \
 
 INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
 
-JOSHUA_OBJS := joshua_serial_task.obj joshua_commands.obj joshua_wire_commands.obj \
-	joshua_wire.obj joshua_wire_firmware_session.obj joshua_wire_serial_endpoint.obj
+JOSHUA_OBJS := transport_uart.obj serial_frame_assembler.obj joshua_serial_task.obj \
+	joshua_commands.obj joshua_wire_commands.obj joshua_wire.obj \
+	joshua_wire_firmware_session.obj joshua_wire_endpoint.obj
 ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw)
 JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire.obj \
 	joshua_wire_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj

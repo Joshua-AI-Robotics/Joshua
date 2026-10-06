@@ -14,11 +14,13 @@ cc_test(
         "//firmware/testing:serial_firmware_test.cc",
     ],
     defines = [
+        "JOSHUA_TRANSPORT_SERIAL",
         "EXPECTED_BOARD_ID=2",
     ],
     includes = ["src"],
     deps = [
-        "//firmware/common:joshua_wire_serial_endpoint",
+        "//firmware/common:joshua_wire_endpoint",
+        "//firmware/common:serial_frame_transport",
         "//firmware/testing:arduino",
         "@googletest//:gtest_main",
     ],

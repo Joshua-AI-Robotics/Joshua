@@ -3,54 +3,23 @@
 #include <Arduino.h>
 
 namespace {
-constexpr unsigned long kByteTimeoutMs = 20;
+int ReadByte(void*) {
+  return Serial.available() > 0 ? Serial.read() : -1;
+}
+size_t WriteBytes(void*, const uint8_t* bytes, size_t length) {
+  // Sole Serial writer. Only write bytes that fit immediately; the shared link
+  // adapter owns accepted frames and retains any unwritten remainder.
+  if (Serial.availableForWrite() < static_cast<int>(length)) return 0;
+  return Serial.write(bytes, length);
+}
+uint32_t NowMs(void*) {
+  return millis();
+}
 }  // namespace
 
-void TransportInit(void) {
-  // Teensy's native USB CDC serial ignores the baud rate (always full
-  // USB speed); passed for portability with non-USB serial variants.
-  Serial.begin(115200);
-  Serial.setTimeout(kByteTimeoutMs);
-}
-
-size_t TransportReadFrame(uint8_t* frame_buf, size_t frame_buf_cap) {
-  if (frame_buf_cap < 2 || Serial.available() == 0) {
-    return false;
-  }
-
-  // Resync: discard bytes already in the input buffer until sync is seen.
-  // Only drains what has already arrived — never blocks waiting for a sync
-  // byte that may not come.
-  int sync_byte = -1;
-  while (Serial.available() > 0) {
-    sync_byte = Serial.read();
-    if (sync_byte == JW_SYNC_BYTE) {
-      break;
-    }
-    sync_byte = -1;
-  }
-  if (sync_byte != JW_SYNC_BYTE) {
-    return false;
-  }
-  frame_buf[0] = static_cast<uint8_t>(sync_byte);
-
-  if (Serial.readBytes(reinterpret_cast<char*>(frame_buf + 1), 1) != 1) {
-    return false;  // Timed out waiting for `len`.
-  }
-  const uint8_t len = frame_buf[1];
-  const size_t remaining = static_cast<size_t>(len) + 2;  // body (proto_ver..payload) + crc16.
-  if (2 + remaining > frame_buf_cap) {
-    return false;
-  }
-  if (Serial.readBytes(reinterpret_cast<char*>(frame_buf + 2), remaining) != remaining) {
-    return false;  // Timed out mid-frame.
-  }
-
-  const size_t total_len = 2 + remaining;
-  return total_len;
-}
-
-void TransportWriteFrame(const uint8_t* frame, size_t len) {
-  Serial.write(frame, len);
-  Serial.flush();
+frame_transport_t TransportSerialInit(SerialTransport* state, const SerialTransportConfig& config) {
+  Serial.begin(config.baud_rate);
+  const serial_frame_transport_config_t binding = {
+      nullptr, ReadByte, WriteBytes, NowMs, config.byte_timeout_ms};
+  return serial_frame_transport_init(state, &binding);
 }

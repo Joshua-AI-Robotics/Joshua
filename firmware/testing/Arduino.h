@@ -14,6 +14,7 @@ constexpr int LOW = 0;
 constexpr int OUTPUT = 1;
 inline int pin_values[256]{};
 inline int pin_writes = 0;
+inline unsigned long clock_us = 0;
 inline void pinMode(int, int) {}
 inline void digitalWrite(int pin, int value) {
   pin_values[pin] = value;
@@ -21,13 +22,17 @@ inline void digitalWrite(int pin, int value) {
 }
 inline void delayMicroseconds(unsigned int) {}
 inline unsigned long micros() {
-  return 0;
+  return clock_us;
+}
+inline unsigned long millis() {
+  return clock_us / 1000;
 }
 
 class FakeArduinoSerial {
  public:
   void begin(int) {}
   void setTimeout(unsigned long) {}
+  void setTxBufferSize(size_t) {}
   int available() {
     return input.size();
   }
@@ -43,11 +48,16 @@ class FakeArduinoSerial {
     return actual;
   }
   size_t write(const uint8_t* bytes, size_t len) {
+    if (len > static_cast<size_t>(write_capacity)) return 0;
     output.insert(output.end(), bytes, bytes + len);
     return len;
+  }
+  int availableForWrite() {
+    return write_capacity;
   }
   void flush() {}
   std::deque<uint8_t> input;
   std::vector<uint8_t> output;
+  int write_capacity = 64;
 };
 inline FakeArduinoSerial Serial;

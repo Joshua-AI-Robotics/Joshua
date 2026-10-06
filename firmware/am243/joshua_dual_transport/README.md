@@ -8,6 +8,13 @@ SDK; it does not modify or vendor the SDK.
 The default image serves JW UART alongside TI's EtherCAT echo demo. Its
 serial channel reports `STEP_DIR` and implements command/response handling
 in software; it does not drive STEP/DIR GPIOs or move motors.
+Its dedicated task composes the shared JW endpoint with the nonblocking
+[`transport_uart`](src/transport_uart.h) adapter. The adapter exclusively polls
+UART0's 64-byte FIFO, uses the common incremental serial assembler, and accepts
+a complete response only when the TX FIFO is empty. The task retains blocked
+responses without repeating a command and yields between iterations. Binary
+UART ownership starts after SDK startup logs are disabled; no SDK UART
+transactions or other writers may share that FIFO.
 
 ## Prerequisites
 

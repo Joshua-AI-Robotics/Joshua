@@ -22,9 +22,26 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
   This is state used by a dispatch loop, not a thread or network service.
   Its host-side counterpart is
   [JoshuaWireSession](../../robot/board/joshua_wire/joshua_wire_session.h).
-- [joshua_wire_serial_endpoint.h](joshua_wire_serial_endpoint.h) and `.c` —
+- [joshua_wire_endpoint.h](joshua_wire_endpoint.h) and `.c` —
   connects the JW session to firmware command handlers.
-  It receives complete frames; the board-specific UART/USB code owns I/O.
+  It takes one complete request and returns one complete response; it never
+  opens devices, waits for traffic or transmits bytes.
+- [frame_transport.h](frame_transport.h) — C-compatible, nonblocking frame I/O
+  with an implementation context. One instance represents one peer/controller.
+  Receive returns one complete JW frame, `FRAME_NO_DATA`, or an error. Send
+  accepts the entire frame, or accepts none and returns `FRAME_WOULD_BLOCK`/an
+  error. Accepted bytes are copied or consumed before return; acceptance does
+  not establish delivery or execution of the remote command.
+- [serial_frame_assembler.h](serial_frame_assembler.h) and `.c` — incremental
+  UART/USB link framing used by Teensy, ESP32 and AM243. It retains partial bytes
+  and expires stalled input using the adapter's inter-byte timeout. CRC checks,
+  session IDs, duplicate handling and command dispatch stay in the shared JW
+  codec/session/endpoint. Board bindings supply the clock and nonblocking I/O.
+- [serial_frame_transport.h](serial_frame_transport.h) and `.c` — shared serial
+  adapter for Teensy/ESP32 byte bindings. It copies an accepted response into
+  one TX slot and advances short driver writes without interleaving frames.
+  A busy slot returns `FRAME_WOULD_BLOCK` for the next response. Polls and send
+  attempts advance accepted data without waiting for bytes or output space.
 - [joshua_wire_ethercat.h](joshua_wire_ethercat.h) — shared layout-v1 PDO/CoE
   sizes, offsets, object indices and transport bits. The host adapters use this
   contract for every board; this header itself implements no
@@ -40,7 +57,7 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
   Teensy/ESP32 command handling, calling [backend_stepdir.h](backend_stepdir.h)
   and `.cpp` for physical pin control. Each board supplies `channel_table.h`.
 
-For a JW serial request, follow the board's receive loop into the serial
+For a JW serial request, follow the board's receive loop into the shared
 endpoint, then the firmware session, then the command handler and drive backend.
 The response carries the same session/message IDs back to the host.
 
@@ -50,6 +67,24 @@ Codecs validate bytes; sessions track request lifetimes; command handlers apply
 operations; drive backends control hardware. The same C codec sources build on
 host and MCU. UART drivers stay in board directories, while host link ownership
 and I/O deadlines belong to [robot/comm](../../robot/comm/README.md).
+
+Startup initializes the selected adapter, the shared JW endpoint, and board
+command/reset callbacks. Hardware settings stay in the adapter configuration.
+Each loop polls a complete request, processes it once, and tries to send the
+response. It retains that response until the adapter accepts it, and consumes
+no further request while waiting. Retrying a send never executes the command
+again. Motor channels are serviced on every iteration, including partial input
+and blocked output; serial noise draining is bounded to 64 bytes per iteration.
+An unrecoverable link error requires board-specific recovery; the pending
+response is retained rather than silently discarded.
+
+The `teensy41-serial` and `esp32-serial` PlatformIO profiles explicitly select
+their UART/USB adapter. AM243's `ti-demo` profile selects its UART adapter in a
+dedicated RTOS task with a software-only channel. The `jw` and `jw-soes` profiles
+select the existing EtherCAT capability instead: complete process-data
+snapshots, management messages, deadlines and watchdogs remain in that profile.
+EtherCAT reuses the JW codec/session/commands without pretending its cyclic
+timing and delivery guarantees are those of `frame_transport_t`.
 
 The [AM243 overlay](../am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
 adapts this shared EtherCAT profile to its TI stack and software-only channel.
@@ -97,7 +132,7 @@ validation remain separate work; no fully open firmware claim is made here.
 
 ## Command and frame boundaries
 
-Firmware handlers consume `jw_command_t` and return payload bytes. The serial
+Firmware handlers consume `jw_command_t` and return payload bytes. The shared
 endpoint and firmware session supply framing, correlation and retry handling.
 Host channels use `JoshuaWireSession`, which exchanges JW frames directly
 through comm and returns validated payloads. Vendor protocols retain their
@@ -121,11 +156,18 @@ defaults to reset/identify/ESTOP only; the old JW1 smoke tool is removed.
 
 `*_test.cc` files are maintained source, kept beside the code they verify:
 commands tests pin wire values, payload bytes and bounds; JW tests cover golden
-frames, legacy-frame rejection, firmware sessions and the serial endpoint. Board-specific native
+frames, legacy-frame rejection, firmware sessions and the shared endpoint.
+Assembler tests cover split frames, resynchronization, timeout clock wrap and
+separation of framing from CRC validation. Board-specific native
 tests also compile the real Teensy/ESP32 dispatch with the test-only
 [Arduino substitute](../testing/Arduino.h) and
 [shared test suite](../testing/serial_firmware_test.cc). Those helpers use no
 physical I/O and do not validate pulse timing.
+They also check continued motor service during partial input and blocked TX,
+whole-frame send acceptance, bounded noise draining and retention of a response
+without repeating command dispatch.
+AM243's native UART adapter test substitutes only the TI FIFO/clock calls;
+MCU builds use the real SDK. These checks cannot qualify FIFO timing on hardware.
 
 [BUILD](BUILD) defines host/native targets; [library.json](library.json) exposes
 MCU sources to PlatformIO and excludes `*_test.cc`. AM243's Makefile lists its

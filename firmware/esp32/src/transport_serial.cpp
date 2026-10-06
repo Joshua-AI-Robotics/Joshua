@@ -3,59 +3,25 @@
 #include <Arduino.h>
 
 namespace {
-constexpr unsigned long kByteTimeoutMs = 20;
+int ReadByte(void*) {
+  return Serial.available() > 0 ? Serial.read() : -1;
+}
+size_t WriteBytes(void*, const uint8_t* bytes, size_t length) {
+  // Sole Serial writer. Only write bytes that fit immediately; the shared link
+  // adapter owns accepted frames and retains any unwritten remainder.
+  if (Serial.availableForWrite() < static_cast<int>(length)) return 0;
+  return Serial.write(bytes, length);
+}
+uint32_t NowMs(void*) {
+  return millis();
+}
 }  // namespace
 
-void TransportInit(void) {
-  // Unlike Teensy 4.1's native USB CDC (which ignores the baud rate
-  // argument entirely), most ESP32 dev boards reach the host through a
-  // real UART routed to a USB-to-serial bridge chip (CP2102/CH340/...),
-  // so this baud rate is real and must match the host's
-  // serial_config.baudrate in the pbtxt (docs/BOARD_LAYER_RFC.md §7.3).
-  // ESP32-S2/S3 boards with native USB CDC would ignore it the same way
-  // Teensy does, but the call is harmless either way.
-  Serial.begin(115200);
-  Serial.setTimeout(kByteTimeoutMs);
-}
-
-size_t TransportReadFrame(uint8_t* frame_buf, size_t frame_buf_cap) {
-  if (frame_buf_cap < 2 || Serial.available() == 0) {
-    return false;
-  }
-
-  // Resync: discard bytes already in the input buffer until sync is seen.
-  // Only drains what has already arrived — never blocks waiting for a sync
-  // byte that may not come.
-  int sync_byte = -1;
-  while (Serial.available() > 0) {
-    sync_byte = Serial.read();
-    if (sync_byte == JW_SYNC_BYTE) {
-      break;
-    }
-    sync_byte = -1;
-  }
-  if (sync_byte != JW_SYNC_BYTE) {
-    return false;
-  }
-  frame_buf[0] = static_cast<uint8_t>(sync_byte);
-
-  if (Serial.readBytes(reinterpret_cast<char*>(frame_buf + 1), 1) != 1) {
-    return false;  // Timed out waiting for `len`.
-  }
-  const uint8_t len = frame_buf[1];
-  const size_t remaining = static_cast<size_t>(len) + 2;  // body (proto_ver..payload) + crc16.
-  if (2 + remaining > frame_buf_cap) {
-    return false;
-  }
-  if (Serial.readBytes(reinterpret_cast<char*>(frame_buf + 2), remaining) != remaining) {
-    return false;  // Timed out mid-frame.
-  }
-
-  const size_t total_len = 2 + remaining;
-  return total_len;
-}
-
-void TransportWriteFrame(const uint8_t* frame, size_t len) {
-  Serial.write(frame, len);
-  Serial.flush();
+frame_transport_t TransportSerialInit(SerialTransport* state, const SerialTransportConfig& config) {
+  // Use the UART FIFO directly; no ring-buffer enqueue waits for space.
+  Serial.setTxBufferSize(0);
+  Serial.begin(config.baud_rate);
+  const serial_frame_transport_config_t binding = {
+      nullptr, ReadByte, WriteBytes, NowMs, config.byte_timeout_ms};
+  return serial_frame_transport_init(state, &binding);
 }

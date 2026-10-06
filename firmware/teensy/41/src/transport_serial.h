@@ -1,28 +1,13 @@
-// Native-USB serial framing shared by JoshuaWire artifacts
-// (docs/BOARD_LAYER_RFC.md §7.3 — the [JOSHUA_TRANSPORT_SERIAL] variant of
-// the transport seam). A future UDP/W5500 variant implements the same two
-// functions over a different physical link with zero changes to
-// main.cpp's dispatch loop.
+// Board-specific nonblocking UART/USB binding selected by the serial profile.
 #pragma once
 
-#include <stdbool.h>
-#include <stddef.h>
+#include "serial_frame_transport.h"
 
-#include "joshua_wire.h"
+using SerialTransport = serial_frame_transport_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void TransportInit(void);
-
-// Blocks up to a short timeout waiting for sync, then reads a complete
-// frame (header first to learn `len`, then the rest). Returns the byte count,
-// or zero on timeout/invalid size. The endpoint validates version and CRC.
-size_t TransportReadFrame(uint8_t* frame_buf, size_t frame_buf_cap);
-
-void TransportWriteFrame(const uint8_t* frame, size_t len);
-
-#ifdef __cplusplus
-}
-#endif
+// Hardware settings belong to this adapter, not the JW endpoint.
+struct SerialTransportConfig {
+  unsigned long baud_rate;
+  uint32_t byte_timeout_ms;
+};
+frame_transport_t TransportSerialInit(SerialTransport* state, const SerialTransportConfig& config);
