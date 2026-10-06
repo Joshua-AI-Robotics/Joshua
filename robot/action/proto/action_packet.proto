@@ -2,7 +2,8 @@ syntax = "proto3";
 
 package robot.action;
 
-// Preset commands that don't require parameters
+// Preset commands to position the actuator in a known state.
+// Should be defined in a config.
 enum PresetCommand {
   PRESET_UNKNOWN = 0;
   PRESET_MIDDLE_POSITION = 1;
@@ -13,28 +14,42 @@ enum PresetCommand {
   PRESET_RESET_ENCODER = 6;
 }
 
-message ComplexAction {
-  optional float position = 1;      // Target position
-  optional float speed = 2;         // Movement speed
-  optional float torque = 3;        // Torque setting (e.g. servo torque enable/disable)
-  optional uint32 duration_ms = 4;  // Duration in milliseconds
-  optional float dc = 5;            // Duty cycle (-100 to 100)
+// Unified actuator motion command. Presence distinguishes omitted fields from zero.
+message JointCommand {
+  enum PositionEncoding {
+    POSITION_NATIVE = 0;
+    POSITION_SI = 1;
+    POSITION_NORMALIZED_ZERO_ONE = 2;
+    POSITION_NORMALIZED_MINUS_ONE_ONE = 3;
+  }
+  enum Units {
+    // Driver-defined velocity setting and effort (never an enable gate).
+    NATIVE = 0;
+    // Physical velocity and effort: rad/s and N*m for revolute joints.
+    SI = 1;
+  }
+  string joint_name = 1;
+  optional double position = 2;
+  optional double velocity = 3;
+  optional double effort = 4;  // NATIVE may mean duty cycle for a driver with that contract.
+  // Source metadata only; no coordinate transformation is implied.
+  string frame_id = 5;
+  // Applies only to velocity and effort; position has its own encoding.
+  Units units = 6;
+  PositionEncoding position_encoding = 7;
 }
 
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-  int64 timestamp_ns = 2;
-
-  // If true, position is in [-1, 1] and mapped to operational limits at the actuator.
-  bool normalized = 9;
+  // For joint, preserves the source stamp (including zero/negative
+  // values). Clock domain, scheduling and freshness are not inferred.
+  // TODO(hmoon): Sync the timestamp unit and source across the system.
+  uint64 timestamp_ns = 2;
+  uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
   oneof action_type {
-    float position = 3;         // Simple position command
-    float torque = 4;           // Torque setting (e.g. servo torque enable/disable)
-    float speed = 5;            // Simple speed command
-    PresetCommand preset = 6;   // Preset command
-    ComplexAction complex = 7;  // Complex multi-parameter action
-    float dc = 8;               // Duty cycle (-100 to 100)
+    JointCommand joint = 4;    // Unified actuator motion.
+    PresetCommand preset = 5;  // Preset command
   }
 }

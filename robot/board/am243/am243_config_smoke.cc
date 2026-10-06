@@ -86,9 +86,11 @@ int main(int argc, char** argv) {
   for (int cycle = 0; cycle < cycles; ++cycle) {
     robot::action::ActionPacket packet;
     packet.set_action_id("am243_config_smoke");
-    packet.set_position(cycle % 2 == 0 ? 90.0f : -90.0f);
+    packet.mutable_joint()->set_joint_name(single_action.actuator().actuator_name());
+    packet.mutable_joint()->set_position(cycle % 2 == 0 ? 90.0f : -90.0f);
     const absl::Status status = action->SetAction(packet);
-    std::cout << "cycle=" << cycle << " position=" << packet.position() << " " << status << "\n";
+    std::cout << "cycle=" << cycle << " position=" << packet.joint().position() << " " << status
+              << "\n";
     if (!status.ok()) return Fail(status);
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
   }
