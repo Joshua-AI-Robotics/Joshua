@@ -48,3 +48,13 @@ Callers supply explicit timing budgets and complete output images. Expired
 queued work is not dispatched; dispatched timeouts fail the owner and discard
 late success. Stop wakes waiters before joining the backend. This intermediate
 stage leaves the TI-demo factory path separate; JW mailbox/PDO adapters follow.
+
+## Incremental CoE
+
+`CoeSdoTransfer` performs at most one register datagram per step and never
+retries a published write. `SoemEthercatBackend` implements Begin/Step/Cancel;
+`EthercatMaster` schedules these steps within the declared mailbox budget and
+guard while cyclic exchange continues. Missing support or insufficient slack
+is rejected. Mailbox counters, malformed responses, abort codes, cancellation
+and deadline overruns are covered by register fakes. The legacy TI adapter
+remains separate until factory integration.

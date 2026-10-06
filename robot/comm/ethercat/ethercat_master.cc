@@ -1,6 +1,7 @@
 // Scheduling, deadline/cancellation policy and shadow images; no SOEM types.
 #include "robot/comm/ethercat/ethercat_master.h"
 
+#include <algorithm>
 #include <climits>
 #include <utility>
 
@@ -40,7 +41,13 @@ absl::StatusOr<std::unique_ptr<EthercatMaster>> EthercatMaster::Open(
   if (!io || interface_name.empty() || mode != ProcessDataMode::kSplitLrdLwr ||
       !ValidTimeout(options.period) || !ValidTimeout(options.process_timeout) ||
       !ValidTimeout(options.state_timeout) || !ValidTimeout(options.operation_timeout) ||
-      options.period <= options.process_timeout + options.state_timeout) {
+      options.mailbox_step_budget.count() < 0 || options.scheduling_guard.count() < 0 ||
+      options.scheduling_guard.count() > INT_MAX ||
+      (options.mailbox_step_budget.count() > 0 &&
+       (!ValidTimeout(options.mailbox_step_budget) || !ValidTimeout(options.scheduling_guard))) ||
+      options.period <= options.process_timeout +
+                            std::max(options.state_timeout, options.mailbox_step_budget) +
+                            options.scheduling_guard) {
     return absl::InvalidArgumentError("invalid EtherCAT interface/backend or timing budgets");
   }
   auto master = std::unique_ptr<EthercatMaster>(new EthercatMaster(std::move(io), options));
@@ -73,7 +80,7 @@ absl::StatusOr<EthercatMaster::Bytes> EthercatMaster::Submit(std::shared_ptr<Wor
   work->deadline = Clock::now() + timeout;
   std::unique_lock lock(mutex_);
   if (stopping_) return terminal_status_;
-  if (cyclic_) {
+  if (cyclic_ && (!runtime_sdo_ || work->kind == Work::Kind::kStart)) {
     return absl::FailedPreconditionError("cyclic already started; startup SDO access is closed");
   }
   constexpr size_t kQueueCapacity = 64;
@@ -167,6 +174,24 @@ absl::Status EthercatMaster::Stop() {
   return shutdown_status_;
 }
 
+absl::Status EthercatMaster::ClaimEndpoint(uint16_t slave) {
+  std::lock_guard lock(mutex_);
+  if (stopping_) return terminal_status_;
+  if (cyclic_ || active_ || !queue_.empty() || !runtime_sdo_)
+    return absl::FailedPreconditionError("claim endpoints before OP on an incremental-SDO master");
+  if (slave == 0 || slave > regions_.size())
+    return absl::InvalidArgumentError("invalid endpoint slave");
+  if (std::find(claimed_slaves_.begin(), claimed_slaves_.end(), slave) != claimed_slaves_.end())
+    return absl::AlreadyExistsError("slave endpoint already claimed; reopen master to replace");
+  claimed_slaves_.push_back(slave);
+  return absl::OkStatus();
+}
+
+absl::Status EthercatMaster::status() {
+  std::lock_guard lock(mutex_);
+  return terminal_status_;
+}
+
 absl::StatusOr<ProcessData> EthercatMaster::Exchange(const std::vector<Bytes>& outputs) {
   for (size_t i = 0; i < regions_.size(); ++i) {
     auto status = io_->WriteOutputs(regions_[i], outputs[i]);
@@ -182,7 +207,10 @@ absl::StatusOr<ProcessData> EthercatMaster::Exchange(const std::vector<Bytes>& o
 }
 
 void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode) {
-  auto status = io_->Init(interface_name, mode);
+  runtime_sdo_ = options_.mailbox_step_budget.count() > 0 && io_->HasIncrementalSdo();
+  auto status = options_.mailbox_step_budget.count() > 0 && !runtime_sdo_
+                    ? absl::FailedPreconditionError("backend has no incremental SDO support")
+                    : io_->Init(interface_name, mode);
   if (status.ok()) status = io_->ConfigureSlaves();
   if (status.ok()) {
     auto slaves = io_->GetSlaves();
@@ -210,6 +238,7 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
   cv_.notify_all();
   auto next_cycle = Clock::now();
   bool start_attempted = false;
+  bool mailbox_turn = false;
   std::vector<Bytes> stop_images;
   while (true) {
     std::shared_ptr<Work> work;
@@ -238,12 +267,29 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
       }
     }
     if (!work) {
-      // Process data comes first. Only one state check follows, no runtime SDO.
+      // Process data first, then at most one mailbox OR state step. Alternation
+      // prevents mailbox load from starving AL-state checks (at most two cycles).
       auto data = Exchange(outputs);
       status = data.status();
-      if (status.ok())
-        status = io_->CheckOperational(static_cast<int>(options_.state_timeout.count()));
       next_cycle += options_.period;
+      bool mailbox_pending = false;
+      {
+        std::lock_guard lock(mutex_);
+        mailbox_pending = !stopping_ && runtime_sdo_ && (active_ || !queue_.empty());
+      }
+      if (status.ok()) {
+        if (mailbox_turn && mailbox_pending) {
+          MailboxStep(next_cycle);
+        } else {
+          const auto slack = std::chrono::duration_cast<Microseconds>(next_cycle - Clock::now()) -
+                             options_.scheduling_guard;
+          if (slack < options_.state_timeout)
+            status = absl::DeadlineExceededError("insufficient cyclic slack for AL state check");
+          else
+            status = io_->CheckOperational(static_cast<int>(options_.state_timeout.count()));
+        }
+      }
+      mailbox_turn = !mailbox_turn;
       if (status.ok() && Clock::now() >= next_cycle)
         status = absl::DeadlineExceededError("EtherCAT cyclic deadline missed");
       {
@@ -290,8 +336,9 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
         cyclic_ = true;
         outputs_ = stop_images;
         next_cycle = Clock::now();
+        // Work queued before OP is not silently promoted to runtime work.
         for (const auto& queued : queue_)
-          FinishLocked(queued, absl::FailedPreconditionError("cyclic startup closed SDO access"));
+          FinishLocked(queued, absl::FailedPreconditionError("resubmit SDO after cyclic startup"));
         queue_.clear();
       }
       FinishLocked(work, std::move(result));
@@ -299,6 +346,7 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
     }
     cv_.notify_all();
   }
+  io_->CancelSdo();
   if (start_attempted) {
     shutdown_status_ = Exchange(stop_images).status();
     const auto stopped = io_->StopCyclic();
@@ -307,6 +355,72 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
   const auto teardown = io_->Teardown();
   if (shutdown_status_.ok()) shutdown_status_ = teardown;
   io_.reset();  // Backend destruction also belongs to the worker.
+}
+
+void EthercatMaster::MailboxStep(Clock::time_point next_cycle) {
+  // Start only a complete budgeted step; no busy polling when slack is short.
+  if (next_cycle - Clock::now() <= options_.mailbox_step_budget + options_.scheduling_guard) return;
+  std::shared_ptr<Work> work;
+  bool begin = false;
+  {
+    std::lock_guard lock(mutex_);
+    if (stopping_) return;
+    // Expired queued calls must never reach the backend. Queue length is capped.
+    while (!active_ && !queue_.empty()) {
+      auto candidate = queue_.front();
+      queue_.pop_front();
+      if (candidate->done) continue;
+      if (Clock::now() >= candidate->deadline) {
+        FinishLocked(candidate,
+                     absl::DeadlineExceededError("expired before dispatch; not executed"));
+        continue;
+      }
+      candidate->dispatched = true;
+      active_ = candidate;
+      begin = true;
+    }
+    work = active_;
+  }
+  cv_.notify_all();
+  if (!work) return;
+  absl::Status status;
+  if (begin)
+    status =
+        io_->BeginSdo(work->address, work->kind == Work::Kind::kWrite, work->bytes, work->capacity);
+  {
+    std::lock_guard lock(mutex_);
+    if (stopping_) return;  // No new datagram after cancellation during Begin.
+  }
+  const auto now = Clock::now();
+  const auto budget = std::min(
+      {options_.mailbox_step_budget,
+       std::chrono::duration_cast<Microseconds>(next_cycle - now) - options_.scheduling_guard,
+       std::chrono::duration_cast<Microseconds>(work->deadline - now)});
+  absl::StatusOr<std::optional<Bytes>> result = std::optional<Bytes>{};
+  if (!status.ok())
+    result = status;
+  else if (budget.count() <= 0)
+    result = absl::DeadlineExceededError("runtime SDO expired; outcome unknown");
+  else {
+    result = io_->StepSdo(static_cast<int>(budget.count()));
+    if (Clock::now() - now > budget) {
+      // Preserve the backend's register/timing evidence when it also observed
+      // the timeout. Replacing it with only "overrun" hides the failing I/O.
+      const std::string detail = result.ok() ? "" : "; " + result.status().ToString();
+      result = absl::DeadlineExceededError(
+          "runtime SDO backend exceeded step budget; outcome unknown" + detail);
+    }
+  }
+  {
+    std::lock_guard lock(mutex_);
+    if (!stopping_ && !result.ok())
+      FailLocked(result.status());
+    else if (!stopping_ && result->has_value()) {
+      FinishLocked(work, std::move(**result));
+      active_.reset();
+    }
+  }
+  cv_.notify_all();
 }
 
 }  // namespace robot::comm::ethercat
