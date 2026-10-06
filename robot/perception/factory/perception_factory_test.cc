@@ -40,7 +40,7 @@ class PerceptionFactoryTest : public ::testing::Test {
  protected:
   void TearDown() override {
     robot::board::BoardFactory::ResetForTesting();
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(nullptr);
   }
 };
 
@@ -155,6 +155,12 @@ class RecordingStream : public robot::comm::ByteStream {
   std::vector<std::vector<uint8_t>> writes;
 };
 
+robot::comm::CommLease ByteStreamLease(std::shared_ptr<robot::comm::ByteStream> stream) {
+  robot::comm::CommCapabilities capabilities;
+  capabilities.byte_stream = std::move(stream);
+  return robot::comm::CommLease(std::move(capabilities));
+}
+
 SinglePerception MakeLidar() {
   SinglePerception sensor;
   sensor.set_sensor_name("front_scan");
@@ -180,11 +186,11 @@ TEST_F(PerceptionFactoryTest, CreatesCameraWithConfiguredNameWithoutOpeningHardw
 
 TEST_F(PerceptionFactoryTest, CreatesLidarThroughByteStreamAndPreservesPacketName) {
   auto stream = std::make_shared<RecordingStream>();
-  robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-      [stream](const robot::comm::Comm& comm) -> absl::StatusOr<robot::comm::CommTransport> {
+  robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+      [stream](const robot::comm::Comm& comm,
+               const robot::comm::CommOptions&) -> absl::StatusOr<robot::comm::CommLease> {
         EXPECT_EQ(comm.serial_config().port(), "/test/lidar");
-        return robot::comm::CommTransport{
-            std::static_pointer_cast<robot::comm::ByteStream>(stream)};
+        return ByteStreamLease(stream);
       });
   config::Robot robot;
   auto result = PerceptionFactory::CreatePerception(MakeLidar(), robot.boards());
@@ -204,10 +210,10 @@ TEST_F(PerceptionFactoryTest, CreatesLidarThroughByteStreamAndPreservesPacketNam
 TEST_F(PerceptionFactoryTest, PropagatesLidarInitializationFailure) {
   auto stream = std::make_shared<RecordingStream>();
   stream->open_status = absl::UnavailableError("disconnected");
-  robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-      [stream](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
-        return robot::comm::CommTransport{
-            std::static_pointer_cast<robot::comm::ByteStream>(stream)};
+  robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+      [stream](const robot::comm::Comm&,
+               const robot::comm::CommOptions&) -> absl::StatusOr<robot::comm::CommLease> {
+        return ByteStreamLease(stream);
       });
   config::Robot robot;
   auto result = PerceptionFactory::CreatePerception(MakeLidar(), robot.boards());
@@ -218,8 +224,9 @@ TEST_F(PerceptionFactoryTest, PropagatesLidarInitializationFailure) {
 
 TEST_F(PerceptionFactoryTest, RejectsWrongDirectSensorTypesBeforeOpeningComm) {
   bool called = false;
-  robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-      [&called](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
+  robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+      [&called](const robot::comm::Comm&,
+                const robot::comm::CommOptions&) -> absl::StatusOr<robot::comm::CommLease> {
         called = true;
         return absl::InternalError("should not open hardware");
       });

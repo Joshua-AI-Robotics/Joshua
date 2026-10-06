@@ -10,13 +10,18 @@ enum CommType {
   ETHERNET_UDP = 3;
 }
 
-// The communication behavior required by the consumer. CommType selects the
-// mechanism; TransportType selects the interface exposed by CommFactory.
+// A communication behavior used by the consumer. CommType selects the
+// mechanism; each required TransportType selects one interface CommFactory
+// exposes from it.
 enum TransportType {
   TRANSPORT_INVALID = 0;
   BYTE_STREAM = 1;
   MESSAGE = 2;
+  // Raw process image swapped every cycle. Only the retained TI EtherCAT demo
+  // uses it; Joshua firmware uses CORRELATED_CYCLIC.
   CYCLIC = 3;
+  // Correlated request/response slots carried in the cyclic process image.
+  CORRELATED_CYCLIC = 4;
 }
 
 message Comm {
@@ -26,7 +31,11 @@ message Comm {
     EthercatConfig ethercat_config = 3;
     UdpConfig udp_config = 4;
   }
+  // Single-capability form, still accepted for configs that use exactly one
+  // transport. Set this or required_transports, not both.
   TransportType transport_type = 5;
+  // Every capability the consumer uses from this comm, without duplicates.
+  repeated TransportType required_transports = 6;
 }
 
 message SerialConfig {

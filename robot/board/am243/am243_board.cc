@@ -12,6 +12,7 @@
 #include "robot/comm/ethercat/ethercat_status.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -69,10 +70,10 @@ absl::Status ValidateEthercatConfig(const robot::board::Board& config) {
     return absl::InvalidArgumentError(
         absl::StrCat("AM243 board '", config.name(), "' has no EtherCAT comm config."));
   }
-  if (config.comm().transport_type() != robot::comm::TransportType::CYCLIC) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("AM243 board '", config.name(), "' requires CYCLIC transport."));
-  }
+  ABSL_RETURN_IF_ERROR(
+      robot::comm::ExpectRequiredTransports(config.comm(),
+                                            {robot::comm::TransportType::CYCLIC},
+                                            absl::StrCat("AM243 board '", config.name(), "'")));
   if (config.comm().ethercat_config().process_data_mode() !=
       robot::comm::EthercatProcessDataMode::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR) {
     return absl::InvalidArgumentError(
@@ -129,10 +130,9 @@ absl::Status Am243Board::Init(const robot::board::Board& config) {
   ABSL_RETURN_IF_ERROR(ValidateEthercatConfig(config));
 
   auto state = std::make_shared<Am243SharedState>();
-  ABSL_ASSIGN_OR_RETURN(auto comm, robot::comm::CommFactory::CreateComm(config.comm()));
-  ABSL_ASSIGN_OR_RETURN(
-      state->transport,
-      robot::comm::GetCommTransport<robot::comm::ethercat::EthercatTransport>(comm));
+  ABSL_ASSIGN_OR_RETURN(auto lease, robot::comm::CommFactory::Acquire(config.comm()));
+  ABSL_ASSIGN_OR_RETURN(state->transport,
+                        lease.Require<robot::comm::ethercat::EthercatTransport>());
   ABSL_RETURN_IF_ERROR(state->transport->ConfigureSlaves());
   ABSL_RETURN_IF_ERROR(state->transport->StartCyclic());
 

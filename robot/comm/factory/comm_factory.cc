@@ -1,11 +1,19 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <map>
+#include <mutex>
+#include <string>
 #include <thread>
+#include <utility>
 
+#include "absl/strings/str_cat.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "robot/comm/serial/serial.h"
+#include "robot/comm/serial/serial_message_transport.h"
+#include "utils/status_macros.h"
 
 namespace robot::comm {
 
@@ -37,8 +45,8 @@ static std::map<std::string, CachedEthercatTransport>
     g_ethercat_transports;  // keyed by interface name
 static std::function<std::shared_ptr<robot::comm::ethercat::EthercatTransport>()>
     g_ethercat_transport_factory_for_testing;
-static std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)>
-    g_comm_transport_factory_for_testing;
+static std::function<absl::StatusOr<CommLease>(const robot::comm::Comm&, const CommOptions&)>
+    g_comm_lease_factory_for_testing;
 
 absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMode(
     EthercatProcessDataMode process_data_mode) {
@@ -53,69 +61,8 @@ absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMod
                           "EtherCAT config has invalid process data mode");
   }
 }
-}  // namespace
 
-absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& comm) {
-  if (g_comm_transport_factory_for_testing) {
-    return g_comm_transport_factory_for_testing(comm);
-  }
-  switch (comm.comm_type()) {
-    case CommType::SERIAL: {
-      if (!comm.has_serial_config()) {
-        return absl::InvalidArgumentError("SERIAL comm has no serial_config.");
-      }
-      if (comm.transport_type() == TransportType::TRANSPORT_INVALID) {
-        return absl::InvalidArgumentError("Comm has an invalid transport_type.");
-      }
-      if (comm.transport_type() == TransportType::CYCLIC) {
-        return absl::InvalidArgumentError("SERIAL does not provide a cyclic transport.");
-      }
-      auto serial_or = CreateSerial(comm.serial_config());
-      if (!serial_or.ok()) {
-        return serial_or.status();
-      }
-      switch (comm.transport_type()) {
-        case TransportType::BYTE_STREAM:
-          return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
-        case TransportType::MESSAGE:
-          return CommTransport{std::static_pointer_cast<MessageTransport>(*serial_or)};
-        case TransportType::CYCLIC:
-        case TransportType::TRANSPORT_INVALID:
-        default:
-          return absl::InvalidArgumentError("Comm has an invalid transport_type.");
-      }
-    }
-    case CommType::ETHERCAT: {
-      if (comm.transport_type() != TransportType::CYCLIC) {
-        return absl::InvalidArgumentError("ETHERCAT requires CYCLIC transport_type.");
-      }
-      if (!comm.has_ethercat_config()) {
-        return absl::InvalidArgumentError("ETHERCAT comm has no ethercat_config.");
-      }
-      auto ethercat_or = CreateEthercat(comm.ethercat_config());
-      if (!ethercat_or.ok()) {
-        return ethercat_or.status();
-      }
-      return CommTransport{*ethercat_or};
-    }
-    case CommType::ETHERNET_UDP:
-      if (comm.transport_type() != TransportType::MESSAGE) {
-        return absl::InvalidArgumentError("ETHERNET_UDP requires MESSAGE transport_type.");
-      }
-      return absl::UnimplementedError("ETHERNET_UDP communication is not implemented.");
-    case CommType::COMM_INVALID:
-    default:
-      return absl::InvalidArgumentError("Comm has an invalid comm_type.");
-  }
-}
-
-void CommFactory::SetCommTransportFactoryForTesting(
-    std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory) {
-  g_comm_transport_factory_for_testing = std::move(factory);
-}
-
-absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(
-    const robot::comm::SerialConfig& config) {
+absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialConfig& config) {
   if (config.port().empty()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no port");
   }
@@ -142,6 +89,131 @@ absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(
   auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
   serials[baudrate] = serial;
   return serial;
+}
+
+// Rejects configs whose mechanism cannot provide a required transport, before
+// any link is opened.
+absl::Status ValidateMechanism(const robot::comm::Comm& comm,
+                               const TransportSet& required,
+                               const CommOptions& options) {
+  switch (comm.comm_type()) {
+    case CommType::SERIAL:
+      if (!comm.has_serial_config()) {
+        return absl::InvalidArgumentError("SERIAL comm has no serial_config.");
+      }
+      for (const auto transport : required) {
+        switch (transport) {
+          case TransportType::BYTE_STREAM:
+            break;
+          case TransportType::MESSAGE:
+            if (options.message_framer == nullptr) {
+              return absl::InvalidArgumentError(
+                  "SERIAL MESSAGE transport requires a message framer from its consumer.");
+            }
+            break;
+          case TransportType::CYCLIC:
+          case TransportType::CORRELATED_CYCLIC:
+            return absl::InvalidArgumentError("SERIAL does not provide a cyclic transport.");
+          default:
+            return absl::InvalidArgumentError("Comm has an invalid transport_type.");
+        }
+      }
+      return absl::OkStatus();
+    case CommType::ETHERCAT:
+      if (!comm.has_ethercat_config()) {
+        return absl::InvalidArgumentError("ETHERCAT comm has no ethercat_config.");
+      }
+      for (const auto transport : required) {
+        switch (transport) {
+          case TransportType::CYCLIC:
+            break;
+          case TransportType::MESSAGE:
+          case TransportType::CORRELATED_CYCLIC:
+            return absl::UnimplementedError(absl::StrCat(
+                "ETHERCAT ", TransportType_Name(transport), " transport is not implemented yet."));
+          default:
+            return absl::InvalidArgumentError(absl::StrCat(
+                "ETHERCAT does not provide ", TransportType_Name(transport), " transport."));
+        }
+      }
+      return absl::OkStatus();
+    case CommType::ETHERNET_UDP:
+      if (required != TransportSet{TransportType::MESSAGE}) {
+        return absl::InvalidArgumentError("ETHERNET_UDP requires MESSAGE transport_type.");
+      }
+      return absl::UnimplementedError("ETHERNET_UDP communication is not implemented.");
+    case CommType::COMM_INVALID:
+    default:
+      return absl::InvalidArgumentError("Comm has an invalid comm_type.");
+  }
+}
+
+absl::StatusOr<CommLease> OpenComm(const robot::comm::Comm& comm,
+                                   const TransportSet& required,
+                                   const CommOptions& options) {
+  CommCapabilities capabilities;
+  switch (comm.comm_type()) {
+    case CommType::SERIAL: {
+      ABSL_ASSIGN_OR_RETURN(auto serial, CreateSerial(comm.serial_config()));
+      if (required.count(TransportType::BYTE_STREAM) > 0) {
+        capabilities.byte_stream = serial;
+      }
+      if (required.count(TransportType::MESSAGE) > 0) {
+        capabilities.message =
+            std::make_shared<SerialMessageTransport>(serial, options.message_framer);
+      }
+      return CommLease(std::move(capabilities));
+    }
+    case CommType::ETHERCAT: {
+      ABSL_ASSIGN_OR_RETURN(capabilities.process_image,
+                            CommFactory::CreateEthercat(comm.ethercat_config()));
+      return CommLease(std::move(capabilities));
+    }
+    default:
+      return absl::InternalError("Comm mechanism passed validation but cannot be opened.");
+  }
+}
+
+bool Provides(const CommCapabilities& capabilities, TransportType transport) {
+  switch (transport) {
+    case TransportType::BYTE_STREAM:
+      return capabilities.byte_stream != nullptr;
+    case TransportType::MESSAGE:
+      return capabilities.message != nullptr;
+    case TransportType::CYCLIC:
+      return capabilities.process_image != nullptr;
+    case TransportType::CORRELATED_CYCLIC:
+      return capabilities.correlated_cyclic != nullptr;
+    default:
+      return false;
+  }
+}
+}  // namespace
+
+absl::StatusOr<CommLease> CommFactory::Acquire(const robot::comm::Comm& comm,
+                                               const CommOptions& options) {
+  ABSL_ASSIGN_OR_RETURN(const TransportSet required, RequiredTransports(comm));
+  ABSL_RETURN_IF_ERROR(ValidateMechanism(comm, required, options));
+
+  CommLease lease;
+  if (g_comm_lease_factory_for_testing) {
+    ABSL_ASSIGN_OR_RETURN(lease, g_comm_lease_factory_for_testing(comm, options));
+  } else {
+    ABSL_ASSIGN_OR_RETURN(lease, OpenComm(comm, required, options));
+  }
+  for (const auto transport : required) {
+    if (!Provides(lease.capabilities(), transport)) {
+      return absl::InternalError(absl::StrCat(
+          "Opened comm does not provide required ", TransportType_Name(transport), " transport."));
+    }
+  }
+  return lease;
+}
+
+void CommFactory::SetCommLeaseFactoryForTesting(
+    std::function<absl::StatusOr<CommLease>(const robot::comm::Comm&, const CommOptions&)>
+        factory) {
+  g_comm_lease_factory_for_testing = std::move(factory);
 }
 
 absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>

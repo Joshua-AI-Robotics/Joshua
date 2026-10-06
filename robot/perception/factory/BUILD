@@ -10,6 +10,7 @@ cc_library(
         "//robot/board/factory:board_factory",
         "//robot/board/factory:board_resolver",
         "//robot/comm/factory:comm_factory",
+        "//robot/comm/factory:transport_requirements",
         "//robot/perception/camera:cv_camera",
         "//robot/perception/interfaces:perception_interface",
         "//robot/perception/lidar:lds01_driver",

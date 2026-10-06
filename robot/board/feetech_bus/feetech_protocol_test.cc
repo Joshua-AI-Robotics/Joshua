@@ -1,5 +1,6 @@
 #include "robot/board/feetech_bus/feetech_protocol.h"
 
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 
 namespace robot::board::feetech {
@@ -83,6 +84,30 @@ TEST(FeetechProtocolTest, ParseStatusPacketRejectsErrorByte) {
   std::vector<uint8_t> response = {0xFF, 0xFF, 0x05, 0x02, 0x01, 0xF7};
   auto params = ParseStatusPacket(response, 5);
   EXPECT_EQ(params.status().code(), absl::StatusCode::kInternal);
+}
+
+TEST(FeetechProtocolTest, StatusPacketFramerDelimitsAPresentPositionResponse) {
+  // 0xFF 0xFF id=5 length=4 error=0 params=0x16,0x08 checksum.
+  const std::vector<uint8_t> response = {0xFF, 0xFF, 0x05, 0x04, 0x00, 0x16, 0x08, 0xD8};
+  StatusPacketFramer framer;
+
+  auto header = framer.RemainingBytes({});
+  auto body = framer.RemainingBytes(absl::MakeConstSpan(response).first(4));
+  auto done = framer.RemainingBytes(response);
+
+  ASSERT_TRUE(header.ok() && body.ok() && done.ok());
+  EXPECT_EQ(*header, 4u);
+  EXPECT_EQ(*body, 4u);
+  EXPECT_EQ(*done, 0u);
+}
+
+TEST(FeetechProtocolTest, StatusPacketFramerRejectsBadHeaderAndLength) {
+  StatusPacketFramer framer;
+  const std::vector<uint8_t> bad_header = {0xFF, 0x00};
+  const std::vector<uint8_t> bad_length = {0xFF, 0xFF, 0x05, 0x01};
+
+  EXPECT_EQ(framer.RemainingBytes(bad_header).status().code(), absl::StatusCode::kDataLoss);
+  EXPECT_EQ(framer.RemainingBytes(bad_length).status().code(), absl::StatusCode::kDataLoss);
 }
 
 TEST(FeetechProtocolTest, Uint16LeRoundTrips) {

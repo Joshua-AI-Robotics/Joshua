@@ -9,12 +9,21 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "robot/board/feetech_bus/feetech_protocol.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
+
+namespace {
+
+// Bounds every bus write and every request/response exchange.
+constexpr absl::Duration kBusTimeout = absl::Milliseconds(20);
+
+}  // namespace
 
 struct FeetechBusSharedState {
   std::shared_ptr<robot::comm::MessageTransport> transport;
@@ -60,7 +69,7 @@ class FeetechBusChannel : public BoardChannel {
         data.insert(data.end(), speed_bytes.begin(), speed_bytes.end());
         const auto packet = feetech::BuildWritePacket(servo_id_, feetech::kRegGoalPosition, data);
         std::lock_guard<std::mutex> bus_lock(state_->bus_mutex);
-        return state_->transport->Write(packet);
+        return state_->transport->Send(packet, kBusTimeout);
       }
       case TargetMode::kTorque:
         // This bus exposes torque enable, but no continuous torque target.
@@ -75,9 +84,7 @@ class FeetechBusChannel : public BoardChannel {
     std::vector<uint8_t> response;
     {
       std::lock_guard<std::mutex> lock(state_->bus_mutex);
-      ABSL_ASSIGN_OR_RETURN(
-          response,
-          state_->transport->SendAndReceive(request, feetech::kStatusPacketOverheadBytes + 2));
+      ABSL_ASSIGN_OR_RETURN(response, state_->transport->Exchange(request, kBusTimeout));
     }
     ABSL_ASSIGN_OR_RETURN(auto params, feetech::ParseStatusPacket(response, servo_id_));
     if (params.size() != 2) {
@@ -101,7 +108,7 @@ class FeetechBusChannel : public BoardChannel {
     const auto packet = feetech::BuildWritePacket(
         servo_id_, feetech::kRegTorqueEnable, {static_cast<uint8_t>(enable ? 1 : 0)});
     std::lock_guard<std::mutex> lock(state_->bus_mutex);
-    return state_->transport->Write(packet);
+    return state_->transport->Send(packet, kBusTimeout);
   }
 
   std::shared_ptr<FeetechBusSharedState> state_;
@@ -121,10 +128,10 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
     return absl::InvalidArgumentError(
         absl::StrCat("FEETECH_BUS board '", config.name(), "' requires SERIAL comm config."));
   }
-  if (config.comm().transport_type() != robot::comm::TransportType::MESSAGE) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("FEETECH_BUS board '", config.name(), "' requires MESSAGE transport."));
-  }
+  ABSL_RETURN_IF_ERROR(robot::comm::ExpectRequiredTransports(
+      config.comm(),
+      {robot::comm::TransportType::MESSAGE},
+      absl::StrCat("FEETECH_BUS board '", config.name(), "'")));
   if (config.channels_size() == 0) {
     return absl::InvalidArgumentError(
         absl::StrCat("FEETECH_BUS board '", config.name(), "' declares no channels."));
@@ -163,9 +170,10 @@ absl::Status IdentifyServo(FeetechBusSharedState& state,
   std::lock_guard<std::mutex> lock(state.bus_mutex);
 
   const auto ping = feetech::BuildPingPacket(servo_id);
-  ABSL_ASSIGN_OR_RETURN(auto ping_response,
-                        state.transport->SendAndReceive(ping, feetech::kStatusPacketOverheadBytes));
-  auto ping_status = feetech::ParseStatusPacket(ping_response, servo_id);
+  auto ping_status = [&]() -> absl::StatusOr<std::vector<uint8_t>> {
+    ABSL_ASSIGN_OR_RETURN(auto ping_response, state.transport->Exchange(ping, kBusTimeout));
+    return feetech::ParseStatusPacket(ping_response, servo_id);
+  }();
   if (!ping_status.ok()) {
     return absl::UnavailableError(absl::StrCat("Board '",
                                                board_name,
@@ -176,9 +184,7 @@ absl::Status IdentifyServo(FeetechBusSharedState& state,
   }
 
   const auto read_model = feetech::BuildReadPacket(servo_id, feetech::kRegModelNumber, 2);
-  ABSL_ASSIGN_OR_RETURN(
-      auto model_response,
-      state.transport->SendAndReceive(read_model, feetech::kStatusPacketOverheadBytes + 2));
+  ABSL_ASSIGN_OR_RETURN(auto model_response, state.transport->Exchange(read_model, kBusTimeout));
   ABSL_RETURN_IF_ERROR(feetech::ParseStatusPacket(model_response, servo_id).status());
   return absl::OkStatus();
 }
@@ -193,9 +199,10 @@ absl::Status FeetechBusBoard::Init(const robot::board::Board& config) {
   ABSL_RETURN_IF_ERROR(ValidateConfig(config));
 
   auto state = std::make_shared<FeetechBusSharedState>();
-  ABSL_ASSIGN_OR_RETURN(auto comm, robot::comm::CommFactory::CreateComm(config.comm()));
-  ABSL_ASSIGN_OR_RETURN(state->transport,
-                        robot::comm::GetCommTransport<robot::comm::MessageTransport>(comm));
+  robot::comm::CommOptions options;
+  options.message_framer = std::make_shared<feetech::StatusPacketFramer>();
+  ABSL_ASSIGN_OR_RETURN(auto lease, robot::comm::CommFactory::Acquire(config.comm(), options));
+  ABSL_ASSIGN_OR_RETURN(state->transport, lease.Require<robot::comm::MessageTransport>());
 
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels;
   for (const auto& channel_config : config.channels()) {

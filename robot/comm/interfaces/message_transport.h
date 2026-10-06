@@ -5,19 +5,24 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 
 namespace robot::comm {
 
-// Atomic message-oriented communication. Implementations preserve a complete
-// request while waiting for its response so shared links cannot interleave.
+// Acyclic exchange of complete messages. Implementations serialize calls so
+// two exchanges on a shared link never interleave.
 class MessageTransport {
  public:
   virtual ~MessageTransport() = default;
 
-  virtual absl::Status Open() = 0;
-  virtual absl::Status Write(const std::vector<uint8_t>& message) = 0;
-  virtual absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& request,
-                                                              size_t expected_response_size) = 0;
+  // Delivers one complete request for which no response is expected.
+  virtual absl::Status Send(absl::Span<const uint8_t> request, absl::Duration timeout) = 0;
+
+  // Delivers one complete request and returns the complete response to it,
+  // or DEADLINE_EXCEEDED if none arrives within `timeout`.
+  virtual absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t> request,
+                                                        absl::Duration timeout) = 0;
 };
 
 }  // namespace robot::comm

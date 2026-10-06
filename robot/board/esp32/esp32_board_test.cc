@@ -5,10 +5,11 @@
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/interfaces/comm_lease.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_message_transport.h"
 
 // Esp32Board only supplies two facts to the shared JoshuaWireBoard, as
 // constructor arguments (BoardType::ESP32, JW1_BOARD_ESP32) — everything
@@ -18,6 +19,8 @@
 // only prove ESP32's identity is wired to the right values.
 namespace robot::board {
 namespace {
+
+using robot::comm::FakeMessageTransport;
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
                                           jw1_board_id_t board_id = JW1_BOARD_ESP32) {
@@ -64,19 +67,19 @@ robot::board::Board MakeEsp32Board() {
 class Esp32BoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeFrameTransport>();
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-        [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
-          return robot::comm::CommTransport{
-              std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
+    transport_ = std::make_shared<FakeMessageTransport>();
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+        [this](const robot::comm::Comm&,
+               const robot::comm::CommOptions&) -> absl::StatusOr<robot::comm::CommLease> {
+          return robot::comm::MessageOnlyLease(transport_);
         });
   }
 
   void TearDown() override {
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(nullptr);
   }
 
-  std::shared_ptr<FakeFrameTransport> transport_;
+  std::shared_ptr<FakeMessageTransport> transport_;
 };
 
 TEST_F(Esp32BoardTest, InitSucceedsAgainstRealEsp32Identity) {

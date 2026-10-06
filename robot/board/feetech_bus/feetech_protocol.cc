@@ -95,6 +95,29 @@ absl::StatusOr<std::vector<uint8_t>> ParseStatusPacket(const std::vector<uint8_t
   return std::vector<uint8_t>(response.begin() + 5, response.end() - 1);
 }
 
+absl::StatusOr<size_t> StatusPacketFramer::RemainingBytes(
+    absl::Span<const uint8_t> received) const {
+  // 0xFF 0xFF id length.
+  constexpr size_t kHeaderBytes = 4;
+  for (size_t i = 0; i < received.size() && i < 2; ++i) {
+    if (received[i] != 0xFF) {
+      return absl::DataLossError("Feetech response has an invalid header.");
+    }
+  }
+  if (received.size() < kHeaderBytes) {
+    return kHeaderBytes - received.size();
+  }
+  const uint8_t length = received[3];
+  if (length < 2) {
+    return absl::DataLossError("Feetech response length field is too small.");
+  }
+  const size_t packet_bytes = kHeaderBytes + length;
+  if (received.size() > packet_bytes) {
+    return absl::InternalError("Feetech framer received more bytes than one packet.");
+  }
+  return packet_bytes - received.size();
+}
+
 std::vector<uint8_t> EncodeUint16Le(uint16_t value) {
   return {static_cast<uint8_t>(value & 0xFF), static_cast<uint8_t>((value >> 8) & 0xFF)};
 }
