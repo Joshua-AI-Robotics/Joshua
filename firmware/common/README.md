@@ -121,3 +121,7 @@ remain gates in the normative contract. Serialized loopback tests do not establi
 those guarantees. No firmware is flashed automatically. See the
 [manual validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md) for explicit
 hardware procedures and `--allow_recover` when recovering a latched stop.
+
+The [SOES binding](soes/README.md) supplies a separately pinned slave stack,
+fixed object dictionary and PDO packing. It reuses the same revision-4 profile
+and remains subject to the same AM243 hardware qualification gates.
