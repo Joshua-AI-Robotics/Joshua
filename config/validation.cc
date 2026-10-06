@@ -7,6 +7,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "utils/status_macros.h"
 
 namespace config {
@@ -64,7 +65,9 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
             absl::StrCat(owner, ": lds01_config requires RANGE_SCAN sensor_type."));
       }
       if (!sensor.lds01_config().has_comm() ||
-          sensor.lds01_config().comm().transport_type() != robot::comm::BYTE_STREAM) {
+          !robot::comm::ExpectRequiredTransports(
+               sensor.lds01_config().comm(), {robot::comm::BYTE_STREAM}, owner)
+               .ok()) {
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": lds01_config requires BYTE_STREAM comm."));
       }

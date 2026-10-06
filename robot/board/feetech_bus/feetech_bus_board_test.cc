@@ -7,13 +7,14 @@
 #include "robot/board/feetech_bus/feetech_protocol.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/interfaces/comm_lease.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/serial/fake_serial_transport.h"
+#include "robot/comm/testing/fake_message_transport.h"
 
 namespace robot::board {
 namespace {
 
-using robot::comm::FakeSerialTransport;
+using robot::comm::FakeMessageTransport;
 
 // Builds a well-formed Feetech status/response packet with the given
 // parameter bytes and error byte, matching the checksum arithmetic in
@@ -56,16 +57,17 @@ robot::board::Board MakeArmBusBoard() {
 class FeetechBusBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeSerialTransport>();
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-        [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
-          return robot::comm::CommTransport{
-              std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
+    transport_ = std::make_shared<FakeMessageTransport>();
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+        [this](const robot::comm::Comm&,
+               const robot::comm::CommOptions& options) -> absl::StatusOr<robot::comm::CommLease> {
+          framer_supplied_ = options.message_framer != nullptr;
+          return robot::comm::MessageOnlyLease(transport_);
         });
   }
 
   void TearDown() override {
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(nullptr);
   }
 
   // Every channel's Init() does a PING + read-model-number IDENTIFY, so
@@ -75,7 +77,8 @@ class FeetechBusBoardTest : public ::testing::Test {
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {0x0F, 0x03}));
   }
 
-  std::shared_ptr<FakeSerialTransport> transport_;
+  std::shared_ptr<FakeMessageTransport> transport_;
+  bool framer_supplied_ = false;
 };
 
 TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
@@ -85,11 +88,12 @@ TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
   auto status = board.Init(MakeArmBusBoard());
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->atomic_read_calls_, 2);
+  EXPECT_EQ(transport_->exchange_calls_, 2);
+  EXPECT_TRUE(framer_supplied_);
 }
 
 TEST_F(FeetechBusBoardTest, InitFailsWhenServoDoesNotRespond) {
-  // No queued responses: FakeSerialTransport::AtomicRead returns zero bytes.
+  // No queued responses: the servo stays silent and the exchange times out.
   FeetechBusBoard board;
 
   auto status = board.Init(MakeArmBusBoard());
@@ -133,7 +137,8 @@ TEST_F(FeetechBusBoardTest, OpenChannelEnableWritesTorqueEnableRegister) {
   ASSERT_TRUE(channel.ok()) << channel.status();
   ASSERT_TRUE((*channel)->Enable().ok());
 
-  EXPECT_EQ(transport_->last_written_,
+  EXPECT_EQ(transport_->send_calls_, 1);
+  EXPECT_EQ(transport_->last_request_,
             (std::vector<uint8_t>{0xFF, 0xFF, 0x05, 0x04, 0x03, 0x28, 0x01, 0xCA}));
 }
 
@@ -148,7 +153,7 @@ TEST_F(FeetechBusBoardTest, SetTargetPositionBundlesStagedSpeedAndConfiguredMove
   ASSERT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 2070.0f).ok());
 
   // position=2070 (0x0816), move_time_ms=40 (0x0028), speed=3000 (0x0BB8).
-  auto written = transport_->last_written_;
+  auto written = transport_->last_request_;
   ASSERT_EQ(written.size(), 13u);
   EXPECT_EQ(written[6], 0x16);
   EXPECT_EQ(written[7], 0x08);

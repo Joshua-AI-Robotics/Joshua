@@ -3,14 +3,42 @@
 #include <memory>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
+#include "robot/comm/interfaces/comm_lease.h"
+#include "robot/comm/interfaces/message_framer.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_correlated_cyclic_transport.h"
+#include "robot/comm/testing/fake_message_transport.h"
 
 namespace robot::comm {
 namespace {
 
 using robot::comm::ethercat::FakeEthercatTransport;
+
+class OneByteFramer : public MessageFramer {
+ public:
+  absl::StatusOr<size_t> RemainingBytes(absl::Span<const uint8_t> received) const override {
+    return received.empty() ? 1 : 0;
+  }
+};
+
+CommOptions WithFramer() {
+  CommOptions options;
+  options.message_framer = std::make_shared<OneByteFramer>();
+  return options;
+}
+
+robot::comm::Comm MakeSerialComm(TransportType transport) {
+  robot::comm::Comm comm;
+  comm.set_comm_type(robot::comm::CommType::SERIAL);
+  comm.set_transport_type(transport);
+  comm.mutable_serial_config()->set_port("/dev/joshua-no-such-port");
+  comm.mutable_serial_config()->set_baudrate(115200);
+  return comm;
+}
 
 robot::comm::Comm MakeEthercatComm() {
   robot::comm::Comm comm;
@@ -23,35 +51,48 @@ robot::comm::Comm MakeEthercatComm() {
   return comm;
 }
 
-TEST(CommFactoryTest, CreateCommRejectsMissingTransportType) {
-  robot::comm::Comm comm;
-  comm.set_comm_type(robot::comm::CommType::SERIAL);
-  comm.mutable_serial_config()->set_port("/dev/ttyUSB0");
-  comm.mutable_serial_config()->set_baudrate(115200);
+TEST(CommFactoryTest, AcquireRejectsMissingTransportType) {
+  auto comm = MakeSerialComm(TransportType::TRANSPORT_INVALID);
 
-  auto transport = CommFactory::CreateComm(comm);
-
-  EXPECT_EQ(transport.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(CommFactory::Acquire(comm).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(CommFactoryTest, CreateCommRejectsUnsupportedMechanismCapabilityPair) {
+TEST(CommFactoryTest, AcquireRejectsUnsupportedMechanismCapabilityPair) {
   robot::comm::Comm comm;
   comm.set_comm_type(robot::comm::CommType::ETHERNET_UDP);
   comm.set_transport_type(robot::comm::TransportType::BYTE_STREAM);
 
-  auto transport = CommFactory::CreateComm(comm);
-
-  EXPECT_EQ(transport.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(CommFactory::Acquire(comm).status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST(CommFactoryTest, CreateCommRejectsMissingEthercatConfig) {
+TEST(CommFactoryTest, AcquireRejectsMissingEthercatConfig) {
   robot::comm::Comm comm;
   comm.set_comm_type(robot::comm::CommType::ETHERCAT);
   comm.set_transport_type(robot::comm::TransportType::CYCLIC);
 
-  auto transport_or = CommFactory::CreateComm(comm);
+  EXPECT_EQ(CommFactory::Acquire(comm).status().code(), absl::StatusCode::kInvalidArgument);
+}
 
-  EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+TEST(CommFactoryTest, AcquireRejectsSerialMessageWithoutFramerBeforeOpening) {
+  auto comm = MakeSerialComm(TransportType::MESSAGE);
+
+  EXPECT_EQ(CommFactory::Acquire(comm).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, AcquireRejectsCyclicCapabilitiesOnSerial) {
+  EXPECT_EQ(CommFactory::Acquire(MakeSerialComm(TransportType::CYCLIC)).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(CommFactory::Acquire(MakeSerialComm(TransportType::CORRELATED_CYCLIC)).status().code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, AcquireReportsEthercatMailboxAndCorrelatedPdoAsUnimplemented) {
+  auto comm = MakeEthercatComm();
+  comm.clear_transport_type();
+  comm.add_required_transports(TransportType::MESSAGE);
+  comm.add_required_transports(TransportType::CORRELATED_CYCLIC);
+
+  EXPECT_EQ(CommFactory::Acquire(comm).status().code(), absl::StatusCode::kUnimplemented);
 }
 
 TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {
@@ -80,6 +121,76 @@ TEST(CommFactoryTest, CreateEthercatTransportReportsUnavailableForMissingInterfa
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kUnavailable);
 }
 
+class CommFactoryLeaseTest : public ::testing::Test {
+ protected:
+  void TearDown() override {
+    CommFactory::SetCommLeaseFactoryForTesting(nullptr);
+  }
+};
+
+TEST_F(CommFactoryLeaseTest, OneLeaseCanExposeSeveralCapabilitiesOfOneLink) {
+  auto message = std::make_shared<FakeMessageTransport>();
+  auto cyclic = std::make_shared<FakeCorrelatedCyclicTransport>();
+  CommFactory::SetCommLeaseFactoryForTesting(
+      [&](const Comm&, const CommOptions&) -> absl::StatusOr<CommLease> {
+        CommCapabilities capabilities;
+        capabilities.message = message;
+        capabilities.correlated_cyclic = cyclic;
+        return CommLease(std::move(capabilities));
+      });
+  auto comm = MakeSerialComm(TransportType::MESSAGE);
+
+  auto lease = CommFactory::Acquire(comm, WithFramer());
+
+  ASSERT_TRUE(lease.ok()) << lease.status();
+  auto selected_message = lease->Require<MessageTransport>();
+  auto selected_cyclic = lease->Require<CorrelatedCyclicTransport>();
+  ASSERT_TRUE(selected_message.ok()) << selected_message.status();
+  ASSERT_TRUE(selected_cyclic.ok()) << selected_cyclic.status();
+  EXPECT_EQ(selected_message->get(), message.get());
+  EXPECT_EQ(selected_cyclic->get(), cyclic.get());
+  EXPECT_EQ(lease->Require<ByteStream>().status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(CommFactoryLeaseTest, PassesConsumerFramerToTheLinkFactory) {
+  auto options = WithFramer();
+  const MessageFramer* seen_framer = nullptr;
+  CommFactory::SetCommLeaseFactoryForTesting(
+      [&](const Comm&, const CommOptions& passed) -> absl::StatusOr<CommLease> {
+        seen_framer = passed.message_framer.get();
+        CommCapabilities capabilities;
+        capabilities.message = std::make_shared<FakeMessageTransport>();
+        return CommLease(std::move(capabilities));
+      });
+
+  ASSERT_TRUE(CommFactory::Acquire(MakeSerialComm(TransportType::MESSAGE), options).ok());
+
+  EXPECT_EQ(seen_framer, options.message_framer.get());
+}
+
+TEST_F(CommFactoryLeaseTest, RejectsLeaseMissingARequiredCapability) {
+  CommFactory::SetCommLeaseFactoryForTesting(
+      [](const Comm&, const CommOptions&) -> absl::StatusOr<CommLease> { return CommLease(); });
+
+  auto lease = CommFactory::Acquire(MakeSerialComm(TransportType::MESSAGE), WithFramer());
+
+  EXPECT_EQ(lease.status().code(), absl::StatusCode::kInternal);
+}
+
+TEST_F(CommFactoryLeaseTest, ValidatesConfigBeforeCallingTheLinkFactory) {
+  bool called = false;
+  CommFactory::SetCommLeaseFactoryForTesting(
+      [&called](const Comm&, const CommOptions&) -> absl::StatusOr<CommLease> {
+        called = true;
+        return CommLease();
+      });
+
+  auto lease = CommFactory::Acquire(MakeSerialComm(TransportType::CORRELATED_CYCLIC));
+
+  EXPECT_EQ(lease.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_FALSE(called);
+}
+
 class CommFactoryEthercatCacheTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -92,6 +203,23 @@ class CommFactoryEthercatCacheTest : public ::testing::Test {
     CommFactory::ResetEthercatTransportCacheForTesting();
   }
 };
+
+TEST_F(CommFactoryEthercatCacheTest, AcquireExposesProcessImageOnly) {
+  auto lease = CommFactory::Acquire(MakeEthercatComm());
+
+  ASSERT_TRUE(lease.ok()) << lease.status();
+  EXPECT_TRUE(lease->Require<ethercat::EthercatTransport>().ok());
+  EXPECT_EQ(lease->Require<MessageTransport>().status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(CommFactoryEthercatCacheTest, LeasesOnOneInterfaceShareOneMaster) {
+  auto first = CommFactory::Acquire(MakeEthercatComm());
+  auto second = CommFactory::Acquire(MakeEthercatComm());
+
+  ASSERT_TRUE(first.ok()) << first.status();
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(first->capabilities().process_image.get(), second->capabilities().process_image.get());
+}
 
 TEST_F(CommFactoryEthercatCacheTest, SameInterfaceSharesOneMaster) {
   auto comm = MakeEthercatComm();

@@ -439,30 +439,40 @@ Document or generate the matching ESI and PDO mapping.
 The design update is PR 0. Implementation is split into nine reviewable PRs.
 Every PR keeps tests green and preserves the retained TI demo.
 
-1. **Communication seams and configuration.** Finalize `MessageTransport`,
-   `CorrelatedCyclicTransport`, capability leases, fakes, configuration
-   migration, and BUILD visibility. Adapt existing users without changing wire
-   behavior.
+1. **Communication seams and configuration.** Finalize `MessageTransport`
+   (deadline-bounded `Send`/`Exchange`, no caller-supplied response size),
+   `CorrelatedCyclicTransport`, `CommLease`, fakes, and the
+   `required_transports` capability set with its single-`transport_type`
+   fallback. Serial delimits responses with a consumer-supplied
+   `MessageFramer`, so existing JoshuaWire v1 and Feetech wire bytes are
+   unchanged. Concrete serial and SOEM targets become visible only inside
+   `robot/comm/`. The remaining configuration fields land with their first
+   consumer: protocol selection in PR 3, the serial settle delay in PR 4,
+   EtherCAT cyclic period and response timeout in PR 5, and EtherCAT endpoint
+   facts in PR 7.
 2. **JoshuaWire v2 codec and correlation primitives.** Add the shared v2 C
    codec beside v1, session/message-ID allocation, exact golden bytes, response
    matching, and shared mailbox/PDO layout assertions. No endpoint switches
    protocol in this PR.
 3. **Composed board engine and serial v2 host.** Add board identity as data,
-   protocol selection, command routing, the reset handshake, and deadline-based
-   serial framed reads. Keep explicit v1 support.
+   protocol selection, command routing, the reset handshake, the JoshuaWire v2
+   framer, and serial reconnect flushing. Keep explicit v1 support.
 4. **Serial firmware and board migration.** Add v2 to Teensy, ESP32, and AM243
    serial firmware; propagate response IDs; move serial settle delay into comm
    config; migrate factory assembly; and remove Teensy/ESP32 board subclasses.
    This PR completes the serial-v2-stable milestone.
 5. **Single-owner EtherCAT runtime.** Add the background master loop, bounded
-   work queues, lifecycle, shared leases, stop priority, teardown cancellation,
-   and timing tests. Keep the TI demo usable through a compatibility adapter.
+   work queues, lifecycle, reference-counted master leases, stop priority,
+   teardown cancellation, cyclic period and response timeout config, and
+   timing tests. Keep the TI demo usable through a compatibility adapter.
 6. **CoE/SDO mailbox transport.** Add worker-owned SDO operations,
    compatibility validation, mailbox publication/acknowledgment, reset-session
    exchange, and slow-mailbox deadline tests.
 7. **Correlated PDO transport.** Add the 80-byte host codec, process-image
    shadows, generation publication and acknowledgment, cancellation,
-   outcome-unknown timeout handling, and cyclic routing tests.
+   outcome-unknown timeout handling, and cyclic routing tests. Move slave index
+   and PDO region overrides into `EthercatConfig`, where the per-slave adapter
+   reads them.
 8. **Joshua-controlled AM243 firmware/profile.** Add the CoE object dictionary,
    correlated PDO handling, watchdog and ESTOP safe state, ESI/PDO mapping, and
    host/firmware layout tests. This remains a separate artifact from the TI

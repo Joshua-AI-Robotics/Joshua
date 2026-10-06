@@ -5,12 +5,26 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "robot/board/joshua_wire/joshua_wire_v1_framer.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
 
 namespace {
+
+// Bounds every request/response exchange, including the request write.
+constexpr absl::Duration kExchangeTimeout = absl::Milliseconds(20);
+
+absl::StatusOr<std::vector<uint8_t>> ExchangeFrame(FrameTransport& transport,
+                                                   const uint8_t* request,
+                                                   int request_len) {
+  return transport.Exchange(absl::MakeConstSpan(request, static_cast<size_t>(request_len)),
+                            kExchangeTimeout);
+}
 
 absl::Status JwStatusToAbsl(jw1_status_t status, const std::string& what) {
   switch (status) {
@@ -85,10 +99,7 @@ class JoshuaWireChannel : public BoardChannel {
     if (len < 0) {
       return absl::InternalError("Failed to encode GET_FEEDBACK request.");
     }
-    ABSL_ASSIGN_OR_RETURN(
-        auto response,
-        transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW1_FEEDBACK_RESPONSE_PAYLOAD_LEN)));
+    ABSL_ASSIGN_OR_RETURN(auto response, ExchangeFrame(*transport_, buf, len));
     jw1_frame_t frame;
     if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
       return absl::InternalError("Malformed GET_FEEDBACK response frame.");
@@ -109,10 +120,7 @@ class JoshuaWireChannel : public BoardChannel {
     if (len < 0) {
       return absl::InternalError(absl::StrCat("Failed to encode ", what, " request."));
     }
-    ABSL_ASSIGN_OR_RETURN(
-        auto response,
-        transport_->SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                   JW1_FRAME_LEN(JW1_STATUS_RESPONSE_PAYLOAD_LEN)));
+    ABSL_ASSIGN_OR_RETURN(auto response, ExchangeFrame(*transport_, buf, len));
     jw1_frame_t frame;
     if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
       return absl::InternalError(absl::StrCat("Malformed ", what, " response frame."));
@@ -150,9 +158,7 @@ absl::Status ConfigureStepDirChannel(FrameTransport& transport,
   if (len < 0) {
     return absl::InternalError("Failed to encode CONFIGURE_CHANNEL request.");
   }
-  ABSL_ASSIGN_OR_RETURN(auto response,
-                        transport.SendAndReceive(std::vector<uint8_t>(buf, buf + len),
-                                                 JW1_FRAME_LEN(JW1_STATUS_RESPONSE_PAYLOAD_LEN)));
+  ABSL_ASSIGN_OR_RETURN(auto response, ExchangeFrame(transport, buf, len));
   jw1_frame_t frame;
   if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {
     return absl::InternalError("Malformed CONFIGURE_CHANNEL response frame.");
@@ -189,17 +195,16 @@ absl::Status JoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", board_name, "' requires SERIAL comm config."));
   }
-  if (comm.transport_type() != robot::comm::TransportType::MESSAGE) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Board '", board_name, "' requires MESSAGE transport."));
-  }
-  return absl::OkStatus();
+  return robot::comm::ExpectRequiredTransports(
+      comm, {robot::comm::TransportType::MESSAGE}, absl::StrCat("Board '", board_name, "'"));
 }
 
 absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateTransport(
     const robot::comm::Comm& comm) const {
-  ABSL_ASSIGN_OR_RETURN(auto transport, robot::comm::CommFactory::CreateComm(comm));
-  return robot::comm::GetCommTransport<robot::comm::MessageTransport>(transport);
+  robot::comm::CommOptions options;
+  options.message_framer = std::make_shared<JoshuaWireV1Framer>();
+  ABSL_ASSIGN_OR_RETURN(auto lease, robot::comm::CommFactory::Acquire(comm, options));
+  return lease.Require<robot::comm::MessageTransport>();
 }
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {
@@ -303,10 +308,7 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(FrameTransport& transport,
   if (request_len < 0) {
     return absl::InternalError("Failed to encode IDENTIFY request.");
   }
-  ABSL_ASSIGN_OR_RETURN(
-      auto response,
-      transport.SendAndReceive(std::vector<uint8_t>(request, request + request_len),
-                               JW1_FRAME_LEN(JW1_IDENTIFY_RESPONSE_PAYLOAD_LEN)));
+  ABSL_ASSIGN_OR_RETURN(auto response, ExchangeFrame(transport, request, request_len));
 
   jw1_frame_t frame;
   if (jw1_decode_frame(response.data(), response.size(), &frame) != 0) {

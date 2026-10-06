@@ -6,14 +6,17 @@
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/frame/fake_frame_transport.h"
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/interfaces/comm_lease.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_message_transport.h"
 
 namespace robot::board {
 namespace {
+
+using robot::comm::FakeMessageTransport;
 
 std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
                                           jw1_board_id_t board_id = JW1_BOARD_AM243) {
@@ -82,24 +85,26 @@ robot::board::Board MakeAm243EthercatBoard() {
 class Am243BoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    serial_transport_ = std::make_shared<FakeFrameTransport>();
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(
-        [this](const robot::comm::Comm& comm) -> absl::StatusOr<robot::comm::CommTransport> {
-          if (comm.comm_type() == robot::comm::CommType::SERIAL) {
-            return robot::comm::CommTransport{
-                std::static_pointer_cast<robot::comm::MessageTransport>(serial_transport_)};
-          }
-          return robot::comm::CommTransport{ethercat_transport_};
-        });
+    serial_transport_ = std::make_shared<FakeMessageTransport>();
     ethercat_transport_ = std::make_shared<robot::comm::ethercat::FakeEthercatTransport>();
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(
+        [this](const robot::comm::Comm& comm,
+               const robot::comm::CommOptions&) -> absl::StatusOr<robot::comm::CommLease> {
+          if (comm.comm_type() == robot::comm::CommType::SERIAL) {
+            return robot::comm::MessageOnlyLease(serial_transport_);
+          }
+          robot::comm::CommCapabilities capabilities;
+          capabilities.process_image = ethercat_transport_;
+          return robot::comm::CommLease(std::move(capabilities));
+        });
   }
 
   void TearDown() override {
-    robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
+    robot::comm::CommFactory::SetCommLeaseFactoryForTesting(nullptr);
     robot::comm::CommFactory::ResetEthercatTransportCacheForTesting();
   }
 
-  std::shared_ptr<FakeFrameTransport> serial_transport_;
+  std::shared_ptr<FakeMessageTransport> serial_transport_;
   std::shared_ptr<robot::comm::ethercat::FakeEthercatTransport> ethercat_transport_;
 };
 
@@ -125,6 +130,17 @@ TEST_F(Am243BoardTest, InitSupportsEthercatDemoConfig) {
   EXPECT_TRUE(board.Init(MakeAm243EthercatBoard()).ok());
   EXPECT_EQ(ethercat_transport_->configure_slaves_calls_, 1);
   EXPECT_EQ(ethercat_transport_->start_cyclic_calls_, 1);
+}
+
+TEST_F(Am243BoardTest, InitRejectsEthercatConfigRequiringMailbox) {
+  auto config = MakeAm243EthercatBoard();
+  config.mutable_comm()->clear_transport_type();
+  config.mutable_comm()->add_required_transports(robot::comm::TransportType::CYCLIC);
+  config.mutable_comm()->add_required_transports(robot::comm::TransportType::MESSAGE);
+  Am243Board board;
+
+  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(ethercat_transport_->configure_slaves_calls_, 0);
 }
 
 TEST_F(Am243BoardTest, InitRejectsNonAm243WireIdentity) {

@@ -28,10 +28,11 @@ cc_test(
     deps = [
         ":teensy_board",
         "//firmware/common:joshua_wire_v1",
-        "//robot/board/frame:fake_frame_transport",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
+        "//robot/comm/interfaces:comm_lease",
         "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/testing:fake_message_transport",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

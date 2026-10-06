@@ -11,6 +11,7 @@
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/factory/transport_requirements.h"
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
@@ -63,15 +64,14 @@ PerceptionFactory::CreatePerception(
       // Preserve lazy camera acquisition: GetData opens the configured camera.
       return std::make_unique<CvCamera>(single_perception);
     case robot::perception::SinglePerception::kLds01Config: {
+      const auto& comm = single_perception.lds01_config().comm();
       if (single_perception.sensor_type() != RANGE_SCAN ||
-          single_perception.lds01_config().comm().transport_type() != robot::comm::BYTE_STREAM) {
+          !robot::comm::ExpectRequiredTransports(comm, {robot::comm::BYTE_STREAM}, owner).ok()) {
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": LDS01 requires RANGE_SCAN and BYTE_STREAM comm."));
       }
-      ABSL_ASSIGN_OR_RETURN(
-          auto comm, robot::comm::CommFactory::CreateComm(single_perception.lds01_config().comm()));
-      ABSL_ASSIGN_OR_RETURN(auto stream,
-                            robot::comm::GetCommTransport<robot::comm::ByteStream>(comm));
+      ABSL_ASSIGN_OR_RETURN(auto lease, robot::comm::CommFactory::Acquire(comm));
+      ABSL_ASSIGN_OR_RETURN(auto stream, lease.Require<robot::comm::ByteStream>());
       auto lidar = std::make_unique<Lds01Driver>(stream, single_perception);
       ABSL_RETURN_IF_ERROR(lidar->Init());
       return lidar;

@@ -42,9 +42,8 @@ extern "C" {
 #define JW1_FRAME_LEN(payload_len) (5 + (payload_len) + 2)
 
 // Every response in the protocol has a fixed size for a given proto_ver, so
-// a caller atop a fixed-size-read transport (mirrors
-// robot::comm::SerialTransport::AtomicRead) always knows how much to read
-// before sending. IDENTIFY's channel_drives array is therefore always
+// a caller always knows how large a response will be before sending.
+// IDENTIFY's channel_drives array is therefore always
 // transmitted at its maximum size (JW1_MAX_CHANNELS entries, unused slots
 // padded with JW1_DRIVE_INVALID) rather than sized to the board's actual
 // channel count.

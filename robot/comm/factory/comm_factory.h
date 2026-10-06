@@ -1,48 +1,39 @@
 #pragma once
 
 #include <functional>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <string>
-#include <utility>
-#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "robot/comm/ethercat/ethercat_transport.h"
-#include "robot/comm/interfaces/byte_stream.h"
-#include "robot/comm/interfaces/message_transport.h"
+#include "robot/comm/interfaces/comm_lease.h"
+#include "robot/comm/interfaces/message_framer.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/serial/serial.h"
 
 namespace robot::comm {
 
-using CommTransport = std::variant<std::shared_ptr<ByteStream>,
-                                   std::shared_ptr<MessageTransport>,
-                                   std::shared_ptr<robot::comm::ethercat::EthercatTransport>>;
-
-template <typename Transport>
-absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport& transport) {
-  const auto* selected = std::get_if<std::shared_ptr<Transport>>(&transport);
-  if (selected == nullptr) {
-    return absl::InvalidArgumentError("Configured comm does not provide the requested transport.");
-  }
-  return *selected;
-}
+// Protocol facts a consumer supplies when acquiring a comm.
+struct CommOptions {
+  // Delimits responses when MESSAGE is required over a link without message
+  // boundaries, such as serial.
+  std::shared_ptr<const MessageFramer> message_framer;
+};
 
 class CommFactory {
  public:
-  static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
+  // Validates that `config`'s mechanism provides every required transport,
+  // opens or reuses the link, and returns a lease exposing exactly those
+  // capabilities.
+  static absl::StatusOr<CommLease> Acquire(const robot::comm::Comm& config,
+                                           const CommOptions& options = {});
 
-  // Replaces the result of CreateComm without changing the consumer call
-  // path or opening hardware. Pass nullptr to restore production behavior.
-  // For tests.
-  static void SetCommTransportFactoryForTesting(
-      std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory);
-
-  static absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(
-      const robot::comm::SerialConfig& config);
+  // Replaces how Acquire opens the link, after config validation, without
+  // changing the consumer call path or opening hardware. The returned lease
+  // must still provide every required transport. Pass nullptr to restore
+  // production behavior. For tests.
+  static void SetCommLeaseFactoryForTesting(
+      std::function<absl::StatusOr<CommLease>(const robot::comm::Comm&, const CommOptions&)>
+          factory);
 
   // Returns a cached instance per interface name — an EtherCAT NIC has
   // exactly one master, and two ecx_init()s on one NIC fight over the raw
@@ -59,13 +50,6 @@ class CommFactory {
   // Tears down and forgets every cached EtherCAT transport. For tests.
   static void ResetEthercatTransportCacheForTesting();
 
-  ~CommFactory() = default;
-  CommFactory(const CommFactory&) = delete;
-  CommFactory& operator=(const CommFactory&) = delete;
-  CommFactory(CommFactory&&) = default;
-  CommFactory& operator=(CommFactory&&) = default;
-
- private:
-  CommFactory() = default;
+  CommFactory() = delete;
 };
 }  // namespace robot::comm

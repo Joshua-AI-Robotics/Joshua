@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
+#include "robot/comm/interfaces/message_framer.h"
 
 namespace robot::board::feetech {
 
@@ -20,10 +22,6 @@ inline constexpr uint8_t kRegMovingTime = 0x2C;
 inline constexpr uint8_t kRegMovingSpeed = 0x2E;
 inline constexpr uint8_t kRegPresentPosition = 0x38;
 inline constexpr uint8_t kRegModelNumber = 0x03;
-
-// Bytes on the wire for a status/response packet with zero parameter bytes:
-// 0xFF 0xFF id length error checksum.
-inline constexpr size_t kStatusPacketOverheadBytes = 6;
 
 // Builds a PING instruction packet (docs/BOARD_LAYER_RFC.md §5.6 IDENTIFY).
 std::vector<uint8_t> BuildPingPacket(uint8_t servo_id);
@@ -45,6 +43,13 @@ std::vector<uint8_t> BuildWritePacket(uint8_t servo_id,
 // and the checksum). Used for PING acks and READ_DATA responses.
 absl::StatusOr<std::vector<uint8_t>> ParseStatusPacket(const std::vector<uint8_t>& response,
                                                        uint8_t expected_servo_id);
+
+// Delimits status/response packets from their header and length field;
+// ParseStatusPacket still validates id, checksum, and error byte.
+class StatusPacketFramer : public robot::comm::MessageFramer {
+ public:
+  absl::StatusOr<size_t> RemainingBytes(absl::Span<const uint8_t> received) const override;
+};
 
 std::vector<uint8_t> EncodeUint16Le(uint16_t value);
 uint16_t DecodeUint16Le(uint8_t low_byte, uint8_t high_byte);
