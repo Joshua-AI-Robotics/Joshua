@@ -1,9 +1,40 @@
 # Board and Comm Separation Plan
 
-Status: **Proposed**
+Status: **Software migration implemented; EtherCAT hardware qualification open.**
 
-Companion to: [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md),
-[am243_ethercat.md](am243_ethercat.md)
+Companion to [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) and
+[AM243 EtherCAT](am243_ethercat.md).
+
+## Implementation status
+
+| Plan step | Implemented |
+| --- | --- |
+| 2: JW correlation | Shared C codecs, host/firmware sessions, neutral command payloads and one JW 0.2.0 serial artifact per board |
+| 3: comm boundaries | Message/correlated-cyclic interfaces, comm-internal adapters, serial framing and configurable exchange/settle timing |
+| 4: EtherCAT owner | Per-NIC worker/leases, PDO shadows/snapshots, bounded incremental runtime CoE and explicit timing policy |
+| 5: paired endpoint | Compatibility gate, verified reset, shared CoE/PDO session, retained replies and firmware watchdog core |
+| 6–7: factory/engine wiring | Shared JoshuaWire engine, paired capability assembly and multi-board ownership checks; legacy TI-demo host path retired |
+
+Native regression coverage includes correlation, retries, ID exhaustion, late
+replies, timeouts, teardown, factory boundaries and two-slave sharing. Vendor consumers retain their fixed-length compatibility interface.
+Serial timing comes from protobuf config, not board-specific sleeps.
+
+Use the [serial validation procedure](JOSHUA_WIRE_VALIDATION.md) for manual
+hardware checks. EtherCAT qualification is affected by the
+[master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+
+Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
+OP/link-loss recovery and a replacement slave-stack run longer than one hour
+before evaluation-stack retirement. Disabled-channel polling diagnostics do not
+satisfy these gates. Track TI profile removal and conversion of the default UART
+image to UART-only in the [firmware retirement TODO](../firmware/am243/joshua_dual_transport/README.md#todo-retire-ti-stack-profiles-after-replacement-qualification).
+AM243 firmware has no physical motor backend; simultaneous
+UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
+separate work. The single-transport artifacts do not claim those capabilities.
+
+The contracts below define the target design; software coverage does not
+establish hard-real-time behavior or physical-output safety.
+See [firmware usage](../firmware/README.md) and [configuration](../config/README.md).
 
 ## 1. Goal
 
@@ -238,6 +269,21 @@ reserved bytes (`uint16`), and frame (`uint8[96]`). Mailbox generations and
 retained-response acknowledgment follow the same publication rules as PDO
 generations.
 
+Layout-v1 details are pinned in
+[`joshua_wire_ethercat.h`](../firmware/common/joshua_wire_ethercat.h): transport
+bitmap bit 0 is serial, bit 1 is CoE management, and bit 2 is correlated PDO.
+PDO transport status 0 means success; nonzero values fail the exchange.
+Frame padding and reserved fields are zero. Artifact IDs are nonempty printable
+ASCII, NUL-padded when shorter than 12 bytes.
+
+The reset object is not a JW frame: writing `{operation=1, new_session_id}`
+requests an atomic safe/session reset. Reading that exact pair acknowledges
+completion only after outputs are disabled and both planes' retained responses,
+generations and request history have been cleared. The host then constructs
+the correlated JW RESET_SESSION/OK reply for the board engine. This preserves
+the engine's frame interface without inventing an acknowledgment before verified
+readback. Reboot reads session zero. Normal envelopes remain full JW frames.
+
 Mailbox exchange is used only for management operations:
 
 ```text
@@ -411,5 +457,5 @@ or flash firmware without explicit hardware confirmation.
   enable.
 - Serial message-only boards retain all JoshuaWire commands.
 - Board targets cannot name concrete serial or SOEM implementations.
-- The retained TI demo remains independently runnable for bring-up and is not
-  mistaken for the JoshuaWire EtherCAT firmware.
+- TI vendor firmware build/flash assets remain distinct from JoshuaWire firmware.
+  The legacy Joshua TI-demo host path is retired; old configs fail explicitly.
