@@ -12,7 +12,7 @@
 // times, printing every status. A working board/firmware/wiring chain
 // prints "OK" for every line and the motor visibly moves; any failure
 // (wrong firmware, bad wiring, unplugged board) surfaces as a non-OK
-// status with an actionable message from JoshuaWireBoard/JoshuaWireChannel
+// status with an actionable message from LegacyJoshuaWireBoard/JoshuaWireChannel
 // (robot/board/joshua_wire/), which Esp32Board is a thin subclass of.
 #include <glog/logging.h>
 

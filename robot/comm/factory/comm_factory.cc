@@ -7,6 +7,7 @@
 
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/serial/framed_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 
 namespace robot::comm {
@@ -112,7 +113,12 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
         case TransportType::BYTE_STREAM:
           return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
         case TransportType::MESSAGE:
-          return CommTransport{std::static_pointer_cast<MessageTransport>(*serial_or)};
+          return CommTransport{
+              std::static_pointer_cast<MessageTransport>(std::make_shared<FramedSerialTransport>(
+                  *serial_or,
+                  std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
+                                                ? comm.serial_config().exchange_timeout_ms()
+                                                : 100)))};
         case TransportType::CYCLIC:
         case TransportType::TRANSPORT_INVALID:
         default:
