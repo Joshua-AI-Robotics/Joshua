@@ -22,25 +22,20 @@ Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
     serial_->set_option(boost::asio::serial_port_base::flow_control(
         boost::asio::serial_port_base::flow_control::none));
   } catch (const boost::system::system_error& e) {
-    LOG(ERROR) << e.what();
-    throw std::runtime_error("Error opening serial port.");
+    throw std::runtime_error("Error opening serial port " + uart_port_ + ": " + e.what());
   }
 }
 
 Serial::~Serial() {
-  if (serial_->is_open()) {
-    try {
-      serial_->close();
-    } catch (const boost::system::system_error& e) {
-      LOG(ERROR) << "Error closing serial port: " << e.what();
-      throw std::runtime_error("Error closing serial port.");
-    }
+  if (serial_ && serial_->is_open()) {
+    boost::system::error_code error;
+    serial_->close(error);
+    if (error) LOG(ERROR) << "Error closing serial port " << uart_port_ << ": " << error.message();
   }
 }
 
 absl::Status Serial::Open() {
   if (!serial_->is_open()) {
-    LOG(ERROR) << "Error: Serial port not open.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open.");
   }
   return absl::OkStatus();
@@ -49,14 +44,13 @@ absl::Status Serial::Open() {
 absl::Status Serial::Write(const std::vector<uint8_t>& data) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!serial_->is_open()) {
-    LOG(ERROR) << "Error: Serial port not open for writing.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for writing.");
   }
   try {
     boost::asio::write(*serial_, boost::asio::buffer(data));
   } catch (const boost::system::system_error& e) {
-    LOG(ERROR) << "Error writing to serial port: " << e.what();
-    return absl::Status(absl::StatusCode::kInternal, "Error writing to serial port.");
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Error writing to serial port " + uart_port_ + ": " + e.what());
   }
   return absl::OkStatus();
 }
@@ -64,7 +58,6 @@ absl::Status Serial::Write(const std::vector<uint8_t>& data) {
 absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!serial_->is_open()) {
-    LOG(ERROR) << "Error: Serial port not open for reading.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for reading.");
   }
 
@@ -84,23 +77,25 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Read(size_t bytes_to_read) {
   try {
     bytes_read = boost::asio::read(*serial_, boost::asio::buffer(buffer), ec);
   } catch (const boost::system::system_error& e) {
-    LOG(ERROR) << "Error reading from serial port: " << e.what();
-    return absl::Status(absl::StatusCode::kInternal, "Error reading from serial port.");
+    timer.cancel();
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Error reading from serial port " + uart_port_ + ": " + e.what());
   }
 
   timer.cancel();  // Cancel the timer if read completes
 
   if (ec == boost::asio::error::operation_aborted) {
-    // LOG(ERROR) << "Serial read operation timed out or was cancelled.";
     return absl::Status(absl::StatusCode::kInternal,
                         "Serial read operation timed out or was cancelled.");
   } else if (ec) {
-    LOG(ERROR) << "Error reading from serial port: " << ec.message();
-    return absl::Status(absl::StatusCode::kInternal, "Read failed");
+    return absl::Status(absl::StatusCode::kInternal,
+                        "Read failed on " + uart_port_ + ": " + ec.message());
   }
 
   if (bytes_read != bytes_to_read) {
-    LOG(WARNING) << "Read " << bytes_read << " bytes, expected " << bytes_to_read;
+    return absl::DataLossError("Short read on " + uart_port_ + ": received " +
+                               std::to_string(bytes_read) + ", expected " +
+                               std::to_string(bytes_to_read));
   }
 
   return buffer;
@@ -116,7 +111,7 @@ absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_
 
   // 1. Flush (Clear input buffer before sending command)
   if (::tcflush(serial_->native_handle(), TCIFLUSH) != 0) {
-    LOG(WARNING) << "tcflush failed during query: " << strerror(errno);
+    return absl::InternalError("tcflush failed on " + uart_port_ + ": " + strerror(errno));
   }
 
   // 2. Write Command
@@ -140,6 +135,7 @@ absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_
   try {
     boost::asio::read(*serial_, boost::asio::buffer(buffer), ec);
   } catch (const boost::system::system_error& e) {
+    timer.cancel();
     return absl::Status(absl::StatusCode::kInternal,
                         "Error reading query response: " + std::string(e.what()));
   }
@@ -157,12 +153,11 @@ absl::StatusOr<std::vector<uint8_t>> Serial::AtomicRead(const std::vector<uint8_
 absl::Status Serial::Flush() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!serial_->is_open()) {
-    LOG(ERROR) << "Error: Serial port not open for flushing.";
     return absl::Status(absl::StatusCode::kInternal, "Serial port not open for flushing.");
   }
   // Using tcflush for POSIX systems is more reliable for clearing serial buffers.
   if (::tcflush(serial_->native_handle(), TCIFLUSH) != 0) {
-    LOG(ERROR) << "tcflush failed: " << strerror(errno);
+    return absl::InternalError("tcflush failed on " + uart_port_ + ": " + strerror(errno));
   }
   return absl::OkStatus();
 }

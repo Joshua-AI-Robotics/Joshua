@@ -5,11 +5,13 @@
 #include <opencv2/imgproc.hpp>
 
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "sensor_msgs/msg/image.hpp"
 
 class CameraSubscriber : public rclcpp::Node {
  public:
   CameraSubscriber(const std::string& subscribe_topic) : Node("camera_subscriber") {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     // Create subscriber for camera image data
     subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
         subscribe_topic,
@@ -19,14 +21,14 @@ class CameraSubscriber : public rclcpp::Node {
     // Create OpenCV window
     cv::namedWindow("Camera Feed", cv::WINDOW_AUTOSIZE);
 
-    RCLCPP_INFO(this->get_logger(), "Camera subscriber node started!");
-    RCLCPP_INFO(this->get_logger(), "Listening on topic: %s", subscribe_topic.c_str());
-    RCLCPP_INFO(this->get_logger(), "Press 'q' to quit");
+    JOSHUA_LOG(INFO) << "Camera subscriber node started!";
+    JOSHUA_LOG(INFO) << "Listening on topic: " << subscribe_topic;
+    JOSHUA_LOG(INFO) << "Press 'q' to quit";
   }
 
   ~CameraSubscriber() {
     cv::destroyAllWindows();
-    RCLCPP_INFO(this->get_logger(), "Camera subscriber node shutting down.");
+    JOSHUA_LOG(INFO) << "Camera subscriber node shutting down.";
   }
 
  private:
@@ -34,14 +36,13 @@ class CameraSubscriber : public rclcpp::Node {
     try {
       // Validate message
       if (msg->data.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Received empty image data!");
+        JOSHUA_LOG(WARNING) << "Received empty image data!";
         return;
       }
 
       // Check encoding
       if (msg->encoding != "rgb8") {
-        RCLCPP_WARN(
-            this->get_logger(), "Unexpected encoding: %s, expected rgb8", msg->encoding.c_str());
+        JOSHUA_LOG(WARNING) << "Unexpected encoding: " << msg->encoding << ", expected rgb8";
         return;
       }
 
@@ -50,10 +51,8 @@ class CameraSubscriber : public rclcpp::Node {
 
       // Copy image data
       if (msg->data.size() != frame.total() * frame.elemSize()) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Data size mismatch! Expected: %zu, Got: %zu",
-                     frame.total() * frame.elemSize(),
-                     msg->data.size());
+        JOSHUA_LOG(ERROR) << "Data size mismatch! Expected: " << frame.total() * frame.elemSize()
+                          << ", Got: " << msg->data.size();
         return;
       }
 
@@ -64,7 +63,7 @@ class CameraSubscriber : public rclcpp::Node {
       cv::cvtColor(frame, bgr_frame, cv::COLOR_RGB2BGR);
 
       if (bgr_frame.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Failed to process image from received data!");
+        JOSHUA_LOG(WARNING) << "Failed to process image from received data!";
         return;
       }
 
@@ -96,22 +95,18 @@ class CameraSubscriber : public rclcpp::Node {
       // Display the frame
       cv::imshow("Camera Feed", display_frame);
 
-      RCLCPP_DEBUG(this->get_logger(),
-                   "Received image: %dx%d, %zu bytes, encoding: %s",
-                   bgr_frame.cols,
-                   bgr_frame.rows,
-                   msg->data.size(),
-                   msg->encoding.c_str());
+      JOSHUA_LOG(DEBUG) << "Received image: " << bgr_frame.cols << "x" << bgr_frame.rows << ", "
+                        << msg->data.size() << " bytes, encoding: " << msg->encoding;
 
       // Check for 'q' key to quit
       int key = cv::waitKey(1);
       if (key == 'q' || key == 27) {  // 'q' or ESC key
-        RCLCPP_INFO(this->get_logger(), "Quit key pressed, shutting down...");
+        JOSHUA_LOG(INFO) << "Quit key pressed, shutting down...";
         rclcpp::shutdown();
       }
 
     } catch (const std::exception& e) {
-      RCLCPP_ERROR(this->get_logger(), "Error processing image: %s", e.what());
+      JOSHUA_LOG(ERROR) << "Error processing image: " << e.what();
     }
   }
 
@@ -122,11 +117,10 @@ class CameraSubscriber : public rclcpp::Node {
 // docker compose run --rm joshua-u22 bazel run --config=u22 --config=x86-base
 // ros2/utils:camera_subscriber <topic_name>
 int main(int argc, char* argv[]) {
-  rclcpp::init(argc, argv);
+  ros2_utils::InitializeRosLogging(argc, argv);
 
   if (argc < 2) {
-    RCLCPP_WARN(rclcpp::get_logger("camera_subscriber"),
-                "No topic provided, using default topic: /camera_1");
+    JOSHUA_LOG(WARNING) << "No topic provided, using default topic: /camera_1";
     argv[1] = "/camera_1";
   }
 

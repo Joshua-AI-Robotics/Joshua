@@ -1,6 +1,7 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <exception>
 #include <thread>
 
 #include "robot/comm/ethercat/ethercat_transport.h"
@@ -139,9 +140,13 @@ absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(
     return it->second;
   }
 
-  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
-  serials[baudrate] = serial;
-  return serial;
+  try {
+    auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
+    serials[baudrate] = serial;
+    return serial;
+  } catch (const std::exception& error) {
+    return absl::UnavailableError(error.what());
+  }
 }
 
 absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>

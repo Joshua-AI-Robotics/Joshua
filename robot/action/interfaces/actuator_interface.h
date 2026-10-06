@@ -22,12 +22,10 @@ class ActuatorInterface : public ActionInterface {
   virtual absl::Status SetPosition(float angle) = 0;
   virtual absl::Status SetTorque(float torque) = 0;
   virtual absl::Status SetMiddlePosition() {
-    LOG(WARNING) << "SetMiddlePosition not implemented.";
-    return absl::OkStatus();
+    return absl::UnimplementedError("SetMiddlePosition not implemented");
   };
   virtual absl::Status SetIdlePosition() {
-    LOG(WARNING) << "SetIdlePosition not implemented.";
-    return absl::OkStatus();
+    return absl::UnimplementedError("SetIdlePosition not implemented");
   };
 
  protected:
