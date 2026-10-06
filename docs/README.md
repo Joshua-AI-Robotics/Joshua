@@ -8,6 +8,7 @@
 | AI integration rules and proposed follow-ups (including MCP) | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
+| Host GPIO and board pin profiles plan | [HOST_GPIO_AND_BOARD_PROFILES_PLAN.md](HOST_GPIO_AND_BOARD_PROFILES_PLAN.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
 | Agent instructions RFC (AGENTS.md contract) | [AGENTS_RFC.md](AGENTS_RFC.md) |
 | Repository skills (agent + human playbooks) | [skills/README.md](skills/README.md) |
