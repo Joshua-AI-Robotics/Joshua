@@ -5,7 +5,7 @@
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
-| AI integration requirements, vision, checkpoints, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
+| AI integration vision, requirements, user scenarios, checkpoints, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |

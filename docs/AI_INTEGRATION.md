@@ -36,9 +36,11 @@ development:
   cannot supply or bypass. Approval covers the complete bounded plan; changes
   or restarts require fresh confirmation.
 - **Show what actually happened.** Use correctly associated, fresh measured
-  feedback with known units and tolerances. Report progress, completed actions,
-  timeouts, and faults. Missing feedback or a fault invokes the task's defined
-  stop behavior; cancellation remains available without the model.
+  feedback with known units, reference frame or zero, and tolerances. Report
+  progress, completed actions, timeouts, and faults. Label command or step-count
+  estimates separately from measured position. Missing feedback or a fault
+  invokes the task's defined stop behavior; cancellation remains available
+  without the model.
 - **Demonstrate hardware coverage.** Each implemented hardware path needs
   applicable MCP integration and verification. Record missing evidence as a gap
   rather than presenting that path as covered.
@@ -69,8 +71,11 @@ which actions are available. If the hardware type is not implemented, Joshua
 should start a guided integration wizard through chat. It gathers hardware
 details, identifies reusable components and missing support, and walks through
 configuration, implementation, testing, and documentation. The wizard shows
-progress and required human steps. Verification and release are required before
-presenting the hardware as supported.
+progress and required human steps. Its outcome is a validated configuration
+using implemented components, a reusable existing setup, or a clear list of
+missing integration steps. Configuration validation checks integrity; physical
+readiness still needs verification and operator confirmation. New hardware needs
+verification and release before Joshua presents it as supported.
 
 ### Connect to an existing robot
 
@@ -82,13 +87,19 @@ controls. The user should not need to repeat software setup for each session.
 
 ### Conduct an experiment
 
-“Repeat the saved movement 100 times at two supported speeds and compare
-positioning accuracy.” Joshua should clarify the movement, cycle count, speeds,
-and measurement, then preview the complete bounded plan for operator approval.
-The backend executes the repetitions, records completed cycles and measured
-endpoint error, and reports interruptions. If the required feedback is
-unavailable, Joshua should explain what is missing. The user can refine and
-reuse the task through chat.
+“Repeat the saved movement 100 times per speed at two supported speeds and
+compare how closely the joint reaches its targets.” The preview specifies
+**100 cycles per speed, 200 cycles total**, with the movement, endpoints, speeds,
+measurement, and limits resolved before operator approval.
+
+The experiment can be saved as a reusable task or script referencing the robot's
+protobuf configuration. An optional skill can guide creation and refinement
+through chat; Joshua validates and executes the complete approved plan. Results
+include requested and completed cycles, interruptions, partial results, and
+measured joint endpoint error with its units, reference frame or zero, and
+tolerance. Tool-position accuracy requires its own measurement. If the required
+feedback is unavailable, Joshua should explain what is missing. The task format
+and runtime interfaces remain follow-up design decisions.
 
 ## Checkpoints
 
@@ -109,19 +120,26 @@ ownership.
 The user requests one supported movement on a named robot. For example, the
 preview defines a base-joint cycle as **0° → 45° → 0°**, at a supported speed
 and within that arm's calibrated limits. After direct operator confirmation,
-Joshua executes it, shows progress, and uses measured feedback to verify each
-endpoint. The demonstration covers success, timeout, cancellation, and fault
-handling.
+Joshua executes it, shows progress, and uses physical feedback to verify each
+endpoint against a declared reference and tolerance.
+
+The first demonstration combines read-only inspection, independent operator
+confirmation, and that bounded movement. It covers success, timeout,
+cancellation, and fault handling, with stop controls usable without the model
+and observable backend stop status. Verify stop behaviour separately from
+cancellation acknowledgments. Reconnecting and repeating the task should reuse
+the saved setup without repeating software preparation.
 
 ### 3. Compose, repeat, and vary actions through chat
 
-The user saves that movement as “Base movement test,” asks for **100 cycles**,
-and later refines it to “20 cycles” or “slower.” They can also group supported
-movements and repeat the group with finite parameter variations. The LLM
-clarifies the request and previews the full plan; the backend validates and
-executes it as one bounded, operator-approved run. Results show which actions,
-cycles, and variations completed. Start with one useful sequence before
-considering a dedicated experiment framework.
+The user saves that movement as a reusable task or script, optionally guided by
+a skill, and later refines its count or speed through chat. They can group
+supported movements and repeat the group with finite parameter variations. The
+LLM clarifies the request and previews the full plan; the backend validates and
+executes it as one bounded, operator-approved run. Results retain requested and
+completed actions, cycles, variations, and measured outcomes, including partial
+results after interruption. Start with one useful sequence before considering a
+dedicated experiment framework.
 
 ### 4. Reach 100% hardware coverage
 
@@ -140,16 +158,7 @@ implementation designs in follow-up PRs.
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
 current implementations and example presets are indexed in the
-[supported-component catalog](SUPPORTED_COMPONENTS.md). The
-proposed first motion-capable Model Context Protocol (MCP) release is an optional
-front end for exactly one tested, bounded robot operation. AI inference,
-including the existing [inference host](../ai/README.md), and
-[data collection](../ai/train/README.md) are outside its scope. This guide
-records shared design rules and independent proposed follow-ups.
-
-Any contributor may propose these changes. Reviews should include people
-familiar with the affected implementation; this does not create exclusive
-subsystem or runtime roles.
+[supported-component catalog](SUPPORTED_COMPONENTS.md).
 
 | Area | Current implementation | Limitation |
 |---|---|---|
@@ -184,6 +193,15 @@ subsystem or runtime roles.
 
 ## Proposed follow-ups
 
+The proposed first motion-capable Model Context Protocol (MCP) release is an
+optional front end for exactly one tested, bounded robot operation. AI inference,
+including the existing [inference host](../ai/README.md), and
+[data collection](../ai/train/README.md) are outside its scope.
+
+Any contributor may propose these changes. Reviews should include people
+familiar with the affected implementation; this does not create exclusive
+subsystem or runtime roles.
+
 | Change | Start from | Intended result |
 |---|---|---|
 | Change-validation skill | Existing subsystem documentation and test commands; use the catalog when available | A workflow that selects relevant checks and states what each result proves, without implementing another validator. |
@@ -197,8 +215,13 @@ project phases. MCP requires only the tested contract and safeguards relevant
 to each operation it exposes; it does not depend on the contributor tooling
 items in this table.
 
-PR #90 is an unmerged prototype for one actuator. It informs
-this direction but does not establish current MCP support or select the first
+PR #90 is an unmerged prototype for one actuator. Its author reports operating
+Teensy/TB6600 hardware through ChatGPT and a local MCP server. The
+[prototype guide](https://github.com/Joshua-AI-Robotics/Joshua/blob/f0c421f869e16ee85240d9573849f465389a6e78/mhs/README.md)
+describes emitted-step position estimates and readiness flags supplied through
+tool arguments. Independent human confirmation and measured physical feedback
+remain necessary for this guide's first verified task. The prototype informs
+follow-up work without establishing merged MCP support or selecting the first
 operation.
 
 ### Proposed MCP operator guide
