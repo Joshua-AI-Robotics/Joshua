@@ -31,6 +31,9 @@ development:
   match the installed version and merged, verified implementations.
 - **Make every task explicit and bounded.** Resolve the target, movement,
   units, speed, repetition count, and any variations into a validated plan.
+  Feedback-driven plans also specify allowed next actions, selection conditions,
+  and finite action, time, and retry limits. Joshua checks each selected action
+  against those approved bounds.
 - **Get direct operator confirmation.** Before real motion, the person
   responsible for the hardware confirms readiness through a channel the model
   cannot supply or bypass. Approval covers the complete bounded plan; changes
@@ -40,7 +43,8 @@ development:
   progress, completed actions, timeouts, and faults. Label command or step-count
   estimates separately from measured position. Missing feedback or a fault
   invokes the task's defined stop behavior; cancellation remains available
-  without the model.
+  without the model. Preserve the observations, decisions, and failed attempts
+  behind adaptations, and identify changed procedures when comparing results.
 - **Demonstrate hardware coverage.** Each implemented hardware path needs
   applicable MCP integration and verification. Record missing evidence as a gap
   rather than presenting that path as covered.
@@ -54,6 +58,15 @@ Start with an existing AI IDE or compatible chat application connected through
 MCP. A dedicated Joshua chat interface can follow if needed.
 
 **User → Chat → MCP → Joshua backend → Robot**
+
+**Robot feedback → Joshua backend → MCP → Chat**
+
+MCP should expose task state, measured outcomes, and diagnostic logs so chat can
+observe the result and propose the next supported task. The AI application
+(MCP host) owns retrieving updates and continuing the model conversation; the
+chosen client must demonstrate this loop. Backend task state and measurements
+establish outcomes; logs help diagnose events. Joshua owns control timing and
+fault responses.
 
 Connecting supported hardware should be guided. Adding new hardware requires
 implementation, testing, documentation, and release through the relevant
@@ -130,7 +143,7 @@ and observable backend stop status. Verify stop behaviour separately from
 cancellation acknowledgments. Reconnecting and repeating the task should reuse
 the saved setup without repeating software preparation.
 
-### 3. Compose, repeat, and vary actions through chat
+### 3. Compose, repeat, and adapt tasks through chat
 
 The user saves that movement as a reusable task or script, optionally guided by
 a skill, and later refines its count or speed through chat. They can group
@@ -140,6 +153,14 @@ executes it as one bounded, operator-approved run. Results retain requested and
 completed actions, cycles, variations, and measured outcomes, including partial
 results after interruption. Start with one useful sequence before considering a
 dedicated experiment framework.
+
+Close the task loop through **observe → decide → execute → verify**. First,
+use returned measurements and task status to explain a completed task, propose
+the next supported task, obtain its required approval, and execute and verify
+it. Later, choose among preapproved next steps based on observed results, within
+the plan's conditions and finite limits. Joshua validates the choice before
+execution; new plans and restarts require fresh confirmation. Demonstrate an
+unsuccessful outcome that stops the task or requests human help.
 
 ### 4. Reach 100% hardware coverage
 
