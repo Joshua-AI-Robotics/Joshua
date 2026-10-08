@@ -39,27 +39,29 @@ int jw_encode_frame(uint8_t* buf,
     return -1;
   }
   buf[0] = JW_SYNC_BYTE;
-  buf[1] = JW_HEADER_BODY_LEN + payload_len;
+  buf[JW_LENGTH_OFFSET] = JW_HEADER_BODY_LEN + payload_len;
   buf[2] = JW_PROTO_VERSION;
   put_u32(buf + 3, session_id);
   put_u32(buf + 7, message_id);
   buf[11] = cmd;
   buf[12] = channel;
   if (payload_len != 0) memcpy(buf + 13, payload, payload_len);
-  const uint16_t crc = crc16(buf + 2, buf[1]);
-  buf[total - 2] = (uint8_t)crc;
+  const uint16_t crc = crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]);
+  buf[total - JW_CRC_LEN] = (uint8_t)crc;
   buf[total - 1] = (uint8_t)(crc >> 8);
   return (int)total;
 }
 
 int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
-  if (buf == NULL || out == NULL || len < JW_FRAME_OVERHEAD || len > JW_MAX_FRAME_LEN ||
-      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION || buf[1] < JW_HEADER_BODY_LEN ||
-      (size_t)buf[1] + 4 != len) {
+  if (buf == NULL || out == NULL || len < JW_MIN_FRAME_LEN || len > JW_MAX_FRAME_LEN ||
+      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION ||
+      buf[JW_LENGTH_OFFSET] < JW_HEADER_BODY_LEN ||
+      (size_t)buf[JW_LENGTH_OFFSET] + JW_LENGTH_FIELD_OVERHEAD != len) {
     return -1;
   }
-  const uint16_t crc = (uint16_t)buf[len - 2] | ((uint16_t)buf[len - 1] << 8);
-  if (crc16(buf + 2, buf[1]) != crc || get_u32(buf + 3) == 0 || get_u32(buf + 7) == 0) {
+  const uint16_t crc = (uint16_t)buf[len - JW_CRC_LEN] | ((uint16_t)buf[len - 1] << 8);
+  if (crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]) != crc || get_u32(buf + 3) == 0 ||
+      get_u32(buf + 7) == 0) {
     return -1;
   }
   out->proto_ver = buf[2];
@@ -68,7 +70,7 @@ int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
   out->cmd = buf[11];
   out->channel = buf[12];
   out->payload = buf + 13;
-  out->payload_len = buf[1] - JW_HEADER_BODY_LEN;
+  out->payload_len = buf[JW_LENGTH_OFFSET] - JW_HEADER_BODY_LEN;
   return 0;
 }
 
