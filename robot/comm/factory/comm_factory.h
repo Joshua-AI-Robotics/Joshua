@@ -50,6 +50,7 @@ absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport&
 
 class CommFactory {
  public:
+  // Serial connections are shared per port; a conflicting baud rate is rejected.
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
 
   // Replaces the result of CreateComm without changing the consumer call
@@ -57,6 +58,10 @@ class CommFactory {
   // For tests.
   static void SetCommTransportFactoryForTesting(
       std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory);
+
+  // Forgets cached serial connections. Release all consumers before calling.
+  // For tests.
+  static void ResetSerialTransportCacheForTesting();
 
   // Returns a cached instance per interface name — an EtherCAT NIC has
   // exactly one master, and two ecx_init()s on one NIC fight over the raw

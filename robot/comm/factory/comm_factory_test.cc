@@ -1,6 +1,11 @@
 #include "robot/comm/factory/comm_factory.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstdlib>
 #include <memory>
+#include <string>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
@@ -86,6 +91,72 @@ TEST(CommFactoryTest, UnsupportedCapabilitiesAreRejectedBeforeOpeningDevices) {
   auto ethercat = MakeEthercatComm();
   ethercat.set_transport_type(MESSAGE);
   EXPECT_EQ(CommFactory::CreateComm(ethercat).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+class CommFactorySerialCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    // A fresh pseudo-terminal exercises the real serial factory without hardware.
+    master_fd_ = posix_openpt(O_RDWR | O_NOCTTY);
+    ASSERT_GE(master_fd_, 0);
+    ASSERT_EQ(grantpt(master_fd_), 0);
+    ASSERT_EQ(unlockpt(master_fd_), 0);
+    const char* port = ptsname(master_fd_);
+    ASSERT_NE(port, nullptr);
+    comm_.set_comm_type(SERIAL);
+    comm_.set_transport_type(BYTE_STREAM);
+    comm_.mutable_serial_config()->set_port(port);
+    comm_.mutable_serial_config()->set_baudrate(115200);
+  }
+
+  void TearDown() override {
+    CommFactory::ResetSerialTransportCacheForTesting();
+    if (master_fd_ >= 0) close(master_fd_);
+  }
+
+  int master_fd_ = -1;
+  robot::comm::Comm comm_;
+};
+
+TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneSerialAcrossCapabilities) {
+  auto first = CommFactory::CreateComm(comm_);
+  auto second = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+  ASSERT_TRUE(second.ok()) << second.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto second_stream = GetCommTransport<ByteStream>(*second);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(second_stream.ok());
+  EXPECT_EQ(*first_stream, *second_stream);
+
+  comm_.set_transport_type(MESSAGE);
+  auto message = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(message.ok()) << message.status();
+  auto message_transport = GetCommTransport<MessageTransport>(*message);
+  ASSERT_TRUE(message_transport.ok());
+  EXPECT_EQ(std::dynamic_pointer_cast<MessageTransport>(*first_stream), *message_transport);
+}
+
+TEST_F(CommFactorySerialCacheTest, ConflictingBaudRateIsRejectedAndOriginalSerialIsPreserved) {
+  auto first = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+
+  auto conflicting = comm_;
+  conflicting.mutable_serial_config()->set_baudrate(9600);
+  auto rejected = CommFactory::CreateComm(conflicting);
+  ASSERT_EQ(rejected.status().code(), absl::StatusCode::kInvalidArgument);
+  const std::string error(rejected.status().message());
+  EXPECT_NE(error.find(comm_.serial_config().port()), std::string::npos);
+  EXPECT_NE(error.find("115200"), std::string::npos);
+  EXPECT_NE(error.find("9600"), std::string::npos);
+
+  auto retry = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto retry_stream = GetCommTransport<ByteStream>(*retry);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(retry_stream.ok());
+  EXPECT_EQ(*first_stream, *retry_stream);
 }
 
 TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {

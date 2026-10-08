@@ -12,13 +12,14 @@
 namespace robot::comm {
 
 namespace {
-// Shared serial resources keyed by port and baud rate.
+// One serial connection per port, with a fixed baud rate and shared I/O lock.
 struct PortResources {
   std::shared_ptr<boost::asio::io_context> io_context{std::make_shared<boost::asio::io_context>()};
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard{
       boost::asio::make_work_guard(*io_context)};
   std::thread io_context_thread{[this] { io_context->run(); }};
-  std::map<uint32_t, std::shared_ptr<robot::comm::Serial>> serials;
+  uint32_t baudrate = 0;
+  std::shared_ptr<robot::comm::Serial> serial;
   ~PortResources() {
     work_guard.reset();
     if (io_context_thread.joinable()) io_context_thread.join();
@@ -65,7 +66,7 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   }
 
   const std::string& port = config.port();
-  uint32_t baudrate = config.baudrate();
+  const uint32_t baudrate = config.baudrate();
 
   std::lock_guard<std::mutex> lock(g_serial_mutex);
   auto& port_res_ptr = g_port_resources[port];
@@ -73,14 +74,18 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
     port_res_ptr = std::make_unique<PortResources>();
   }
 
-  auto& serials = port_res_ptr->serials;
-  auto it = serials.find(baudrate);
-  if (it != serials.end()) {
-    return it->second;
+  if (port_res_ptr->serial) {
+    if (port_res_ptr->baudrate != baudrate) {
+      return absl::InvalidArgumentError("Serial port " + port + " is already open at baud rate " +
+                                        std::to_string(port_res_ptr->baudrate) + "; requested " +
+                                        std::to_string(baudrate));
+    }
+    return port_res_ptr->serial;
   }
 
   auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
-  serials[baudrate] = serial;
+  port_res_ptr->baudrate = baudrate;
+  port_res_ptr->serial = serial;
   return serial;
 }
 
@@ -141,6 +146,11 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
 void CommFactory::SetCommTransportFactoryForTesting(
     std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory) {
   g_comm_transport_factory_for_testing = std::move(factory);
+}
+
+void CommFactory::ResetSerialTransportCacheForTesting() {
+  std::lock_guard<std::mutex> lock(g_serial_mutex);
+  g_port_resources.clear();
 }
 
 absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>
