@@ -68,7 +68,7 @@ class SerialExchangeTest : public ::testing::Test {
 };
 
 TEST_F(SerialExchangeTest, ReadsVariableResponseLengthsAndFragmentedInput) {
-  for (size_t size : {1, 26, 49}) {
+  for (size_t size : {0, 1, 26, 49}) {
     const auto response = Reply(size);
     auto device = std::async(std::launch::async, [&] {
       if (!ReadRequest()) return false;
@@ -130,6 +130,27 @@ TEST_F(SerialExchangeTest, InvalidLengthsAndDisconnectFail) {
   master = -1;
   EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kUnavailable);
   EXPECT_EQ(serial->Exchange({}).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(SerialExchangeTest, FramesBelowWireRevisionTwoMinimumAreRejected) {
+  const Bytes legacy_frame{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04};
+  auto truncated_frame = request;
+  truncated_frame.pop_back();
+  truncated_frame[JW_LENGTH_OFFSET] = truncated_frame.size() - JW_LENGTH_FIELD_OVERHEAD;
+
+  for (const auto& frame : {legacy_frame, truncated_frame}) {
+    EXPECT_EQ(serial->Exchange(frame).status().code(), absl::StatusCode::kInvalidArgument);
+    pollfd descriptor{master, POLLIN, 0};
+    EXPECT_EQ(poll(&descriptor, 1, 10), 0);  // Invalid requests must not reach the bus.
+
+    auto device = std::async(std::launch::async, [&] {
+      if (!ReadRequest()) return false;
+      return write(master, frame.data(), frame.size()) == static_cast<ssize_t>(frame.size());
+    });
+    auto result = serial->Exchange(request);
+    EXPECT_TRUE(device.get());
+    EXPECT_EQ(result.status().code(), absl::StatusCode::kDataLoss);
+  }
 }
 
 TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
