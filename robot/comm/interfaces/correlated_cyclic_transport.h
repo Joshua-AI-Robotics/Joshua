@@ -11,12 +11,18 @@
 
 namespace robot::comm {
 
-// Factory supplies a ready-to-use endpoint. A worker owns cyclic I/O; callers
+// Exchanges cyclic control messages, such as target updates and feedback carried
+// by an EtherCAT PDO worker. Each Exchange returns the response matching its request.
+// JoshuaWire adapters support only:
+//   SET_TARGET   - update a channel's position, velocity or torque target.
+//   GET_FEEDBACK - read a channel's position, velocity and fault flags.
+// Management commands (RESET_SESSION, IDENTIFY, CONFIGURE_CHANNEL, ENABLE,
+// DISABLE and ESTOP) use MessageTransport. The board engine validates routing.
+//
+// CommFactory supplies a ready-to-use endpoint. A worker owns cyclic I/O; callers
 // wait without driving the bus. One request may be in flight per endpoint.
 // Implementations must validate the response correlation tuple, reject stale
 // replies, quarantine timed-out IDs and wake blocked calls on stop/link loss.
-// JoshuaWire adapters accept SET_TARGET/GET_FEEDBACK only; routing validation
-// belongs to the board engine. Management traffic uses MessageTransport.
 class CorrelatedCyclicTransport {
  public:
   virtual ~CorrelatedCyclicTransport() = default;
