@@ -203,11 +203,11 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
         return absl::DeadlineExceededError("Serial framed exchange timed out; outcome unknown.");
       }
       pollfd descriptor{fd, events, 0};
-      const int timeout =
+      const int poll_timeout_ms =
           static_cast<int>(
               std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count()) +
           1;
-      const int result = poll(&descriptor, 1, timeout);
+      const int result = poll(&descriptor, 1, poll_timeout_ms);
       if (result < 0 && errno == EINTR) continue;
       if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
         return absl::UnavailableError(
