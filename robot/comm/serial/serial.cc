@@ -193,6 +193,8 @@ absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> 
   if (tcflush(fd, TCIFLUSH) != 0) {
     return absl::UnavailableError("Cannot flush serial input before exchange.");
   }
+  // TODO: Integrate with RobotTime when it exposes a monotonic deadline API.
+  // Keep steady_clock for deadline calculations; UTC/PTP timestamps can jump.
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
