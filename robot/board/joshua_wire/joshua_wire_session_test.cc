@@ -284,7 +284,8 @@ TEST_F(JoshuaWireSessionTest, FailedResetAndInvalidIdSourceKeepSessionClosed) {
 }
 
 TEST_F(JoshuaWireSessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration) {
-  JoshuaWireSession small(transport, [this] { return ++session_id; }, 5);
+  JoshuaWireSession small(
+      transport, [this] { return ++session_id; }, 5);
   ASSERT_TRUE(small.Open().ok());                                  // ID 1
   ASSERT_TRUE(small.Exchange(Configure()).ok());                   // ID 2
   ASSERT_TRUE(small.Exchange(Command(JW_CMD_ENABLE)).ok());        // ID 3
@@ -303,7 +304,8 @@ TEST_F(JoshuaWireSessionTest, ExhaustionStopsResetsAndRestoresOnlyConfiguration)
 }
 
 TEST_F(JoshuaWireSessionTest, FailedStopAtExhaustionDoesNotResetOrReuseLastId) {
-  JoshuaWireSession small(transport, [this] { return ++session_id; }, 3);
+  JoshuaWireSession small(
+      transport, [this] { return ++session_id; }, 3);
   ASSERT_TRUE(small.Open().ok());
   ASSERT_TRUE(small.Exchange(Configure()).ok());
   transport->timeout = true;
