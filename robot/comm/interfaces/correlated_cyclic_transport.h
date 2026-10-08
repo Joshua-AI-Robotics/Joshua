@@ -27,10 +27,20 @@ class CorrelatedCyclicTransport {
  public:
   virtual ~CorrelatedCyclicTransport() = default;
 
-  // A finite, positive timeout bounds the entire call, including slot waiting.
-  // Borrow request bytes until return; copy them into adapter-owned queue/slot
-  // storage. Returned response bytes are owned by the caller. A post-publication
-  // timeout has unknown execution outcome and must not trigger an implicit retry.
+  // Submits a cyclic request to the I/O worker and waits for its matching response.
+  //
+  // Args:
+  //   request: Complete encoded cyclic request message. The caller keeps its bytes
+  //     valid until return; implementations copy them into owned queue/slot storage.
+  //   timeout: Finite, positive duration bounding the entire call, including waiting
+  //     for an available request slot, transmission and the response.
+  //
+  // Returns:
+  //   Matching response bytes owned by the caller, or an error status on invalid
+  //   input, timeout, endpoint stop or link loss.
+  //
+  // A timeout after publication has unknown execution outcome and must not trigger
+  // an implicit retry.
   virtual absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t> request,
                                                         absl::Duration timeout) = 0;
 };
