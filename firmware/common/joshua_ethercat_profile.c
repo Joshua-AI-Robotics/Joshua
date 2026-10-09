@@ -71,16 +71,16 @@ static int Command(void* context, const jw_frame_t* frame, uint8_t* payload, siz
   jw_command_t command = {frame->cmd, frame->channel, frame->payload, frame->payload_len};
   if (frame->cmd == JW_CMD_IDENTIFY) {
     if (frame->channel != JW_CHANNEL_NONE || frame->payload_len)
-      return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+      return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
     return jw_encode_identify_payload(payload, capacity, &p->config.identity);
   }
   if (frame->cmd != JW_CMD_ESTOP && frame->channel >= p->config.identity.n_channels)
-    return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
   if (p->fault_latched && (frame->cmd == JW_CMD_ENABLE || frame->cmd == JW_CMD_SET_TARGET ||
                            frame->cmd == JW_CMD_CONFIGURE_CHANNEL))
-    return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
   if (frame->cmd == JW_CMD_ENABLE && !p->operational)
-    return jw_encode_status_payload(payload, capacity, JW_STATUS_ERROR);
+    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
   const bool channel_command = frame->channel < p->config.identity.n_channels;
   const bool was_enabled = channel_command && p->config.enabled(p->config.context, frame->channel);
   int length = p->config.command(p->config.context, &command, payload, capacity);
@@ -111,7 +111,7 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   for (size_t i = offset + length; i < offset + JW_MAX_FRAME_LEN; ++i)
     if (bytes[i]) return -1;
   jw_frame_t frame;
-  if (jw_decode_frame(bytes + offset, length, &frame) != 0 ||
+  if (jw_decode_frame(bytes + offset, length, &frame) != JW_RESULT_OK ||
       frame.session_id != p->session.session_id)
     return -1;
   const bool cyclic = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;

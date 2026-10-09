@@ -452,7 +452,7 @@ class Am243EthercatProfileTest : public ::testing::Test {
         JoshuaEthercatProfileWrite(&profile, JWEC_REQUEST_INDEX, request.data(), request.size()),
         0);
     jw_frame_t response;
-    if (jw_decode_frame(profile.mailbox + 12, profile.mailbox[8], &response) != 0) {
+    if (jw_decode_frame(profile.mailbox + 12, profile.mailbox[8], &response) != JW_RESULT_OK) {
       ADD_FAILURE() << "missing management reply";
       return {};
     }
@@ -529,8 +529,8 @@ TEST_F(Am243EthercatProfileTest, PdoExecutesOnceAndDuplicateDoesNotFeedWatchdog)
   EXPECT_EQ(ProfileU32(profile.input + 4), generation);
   EXPECT_EQ(ProfileU32(profile.input + 8), generation);
   jw_frame_t request, response;
-  ASSERT_EQ(jw_decode_frame(target.data() + 16, target[12], &request), 0);
-  ASSERT_EQ(jw_decode_frame(profile.input + 16, profile.input[12], &response), 0);
+  ASSERT_EQ(jw_decode_frame(target.data() + 16, target[12], &request), JW_RESULT_OK);
+  ASSERT_EQ(jw_decode_frame(profile.input + 16, profile.input[12], &response), JW_RESULT_OK);
   EXPECT_TRUE(jw_response_matches(&request, &response));
   for (uint64_t now : {100, 200, 300, 400}) {
     JoshuaEthercatProfileTick(&profile, now, true);
@@ -579,10 +579,10 @@ TEST_F(Am243EthercatProfileTest, CommunicationTimeoutOpLossAndBackwardClockLatch
   EXPECT_FALSE(channel.enabled);
   EXPECT_EQ(channel.fault_flags, JOSHUA_ECAT_FAULT_STATE);
   Reset(9);
-  EXPECT_EQ(Management(JW_CMD_CONFIGURE_CHANNEL, Bytes(11)), (Bytes{0}));
+  EXPECT_EQ(Management(JW_CMD_CONFIGURE_CHANNEL, Bytes(11)), (Bytes{JW_STATUS_OK}));
   EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{JW_STATUS_ERROR}));  // Cannot enable outside OP.
   JoshuaEthercatProfileTick(&profile, 202, true);
-  EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{0}));
+  EXPECT_EQ(Management(JW_CMD_ENABLE), (Bytes{JW_STATUS_OK}));
   JoshuaEthercatProfileTick(&profile, 201, true);
   EXPECT_FALSE(channel.enabled);
   EXPECT_TRUE(channel.fault_flags & JOSHUA_ECAT_FAULT_STATE);
@@ -683,7 +683,7 @@ TEST_F(Am243EthercatProfileTest, IndependentChannelsCannotKeepEachOthersTargetsA
   JoshuaEthercatProfileTick(&profile, 0, true);
   auto identity = Management(JW_CMD_IDENTIFY, {}, JW_CHANNEL_NONE);
   jw_identify_response_t decoded{};
-  ASSERT_EQ(jw_decode_identify_payload(identity.data(), identity.size(), &decoded), 0);
+  ASSERT_EQ(jw_decode_identify_payload(identity.data(), identity.size(), &decoded), JW_RESULT_OK);
   EXPECT_EQ(decoded.board_id, JW_BOARD_TEENSY41);
   EXPECT_EQ(decoded.n_channels, 2);
   EXPECT_EQ(std::string(decoded.fw_name), "other-board-jw");

@@ -1582,9 +1582,9 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   auto identity = endpoint->Exchange(JwecRequest(2, JW_CMD_IDENTIFY));
   ASSERT_TRUE(identity.ok()) << identity.status();
   jw_frame_t frame;
-  ASSERT_EQ(jw_decode_frame(identity->data(), identity->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(identity->data(), identity->size(), &frame), JW_RESULT_OK);
   jw_identify_response_t value;
-  ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &value), 0);
+  ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &value), JW_RESULT_OK);
   EXPECT_EQ(value.board_id, JW_BOARD_AM243);
   EXPECT_EQ(std::string(value.fw_name), "am243-ec-jw");
   ASSERT_TRUE(master
@@ -1600,7 +1600,7 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   ASSERT_TRUE(endpoint->Exchange(command(3, JW_CMD_CONFIGURE_CHANNEL, SdoBytes(11))).ok());
   auto enabled = endpoint->Exchange(command(4, JW_CMD_ENABLE));
   ASSERT_TRUE(enabled.ok()) << enabled.status();
-  ASSERT_EQ(jw_decode_frame(enabled->data(), enabled->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(enabled->data(), enabled->size(), &frame), JW_RESULT_OK);
   ASSERT_EQ(frame.payload_len, 1);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
   SdoBytes target(5);
@@ -1608,13 +1608,13 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
             5);
   auto set = endpoint->Exchange(command(5, JW_CMD_SET_TARGET, target), absl::Seconds(1));
   ASSERT_TRUE(set.ok()) << set.status();
-  ASSERT_EQ(jw_decode_frame(set->data(), set->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(set->data(), set->size(), &frame), JW_RESULT_OK);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
   auto feedback = endpoint->Exchange(command(6, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
   ASSERT_TRUE(feedback.ok()) << feedback.status();
-  ASSERT_EQ(jw_decode_frame(feedback->data(), feedback->size(), &frame), 0);
+  ASSERT_EQ(jw_decode_frame(feedback->data(), feedback->size(), &frame), JW_RESULT_OK);
   jw_feedback_t motion;
-  ASSERT_EQ(jw_decode_feedback_payload(frame.payload, frame.payload_len, &motion), 0);
+  ASSERT_EQ(jw_decode_feedback_payload(frame.payload, frame.payload_len, &motion), JW_RESULT_OK);
   EXPECT_FLOAT_EQ(motion.position, 123.0f);
   EXPECT_EQ(motion.fault_flags, 0);
   ASSERT_TRUE(endpoint->Exchange(JwecRequest(7, JW_CMD_ESTOP)).ok());
