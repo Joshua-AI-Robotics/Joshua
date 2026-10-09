@@ -5,7 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIRMWARE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JOSHUA_ROOT="$(cd "$FIRMWARE_DIR/../../.." && pwd)"
 JOSHUA_ETHERCAT_PROFILE="${JOSHUA_ETHERCAT_PROFILE:-ti-demo}"
-
+if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw-soes ]]; then
+  exec bash "$SCRIPT_DIR/build_soes.sh" "$@"
+fi
 case "$JOSHUA_ETHERCAT_PROFILE" in
   ti-demo) ARTIFACT_NAME="am243_dual_transport_jw" ;;
   jw)
@@ -17,7 +19,7 @@ case "$JOSHUA_ETHERCAT_PROFILE" in
     done
     ARTIFACT_NAME="am243_ethercat_jw"
     ;;
-  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo or jw" >&2; exit 2 ;;
+  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo, jw, or jw-soes" >&2; exit 2 ;;
 esac
 SDK_ROOT="${INDUSTRIAL_COMMUNICATIONS_SDK_PATH:-${HOME}/ti/ind_comms_sdk_am243x_09_00_00_03}"
 TI_PROFILE_DIR="$SDK_ROOT/examples/industrial_comms/ethercat_slave_demo/device_profiles/401_simple"

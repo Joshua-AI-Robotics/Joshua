@@ -50,6 +50,9 @@ The STEP/DIR backend can move real motors when compiled into firmware. See the
   slave-stack-independent firmware endpoint: descriptor, CoE/PDO correlation,
   shared session, retained replies, fault latch and per-channel target watchdogs.
   Identity and command/reset/stop/enabled callbacks come from the board.
+- [soes/](soes/README.md) — optional board-independent SOES binding of that
+  profile: fixed dictionary, PDO mapping and compiler/stack options. Excluded
+  from the ordinary PlatformIO source set; SOES is a separately licensed dependency.
 - [joshua_stepdir_commands.h](joshua_stepdir_commands.h) and `.cpp` — shared
   Teensy/ESP32 command handling, calling [backend_stepdir.h](backend_stepdir.h)
   and `.cpp` for physical pin control. Each board supplies `channel_table.h`.
@@ -77,8 +80,8 @@ response is retained rather than silently discarded.
 
 The `teensy41-serial` and `esp32-serial` PlatformIO profiles explicitly select
 their UART/USB adapter. AM243's `ti-demo` profile selects its UART adapter in a
-dedicated RTOS task with a software-only channel. The `jw` profile
-selects the existing EtherCAT capability instead: complete process-data
+dedicated RTOS task with a software-only channel. The `jw` and `jw-soes` profiles
+select the existing EtherCAT capability instead: complete process-data
 snapshots, management messages, deadlines and watchdogs remain in that profile.
 EtherCAT reuses the JW codec/session/commands without pretending its cyclic
 timing and delivery guarantees are those of `frame_transport_t`.
@@ -121,6 +124,11 @@ registration there; existing model configurations use the same comm path.
 6. Validate identity, reset, both command planes, duplicates, per-channel
    freshness, OP/link loss and stop behavior on the new hardware. Native tests
    cannot establish physical-output safety or production timing.
+
+The opt-in AM243 SOES artifact replaces the slave-stack dependency at build time,
+but has not yet passed hardware qualification. Existing TI artifacts retain
+their evaluation limit. TI PRU firmware licensing, product identity and endurance
+validation remain separate work; no fully open firmware claim is made here.
 
 ## Command and frame boundaries
 

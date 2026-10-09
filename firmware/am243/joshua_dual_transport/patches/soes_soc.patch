@@ -1,0 +1,4 @@
+--- a/tiescsoc.c
++++ b/tiescsoc.c
+@@ -43,1 +43,0 @@
+-#include <industrial_comms/ethercat_slave/beckhoff_stack/stack_hal/tieschw.h>

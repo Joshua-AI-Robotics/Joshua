@@ -83,7 +83,10 @@ The endpoint and watchdog policy now live in `common/joshua_ethercat_profile`.
 AM243 supplies identity, its TI-stack bridge and drive callbacks. Other boards
 reuse that core and the same host communication implementation; see the
 [firmware porting contract](common/README.md#porting-jw-ethercat-to-another-board).
-The original AM243 images still link TI's one-hour evaluation stack. Hardware timing and endurance qualification remain open, including the
+The original AM243 images still link TI's one-hour evaluation stack. A separate
+[SOES candidate](am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
+builds without that stack and has native protocol coverage. Hardware timing
+and endurance qualification remain open, including the
 [master-side NIC timing issue](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
 Evaluation-stack retirement remains pending.
 

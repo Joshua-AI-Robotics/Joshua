@@ -15,9 +15,38 @@
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_endpoint.h"
+#include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/comm/factory/comm_factory.h"
+
+extern "C" {
+#include "ecat_slv.h"
+#include "esc_coe.h"
+}
+
+// Memory-only ESC for the real SOES parser/PDO callbacks. This substitutes only
+// registers, not the slave stack; it cannot validate AM243 PRU handshakes/timing.
+namespace {
+std::array<uint8_t, 0x2000> soes_esc{};
+uint64_t soes_time_us;
+}  // namespace
+extern "C" void ESC_read(uint16_t address, void* data, uint16_t size) {
+  ASSERT_LE(static_cast<size_t>(address) + size, soes_esc.size());
+  std::memcpy(data, soes_esc.data() + address, size);
+  if (address == SM2_sma) ESCvar.ALevent &= ~ESCREG_ALEVENT_SM2;
+}
+extern "C" void ESC_write(uint16_t address, void* data, uint16_t size) {
+  ASSERT_LE(static_cast<size_t>(address) + size, soes_esc.size());
+  std::memcpy(soes_esc.data() + address, data, size);
+}
+extern "C" void ESC_init(const esc_cfg_t*) {}
+extern "C" int8_t EEP_read(uint32_t, uint8_t*, uint16_t) {
+  return 1;
+}
+extern "C" int8_t EEP_write(uint32_t, uint8_t*, uint16_t) {
+  return 1;
+}
 
 namespace robot::board {
 namespace {
@@ -709,6 +738,154 @@ TEST_F(Am243EthercatProfileTest, IndependentChannelsCannotKeepEachOthersTargetsA
   Reset(12);
   EXPECT_FALSE(profile.fault_latched);
   for (const auto& c : channels) EXPECT_FALSE(c.configured);
+}
+
+// Extend the maintained profile suite with the production SOES parser, fixed
+// object dictionary and real PDO packing. No separate development probe files.
+class SoesProfileTest : public Am243EthercatProfileTest {
+ protected:
+  void SetUp() override {
+    Am243EthercatProfileTest::SetUp();
+    soes_esc.fill(0);
+    soes_esc[ESCREG_DLSTATUS] = 1;
+    soes_time_us = 0;
+    std::memset(static_cast<void*>(&ESCvar), 0, sizeof(ESCvar));
+    std::memset(MBXcontrol, 0, sizeof(_MBXcontrol) * MBXBUFFERS);
+    JoshuaSoesConfig port{};
+    port.profile = &profile;
+    port.vendor_id = 0x12345678;
+    port.product_code = 0xabcdef01;
+    port.time_us = []() -> uint64_t { return soes_time_us; };
+    port.lock = []() -> uintptr_t { return 0; };
+    port.unlock = [](uintptr_t) {};
+    ASSERT_EQ(JoshuaSoesInit(&port), 0);
+    ESCvar.ALstatus = ESCpreop;
+    ESCvar.MBXrun = 1;
+    // Initialize SOES's mailbox pointers through its state machine config.
+    ESCvar.activembxsize = MBXSIZE;
+    Bytes reset(8);
+    reset[0] = 1;
+    ProfilePut32(reset.data() + 4, 8);
+    EXPECT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x60);
+    session_id = 8;
+    generation = 0;
+    next_id = 1;
+  }
+  Bytes Transfer(uint8_t command,
+                 uint16_t index,
+                 uint8_t sub,
+                 const Bytes& payload,
+                 uint32_t declared_size = 0) {
+    std::memset(MBX, 0, MBXBUFFERS * MBXSIZE);
+    std::memset(MBXcontrol, 0, sizeof(_MBXcontrol) * MBXBUFFERS);
+    auto* sdo = reinterpret_cast<_COEsdo*>(MBX);
+    sdo->mbxheader.length = COE_HEADERSIZE + payload.size();
+    sdo->mbxheader.mbxtype = MBXCOE;
+    sdo->coeheader.numberservice = COE_SDOREQUEST << 12;
+    sdo->command = command;
+    sdo->index = index;
+    sdo->subindex = sub;
+    sdo->size = declared_size;
+    if (!payload.empty()) std::memcpy(MBX + sizeof(_COEsdo), payload.data(), payload.size());
+    MBXcontrol[0].state = MBXstate_inclaim;
+    ESCvar.xoe = 0;
+    ESC_coeprocess();
+    for (size_t i = 1; i < MBXBUFFERS; ++i) {
+      if (MBXcontrol[i].state == MBXstate_outreq) {
+        auto* reply = reinterpret_cast<_COEsdo*>(MBX + i * MBXSIZE);
+        const auto* begin = reinterpret_cast<const uint8_t*>(reply);
+        return Bytes(begin, begin + sizeof(_MBXh) + reply->mbxheader.length);
+      }
+    }
+    ADD_FAILURE() << "SOES did not return a CoE response";
+    return Bytes(16);
+  }
+  Bytes Download(uint16_t index, const Bytes& bytes, uint8_t sub = 0, bool ca = false) {
+    // Normal transfers exercise the full-size parser, even for the 4-byte ack.
+    return Transfer(0x21 | (ca ? 0x10 : 0), index, sub, bytes, bytes.size());
+  }
+  Bytes Upload(uint16_t index, uint8_t sub = 0, bool ca = false) {
+    return Transfer(0x40 | (ca ? 0x10 : 0), index, sub, {});
+  }
+  void SetOp() {
+    ESCvar.ALstatus = ESCop;
+    ESCvar.App.state = APPSTATE_INPUT | APPSTATE_OUTPUT;
+    ESCvar.ESC_SM2_sml = sizeOfPDO(0x1c12, &ESCvar.sm2mappings, SMmap2, MAX_MAPPINGS_SM2);
+    ESCvar.ESC_SM3_sml = sizeOfPDO(0x1c13, &ESCvar.sm3mappings, SMmap3, MAX_MAPPINGS_SM3);
+    ASSERT_EQ(ESCvar.ESC_SM2_sml, 80);
+    ASSERT_EQ(ESCvar.ESC_SM3_sml, 80);
+  }
+  Bytes Cyclic(const Bytes& bytes) {
+    std::memcpy(soes_esc.data() + SM2_sma, bytes.data(), bytes.size());
+    ESCvar.ALevent |= ESCREG_ALEVENT_SM2;
+    DIG_process(DIG_PROCESS_OUTPUTS_FLAG | DIG_PROCESS_APP_HOOK_FLAG | DIG_PROCESS_INPUTS_FLAG);
+    return Bytes(soes_esc.data() + SM3_sma, soes_esc.data() + SM3_sma + 80);
+  }
+  void ConfigureAndEnable() {
+    SetOp();
+    for (uint8_t cmd : {JW_CMD_CONFIGURE_CHANNEL, JW_CMD_ENABLE}) {
+      const auto image = Image(false, cmd, cmd == JW_CMD_CONFIGURE_CHANNEL ? Bytes(11) : Bytes{});
+      EXPECT_EQ(Download(JWEC_REQUEST_INDEX, image)[8], 0x60);
+      const auto uploaded = Upload(JWEC_RESPONSE_INDEX);
+      ASSERT_EQ(uploaded.size(), 16 + 76);
+      EXPECT_EQ(uploaded[8], 0x41);
+      jw_frame_t reply;
+      ASSERT_EQ(jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply), JW_RESULT_OK);
+      ASSERT_EQ(reply.payload_len, 1);
+      EXPECT_EQ(reply.payload[0], JW_STATUS_OK);
+      EXPECT_EQ(Download(JWEC_ACK_INDEX, Bytes(image.begin() + 4, image.begin() + 8))[8], 0x60);
+    }
+    ASSERT_TRUE(channel.enabled);
+  }
+};
+
+TEST_F(SoesProfileTest, RealCoeDiscoveryAndExactAccessContract) {
+  const auto descriptor = Upload(JWEC_DESCRIPTOR_INDEX);
+  ASSERT_EQ(descriptor.size(), 52);
+  EXPECT_EQ(descriptor[8], 0x41);
+  EXPECT_EQ(std::memcmp(descriptor.data() + 16, "JWEC", 4), 0);
+  EXPECT_EQ(ProfileU32(Upload(0x1018, 1).data() + 12), 0x12345678);
+  EXPECT_EQ(ProfileU32(Upload(0x1018, 2).data() + 12), 0xabcdef01);
+  EXPECT_EQ(Upload(0x1c12, 1)[12], 0);
+  EXPECT_EQ(Upload(0x1c12, 1)[13], 0x16);
+  EXPECT_EQ(ProfileU32(Upload(0x1600, 20).data() + 12), 0x70001420);
+  EXPECT_EQ(ProfileU32(Upload(JWEC_SESSION_INDEX).data() + 20), session_id);
+  EXPECT_EQ(Upload(JWEC_DESCRIPTOR_INDEX, 0, true)[8], 0x80);
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, Bytes(7))[8], 0x80);
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, Bytes(9))[8], 0x80);
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, Bytes(8), 1)[8], 0x80);
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, Bytes(8), 0, true)[8], 0x80);
+  EXPECT_EQ(Download(JWEC_DESCRIPTOR_INDEX, Bytes(36))[8], 0x80);
+  EXPECT_EQ(Download(0x7000, Bytes(4), 1)[8], 0x80);
+  EXPECT_EQ(Upload(0x6000, 1)[8], 0x80);
+  // No partial session mutation, truncation or segmented command execution.
+  EXPECT_EQ(Transfer(0x21, JWEC_SESSION_INDEX, 0, Bytes(4), 8)[8], 0x80);
+  EXPECT_EQ(Transfer(0x21, JWEC_SESSION_INDEX, 0, Bytes(8), 0x10008)[8], 0x80);
+  EXPECT_EQ(ProfileU32(Upload(JWEC_SESSION_INDEX).data() + 20), session_id);
+}
+
+TEST_F(SoesProfileTest, RealPdoMappingDuplicateWatchdogAndOpLoss) {
+  ConfigureAndEnable();
+  const auto target = Target(42);
+  const auto first = Cyclic(target);
+  EXPECT_FLOAT_EQ(channel.target_value, 42);
+  for (soes_time_us = 100; soes_time_us < 500; soes_time_us += 100) {
+    EXPECT_EQ(Cyclic(target), first);
+    EXPECT_TRUE(channel.enabled);
+  }
+  Cyclic(target);
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_NE(channel.fault_flags & JOSHUA_ECAT_FAULT_TARGET, 0);
+  Bytes reset(8);
+  reset[0] = 1;
+  ProfilePut32(reset.data() + 4, 9);
+  ASSERT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x60);
+  session_id = 9;
+  next_id = 1;
+  ConfigureAndEnable();
+  ESC_stopoutput();
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_TRUE(profile.fault_latched);
 }
 
 }  // namespace

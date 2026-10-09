@@ -1,0 +1,17 @@
+--- a/soes/esc_coe.c
++++ b/soes/esc_coe.c
+@@ -307,1 +307,1 @@
+-   uint32_t size;
++   size_t size;
+@@ -364,1 +364,1 @@
+-                     dataptr, (size_t *)&size, (objd + nsub)->flags);
++                     dataptr, &size, (objd + nsub)->flags);
+@@ -388,1 +388,1 @@
+-                     (objd + nsub)->data, (size_t *)&size, (objd + nsub)->flags);
++                     (objd + nsub)->data, &size, (objd + nsub)->flags);
+@@ -622,1 +622,1 @@
+-   uint32_t size = complete_access_subindex_loop(objd, nidx, nsub, NULL, UPLOAD, 0);
++   size_t size = complete_access_subindex_loop(objd, nidx, nsub, NULL, UPLOAD, 0);
+@@ -644,1 +644,1 @@
+-         objd->data, (size_t *)&size, objd->flags | COMPLETE_ACCESS_FLAG);
++         objd->data, &size, objd->flags | COMPLETE_ACCESS_FLAG);

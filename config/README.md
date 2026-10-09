@@ -111,7 +111,7 @@ The complete [AM243 JW EtherCAT example](config_preset/example/am243_jw_ethercat
 configures one software-only STEP_DIR channel and a Float32 position-command
 subscriber on `am243_jw_joint_1/position`. Replace `ethercat0` with the intended
 NIC and confirm `slave_index` before running: this preset opens a real bus.
-It requires the separate `jw` EtherCAT firmware; the default
+It requires the separate `jw` or `jw-soes` EtherCAT firmware; the default
 UART/TI echo image is incompatible. The current AM243 channel does not drive
 STEP/DIR GPIOs. Its timing values are illustrative and require qualification
 on the intended hardware.
