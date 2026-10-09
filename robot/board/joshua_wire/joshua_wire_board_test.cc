@@ -37,7 +37,7 @@ FakeJoshuaWireTransport::Response MakeStatusResponse(uint8_t cmd,
                                                      uint8_t channel,
                                                      jw_status_t status) {
   uint8_t buf[JW_MAX_FRAME_LEN];
-  const int len = jw_encode_status_payload(buf, sizeof(buf), status);
+  const int len = jw_encode_status_payload(status, buf, sizeof(buf));
   return {cmd, channel, std::vector<uint8_t>(buf, buf + len)};
 }
 
@@ -122,7 +122,7 @@ TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
   ASSERT_EQ(transport_->written_.size(), 3u);
   jw_frame_t reset;
   ASSERT_EQ(jw_decode_frame(transport_->written_[0].data(), transport_->written_[0].size(), &reset),
-            0);
+            JW_RESULT_OK);
   EXPECT_EQ(reset.cmd, JW_CMD_RESET_SESSION);
   EXPECT_EQ(reset.proto_ver, JW_PROTO_VERSION);
 }

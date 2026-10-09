@@ -40,7 +40,7 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
     case JW_CMD_CONFIGURE_CHANNEL:
       if (frame->channel == 0 && !channel->estopped &&
           jw_decode_configure_step_dir_payload(
-              frame->payload, frame->payload_len, &channel->config) == 0) {
+              frame->payload, frame->payload_len, &channel->config) == JW_RESULT_OK) {
         channel->configured = true;
         channel->enabled = false;
         status = JW_STATUS_OK;
@@ -49,7 +49,8 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
     case JW_CMD_SET_TARGET: {
       jw_set_target_t target;
       if (frame->channel != 0 || !channel->configured || channel->estopped ||
-          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) != 0 ||
+          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) !=
+              JW_RESULT_OK ||
           !isfinite(target.value))
         break;
       if (target.mode != JW_MODE_POSITION && target.mode != JW_MODE_VELOCITY) {
@@ -94,5 +95,5 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
       status = JW_STATUS_UNSUPPORTED;
       break;
   }
-  return jw_encode_status_payload(response, capacity, status);
+  return jw_encode_status_payload(status, response, capacity);
 }

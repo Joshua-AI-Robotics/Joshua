@@ -128,7 +128,7 @@ class JoshuaWireChannel : public BoardChannel {
     ABSL_ASSIGN_OR_RETURN(auto response,
                           commands_->Exchange({JW_CMD_GET_FEEDBACK, channel_index_, nullptr, 0}));
     jw_feedback_t feedback;
-    if (jw_decode_feedback_payload(response.data(), response.size(), &feedback) != 0)
+    if (jw_decode_feedback_payload(response.data(), response.size(), &feedback) != JW_RESULT_OK)
       return absl::InternalError("Malformed GET_FEEDBACK response payload.");
     ChannelFeedback out;
     out.position = feedback.position;
@@ -144,7 +144,7 @@ class JoshuaWireChannel : public BoardChannel {
                                 const std::string& what) {
     ABSL_ASSIGN_OR_RETURN(auto response, commands_->Exchange({cmd, channel_index_, payload, len}));
     jw_status_t status;
-    if (jw_decode_status_payload(response.data(), response.size(), &status) != 0)
+    if (jw_decode_status_payload(response.data(), response.size(), &status) != JW_RESULT_OK)
       return absl::InternalError(absl::StrCat("Malformed ", what, " response payload."));
     return JwStatusToAbsl(status, what);
   }
@@ -175,7 +175,7 @@ absl::Status ConfigureChannel(JoshuaWireCommandClient& commands,
                                            payload,
                                            static_cast<size_t>(len)}));
   jw_status_t status;
-  if (jw_decode_status_payload(response.data(), response.size(), &status) != 0)
+  if (jw_decode_status_payload(response.data(), response.size(), &status) != JW_RESULT_OK)
     return absl::InternalError("Malformed CONFIGURE_CHANNEL response payload.");
   return JwStatusToAbsl(status, absl::StrCat("CONFIGURE_CHANNEL(", channel.index(), ")"));
 }
@@ -305,7 +305,7 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& comma
   }
 
   jw_identify_response_t identify;
-  if (jw_decode_identify_payload(response.data(), response.size(), &identify) != 0) {
+  if (jw_decode_identify_payload(response.data(), response.size(), &identify) != JW_RESULT_OK) {
     return absl::UnavailableError(
         absl::StrCat("Board '", config.name(), "': malformed IDENTIFY payload."));
   }

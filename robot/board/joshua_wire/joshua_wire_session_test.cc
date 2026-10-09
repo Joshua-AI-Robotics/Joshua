@@ -68,7 +68,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     if (!retained.empty()) return retained;
     if (corrupt_field >= 0) {
       jw_frame_t frame;
-      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &frame), 0);
+      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &frame), JW_RESULT_OK);
       const Bytes payload(frame.payload, frame.payload + frame.payload_len);
       switch (corrupt_field) {
         case 0:
@@ -129,7 +129,7 @@ class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
   absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> request,
                                  absl::Duration timeout) override {
     jw_frame_t frame;
-    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), 0);
+    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), JW_RESULT_OK);
     EXPECT_TRUE(frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK);
     EXPECT_EQ(timeout, absl::Milliseconds(37));
     commands.push_back(frame.cmd);
@@ -160,7 +160,7 @@ TEST_F(JoshuaWireSessionTest, PairedRoutingSharesIdsAndPreservesCorrelationAndTi
   uint32_t expected = 1;
   for (const auto& bytes : transport->requests) {
     jw_frame_t frame;
-    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
     EXPECT_EQ(frame.session_id, 99);
     EXPECT_EQ(frame.message_id, expected++);
   }
@@ -223,7 +223,7 @@ TEST_F(JoshuaWireSessionTest, InvalidNeutralCommandsDoNotReachTransportOrConsume
   jw_frame_t sent;
   ASSERT_EQ(
       jw_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &sent),
-      0);
+      JW_RESULT_OK);
   EXPECT_EQ(sent.message_id, 2);
 }
 
@@ -235,7 +235,7 @@ TEST_F(JoshuaWireSessionTest, TimeoutAndLateResponseNeverReuseAnId) {
   EXPECT_TRUE(transport->channel.enabled);  // Request executed; response was lost.
   jw_frame_t timed_out;
   const auto request = transport->requests.back();
-  ASSERT_EQ(jw_decode_frame(request.data(), request.size(), &timed_out), 0);
+  ASSERT_EQ(jw_decode_frame(request.data(), request.size(), &timed_out), JW_RESULT_OK);
   transport->timeout = false;
   transport->retained.resize(JW_MAX_FRAME_LEN);
   const uint8_t ok = 0;
@@ -246,7 +246,7 @@ TEST_F(JoshuaWireSessionTest, TimeoutAndLateResponseNeverReuseAnId) {
   jw_frame_t next;
   ASSERT_EQ(
       jw_decode_frame(transport->requests.back().data(), transport->requests.back().size(), &next),
-      0);
+      JW_RESULT_OK);
   EXPECT_GT(next.message_id, timed_out.message_id);
   transport->retained.clear();
   EXPECT_TRUE(Exchange(Command(JW_CMD_DISABLE)).ok());
@@ -330,7 +330,7 @@ TEST_F(JoshuaWireSessionTest, ConcurrentCallersSerializeAcrossChannels) {
   uint32_t expected = 1;
   for (const auto& bytes : transport->requests) {
     jw_frame_t frame;
-    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), 0);
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
     EXPECT_EQ(frame.message_id, expected++);
   }
 }
