@@ -10,13 +10,13 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "robot/comm/interfaces/byte_stream.h"
-#include "robot/comm/interfaces/message_transport.h"
+#include "robot/comm/interfaces/legacy_message_transport.h"
 
 namespace robot::comm {
 
 // Serial request/response capability with an atomic write-then-read operation
 // for shared half-duplex buses.
-class SerialTransport : public MessageTransport {
+class SerialTransport : public LegacyMessageTransport {
  public:
   virtual ~SerialTransport() = default;
   absl::Status Open() override {
@@ -47,6 +47,9 @@ class Serial : public SerialTransport, public ByteStream {
 
   absl::Status Flush();
   absl::Status Open() override;
+  // JoshuaWire length-prefixed frames, bounded to 64 bytes. Includes write and
+  // read in one 100 ms deadline and one bus lock; accepts variable-size replies.
+  absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t> request) override;
 
  private:
   std::string uart_port_;

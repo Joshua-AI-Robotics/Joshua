@@ -1,11 +1,17 @@
 #include "robot/comm/factory/comm_factory.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstdlib>
 #include <memory>
+#include <string>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_transports.h"
 
 namespace robot::comm {
 namespace {
@@ -52,6 +58,105 @@ TEST(CommFactoryTest, CreateCommRejectsMissingEthercatConfig) {
   auto transport_or = CommFactory::CreateComm(comm);
 
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, CapabilitySelectionRejectsMissingOrNullEndpoints) {
+  auto message = std::make_shared<testing::FakeMessageTransport>();
+  CommTransport selected{std::static_pointer_cast<MessageTransport>(message)};
+  ASSERT_TRUE(GetCommTransport<MessageTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  auto cyclic = std::make_shared<testing::FakeCorrelatedCyclicTransport>();
+  selected = std::static_pointer_cast<CorrelatedCyclicTransport>(cyclic);
+  ASSERT_TRUE(GetCommTransport<CorrelatedCyclicTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<MessageTransport>{};
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<CorrelatedCyclicTransport>{};
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, UnsupportedCapabilitiesAreRejectedBeforeOpeningDevices) {
+  robot::comm::Comm serial;
+  serial.set_comm_type(SERIAL);
+  serial.set_transport_type(CYCLIC);
+  serial.mutable_serial_config()->set_port("never-open-this-port");
+  serial.mutable_serial_config()->set_baudrate(115200);
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  serial.set_transport_type(static_cast<TransportType>(999));
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  auto ethercat = MakeEthercatComm();
+  ethercat.set_transport_type(MESSAGE);
+  EXPECT_EQ(CommFactory::CreateComm(ethercat).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+class CommFactorySerialCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    // A fresh pseudo-terminal exercises the real serial factory without hardware.
+    master_fd_ = posix_openpt(O_RDWR | O_NOCTTY);
+    ASSERT_GE(master_fd_, 0);
+    ASSERT_EQ(grantpt(master_fd_), 0);
+    ASSERT_EQ(unlockpt(master_fd_), 0);
+    const char* port = ptsname(master_fd_);
+    ASSERT_NE(port, nullptr);
+    comm_.set_comm_type(SERIAL);
+    comm_.set_transport_type(BYTE_STREAM);
+    comm_.mutable_serial_config()->set_port(port);
+    comm_.mutable_serial_config()->set_baudrate(115200);
+  }
+
+  void TearDown() override {
+    CommFactory::ResetSerialTransportCacheForTesting();
+    if (master_fd_ >= 0) close(master_fd_);
+  }
+
+  int master_fd_ = -1;
+  robot::comm::Comm comm_;
+};
+
+TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneSerialAcrossCapabilities) {
+  auto first = CommFactory::CreateComm(comm_);
+  auto second = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+  ASSERT_TRUE(second.ok()) << second.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto second_stream = GetCommTransport<ByteStream>(*second);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(second_stream.ok());
+  EXPECT_EQ(*first_stream, *second_stream);
+
+  comm_.set_transport_type(MESSAGE);
+  auto message = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(message.ok()) << message.status();
+  auto message_transport = GetCommTransport<MessageTransport>(*message);
+  ASSERT_TRUE(message_transport.ok());
+  EXPECT_EQ(std::dynamic_pointer_cast<MessageTransport>(*first_stream), *message_transport);
+}
+
+TEST_F(CommFactorySerialCacheTest, ConflictingBaudRateIsRejectedAndOriginalSerialIsPreserved) {
+  auto first = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+
+  auto conflicting = comm_;
+  conflicting.mutable_serial_config()->set_baudrate(9600);
+  auto rejected = CommFactory::CreateComm(conflicting);
+  ASSERT_EQ(rejected.status().code(), absl::StatusCode::kInvalidArgument);
+  const std::string error(rejected.status().message());
+  EXPECT_NE(error.find(comm_.serial_config().port()), std::string::npos);
+  EXPECT_NE(error.find("115200"), std::string::npos);
+  EXPECT_NE(error.find("9600"), std::string::npos);
+
+  auto retry = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto retry_stream = GetCommTransport<ByteStream>(*retry);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(retry_stream.ok());
+  EXPECT_EQ(*first_stream, *retry_stream);
 }
 
 TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {
@@ -101,6 +206,16 @@ TEST_F(CommFactoryEthercatCacheTest, SameInterfaceSharesOneMaster) {
   ASSERT_TRUE(first_or.ok()) << first_or.status();
   ASSERT_TRUE(second_or.ok()) << second_or.status();
   EXPECT_EQ(first_or->get(), second_or->get());
+}
+
+TEST_F(CommFactoryEthercatCacheTest, TiDemoDoesNotAdvertiseCorrelatedCyclicOrMailbox) {
+  auto selected = CommFactory::CreateComm(MakeEthercatComm());
+  ASSERT_TRUE(selected.ok());
+  EXPECT_TRUE(GetCommTransport<ethercat::EthercatTransport>(*selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(GetCommTransport<MessageTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(CommFactoryEthercatCacheTest, DifferentInterfacesGetDifferentMasters) {

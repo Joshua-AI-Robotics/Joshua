@@ -1,8 +1,12 @@
 #include "robot/comm/serial/serial.h"
 
+#include <fcntl.h>
+#include <poll.h>
 #include <termios.h>
+#include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 
 namespace robot::comm {
@@ -165,6 +169,81 @@ absl::Status Serial::Flush() {
     LOG(ERROR) << "tcflush failed: " << strerror(errno);
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<uint8_t>> Serial::Exchange(absl::Span<const uint8_t> request) {
+  if (request.size() < 7 || request.size() > 64 || request[0] != 0xA5 ||
+      static_cast<size_t>(request[1]) + 4 != request.size()) {
+    return absl::InvalidArgumentError("Serial Exchange requires a bounded JoshuaWire frame.");
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!serial_->is_open()) return absl::FailedPreconditionError("Serial port is closed.");
+  const int fd = serial_->native_handle();
+  const int flags = fcntl(fd, F_GETFL);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    return absl::UnavailableError("Cannot configure serial exchange deadline.");
+  }
+  struct RestoreFlags {
+    int fd;
+    int flags;
+    ~RestoreFlags() {
+      (void)fcntl(fd, F_SETFL, flags);
+    }
+  } restore{fd, flags};
+  if (tcflush(fd, TCIFLUSH) != 0) {
+    return absl::UnavailableError("Cannot flush serial input before exchange.");
+  }
+  // TODO: Integrate with RobotTime when it exposes a monotonic deadline API.
+  // Keep steady_clock for deadline calculations; UTC/PTP timestamps can jump.
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+  auto wait = [&](short events) -> absl::Status {
+    for (;;) {
+      const auto remaining = deadline - std::chrono::steady_clock::now();
+      if (remaining <= std::chrono::steady_clock::duration::zero()) {
+        return absl::DeadlineExceededError("Serial framed exchange timed out; outcome unknown.");
+      }
+      pollfd descriptor{fd, events, 0};
+      const int poll_timeout_ms =
+          static_cast<int>(
+              std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count()) +
+          1;
+      const int result = poll(&descriptor, 1, poll_timeout_ms);
+      if (result < 0 && errno == EINTR) continue;
+      if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+        return absl::UnavailableError(
+            "Serial framed exchange lost its connection; outcome unknown.");
+      }
+      if (result > 0 && (descriptor.revents & events)) return absl::OkStatus();
+    }
+  };
+  size_t written = 0;
+  while (written < request.size()) {
+    auto status = wait(POLLOUT);
+    if (!status.ok()) return status;
+    const ssize_t count = write(fd, request.data() + written, request.size() - written);
+    if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+    if (count <= 0) return absl::UnavailableError("Serial framed write failed; outcome unknown.");
+    written += static_cast<size_t>(count);
+  }
+  std::vector<uint8_t> response;
+  size_t total = 0;
+  for (;;) {
+    auto status = wait(POLLIN);
+    if (!status.ok()) return status;
+    uint8_t byte;
+    const ssize_t count = read(fd, &byte, 1);
+    if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+    if (count <= 0) return absl::UnavailableError("Serial framed read failed; outcome unknown.");
+    if (response.empty() && byte != 0xA5) continue;
+    response.push_back(byte);
+    if (response.size() == 2) {
+      total = static_cast<size_t>(byte) + 4;
+      if (total < 7 || total > 64) {
+        return absl::DataLossError("Serial response frame length is invalid; outcome unknown.");
+      }
+    }
+    if (total != 0 && response.size() == total) return response;
+  }
 }
 
 }  // namespace robot::comm

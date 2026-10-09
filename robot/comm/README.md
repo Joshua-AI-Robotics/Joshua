@@ -25,10 +25,19 @@ Current combinations are:
 | EtherCAT | no | no | yes |
 
 `ByteStream` provides ordered bytes without boundaries. `MessageTransport`
-provides atomic writes and request/response exchanges. EtherCAT currently
+provides complete-frame `Send` and `Exchange` calls. `CorrelatedCyclicTransport`
+provides correlated exchanges with an explicit finite timeout.
+The temporary `LegacyMessageTransport` adapter preserves fixed-length serial
+reads for existing consumers while the shared board engine is migrated. EtherCAT currently
 provides its cyclic transport directly. UDP remains rejected until its concrete
 implementation is added.
 
 Device protocol parsing remains outside this layer. For example, the lidar
 parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`.
+
+The validated interfaces configure timeout policy in adapters rather than adding
+a deadline argument to every message call. The factory owns concrete adapters;
+consumers receive capability interfaces. This migration does not introduce the
+plan's proposed `CommLease` or `required_transports` API. Tests enforce concrete
+adapter visibility and provide hardware-free capability fakes.
