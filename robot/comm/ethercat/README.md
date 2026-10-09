@@ -39,3 +39,12 @@ the board firmware or EEPROM/ESI configuration changes.
 - AM243-specific actuator mapping.
 - UART or serial flashing/debug tools.
 - SOEM-specific types in public action-driver headers.
+
+## Owner worker migration
+
+`EthercatMaster` transfers backend ownership to one worker. That worker handles
+discovery, state transitions, cyclic snapshots and queued startup SDO calls.
+Callers supply explicit timing budgets and complete output images. Expired
+queued work is not dispatched; dispatched timeouts fail the owner and discard
+late success. Stop wakes waiters before joining the backend. This intermediate
+stage leaves the TI-demo factory path separate; JW mailbox/PDO adapters follow.
