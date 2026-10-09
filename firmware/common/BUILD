@@ -1,28 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
-# The shared artifact between host boards and Joshua-authored MCU firmware
-# (docs/BOARD_LAYER_RFC.md §7.2/§7.3). This cc_library is the host build of
-# joshua_wire_v1.{h,c}; the same two files are compiled again for each
-# firmware target via its PlatformIO project (e.g.
-# firmware/teensy/41/platformio.ini), never via Bazel cross-compilation —
-# same source, two separate toolchains, one repo commit keeping them in
-# sync.
-cc_library(
-    name = "joshua_wire_v1",
-    srcs = ["joshua_wire_v1.c"],
-    hdrs = ["joshua_wire_v1.h"],
-    visibility = ["//visibility:public"],
-)
-
-cc_test(
-    name = "joshua_wire_v1_test",
-    srcs = ["joshua_wire_v1_test.cc"],
-    deps = [
-        ":joshua_wire_v1",
-        "@googletest//:gtest_main",
-    ],
-)
-
+# Shared semantic definitions; neither frame version depends on the other.
 cc_library(
     name = "joshua_wire_commands",
     srcs = ["joshua_wire_commands.c"],
@@ -40,11 +18,24 @@ cc_test(
     ],
 )
 
+# Native builds of the same codecs compiled into MCU firmware.
 cc_library(
     name = "joshua_wire_ethercat",
     hdrs = ["joshua_wire_ethercat.h"],
     visibility = ["//visibility:public"],
     deps = [":joshua_wire"],
+)
+
+# See README.md for the file map, test boundaries and migration adapters.
+cc_library(
+    name = "joshua_ethercat_profile",
+    srcs = ["joshua_ethercat_profile.c"],
+    hdrs = ["joshua_ethercat_profile.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire_ethercat",
+        ":joshua_wire_firmware_session",
+    ],
 )
 
 cc_library(
@@ -139,16 +130,5 @@ cc_test(
     deps = [
         ":serial_frame_transport",
         "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "joshua_ethercat_profile",
-    srcs = ["joshua_ethercat_profile.c"],
-    hdrs = ["joshua_ethercat_profile.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":joshua_wire_ethercat",
-        ":joshua_wire_firmware_session",
     ],
 )

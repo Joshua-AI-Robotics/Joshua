@@ -9,7 +9,6 @@ cc_library(
         "//robot/action/interfaces:action_interface",
         "//robot/action/motors/drivers:stepper_driver",
         "//robot/action/motors/drivers:sts3215_driver",
-        "//robot/action/motors/drivers:ti_demo_driver",
         "//robot/board/factory:board_factory",
         "//robot/board/factory:board_resolver",
         "//robot/board/factory:motor_channel_validation",

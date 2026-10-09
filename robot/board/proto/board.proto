@@ -103,7 +103,7 @@ message FirmwareSpec {
   uint32 min_proto_version = 1;
 }
 
-// Legacy TI-demo schema, retained during consumer migration.
+// Retired TI-demo schema: retained only to diagnose old configs; never executed.
 enum Am243PdoMapping {
   AM243_PDO_MAPPING_UNSPECIFIED = 0;
   AM243_PDO_MAPPING_TI_DEMO = 1;
@@ -123,7 +123,8 @@ message Am243Config {
   uint32 input_size_bytes = 6;
 }
 
-// Select the correlated JW engine explicitly until firmware migration lands.
+// JoshuaWire 0.0.2 is the sole Joshua protocol; unspecified selects it on
+// Joshua boards. Vendor boards retain their own protocol.
 enum BoardProtocol {
   BOARD_PROTOCOL_UNSPECIFIED = 0;
   reserved 1;

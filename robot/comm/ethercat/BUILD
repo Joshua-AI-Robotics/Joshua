@@ -1,21 +1,16 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
-    name = "ethercat_transport",
-    hdrs = ["ethercat_transport.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":ethercat_types",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
+    name = "ethercat_types",
+    hdrs = ["ethercat_types.h"],
+    visibility = ["//robot/comm:__subpackages__"],
 )
 
 cc_library(
     name = "ethercat_status",
     srcs = ["ethercat_status.cc"],
     hdrs = ["ethercat_status.h"],
-    visibility = ["//visibility:public"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
         ":ethercat_types",
         "@abseil-cpp//absl/status:status",
@@ -27,67 +22,10 @@ cc_test(
     srcs = ["ethercat_status_test.cc"],
     deps = [
         ":ethercat_status",
-        ":ethercat_transport",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],
-)
-
-cc_library(
-    name = "fake_ethercat_transport",
-    testonly = True,
-    hdrs = ["fake_ethercat_transport.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_library(
-    name = "soem_ethercat_transport",
-    srcs = ["soem_ethercat_transport.cc"],
-    hdrs = ["soem_ethercat_transport.h"],
-    implementation_deps = ["@soem"],
-    visibility = ["//robot/comm:__subpackages__"],
-    deps = [
-        ":ethercat_master",
-        ":ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_binary(
-    name = "am243_demo_smoke",
-    srcs = ["am243_demo_smoke.cc"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":ethercat_status",
-        ":ethercat_transport",
-        ":soem_ethercat_transport",
-        "//robot/board/am243:am243_pdo_codec",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-    ],
-)
-
-cc_test(
-    name = "soem_ethercat_transport_test",
-    srcs = ["soem_ethercat_transport_test.cc"],
-    deps = [
-        ":ethercat_master",
-        ":soem_ethercat_transport",
-        "@abseil-cpp//absl/status:status",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "ethercat_types",
-    hdrs = ["ethercat_types.h"],
-    visibility = ["//robot/comm:__subpackages__"],
 )
 
 cc_library(
@@ -129,22 +67,6 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "soem_ethercat_backend_test",
-    srcs = ["soem_ethercat_backend_test.cc"],
-    deps = [
-        ":coe_sdo_transfer",
-        ":ethercat_master",
-        ":ethercat_types",
-        ":joshua_wire_ethercat_transport",
-        ":soem_ethercat_backend",
-        "//firmware/am243/joshua_dual_transport:commands",
-        "//firmware/common:joshua_ethercat_profile",
-        "//firmware/common:joshua_wire_ethercat",
-        "@googletest//:gtest_main",
-    ],
-)
-
 cc_library(
     name = "joshua_wire_ethercat_transport",
     srcs = ["joshua_wire_ethercat_transport.cc"],
@@ -160,5 +82,26 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/time",
         "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "soem_ethercat_backend_test",
+    srcs = ["soem_ethercat_backend_test.cc"],
+    deps = [
+        ":coe_sdo_transfer",
+        ":ethercat_master",
+        ":ethercat_types",
+        ":joshua_wire_ethercat_transport",
+        ":soem_ethercat_backend",
+        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/common:joshua_ethercat_profile",
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/board/factory:board_factory",
+        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/proto:comm_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
     ],
 )

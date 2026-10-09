@@ -113,6 +113,9 @@ class FeetechBusChannel : public BoardChannel {
 };
 
 absl::Status ValidateConfig(const robot::board::Board& config) {
+  if (config.protocol() != BOARD_PROTOCOL_UNSPECIFIED) {
+    return absl::InvalidArgumentError("FEETECH_BUS does not speak JoshuaWire.");
+  }
   if (config.board_type() != robot::board::BoardType::FEETECH_BUS) {
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not a FEETECH_BUS board."));

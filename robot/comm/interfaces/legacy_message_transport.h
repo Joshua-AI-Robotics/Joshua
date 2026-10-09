@@ -1,4 +1,4 @@
-// Temporary fixed-length compatibility seam for v1/vendor serial consumers.
+// Temporary fixed-length compatibility seam for vendor serial consumers.
 // New adapters implement MessageTransport directly. Remove this seam once those
 // consumers have protocol-aware framed adapters and use Send/Exchange only.
 #pragma once
