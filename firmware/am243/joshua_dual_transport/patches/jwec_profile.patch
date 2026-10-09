@@ -1,0 +1,28 @@
+--- ecSlvSimple.c
++++ ecSlvSimple.c
+@@ -61,2 +61,3 @@
+ #include <ecSlvApiDef.h>
++#include "joshua_ethercat_ti.h"
+ #include "project.h"
+@@ -2997,1 +2998,4 @@
++    error = (EC_API_EError_t)JoshuaEthercatConfigure(pAppInstance_p->ptEcSlvApi);
++    if (error != EC_API_eERR_NONE) goto Exit;
++#if 0 /* The independent TI echo dictionary is not part of this artifact. */
+     /* Creation of Object Data */
+@@ -3090,1 +3094,2 @@
++#endif /* TI echo dictionary and its persisted EEPROM callbacks */
+     EC_API_SLV_cbRegisterUserApplicationRun     (pAppInstance_p->ptEcSlvApi, pAppInstance_p->ptEcSlvApi, EC_SLV_APP_SS_applicationRun, pAppInstance_p);
+@@ -3103,1 +3108,1 @@
+-    error = EC_SLV_APP_SS_populateDescriptionObjectValues(pAppInstance_p);
++    error = EC_API_eERR_NONE; /* JWEC objects are supplied by callbacks. */
+@@ -3194,6 +3199,10 @@
+  * */
+ static void EC_SLV_APP_SS_applicationRun(void* pAppCtxt_p)
+ {
++    if (pAppCtxt_p)
++        JoshuaEthercatRun(((EC_SLV_APP_SS_Application_t*)pAppCtxt_p)->ptEcSlvApi);
++    return;
++    /* Retained TI loop below is unreachable in this explicit artifact. */
+     /* @cppcheck_justify{misra-c2012-11.5} generic API requires cast */
+     /* cppcheck-suppress misra-c2012-11.5 */
+     EC_SLV_APP_SS_Application_t*  pApplicationInstace = (EC_SLV_APP_SS_Application_t*)pAppCtxt_p;

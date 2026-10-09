@@ -141,3 +141,14 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "joshua_ethercat_profile",
+    srcs = ["joshua_ethercat_profile.c"],
+    hdrs = ["joshua_ethercat_profile.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire_ethercat",
+        ":joshua_wire_firmware_session",
+    ],
+)

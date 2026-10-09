@@ -4,6 +4,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIRMWARE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JOSHUA_ROOT="$(cd "$FIRMWARE_DIR/../../.." && pwd)"
+JOSHUA_ETHERCAT_PROFILE="${JOSHUA_ETHERCAT_PROFILE:-ti-demo}"
+
+case "$JOSHUA_ETHERCAT_PROFILE" in
+  ti-demo) ARTIFACT_NAME="am243_dual_transport_jw" ;;
+  jw)
+    for watchdog in JOSHUA_COMM_WATCHDOG_US JOSHUA_TARGET_WATCHDOG_US; do
+      value="${!watchdog:-}"
+      if [[ ! "$value" =~ ^[1-9][0-9]{0,8}$ ]] || (( value < 10000 )); then
+        echo "$watchdog must be explicitly supplied, 10000..999999999 microseconds" >&2; exit 2
+      fi
+    done
+    ARTIFACT_NAME="am243_ethercat_jw"
+    ;;
+  *) echo "JOSHUA_ETHERCAT_PROFILE must be ti-demo or jw" >&2; exit 2 ;;
+esac
 SDK_ROOT="${INDUSTRIAL_COMMUNICATIONS_SDK_PATH:-${HOME}/ti/ind_comms_sdk_am243x_09_00_00_03}"
 TI_PROFILE_DIR="$SDK_ROOT/examples/industrial_comms/ethercat_slave_demo/device_profiles/401_simple"
 TI_PROJECT_DIR="$TI_PROFILE_DIR/am243x-lp/r5fss0-0_freertos/ti-arm-clang"
@@ -23,23 +38,30 @@ cp "$TI_PROJECT_DIR/linker.cmd" "$BUILD_ROOT/build/linker.cmd"
 cp "$TI_PROFILE_DIR/am243x-lp/r5fss0-0_freertos/example.syscfg" "$BUILD_ROOT/example.syscfg"
 cp "$TI_PROFILE_DIR/EtherCAT_Slave_Simple.c" "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c"
 cp "$SDK_ROOT/mcu_plus_sdk/tools/boot/xipGen/xipGen.out" "$BUILD_ROOT/xipGen.out"
-patch "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c" \
-  < "$FIRMWARE_DIR/patches/dual_transport.patch"
+if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw ]]; then
+  cp "$TI_PROFILE_DIR/ecSlvSimple.c" "$BUILD_ROOT/patched/ecSlvSimple.c"
+  patch --fuzz=0 "$BUILD_ROOT/patched/ecSlvSimple.c" < "$FIRMWARE_DIR/patches/jwec_profile.patch"
+else
+  patch "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c" < "$FIRMWARE_DIR/patches/dual_transport.patch"
+fi
 
 make -C "$BUILD_ROOT/build" -f "$FIRMWARE_DIR/Makefile" all \
   INDUSTRIAL_COMMUNICATIONS_SDK_PATH="$SDK_ROOT" \
   TI_PROJECT_DIR="$TI_PROJECT_DIR" \
   JOSHUA_ROOT="$JOSHUA_ROOT" \
+  JOSHUA_ETHERCAT_PROFILE="$JOSHUA_ETHERCAT_PROFILE" \
+  JOSHUA_COMM_WATCHDOG_US="${JOSHUA_COMM_WATCHDOG_US:-0}" \
+  JOSHUA_TARGET_WATCHDOG_US="${JOSHUA_TARGET_WATCHDOG_US:-0}" \
   JOSHUA_PATCHED_SOURCE_DIR="$BUILD_ROOT/patched" \
   XIPGEN_CMD="$BUILD_ROOT/xipGen.out" "$@"
 
 mkdir -p "$FIRMWARE_DIR/out"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.out" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_jw.release.out"
+  "$FIRMWARE_DIR/out/${ARTIFACT_NAME}.release.out"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.appimage" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_jw.release.appimage"
+  "$FIRMWARE_DIR/out/${ARTIFACT_NAME}.release.appimage"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.appimage.hs_fs" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_jw.release.appimage.hs_fs"
+  "$FIRMWARE_DIR/out/${ARTIFACT_NAME}.release.appimage.hs_fs"
 
-echo "Built AM243 dual-transport firmware:"
-ls -lh "$FIRMWARE_DIR"/out/am243_dual_transport_jw.release.*
+echo "Built AM243 firmware ($JOSHUA_ETHERCAT_PROFILE):"
+ls -lh "$FIRMWARE_DIR"/out/"$ARTIFACT_NAME".release.*
