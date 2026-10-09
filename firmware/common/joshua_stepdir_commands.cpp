@@ -28,7 +28,7 @@ int JoshuaStepDirCommand(void* context,
                          size_t capacity) {
   auto* protocol = static_cast<JoshuaStepDirProtocol*>(context);
   auto reply = [&](jw_status_t status) {
-    return jw_encode_status_payload(response, capacity, status);
+    return jw_encode_status_payload(status, response, capacity);
   };
   ChannelState* channel = frame->channel < g_num_channels ? &g_channels[frame->channel] : nullptr;
   switch (frame->cmd) {
@@ -48,7 +48,8 @@ int JoshuaStepDirCommand(void* context,
     case JW_CMD_CONFIGURE_CHANNEL: {
       jw_configure_step_dir_t config;
       if (channel == nullptr || protocol->estopped ||
-          jw_decode_configure_step_dir_payload(frame->payload, frame->payload_len, &config) != 0) {
+          jw_decode_configure_step_dir_payload(frame->payload, frame->payload_len, &config) !=
+              JW_RESULT_OK) {
         return reply(JW_STATUS_ERROR);
       }
       StepDirDisable(channel);
@@ -58,7 +59,8 @@ int JoshuaStepDirCommand(void* context,
     case JW_CMD_SET_TARGET: {
       jw_set_target_t target;
       if (channel == nullptr || !channel->configured || protocol->estopped ||
-          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) != 0 ||
+          jw_decode_set_target_payload(frame->payload, frame->payload_len, &target) !=
+              JW_RESULT_OK ||
           !isfinite(target.value)) {
         return reply(JW_STATUS_ERROR);
       }

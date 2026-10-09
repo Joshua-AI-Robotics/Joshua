@@ -32,7 +32,7 @@ FakeJoshuaWireTransport::Response MakeStatusResponse(uint8_t cmd,
                                                      uint8_t channel,
                                                      jw_status_t status) {
   uint8_t buf[JW_MAX_FRAME_LEN];
-  const int len = jw_encode_status_payload(buf, sizeof(buf), status);
+  const int len = jw_encode_status_payload(status, buf, sizeof(buf));
   return {cmd, channel, std::vector<uint8_t>(buf, buf + len)};
 }
 

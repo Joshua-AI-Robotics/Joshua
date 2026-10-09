@@ -73,6 +73,6 @@ TEST(SerialFrameAssemblerTest, LeavesCrcValidationToEndpointAndRejectsSmallStora
     status = serial_frame_assembler_push(&assembler, 0, byte, out, sizeof(out), &length);
   EXPECT_EQ(status, FRAME_OK);
   jw_frame_t decoded;
-  EXPECT_LT(jw_decode_frame(out, length, &decoded), 0);
+  EXPECT_LT(jw_decode_frame(out, length, &decoded), JW_RESULT_OK);
 }
 }  // namespace

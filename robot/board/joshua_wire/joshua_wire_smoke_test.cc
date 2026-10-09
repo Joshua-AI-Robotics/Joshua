@@ -82,7 +82,7 @@ class SmokeCliTest : public ::testing::Test {
 
   void Respond(const Bytes& bytes) {
     jw_frame_t request{};
-    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &request), 0);
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &request), JW_RESULT_OK);
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
     uint8_t response[JW_MAX_FRAME_LEN];
@@ -105,7 +105,7 @@ class SmokeCliTest : public ::testing::Test {
     if (fault == Fault::kLostEstopReply && request.cmd == JW_CMD_ESTOP) return;
     if (fault == Fault::kWrongMessageId && request.cmd == JW_CMD_IDENTIFY) {
       jw_frame_t reply{};
-      ASSERT_EQ(jw_decode_frame(response, size, &reply), 0);
+      ASSERT_EQ(jw_decode_frame(response, size, &reply), JW_RESULT_OK);
       const Bytes payload(reply.payload, reply.payload + reply.payload_len);
       ++request.message_id;
       size =

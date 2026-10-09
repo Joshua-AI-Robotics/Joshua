@@ -23,7 +23,7 @@ class Firmware : public robot::comm::MessageTransport {
   }
   absl::StatusOr<Bytes> Exchange(absl::Span<const uint8_t> bytes) override {
     jw_frame_t request;
-    if (jw_decode_frame(bytes.data(), bytes.size(), &request) != 0)
+    if (jw_decode_frame(bytes.data(), bytes.size(), &request) != JW_RESULT_OK)
       return absl::DataLossError("Not JW");
     commands.push_back(request.cmd);
     sessions.push_back(request.session_id);
@@ -41,7 +41,7 @@ class Firmware : public robot::comm::MessageTransport {
     response.resize(len);
     if (request.cmd == JW_CMD_IDENTIFY && wrong_identity) {
       jw_frame_t reply;
-      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &reply), 0);
+      EXPECT_EQ(jw_decode_frame(response.data(), response.size(), &reply), JW_RESULT_OK);
       Bytes payload(reply.payload, reply.payload + reply.payload_len);
       payload[0] = JW_BOARD_ESP32;
       response.resize(JW_MAX_FRAME_LEN);

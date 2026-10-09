@@ -27,7 +27,7 @@ class SerialFirmwareTest : public ::testing::Test {
     memset(g_channels, 0, sizeof(ChannelState) * g_num_channels);
     pin_writes = 0;
     setup();
-    ASSERT_EQ(Send(JW_CMD_RESET_SESSION, 0xff), Bytes{0});
+    ASSERT_EQ(Send(JW_CMD_RESET_SESSION, 0xff), Bytes{JW_STATUS_OK});
   }
   Bytes Frame(uint8_t cmd, uint8_t channel, const Bytes& payload = {}) {
     Bytes bytes(JW_MAX_FRAME_LEN);
@@ -48,8 +48,8 @@ class SerialFirmwareTest : public ::testing::Test {
     const auto response = Run(request);
     jw_frame_t sent;
     jw_frame_t reply;
-    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &sent), 0);
-    if (jw_decode_frame(response.data(), response.size(), &reply) != 0) {
+    EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &sent), JW_RESULT_OK);
+    if (jw_decode_frame(response.data(), response.size(), &reply) != JW_RESULT_OK) {
       ADD_FAILURE() << "Invalid firmware response";
       return {};
     }
@@ -79,7 +79,7 @@ TEST_F(SerialFirmwareTest, AllCommandsUseActualFirmwareDispatch) {
   EXPECT_EQ(Send(JW_CMD_ENABLE, 0), Bytes{JW_STATUS_OK});
   EXPECT_TRUE(g_channels[0].enabled);
   EXPECT_EQ(pin_values[4], LOW);
-  EXPECT_EQ(Send(JW_CMD_SET_TARGET, 0, {0, 0, 0, 0x48, 0x41}), Bytes{JW_STATUS_OK});
+  EXPECT_EQ(Send(JW_CMD_SET_TARGET, 0, {JW_MODE_POSITION, 0, 0, 0x48, 0x41}), Bytes{JW_STATUS_OK});
   EXPECT_FLOAT_EQ(g_channels[0].target_value, 12.5f);
   EXPECT_EQ(Send(JW_CMD_GET_FEEDBACK, 0).size(), JW_FEEDBACK_RESPONSE_PAYLOAD_LEN);
   EXPECT_EQ(Send(JW_CMD_DISABLE, 0), Bytes{JW_STATUS_OK});
@@ -138,7 +138,7 @@ TEST_F(SerialFirmwareTest, ResetWhileEnabledDisablesOldPinsBeforeForgettingThem)
 TEST_F(SerialFirmwareTest, RetainsPartialInputAndServicesMotorsBetweenBytes) {
   EXPECT_EQ(Send(JW_CMD_CONFIGURE_CHANNEL, 0, ConfigPayload()), Bytes{JW_STATUS_OK});
   EXPECT_EQ(Send(JW_CMD_ENABLE, 0), Bytes{JW_STATUS_OK});
-  EXPECT_EQ(Send(JW_CMD_SET_TARGET, 0, {0, 0, 0, 0x20, 0x41}), Bytes{JW_STATUS_OK});
+  EXPECT_EQ(Send(JW_CMD_SET_TARGET, 0, {JW_MODE_POSITION, 0, 0, 0x20, 0x41}), Bytes{JW_STATUS_OK});
   const auto request = Frame(JW_CMD_IDENTIFY, 0xff);
   for (size_t i = 0; i < request.size(); ++i) {
     clock_us += 1000;
@@ -157,7 +157,7 @@ TEST_F(SerialFirmwareTest, BlockedResponseDoesNotRepeatCommandOrConsumeNextReque
   Serial.write_capacity = 0;
   // Fill the adapter TX slot before producing a response retained by main.
   EXPECT_TRUE(Run(Frame(JW_CMD_IDENTIFY, 0xff)).empty());
-  const auto target = Frame(JW_CMD_SET_TARGET, 0, {0, 0, 0, 0x20, 0x41});
+  const auto target = Frame(JW_CMD_SET_TARGET, 0, {JW_MODE_POSITION, 0, 0, 0x20, 0x41});
   EXPECT_TRUE(Run(target).empty());
   ASSERT_FLOAT_EQ(g_channels[0].target_value, 10);
   // Any repeated command dispatch would restore 10. Motor servicing must still
@@ -186,7 +186,7 @@ TEST_F(SerialFirmwareTest, BlockedResponseDoesNotRepeatCommandOrConsumeNextReque
   ASSERT_EQ(
       jw_decode_frame(
           Serial.output.data() + first_length, Serial.output.size() - first_length, &response),
-      0);
+      JW_RESULT_OK);
   EXPECT_EQ(response.message_id, id - 1);
   EXPECT_EQ(response.cmd, JW_CMD_SET_TARGET);
   EXPECT_EQ(Serial.input.size(), next.size());
@@ -194,7 +194,7 @@ TEST_F(SerialFirmwareTest, BlockedResponseDoesNotRepeatCommandOrConsumeNextReque
   loop();
   EXPECT_FALSE(g_channels[0].enabled);
   EXPECT_TRUE(Serial.input.empty());
-  ASSERT_EQ(jw_decode_frame(Serial.output.data(), Serial.output.size(), &response), 0);
+  ASSERT_EQ(jw_decode_frame(Serial.output.data(), Serial.output.size(), &response), JW_RESULT_OK);
   EXPECT_EQ(response.message_id, id);
 }
 

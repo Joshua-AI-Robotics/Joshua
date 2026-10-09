@@ -52,7 +52,7 @@ absl::Status RunSession(JoshuaWireSession& session,
                             size_t len = 0) -> absl::Status {
     ABSL_ASSIGN_OR_RETURN(auto response, exchange({cmd, channel, payload, len}));
     jw_status_t status;
-    if (jw_decode_status_payload(response.data(), response.size(), &status) != 0) {
+    if (jw_decode_status_payload(response.data(), response.size(), &status) != JW_RESULT_OK) {
       return absl::DataLossError("Malformed status response.");
     }
     if (status != JW_STATUS_OK) return absl::FailedPreconditionError("Firmware rejected command.");
@@ -60,7 +60,7 @@ absl::Status RunSession(JoshuaWireSession& session,
   };
   ABSL_ASSIGN_OR_RETURN(auto response, exchange({JW_CMD_IDENTIFY, JW_CHANNEL_NONE, nullptr, 0}));
   jw_identify_response_t identity{};
-  if (jw_decode_identify_payload(response.data(), response.size(), &identity) != 0) {
+  if (jw_decode_identify_payload(response.data(), response.size(), &identity) != JW_RESULT_OK) {
     return absl::DataLossError("Malformed IDENTIFY response.");
   }
   output << "IDENTIFY board_id=" << identity.board_id
@@ -94,7 +94,7 @@ absl::Status RunSession(JoshuaWireSession& session,
   auto feedback = [&]() -> absl::StatusOr<jw_feedback_t> {
     ABSL_ASSIGN_OR_RETURN(auto reply, exchange({JW_CMD_GET_FEEDBACK, channel, nullptr, 0}));
     jw_feedback_t value{};
-    if (jw_decode_feedback_payload(reply.data(), reply.size(), &value) != 0 ||
+    if (jw_decode_feedback_payload(reply.data(), reply.size(), &value) != JW_RESULT_OK ||
         !std::isfinite(value.position) || !std::isfinite(value.velocity) ||
         std::abs(value.position) > kMaxMcuPosition) {
       return absl::DataLossError("Malformed/non-finite feedback.");
