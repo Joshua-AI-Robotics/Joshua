@@ -60,7 +60,7 @@ absl::StatusOr<Bytes> Response(absl::Span<const uint8_t> image,
       !std::all_of(image.begin() + offset + length, image.end(), [](uint8_t v) { return v == 0; }))
     return absl::DataLossError("invalid JW envelope length, status/reserved bits or padding");
   jw_frame_t response;
-  if (jw_decode_frame(image.data() + offset, length, &response) != 0 ||
+  if (jw_decode_frame(image.data() + offset, length, &response) != JW_RESULT_OK ||
       !jw_response_matches(&request, &response))
     return absl::DataLossError("uncorrelated JW response; outcome unknown");
   return Bytes(image.begin() + offset, image.begin() + offset + length);
@@ -177,7 +177,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
                                                           bool cyclic,
                                                           Microseconds timeout) {
   jw_frame_t frame;
-  if (!ValidTimeout(timeout) || jw_decode_frame(request.data(), request.size(), &frame) != 0)
+  if (!ValidTimeout(timeout) ||
+      jw_decode_frame(request.data(), request.size(), &frame) != JW_RESULT_OK)
     return absl::InvalidArgumentError("invalid JW frame or timeout");
   const bool cyclic_command = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;
   const bool management = frame.cmd == JW_CMD_IDENTIFY || frame.cmd == JW_CMD_CONFIGURE_CHANNEL ||

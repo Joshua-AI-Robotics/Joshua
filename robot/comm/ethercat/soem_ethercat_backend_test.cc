@@ -931,7 +931,7 @@ SdoBytes JwecRequest(uint32_t id,
 }
 SdoBytes JwecReply(const SdoBytes& request, int mutation = 0) {
   jw_frame_t frame;
-  EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), 0);
+  EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), JW_RESULT_OK);
   if (mutation == 1) ++frame.message_id;
   if (mutation == 2) frame.cmd = JW_CMD_ENABLE;
   if (mutation == 3) frame.channel = 2;
