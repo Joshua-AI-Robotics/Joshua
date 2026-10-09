@@ -5,6 +5,7 @@ cc_library(
     hdrs = ["ethercat_transport.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
@@ -16,7 +17,7 @@ cc_library(
     hdrs = ["ethercat_status.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":ethercat_transport",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
     ],
 )
@@ -84,14 +85,59 @@ cc_test(
 )
 
 cc_library(
+    name = "ethercat_types",
+    hdrs = ["ethercat_types.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+)
+
+cc_library(
     name = "ethercat_master",
     srcs = ["ethercat_master.cc"],
     hdrs = ["ethercat_master.h"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         ":ethercat_status",
-        ":ethercat_transport",
+        ":ethercat_types",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "coe_sdo_transfer",
+    srcs = ["coe_sdo_transfer.cc"],
+    hdrs = ["coe_sdo_transfer.h"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "soem_ethercat_backend",
+    srcs = ["soem_ethercat_backend.cc"],
+    hdrs = ["soem_ethercat_backend.h"],
+    implementation_deps = ["@soem"],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":coe_sdo_transfer",
+        ":ethercat_master",
+        ":ethercat_types",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "soem_ethercat_backend_test",
+    srcs = ["soem_ethercat_backend_test.cc"],
+    deps = [
+        ":coe_sdo_transfer",
+        ":ethercat_master",
+        ":ethercat_types",
+        ":soem_ethercat_backend",
+        "//firmware/common:joshua_wire_ethercat",
+        "@googletest//:gtest_main",
     ],
 )
