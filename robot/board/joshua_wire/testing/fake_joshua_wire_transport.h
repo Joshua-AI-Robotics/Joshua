@@ -27,7 +27,7 @@ class FakeJoshuaWireTransport : public robot::comm::MessageTransport {
     last_written_.assign(bytes.begin(), bytes.end());
     written_.push_back(last_written_);
     jw_frame_t request;
-    if (jw_decode_frame(bytes.data(), bytes.size(), &request) != 0)
+    if (jw_decode_frame(bytes.data(), bytes.size(), &request) != JW_RESULT_OK)
       return absl::DataLossError("Invalid test request");
     Response response{request.cmd, request.channel, {JW_STATUS_OK}};
     if (request.cmd != JW_CMD_RESET_SESSION && request.cmd != JW_CMD_ESTOP) {

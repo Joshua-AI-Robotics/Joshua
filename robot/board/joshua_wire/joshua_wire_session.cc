@@ -55,8 +55,8 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
   }
   jw_frame_t sent;
   jw_frame_t received;
-  if (jw_decode_frame(request.data(), request.size(), &sent) != 0 ||
-      jw_decode_frame(result->data(), result->size(), &received) != 0 ||
+  if (jw_decode_frame(request.data(), request.size(), &sent) != JW_RESULT_OK ||
+      jw_decode_frame(result->data(), result->size(), &received) != JW_RESULT_OK ||
       !jw_response_matches(&sent, &received)) {
     return absl::DataLossError("Uncorrelated JoshuaWire response; command outcome unknown.");
   }
