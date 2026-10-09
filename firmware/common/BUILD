@@ -84,3 +84,60 @@ cc_library(
         ":joshua_wire_firmware_session",
     ],
 )
+
+filegroup(
+    name = "stepdir_sources",
+    srcs = [
+        "backend_stepdir.cpp",
+        "backend_stepdir.h",
+        "joshua_stepdir_commands.cpp",
+        "joshua_stepdir_commands.h",
+    ],
+    visibility = ["//firmware:__subpackages__"],
+)
+
+cc_library(
+    name = "frame_transport",
+    hdrs = ["frame_transport.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "serial_frame_assembler",
+    srcs = ["serial_frame_assembler.c"],
+    hdrs = ["serial_frame_assembler.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":frame_transport",
+        ":joshua_wire",
+    ],
+)
+
+cc_test(
+    name = "serial_frame_assembler_test",
+    srcs = ["serial_frame_assembler_test.cc"],
+    deps = [
+        ":serial_frame_assembler",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_frame_transport",
+    srcs = ["serial_frame_transport.c"],
+    hdrs = ["serial_frame_transport.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [":serial_frame_assembler"],
+)
+
+cc_test(
+    name = "serial_frame_transport_test",
+    srcs = ["serial_frame_transport_test.cc"],
+    deps = [
+        ":serial_frame_transport",
+        "@googletest//:gtest_main",
+    ],
+)

@@ -84,7 +84,10 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
     return port_res_ptr->serial;
   }
 
-  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
+  auto serial = std::make_shared<Serial>(port_res_ptr->io_context,
+                                         port,
+                                         baudrate,
+                                         std::chrono::milliseconds(config.post_open_settle_ms()));
   port_res_ptr->baudrate = baudrate;
   port_res_ptr->serial = serial;
   return serial;
