@@ -830,7 +830,7 @@ class SoesProfileTest : public Am243EthercatProfileTest {
       ASSERT_EQ(uploaded.size(), 16 + 76);
       EXPECT_EQ(uploaded[8], 0x41);
       jw_frame_t reply;
-      ASSERT_EQ(jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply), 0);
+      ASSERT_EQ(jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply), JW_RESULT_OK);
       ASSERT_EQ(reply.payload_len, 1);
       EXPECT_EQ(reply.payload[0], JW_STATUS_OK);
       EXPECT_EQ(Download(JWEC_ACK_INDEX, Bytes(image.begin() + 4, image.begin() + 8))[8], 0x60);
