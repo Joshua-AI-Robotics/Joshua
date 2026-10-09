@@ -46,9 +46,10 @@ typedef struct {
   uint8_t payload_len;
 } jw_frame_t;
 
-// Returns the encoded length, or -1 for invalid arguments/capacity. Decode
-// accepts exactly one JW frame, rejects all other versions, and borrows payload
-// storage from buf. Neither operation allocates memory.
+// Encode returns the encoded length, or -1 for invalid arguments/capacity.
+// Decode returns JW_RESULT_OK or JW_RESULT_ERROR. It accepts exactly one JW
+// frame, rejects all other versions, and borrows payload storage from buf.
+// Neither operation allocates memory.
 int jw_encode_frame(uint8_t* buf,
                     size_t cap,
                     uint32_t session_id,
@@ -57,7 +58,7 @@ int jw_encode_frame(uint8_t* buf,
                     uint8_t channel,
                     const uint8_t* payload,
                     uint8_t payload_len);
-int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out);
+jw_result_t jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out);
 
 // Responses always copy all four correlation fields from the request.
 int jw_encode_response(uint8_t* buf,
@@ -65,6 +66,25 @@ int jw_encode_response(uint8_t* buf,
                        const jw_frame_t* request,
                        const uint8_t* payload,
                        uint8_t payload_len);
+// Local correlation diagnostics, not on-wire status or device fault flags.
+typedef enum {
+  JW_MATCH_OK = 0,
+  JW_MATCH_NULL_ARGUMENT,
+  JW_MATCH_INVALID_VERSION,
+  JW_MATCH_INVALID_SESSION_ID,
+  JW_MATCH_INVALID_MESSAGE_ID,
+  JW_MATCH_SESSION_MISMATCH,
+  JW_MATCH_MESSAGE_MISMATCH,
+  JW_MATCH_COMMAND_MISMATCH,
+  JW_MATCH_CHANNEL_MISMATCH,
+} jw_match_result_t;
+
+// Returns the first failure in the order above, for caller-owned logging/fault
+// reporting. The codec itself performs no logging or device I/O.
+// TODO: Have callers log or raise an appropriate fault for non-JW_MATCH_OK
+// results, including the mismatch reason and request/response correlation IDs.
+jw_match_result_t jw_check_response(const jw_frame_t* request, const jw_frame_t* response);
+// Boolean convenience wrapper: 1 for JW_MATCH_OK, otherwise 0.
 int jw_response_matches(const jw_frame_t* request, const jw_frame_t* response);
 
 #ifdef __cplusplus

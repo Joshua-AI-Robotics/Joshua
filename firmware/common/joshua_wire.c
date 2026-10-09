@@ -7,6 +7,7 @@
 
 static uint16_t crc16(const uint8_t* data, size_t len) {
   uint16_t crc = 0xFFFF;
+  if (data == NULL) return crc;
   for (size_t i = 0; i < len; ++i) {
     crc ^= (uint16_t)data[i] << 8;
     for (int bit = 0; bit < 8; ++bit) {
@@ -17,10 +18,12 @@ static uint16_t crc16(const uint8_t* data, size_t len) {
 }
 
 static void put_u32(uint8_t* out, uint32_t value) {
+  if (out == NULL) return;
   for (unsigned i = 0; i < 4; ++i) out[i] = (uint8_t)(value >> (8 * i));
 }
 
 static uint32_t get_u32(const uint8_t* in) {
+  if (in == NULL) return 0;
   return (uint32_t)in[0] | ((uint32_t)in[1] << 8) | ((uint32_t)in[2] << 16) |
          ((uint32_t)in[3] << 24);
 }
@@ -52,17 +55,21 @@ int jw_encode_frame(uint8_t* buf,
   return (int)total;
 }
 
-int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
+jw_result_t jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
   if (buf == NULL || out == NULL || len < JW_MIN_FRAME_LEN || len > JW_MAX_FRAME_LEN ||
-      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION ||
-      buf[JW_LENGTH_OFFSET] < JW_HEADER_BODY_LEN ||
+      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION) {
+    return JW_RESULT_ERROR;
+  }
+  // Validate the signed difference before narrowing to the unsigned payload field.
+  const int payload_len = (int)buf[JW_LENGTH_OFFSET] - JW_HEADER_BODY_LEN;
+  if (payload_len < 0 || payload_len > JW_MAX_PAYLOAD_LEN ||
       (size_t)buf[JW_LENGTH_OFFSET] + JW_LENGTH_FIELD_OVERHEAD != len) {
-    return -1;
+    return JW_RESULT_ERROR;
   }
   const uint16_t crc = (uint16_t)buf[len - JW_CRC_LEN] | ((uint16_t)buf[len - 1] << 8);
   if (crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]) != crc || get_u32(buf + 3) == 0 ||
       get_u32(buf + 7) == 0) {
-    return -1;
+    return JW_RESULT_ERROR;
   }
   out->proto_ver = buf[2];
   out->session_id = get_u32(buf + 3);
@@ -70,8 +77,8 @@ int jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
   out->cmd = buf[11];
   out->channel = buf[12];
   out->payload = buf + 13;
-  out->payload_len = buf[JW_LENGTH_OFFSET] - JW_HEADER_BODY_LEN;
-  return 0;
+  out->payload_len = (uint8_t)payload_len;
+  return JW_RESULT_OK;
 }
 
 int jw_encode_response(uint8_t* buf,
@@ -79,7 +86,10 @@ int jw_encode_response(uint8_t* buf,
                        const jw_frame_t* request,
                        const uint8_t* payload,
                        uint8_t payload_len) {
-  if (request == NULL || request->proto_ver != JW_PROTO_VERSION) return -1;
+  if (buf == NULL || request == NULL || (payload_len != 0 && payload == NULL) ||
+      request->proto_ver != JW_PROTO_VERSION) {
+    return -1;
+  }
   return jw_encode_frame(buf,
                          cap,
                          request->session_id,
@@ -90,10 +100,20 @@ int jw_encode_response(uint8_t* buf,
                          payload_len);
 }
 
+jw_match_result_t jw_check_response(const jw_frame_t* request, const jw_frame_t* response) {
+  if (request == NULL || response == NULL) return JW_MATCH_NULL_ARGUMENT;
+  if (request->proto_ver != JW_PROTO_VERSION || response->proto_ver != JW_PROTO_VERSION) {
+    return JW_MATCH_INVALID_VERSION;
+  }
+  if (request->session_id == 0 || response->session_id == 0) return JW_MATCH_INVALID_SESSION_ID;
+  if (request->message_id == 0 || response->message_id == 0) return JW_MATCH_INVALID_MESSAGE_ID;
+  if (request->session_id != response->session_id) return JW_MATCH_SESSION_MISMATCH;
+  if (request->message_id != response->message_id) return JW_MATCH_MESSAGE_MISMATCH;
+  if (request->cmd != response->cmd) return JW_MATCH_COMMAND_MISMATCH;
+  if (request->channel != response->channel) return JW_MATCH_CHANNEL_MISMATCH;
+  return JW_MATCH_OK;
+}
+
 int jw_response_matches(const jw_frame_t* request, const jw_frame_t* response) {
-  return request != NULL && response != NULL && request->proto_ver == JW_PROTO_VERSION &&
-         response->proto_ver == JW_PROTO_VERSION && request->session_id != 0 &&
-         request->message_id != 0 && request->session_id == response->session_id &&
-         request->message_id == response->message_id && request->cmd == response->cmd &&
-         request->channel == response->channel;
+  return jw_check_response(request, response) == JW_MATCH_OK;
 }

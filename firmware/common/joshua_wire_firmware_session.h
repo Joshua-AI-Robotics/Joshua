@@ -34,7 +34,7 @@ void jw_firmware_session_init(jw_firmware_session_t* session);
 
 // Returns response length, 0 for a discarded frame, or -1 for API/handler errors.
 // New sessions require RESET_SESSION (channel=0xff, empty payload). Its response
-// is one status byte (0 = OK). A duplicate of the most recent identical request
+// is one status byte (JW_STATUS_OK). A duplicate of the most recent identical request
 // replays the retained response; older IDs and changed requests reusing an ID
 // are discarded. An ID is consumed even if its handler fails. Input/output
 // buffers must not overlap the session or each other; output capacity must be 64.

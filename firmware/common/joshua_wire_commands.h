@@ -7,6 +7,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Local codec result, not an on-wire jw_status_t value.
+typedef enum {
+  JW_RESULT_OK = 0,
+  JW_RESULT_ERROR = -1,
+} jw_result_t;
+
 // Board-scope commands (IDENTIFY, ESTOP, RESET_SESSION) use this channel byte.
 #define JW_CHANNEL_NONE 0xFF
 
@@ -32,6 +38,7 @@ typedef struct {
 } jw_command_t;
 
 typedef enum {
+  JW_CMD_INVALID = 0x00,  // Reserved; zero is not a valid command.
   JW_CMD_IDENTIFY = 0x01,
   JW_CMD_CONFIGURE_CHANNEL = 0x02,
   JW_CMD_SET_TARGET = 0x03,
@@ -43,12 +50,13 @@ typedef enum {
   JW_CMD_RESET_SESSION = 0x08,
 } jw_cmd_t;
 
-// Mirrors robot::board::TargetMode (robot/board/interfaces/board_channel.h)
-// value-for-value so the host casts directly with no lookup table.
+// Wire revision 2 target modes reserve zero as invalid. Map host TargetMode
+// values explicitly; these IDs differ from the legacy JW1 mode values.
 typedef enum {
-  JW_MODE_POSITION = 0,
-  JW_MODE_VELOCITY = 1,
-  JW_MODE_TORQUE = 2,
+  JW_MODE_INVALID = 0,
+  JW_MODE_POSITION = 1,
+  JW_MODE_VELOCITY = 2,
+  JW_MODE_TORQUE = 3,
 } jw_mode_t;
 
 // Mirrors robot.board.DriveInterface (robot/board/proto/board.proto)
@@ -75,9 +83,10 @@ typedef enum {
 } jw_board_id_t;
 
 typedef enum {
-  JW_STATUS_OK = 0,
-  JW_STATUS_ERROR = 1,
-  JW_STATUS_UNSUPPORTED = 2,
+  JW_STATUS_INVALID = 0,
+  JW_STATUS_OK = 1,
+  JW_STATUS_ERROR = 2,
+  JW_STATUS_UNSUPPORTED = 3,
 } jw_status_t;
 
 typedef struct {
@@ -128,24 +137,27 @@ extern "C" {
 #endif
 
 // Payload-only codecs shared by both frame versions. Encoders return the byte
-// count, decoders return 0; all return -1 for null pointers or invalid size.
+// count or -1 on failure. Decoders return JW_RESULT_OK on success, or
+// JW_RESULT_ERROR for null pointers, invalid sizes or malformed payloads.
 // Decoders require the exact payload length. No frame headers, CRCs or IDs are
 // read/written. Dispatch/session code validates command/channel/correlation;
 // drive handlers retain responsibility for supported modes and safety policy.
-int jw_encode_status_payload(uint8_t* out, size_t cap, jw_status_t status);
-int jw_decode_status_payload(const uint8_t* data, size_t len, jw_status_t* out);
+int jw_encode_status_payload(jw_status_t status, uint8_t* out, size_t cap);
+jw_result_t jw_decode_status_payload(const uint8_t* data, size_t len, jw_status_t* out);
 int jw_encode_identify_payload(uint8_t* out, size_t cap, const jw_identify_response_t* value);
-int jw_decode_identify_payload(const uint8_t* data, size_t len, jw_identify_response_t* out);
+jw_result_t jw_decode_identify_payload(const uint8_t* data,
+                                       size_t len,
+                                       jw_identify_response_t* out);
 int jw_encode_feedback_payload(uint8_t* out, size_t cap, const jw_feedback_t* value);
-int jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedback_t* out);
+jw_result_t jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedback_t* out);
 int jw_encode_set_target_payload(uint8_t* out, size_t cap, jw_mode_t mode, float value);
-int jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out);
+jw_result_t jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out);
 int jw_encode_configure_step_dir_payload(uint8_t* out,
                                          size_t cap,
                                          const jw_configure_step_dir_t* value);
-int jw_decode_configure_step_dir_payload(const uint8_t* data,
-                                         size_t len,
-                                         jw_configure_step_dir_t* out);
+jw_result_t jw_decode_configure_step_dir_payload(const uint8_t* data,
+                                                 size_t len,
+                                                 jw_configure_step_dir_t* out);
 
 #ifdef __cplusplus
 }

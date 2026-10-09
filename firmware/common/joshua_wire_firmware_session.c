@@ -22,7 +22,7 @@ int jw_firmware_session_process(jw_firmware_session_t* session,
     return -1;
   }
   jw_frame_t frame;
-  if (jw_decode_frame(request, request_len, &frame) != 0) return 0;
+  if (jw_decode_frame(request, request_len, &frame) != JW_RESULT_OK) return 0;
   const int is_reset = frame.cmd == JW_CMD_RESET_SESSION;
   if (is_reset && (frame.channel != JW_CHANNEL_NONE || frame.payload_len != 0)) return 0;
 
@@ -50,7 +50,7 @@ int jw_firmware_session_process(jw_firmware_session_t* session,
   uint8_t payload[JW_MAX_PAYLOAD_LEN];
   int payload_len;
   if (is_reset) {
-    payload[0] = 0;
+    payload[0] = JW_STATUS_OK;
     payload_len = 1;
   } else {
     payload_len = handler(context, &frame, payload, sizeof(payload));
