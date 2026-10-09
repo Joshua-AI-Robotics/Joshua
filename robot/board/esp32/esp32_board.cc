@@ -16,7 +16,7 @@ namespace robot::board {
 // bootloader boot-log output (printed at a different baud, read as noise)
 // and Arduino setup(). Teensy 4.1's native-USB CDC has no such reset-on-
 // open behavior, which is why this settle delay lives here and not in
-// JoshuaWireBoard. Serial::AtomicRead already flushes the input buffer
+// LegacyJoshuaWireBoard. Serial::AtomicRead already flushes the input buffer
 // immediately before writing each request, so once boot has actually
 // finished, no leftover boot-log bytes remain to corrupt IDENTIFY's
 // response — this delay only needs to outlast the boot itself.
@@ -24,7 +24,7 @@ constexpr std::chrono::milliseconds kPostResetSettleDelay(2000);
 
 absl::StatusOr<std::shared_ptr<FrameTransport>> Esp32Board::CreateTransport(
     const robot::comm::Comm& comm) const {
-  ABSL_ASSIGN_OR_RETURN(auto transport, JoshuaWireBoard::CreateTransport(comm));
+  ABSL_ASSIGN_OR_RETURN(auto transport, LegacyJoshuaWireBoard::CreateTransport(comm));
   std::this_thread::sleep_for(kPostResetSettleDelay);
   return transport;
 }

@@ -10,7 +10,7 @@
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
 
-// Esp32Board only supplies two facts to the shared JoshuaWireBoard, as
+// Esp32Board only supplies two facts to the shared LegacyJoshuaWireBoard, as
 // constructor arguments (BoardType::ESP32, JW1_BOARD_ESP32) — everything
 // else (IDENTIFY handshake, CONFIGURE_CHANNEL, multi-channel, ENABLE/
 // SET_TARGET/GET_FEEDBACK, ...) is generic protocol orchestration, tested
@@ -97,7 +97,7 @@ TEST_F(Esp32BoardTest, InitRejectsNonEsp32BoardType) {
 
 TEST_F(Esp32BoardTest, InitRejectsNonEsp32WireBoardId) {
   // Proves Esp32Board's constructor actually passed JW1_BOARD_ESP32 through
-  // to JoshuaWireBoard — e.g. a re-enumerated serial path now pointing at a
+  // to LegacyJoshuaWireBoard — e.g. a re-enumerated serial path now pointing at a
   // Teensy instead (docs/BOARD_LAYER_RFC.md §7.5).
   transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_TEENSY41));
   Esp32Board board;

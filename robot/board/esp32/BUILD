@@ -7,7 +7,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//firmware/common:joshua_wire_v1",
-        "//robot/board/joshua_wire:joshua_wire_board",
+        "//robot/board/joshua_wire:legacy_joshua_wire_board",
         "//robot/board/proto:board_cc_proto",
         "//utils:status_macros",
     ],
