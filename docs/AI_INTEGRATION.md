@@ -7,9 +7,10 @@ understand, without requiring robotics expertise. Long term, agents should help
 users configure, operate, and improve robotic systems around their needs: use
 an existing robot as a peripheral, build a new application from supported
 components, and eventually help create robots and develop capabilities.
-Agents should assess what is needed and guide users to external training or
-fine-tuning workflows when existing behavior is insufficient. These goals
-extend beyond the first bounded operation. These principles guide development:
+Agents should assess what is needed when existing behavior is insufficient.
+Optional future integrations may guide users through external training or
+fine-tuning workflows. These goals extend beyond the first bounded operation.
+These principles guide development:
 
 - **Use chat to express intent.** Let users describe and refine their goals
   using their own domain knowledge.
@@ -256,10 +257,14 @@ including the existing [inference host](../ai/README.md), and
 A later model workflow should assess whether an existing policy or programmed
 sequence meets the task requirements, using available evidence. Its MCP
 capabilities should cover inference with an existing, supported policy and data
-collection for demonstrations, evaluation, or future training. If fine-tuning or
-training is needed, the agent should explain the gap and guide the user to
-external workflows. Training, fine-tuning, and training-specific evaluation are
-outside Joshua's MCP scope.
+collection for demonstrations, evaluation, or future training. If additional
+demonstrations, fine-tuning, or training are needed, the agent should explain
+what is missing and recommend data collection or an external learning workflow.
+
+Training and fine-tuning are optional future integrations with external tools.
+Each integration needs a separate proposal covering data preparation, training,
+evaluation against task requirements, and deployment of a validated policy,
+including tool ownership and verification responsibilities.
 
 Task-level success checks through measured feedback remain required. Any
 externally trained policy needs supported inference integration and
