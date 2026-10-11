@@ -20,6 +20,7 @@ cc_library(
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
         "//ros2/utils:packet_parser",
+        "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

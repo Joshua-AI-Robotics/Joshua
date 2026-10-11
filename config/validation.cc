@@ -9,6 +9,7 @@
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
 #include "ros2/utils/packet_parser.h"
+#include "utils/robot_time.h"
 #include "utils/status_macros.h"
 
 namespace config {
@@ -235,6 +236,7 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
+  ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
