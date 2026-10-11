@@ -3,8 +3,12 @@
 ## Vision
 
 Joshua's purpose is to help people apply robotics to work they already
-understand, without requiring robotics expertise. These principles guide its
-development:
+understand, without requiring robotics expertise. Long term, agents should help
+users configure, operate, and improve robotic systems around their needs: use
+an existing robot as a peripheral, build a new application from supported
+components, and eventually help create robots and develop capabilities,
+including training when existing behavior is insufficient. These goals extend
+beyond the first bounded operation. These principles guide development:
 
 - **Use chat to express intent.** Let users describe and refine their goals
   using their own domain knowledge.
@@ -34,10 +38,15 @@ development:
   Feedback-driven plans also specify allowed next actions, selection conditions,
   and finite action, time, and retry limits. Joshua checks each selected action
   against those approved bounds.
-- **Get direct operator confirmation.** Before real motion, the person
-  responsible for the hardware confirms readiness through a channel the model
-  cannot supply or bypass. Approval covers the complete bounded plan; changes
-  or restarts require fresh confirmation.
+- **Get direct operator confirmation.** Robot motion can injure people or
+  damage equipment. Before every real-motion run, preview the complete plan,
+  expected physical effects, known hazards, and uncertainties. The responsible
+  operator must understand the proposed impact, grant permission, and confirm
+  physical readiness through a channel the model cannot supply or bypass. If
+  required readiness or understanding is missing, do not start. Approval covers
+  the complete bounded plan; changes or restarts require fresh confirmation.
+  The operator checks physical conditions Joshua cannot verify; Joshua remains
+  responsible for its validation, limits, and fault responses.
 - **Show what actually happened.** Use correctly associated, fresh measured
   feedback with known units, reference frame or zero, and tolerances. Report
   progress, completed actions, timeouts, and faults. Label command or step-count
@@ -74,7 +83,18 @@ subsystem.
 
 ## User scenarios
 
-These scenarios describe the intended experience as the checkpoints ship.
+These non-exhaustive examples describe the intended experience as checkpoints
+ship. The team should propose diverse use cases and measurable success criteria.
+
+### Build an application
+
+“Help me build a system to sort these objects within this workspace and
+budget.” In a later workflow, Joshua should clarify the objects, constraints,
+and measurable success criteria; assess feasibility; identify suitable
+supported components and missing support; and prepare and validate the protobuf
+configuration. It should explain tradeoffs and required human setup. Composing
+supported components into an application is distinct from designing new
+hardware, which requires separate engineering and verification.
 
 ### Set up hardware
 
@@ -171,6 +191,15 @@ missing or unverified paths keep this checkpoint open. New hardware can merge
 first, with its MCP integration following the relevant merged contract in the
 same or a linked PR. Track that gap until integration and verification land.
 
+### Later: Prove a complete application
+
+Demonstrate requirements → configuration → simulation → hardware commissioning
+→ measured task success on a limited set of supported components. Guide the
+operator through physical setup and verification, and require approval before
+every real-motion run. Simulation results do not establish physical readiness
+or task success; verify the agreed outcome on hardware. This proof can proceed
+while hardware coverage expands; reaching 100% coverage is not a prerequisite.
+
 Agree on the first robot, task, client, and feedback contract before writing
 implementation designs in follow-up PRs.
 
@@ -218,6 +247,16 @@ The proposed first motion-capable Model Context Protocol (MCP) release is an
 optional front end for exactly one tested, bounded robot operation. AI inference,
 including the existing [inference host](../ai/README.md), and
 [data collection](../ai/train/README.md) are outside its scope.
+
+A later learning phase should assess whether an existing policy or programmed
+sequence meets the task requirements. If additional demonstrations,
+fine-tuning, or training are needed, it should guide data preparation, training,
+evaluation against those requirements, and deployment of a validated policy
+with operator-approved hardware verification. Learning a policy is distinct
+from adapting a sequence of existing actions. Training is not currently
+implemented in Joshua; this proposed workflow lies beyond the first
+motion-capable release. Policy evaluation alone does not establish verified
+hardware operation.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
