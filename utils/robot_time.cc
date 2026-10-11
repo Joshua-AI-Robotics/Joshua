@@ -30,7 +30,7 @@ GlobalClockState& GlobalState() {
   return *state;
 }
 
-class PosixClockIo final : public internal::ClockIo {
+class SystemClockReader final : public internal::ClockIo {
  public:
   absl::StatusOr<int> OpenPtp(const std::string& path) override {
     const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
@@ -51,47 +51,82 @@ class PosixClockIo final : public internal::ClockIo {
   }
 };
 
-class PosixRobotClock final : public RobotClock {
- public:
-  PosixRobotClock(std::shared_ptr<internal::ClockIo> io,
-                  clockid_t id,
-                  int fd,
-                  int utc_offset,
-                  std::string_view source)
-      : io_(std::move(io)), id_(id), fd_(fd), utc_offset_(utc_offset), source_(source) {}
+double ReadSeconds(const internal::ClockIo& reader, clockid_t id, int utc_offset = 0) {
+  const auto result = reader.Read(id);
+  if (!result.ok()) throw std::runtime_error(result.status().ToString());
+  const auto& ts = *result;
+  return (static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
+         static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond;
+}
 
-  ~PosixRobotClock() override {
-    if (fd_ >= 0) io_->Close(fd_);
+// Owns a PHC descriptor and normalizes its readings to the UTC time domain.
+class PtpClock final : public RobotClock {
+ public:
+  PtpClock(std::shared_ptr<internal::ClockIo> reader, int fd, int utc_offset)
+      : reader_(std::move(reader)),
+        fd_(fd),
+        id_(internal::PtpClockId(fd)),
+        utc_offset_(utc_offset) {}
+
+  ~PtpClock() override {
+    reader_->Close(fd_);
   }
 
+  PtpClock(const PtpClock&) = delete;
+  PtpClock& operator=(const PtpClock&) = delete;
+
   double Now() const override {
-    const auto result = io_->Read(id_);
-    if (!result.ok()) throw std::runtime_error(result.status().ToString());
-    const auto& ts = *result;
-    return (static_cast<double>(ts.tv_sec) - utc_offset_ - kRobotStartTime) +
-           static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond;
+    return ReadSeconds(*reader_, id_, utc_offset_);
   }
 
   std::string_view SourceName() const override {
-    return source_;
+    return "PTP";
   }
 
  private:
-  const std::shared_ptr<internal::ClockIo> io_;
-  const clockid_t id_;
+  const std::shared_ptr<internal::ClockIo> reader_;
   const int fd_;
+  const clockid_t id_;
   const int utc_offset_;
-  const std::string_view source_;
 };
 
-absl::StatusOr<std::unique_ptr<RobotClock>> ProbeClock(std::shared_ptr<internal::ClockIo> io,
-                                                       clockid_t id,
-                                                       int fd,
-                                                       int utc_offset,
-                                                       std::string_view source) {
-  std::unique_ptr<RobotClock> clock =
-      std::make_unique<PosixRobotClock>(io, id, fd, utc_offset, source);
-  const auto result = io->Read(id);
+class UtcClock final : public RobotClock {
+ public:
+  explicit UtcClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
+
+  double Now() const override {
+    return ReadSeconds(*reader_, CLOCK_REALTIME);
+  }
+
+  std::string_view SourceName() const override {
+    return "UTC";
+  }
+
+ private:
+  const std::shared_ptr<internal::ClockIo> reader_;
+};
+
+// Explicit local-time option; never selected as an automatic UTC fallback.
+class MonotonicClock final : public RobotClock {
+ public:
+  explicit MonotonicClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
+
+  double Now() const override {
+    return ReadSeconds(*reader_, CLOCK_MONOTONIC);
+  }
+
+  std::string_view SourceName() const override {
+    return "MONOTONIC (local only)";
+  }
+
+ private:
+  const std::shared_ptr<internal::ClockIo> reader_;
+};
+
+absl::StatusOr<std::unique_ptr<RobotClock>> ProbeClock(std::unique_ptr<RobotClock> clock,
+                                                       const internal::ClockIo& reader,
+                                                       clockid_t id) {
+  const auto result = reader.Read(id);
   if (!result.ok()) return result.status();  // RAII closes any PHC descriptor.
   return clock;
 }
@@ -131,7 +166,7 @@ absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClockWithIo(
   if (!io) return absl::InvalidArgumentError("Clock IO must not be null");
 
   if (config.source() == config::RobotClockConfig::MONOTONIC) {
-    return ProbeClock(std::move(io), CLOCK_MONOTONIC, -1, 0, "MONOTONIC (local only)");
+    return ProbeClock(std::make_unique<MonotonicClock>(io), *io, CLOCK_MONOTONIC);
   }
   if (config.source() == config::RobotClockConfig::PTP) {
     auto ptp_status = absl::FailedPreconditionError(
@@ -139,7 +174,10 @@ absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClockWithIo(
     if (config.has_ptp_utc_offset_seconds()) {
       const auto fd = io->OpenPtp(config.ptp_device().empty() ? "/dev/ptp0" : config.ptp_device());
       if (fd.ok()) {
-        auto clock = ProbeClock(io, PtpClockId(*fd), *fd, config.ptp_utc_offset_seconds(), "PTP");
+        auto clock =
+            ProbeClock(std::make_unique<PtpClock>(io, *fd, config.ptp_utc_offset_seconds()),
+                       *io,
+                       PtpClockId(*fd));
         if (clock.ok()) return clock;
         ptp_status = clock.status();
       } else {
@@ -149,13 +187,13 @@ absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClockWithIo(
     if (config.require_ptp()) return ptp_status;
     LOG(WARNING) << "Robot clock falling back from PTP to system UTC: " << ptp_status;
   }
-  return ProbeClock(std::move(io), CLOCK_REALTIME, -1, 0, "UTC");
+  return ProbeClock(std::make_unique<UtcClock>(io), *io, CLOCK_REALTIME);
 }
 
 }  // namespace internal
 
 absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClock(const config::RobotClockConfig& config) {
-  return internal::MakeRobotClockWithIo(config, std::make_shared<PosixClockIo>());
+  return internal::MakeRobotClockWithIo(config, std::make_shared<SystemClockReader>());
 }
 
 absl::Status SetGlobalRobotClock(std::unique_ptr<RobotClock> clock) {

@@ -32,7 +32,13 @@ class FakeClockIo final : public internal::ClockIo {
       if (!utc_status.ok()) return utc_status;
       return utc_time;
     }
-    if (id == CLOCK_MONOTONIC) return timespec{123, 500000000};
+    if (id == CLOCK_MONOTONIC) {
+      if (!monotonic_status.ok()) return monotonic_status;
+      return timespec{123, 500000000};
+    }
+    if (id != internal::PtpClockId(7)) {
+      return absl::InvalidArgumentError("Unexpected clock ID");
+    }
     if (!ptp_status.ok()) return ptp_status;
     return ptp_time;
   }
@@ -49,6 +55,7 @@ class FakeClockIo final : public internal::ClockIo {
   absl::Status open_status;
   absl::Status utc_status;
   absl::Status ptp_status;
+  absl::Status monotonic_status;
   timespec utc_time{1700000000, 250000000};
   timespec ptp_time{1700000037, 250000000};
 };
@@ -149,6 +156,9 @@ TEST(RobotClockTest, UtcProbeAndRuntimeFailuresAreReported) {
   config.set_source(config::RobotClockConfig::UTC);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_EQ((*clock)->SourceName(), "UTC");
+  EXPECT_EQ((*clock)->Now(), 1700000000.25 - kRobotStartTime);
+  EXPECT_EQ(io->last_id, CLOCK_REALTIME);
   io->utc_status = absl::UnavailableError("test UTC unavailable");
   EXPECT_THROW((*clock)->Now(), std::runtime_error);
   EXPECT_FALSE(internal::MakeRobotClockWithIo(config, io).ok());
@@ -161,9 +171,37 @@ TEST(RobotClockTest, MonotonicRequiresExplicitSelection) {
   config.set_source(config::RobotClockConfig::MONOTONIC);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_EQ((*clock)->SourceName(), "MONOTONIC (local only)");
   EXPECT_EQ((*clock)->Now(), 123.5 - kRobotStartTime);
   EXPECT_EQ(io->last_id, CLOCK_MONOTONIC);
   EXPECT_EQ(io->opens, 0);
+}
+
+TEST(RobotClockTest, MonotonicFailuresDoNotFallBackToUtc) {
+  auto io = std::make_shared<FakeClockIo>();
+  config::RobotClockConfig config;
+  config.set_source(config::RobotClockConfig::MONOTONIC);
+  auto clock = internal::MakeRobotClockWithIo(config, io);
+  ASSERT_TRUE(clock.ok()) << clock.status();
+  io->monotonic_status = absl::UnavailableError("test monotonic clock unavailable");
+  EXPECT_THROW((*clock)->Now(), std::runtime_error);
+  EXPECT_EQ(internal::MakeRobotClockWithIo(config, io).status().code(),
+            absl::StatusCode::kUnavailable);
+  EXPECT_EQ(io->utc_reads, 0);
+  EXPECT_EQ(io->opens, 0);
+}
+
+TEST(RobotClockTest, SystemClocksDoNotOwnPtpDescriptors) {
+  auto io = std::make_shared<FakeClockIo>();
+  for (const auto source : {config::RobotClockConfig::UTC, config::RobotClockConfig::MONOTONIC}) {
+    config::RobotClockConfig config;
+    config.set_source(source);
+    auto clock = internal::MakeRobotClockWithIo(config, io);
+    ASSERT_TRUE(clock.ok()) << clock.status();
+    EXPECT_TRUE(std::isfinite((*clock)->Now()));
+  }
+  EXPECT_EQ(io->opens, 0);
+  EXPECT_EQ(io->closes, 0);
 }
 
 TEST(RobotClockTest, RejectsInvalidConfigurationWithoutIo) {

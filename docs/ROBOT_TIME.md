@@ -21,6 +21,24 @@ reach that object; no module context or clock pointer is needed. Separate
 processes have separate objects. A common configuration and external clock
 synchronization are required to make their readings comparable.
 
+## Clock implementations
+
+`RobotClock` has three concrete implementations, private to `robot_time.cc`:
+
+```text
+RobotClock
+├── PtpClock        — owns a PHC descriptor and converts PHC time to UTC
+├── UtcClock        — reads CLOCK_REALTIME
+└── MonotonicClock  — reads CLOCK_MONOTONIC for local boot-relative time
+```
+
+`MakeRobotClock()` selects and probes one implementation before global
+installation. If PTP is unavailable and fallback is allowed, it creates a
+`UtcClock`. `SystemClockReader` is the shared system-call adapter for opening,
+reading and closing clocks; tests replace it through the internal `ClockIo`
+interface. The adapter does not select the source or own the global clock.
+Drivers continue calling `RobotTime()` without depending on a concrete class.
+
 ## Initialization and ownership
 
 The C++ `ros2_utils::RunNode<T>` loads and validates the config, creates the
