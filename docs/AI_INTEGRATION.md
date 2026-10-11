@@ -1,20 +1,220 @@
 # AI integration
 
+## Vision
+
+Joshua's purpose is to help people apply robotics to work they already
+understand, without requiring robotics expertise. Long term, agents should help
+users configure, operate, and improve robotic systems around their needs: use
+an existing robot as a peripheral, build a new application from supported
+components, and eventually help create robots and develop capabilities.
+Agents should assess what is needed when existing behavior is insufficient.
+Optional future integrations may guide users through external training or
+fine-tuning workflows. These goals extend beyond the first bounded operation.
+These principles guide development:
+
+- **Use chat to express intent.** Let users describe and refine their goals
+  using their own domain knowledge.
+- **Keep complexity in Joshua.** The binary and backend own software
+  preparation, configuration, device access, and execution. Guide users through
+  the physical steps that remain theirs.
+- **Build reusable capabilities.** Integrate hardware through tested contracts
+  so supported actions can be composed, repeated, and adapted across tasks.
+- **Verify real outcomes.** Establish task success through measured robot
+  feedback and make progress, failures, and missing evidence visible.
+- **Keep the operator in control.** Require direct human readiness confirmation
+  before real motion and provide stop controls that remain usable without the
+  model.
+- **Ship useful increments.** Prove one complete workflow, then expand toward
+  100% coverage of implemented hardware paths.
+
+## Requirements
+
+- **Joshua owns preparation and execution.** Chat gathers and refines intent;
+  the binary and backend handle software setup, configuration, device access,
+  and execution. MCP wraps tested subsystem operations.
+- **Use the existing robot configuration.** Hardware identity, wiring,
+  calibration, and limits come from protobuf configuration. Capability claims
+  match the installed version and merged, verified implementations.
+- **Make every task explicit and bounded.** Resolve the target, movement,
+  units, speed, repetition count, and any variations into a validated plan.
+  Feedback-driven plans also specify allowed next actions, selection conditions,
+  and finite action, time, and retry limits. Joshua checks each selected action
+  against those approved bounds.
+- **Get direct operator confirmation.** Robot motion can injure people or
+  damage equipment. Before every real-motion run, preview the complete plan,
+  expected physical effects, known hazards, and uncertainties. The responsible
+  operator must understand the proposed impact, grant permission, and confirm
+  physical readiness through a channel the model cannot supply or bypass. If
+  required readiness or understanding is missing, do not start. Approval covers
+  the complete bounded plan; changes or restarts require fresh confirmation.
+  The operator checks physical conditions Joshua cannot verify; Joshua remains
+  responsible for its validation, limits, and fault responses.
+- **Show what actually happened.** Use correctly associated, fresh measured
+  feedback with known units, reference frame or zero, and tolerances. Report
+  progress, completed actions, timeouts, and faults. Label command or step-count
+  estimates separately from measured position. Missing feedback or a fault
+  invokes the task's defined stop behavior; cancellation remains available
+  without the model. Preserve the observations, decisions, and failed attempts
+  behind adaptations, and identify changed procedures when comparing results.
+- **Demonstrate hardware coverage.** Each implemented hardware path needs
+  applicable MCP integration and verification. Record missing evidence as a gap
+  rather than presenting that path as covered.
+
+Early checkpoints can use a prepared, supported environment. A complete
+fresh-host installation journey remains a separate release gate.
+
+## Interface
+
+Start with an existing AI IDE or compatible chat application connected through
+MCP. A dedicated Joshua chat interface can follow if needed.
+
+**User → Chat → MCP → Joshua backend → Robot**
+
+**Robot feedback → Joshua backend → MCP → Chat**
+
+MCP should expose task state, measured outcomes, and diagnostic logs so chat can
+observe the result and propose the next supported task. The AI application
+(MCP host) owns retrieving updates and continuing the model conversation; the
+chosen client must demonstrate this loop. Backend task state and measurements
+establish outcomes; logs help diagnose events. Joshua owns control timing and
+fault responses.
+
+Connecting supported hardware should be guided. Adding new hardware requires
+implementation, testing, documentation, and release through the relevant
+subsystem.
+
+## User scenarios
+
+These non-exhaustive examples describe the intended experience as checkpoints
+ship. The team should propose diverse use cases and measurable success criteria.
+
+### Build an application
+
+“Help me build a system to sort these objects within this workspace and
+budget.” The user may already have hardware: “I have one arm, a gripper, and a
+camera. Can this setup sort these objects?” In a later workflow, Joshua should
+clarify the objects, constraints, and measurable success criteria; check the
+available hardware and its supported capabilities; assess feasibility; and
+identify missing capabilities before proposing and validating a protobuf
+configuration. It may suggest additional supported hardware when needed,
+explaining tradeoffs and required human setup. Composing supported components
+into an application is distinct from designing new hardware, which requires
+separate engineering and verification.
+
+### Set up hardware
+
+“Help me set up this arm.” Joshua should prepare the software and configuration,
+guide the user through physical connections and required checks, and explain
+which actions are available. If the hardware type is not implemented, Joshua
+should start a guided integration wizard through chat. It gathers hardware
+details, identifies reusable components and missing support, and walks through
+configuration, implementation, testing, and documentation. The wizard shows
+progress and required human steps. Its outcome is a validated configuration
+using implemented components, a reusable existing setup, or a clear list of
+missing integration steps. Configuration validation checks integrity; physical
+readiness still needs verification and operator confirmation. New hardware needs
+verification and release before Joshua presents it as supported.
+
+### Connect to an existing robot
+
+“Connect to Arm A and run my saved movement.” Joshua should reuse the robot's
+configuration, check its current connection and capabilities, and ask for any
+missing or changed details. It previews the resolved task, obtains fresh
+operator readiness confirmation before motion, and shows progress and stop
+controls. The user should not need to repeat software setup for each session.
+
+### Conduct an experiment
+
+“Repeat the saved movement 100 times per speed at two supported speeds and
+compare how closely the joint reaches its targets.” The preview specifies
+**100 cycles per speed, 200 cycles total**, with the movement, endpoints, speeds,
+measurement, and limits resolved before operator approval.
+
+The experiment can be saved as a reusable task or script referencing the robot's
+protobuf configuration. An optional skill can guide creation and refinement
+through chat; Joshua validates and executes the complete approved plan. Results
+include requested and completed cycles, interruptions, partial results, and
+measured joint endpoint error with its units, reference frame or zero, and
+tolerance. Tool-position accuracy requires its own measurement. If the required
+feedback is unavailable, Joshua should explain what is missing. The task format
+and runtime interfaces remain follow-up design decisions.
+
+## Checkpoints
+
+Ship the first three checkpoints using one supported environment and robot.
+Expand hardware coverage alongside them.
+
+### 1. Connect and inspect through MCP
+
+A user connects an AI IDE or chat client and asks, “What can this setup do, and
+is my configuration valid?” Joshua reports its installed version, configured
+devices, supported capabilities, and validation errors without opening devices.
+This establishes a working client connection and inspection flow. Live
+connection probes are separate approved backend steps that respect device
+ownership.
+
+### 2. Execute one verified robot task
+
+The user requests one supported movement on a named robot. For example, the
+preview defines a base-joint cycle as **0° → 45° → 0°**, at a supported speed
+and within that arm's calibrated limits. After direct operator confirmation,
+Joshua executes it, shows progress, and uses physical feedback to verify each
+endpoint against a declared reference and tolerance.
+
+The first demonstration combines read-only inspection, independent operator
+confirmation, and that bounded movement. It covers success, timeout,
+cancellation, and fault handling, with stop controls usable without the model
+and observable backend stop status. Verify stop behaviour separately from
+cancellation acknowledgments. Reconnecting and repeating the task should reuse
+the saved setup without repeating software preparation.
+
+### 3. Compose, repeat, and adapt tasks through chat
+
+The user saves that movement as a reusable task or script, optionally guided by
+a skill, and later refines its count or speed through chat. They can group
+supported movements and repeat the group with finite parameter variations. The
+LLM clarifies the request and previews the full plan; the backend validates and
+executes it as one bounded, operator-approved run. Results retain requested and
+completed actions, cycles, variations, and measured outcomes, including partial
+results after interruption. Start with one useful sequence before considering a
+dedicated experiment framework.
+
+Close the task loop through **observe → decide → execute → verify**. First,
+use returned measurements and task status to explain a completed task, propose
+the next supported task, obtain its required approval, and execute and verify
+it. Later, choose among preapproved next steps based on observed results, within
+the plan's conditions and finite limits. Joshua validates the choice before
+execution; new plans and restarts require fresh confirmation. Demonstrate an
+unsuccessful outcome that stops the task or requests human help.
+
+### 4. Reach 100% hardware coverage
+
+The same inspection and applicable operation/feedback flows work across every
+implemented board, transport, actuator, and sensor path in the runtime version
+under review. Each path has recorded demonstration and verification evidence;
+missing or unverified paths keep this checkpoint open. New hardware can merge
+first, with its MCP integration following the relevant merged contract in the
+same or a linked PR. Track that gap until integration and verification land.
+
+### Later: Prove a complete application
+
+Demonstrate requirements → configuration → simulation → hardware commissioning
+→ measured task success. Start with a fixed, known set of supported hardware
+and capabilities. Guide the operator through physical setup and verification,
+and require approval before every real-motion run. Simulation results do not
+establish physical readiness or task success; verify the agreed outcome on
+hardware. This proof can proceed
+while hardware coverage expands; reaching 100% coverage is not a prerequisite.
+
+Agree on the first robot, task, client, and feedback contract before writing
+implementation designs in follow-up PRs.
+
+## Relevant current capabilities
+
 Joshua already connects protobuf configuration, ROS 2 runtime components,
 model adapters, data collection, simulation, and contributor workflows. The
 current implementations and example presets are indexed in the
-[supported-component catalog](SUPPORTED_COMPONENTS.md). The
-proposed first Model Context Protocol (MCP) release is an optional front end
-for exactly one tested, bounded robot operation. AI inference, including the
-existing [inference host](../ai/README.md), and
-[data collection](../ai/train/README.md) are outside its scope. This guide
-records shared design rules and independent proposed follow-ups.
-
-Any contributor may propose these changes. Reviews should include people
-familiar with the affected implementation; this does not create exclusive
-subsystem or runtime roles.
-
-## Relevant current capabilities
+[supported-component catalog](SUPPORTED_COMPONENTS.md).
 
 | Area | Current implementation | Limitation |
 |---|---|---|
@@ -49,21 +249,53 @@ subsystem or runtime roles.
 
 ## Proposed follow-ups
 
+The proposed first motion-capable Model Context Protocol (MCP) release is an
+optional front end for exactly one tested, bounded robot operation. AI inference,
+including the existing [inference host](../ai/README.md), and
+[data collection](../ai/train/README.md) are outside its scope.
+
+A later model workflow should assess whether an existing policy or programmed
+sequence meets the task requirements, using available evidence. Its MCP
+capabilities should cover inference with an existing, supported policy and data
+collection for demonstrations, evaluation, or future training. If additional
+demonstrations, fine-tuning, or training are needed, the agent should explain
+what is missing and recommend data collection or an external learning workflow.
+
+Training and fine-tuning are optional future integrations with external tools.
+Each integration needs a separate proposal covering data preparation, training,
+evaluation against task requirements, and deployment of a validated policy,
+including tool ownership and verification responsibilities.
+
+Task-level success checks through measured feedback remain required. Any
+externally trained policy needs supported inference integration and
+operator-approved hardware verification before use. Training is not currently
+implemented in Joshua; these MCP additions follow the first motion-capable
+release.
+
+Any contributor may propose these changes. Reviews should include people
+familiar with the affected implementation; this does not create exclusive
+subsystem or runtime roles.
+
 | Change | Start from | Intended result |
 |---|---|---|
 | Change-validation skill | Existing subsystem documentation and test commands; use the catalog when available | A workflow that selects relevant checks and states what each result proves, without implementing another validator. |
 | Configuration skill | Existing presets, schemas, and `config::ValidateConfig` | A workflow that starts from the nearest merged preset, modifies it through existing config paths, and validates the result without launching it. |
 | Layer-specific guidance | A merged and documented extension contract | Separate guidance for communication, board/GPIO, and perception because their implementations and evidence differ. |
 | Guided-integration skill | Existing merged components, presets, and validation paths; use the proposed skills when available | A workflow that composes supported components into a preset. New drivers and runtime extensions remain separate changes. |
-| MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Stabilize and merge one tested subsystem operation, then add an optional adapter and guide for it. |
+| MCP front end and operator guide | A candidate bounded robot operation to define and test; [PR #90](https://github.com/Joshua-AI-Robotics/Joshua/pull/90) is an experimental reference | Start with read-only inspection; then stabilize one tested subsystem operation and add its motion-capable adapter and guide. |
 
 These items describe independent proposed work, not current support or required
 project phases. MCP requires only the tested contract and safeguards relevant
 to each operation it exposes; it does not depend on the contributor tooling
 items in this table.
 
-PR #90 is an unmerged prototype for one actuator. It informs
-this direction but does not establish current MCP support or select the first
+PR #90 is an unmerged prototype for one actuator. Its author reports operating
+Teensy/TB6600 hardware through ChatGPT and a local MCP server. The
+[prototype guide](https://github.com/Joshua-AI-Robotics/Joshua/blob/f0c421f869e16ee85240d9573849f465389a6e78/mhs/README.md)
+describes emitted-step position estimates and readiness flags supplied through
+tool arguments. Independent human confirmation and measured physical feedback
+remain necessary for this guide's first verified task. The prototype informs
+follow-up work without establishing merged MCP support or selecting the first
 operation.
 
 ### Proposed MCP operator guide
