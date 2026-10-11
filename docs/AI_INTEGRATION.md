@@ -89,12 +89,15 @@ ship. The team should propose diverse use cases and measurable success criteria.
 ### Build an application
 
 “Help me build a system to sort these objects within this workspace and
-budget.” In a later workflow, Joshua should clarify the objects, constraints,
-and measurable success criteria; assess feasibility; identify suitable
-supported components and missing support; and prepare and validate the protobuf
-configuration. It should explain tradeoffs and required human setup. Composing
-supported components into an application is distinct from designing new
-hardware, which requires separate engineering and verification.
+budget.” The user may already have hardware: “I have one arm, a gripper, and a
+camera. Can this setup sort these objects?” In a later workflow, Joshua should
+clarify the objects, constraints, and measurable success criteria; check the
+available hardware and its supported capabilities; assess feasibility; and
+identify missing capabilities before proposing and validating a protobuf
+configuration. It may suggest additional supported hardware when needed,
+explaining tradeoffs and required human setup. Composing supported components
+into an application is distinct from designing new hardware, which requires
+separate engineering and verification.
 
 ### Set up hardware
 
@@ -194,10 +197,11 @@ same or a linked PR. Track that gap until integration and verification land.
 ### Later: Prove a complete application
 
 Demonstrate requirements → configuration → simulation → hardware commissioning
-→ measured task success on a limited set of supported components. Guide the
-operator through physical setup and verification, and require approval before
-every real-motion run. Simulation results do not establish physical readiness
-or task success; verify the agreed outcome on hardware. This proof can proceed
+→ measured task success. Start with a fixed, known set of supported hardware
+and capabilities. Guide the operator through physical setup and verification,
+and require approval before every real-motion run. Simulation results do not
+establish physical readiness or task success; verify the agreed outcome on
+hardware. This proof can proceed
 while hardware coverage expands; reaching 100% coverage is not a prerequisite.
 
 Agree on the first robot, task, client, and feedback contract before writing
