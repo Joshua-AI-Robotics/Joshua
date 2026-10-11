@@ -6,9 +6,10 @@ Joshua's purpose is to help people apply robotics to work they already
 understand, without requiring robotics expertise. Long term, agents should help
 users configure, operate, and improve robotic systems around their needs: use
 an existing robot as a peripheral, build a new application from supported
-components, and eventually help create robots and develop capabilities,
-including training when existing behavior is insufficient. These goals extend
-beyond the first bounded operation. These principles guide development:
+components, and eventually help create robots and develop capabilities.
+Agents should assess what is needed and guide users to external training or
+fine-tuning workflows when existing behavior is insufficient. These goals
+extend beyond the first bounded operation. These principles guide development:
 
 - **Use chat to express intent.** Let users describe and refine their goals
   using their own domain knowledge.
@@ -252,15 +253,19 @@ optional front end for exactly one tested, bounded robot operation. AI inference
 including the existing [inference host](../ai/README.md), and
 [data collection](../ai/train/README.md) are outside its scope.
 
-A later learning phase should assess whether an existing policy or programmed
-sequence meets the task requirements. If additional demonstrations,
-fine-tuning, or training are needed, it should guide data preparation, training,
-evaluation against those requirements, and deployment of a validated policy
-with operator-approved hardware verification. Learning a policy is distinct
-from adapting a sequence of existing actions. Training is not currently
-implemented in Joshua; this proposed workflow lies beyond the first
-motion-capable release. Policy evaluation alone does not establish verified
-hardware operation.
+A later model workflow should assess whether an existing policy or programmed
+sequence meets the task requirements, using available evidence. Its MCP
+capabilities should cover inference with an existing, supported policy and data
+collection for demonstrations, evaluation, or future training. If fine-tuning or
+training is needed, the agent should explain the gap and guide the user to
+external workflows. Training, fine-tuning, and training-specific evaluation are
+outside Joshua's MCP scope.
+
+Task-level success checks through measured feedback remain required. Any
+externally trained policy needs supported inference integration and
+operator-approved hardware verification before use. Training is not currently
+implemented in Joshua; these MCP additions follow the first motion-capable
+release.
 
 Any contributor may propose these changes. Reviews should include people
 familiar with the affected implementation; this does not create exclusive
