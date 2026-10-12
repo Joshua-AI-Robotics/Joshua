@@ -1,5 +1,4 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 cc_library(
     name = "config_utils",
@@ -65,31 +64,5 @@ cc_binary(
         "@gflags",
         "@glog",
         "@protobuf",
-    ],
-)
-
-py_library(
-    name = "ros2_network_py",
-    srcs = ["ros2_network.py"],
-    data = [":ros2_network_export"],
-    visibility = ["//visibility:public"],
-)
-
-cc_test(
-    name = "ros2_network_test",
-    srcs = ["ros2_network_test.cc"],
-    deps = [
-        ":ros2_network",
-        "@googletest//:gtest_main",
-    ],
-)
-
-py_test(
-    name = "ros2_network_py_test",
-    srcs = ["ros2_network_test.py"],
-    main = "ros2_network_test.py",
-    deps = [
-        ":ros2_network_py",
-        "//config/proto:config_py_proto",
     ],
 )

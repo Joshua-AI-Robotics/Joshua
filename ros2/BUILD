@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -28,12 +28,11 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//config:ros2_network_py",
         "//config/proto:config_py_proto",
         "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:ros_python_paths_py",
         # rclpy is provided by the selected Docker image's ROS2 installation.
-    ] + requirement("protobuf") + requirement("PyYAML") + requirement("numpy"),
+    ] + requirement("protobuf") + requirement("PyYAML"),
 )
 
 py_library(
@@ -220,31 +219,10 @@ genrule(
 cc_test(
     name = "node_runner_test",
     srcs = ["node_runner_test.cc"],
-    env_inherit = [
-        "AMENT_PREFIX_PATH",
-        "LD_LIBRARY_PATH",
-        "ROS_DISTRO",
-    ],
     deps = [
         ":node_runner",
         "//config/proto:config_cc_proto",
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
-    ],
-)
-
-py_test(
-    name = "network_integration_test",
-    size = "small",
-    timeout = "short",
-    srcs = ["network_integration_test.py"],
-    env_inherit = [
-        "AMENT_PREFIX_PATH",
-        "LD_LIBRARY_PATH",
-        "ROS_DISTRO",
-    ],
-    deps = [
-        ":node_runner_py",
-        "//ros2/utils:ros_python_paths_py",
     ],
 )

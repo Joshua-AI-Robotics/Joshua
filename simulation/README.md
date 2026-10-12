@@ -135,7 +135,7 @@ Close the viewer window (or Ctrl+C) to exit.
 
 ## ROS network settings
 
-Full Joshua configs apply `general.ros2_network` before simulation backend startup,
-including direct `simulation/main.py` launches. Legacy standalone
-`SimulationConfig` files inherit the environment. See
+`joshua_main` applies `general.ros2_network` before starting simulation, which
+inherits the launcher's environment. For direct `simulation/main.py` launches,
+source an exported networking environment first. See
 [network configuration](../config/README.md#ros-2-discovery-across-computers).

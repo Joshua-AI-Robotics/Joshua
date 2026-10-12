@@ -162,9 +162,10 @@ variables. Conflicting `RMW_IMPLEMENTATION`, `ROS_DISCOVERY_SERVER`,
 `ROS_SUPER_CLIENT`, `ROS_STATIC_PEERS`, or DDS profile files produce an error
 asking you to unset the variable or select `INHERIT`. Identical inherited Joshua
 profiles are reused. Generated profiles live until their owning launcher or
-standalone node exits. Standalone C++/Python nodes and simulation use the same
-preparation component. Python's adapter calls the packaged C++ helper, so profile
-generation and validation have one implementation.
+standalone C++ node exits. The launcher and standalone C++ runner use the same
+preparation component. Python nodes and simulation launched through `joshua_main`
+inherit its settings. For standalone Python nodes or direct simulation launches,
+source the exported environment described below.
 
 Participant IDs belong to DDS processes/contexts, not Joshua `node_id` values.
 Include ROS CLI processes in the scan range. Ports follow Fast DDS's standard
