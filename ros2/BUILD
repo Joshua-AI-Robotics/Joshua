@@ -13,6 +13,7 @@ cc_library(
     ],
     deps = [
         "//config:config_utils",
+        "//config:ros2_network",
         "//config:validation",
         "//config/proto:config_cc_proto",
         "@ros2_deps//:cpp_std_msgs",

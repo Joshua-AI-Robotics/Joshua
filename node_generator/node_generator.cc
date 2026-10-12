@@ -226,12 +226,16 @@ NodeGenerator::~NodeGenerator() {
 }
 
 absl::Status NodeGenerator::Initialize() {
+  if (network_) return absl::FailedPreconditionError("NodeGenerator is already initialized");
   LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
 
   ABSL_ASSIGN_OR_RETURN(config_, config::config_util::LoadConfig(config_path_));
 
   ABSL_RETURN_IF_ERROR(IdentifyNodeTypes());
   ABSL_RETURN_IF_ERROR(CheckConfigIntegrity());
+  ABSL_ASSIGN_OR_RETURN(network_,
+                        config::Ros2NetworkEnvironment::Prepare(config_.general().ros2_network()));
+  ABSL_RETURN_IF_ERROR(network_->Apply());
 
   SetupSignalHandlers();
 

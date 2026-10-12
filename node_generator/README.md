@@ -39,3 +39,11 @@ have one shared home. Add new checks as separate functions and call them from
 separate private helpers in this module. Factories retain defensive checks for
 construction and initialization, and do not depend on node generation.
 Validation does not instantiate drivers, open devices, or launch nodes.
+
+## ROS discovery environment
+
+`general.ros2_network` is prepared before launching nodes. `joshua_main` prepares
+it before choosing the normal or simulation path; direct `NodeGenerator` use
+prepares it during `Initialize`. Children inherit the settings and reuse a
+matching profile. Shutdown completes before the owner removes generated files.
+See [network settings and CLI export](../config/README.md#ros-2-discovery-across-computers).

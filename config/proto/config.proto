@@ -6,6 +6,21 @@ import "simulation/proto/simulation.proto";
 
 package config;
 
+// Process-wide ROS discovery settings, applied before initializing ROS.
+message Ros2NetworkConfig {
+  enum Discovery {
+    INHERIT = 0;       // Preserve environment-based discovery settings.
+    AUTOMATIC = 1;     // Fast DDS discovery on the local subnet.
+    LOCALHOST = 2;     // Fast DDS discovery on this computer only.
+    STATIC_PEERS = 3;  // Fast DDS unicast discovery, including loopback.
+  }
+  optional uint32 domain_id = 1;  // Omitted: inherit ROS_DOMAIN_ID (default 0).
+  Discovery discovery = 2;
+  repeated string peers = 3;  // Unicast IPv4 addresses; STATIC_PEERS only.
+  // Probe participant IDs [0, count) on each host (default 32, maximum 120).
+  optional uint32 participant_scan_count = 4;
+}
+
 message General {
   enum OperationMode {
     MODE_INVALID = 0;
@@ -25,6 +40,7 @@ message General {
   RobotType robot_type = 2;
   string name = 3;
   uint64 id = 4;
+  Ros2NetworkConfig ros2_network = 6;
 }
 
 message Config {

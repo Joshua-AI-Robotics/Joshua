@@ -5,6 +5,7 @@
 #include <string>
 
 #include "config/config_utils.h"
+#include "config/ros2_network.h"
 #include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
 
@@ -23,11 +24,6 @@ inline void sigterm_handler(int) noexcept {
 // logger_name is used for usage/error logging.
 template <typename NodeT>
 int RunNode(int argc, char* argv[], const char* logger_name) {
-  rclcpp::init(argc, argv);
-
-  // Ensure external termination results in teardown
-  std::signal(SIGTERM, detail::sigterm_handler);
-
   if (argc < 4) {
     RCLCPP_ERROR(rclcpp::get_logger(logger_name),
                  "Usage: %s <node_name> <node_id> <config_path>",
@@ -50,11 +46,29 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
   const auto validation_status = config::ValidateConfig(config);
   if (!validation_status.ok()) {
     LOG(ERROR) << "Invalid config: " << validation_status;
-    rclcpp::shutdown();
     return 1;
   }
 
-  rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
+  auto network = config::Ros2NetworkEnvironment::Prepare(config.general().ros2_network());
+  if (!network.ok()) {
+    LOG(ERROR) << network.status();
+    return 1;
+  }
+  const auto applied = (*network)->Apply();
+  if (!applied.ok()) {
+    LOG(ERROR) << applied;
+    return 1;
+  }
+  rclcpp::init(argc, argv);
+  std::signal(SIGTERM, detail::sigterm_handler);
+
+  try {
+    rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
+  } catch (const std::exception& error) {
+    LOG(ERROR) << "Node failed: " << error.what();
+    rclcpp::shutdown();
+    return 1;
+  }
   rclcpp::shutdown();
   return 0;
 }
