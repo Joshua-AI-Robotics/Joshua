@@ -179,3 +179,11 @@ even when it has several subscriptions.
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
+
+## Network initialization
+
+The shared C++ and Python runners load the config and apply
+`general.ros2_network` **before** `rclcpp::init` / `rclpy.init`. This also covers
+nodes launched directly. Their profile/environment scope ends after ROS shutdown.
+See [network configuration](../config/README.md#ros-2-discovery-across-computers)
+for static peers on networks that block multicast and for ROS CLI exports.

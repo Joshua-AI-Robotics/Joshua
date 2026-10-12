@@ -120,3 +120,86 @@ node defines the interpretation: actuator scalar position topics use native unit
 while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
+
+## ROS 2 discovery across computers
+
+Set `general.ros2_network` to configure discovery before Joshua initializes ROS.
+For example, on the computer that needs to discover a peer at `192.0.2.20`:
+
+```protobuf
+general {
+  # Keep the preset's existing operation_mode and other settings.
+  ros2_network {
+    domain_id: 0
+    discovery: STATIC_PEERS
+    peers: "192.0.2.20"
+    participant_scan_count: 32
+  }
+}
+```
+
+Use the other computer's actual LAN address in each preset. Each computer runs
+its own preset and local nodes. Reserve addresses in DHCP so peer addresses stay
+stable. Both sides need the same domain, compatible topic types and QoS, and
+reachable UDP ports. This config does not deploy processes to another computer.
+
+| Setting | Behavior |
+|---|---|
+| Block omitted / `INHERIT` | Preserve existing discovery environment. An explicitly supplied `domain_id` still overrides `ROS_DOMAIN_ID`. |
+| `AUTOMATIC` | Fast DDS discovery on the local subnet; requires multicast between computers. |
+| `LOCALHOST` | Fast DDS discovery restricted to this computer. |
+| `STATIC_PEERS` | Fast DDS unicast discovery to the configured IPv4 addresses and loopback, without multicast discovery. |
+| `domain_id` | Optional, 0–101. If omitted, inherit `ROS_DOMAIN_ID`, defaulting to 0. |
+| `participant_scan_count` | Static peers only; default 32, range 1–120. Probe participant IDs from zero through count minus one on each host. Domain 101 allows at most 54 to avoid Linux's default ephemeral ports. |
+
+Managed modes require `rmw_fastrtps_cpp`; `INHERIT` also permits other middleware.
+Peers must be unicast IPv4 addresses. Hostnames, IPv6, and discovery servers are
+not supported by managed modes. Empty peer lists and incompatible settings fail
+before node construction. An unavailable peer does not block launch.
+
+Explicit settings override the corresponding domain and localhost environment
+variables. Conflicting `RMW_IMPLEMENTATION`, `ROS_DISCOVERY_SERVER`,
+`ROS_SUPER_CLIENT`, `ROS_STATIC_PEERS`, or DDS profile files produce an error
+asking you to unset the variable or select `INHERIT`. Identical inherited Joshua
+profiles are reused. Generated profiles live until their owning launcher or
+standalone node exits. Standalone C++/Python nodes and simulation use the same
+preparation component. Python's adapter calls the packaged C++ helper, so profile
+generation and validation have one implementation.
+
+Participant IDs belong to DDS processes/contexts, not Joshua `node_id` values.
+Include ROS CLI processes in the scan range. Ports follow Fast DDS's standard
+mapping (`7410 + 250 * domain_id + 2 * participant_id` for discovery); changing
+the domain or scan range regenerates the profile. The scan range determines
+which remote participants can be contacted, not the maximum number of nodes
+Joshua will launch.
+
+### ROS CLI and external applications
+
+The export command reads only networking settings from a preset. It never
+constructs nodes or opens robot hardware. Inside a Docker development shell:
+
+```bash
+mkdir -p /workspace/.cache/ros-network
+bazel run --config=u22 --config=x86-base \
+  --@rules_python//python/config_settings:python_version=3.10 \
+  //config:ros2_network_export -- \
+  --config=/workspace/config/config_preset/<robot>/<preset>.pbtxt \
+  --output_parent=/workspace/.cache/ros-network \
+  > /workspace/.cache/ros-network/env.sh
+source /workspace/.cache/ros-network/env.sh
+ros2 daemon stop
+ros2 topic list
+```
+
+Use `u24` and Python `3.12` for Jazzy. Source the exported file in each terminal
+that starts a publisher, subscriber, or external ROS application. Restart an
+existing ROS CLI daemon after changing settings; changing a terminal's environment
+does not reconfigure already running nodes. Exported profiles persist until you
+remove them. Re-export after changing the config, first unsetting both
+`FASTRTPS_DEFAULT_PROFILES_FILE` and `FASTDDS_DEFAULT_PROFILES_FILE` if they refer
+to the old settings.
+
+Joshua's Linux Compose services use host networking. For another container,
+share the exported directory at the **same absolute path** and use host
+networking. Generate the export separately on each computer. Environment exports
+alone cannot bypass a firewall blocking unicast traffic.

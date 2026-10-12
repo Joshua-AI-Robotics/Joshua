@@ -10,6 +10,7 @@ from rclpy.node import Node  # noqa: E402
 
 # Protobuf generated modules
 from config.proto import config_pb2  # noqa: E402
+from config.ros2_network import network_environment  # noqa: E402
 
 
 def load_config(config_path: str) -> config_pb2.Config:
@@ -47,38 +48,27 @@ def run_node(
     if argv is None:
         argv = sys.argv
 
-    rclpy.init(args=argv)
-
     try:
         node_name, node_id, config_path = parse_cli(argv)
-    except Exception as e:
-        # Prefer rclpy logger format similar to the C++ variant
-        try:
-            rclpy.logging.get_logger(logger_name).error(str(e))
-        except Exception:
-            print(str(e), file=sys.stderr)
-        rclpy.shutdown()
-        return 1
-
-    try:
         cfg = load_config(config_path)
-        node = node_cls(node_name, node_id, cfg)
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        try:
-            # Call shutdown method if it exists
-            # node_runner runs a single node; use the local 'node' variable.
-            node_instance = locals().get("node")
-            if node_instance:
-                if hasattr(node_instance, "shutdown"):
-                    node_instance.shutdown()
-                node_instance.destroy_node()
-        except Exception as e:
-            print(f"Error during node shutdown: {e}")
-
-        if rclpy.ok():
-            rclpy.shutdown()
-
+        with network_environment(cfg.general.ros2_network):
+            rclpy.init(args=argv)
+            node = None
+            try:
+                node = node_cls(node_name, node_id, cfg)
+                rclpy.spin(node)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                try:
+                    if node is not None:
+                        if hasattr(node, "shutdown"):
+                            node.shutdown()
+                        node.destroy_node()
+                finally:
+                    if rclpy.ok():
+                        rclpy.shutdown()
+    except Exception as exc:
+        print(f"{logger_name}: {exc}", file=sys.stderr)
+        return 1
     return 0

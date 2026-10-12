@@ -132,3 +132,10 @@ Close the viewer window (or Ctrl+C) to exit.
 | `OSError: Isaac Lab not found` | Set `ISAAC_LAB_PATH` or `ISAAC_LAB_PYTHON` |
 | `Command failed to spawn: Aborted` | Check `nvidia-smi`; verify GPU driver compatibility |
 | `ModuleNotFoundError: No module named 'pxr'` | Expected inside Bazel; USD tools only work in the Isaac Lab venv |
+
+## ROS network settings
+
+Full Joshua configs apply `general.ros2_network` before simulation backend startup,
+including direct `simulation/main.py` launches. Legacy standalone
+`SimulationConfig` files inherit the environment. See
+[network configuration](../config/README.md#ros-2-discovery-across-computers).

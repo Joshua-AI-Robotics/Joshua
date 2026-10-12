@@ -32,6 +32,7 @@ import glog  # noqa: E402
 from google.protobuf import text_format  # noqa: E402
 
 from config.proto import config_pb2  # noqa: E402
+from config.ros2_network import network_environment  # noqa: E402
 from simulation.mujoco.engine import MuJoCoEngine  # noqa: E402
 from simulation.mujoco.modes import (  # noqa: E402
     interactive,
@@ -106,7 +107,13 @@ def main(argv):
         print("Error: --config is required.", file=sys.stderr)
         sys.exit(1)
 
-    config, _ = _load_config(FLAGS.config)
+    config, full_config = _load_config(FLAGS.config)
+    network = (full_config or config_pb2.Config()).general.ros2_network
+    with network_environment(network):
+        return _run_simulation(config)
+
+
+def _run_simulation(config):
 
     if config.backend == simulation_pb2.SIM_BACKEND_ISAAC_SIM:
         from simulation.isaac import launcher as isaac_launcher
