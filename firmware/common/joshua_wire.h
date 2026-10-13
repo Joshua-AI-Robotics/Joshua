@@ -22,10 +22,19 @@ extern "C" {
 #define JW_SYNC_BYTE 0xA5
 #define JW_PROTO_VERSION 2
 #define JW_MAX_FRAME_LEN 64
-#define JW_LENGTH_OFFSET 1
+#define JW_SYNC_OFFSET 0
+#define JW_LENGTH_OFFSET (JW_SYNC_OFFSET + 1)
 #define JW_LENGTH_PREFIX_LEN (JW_LENGTH_OFFSET + 1)  // Sync and length bytes.
+// Wire offsets use protocol widths, independent of jw_frame_t layout/padding.
+#define JW_ID_WIRE_LEN 4  // Both IDs are encoded as u32 little-endian.
+#define JW_PROTO_VERSION_OFFSET JW_LENGTH_PREFIX_LEN
+#define JW_SESSION_OFFSET (JW_PROTO_VERSION_OFFSET + 1)
+#define JW_MESSAGE_OFFSET (JW_SESSION_OFFSET + JW_ID_WIRE_LEN)
+#define JW_CMD_OFFSET (JW_MESSAGE_OFFSET + JW_ID_WIRE_LEN)
+#define JW_CHANNEL_OFFSET (JW_CMD_OFFSET + 1)
+#define JW_PAYLOAD_OFFSET (JW_CHANNEL_OFFSET + 1)
 #define JW_CRC_LEN 2
-#define JW_HEADER_BODY_LEN 11
+#define JW_HEADER_BODY_LEN (JW_PAYLOAD_OFFSET - JW_LENGTH_PREFIX_LEN)
 // Bytes excluded from the wire length field: sync, length and CRC16.
 #define JW_LENGTH_FIELD_OVERHEAD (JW_LENGTH_PREFIX_LEN + JW_CRC_LEN)
 // Bytes outside the payload: prefix, fixed header body and CRC16.

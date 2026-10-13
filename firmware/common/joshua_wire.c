@@ -41,14 +41,14 @@ int jw_encode_frame(uint8_t* buf,
       cap < total || (payload_len != 0 && payload == NULL)) {
     return -1;
   }
-  buf[0] = JW_SYNC_BYTE;
+  buf[JW_SYNC_OFFSET] = JW_SYNC_BYTE;
   buf[JW_LENGTH_OFFSET] = JW_HEADER_BODY_LEN + payload_len;
-  buf[2] = JW_PROTO_VERSION;
-  put_u32(buf + 3, session_id);
-  put_u32(buf + 7, message_id);
-  buf[11] = cmd;
-  buf[12] = channel;
-  if (payload_len != 0) memcpy(buf + 13, payload, payload_len);
+  buf[JW_PROTO_VERSION_OFFSET] = JW_PROTO_VERSION;
+  put_u32(buf + JW_SESSION_OFFSET, session_id);
+  put_u32(buf + JW_MESSAGE_OFFSET, message_id);
+  buf[JW_CMD_OFFSET] = cmd;
+  buf[JW_CHANNEL_OFFSET] = channel;
+  if (payload_len != 0) memcpy(buf + JW_PAYLOAD_OFFSET, payload, payload_len);
   const uint16_t crc = crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]);
   buf[total - JW_CRC_LEN] = (uint8_t)crc;
   buf[total - 1] = (uint8_t)(crc >> 8);
@@ -57,7 +57,7 @@ int jw_encode_frame(uint8_t* buf,
 
 jw_result_t jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
   if (buf == NULL || out == NULL || len < JW_MIN_FRAME_LEN || len > JW_MAX_FRAME_LEN ||
-      buf[0] != JW_SYNC_BYTE || buf[2] != JW_PROTO_VERSION) {
+      buf[JW_SYNC_OFFSET] != JW_SYNC_BYTE || buf[JW_PROTO_VERSION_OFFSET] != JW_PROTO_VERSION) {
     return JW_RESULT_ERROR;
   }
   // Validate the signed difference before narrowing to the unsigned payload field.
@@ -67,16 +67,16 @@ jw_result_t jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out) {
     return JW_RESULT_ERROR;
   }
   const uint16_t crc = (uint16_t)buf[len - JW_CRC_LEN] | ((uint16_t)buf[len - 1] << 8);
-  if (crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]) != crc || get_u32(buf + 3) == 0 ||
-      get_u32(buf + 7) == 0) {
+  if (crc16(buf + JW_LENGTH_PREFIX_LEN, buf[JW_LENGTH_OFFSET]) != crc ||
+      get_u32(buf + JW_SESSION_OFFSET) == 0 || get_u32(buf + JW_MESSAGE_OFFSET) == 0) {
     return JW_RESULT_ERROR;
   }
-  out->proto_ver = buf[2];
-  out->session_id = get_u32(buf + 3);
-  out->message_id = get_u32(buf + 7);
-  out->cmd = buf[11];
-  out->channel = buf[12];
-  out->payload = buf + 13;
+  out->proto_ver = buf[JW_PROTO_VERSION_OFFSET];
+  out->session_id = get_u32(buf + JW_SESSION_OFFSET);
+  out->message_id = get_u32(buf + JW_MESSAGE_OFFSET);
+  out->cmd = buf[JW_CMD_OFFSET];
+  out->channel = buf[JW_CHANNEL_OFFSET];
+  out->payload = buf + JW_PAYLOAD_OFFSET;
   out->payload_len = (uint8_t)payload_len;
   return JW_RESULT_OK;
 }
