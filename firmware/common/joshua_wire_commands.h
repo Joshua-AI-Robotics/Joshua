@@ -77,12 +77,22 @@ typedef enum {
 
 // Stable on-wire board identities. Most match robot.board.BoardType, but the
 // historical ESP32 wire ID is 8 (protobuf ESP32 is 7). Preserve that wire ID.
+// Adding a board that speaks JoshuaWire:
+// - Add JW_BOARD_<NAME> here with an explicit, unused ID in 1..255 (IDENTIFY
+//   serializes one byte). Keep zero invalid; never renumber or reuse existing IDs.
+// - Update robot/board/proto/board.proto's BoardType and host board registration
+//   as needed. Map protobuf IDs explicitly; do not assume they equal wire IDs.
+// - Have the board's firmware report this ID in IDENTIFY; add wire-ID and golden
+//   IDENTIFY payload coverage in joshua_wire_commands_test.cc.
+// - Add the matching JW1_BOARD_<NAME> in joshua_wire_v1.h only if supporting JW1.
+// - Document the board under firmware/<board>/README.md and in firmware/README.md.
 typedef enum {
   JW_BOARD_INVALID = 0,
   JW_BOARD_AM243 = 1,
   JW_BOARD_TEENSY41 = 2,
   JW_BOARD_ARDUINO_UNO = 3,
   JW_BOARD_ESP32 = 8,
+  // Future JoshuaWire boards: JW_BOARD_<NAME> = <explicit unused u8 ID>.
 } jw_board_id_t;
 
 typedef enum {
