@@ -90,15 +90,40 @@ jw_result_t jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedb
   return JW_RESULT_OK;
 }
 int jw_encode_set_target_payload(uint8_t* out, size_t cap, jw_mode_t mode, float value) {
-  if (out == NULL || cap < JW_SET_TARGET_PAYLOAD_LEN) return -1;
+  if (out == NULL || cap < JW_SET_TARGET_PAYLOAD_LEN || mode == JW_MODE_COMPLEX) return -1;
   out[0] = (uint8_t)mode;
   put_float(out + 1, value);
   return JW_SET_TARGET_PAYLOAD_LEN;
 }
+int jw_encode_complex_target_payload(uint8_t* out, size_t cap, const jw_complex_target_t* value) {
+  if (out == NULL || value == NULL || cap < JW_SET_TARGET_COMPLEX_PAYLOAD_LEN) return -1;
+  out[0] = JW_MODE_COMPLEX;
+  uint8_t* field = out + 1;
+  put_float(field, value->position);
+  field += JW_TARGET_FLOAT_WIRE_LEN;
+  put_float(field, value->velocity);
+  field += JW_TARGET_FLOAT_WIRE_LEN;
+  put_float(field, value->torque);
+  return JW_SET_TARGET_COMPLEX_PAYLOAD_LEN;
+}
 jw_result_t jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out) {
-  if (data == NULL || out == NULL || len != JW_SET_TARGET_PAYLOAD_LEN) return JW_RESULT_ERROR;
-  out->mode = (jw_mode_t)data[0];
-  out->value = get_float(data + 1);
+  if (data == NULL || out == NULL || len == 0) return JW_RESULT_ERROR;
+  const jw_mode_t mode = (jw_mode_t)data[0];
+  const size_t expected_len =
+      mode == JW_MODE_COMPLEX ? JW_SET_TARGET_COMPLEX_PAYLOAD_LEN : JW_SET_TARGET_PAYLOAD_LEN;
+  if (len != expected_len) return JW_RESULT_ERROR;
+  jw_set_target_t decoded = {mode, 0.0f, {0.0f, 0.0f, 0.0f}};
+  if (mode == JW_MODE_COMPLEX) {
+    const uint8_t* field = data + 1;
+    decoded.combined.position = get_float(field);
+    field += JW_TARGET_FLOAT_WIRE_LEN;
+    decoded.combined.velocity = get_float(field);
+    field += JW_TARGET_FLOAT_WIRE_LEN;
+    decoded.combined.torque = get_float(field);
+  } else {
+    decoded.value = get_float(data + 1);
+  }
+  *out = decoded;
   return JW_RESULT_OK;
 }
 int jw_encode_configure_step_dir_payload(uint8_t* out,

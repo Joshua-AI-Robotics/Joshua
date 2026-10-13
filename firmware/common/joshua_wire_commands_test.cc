@@ -22,6 +22,7 @@ TEST(JoshuaWireCommands, WireIdsStayStable) {
   EXPECT_EQ(JW_MODE_POSITION, 1);
   EXPECT_EQ(JW_MODE_VELOCITY, 2);
   EXPECT_EQ(JW_MODE_TORQUE, 3);
+  EXPECT_EQ(JW_MODE_COMPLEX, 4);
   EXPECT_EQ(JW_STATUS_INVALID, 0);
   EXPECT_EQ(JW_STATUS_OK, 1);
   EXPECT_EQ(JW_STATUS_ERROR, 2);
@@ -46,6 +47,7 @@ TEST(JoshuaWireCommands, PayloadLimitsStayStable) {
   EXPECT_EQ(JW_FEEDBACK_RESPONSE_PAYLOAD_LEN, 10);
   EXPECT_EQ(JW_STATUS_RESPONSE_PAYLOAD_LEN, 1);
   EXPECT_EQ(JW_SET_TARGET_PAYLOAD_LEN, 5);
+  EXPECT_EQ(JW_SET_TARGET_COMPLEX_PAYLOAD_LEN, 13);
   EXPECT_EQ(JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN, 11);
   jw_identify_response_t identity{};
   EXPECT_EQ(sizeof(identity.fw_name), JW_FW_NAME_LEN);
@@ -112,6 +114,60 @@ TEST(JoshuaWireCommands, PayloadGoldenBytesAndRoundTrips) {
   EXPECT_EQ(status, JW_STATUS_UNSUPPORTED);
 }
 
+TEST(JoshuaWireCommands, ComplexTargetMatchesGoldenBytesAndPreservesAllFields) {
+  const jw_complex_target_t target{1.0f, -2.0f, 0.5f};
+  uint8_t bytes[JW_SET_TARGET_COMPLEX_PAYLOAD_LEN];
+  ASSERT_EQ(jw_encode_complex_target_payload(bytes, sizeof(bytes), &target), sizeof(bytes));
+  EXPECT_EQ(Bytes(bytes, bytes + sizeof(bytes)),
+            (Bytes{4, 0, 0, 0x80, 0x3f, 0, 0, 0, 0xc0, 0, 0, 0, 0x3f}));
+
+  jw_set_target_t decoded{};
+  decoded.value = 99.0f;
+  ASSERT_EQ(jw_decode_set_target_payload(bytes, sizeof(bytes), &decoded), JW_RESULT_OK);
+  EXPECT_EQ(decoded.mode, JW_MODE_COMPLEX);
+  EXPECT_FLOAT_EQ(decoded.value, 0.0f);
+  EXPECT_FLOAT_EQ(decoded.combined.position, target.position);
+  EXPECT_FLOAT_EQ(decoded.combined.velocity, target.velocity);
+  EXPECT_FLOAT_EQ(decoded.combined.torque, target.torque);
+
+  // Reusing the decoded view for a scalar target must clear all combined fields.
+  for (const auto mode : {JW_MODE_POSITION, JW_MODE_VELOCITY, JW_MODE_TORQUE}) {
+    decoded.combined = target;
+    ASSERT_EQ(jw_encode_set_target_payload(bytes, sizeof(bytes), mode, -12.5f), 5);
+    ASSERT_EQ(jw_decode_set_target_payload(bytes, 5, &decoded), JW_RESULT_OK);
+    EXPECT_EQ(decoded.mode, mode);
+    EXPECT_FLOAT_EQ(decoded.value, -12.5f);
+    EXPECT_FLOAT_EQ(decoded.combined.position, 0.0f);
+    EXPECT_FLOAT_EQ(decoded.combined.velocity, 0.0f);
+    EXPECT_FLOAT_EQ(decoded.combined.torque, 0.0f);
+  }
+}
+
+TEST(JoshuaWireCommands, ComplexTargetRequiresItsFullLayoutAndPreservesOutputOnFailure) {
+  Bytes bytes(JW_SET_TARGET_COMPLEX_PAYLOAD_LEN, 0xa5);
+  EXPECT_EQ(jw_encode_set_target_payload(bytes.data(), bytes.size(), JW_MODE_COMPLEX, 1.0f), -1);
+  EXPECT_EQ(bytes, Bytes(JW_SET_TARGET_COMPLEX_PAYLOAD_LEN, 0xa5));
+
+  const jw_complex_target_t target{0.0f, 0.0f, 0.0f};
+  ASSERT_EQ(jw_encode_complex_target_payload(bytes.data(), bytes.size(), &target), bytes.size());
+  jw_set_target_t decoded{JW_MODE_VELOCITY, 12.5f, {1.0f, 2.0f, 3.0f}};
+  for (size_t len = 0; len < bytes.size(); ++len) {
+    EXPECT_EQ(jw_decode_set_target_payload(bytes.data(), len, &decoded), JW_RESULT_ERROR);
+    EXPECT_EQ(decoded.mode, JW_MODE_VELOCITY);
+    EXPECT_FLOAT_EQ(decoded.value, 12.5f);
+    EXPECT_FLOAT_EQ(decoded.combined.position, 1.0f);
+    EXPECT_FLOAT_EQ(decoded.combined.velocity, 2.0f);
+    EXPECT_FLOAT_EQ(decoded.combined.torque, 3.0f);
+  }
+  ASSERT_EQ(jw_decode_set_target_payload(bytes.data(), bytes.size(), &decoded), JW_RESULT_OK);
+  EXPECT_EQ(decoded.mode, JW_MODE_COMPLEX);
+  EXPECT_FLOAT_EQ(decoded.combined.position, 0.0f);
+  EXPECT_FLOAT_EQ(decoded.combined.velocity, 0.0f);
+  EXPECT_FLOAT_EQ(decoded.combined.torque, 0.0f);
+  bytes[0] = JW_MODE_POSITION;
+  EXPECT_EQ(jw_decode_set_target_payload(bytes.data(), bytes.size(), &decoded), JW_RESULT_ERROR);
+}
+
 TEST(JoshuaWireCommands, IdentifyPreservesFullNameAndClearsUnusedDrives) {
   jw_identify_response_t identity{};
   identity.board_id = JW_BOARD_ESP32;
@@ -144,6 +200,7 @@ TEST(JoshuaWireCommands, PayloadCodecsRejectNullAndWrongSize) {
   jw_feedback_t feedback{};
   jw_configure_step_dir_t config{};
   jw_set_target_t target{};
+  jw_complex_target_t complex{};
   jw_status_t status;
   CheckBounds(
       JW_IDENTIFY_RESPONSE_PAYLOAD_LEN,
@@ -164,6 +221,10 @@ TEST(JoshuaWireCommands, PayloadCodecsRejectNullAndWrongSize) {
       [&](uint8_t* p, size_t n) { return jw_encode_set_target_payload(p, n, JW_MODE_POSITION, 1); },
       [&](const uint8_t* p, size_t n) { return jw_decode_set_target_payload(p, n, &target); });
   CheckBounds(
+      JW_SET_TARGET_COMPLEX_PAYLOAD_LEN,
+      [&](uint8_t* p, size_t n) { return jw_encode_complex_target_payload(p, n, &complex); },
+      [&](const uint8_t* p, size_t n) { return jw_decode_set_target_payload(p, n, &target); });
+  CheckBounds(
       JW_STATUS_RESPONSE_PAYLOAD_LEN,
       [&](uint8_t* p, size_t n) { return jw_encode_status_payload(JW_STATUS_OK, p, n); },
       [&](const uint8_t* p, size_t n) { return jw_decode_status_payload(p, n, &status); });
@@ -171,6 +232,7 @@ TEST(JoshuaWireCommands, PayloadCodecsRejectNullAndWrongSize) {
   EXPECT_EQ(jw_encode_identify_payload(bytes, sizeof(bytes), nullptr), -1);
   EXPECT_EQ(jw_encode_feedback_payload(bytes, sizeof(bytes), nullptr), -1);
   EXPECT_EQ(jw_encode_configure_step_dir_payload(bytes, sizeof(bytes), nullptr), -1);
+  EXPECT_EQ(jw_encode_complex_target_payload(bytes, sizeof(bytes), nullptr), -1);
   EXPECT_EQ(jw_decode_identify_payload(bytes, JW_IDENTIFY_RESPONSE_PAYLOAD_LEN, nullptr),
             JW_RESULT_ERROR);
   EXPECT_EQ(jw_decode_feedback_payload(bytes, JW_FEEDBACK_RESPONSE_PAYLOAD_LEN, nullptr),
@@ -178,6 +240,8 @@ TEST(JoshuaWireCommands, PayloadCodecsRejectNullAndWrongSize) {
   EXPECT_EQ(jw_decode_configure_step_dir_payload(bytes, JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN, nullptr),
             JW_RESULT_ERROR);
   EXPECT_EQ(jw_decode_set_target_payload(bytes, JW_SET_TARGET_PAYLOAD_LEN, nullptr),
+            JW_RESULT_ERROR);
+  EXPECT_EQ(jw_decode_set_target_payload(bytes, JW_SET_TARGET_COMPLEX_PAYLOAD_LEN, nullptr),
             JW_RESULT_ERROR);
   EXPECT_EQ(jw_decode_status_payload(bytes, JW_STATUS_RESPONSE_PAYLOAD_LEN, nullptr),
             JW_RESULT_ERROR);

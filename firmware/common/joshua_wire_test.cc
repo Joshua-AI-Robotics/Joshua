@@ -79,6 +79,29 @@ TEST(JoshuaWire, ResetAndTargetMatchIndependentGoldenBytes) {
              0x01, 0x03, 0x02, 1,    0,    0,    0x48, 0x41, 0x33, 0x81}));
 }
 
+TEST(JoshuaWire, ComplexTargetMatchesIndependentGoldenFrame) {
+  const jw_complex_target_t target{1.0f, -2.0f, 0.5f};
+  Bytes payload(JW_SET_TARGET_COMPLEX_PAYLOAD_LEN);
+  ASSERT_EQ(jw_encode_complex_target_payload(payload.data(), payload.size(), &target),
+            payload.size());
+  const auto bytes = Request(0x12345678, 0x01020305, JW_CMD_SET_TARGET, 2, payload);
+  // CRC independently computed with Python binascii.crc_hqx(body, 0xffff).
+  EXPECT_EQ(bytes, (Bytes{0xa5, 0x18, 0x02, 0x78, 0x56, 0x34, 0x12, 0x05, 0x03, 0x02,
+                          0x01, 0x03, 0x02, 0x04, 0,    0,    0x80, 0x3f, 0,    0,
+                          0,    0xc0, 0,    0,    0,    0x3f, 0x5e, 0x8b}));
+  jw_frame_t frame{};
+  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.cmd, JW_CMD_SET_TARGET);
+  EXPECT_EQ(frame.channel, 2);
+  EXPECT_EQ(frame.payload_len, JW_SET_TARGET_COMPLEX_PAYLOAD_LEN);
+  jw_set_target_t decoded{};
+  ASSERT_EQ(jw_decode_set_target_payload(frame.payload, frame.payload_len, &decoded), JW_RESULT_OK);
+  EXPECT_EQ(decoded.mode, JW_MODE_COMPLEX);
+  EXPECT_FLOAT_EQ(decoded.combined.position, target.position);
+  EXPECT_FLOAT_EQ(decoded.combined.velocity, target.velocity);
+  EXPECT_FLOAT_EQ(decoded.combined.torque, target.torque);
+}
+
 TEST(JoshuaWire, CrcCoversEveryHeaderAndPayloadBit) {
   const auto original = Request(0x12345678, 0x01020305, JW_CMD_SET_TARGET, 2, {1, 2, 3, 4, 5});
   for (size_t i = 0; i < original.size(); ++i) {

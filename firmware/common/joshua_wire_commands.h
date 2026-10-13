@@ -24,7 +24,9 @@ typedef enum {
 #define JW_IDENTIFY_RESPONSE_PAYLOAD_LEN (1 + JW_FW_NAME_LEN + 1 + JW_MAX_CHANNELS)
 #define JW_FEEDBACK_RESPONSE_PAYLOAD_LEN 10
 #define JW_STATUS_RESPONSE_PAYLOAD_LEN 1
-#define JW_SET_TARGET_PAYLOAD_LEN 5
+#define JW_TARGET_FLOAT_WIRE_LEN 4  // Target values are serialized as f32 little-endian.
+#define JW_SET_TARGET_PAYLOAD_LEN (1 + JW_TARGET_FLOAT_WIRE_LEN)
+#define JW_SET_TARGET_COMPLEX_PAYLOAD_LEN (1 + 3 * JW_TARGET_FLOAT_WIRE_LEN)
 #define JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN 11
 
 // Borrowed command view, independent of framing, wire version and session IDs.
@@ -57,6 +59,7 @@ typedef enum {
   JW_MODE_POSITION = 1,
   JW_MODE_VELOCITY = 2,
   JW_MODE_TORQUE = 3,
+  JW_MODE_COMPLEX = 4,
 } jw_mode_t;
 
 // Mirrors robot.board.DriveInterface (robot/board/proto/board.proto)
@@ -104,15 +107,26 @@ typedef struct {
   uint16_t fault_flags;
 } jw_feedback_t;
 
-// TODO(hmoon): Add a versioned multi-field command and advertise capabilities
-// during identification. Preserve field presence (omitted != zero), native units,
-// and control semantics, including position with a speed limit. Update host and
-// firmware codecs together; retain or explicitly reject legacy single-target
-// commands rather than silently reinterpreting their payload. Validate the full
-// command before applying it; allow future supported fields without dropping them.
+// One channel's combined target, corresponding to one index in the ROS 2
+// JointState position/velocity/effort arrays (effort is torque for revolute joints).
+// All three fields are present; zero is a value, never an omitted field.
+// Values use the channel's native units; ROS adapters must convert explicitly.
+typedef struct {
+  float position;
+  float velocity;
+  float torque;
+} jw_complex_target_t;
+
+// TODO(hmoon): Advertise supported target capabilities during identification and
+// define partial-field commands (omitted != zero) and control semantics, including
+// position with a speed limit. Drive handlers must validate the complete target
+// before applying it and reject unsupported combinations without dropping fields.
 typedef struct {
   jw_mode_t mode;
+  // Used by scalar modes; zero when decoding JW_MODE_COMPLEX.
   float value;
+  // Used by JW_MODE_COMPLEX; zeroed when decoding scalar modes.
+  jw_complex_target_t combined;
 } jw_set_target_t;
 
 typedef struct {
@@ -150,7 +164,13 @@ jw_result_t jw_decode_identify_payload(const uint8_t* data,
                                        jw_identify_response_t* out);
 int jw_encode_feedback_payload(uint8_t* out, size_t cap, const jw_feedback_t* value);
 jw_result_t jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedback_t* out);
+// Scalar layout: [mode:u8][value:f32le]. JW_MODE_COMPLEX requires the dedicated
+// encoder below; passing it to the scalar encoder is an error.
 int jw_encode_set_target_payload(uint8_t* out, size_t cap, jw_mode_t mode, float value);
+// Complex layout: [JW_MODE_COMPLEX:u8][position:f32le][velocity:f32le][torque:f32le].
+// A JointState array maps to separate channel frames, without batch atomicity.
+int jw_encode_complex_target_payload(uint8_t* out, size_t cap, const jw_complex_target_t* value);
+// Decodes either layout, requiring the exact length for the encoded mode.
 jw_result_t jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out);
 int jw_encode_configure_step_dir_payload(uint8_t* out,
                                          size_t cap,
