@@ -45,59 +45,30 @@ class BoardChannel {
 The selected comm determines how those operations travel, but motor drivers do
 not see serial, EtherCAT, SOEM, CoE, SDO, or PDO types.
 
-## 3. JoshuaWire v2 correlation
+## 3. JoshuaWire revision 4: generic profiles and shared session
 
-JoshuaWire v2 adds nonzero, little-endian `uint32_t session_id` and
-`uint32_t message_id` fields to every request. Every response echoes both
-fields. The session ID is established by the reset handshake below; it is not
-a board identity or a value that persists across reboot.
+The normative core/profile/discovery/session/safety contract is now
+[JOSHUA_WIRE.md](JOSHUA_WIRE.md). It supersedes revision 3's fixed eight-channel
+IDENTIFY and global device commands. Codec release 0.2.0 uses wire revision 4,
+with 96-byte frames, paginated stable function descriptors and opaque versioned
+profiles. `jw_drive_t` is actuator metadata. Vendor/product identity is
+informational; protocol/profile/plane support determines compatibility.
 
-The v2 frame is:
+PROFILE carries a profile ID/version/operation selector. Actuator SET_TARGET and
+GET_FEEDBACK below mean profile 1 operations 1 and 2, respectively. Actuator
+CONFIGURE, ENABLE and DISABLE mean profile 1 operations 0, 3 and 4. Common
+responses carry status and firmware execution phase; queryable board/function
+state distinguishes stop action completion from physical verification and exposes
+shutdown dependencies/recovery. No optional streaming/bulk service is implied.
 
-```text
-[sync][len][proto_ver][session_id_le][message_id_le][cmd][channel][payload...][crc16_le]
-```
-
-The length and CRC cover `session_id` and `message_id` along with the remaining
-header and payload. The decoded frame becomes conceptually:
-
-```c
-typedef struct {
-  uint8_t proto_ver;
-  uint32_t session_id;
-  uint32_t message_id;
-  uint8_t cmd;
-  uint8_t channel;
-  const uint8_t* payload;
-  uint8_t payload_len;
-} jw2_frame_t;
-```
-
-Protocol rules:
-
-- Before normal exchange, the host sends `RESET_SESSION` with a newly generated
-  nonzero session ID. Firmware atomically clears request de-duplication state
-  and retained responses, adopts the ID, and echoes it. No channel may be
-  configured or enabled until this handshake succeeds. `RESET_SESSION` is the
-  sole frame firmware accepts when its proposed session ID differs from the
-  active session.
-- Firmware reboot resets the active session to zero. Host reconnect always
-  performs `RESET_SESSION`, even if transport buffers or PDO inputs retain old
-  bytes. Frames from any other session are discarded.
-- Serial open/reconnect flushes receive bytes before the handshake. PDO and
-  mailbox responses remain explicitly tagged with the session ID, so a
-  retained old response cannot match a request in a new session.
-- Message ID `0` is reserved and never allocated.
-- The host allocates IDs monotonically. Before `UINT32_MAX` would wrap, it
-  disables channels and establishes a new session, so an ID is never reused
-  within one session.
-- A response must match session ID, message ID, command, and channel.
-- Stale, duplicate, or mismatched responses do not complete a call.
-- A timed-out ID remains quarantined from late responses until transport state
-  has advanced past that response.
-- JoshuaWire v1 remains available during migration. Current firmware and
-  presets move to v2 only after both endpoints support it; v1 wire bytes are
-  not silently reinterpreted as v2.
+One host coordinator and one firmware endpoint own each MCU across all functions
+and transports, including mailbox/PDO. IDs are allocated on publication and one
+request is in flight across all planes. Exact last-request retries replay cached
+responses, including unknown handler outcomes; uncertain mutations are never
+blindly retried with a new ID. Reconnect resets once, invalidates all configurations
+without clearing ESTOP, and reconciles the complete board/function state before
+explicit configuration/enable. Read the normative contract for bounds, priority,
+resource ownership and the H/F/T stacked implementation/integration gates.
 
 ## 4. Communication seams
 
@@ -138,8 +109,9 @@ class CorrelatedCyclicTransport {
 };
 ```
 
-Only `SET_TARGET` and `GET_FEEDBACK` are accepted by this adapter. The board
-engine rejects any routing table that sends another command through it.
+Only actuator-profile `SET_TARGET` and `GET_FEEDBACK` are accepted by this adapter;
+routing validates PROFILE ID, requested version and operation, not command 0x0b
+alone. The board engine rejects any routing table that sends another command through it.
 
 ## 5. EtherCAT runtime model
 
@@ -158,7 +130,7 @@ sequenceDiagram
   participant Firmware
 
   Caller->>BoardEngine: SET_TARGET or GET_FEEDBACK
-  BoardEngine->>CyclicAdapter: Exchange JoshuaWire v2 frame
+  BoardEngine->>CyclicAdapter: Exchange JoshuaWire revision 4 frame
   CyclicAdapter->>CyclicAdapter: Reserve request slot
   MasterLoop->>Firmware: Exchange output PDO
   Firmware->>Firmware: Process new message ID once
@@ -170,7 +142,8 @@ sequenceDiagram
 
 The initial implementation allows one in-flight cyclic request per
 board/slave adapter. One master loop may service several slave PDO regions.
-Concurrent callers targeting the same adapter serialize on its request slot.
+Concurrent callers targeting the same MCU serialize on the board coordinator,
+including its mailbox path; per-adapter serialization alone is insufficient.
 
 The worker always performs process-data send/receive first. Between cyclic
 deadlines it may service at most one queued mailbox or state-management step.
@@ -190,8 +163,8 @@ then tears down the master. Locks are acquired only in lifecycle → work-queue
 caller notification and never waits for a caller, eliminating reverse-order
 and callback deadlocks.
 
-JoshuaWire v2 frames are bounded to 64 bytes, including framing and CRC. PDO
-layout version 1 uses fixed 80-byte output and input images with these
+JoshuaWire revision 4 frames are bounded to 96 bytes, including framing and CRC. PDO
+layout version 2 uses fixed 112-byte output and input images with these
 little-endian offsets:
 
 | Direction | Offset | Type | Field |
@@ -199,15 +172,15 @@ little-endian offsets:
 | Output | 0 | `uint32` | session ID (`0` means no active session) |
 | Output | 4 | `uint32` | request generation (`0` means invalid/cancelled) |
 | Output | 8 | `uint32` | response generation acknowledgment |
-| Output | 12 | `uint16` | request frame length, `0..64` |
-| Output | 14 | `uint16` | flags/reserved, must be zero in layout v1 |
-| Output | 16 | `uint8[64]` | request frame, zero-filled after length |
+| Output | 12 | `uint16` | request frame length, `0..96` |
+| Output | 14 | `uint16` | flags/reserved, must be zero in layout v2 |
+| Output | 16 | `uint8[96]` | request frame, zero-filled after length |
 | Input | 0 | `uint32` | active firmware session ID |
 | Input | 4 | `uint32` | accepted request generation |
 | Input | 8 | `uint32` | published response generation (`0` means none) |
-| Input | 12 | `uint16` | response frame length, `0..64` |
+| Input | 12 | `uint16` | response frame length, `0..96` |
 | Input | 14 | `uint16` | transport status |
-| Input | 16 | `uint8[64]` | response frame, zero-filled after length |
+| Input | 16 | `uint8[96]` | response frame, zero-filled after length |
 
 The host constructs a complete output shadow image, then the sole master worker
 copies that image into the SOEM process image before send. Firmware latches the
@@ -240,28 +213,28 @@ failure, loss of OPERATIONAL state, or a stopped loop fails pending calls.
 
 The SOEM adapter gains CoE/SDO read and write operations. Joshua-controlled
 AM243 firmware exposes object-dictionary entries for request and response
-JoshuaWire v2 frames.
+JoshuaWire revision 4 frames.
 
-The layout-v1 CoE contract is:
+The layout-v2 CoE contract is:
 
 | Index | Subindex | Type/access | Meaning |
 | --- | --- | --- | --- |
 | `0x2000` | `0` | `OCTET_STRING[36]`, RO | compatibility descriptor |
 | `0x2001` | `0` | `OCTET_STRING[8]`, RW | reset-session request/result |
-| `0x2010` | `0` | `OCTET_STRING[76]`, WO | mailbox request envelope |
-| `0x2011` | `0` | `OCTET_STRING[76]`, RO | retained mailbox response envelope |
+| `0x2010` | `0` | `OCTET_STRING[108]`, WO | mailbox request envelope |
+| `0x2011` | `0` | `OCTET_STRING[108]`, RO | retained mailbox response envelope |
 | `0x2012` | `0` | `UNSIGNED32`, WO | mailbox response-generation acknowledgment |
 
 The 36-byte compatibility descriptor contains, in order, magic
 `"JWEC"` (`uint8[4]`), descriptor version (`uint16`, value 1), minimum and
 maximum JoshuaWire protocol versions (`uint16` each), PDO layout version
-(`uint16`, value 1), output and input PDO sizes (`uint16`, both 80), maximum
-frame size (`uint16`, 64), supported-transport bitmap (`uint32`), and a
+(`uint16`, value 2), output and input PDO sizes (`uint16`, both 112), maximum
+frame size (`uint16`, 96), supported-transport bitmap (`uint32`), and a
 12-byte NUL-padded firmware artifact ID followed by a zero `uint16` reserved
 field. The 8-byte session object contains an operation (`uint32`, 1 means
-reset) and session ID (`uint32`). Each 76-byte mailbox envelope contains
+reset) and session ID (`uint32`). Each 108-byte mailbox envelope contains
 session ID (`uint32`), generation (`uint32`), frame length (`uint16`), zero
-reserved bytes (`uint16`), and frame (`uint8[64]`). Mailbox generations and
+reserved bytes (`uint16`), and frame (`uint8[96]`). Mailbox generations and
 retained-response acknowledgment follow the same publication rules as PDO
 generations.
 
@@ -279,7 +252,7 @@ Mailbox timeouts and serialization belong to the comm adapter. The board
 engine sees only a `MessageTransport`.
 
 At startup, before session reset or channel enable, the host reads `0x2000` and
-requires JoshuaWire v2, PDO layout v1, exact 80-byte PDO mappings, a 64-byte
+requires JoshuaWire revision 4, PDO layout v2, exact 112-byte PDO mappings, a 96-byte
 frame limit, and the transports required by the selected configuration. A
 mismatch fails initialization with the observed artifact ID and expected
 protocol/layout/size/transport values, plus an instruction to build and flash
@@ -353,8 +326,10 @@ modifying the retained TI demo.
 
 The firmware must:
 
-- Implement the JoshuaWire v2 codec and echo session and request IDs in every
+- Implement the JoshuaWire revision 4 codec and echo session and request IDs in every
   response.
+- Implement the discovery/profile/state/resource/bounded-dispatch contracts and
+  F integration gates in [JOSHUA_WIRE.md](JOSHUA_WIRE.md).
 - Implement reset-session and clear retained/de-duplication state on reboot.
 - Expose CoE object-dictionary entries for management requests and responses.
 - Consume each new PDO request once.
@@ -369,15 +344,15 @@ Document or generate the matching ESI and PDO mapping.
 
 ## 10. Migration sequence
 
-1. Update this design and the board-layer RFC with the v2 and dual-plane
+1. Update this design and the board-layer RFC with the revision-4 and dual-plane
    contracts.
-2. Add JoshuaWire v2 beside v1, including correlation tests and response-ID
+2. Add JoshuaWire revision 4 beside v1, including correlation tests and response-ID
    propagation through existing serial firmware.
 3. Add message and correlated-cyclic comm interfaces, fakes, and BUILD
    visibility rules.
 4. Add SOEM CoE/SDO support and the single-owner background cyclic loop.
 5. Implement the host PDO codec and Joshua-controlled AM243 firmware/profile.
-6. Compose the JoshuaWire board engine and migrate AM243 after serial v2 is
+6. Compose the JoshuaWire board engine and migrate AM243 after serial revision 4 is
    stable.
 7. Remove `Am243Board::serial_mode_` and board-layer dependencies on concrete
    serial/SOEM implementations.
@@ -386,8 +361,8 @@ Document or generate the matching ESI and PDO mapping.
 
 Required host and shared-codec tests:
 
-- JoshuaWire v2 exact golden bytes and CRC coverage.
-- v1/v2 compatibility and explicit version rejection.
+- JoshuaWire revision 4 exact golden bytes and CRC coverage.
+- JW1 preservation and explicit rejection of revision 1/2/3 frames by the revision-4 endpoint.
 - Every response echoes its session and request IDs.
 - Message-ID exhaustion starts a new session rather than reusing an ID.
 - Reboot, reconnect, retained PDO/mailbox response, and reset-session behavior.
@@ -422,7 +397,7 @@ or flash firmware without explicit hardware confirmation.
 ## 12. Acceptance criteria
 
 - Motor drivers remain unchanged and depend only on `BoardChannel`.
-- JoshuaWire v2 works over serial with correlated responses.
+- JoshuaWire revision 4 works over serial with correlated responses.
 - Session reset prevents pre-reboot, pre-reconnect, and retained responses from
   satisfying new requests.
 - EtherCAT management commands use CoE/SDO.
