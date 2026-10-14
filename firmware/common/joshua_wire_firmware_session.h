@@ -37,7 +37,8 @@ void jw_firmware_session_init(jw_firmware_session_t* session);
 // is one status byte (JW_STATUS_OK). A duplicate of the most recent identical request
 // replays the retained response; older IDs and changed requests reusing an ID
 // are discarded. An ID is consumed even if its handler fails. Input/output
-// buffers must not overlap the session or each other; output capacity must be 64.
+// buffers must not overlap the session or each other; output capacity must be
+// at least JW_MAX_FRAME_LEN.
 // A different-session reset is accepted by contract: session IDs provide
 // correlation, not authentication or protection against injected resets.
 int jw_firmware_session_process(jw_firmware_session_t* session,

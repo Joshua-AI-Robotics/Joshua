@@ -1,4 +1,4 @@
-// JoshuaWire EtherCAT layout-v1 wire contract, shared by host and all board
+// JoshuaWire EtherCAT layout-v2 wire contract, shared by host and all board
 // firmware endpoints. Constants are byte offsets/sizes, never packed structs.
 // This header does not implement an object dictionary, watchdog or motor I/O.
 #pragma once
@@ -12,9 +12,7 @@
 #define JWEC_ACK_INDEX 0x2012
 #define JWEC_DESCRIPTOR_SIZE 36
 #define JWEC_SESSION_SIZE 8
-#define JWEC_MAILBOX_SIZE 76
-#define JWEC_PDO_SIZE 80
-#define JWEC_LAYOUT_VERSION 1
+#define JWEC_LAYOUT_VERSION 2
 #define JWEC_DESCRIPTOR_VERSION 1
 
 // Descriptor: magic[4], version:u16, min/max protocol:u16, layout:u16,
@@ -26,8 +24,9 @@
 #define JWEC_TRANSPORT_STATUS_OK 0u
 
 // Both envelopes start with session:u32 and generation:u32. Mailbox adds
-// length:u16, reserved:u16, frame[64]. PDO adds acknowledgment (output) or
-// response generation (input):u32, length:u16, flags/status:u16, frame[64].
+// length:u16, reserved:u16, frame[JW_MAX_FRAME_LEN]. PDO adds acknowledgment
+// (output) or response generation (input):u32, length:u16, flags/status:u16,
+// frame[JW_MAX_FRAME_LEN]. Layout v1's 64-byte slots are incompatible with v2.
 #define JWEC_SESSION_OFFSET 0
 #define JWEC_GENERATION_OFFSET 4
 #define JWEC_MAILBOX_LENGTH_OFFSET 8
@@ -35,3 +34,5 @@
 #define JWEC_PDO_RESPONSE_OFFSET 8
 #define JWEC_PDO_LENGTH_OFFSET 12
 #define JWEC_PDO_FRAME_OFFSET 16
+#define JWEC_MAILBOX_SIZE (JWEC_MAILBOX_FRAME_OFFSET + JW_MAX_FRAME_LEN)
+#define JWEC_PDO_SIZE (JWEC_PDO_FRAME_OFFSET + JW_MAX_FRAME_LEN)

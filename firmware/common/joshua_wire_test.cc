@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "firmware/common/joshua_wire_endpoint.h"
+#include "firmware/common/joshua_wire_ethercat.h"
 #include "firmware/common/joshua_wire_firmware_session.h"
 #include "gtest/gtest.h"
 
@@ -48,11 +49,11 @@ TEST(JoshuaWire, ConfigurePayloadMatchesIndependentGoldenBytes) {
   ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
   EXPECT_EQ(frame.cmd, JW_CMD_CONFIGURE_CHANNEL);
   EXPECT_EQ(Bytes(frame.payload, frame.payload + frame.payload_len), expected);
-  EXPECT_EQ(frame.proto_ver, 2);
-  EXPECT_STREQ(JW_VERSION_STRING, "0.0.2");
+  EXPECT_EQ(frame.proto_ver, 3);
+  EXPECT_STREQ(JW_VERSION_STRING, "0.1.0");
   EXPECT_EQ(JW_VERSION_MAJOR, 0);
-  EXPECT_EQ(JW_VERSION_MINOR, 0);
-  EXPECT_EQ(JW_VERSION_PATCH, 2);
+  EXPECT_EQ(JW_VERSION_MINOR, 1);
+  EXPECT_EQ(JW_VERSION_PATCH, 0);
 }
 
 TEST(JoshuaWire, ResetAndTargetMatchIndependentGoldenBytes) {
@@ -60,7 +61,7 @@ TEST(JoshuaWire, ResetAndTargetMatchIndependentGoldenBytes) {
   EXPECT_EQ(Request(0x12345678, 0x01020304, JW_CMD_RESET_SESSION),
             (Bytes{0xa5,
                    0x0b,
-                   0x02,
+                   0x03,
                    0x78,
                    0x56,
                    0x34,
@@ -71,12 +72,12 @@ TEST(JoshuaWire, ResetAndTargetMatchIndependentGoldenBytes) {
                    0x01,
                    0x08,
                    0xff,
-                   0x82,
-                   0x0c}));
+                   0xcb,
+                   0xd4}));
   EXPECT_EQ(
       Request(0x12345678, 0x01020305, JW_CMD_SET_TARGET, 2, {JW_MODE_POSITION, 0, 0, 0x48, 0x41}),
-      (Bytes{0xa5, 0x10, 0x02, 0x78, 0x56, 0x34, 0x12, 0x05, 0x03, 0x02,
-             0x01, 0x03, 0x02, 1,    0,    0,    0x48, 0x41, 0x33, 0x81}));
+      (Bytes{0xa5, 0x10, 0x03, 0x78, 0x56, 0x34, 0x12, 0x05, 0x03, 0x02,
+             0x01, 0x03, 0x02, 1,    0,    0,    0x48, 0x41, 0x17, 0x29}));
 }
 
 TEST(JoshuaWire, ComplexTargetMatchesIndependentGoldenFrame) {
@@ -86,9 +87,9 @@ TEST(JoshuaWire, ComplexTargetMatchesIndependentGoldenFrame) {
             payload.size());
   const auto bytes = Request(0x12345678, 0x01020305, JW_CMD_SET_TARGET, 2, payload);
   // CRC independently computed with Python binascii.crc_hqx(body, 0xffff).
-  EXPECT_EQ(bytes, (Bytes{0xa5, 0x18, 0x02, 0x78, 0x56, 0x34, 0x12, 0x05, 0x03, 0x02,
+  EXPECT_EQ(bytes, (Bytes{0xa5, 0x18, 0x03, 0x78, 0x56, 0x34, 0x12, 0x05, 0x03, 0x02,
                           0x01, 0x03, 0x02, 0x04, 0,    0,    0x80, 0x3f, 0,    0,
-                          0,    0xc0, 0,    0,    0,    0x3f, 0x5e, 0x8b}));
+                          0,    0xc0, 0,    0,    0,    0x3f, 0x5d, 0xbc}));
   jw_frame_t frame{};
   ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
   EXPECT_EQ(frame.cmd, JW_CMD_SET_TARGET);
@@ -116,30 +117,55 @@ TEST(JoshuaWire, CrcCoversEveryHeaderAndPayloadBit) {
 }
 
 TEST(JoshuaWire, BoundsVersionsAndReservedIdsAreRejected) {
-  std::array<uint8_t, 65> buffer{};
+  std::array<uint8_t, JW_MAX_FRAME_LEN + 1> buffer{};
   Bytes payload(JW_MAX_PAYLOAD_LEN, 0xC3);
-  EXPECT_EQ(jw_encode_frame(
-                buffer.data(), 64, UINT32_MAX, UINT32_MAX, 3, 0, payload.data(), payload.size()),
-            64);
+  EXPECT_EQ(jw_encode_frame(buffer.data(),
+                            JW_MAX_FRAME_LEN,
+                            UINT32_MAX,
+                            UINT32_MAX,
+                            3,
+                            0,
+                            payload.data(),
+                            payload.size()),
+            JW_MAX_FRAME_LEN);
   jw_frame_t decoded;
-  ASSERT_EQ(jw_decode_frame(buffer.data(), 64, &decoded), JW_RESULT_OK);
+  ASSERT_EQ(jw_decode_frame(buffer.data(), JW_MAX_FRAME_LEN, &decoded), JW_RESULT_OK);
   EXPECT_EQ(decoded.session_id, UINT32_MAX);
   EXPECT_EQ(decoded.message_id, UINT32_MAX);
   EXPECT_EQ(decoded.payload_len, JW_MAX_PAYLOAD_LEN);
-  for (size_t len = 0; len < 64; ++len) {
+  for (size_t len = 0; len < JW_MAX_FRAME_LEN; ++len) {
     EXPECT_EQ(jw_decode_frame(buffer.data(), len, &decoded), JW_RESULT_ERROR);
   }
-  EXPECT_EQ(jw_decode_frame(buffer.data(), 65, &decoded), JW_RESULT_ERROR);
-  EXPECT_EQ(jw_decode_frame(nullptr, 64, &decoded), JW_RESULT_ERROR);
-  EXPECT_EQ(jw_decode_frame(buffer.data(), 64, nullptr), JW_RESULT_ERROR);
-  EXPECT_EQ(jw_encode_frame(buffer.data(), 63, 1, 1, 3, 0, payload.data(), payload.size()), -1);
-  EXPECT_EQ(jw_encode_frame(buffer.data(), 65, 1, 1, 3, 0, payload.data(), 50), -1);
-  EXPECT_EQ(jw_encode_frame(buffer.data(), 64, 0, 1, 3, 0, nullptr, 0), -1);
-  EXPECT_EQ(jw_encode_frame(buffer.data(), 64, 1, 0, 3, 0, nullptr, 0), -1);
-  EXPECT_EQ(jw_encode_frame(buffer.data(), 64, 1, 1, 3, 0, nullptr, 1), -1);
-  EXPECT_EQ(jw_encode_frame(nullptr, 64, 1, 1, 3, 0, nullptr, 0), -1);
+  EXPECT_EQ(jw_decode_frame(buffer.data(), JW_MAX_FRAME_LEN + 1, &decoded), JW_RESULT_ERROR);
+  EXPECT_EQ(jw_decode_frame(nullptr, JW_MAX_FRAME_LEN, &decoded), JW_RESULT_ERROR);
+  EXPECT_EQ(jw_decode_frame(buffer.data(), JW_MAX_FRAME_LEN, nullptr), JW_RESULT_ERROR);
+  EXPECT_EQ(jw_encode_frame(
+                buffer.data(), JW_MAX_FRAME_LEN - 1, 1, 1, 3, 0, payload.data(), payload.size()),
+            -1);
+  EXPECT_EQ(
+      jw_encode_frame(
+          buffer.data(), JW_MAX_FRAME_LEN + 1, 1, 1, 3, 0, payload.data(), JW_MAX_PAYLOAD_LEN + 1),
+      -1);
+  EXPECT_EQ(jw_encode_frame(buffer.data(), JW_MAX_FRAME_LEN, 0, 1, 3, 0, nullptr, 0), -1);
+  EXPECT_EQ(jw_encode_frame(buffer.data(), JW_MAX_FRAME_LEN, 1, 0, 3, 0, nullptr, 0), -1);
+  EXPECT_EQ(jw_encode_frame(buffer.data(), JW_MAX_FRAME_LEN, 1, 1, 3, 0, nullptr, 1), -1);
+  EXPECT_EQ(jw_encode_frame(nullptr, JW_MAX_FRAME_LEN, 1, 1, 3, 0, nullptr, 0), -1);
   const Bytes legacy{0xa5, 0x03, 0x01, 0x05, 0x00, 0x59, 0x04};
   EXPECT_EQ(jw_decode_frame(legacy.data(), legacy.size(), &decoded), JW_RESULT_ERROR);
+  const Bytes revision2{
+      0xa5, 0x0b, 0x02, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01, 0x08, 0xff, 0x82, 0x0c};
+  EXPECT_EQ(jw_decode_frame(revision2.data(), revision2.size(), &decoded), JW_RESULT_ERROR);
+}
+
+TEST(JoshuaWire, EthercatLayoutAccommodatesTheFullIdentifyResponse) {
+  EXPECT_EQ(JW_MAX_FRAME_LEN, 96);
+  EXPECT_LE(JW_IDENTIFY_MAX_PAYLOAD_LEN + JW_FRAME_OVERHEAD, JW_MAX_FRAME_LEN);
+  EXPECT_EQ(JWEC_LAYOUT_VERSION, 2);
+  EXPECT_EQ(JWEC_DESCRIPTOR_VERSION, 1);
+  EXPECT_EQ(JWEC_MAILBOX_SIZE, 108);
+  EXPECT_EQ(JWEC_PDO_SIZE, 112);
+  EXPECT_EQ(JWEC_MAILBOX_SIZE - JWEC_MAILBOX_FRAME_OFFSET, JW_MAX_FRAME_LEN);
+  EXPECT_EQ(JWEC_PDO_SIZE - JWEC_PDO_FRAME_OFFSET, JW_MAX_FRAME_LEN);
 }
 
 TEST(JoshuaWire, PayloadLengthCannotUnderflowOrExceedLimit) {
@@ -284,7 +310,7 @@ TEST_F(FirmwareSessionTest, ResetRequiredAndGoldenResponse) {
   EXPECT_EQ(response,
             (Bytes{0xa5,
                    0x0c,
-                   0x02,
+                   0x03,
                    0x78,
                    0x56,
                    0x34,
@@ -296,8 +322,8 @@ TEST_F(FirmwareSessionTest, ResetRequiredAndGoldenResponse) {
                    0x08,
                    0xff,
                    0x01,
-                   0xad,
-                   0x53}));
+                   0xd8,
+                   0x50}));
   EXPECT_EQ(device.resets, 1);
 }
 
@@ -363,6 +389,145 @@ int NeutralHandler(void*, const jw_command_t*, uint8_t* out, size_t cap) {
   return jw_encode_status_payload(JW_STATUS_OK, out, cap);
 }
 void NoopReset(void*) {}
+
+struct MixedBoard {
+  jw_identify_response_t identity{};
+  int calls = 0;
+  uint8_t digital = 0;
+
+  MixedBoard() {
+    identity.board_id = JW_BOARD_ESP32;
+    identity.n_channels = JW_MAX_CHANNELS;
+    for (uint8_t i = 0; i < JW_MAX_CHANNELS; ++i) {
+      auto& channel = identity.channels[i];
+      channel.channel_id = i;
+      channel.capabilities = JW_CAP_READ;
+      switch (i % 3) {
+        case 0:
+          channel.kind = JW_CHANNEL_KIND_ACTUATOR;
+          channel.interface.actuator_drive = JW_DRIVE_STEP_DIR;
+          break;
+        case 1:
+          channel.kind = JW_CHANNEL_KIND_SENSOR;
+          channel.interface.sensor_interface = JW_SENSOR_INTERFACE_SCALAR_F32;
+          break;
+        case 2:
+          channel.kind = JW_CHANNEL_KIND_IO;
+          channel.interface.io_interface = JW_IO_INTERFACE_DIGITAL;
+          channel.capabilities |= JW_CAP_WRITE;
+          break;
+      }
+    }
+  }
+};
+
+int MixedHandler(void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+  auto& board = *static_cast<MixedBoard*>(context);
+  ++board.calls;
+  if (command->cmd == JW_CMD_IDENTIFY && command->channel == JW_CHANNEL_NONE &&
+      command->payload_len == 0)
+    return jw_encode_identify_payload(out, cap, &board.identity);
+  for (uint8_t i = 0; i < board.identity.n_channels; ++i) {
+    const auto& channel = board.identity.channels[i];
+    if (channel.channel_id != command->channel) continue;
+    if (!jw_channel_supports_command(&channel, command->cmd)) break;
+    if (command->cmd == JW_CMD_READ_CHANNEL && command->payload_len == 0) {
+      if (channel.kind == JW_CHANNEL_KIND_SENSOR) {
+        const jw_sensor_sample_t sample{1.25f};
+        return jw_encode_sensor_sample_payload(
+            out, cap, channel.interface.sensor_interface, &sample);
+      }
+      jw_io_value_t io{};
+      io.interface = channel.interface.io_interface;
+      io.value.digital = board.digital;
+      return jw_encode_io_payload(out, cap, &io);
+    }
+    if (command->cmd == JW_CMD_WRITE_CHANNEL) {
+      jw_io_value_t io{};
+      if (jw_decode_io_payload(
+              command->payload, command->payload_len, channel.interface.io_interface, &io) !=
+          JW_RESULT_OK)
+        return jw_encode_status_payload(JW_STATUS_ERROR, out, cap);
+      board.digital = io.value.digital;
+      return jw_encode_status_payload(JW_STATUS_OK, out, cap);
+    }
+    if (command->cmd == JW_CMD_GET_FEEDBACK && command->payload_len == 0) {
+      const jw_feedback_t feedback{};
+      return jw_encode_feedback_payload(out, cap, &feedback);
+    }
+    return jw_encode_status_payload(JW_STATUS_ERROR, out, cap);
+  }
+  return jw_encode_status_payload(JW_STATUS_UNSUPPORTED, out, cap);
+}
+
+TEST(JoshuaWireEndpoint, DiscoversMixedChannelsAndDispatchesInterfaceSpecificPayloads) {
+  MixedBoard board;
+  jw_endpoint_t endpoint;
+  jw_endpoint_init(&endpoint);
+  Bytes response(JW_MAX_FRAME_LEN);
+  auto process = [&](const Bytes& request) {
+    return jw_endpoint_process(&endpoint,
+                               request.data(),
+                               request.size(),
+                               response.data(),
+                               response.size(),
+                               MixedHandler,
+                               NoopReset,
+                               &board);
+  };
+  ASSERT_GT(process(Request(1, 1, JW_CMD_RESET_SESSION)), 0);
+  const auto identify = Request(1, 2, JW_CMD_IDENTIFY);
+  const int len = process(identify);
+  ASSERT_EQ(len, 89);
+  const auto retained = response;
+  EXPECT_EQ(process(identify), len);
+  EXPECT_EQ(response, retained);
+  EXPECT_EQ(board.calls, 1);
+  jw_frame_t frame{};
+  ASSERT_EQ(jw_decode_frame(response.data(), len, &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.payload_len, 74);
+  jw_identify_response_t identity{};
+  ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &identity), JW_RESULT_OK);
+  EXPECT_EQ(identity.n_channels, JW_MAX_CHANNELS);
+  EXPECT_EQ(identity.channels[0].kind, JW_CHANNEL_KIND_ACTUATOR);
+  EXPECT_EQ(identity.channels[1].kind, JW_CHANNEL_KIND_SENSOR);
+  EXPECT_EQ(identity.channels[2].kind, JW_CHANNEL_KIND_IO);
+
+  int reply_len = process(Request(1, 3, JW_CMD_READ_CHANNEL, 1));
+  ASSERT_GT(reply_len, 0);
+  ASSERT_EQ(jw_decode_frame(response.data(), reply_len, &frame), JW_RESULT_OK);
+  jw_sensor_sample_t sample{};
+  ASSERT_EQ(jw_decode_sensor_sample_payload(frame.payload,
+                                            frame.payload_len,
+                                            identity.channels[1].interface.sensor_interface,
+                                            &sample),
+            JW_RESULT_OK);
+  EXPECT_FLOAT_EQ(sample.value, 1.25f);
+  jw_feedback_t feedback{};
+  EXPECT_EQ(jw_decode_feedback_payload(frame.payload, frame.payload_len, &feedback),
+            JW_RESULT_ERROR);
+
+  reply_len = process(Request(1, 4, JW_CMD_SET_TARGET, 1, {JW_MODE_POSITION, 0, 0, 0, 0}));
+  ASSERT_GT(reply_len, 0);
+  ASSERT_EQ(jw_decode_frame(response.data(), reply_len, &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.payload[0], JW_STATUS_UNSUPPORTED);
+  reply_len = process(Request(1, 5, JW_CMD_WRITE_CHANNEL, 2, {1}));
+  ASSERT_GT(reply_len, 0);
+  EXPECT_EQ(board.digital, 1);
+  reply_len = process(Request(1, 6, JW_CMD_WRITE_CHANNEL, 2, {2}));
+  ASSERT_GT(reply_len, 0);
+  EXPECT_EQ(board.digital, 1);
+  ASSERT_EQ(jw_decode_frame(response.data(), reply_len, &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.payload[0], JW_STATUS_ERROR);
+  reply_len = process(Request(1, 7, JW_CMD_READ_CHANNEL, 2));
+  ASSERT_GT(reply_len, 0);
+  ASSERT_EQ(jw_decode_frame(response.data(), reply_len, &frame), JW_RESULT_OK);
+  jw_io_value_t io{};
+  ASSERT_EQ(jw_decode_io_payload(
+                frame.payload, frame.payload_len, identity.channels[2].interface.io_interface, &io),
+            JW_RESULT_OK);
+  EXPECT_EQ(io.value.digital, 1);
+}
 
 TEST(JoshuaWireEndpoint, RejectsLegacyFramesAndRequiresReset) {
   jw_endpoint_t endpoint;

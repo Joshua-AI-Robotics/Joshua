@@ -26,7 +26,12 @@ cc_test(
 cc_library(
     name = "joshua_wire_commands",
     srcs = ["joshua_wire_commands.c"],
-    hdrs = ["joshua_wire_commands.h"],
+    hdrs = [
+        "joshua_wire_actuator.h",
+        "joshua_wire_commands.h",
+        "joshua_wire_io.h",
+        "joshua_wire_sensor.h",
+    ],
     includes = ["."],
     visibility = ["//visibility:public"],
 )
@@ -69,6 +74,7 @@ cc_test(
     deps = [
         ":joshua_wire",
         ":joshua_wire_endpoint",
+        ":joshua_wire_ethercat",
         ":joshua_wire_firmware_session",
         "@googletest//:gtest_main",
     ],

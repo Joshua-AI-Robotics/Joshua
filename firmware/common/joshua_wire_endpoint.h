@@ -1,6 +1,6 @@
-// Firmware endpoint for JoshuaWire 0.0.2. Decodes the wire
+// Firmware endpoint for JoshuaWire 0.1.0 (wire revision 3). Decodes the wire
 // envelope and dispatches a neutral command view; handlers return payload bytes.
-// Framing and session/correlation live here, not in drive command handlers.
+// Framing and session/correlation live here, not in device command handlers.
 // Owns no transport I/O and never auto-detects or downgrades the wire version.
 #pragma once
 
@@ -12,6 +12,9 @@ extern "C" {
 
 // Handler returns a response payload byte count, or -1 on failure. The command
 // and its payload are borrowed for this call only. The endpoint owns framing.
+// Channel handlers resolve the advertised descriptor by channel_id and check
+// jw_channel_supports_command before interpreting interface-specific payloads.
+// Board/session commands use JW_CHANNEL_NONE and remain independent of kind.
 typedef int (*jw_command_handler_fn)(void* context,
                                      const jw_command_t* command,
                                      uint8_t* response,
