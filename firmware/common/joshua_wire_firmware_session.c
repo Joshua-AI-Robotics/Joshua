@@ -50,12 +50,19 @@ int jw_firmware_session_process(jw_firmware_session_t* session,
   uint8_t payload[JW_MAX_PAYLOAD_LEN];
   int payload_len;
   if (is_reset) {
-    payload[0] = JW_STATUS_OK;
-    payload_len = 1;
+    payload_len = jw_encode_reply_payload(
+        payload, sizeof(payload), JW_STATUS_OK, JW_EXECUTION_COMPLETE, NULL, 0);
   } else {
     payload_len = handler(context, &frame, payload, sizeof(payload));
   }
-  if (payload_len < 0 || payload_len > JW_MAX_PAYLOAD_LEN) return -1;
+  jw_reply_t reply;
+  // A handler failure cannot prove that no side effects occurred. Cache the
+  // unknown outcome too, so a lost/malformed reply can never execute twice.
+  if (payload_len < 0 || payload_len > JW_MAX_PAYLOAD_LEN ||
+      jw_decode_reply_payload(payload, (size_t)payload_len, &reply) != JW_RESULT_OK) {
+    payload_len = jw_encode_reply_payload(
+        payload, sizeof(payload), JW_STATUS_OUTCOME_UNKNOWN, JW_EXECUTION_UNKNOWN, NULL, 0);
+  }
   const int len = jw_encode_response(
       session->response, sizeof(session->response), &frame, payload, (uint8_t)payload_len);
   if (len < 0) return -1;

@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#include "joshua_wire_sensor.h"
+
 typedef enum {
   JW_IO_INTERFACE_INVALID = 0,
   JW_IO_INTERFACE_DIGITAL = 1,
@@ -20,3 +22,17 @@ typedef struct {
     float analog;     // Native channel units.
   } value;
 } jw_io_value_t;
+
+// IO profile reads carry freshness; raw jw_io_value_t is the write payload.
+typedef struct {
+  jw_io_value_t value;
+  jw_measurement_metadata_t metadata;
+} jw_io_sample_t;
+
+#define JW_IO_SCHEMA_LEN 8
+typedef struct {
+  jw_io_interface_t interface;
+  uint16_t unit;
+  jw_clock_t clock;
+  uint32_t max_age_us;
+} jw_io_schema_t;

@@ -18,8 +18,35 @@ static int command_adapter(void* context,
                            uint8_t* payload,
                            size_t capacity) {
   command_context_t* command = (command_context_t*)context;
-  const jw_command_t view = {
-      request->cmd, request->channel, request->payload, request->payload_len};
+  int valid_scope = 0;
+  switch (request->cmd) {
+    case JW_CMD_IDENTIFY:
+    case JW_CMD_DISCOVER:
+    case JW_CMD_ESTOP:
+    case JW_CMD_GET_DEPENDENCIES:
+    case JW_CMD_RECOVER:
+      valid_scope = request->channel == JW_CHANNEL_NONE;
+      break;
+    case JW_CMD_GET_STATUS:
+      valid_scope = 1;
+      break;
+    case JW_CMD_PROFILE:
+    case JW_CMD_DESCRIBE_FUNCTION:
+      valid_scope = request->channel != JW_CHANNEL_NONE;
+      break;
+    default:
+      return jw_encode_reply_payload(
+          payload, capacity, JW_STATUS_UNSUPPORTED, JW_EXECUTION_REJECTED, NULL, 0);
+  }
+  if (!valid_scope)
+    return jw_encode_reply_payload(
+        payload, capacity, JW_STATUS_INVALID_CHANNEL, JW_EXECUTION_REJECTED, NULL, 0);
+  const jw_command_t view = {request->session_id,
+                             request->message_id,
+                             request->cmd,
+                             request->channel,
+                             request->payload,
+                             request->payload_len};
   return command->handler(command->context, &view, payload, capacity);
 }
 

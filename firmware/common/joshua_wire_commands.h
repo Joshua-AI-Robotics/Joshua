@@ -1,196 +1,224 @@
-// Version-neutral JoshuaWire command IDs, semantic types and payload definitions.
-// Shared by host and MCU firmware using JoshuaWire 0.1.0 (wire revision 3); framing,
-// frame layouts and session state belong to their respective codec/endpoint.
-// Structs describe values, not packed wire images: codecs serialize explicitly.
+// JoshuaWire core contracts. Device schemas live in versioned profiles.
+// Semantic structs are never packed/copied onto the wire. See docs/JOSHUA_WIRE.md.
 #pragma once
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "joshua_wire_actuator.h"
-#include "joshua_wire_io.h"
-#include "joshua_wire_sensor.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// Local codec result, not an on-wire jw_status_t value.
-typedef enum {
-  JW_RESULT_OK = 0,
-  JW_RESULT_ERROR = -1,
-} jw_result_t;
-
-// Board-scope commands (IDENTIFY, ESTOP, RESET_SESSION) use this channel byte.
-#define JW_CHANNEL_NONE 0xFF
-
-#define JW_MAX_CHANNELS 8
+typedef enum { JW_RESULT_OK = 0, JW_RESULT_ERROR = -1 } jw_result_t;
+#define JW_CHANNEL_NONE 0xff
 #define JW_FW_NAME_LEN 16
-// Revision 3 IDENTIFY sends only n_channels descriptors. Revision 1/2's drive-only
-// layout is incompatible; JW1 codecs retain their own types and fixed sizes.
-#define JW_CHANNEL_ID_OFFSET 0
-#define JW_CHANNEL_KIND_OFFSET (JW_CHANNEL_ID_OFFSET + 1)
-#define JW_CHANNEL_CAPABILITIES_OFFSET (JW_CHANNEL_KIND_OFFSET + 1)
-#define JW_CHANNEL_INTERFACE_OFFSET (JW_CHANNEL_CAPABILITIES_OFFSET + 4)
-#define JW_CHANNEL_DESCRIPTOR_WIRE_LEN (JW_CHANNEL_INTERFACE_OFFSET + 1)
-#define JW_IDENTIFY_BOARD_OFFSET 0
-#define JW_IDENTIFY_NAME_OFFSET (JW_IDENTIFY_BOARD_OFFSET + 1)
-#define JW_IDENTIFY_COUNT_OFFSET (JW_IDENTIFY_NAME_OFFSET + JW_FW_NAME_LEN)
-#define JW_IDENTIFY_CHANNELS_OFFSET (JW_IDENTIFY_COUNT_OFFSET + 1)
-#define JW_IDENTIFY_MIN_PAYLOAD_LEN JW_IDENTIFY_CHANNELS_OFFSET
-#define JW_IDENTIFY_MAX_PAYLOAD_LEN \
-  (JW_IDENTIFY_MIN_PAYLOAD_LEN + JW_MAX_CHANNELS * JW_CHANNEL_DESCRIPTOR_WIRE_LEN)
-#define JW_STATUS_RESPONSE_PAYLOAD_LEN 1
+#define JW_MAX_FUNCTIONS 255
+#define JW_DISCOVERY_PAGE_SIZE 4
+#define JW_CURSOR_END 0xffff
+#define JW_PAYLOAD_LIMIT 81  // Revision 4: 96-byte frame minus 15-byte envelope.
+#define JW_REPLY_HEADER_LEN 2
+#define JW_PROFILE_HEADER_LEN 5
+#define JW_FUNCTION_DESCRIPTOR_LEN 13
+#define JW_DISCOVERY_HEADER_LEN 9
+#define JW_DISCOVERY_MAX_LEN \
+  (JW_DISCOVERY_HEADER_LEN + JW_DISCOVERY_PAGE_SIZE * JW_FUNCTION_DESCRIPTOR_LEN)
+#define JW_IDENTIFY_PAYLOAD_LEN 52
+#define JW_DEVICE_STATUS_LEN 19
+#define JW_DEPENDENCY_PAGE_SIZE 16
+#define JW_DEPENDENCY_HEADER_LEN 7
+#define JW_DEPENDENCY_RECORD_LEN 4
+#define JW_DEPENDENCY_MAX_LEN \
+  (JW_DEPENDENCY_HEADER_LEN + JW_DEPENDENCY_PAGE_SIZE * JW_DEPENDENCY_RECORD_LEN)
 
-// Borrowed command view, independent of framing, wire version and session IDs.
-// The caller owns payload storage throughout dispatch. Responses are payloads;
-// the endpoint supplies the request's command/channel and any correlation IDs.
+typedef enum {
+  JW_CMD_INVALID = 0,
+  JW_CMD_IDENTIFY = 0x01,
+  // 0x02..0x06, 0x09..0x0a were device commands in retired revisions.
+  JW_CMD_ESTOP = 0x07,
+  JW_CMD_RESET_SESSION = 0x08,
+  JW_CMD_PROFILE = 0x0b,
+  JW_CMD_DISCOVER = 0x0c,
+  JW_CMD_DESCRIBE_FUNCTION = 0x0d,
+  JW_CMD_GET_STATUS = 0x0e,
+  JW_CMD_GET_DEPENDENCIES = 0x0f,
+  JW_CMD_RECOVER = 0x10,
+} jw_cmd_t;
+
 typedef struct {
+  uint32_t session_id;  // Action token for asynchronous completion/status.
+  uint32_t message_id;
   uint8_t cmd;
-  uint8_t channel;
+  uint8_t channel;  // Stable function ID, or JW_CHANNEL_NONE for board scope.
   const uint8_t* payload;
   size_t payload_len;
 } jw_command_t;
 
 typedef enum {
-  JW_CMD_INVALID = 0x00,  // Reserved; zero is not a valid command.
-  JW_CMD_IDENTIFY = 0x01,
-  JW_CMD_CONFIGURE_CHANNEL = 0x02,
-  JW_CMD_SET_TARGET = 0x03,
-  JW_CMD_GET_FEEDBACK = 0x04,
-  JW_CMD_ENABLE = 0x05,
-  JW_CMD_DISABLE = 0x06,
-  JW_CMD_ESTOP = 0x07,
-  // Requires session/message correlation; required before normal commands.
-  JW_CMD_RESET_SESSION = 0x08,
-  // Sensor sample / I/O value read: empty request, interface-specific response.
-  JW_CMD_READ_CHANNEL = 0x09,
-  // I/O value write: interface-specific request, status response.
-  JW_CMD_WRITE_CHANNEL = 0x0A,
-} jw_cmd_t;
-
-// A channel describes a device or I/O function, not necessarily a motor drive.
-typedef enum {
-  JW_CHANNEL_KIND_INVALID = 0,
-  JW_CHANNEL_KIND_ACTUATOR = 1,
-  JW_CHANNEL_KIND_SENSOR = 2,
-  JW_CHANNEL_KIND_IO = 3,
-} jw_channel_kind_t;
-
-typedef enum {
-  JW_CAP_CONFIGURE = 1u << 0,
-  JW_CAP_READ = 1u << 1,
-  JW_CAP_WRITE = 1u << 2,
-  // Reserved for interface-specific streaming schemas/handlers; the current
-  // request-response endpoint does not provide unsolicited streaming.
-  JW_CAP_STREAM = 1u << 3,
-  JW_CAP_ENABLE_DISABLE = 1u << 4,
-} jw_channel_capability_t;
-
-typedef struct {
-  // IDs may be sparse, but must be unique and cannot equal JW_CHANNEL_NONE.
-  uint8_t channel_id;
-  jw_channel_kind_t kind;
-  uint32_t capabilities;  // Preserve unknown bits for future extensions.
-  // Only the member selected by kind is meaningful. Interface IDs are scoped
-  // to that kind; new interfaces must extend the enum, codec and command checks.
-  union {
-    jw_drive_t actuator_drive;
-    jw_sensor_interface_t sensor_interface;
-    jw_io_interface_t io_interface;
-  } interface;
-} jw_channel_descriptor_t;
-
-// Stable on-wire board identities. Most match robot.board.BoardType, but the
-// historical ESP32 wire ID is 8 (protobuf ESP32 is 7). Preserve that wire ID.
-// Adding a board that speaks JoshuaWire:
-// - Add JW_BOARD_<NAME> here with an explicit, unused ID in 1..255 (IDENTIFY
-//   serializes one byte). Keep zero invalid; never renumber or reuse existing IDs.
-// - Update robot/board/proto/board.proto's BoardType and host board registration
-//   as needed. Map protobuf IDs explicitly; do not assume they equal wire IDs.
-// - Have the board's firmware report this ID in IDENTIFY; add wire-ID and golden
-//   IDENTIFY payload coverage in joshua_wire_commands_test.cc.
-// - Add the matching JW1_BOARD_<NAME> in joshua_wire_v1.h only if supporting JW1.
-// - Document the board under firmware/<board>/README.md and in firmware/README.md.
-typedef enum {
-  JW_BOARD_INVALID = 0,
-  JW_BOARD_AM243 = 1,
-  JW_BOARD_TEENSY41 = 2,
-  JW_BOARD_ARDUINO_UNO = 3,
-  JW_BOARD_ESP32 = 8,
-  // Future JoshuaWire boards: JW_BOARD_<NAME> = <explicit unused u8 ID>.
-} jw_board_id_t;
-
-typedef enum {
   JW_STATUS_INVALID = 0,
   JW_STATUS_OK = 1,
-  JW_STATUS_ERROR = 2,
+  JW_STATUS_ERROR = 2,  // Confirmed operation failure; reconcile partial effects.
   JW_STATUS_UNSUPPORTED = 3,
+  JW_STATUS_INVALID_CHANNEL = 4,
+  JW_STATUS_INVALID_PAYLOAD = 5,
+  JW_STATUS_UNAVAILABLE = 6,
+  JW_STATUS_NOT_READY = 7,
+  JW_STATUS_BUSY = 8,  // Rejected before execution, safe to try with a NEW ID.
+  JW_STATUS_RESOURCE_CONFLICT = 9,
+  JW_STATUS_PROFILE_MISMATCH = 10,
+  JW_STATUS_STALE_DISCOVERY = 11,
+  JW_STATUS_OUTCOME_UNKNOWN = 12,  // Execution may have occurred; never blind-retry.
 } jw_status_t;
 
+typedef enum {
+  JW_EXECUTION_REJECTED = 0,
+  JW_EXECUTION_ACCEPTED = 1,  // Bounded asynchronous work queued, not complete.
+  JW_EXECUTION_COMPLETE = 2,  // Firmware action complete, not physical safety.
+  JW_EXECUTION_UNKNOWN = 3,
+} jw_execution_t;
+
 typedef struct {
-  jw_board_id_t board_id;
-  // Not guaranteed null-terminated if the name fills all JW_FW_NAME_LEN
-  // bytes; callers must treat this as a fixed-size buffer, not a C string.
-  char fw_name[JW_FW_NAME_LEN];
-  uint8_t n_channels;
-  // Only the first n_channels entries are advertised; decode clears the rest.
-  jw_channel_descriptor_t channels[JW_MAX_CHANNELS];
+  jw_status_t status;
+  jw_execution_t execution;
+  const uint8_t* data;  // Borrowed, excludes the common two-byte header.
+  size_t data_len;
+} jw_reply_t;
+
+typedef struct {
+  uint8_t function_id;
+  uint16_t device_id;   // Functions on one physical device share this stable ID.
+  uint16_t profile_id;  // Opaque to core, zero invalid. Unknown IDs are preserved.
+  uint8_t profile_major;
+  uint8_t profile_minor;
+  uint32_t operations;     // Bit N = profile operation N, N in 0..31.
+  uint16_t safety_domain;  // Zero = board-wide; see dependency enumeration.
+} jw_function_descriptor_t;
+
+typedef struct {
+  uint32_t vendor_id;  // Informational; compatibility never depends on these.
+  uint32_t product_id;
+  char fw_name[JW_FW_NAME_LEN];   // Fixed bytes, not necessarily NUL terminated.
+  uint32_t boot_id;               // Changes every reboot; stable across session resets.
+  uint32_t discovery_generation;  // Nonzero; changes with topology/capabilities.
+  uint16_t function_count;
+  uint16_t max_frame_len;
+  uint8_t max_inflight;  // This revision requires exactly one across all planes.
+  uint8_t max_page_entries;
+  uint32_t max_handler_us;  // Declared worst-case dispatch time, nonzero.
+  uint32_t safety_flags;
+  uint8_t protocol_min;
+  uint8_t protocol_max;
+  uint32_t supported_planes;
 } jw_identify_response_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define JW_PLANE_MESSAGE (1u << 0)
+#define JW_PLANE_CYCLIC (1u << 1)
 
-// Revision 3 payload codecs. Encoders return the byte
-// count or -1 on failure. Decoders return JW_RESULT_OK on success, or
-// JW_RESULT_ERROR for null pointers, invalid sizes or malformed payloads.
-// Decoders require the exact payload length. No frame headers, CRCs or IDs are
-// read/written. Dispatch/session code validates command/channel/correlation;
-// device handlers retain responsibility for interface-specific configuration,
-// supported modes and safety policy. CONFIGURE_CHANNEL uses the advertised
-// kind/interface; only actuator STEP_DIR configuration is defined currently.
-// Do not advertise CONFIGURE/STREAM without a matching schema and handler.
-int jw_encode_status_payload(jw_status_t status, uint8_t* out, size_t cap);
-jw_result_t jw_decode_status_payload(const uint8_t* data, size_t len, jw_status_t* out);
-// IDENTIFY: [board:u8][name:16][count:u8], followed by count descriptors:
-// [id:u8][kind:u8][capabilities:u32le][selected interface:u8]. No struct padding.
-// Returns zero for counts exceeding JW_MAX_CHANNELS.
-size_t jw_identify_payload_len(uint8_t n_channels);
+#define JW_SAFETY_BOARD_ESTOP (1u << 0)
+#define JW_SAFETY_DOMAIN_ESTOP (1u << 1)
+#define JW_SAFETY_PHYSICAL_VERIFICATION (1u << 2)
+#define JW_SAFETY_COMM_INTERRUPTED (1u << 3)
+
+typedef struct {
+  uint32_t generation;
+  uint16_t total;
+  uint16_t next_cursor;
+  uint8_t count;
+  jw_function_descriptor_t functions[JW_DISCOVERY_PAGE_SIZE];
+} jw_discovery_page_t;
+
+typedef struct {
+  uint16_t cause_domain;
+  uint8_t function_id;
+  uint8_t effects;
+} jw_safety_dependency_t;
+#define JW_SHUTDOWN_OUTPUT (1u << 0)
+#define JW_SHUTDOWN_POWER (1u << 1)
+#define JW_SHUTDOWN_EXECUTION (1u << 2)
+#define JW_SHUTDOWN_COMMUNICATION (1u << 3)
+typedef struct {
+  uint32_t generation;
+  uint16_t next_cursor;
+  uint8_t count;
+  jw_safety_dependency_t dependencies[JW_DEPENDENCY_PAGE_SIZE];
+} jw_dependency_page_t;
+
+typedef enum {
+  JW_STATE_UNKNOWN = 0,
+  JW_STATE_DISABLED = 1,
+  JW_STATE_READY = 2,
+  JW_STATE_ACTIVE = 3,
+  JW_STATE_UNAVAILABLE = 4,
+  JW_STATE_FAULT = 5,
+} jw_device_state_t;
+typedef enum {
+  JW_REASON_NONE = 0,
+  JW_REASON_SESSION_RESET = 1,
+  JW_REASON_ESTOP = 2,
+  JW_REASON_SHUTDOWN_DEPENDENCY = 3,
+  JW_REASON_DEVICE_FAULT = 4,
+  JW_REASON_REBOOT = 5,
+} jw_state_reason_t;
+#define JW_RECOVERY_RECONFIGURE (1u << 0)
+#define JW_RECOVERY_EXPLICIT_ENABLE (1u << 1)
+#define JW_RECOVERY_CLEAR_ESTOP (1u << 2)
+typedef enum {
+  JW_STOP_NONE = 0,
+  JW_STOP_ACCEPTED = 1,
+  JW_STOP_ACTION_COMPLETE = 2,
+} jw_stop_phase_t;
+typedef enum {
+  JW_SAFE_UNSUPPORTED = 0,
+  JW_SAFE_UNKNOWN = 1,
+  JW_SAFE_VERIFIED = 2,
+  JW_SAFE_NOT_VERIFIED = 3,
+} jw_safe_verification_t;
+typedef struct {
+  jw_device_state_t state;
+  jw_state_reason_t reason;
+  uint8_t recovery;
+  jw_stop_phase_t stop_phase;
+  jw_safe_verification_t verification;
+  uint32_t epoch;  // Changes on every transition; scoped to IDENTIFY.boot_id.
+  uint32_t action_session_id;
+  uint32_t action_message_id;       // Last state-changing action; zero if none.
+  jw_execution_t action_execution;  // Query completion of accepted work.
+  jw_status_t action_status;        // INVALID only when there is no action token.
+} jw_device_status_t;
+
+typedef struct {
+  uint16_t profile_id;
+  uint8_t major;
+  uint8_t minor;
+  uint8_t operation;
+  const uint8_t* data;
+  size_t data_len;
+} jw_profile_request_t;
+
+int jw_encode_reply_payload(uint8_t* out,
+                            size_t cap,
+                            jw_status_t status,
+                            jw_execution_t execution,
+                            const uint8_t* data,
+                            size_t len);
+jw_result_t jw_decode_reply_payload(const uint8_t* data, size_t len, jw_reply_t* out);
 int jw_encode_identify_payload(uint8_t* out, size_t cap, const jw_identify_response_t* value);
 jw_result_t jw_decode_identify_payload(const uint8_t* data,
                                        size_t len,
                                        jw_identify_response_t* out);
-// Channel commands must match both kind and capability. Board/session commands
-// are handled separately. This helper does not apply device safety/units policy.
-int jw_channel_supports_command(const jw_channel_descriptor_t* channel, uint8_t cmd);
-int jw_encode_sensor_sample_payload(uint8_t* out,
-                                    size_t cap,
-                                    jw_sensor_interface_t interface,
-                                    const jw_sensor_sample_t* value);
-jw_result_t jw_decode_sensor_sample_payload(const uint8_t* data,
-                                            size_t len,
-                                            jw_sensor_interface_t interface,
-                                            jw_sensor_sample_t* out);
-int jw_encode_io_payload(uint8_t* out, size_t cap, const jw_io_value_t* value);
-jw_result_t jw_decode_io_payload(const uint8_t* data,
-                                 size_t len,
-                                 jw_io_interface_t interface,
-                                 jw_io_value_t* out);
-// Actuator-only target/feedback operations; never reinterpret sensor/I/O data.
-int jw_encode_feedback_payload(uint8_t* out, size_t cap, const jw_feedback_t* value);
-jw_result_t jw_decode_feedback_payload(const uint8_t* data, size_t len, jw_feedback_t* out);
-// Scalar layout: [mode:u8][value:f32le]. JW_MODE_COMPLEX requires the dedicated
-// encoder below; passing it to the scalar encoder is an error.
-int jw_encode_set_target_payload(uint8_t* out, size_t cap, jw_mode_t mode, float value);
-// Complex layout: [JW_MODE_COMPLEX:u8][position:f32le][velocity:f32le][torque:f32le].
-// A JointState array maps to separate channel frames, without batch atomicity.
-int jw_encode_complex_target_payload(uint8_t* out, size_t cap, const jw_complex_target_t* value);
-// Decodes either layout, requiring the exact length for the encoded mode.
-jw_result_t jw_decode_set_target_payload(const uint8_t* data, size_t len, jw_set_target_t* out);
-int jw_encode_configure_step_dir_payload(uint8_t* out,
-                                         size_t cap,
-                                         const jw_configure_step_dir_t* value);
-jw_result_t jw_decode_configure_step_dir_payload(const uint8_t* data,
-                                                 size_t len,
-                                                 jw_configure_step_dir_t* out);
-
+int jw_encode_function_descriptor(uint8_t* out, size_t cap, const jw_function_descriptor_t* value);
+jw_result_t jw_decode_function_descriptor(const uint8_t* data,
+                                          size_t len,
+                                          jw_function_descriptor_t* out);
+int jw_encode_discovery_page(uint8_t* out, size_t cap, const jw_discovery_page_t* value);
+jw_result_t jw_decode_discovery_page(const uint8_t* data, size_t len, jw_discovery_page_t* out);
+int jw_encode_dependency_page(uint8_t* out, size_t cap, const jw_dependency_page_t* value);
+jw_result_t jw_decode_dependency_page(const uint8_t* data, size_t len, jw_dependency_page_t* out);
+int jw_encode_device_status(uint8_t* out, size_t cap, const jw_device_status_t* value);
+jw_result_t jw_decode_device_status(const uint8_t* data, size_t len, jw_device_status_t* out);
+int jw_encode_profile_request(uint8_t* out, size_t cap, const jw_profile_request_t* value);
+jw_result_t jw_decode_profile_request(const uint8_t* data, size_t len, jw_profile_request_t* out);
+int jw_function_supports_operation(const jw_function_descriptor_t* function,
+                                   const jw_profile_request_t* request);
 #ifdef __cplusplus
 }
 #endif

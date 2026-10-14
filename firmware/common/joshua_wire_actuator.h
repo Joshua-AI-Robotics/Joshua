@@ -4,7 +4,9 @@
 
 #include <stdint.h>
 
-#define JW_FEEDBACK_RESPONSE_PAYLOAD_LEN 10
+#include "joshua_wire_sensor.h"
+
+#define JW_FEEDBACK_RESPONSE_PAYLOAD_LEN (10 + JW_MEASUREMENT_METADATA_LEN)
 #define JW_TARGET_FLOAT_WIRE_LEN 4  // Target values are serialized as f32 little-endian.
 #define JW_SET_TARGET_PAYLOAD_LEN (1 + JW_TARGET_FLOAT_WIRE_LEN)
 #define JW_SET_TARGET_COMPLEX_PAYLOAD_LEN (1 + 3 * JW_TARGET_FLOAT_WIRE_LEN)
@@ -37,6 +39,7 @@ typedef struct {
   float position;
   float velocity;
   uint16_t fault_flags;
+  jw_measurement_metadata_t metadata;
 } jw_feedback_t;
 
 // One channel's combined target, corresponding to one index in the ROS 2
@@ -49,10 +52,8 @@ typedef struct {
   float torque;
 } jw_complex_target_t;
 
-// TODO(hmoon): Advertise supported target modes in addition to channel operation
-// capabilities; define partial-field commands (omitted != zero) and semantics, including
-// position with a speed limit. Drive handlers must validate the complete target
-// before applying it and reject unsupported combinations without dropping fields.
+// Mode bits are advertised in jw_actuator_schema_t; validate all fields before
+// applying a target. Native units must be defined by that profile's metadata.
 typedef struct {
   jw_mode_t mode;
   // Used by scalar modes; zero when decoding JW_MODE_COMPLEX.
@@ -77,3 +78,14 @@ typedef struct {
   // backend_stepdir.cpp) — not "zero-width pulse".
   uint16_t step_pulse_width_us;
 } jw_configure_step_dir_t;
+
+#define JW_ACTUATOR_SCHEMA_LEN 16
+typedef struct {
+  jw_drive_t drive;       // Actuator-only metadata, not a core compatibility gate.
+  uint32_t target_modes;  // Bit N advertises JW_MODE_N.
+  uint16_t position_unit;
+  uint16_t velocity_unit;
+  uint16_t effort_unit;
+  jw_clock_t feedback_clock;
+  uint32_t max_feedback_age_us;
+} jw_actuator_schema_t;

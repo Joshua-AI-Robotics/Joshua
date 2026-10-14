@@ -1,5 +1,5 @@
-// JoshuaWire 0.1.0 framing, shared by host and firmware. Wire revision 3 retains
-// JW2 session/message correlation, adds mixed-channel IDENTIFY and 96-byte frames.
+// JoshuaWire 0.2.0 framing, shared by host and firmware. Wire revision 4 retains
+// session/message correlation and 96-byte frames; the core is profile-neutral.
 // Declares wire limits, the decoded frame view and stateless codec functions;
 // it does not own transport I/O, session state or board command execution.
 #pragma once
@@ -14,13 +14,13 @@ extern "C" {
 #endif
 
 #define JW_VERSION_MAJOR 0
-#define JW_VERSION_MINOR 1
+#define JW_VERSION_MINOR 2
 #define JW_VERSION_PATCH 0
-#define JW_VERSION_STRING "0.1.0"
+#define JW_VERSION_STRING "0.2.0"
 
 // The on-wire revision is distinct from the semantic release version.
 #define JW_SYNC_BYTE 0xA5
-#define JW_PROTO_VERSION 3
+#define JW_PROTO_VERSION 4
 #define JW_MAX_FRAME_LEN 96
 #define JW_SYNC_OFFSET 0
 #define JW_LENGTH_OFFSET (JW_SYNC_OFFSET + 1)
@@ -42,8 +42,12 @@ extern "C" {
 #define JW_MIN_FRAME_LEN JW_FRAME_OVERHEAD
 #define JW_MAX_PAYLOAD_LEN (JW_MAX_FRAME_LEN - JW_FRAME_OVERHEAD)
 
-#if JW_IDENTIFY_MAX_PAYLOAD_LEN > JW_MAX_PAYLOAD_LEN
-#error "The maximum IDENTIFY payload must fit in one JoshuaWire frame"
+#if JW_MAX_PAYLOAD_LEN != JW_PAYLOAD_LIMIT
+#error "Core and frame payload limits must agree"
+#endif
+
+#if JW_DEPENDENCY_MAX_LEN + JW_REPLY_HEADER_LEN > JW_MAX_PAYLOAD_LEN
+#error "The maximum core response must fit in one JoshuaWire frame"
 #endif
 
 // [sync][len][version][session:u32le][message:u32le][cmd][channel]

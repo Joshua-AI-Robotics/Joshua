@@ -1,48 +1,40 @@
 # Shared firmware protocol
 
-The `joshua_wire` codec implements JoshuaWire 0.1.0 / wire revision 3:
-CRC-protected complete frames carry session and message IDs. Pure C firmware
-session and endpoint helpers enforce RESET, duplicate handling and command
-dispatch without device I/O. Semantic payload codecs live in
-`joshua_wire_commands`; actuator, sensor and I/O value/interface definitions
-live in their respective `joshua_wire_{actuator,sensor,io}.h` headers.
+`joshua_wire` implements JoshuaWire **0.2.0 / wire revision 4**. The normative
+[protocol contract](../../docs/JOSHUA_WIRE.md) defines mixed-device discovery,
+versioned profiles, one session owner across all functions/transports, bounded
+callbacks and scheduling, shared resource validation, observable safety state,
+freshness/error semantics and the required stacked integration tests.
 
-IDENTIFY advertises generic channel descriptors rather than treating every
-channel as a motor drive. Each descriptor contains a unique channel ID, kind,
-32-bit capability bitmap and the interface selected by kind. Channel IDs may
-be sparse; `0xff` remains reserved for board/session commands. Only the first
-`n_channels` entries are sent; decoding clears unused entries. The explicit
-wire layout is `[board:u8][name:16][count:u8]`, then `count` copies of
-`[id:u8][kind:u8][capabilities:u32le][interface:u8]`. Its length is
-`18 + 7 * count`, from 18 to 74 bytes. No C padding, enum sizes or union storage
-is serialized. Unknown capability bits are preserved; unknown kinds/interfaces
-and duplicate/reserved channel IDs are rejected.
+The core (`joshua_wire_commands`) contains discovery, common replies, profile
+selectors and board/function state schemas. It does not import actuator, sensor
+or I/O types. `joshua_wire_profiles` contains initial actuator, scalar sensor and
+I/O codecs. `jw_drive_t` remains actuator-only metadata. A new profile or board
+needs no framing/session change or board enum. Vendor/product IDs are informational.
 
-| Kind | Interface | Operations and payloads |
-| --- | --- | --- |
-| Actuator | `jw_drive_t` | SET_TARGET / GET_FEEDBACK; STEP_DIR configuration |
-| Sensor | SCALAR_F32 | READ_CHANNEL: empty request, one f32le sample in native units |
-| I/O | DIGITAL / ANALOG_F32 | READ_CHANNEL / WRITE_CHANNEL: a 0/1 byte or f32le value in native units; writes return status |
+IDENTIFY advertises limits, supported protocol/planes, boot/generation identity
+and safety scope. DISCOVER pages at most four stable function descriptors; the
+function ID space supports 255 functions. Device IDs group multifunction devices.
+DESCRIBE_FUNCTION supplies profile metadata; GET_DEPENDENCIES enumerates shared
+shutdown effects. GET_STATUS is queryable after lost events/reconnect and separates
+firmware stop progress, physical verification support and recovery requirements.
 
-Channel handlers resolve descriptors by ID and use `jw_channel_supports_command`
-to check kind, interface and capabilities before decoding device payloads.
-Configuration follows the advertised interface; only STEP_DIR configuration is
-currently defined. Advertise CONFIGURE or STREAM only after adding matching
-schemas and handlers. STREAM is reserved: this request-response endpoint does
-not implement unsolicited samples. Target-mode support and device safety policy
-remain handler responsibilities. IDENTIFY, ESTOP and RESET_SESSION remain shared
-board/session commands.
+One `jw_endpoint_t` per MCU dispatches every transport through the same session.
+Callbacks must be bounded and return a common status/execution header plus data.
+Slow measurements use background acquisition and cached typed samples, NOT_READY
+or BUSY. Handler failure produces cached OUTCOME_UNKNOWN; exact retries cannot
+repeat side effects. `jw_resource_replace` validates ownership before registry
+changes; board backends retain responsibility for staging/rolling back hardware.
 
-This is an explicit compatibility break from wire revision 2's drive-only
-IDENTIFY. Revision 3 frames allow 96 bytes, so all eight channel descriptors fit
-in one response (89 bytes including framing). The EtherCAT contract uses layout
-2 with 108-byte mailbox and 112-byte PDO envelopes, derived from the same frame
-limit. Its compatibility descriptor retains schema/version 1 and advertises the
-new protocol/layout/sizes. The endpoint rejects revision 1 and 2 frames and never
-auto-downgrades. Existing hardware consumers still select the separate, unchanged
-JW1 codec until the shared engine and firmware migration stages land. No new
-hardware handlers or automatic firmware flashing are introduced.
+Revision 4 is incompatible with earlier new-codec revisions. Frames remain
+96 bytes; EtherCAT layout 2's mailbox/PDO slots remain 108/112 bytes, with the
+advertised protocol range updated to revision 4 by the adapter/firmware stack.
+The unchanged `joshua_wire_v1` codec remains selected by current hardware callers.
+No hardware backend migration or flashing occurs here.
 
-The detailed transport/session contract is in
-[the board/comm plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md). Golden-frame,
-mixed-channel discovery, payload and session tests do not open hardware.
+Hardware-free tests include golden payload/frame bytes, bounded C codecs,
+session retry/reset/reboot behavior and a twelve-function mixed-device fake.
+The fake coordinator/acquisition/scheduler illustrates protocol requirements;
+production concurrency/deadline/rollback tests belong to the H/F/T stacked PRs
+identified in the protocol contract and
+[board/comm migration plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md).
