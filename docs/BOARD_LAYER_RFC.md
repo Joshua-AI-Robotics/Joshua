@@ -5,7 +5,8 @@ Companion to: [ARCHITECTURE.md](ARCHITECTURE.md),
 [am243_ethercat.md](am243_ethercat.md),
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md)
 
-The detailed implementation plan for JoshuaWire v2 correlation, EtherCAT
+The normative mixed-device protocol contract is [JOSHUA_WIRE.md](JOSHUA_WIRE.md).
+The detailed implementation plan for JoshuaWire revision 4 profile discovery/correlation, EtherCAT
 CoE/SDO management commands, correlated PDO commands, and board/comm dependency
 separation now lives in
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md). Where that
