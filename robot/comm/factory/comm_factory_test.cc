@@ -1,11 +1,14 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <cstdlib>
+#include <future>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
@@ -118,7 +121,7 @@ class CommFactorySerialCacheTest : public ::testing::Test {
   robot::comm::Comm comm_;
 };
 
-TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneSerialAcrossCapabilities) {
+TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneByteStream) {
   auto first = CommFactory::CreateComm(comm_);
   auto second = CommFactory::CreateComm(comm_);
   ASSERT_TRUE(first.ok()) << first.status();
@@ -128,13 +131,44 @@ TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneSerialAcrossCapabi
   ASSERT_TRUE(first_stream.ok());
   ASSERT_TRUE(second_stream.ok());
   EXPECT_EQ(*first_stream, *second_stream);
+}
 
+TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
   comm_.set_transport_type(MESSAGE);
-  auto message = CommFactory::CreateComm(comm_);
-  ASSERT_TRUE(message.ok()) << message.status();
-  auto message_transport = GetCommTransport<MessageTransport>(*message);
-  ASSERT_TRUE(message_transport.ok());
-  EXPECT_EQ(std::dynamic_pointer_cast<MessageTransport>(*first_stream), *message_transport);
+  comm_.mutable_serial_config()->set_exchange_timeout_ms(500);
+  auto slow = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(slow.ok()) << slow.status();
+  auto slow_message = GetCommTransport<MessageTransport>(*slow);
+  ASSERT_TRUE(slow_message.ok());
+  comm_.mutable_serial_config()->set_exchange_timeout_ms(25);
+  auto fast = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(fast.ok()) << fast.status();
+  auto fast_message = GetCommTransport<MessageTransport>(*fast);
+  ASSERT_TRUE(fast_message.ok());
+
+  const std::vector<uint8_t> request{
+      0xa5, 0x0b, 0x02, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01, 0x08, 0xff, 0x82, 0x0c};
+  auto pending = std::async(std::launch::async, [&] { return (*slow_message)->Exchange(request); });
+  std::vector<uint8_t> observed(request.size());
+  size_t received = 0;
+  pollfd descriptor{master_fd_, POLLIN, 0};
+  while (received < observed.size()) {
+    ASSERT_GT(poll(&descriptor, 1, 1000), 0);
+    const ssize_t count = read(master_fd_, observed.data() + received, observed.size() - received);
+    ASSERT_GT(count, 0);
+    received += static_cast<size_t>(count);
+  }
+  ASSERT_EQ(observed, request);  // The first exchange now owns the serial bus.
+  auto rejected = (*fast_message)->Exchange(request);
+  EXPECT_EQ(rejected.status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(rejected.status().message().find("not sent"), std::string::npos);
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+
+  ASSERT_EQ(write(master_fd_, request.data(), request.size()),
+            static_cast<ssize_t>(request.size()));
+  auto response = pending.get();
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, request);
 }
 
 TEST_F(CommFactorySerialCacheTest, ConflictingBaudRateIsRejectedAndOriginalSerialIsPreserved) {

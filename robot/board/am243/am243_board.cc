@@ -113,7 +113,7 @@ absl::Status Am243Board::Init(const robot::board::Board& config) {
 
   if (config.comm().comm_type() == robot::comm::CommType::SERIAL) {
     auto serial_board =
-        std::make_shared<JoshuaWireBoard>(robot::board::BoardType::AM243, JW1_BOARD_AM243);
+        std::make_shared<LegacyJoshuaWireBoard>(robot::board::BoardType::AM243, JW1_BOARD_AM243);
     ABSL_RETURN_IF_ERROR(serial_board->Init(config));
     config_ = config;
     serial_board_ = std::move(serial_board);

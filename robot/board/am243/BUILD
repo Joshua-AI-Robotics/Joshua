@@ -20,7 +20,7 @@ cc_library(
         ":am243_pdo_codec",
         "//firmware/common:joshua_wire_v1",
         "//robot/board/interfaces:board_interfaces",
-        "//robot/board/joshua_wire:joshua_wire_board",
+        "//robot/board/joshua_wire:legacy_joshua_wire_board",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/ethercat:ethercat_status",
         "//robot/comm/ethercat:ethercat_transport",

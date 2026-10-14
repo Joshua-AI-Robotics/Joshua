@@ -8,6 +8,7 @@ cc_library(
     implementation_deps = [
         "//robot/comm/ethercat:soem_ethercat_transport",
         "//robot/comm/serial",
+        "//robot/comm/serial:framed_serial_transport",
         "@boost.asio",
         "@glog",
     ],
