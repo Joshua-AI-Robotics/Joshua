@@ -4,23 +4,18 @@
 #
 #    pip-compile --allow-unsafe --output-file=/workspace/ai/models/yamnet/requirements_3.12.lock /workspace/ai/models/yamnet/requirements.in
 #
-ai-edge-litert==2.3.0
+ai-edge-litert==1.4.0
     # via -r /workspace/ai/models/yamnet/requirements.in
 backports-strenum==1.2.8
     # via ai-edge-litert
 flatbuffers==25.12.19
     # via ai-edge-litert
-ml-dtypes==0.6.0
-    # via ai-edge-litert
 numpy==2.2.6
     # via
     #   -r /workspace/ai/models/yamnet/requirements.in
     #   ai-edge-litert
-    #   ml-dtypes
 protobuf==5.29.5
-    # via
-    #   -r /workspace/ai/models/yamnet/requirements.in
-    #   ai-edge-litert
+    # via -r /workspace/ai/models/yamnet/requirements.in
 tqdm==4.70.1
     # via ai-edge-litert
 typing-extensions==4.16.0
