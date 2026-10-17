@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "joshua_device_runtime.h"
+#include "joshua_actuator_handler.h"
 #include "joshua_wire_resources.h"
 
 #ifdef __cplusplus
@@ -24,6 +24,7 @@ typedef struct {
   float target_value;
   StepDirState step_dir;
   jw_feedback_t feedback;
+  jw_actuator_handler_t actuator;
 } ChannelState;
 
 // The image declares equally sized channel/function arrays and three exclusive

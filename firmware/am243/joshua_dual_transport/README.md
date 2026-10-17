@@ -3,7 +3,7 @@
 This overlay builds JoshuaWire 0.2.0 / wire revision 4 on UART0 at 115200 baud
 alongside TI's existing EtherCAT simple demo. The UART endpoint uses the shared
 correlated session, device discovery, actuator profile and software-only backend
-in `src/joshua_commands.c`. It produces no STEP/DIR GPIO output. The TI EtherCAT
+in `src/am243_software_backend.c`. It produces no STEP/DIR GPIO output. The TI EtherCAT
 PDO state remains an independent vendor demo; it is not a second JoshuaWire
 transport or a motor-control path.
 
@@ -132,3 +132,9 @@ TI bridge as C against native SDK substitutes. It exercises stop/enable,
 stop/recovery, stop/reset, watchdog activity during vendor I/O, stale PDO
 snapshots, repeated faults and concurrent callbacks. The broader host priority
 scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
+
+Actuator payload decoding, supported-mode checks, admission guards, replies and
+outcome reporting use the portable C `joshua_actuator_handler`. Device callbacks
+retain pin validation, resource ownership, target limits, cached acquisition and
+hardware actions. Teensy/ESP32 register these callbacks in `joshua_stepdir_device`;
+AM243 uses `am243_software_backend` and has no physical STEP/DIR output.

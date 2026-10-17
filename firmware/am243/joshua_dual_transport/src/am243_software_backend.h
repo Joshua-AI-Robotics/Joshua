@@ -18,11 +18,12 @@
 
 #include <stdbool.h>
 
-#include "joshua_device_runtime.h"
+#include "joshua_actuator_handler.h"
 
 typedef struct {
   jw_device_runtime_t runtime;
   jw_runtime_function_t function;
+  jw_actuator_handler_t actuator;
   uint8_t schema[JW_ACTUATOR_SCHEMA_LEN];
   jw_feedback_t feedback;
   bool configured;
