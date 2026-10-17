@@ -307,7 +307,7 @@ py_test(
         ":monitor_common",
         "//config/proto:config_py_proto",
         "//robot/perception/proto:perception_packet_py_proto",
-    ] + requirement("protobuf") + requirement("numpy"),
+    ] + requirement("protobuf") + requirement("numpy") + requirement("PyYAML"),
 )
 
 ros2_py_binary(

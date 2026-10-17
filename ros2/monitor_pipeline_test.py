@@ -65,7 +65,9 @@ class PipelineTest(unittest.TestCase):
                             text=True,
                         )
                     )
-                deadline = time.monotonic() + 20
+                # Cold ROS/model imports are slow under ARM64 emulation. Exit as
+                # soon as both results arrive; this is not a performance test.
+                deadline = time.monotonic() + 90
                 sequence = 0
                 while time.monotonic() < deadline:
                     now = time.time_ns()
