@@ -193,7 +193,8 @@ template:
           {% elif not inputs %}starting
           {% elif good == inputs | count %}online
           {% elif good > 0 %}degraded
-          {% elif 'waiting' in inputs.values() or 'starting' in inputs.values() %}starting
+          {% elif inputs.values() | reject('in', ['waiting', 'starting'])
+             | list | count == 0 %}starting
           {% else %}offline{% endif %}
         attributes:
           received_at: >-
