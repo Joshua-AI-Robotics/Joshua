@@ -1,15 +1,17 @@
 # Joshua baby monitor: implementation, deployment, and iPhone setup
 
 This is the operating guide for the complete baby-monitor stack on
-`hsmoon5458/monitor-autostart`: USB camera and microphone capture, independent
+`experimental/baby-monitor`: USB camera and microphone capture, independent
 audio/video inference, live streaming, Home Assistant notifications, and automatic
 startup on the Raspberry Pi 5.
 
 The reusable audio pipeline is proposed for `develop` in
 [PR #122](https://github.com/Joshua-AI-Robotics/Joshua/pull/122). The other stack
-PRs (#123–127) are closed; their branches remain available. Build this branch to
-get the complete implementation. The audio PR alone does not contain the full
-monitor.
+PRs (#123–127) are closed. The complete stack now lives on
+`experimental/baby-monitor` (formerly `hsmoon5458/monitor-autostart`); the earlier
+`hmoon/experimental_babymonitor` branch was removed because its changes are
+included here. Build this branch to get the complete implementation. The audio
+PR alone does not contain the full monitor.
 
 ## Contents
 
