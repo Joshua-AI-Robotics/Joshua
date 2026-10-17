@@ -714,6 +714,23 @@ class SoesProfileTest : public Am243EthercatProfileTest {
   Bytes Upload(uint16_t index, uint8_t sub = 0, bool ca = false) {
     return Transfer(0x40 | (ca ? 0x10 : 0), index, sub, {});
   }
+  Bytes CoeCommand(uint8_t command, const Bytes& payload = {}, uint8_t function = 0) {
+    const auto image = Image(false, command, payload, function);
+    EXPECT_EQ(Download(JWEC_REQUEST_INDEX, image)[8], 0x60);
+    const auto uploaded = Upload(JWEC_RESPONSE_INDEX);
+    if (uploaded.size() != 16 + JWEC_MAILBOX_SIZE) {
+      ADD_FAILURE() << "SOES did not return a complete JW mailbox image";
+      return {};
+    }
+    jw_frame_t reply;
+    if (jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply) != JW_RESULT_OK) {
+      ADD_FAILURE() << "SOES did not return a JW command reply";
+      return {};
+    }
+    const Bytes result(reply.payload, reply.payload + reply.payload_len);
+    EXPECT_EQ(Download(JWEC_ACK_INDEX, Bytes(image.begin() + 4, image.begin() + 8))[8], 0x60);
+    return result;
+  }
   void SetOp() {
     ESCvar.ALstatus = ESCop;
     ESCvar.App.state = APPSTATE_INPUT | APPSTATE_OUTPUT;
@@ -799,6 +816,47 @@ TEST_F(SoesProfileTest, RealPdoMappingDuplicateWatchdogAndOpLoss) {
   ESC_stopoutput();
   EXPECT_FALSE(channel.enabled);
   EXPECT_TRUE(profile.fault_latched);
+}
+
+TEST_F(SoesProfileTest, SharedActuatorGuardsAndEstopStatusReachBothPlanes) {
+  ConfigureAndEnable();
+  EXPECT_EQ(CoeCommand(kConfigure, Bytes(11)), (Bytes{JW_STATUS_BUSY, JW_EXECUTION_REJECTED}));
+  EXPECT_TRUE(channel.configured);
+  EXPECT_TRUE(channel.enabled);
+
+  Bytes unsupported_target(JW_SET_TARGET_PAYLOAD_LEN);
+  ASSERT_EQ(jw_encode_set_target_payload(
+                unsupported_target.data(), unsupported_target.size(), JW_MODE_TORQUE, 42),
+            JW_SET_TARGET_PAYLOAD_LEN);
+  const auto input = Cyclic(Image(true, kSetTarget, unsupported_target));
+  jw_frame_t reply;
+  ASSERT_EQ(jw_decode_frame(input.data() + 16, input[12], &reply), JW_RESULT_OK);
+  ASSERT_EQ(reply.payload_len, JW_REPLY_HEADER_LEN);
+  EXPECT_EQ(reply.payload[0], JW_STATUS_UNSUPPORTED);
+  EXPECT_EQ(reply.payload[1], JW_EXECUTION_REJECTED);
+  EXPECT_FLOAT_EQ(channel.target_value, 0);
+
+  EXPECT_EQ(CoeCommand(JW_CMD_ESTOP, {}, JW_CHANNEL_NONE),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_EQ(CoeCommand(kDisable), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  const auto bytes = CoeCommand(JW_CMD_GET_STATUS);
+  jw_device_status_t state;
+  ASSERT_EQ(bytes.size(), JW_REPLY_HEADER_LEN + JW_DEVICE_STATUS_LEN);
+  ASSERT_EQ(jw_decode_device_status(
+                bytes.data() + JW_REPLY_HEADER_LEN, bytes.size() - JW_REPLY_HEADER_LEN, &state),
+            JW_RESULT_OK);
+  EXPECT_EQ(state.state, JW_STATE_UNAVAILABLE);
+  EXPECT_EQ(state.reason, JW_REASON_ESTOP);
+  EXPECT_TRUE(state.recovery & JW_RECOVERY_CLEAR_ESTOP);
+  EXPECT_TRUE(channel.estopped);
+  EXPECT_FALSE(channel.enabled);
+
+  EXPECT_EQ(CoeCommand(JW_CMD_RECOVER, {}, JW_CHANNEL_NONE),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_FALSE(channel.estopped);
+  EXPECT_FALSE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_EQ(CoeCommand(kEnable), (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
 }
 
 }  // namespace
