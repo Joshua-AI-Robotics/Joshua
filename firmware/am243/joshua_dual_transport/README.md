@@ -218,14 +218,16 @@ Production source roles:
   JW CoE/PDO binding and stack settings; no AM243 dependencies.
 - `src/joshua_ethercat_soes_am243.c`: AM243 boot, PRU register/mailbox/triple-buffer
   access, read-only RAM SII and independent watchdog task. Reuses the software
-  channel; no UART protocol or motor GPIOs. Polls at an initial 1 ms cadence,
+  channel and common actuator handler through `am243_software_backend`; no UART
+  protocol or motor GPIOs. Polls at an initial 1 ms cadence,
   which is **not** a validated end-to-end cycle-time guarantee.
 - `Makefile.soes`, `scripts/build_soes.sh`, `patches/soes_soc.patch`: isolated
   firmware build, pinned dependency download and removal of the unused SSC
   header from a temporary copy of TI's board initialization source.
 
-The descriptor label is `am243-soes`, IDENTIFY name `am243-soes-jw`; the layout
-and host transport are unchanged. Bench SII/CoE identity is `0xe000059d` /
+The descriptor label is `am243-soes`; IDENTIFY uses the shared backend's
+`am243-software` name. The layout and host transport are unchanged. Bench
+SII/CoE identity is `0xe000059d` /
 `0x4a570002` / revision `0x00020002`, **not a registered product identity**.
 SII contains four fixed SMs and FMMU types; the master obtains PDO mapping
 through CoE. No standalone ESI is provided. Physical EEPROM is neither loaded
