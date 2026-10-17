@@ -1,7 +1,8 @@
 // SDK callbacks copy whole images into the portable profile. One R5 core owns
 // the stack; short interrupt-disabled sections serialize its callbacks with an
-// independent watchdog task. No EtherCAT stack API, sleep or physical I/O inside
-// that lock; the monotonic RTOS clock is read there to order watchdog checks.
+// independent watchdog task. FIQ handlers and other cores must not enter this
+// owner. No EtherCAT stack API, sleep or physical I/O inside the critical section.
+// A stop epoch rejects snapshots admitted before a stop while SDK I/O was running.
 #include "joshua_ethercat_ti.h"
 
 #include <kernel/dpl/ClockP.h>
@@ -21,6 +22,28 @@ static JoshuaEthercatProfile profile;
 static JoshuaChannel channel;
 static TaskP_Object watchdog_task;
 static uint8_t watchdog_stack[4096] __attribute__((aligned(32)));
+static uint64_t stop_epoch;  // Read/written only with this core's IRQs disabled.
+
+static uint64_t AdmissionEpoch(void) {
+  const uintptr_t key = HwiP_disable();
+  const uint64_t epoch = stop_epoch;
+  HwiP_restore(key);
+  return epoch;
+}
+// Profile callbacks run under the same owner critical section as dispatch.
+static void StopLocked(void* context, uint16_t faults) {
+  ++stop_epoch;
+  JoshuaStop(context, faults);
+}
+static int CommandLocked(void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+  const int length = JoshuaCommand(context, command, out, cap);
+  jw_reply_t reply;
+  if (command->cmd == JW_CMD_ESTOP && length > 0 &&
+      jw_decode_reply_payload(out, (size_t)length, &reply) == JW_RESULT_OK &&
+      reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE)
+    ++stop_epoch;
+  return length;
+}
 
 static void TickLocked(bool op) {
   const uint64_t now = ClockP_getTimeUsec();
@@ -39,7 +62,9 @@ static void Watchdog(void* ignored) {
 static void StopOutput(void* ignored) {
   (void)ignored;
   const uintptr_t key = HwiP_disable();
-  TickLocked(false);
+  profile.operational = false;
+  // Latch even when disabled: an ENABLE/RECOVER may be waiting in SDK I/O.
+  JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_STATE);
   HwiP_restore(key);
 }
 static uint8_t ReadObject(void* ignored,
@@ -50,10 +75,12 @@ static uint8_t ReadObject(void* ignored,
                           uint8_t complete) {
   (void)ignored;
   if (subindex || complete) return ABORTIDX_UNSUPPORTED_ACCESS;
+  const uint64_t epoch = AdmissionEpoch();
   const bool op = EC_API_SLV_getState() == EC_API_SLV_eESM_op;
   const uintptr_t key = HwiP_disable();
-  TickLocked(op);
-  const int result = JoshuaEthercatProfileRead(&profile, index, (uint8_t*)data, length);
+  TickLocked(epoch == stop_epoch ? op : profile.operational);
+  const int result =
+      epoch == stop_epoch ? JoshuaEthercatProfileRead(&profile, index, (uint8_t*)data, length) : -1;
   HwiP_restore(key);
   return result == 0 ? 0 : ABORTIDX_UNSUPPORTED_ACCESS;
 }
@@ -65,10 +92,13 @@ static uint8_t WriteObject(void* ignored,
                            uint8_t complete) {
   (void)ignored;
   if (subindex || complete) return ABORTIDX_UNSUPPORTED_ACCESS;
+  const uint64_t epoch = AdmissionEpoch();
   const bool op = EC_API_SLV_getState() == EC_API_SLV_eESM_op;
   const uintptr_t key = HwiP_disable();
-  TickLocked(op);
-  const int result = JoshuaEthercatProfileWrite(&profile, index, (const uint8_t*)data, length);
+  TickLocked(epoch == stop_epoch ? op : profile.operational);
+  const int result = epoch == stop_epoch
+                         ? JoshuaEthercatProfileWrite(&profile, index, (const uint8_t*)data, length)
+                         : -1;
   HwiP_restore(key);
   return result == 0 ? 0 : ABORTIDX_UNSUPPORTED_ACCESS;
 }
@@ -116,9 +146,9 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   const JoshuaEthercatProfileConfig config = {.identity = channel.runtime.identity,
                                               .artifact = "am243-ec-jw",
                                               .context = &channel,
-                                              .command = JoshuaCommand,
+                                              .command = CommandLocked,
                                               .reset = JoshuaReset,
-                                              .stop = JoshuaStop,
+                                              .stop = StopLocked,
                                               .enabled = JoshuaEnabled};
   if (!slave || JoshuaEthercatProfileInit(
                     &profile, &config, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US))
@@ -165,11 +195,14 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   params.name = "jw_watchdog";
   params.stack = watchdog_stack;
   params.stackSize = sizeof(watchdog_stack);
-  params.priority = TaskP_PRIORITY_HIGHEST - 2;
+  // SDK 09's application/stack task runs at HIGHEST-1. Safety must preempt it
+  // even if a vendor call stalls; only one bounded owner critical section delays it.
+  params.priority = TaskP_PRIORITY_HIGHEST;
   params.taskMain = Watchdog;
   return TaskP_construct(&watchdog_task, &params) == SystemP_SUCCESS ? 0 : EC_API_eERR_INVALID;
 }
 void JoshuaEthercatRun(EC_API_SLV_SHandle_t* slave) {
+  const uint64_t epoch = AdmissionEpoch();
   const bool op = EC_API_SLV_getState() == EC_API_SLV_eESM_op;
   uint8_t output[JWEC_PDO_SIZE];
   uint8_t input[JWEC_PDO_SIZE];
@@ -178,10 +211,10 @@ void JoshuaEthercatRun(EC_API_SLV_SHandle_t* slave) {
   uint32_t result = 0;
   if (op && mapped) result = EC_API_SLV_getOutputData(slave, sizeof(output), output);
   const uintptr_t key = HwiP_disable();
-  TickLocked(op && mapped);
+  TickLocked(epoch == stop_epoch ? op && mapped : profile.operational);
   if (result)
     JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_STATE);
-  else if (op && mapped)
+  else if (epoch == stop_epoch && op && mapped)
     (void)JoshuaEthercatProfilePdo(&profile, output, sizeof(output));
   memcpy(input, profile.input, sizeof(input));
   HwiP_restore(key);

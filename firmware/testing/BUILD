@@ -27,3 +27,17 @@ cc_library(
     includes = ["ti_sdk"],
     visibility = ["//firmware/am243/joshua_dual_transport:__pkg__"],
 )
+
+cc_library(
+    name = "ti_ethercat",
+    testonly = True,
+    hdrs = [
+        "ti_sdk/ecSlvApi.h",
+        "ti_sdk/ecSlvApiDef.h",
+        "ti_sdk/kernel/dpl/ClockP.h",
+        "ti_sdk/kernel/dpl/HwiP.h",
+        "ti_sdk/kernel/dpl/TaskP.h",
+    ],
+    includes = ["ti_sdk"],
+    visibility = ["//firmware/am243/joshua_dual_transport:__pkg__"],
+)

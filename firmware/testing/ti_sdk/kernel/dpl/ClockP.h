@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 uint64_t ClockP_getTimeUsec(void);
+void ClockP_usleep(uint32_t usec);
 #ifdef __cplusplus
 }
 #endif
