@@ -3,7 +3,7 @@
 SDK := $(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)
 TI_SOC_DIR := $(SDK)/examples/industrial_comms/ethercat_slave_beckhoff_ssc_demo
 override FILES_common := joshua_ethercat_soes_am243.c tiescsoc.c joshua_commands.c \
-    joshua_wire_commands.c joshua_wire.c joshua_wire_firmware_session.c \
+    joshua_wire_commands.c joshua_wire_profiles.c joshua_wire_resources.c joshua_device_runtime.c joshua_wire.c joshua_wire_firmware_session.c \
     joshua_ethercat_profile.c joshua_ethercat_soes.c esc.c esc_coe.c esc_eep.c ecat_slv.c \
     ti_drivers_config.c ti_drivers_open_close.c ti_board_config.c \
     ti_board_open_close.c ti_dpl_config.c ti_pinmux_config.c ti_power_clock_config.c

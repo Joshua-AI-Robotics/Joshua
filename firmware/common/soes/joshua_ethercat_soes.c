@@ -22,7 +22,7 @@ static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
 #define CONST(s, t, bits, v) ENTRY(s, t, bits, ATYPE_RO, v, NULL)
 #define WORDS(M)                                                                                  \
   M(1), M(2), M(3), M(4), M(5), M(6), M(7), M(8), M(9), M(10), M(11), M(12), M(13), M(14), M(15), \
-      M(16), M(17), M(18), M(19), M(20)
+      M(16), M(17), M(18), M(19), M(20), M(21), M(22), M(23), M(24), M(25), M(26), M(27), M(28)
 #define RXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x70000020u + ((s) << 8))
 #define TXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x60000020u + ((s) << 8))
 #define RXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_WO | ATYPE_RXPDO, 0, output + 4 * ((s)-1))
@@ -35,8 +35,8 @@ static const _objd device_identity[] = {COUNT(4),
                                         ENTRY(2, DTYPE_UNSIGNED32, 32, ATYPE_RO, 0, &identity[1]),
                                         ENTRY(3, DTYPE_UNSIGNED32, 32, ATYPE_RO, 0, &identity[2]),
                                         ENTRY(4, DTYPE_UNSIGNED32, 32, ATYPE_RO, 0, &identity[3])};
-static const _objd rxmap[] = {COUNT(20), WORDS(RXMAP)};
-static const _objd txmap[] = {COUNT(20), WORDS(TXMAP)};
+static const _objd rxmap[] = {COUNT(JWEC_PDO_SIZE / 4), WORDS(RXMAP)};
+static const _objd txmap[] = {COUNT(JWEC_PDO_SIZE / 4), WORDS(TXMAP)};
 static const _objd sm_types[] = {COUNT(4),
                                  CONST(1, DTYPE_UNSIGNED8, 8, 1),
                                  CONST(2, DTYPE_UNSIGNED8, 8, 2),
@@ -51,16 +51,16 @@ OCTETS(session, ATYPE_RW);
 OCTETS(request, ATYPE_WO);
 OCTETS(response, ATYPE_RO);
 static const _objd od_ack[] = {ENTRY(0, DTYPE_UNSIGNED32, 32, ATYPE_WO, 0, ack)};
-static const _objd rxwords[] = {COUNT(20), WORDS(RXWORD)};
-static const _objd txwords[] = {COUNT(20), WORDS(TXWORD)};
+static const _objd rxwords[] = {COUNT(JWEC_PDO_SIZE / 4), WORDS(RXWORD)};
+static const _objd txwords[] = {COUNT(JWEC_PDO_SIZE / 4), WORDS(TXWORD)};
 #define OBJECT(i, type, n, label, d) \
   { i, type, n, 0, label, d }
 const _objectlist SDOobjects[] = {
     OBJECT(0x1000, OTYPE_VAR, 0, "Device type", device_type),
     OBJECT(0x1008, OTYPE_VAR, 0, "Device name", device_name),
     OBJECT(0x1018, OTYPE_RECORD, 4, "Identity", device_identity),
-    OBJECT(0x1600, OTYPE_RECORD, 20, "JW RxPDO", rxmap),
-    OBJECT(0x1a00, OTYPE_RECORD, 20, "JW TxPDO", txmap),
+    OBJECT(0x1600, OTYPE_RECORD, JWEC_PDO_SIZE / 4, "JW RxPDO", rxmap),
+    OBJECT(0x1a00, OTYPE_RECORD, JWEC_PDO_SIZE / 4, "JW TxPDO", txmap),
     OBJECT(0x1c00, OTYPE_ARRAY, 4, "Sync managers", sm_types),
     OBJECT(0x1c12, OTYPE_ARRAY, 1, "Rx assignment", rxassign),
     OBJECT(0x1c13, OTYPE_ARRAY, 1, "Tx assignment", txassign),
@@ -69,8 +69,8 @@ const _objectlist SDOobjects[] = {
     OBJECT(JWEC_REQUEST_INDEX, OTYPE_VAR, 0, "JWEC request", od_request),
     OBJECT(JWEC_RESPONSE_INDEX, OTYPE_VAR, 0, "JWEC response", od_response),
     OBJECT(JWEC_ACK_INDEX, OTYPE_VAR, 0, "JWEC ack", od_ack),
-    OBJECT(0x6000, OTYPE_ARRAY, 20, "JW input image", txwords),
-    OBJECT(0x7000, OTYPE_ARRAY, 20, "JW output image", rxwords),
+    OBJECT(0x6000, OTYPE_ARRAY, JWEC_PDO_SIZE / 4, "JW input image", txwords),
+    OBJECT(0x7000, OTYPE_ARRAY, JWEC_PDO_SIZE / 4, "JW output image", rxwords),
     OBJECT(0xffff, 0, 0, NULL, NULL)};
 
 static void TickLocked(void) {
