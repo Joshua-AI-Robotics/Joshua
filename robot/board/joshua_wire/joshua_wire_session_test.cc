@@ -719,26 +719,32 @@ class SoesProfileTest : public Am243EthercatProfileTest {
     ESCvar.App.state = APPSTATE_INPUT | APPSTATE_OUTPUT;
     ESCvar.ESC_SM2_sml = sizeOfPDO(0x1c12, &ESCvar.sm2mappings, SMmap2, MAX_MAPPINGS_SM2);
     ESCvar.ESC_SM3_sml = sizeOfPDO(0x1c13, &ESCvar.sm3mappings, SMmap3, MAX_MAPPINGS_SM3);
-    ASSERT_EQ(ESCvar.ESC_SM2_sml, 80);
-    ASSERT_EQ(ESCvar.ESC_SM3_sml, 80);
+    ASSERT_EQ(ESCvar.ESC_SM2_sml, JWEC_PDO_SIZE);
+    ASSERT_EQ(ESCvar.ESC_SM3_sml, JWEC_PDO_SIZE);
   }
   Bytes Cyclic(const Bytes& bytes) {
     std::memcpy(soes_esc.data() + SM2_sma, bytes.data(), bytes.size());
     ESCvar.ALevent |= ESCREG_ALEVENT_SM2;
     DIG_process(DIG_PROCESS_OUTPUTS_FLAG | DIG_PROCESS_APP_HOOK_FLAG | DIG_PROCESS_INPUTS_FLAG);
-    return Bytes(soes_esc.data() + SM3_sma, soes_esc.data() + SM3_sma + 80);
+    return Bytes(soes_esc.data() + SM3_sma, soes_esc.data() + SM3_sma + JWEC_PDO_SIZE);
   }
   void ConfigureAndEnable() {
     SetOp();
-    for (uint8_t cmd : {JW_CMD_CONFIGURE_CHANNEL, JW_CMD_ENABLE}) {
-      const auto image = Image(false, cmd, cmd == JW_CMD_CONFIGURE_CHANNEL ? Bytes(11) : Bytes{});
+    if (profile.fault_latched || channel.estopped) {
+      const auto recovery = Image(false, JW_CMD_RECOVER, {}, JW_CHANNEL_NONE);
+      ASSERT_EQ(Download(JWEC_REQUEST_INDEX, recovery)[8], 0x60);
+      ASSERT_EQ(Download(JWEC_ACK_INDEX, Bytes(recovery.begin() + 4, recovery.begin() + 8))[8],
+                0x60);
+    }
+    for (uint8_t cmd : {kConfigure, kEnable}) {
+      const auto image = Image(false, cmd, cmd == kConfigure ? Bytes(11) : Bytes{});
       EXPECT_EQ(Download(JWEC_REQUEST_INDEX, image)[8], 0x60);
       const auto uploaded = Upload(JWEC_RESPONSE_INDEX);
-      ASSERT_EQ(uploaded.size(), 16 + 76);
+      ASSERT_EQ(uploaded.size(), 16 + JWEC_MAILBOX_SIZE);
       EXPECT_EQ(uploaded[8], 0x41);
       jw_frame_t reply;
       ASSERT_EQ(jw_decode_frame(uploaded.data() + 28, uploaded[24], &reply), JW_RESULT_OK);
-      ASSERT_EQ(reply.payload_len, 1);
+      ASSERT_EQ(reply.payload_len, 2);
       EXPECT_EQ(reply.payload[0], JW_STATUS_OK);
       EXPECT_EQ(Download(JWEC_ACK_INDEX, Bytes(image.begin() + 4, image.begin() + 8))[8], 0x60);
     }
@@ -755,7 +761,7 @@ TEST_F(SoesProfileTest, RealCoeDiscoveryAndExactAccessContract) {
   EXPECT_EQ(ProfileU32(Upload(0x1018, 2).data() + 12), 0xabcdef01);
   EXPECT_EQ(Upload(0x1c12, 1)[12], 0);
   EXPECT_EQ(Upload(0x1c12, 1)[13], 0x16);
-  EXPECT_EQ(ProfileU32(Upload(0x1600, 20).data() + 12), 0x70001420);
+  EXPECT_EQ(ProfileU32(Upload(0x1600, JWEC_PDO_SIZE / 4).data() + 12), 0x70001c20);
   EXPECT_EQ(ProfileU32(Upload(JWEC_SESSION_INDEX).data() + 20), session_id);
   EXPECT_EQ(Upload(JWEC_DESCRIPTOR_INDEX, 0, true)[8], 0x80);
   EXPECT_EQ(Download(JWEC_SESSION_INDEX, Bytes(7))[8], 0x80);

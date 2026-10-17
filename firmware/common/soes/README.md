@@ -5,7 +5,7 @@ same JoshuaWire EtherCAT transport, with SOEM underneath. Changing the slave
 stack or board does not change the host wire contract.
 
 - `joshua_ethercat_soes.{h,c}` registers the fixed CoE dictionary and maps the
-  80-byte PDO images to the [shared profile](../joshua_ethercat_profile.h).
+  112-byte PDO images to the [shared profile](../joshua_ethercat_profile.h).
   SOES parses CoE and owns the EtherCAT state machine; Joshua owns sessions,
   command correlation, drive callbacks and watchdog policy.
 - `ecat_options.h` defines the mailbox/SM/PDO sizes and addresses. Each board's
