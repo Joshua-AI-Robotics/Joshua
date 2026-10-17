@@ -4,6 +4,12 @@ This is the board-independent slave-stack adapter. The host still uses the
 same JoshuaWire EtherCAT transport, with SOEM underneath. Changing the slave
 stack or board does not change the host wire contract.
 
+AM243 registers the same `am243_software_backend` and portable C
+`joshua_actuator_handler` used by its UART and TI-stack JW artifacts. SOES
+supplies transport delivery; actuator validation, replies and action outcomes
+stay in that shared handler. Backend callbacks retain acquisition, device limits
+and safety actions. Sensor and I/O profiles use the generic runtime independently.
+
 - `joshua_ethercat_soes.{h,c}` registers the fixed CoE dictionary and maps the
   112-byte PDO images to the [shared profile](../joshua_ethercat_profile.h).
   SOES parses CoE and owns the EtherCAT state machine; Joshua owns sessions,
@@ -34,7 +40,8 @@ a board explicitly integrates SOES. Its license is not Joshua's Apache license.
 The existing `joshua_wire_session_test` suite exercises the real SOES CoE
 parser/dictionary and PDO pack/unpack functions using memory-backed ESC access.
 It covers descriptor/identity/reset, access and length rejection, command
-execution, duplicate retention, target expiry and OP loss. It does **not**
+execution, duplicate retention, target expiry, OP loss, actuator admission and
+ESTOP/DISABLE status preservation. It does **not**
 validate an ESC hardware driver or timing on a real EtherCAT bus.
 
 The initial [AM243 port](../../am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
