@@ -99,3 +99,10 @@ EtherCAT timing or physical motor outputs.
 TODO: retain this TI-stack JW profile until the separate SOES replacement has
 completed AM243 hardware qualification and endurance testing, then review its
 retirement.
+
+The portable EtherCAT profile uses revision 4/layout 2, 108-byte mailbox
+objects and 112-byte PDO images. The TI dictionary maps 28 words in each PDO.
+Discovery, metadata, status and recovery reach the same backend runtime as
+profile operations. Target watchdog slots use stable function IDs across the
+255-function wire space. Session resets disable/configuration-clear without
+clearing ESTOP or watchdog latches; explicit RECOVER precedes reconfiguration.

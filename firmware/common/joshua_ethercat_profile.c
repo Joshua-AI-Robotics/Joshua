@@ -24,8 +24,8 @@ int JoshuaEthercatProfileInit(JoshuaEthercatProfile* p,
                               uint32_t comm_us,
                               uint32_t target_us) {
   if (!p || !config || !comm_us || !target_us || !config->command || !config->reset ||
-      !config->stop || !config->enabled || !config->identity.n_channels ||
-      config->identity.n_channels > JW_MAX_CHANNELS || !config->artifact[0])
+      !config->stop || !config->enabled || !config->identity.function_count ||
+      config->identity.function_count > JW_MAX_FUNCTIONS || !config->artifact[0])
     return -1;
   bool padding = false;
   for (size_t i = 0; i < sizeof(config->artifact); ++i) {
@@ -47,7 +47,7 @@ void JoshuaEthercatProfileFault(JoshuaEthercatProfile* p, uint16_t fault) {
   p->config.stop(p->config.context, fault);
 }
 static bool AnyEnabled(const JoshuaEthercatProfile* p) {
-  for (uint8_t i = 0; i < p->config.identity.n_channels; ++i)
+  for (uint8_t i = 0; i < JW_MAX_FUNCTIONS; ++i)
     if (p->config.enabled(p->config.context, i)) return true;
   return false;
 }
@@ -59,7 +59,7 @@ void JoshuaEthercatProfileTick(JoshuaEthercatProfile* p, uint64_t now_us, bool o
   uint16_t faults = 0;
   if (!operational) faults |= JOSHUA_ECAT_FAULT_STATE;
   if (now_us - p->last_progress_us >= p->comm_timeout_us) faults |= JOSHUA_ECAT_FAULT_COMM;
-  for (uint8_t i = 0; i < p->config.identity.n_channels; ++i)
+  for (uint8_t i = 0; i < JW_MAX_FUNCTIONS; ++i)
     if (p->config.enabled(p->config.context, i) &&
         now_us - p->last_target_us[i] >= p->target_timeout_us)
       faults |= JOSHUA_ECAT_FAULT_TARGET;
@@ -68,35 +68,42 @@ void JoshuaEthercatProfileTick(JoshuaEthercatProfile* p, uint64_t now_us, bool o
 
 static int Command(void* context, const jw_frame_t* frame, uint8_t* payload, size_t capacity) {
   JoshuaEthercatProfile* p = (JoshuaEthercatProfile*)context;
-  jw_command_t command = {frame->cmd, frame->channel, frame->payload, frame->payload_len};
-  if (frame->cmd == JW_CMD_IDENTIFY) {
-    if (frame->channel != JW_CHANNEL_NONE || frame->payload_len)
-      return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
-    return jw_encode_identify_payload(payload, capacity, &p->config.identity);
-  }
-  if (frame->cmd != JW_CMD_ESTOP && frame->channel >= p->config.identity.n_channels)
-    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
-  if (p->fault_latched && (frame->cmd == JW_CMD_ENABLE || frame->cmd == JW_CMD_SET_TARGET ||
-                           frame->cmd == JW_CMD_CONFIGURE_CHANNEL))
-    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
-  if (frame->cmd == JW_CMD_ENABLE && !p->operational)
-    return jw_encode_status_payload(JW_STATUS_ERROR, payload, capacity);
-  const bool channel_command = frame->channel < p->config.identity.n_channels;
-  const bool was_enabled = channel_command && p->config.enabled(p->config.context, frame->channel);
+  const jw_command_t command = {frame->session_id,
+                                frame->message_id,
+                                frame->cmd,
+                                frame->channel,
+                                frame->payload,
+                                frame->payload_len};
+  jw_profile_request_t operation;
+  const bool actuator =
+      frame->cmd == JW_CMD_PROFILE &&
+      jw_decode_profile_request(frame->payload, frame->payload_len, &operation) == JW_RESULT_OK &&
+      operation.profile_id == JW_PROFILE_ACTUATOR && operation.major == 1 && operation.minor == 0;
+  const bool guarded = actuator && (operation.operation == JW_ACTUATOR_ENABLE ||
+                                    operation.operation == JW_ACTUATOR_SET_TARGET ||
+                                    operation.operation == JW_ACTUATOR_CONFIGURE);
+  if ((p->fault_latched && guarded) ||
+      (actuator && operation.operation == JW_ACTUATOR_ENABLE && !p->operational))
+    return jw_encode_reply_payload(
+        payload, capacity, JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED, NULL, 0);
+  const bool function = frame->channel != JW_CHANNEL_NONE;
+  const bool was_enabled = function && p->config.enabled(p->config.context, frame->channel);
   int length = p->config.command(p->config.context, &command, payload, capacity);
-  if (length == 1 && payload[0] == JW_STATUS_OK) {
-    if (channel_command &&
-        ((!was_enabled && p->config.enabled(p->config.context, frame->channel)) ||
-         frame->cmd == JW_CMD_SET_TARGET))
+  jw_reply_t reply;
+  if (length > 0 && jw_decode_reply_payload(payload, length, &reply) == JW_RESULT_OK &&
+      reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE) {
+    if (function && ((!was_enabled && p->config.enabled(p->config.context, frame->channel)) ||
+                     (actuator && operation.operation == JW_ACTUATOR_SET_TARGET)))
       p->last_target_us[frame->channel] = p->now_us;
-    if (frame->cmd == JW_CMD_ESTOP) JoshuaEthercatProfileFault(p, 0);
+    if (frame->cmd == JW_CMD_ESTOP) p->fault_latched = true;
+    if (frame->cmd == JW_CMD_RECOVER) p->fault_latched = false;
   }
   return length;
 }
+
 static void ResetChannel(void* context) {
   JoshuaEthercatProfile* p = (JoshuaEthercatProfile*)context;
   p->config.reset(p->config.context);
-  p->fault_latched = false;
 }
 
 // plane 0 is CoE, 1 is PDO. Completion is synchronous after snapshot validation:
@@ -114,10 +121,18 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   if (jw_decode_frame(bytes + offset, length, &frame) != JW_RESULT_OK ||
       frame.session_id != p->session.session_id)
     return -1;
-  const bool cyclic = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;
-  const bool management = frame.cmd == JW_CMD_IDENTIFY || frame.cmd == JW_CMD_CONFIGURE_CHANNEL ||
-                          frame.cmd == JW_CMD_ENABLE || frame.cmd == JW_CMD_DISABLE ||
-                          frame.cmd == JW_CMD_ESTOP;
+  jw_profile_request_t operation;
+  const bool profile =
+      frame.cmd == JW_CMD_PROFILE && frame.channel != JW_CHANNEL_NONE &&
+      jw_decode_profile_request(frame.payload, frame.payload_len, &operation) == JW_RESULT_OK;
+  const bool cyclic = profile && operation.profile_id == JW_PROFILE_ACTUATOR &&
+                      operation.major == 1 && operation.minor == 0 &&
+                      (operation.operation == JW_ACTUATOR_SET_TARGET ||
+                       operation.operation == JW_ACTUATOR_GET_FEEDBACK);
+  const bool management = (profile && !cyclic) || frame.cmd == JW_CMD_IDENTIFY ||
+                          frame.cmd == JW_CMD_DISCOVER || frame.cmd == JW_CMD_DESCRIBE_FUNCTION ||
+                          frame.cmd == JW_CMD_GET_STATUS || frame.cmd == JW_CMD_GET_DEPENDENCIES ||
+                          frame.cmd == JW_CMD_RECOVER || frame.cmd == JW_CMD_ESTOP;
   if ((plane && !cyclic) || (!plane && !management)) return -1;
   if (generation < p->last_generation[plane]) return 0;
   if (generation == p->last_generation[plane]) {
@@ -131,7 +146,8 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   uint8_t* response = plane ? p->input : p->mailbox;
   const size_t gen_offset = plane ? 8 : 4;
   if (U32(response + gen_offset)) return -1;  // Must acknowledge retained reply first.
-  if (frame.message_id <= p->session.last_message_id) return -1;
+  if (frame.message_id < p->session.last_message_id) return -1;
+  const bool fresh = frame.message_id > p->session.last_message_id;
   uint8_t frame_reply[JW_MAX_FRAME_LEN];
   const int reply_len = jw_firmware_session_process(&p->session,
                                                     bytes + offset,
@@ -145,7 +161,7 @@ static int Request(JoshuaEthercatProfile* p, const uint8_t* bytes, unsigned plan
   p->last_generation[plane] = generation;
   p->last_request_len[plane] = (uint8_t)length;
   memcpy(p->last_request[plane], bytes + offset, length);
-  p->last_progress_us = p->now_us;
+  if (fresh) p->last_progress_us = p->now_us;
   memset(response, 0, plane ? JWEC_PDO_SIZE : JWEC_MAILBOX_SIZE);
   Put32(response, p->session.session_id);
   if (plane) Put32(response + 4, generation);
@@ -160,8 +176,8 @@ int JoshuaEthercatProfileRead(JoshuaEthercatProfile* p, uint16_t index, uint8_t*
   if (index == JWEC_DESCRIPTOR_INDEX && size == JWEC_DESCRIPTOR_SIZE) {
     uint8_t descriptor[JWEC_DESCRIPTOR_SIZE] = {'J', 'W', 'E', 'C'};
     Put16(descriptor + 4, JWEC_DESCRIPTOR_VERSION);
-    Put16(descriptor + 6, 2);
-    Put16(descriptor + 8, 2);
+    Put16(descriptor + 6, JW_PROTO_VERSION);
+    Put16(descriptor + 8, JW_PROTO_VERSION);
     Put16(descriptor + 10, JWEC_LAYOUT_VERSION);
     Put16(descriptor + 12, JWEC_PDO_SIZE);
     Put16(descriptor + 14, JWEC_PDO_SIZE);
@@ -199,7 +215,7 @@ int JoshuaEthercatProfileWrite(JoshuaEthercatProfile* p,
     memset(p->last_generation, 0, sizeof(p->last_generation));
     memset(p->last_request_len, 0, sizeof(p->last_request_len));
     p->last_progress_us = p->now_us;
-    for (uint8_t i = 0; i < JW_MAX_CHANNELS; ++i) p->last_target_us[i] = p->now_us;
+    for (uint8_t i = 0; i < JW_MAX_FUNCTIONS; ++i) p->last_target_us[i] = p->now_us;
     p->session.session_id = session;  // Reset result published after safe state/history clear.
     Put32(p->input, session);
     return 0;

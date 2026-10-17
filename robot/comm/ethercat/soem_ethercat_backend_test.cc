@@ -1926,14 +1926,12 @@ TEST_F(JwecAdapterTest, MalformedMailboxRequiresResetAndConcurrentCyclicCallsSer
 // C firmware core used by the AM243 artifact, not a second protocol simulator.
 struct FirmwareProfileTrace : IoTrace {
   FirmwareProfileTrace() {
-    outputs.assign(160, 0);
+    outputs.assign((2 * JWEC_PDO_SIZE), 0);
     for (size_t i = 0; i < 2; ++i) {
       JoshuaEthercatProfileConfig config{};
-      config.identity.board_id = JW_BOARD_AM243;
-      std::memcpy(config.identity.fw_name, "am243-ec-jw", 11);
-      config.identity.n_channels = 1;
-      config.identity.channel_drives[0] = JW_DRIVE_STEP_DIR;
-      std::memcpy(config.artifact, "am243-ec-jw", 11);
+      JoshuaInit(&channels[i], 100 + i, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+      config.identity = channels[i].runtime.identity;
+      std::memcpy(config.artifact, "am243-software", 11);
       config.context = &channels[i];
       config.command = JoshuaCommand;
       config.reset = JoshuaReset;
@@ -1956,7 +1954,11 @@ class FirmwareProfileIo : public TestMasterIo {
     return true;
   }
   absl::StatusOr<PdoRegion> GetPdoRegion(uint16_t slave) const override {
-    return PdoRegion{slave, size_t((slave - 1) * 80), size_t((slave - 1) * 80), 80, 80};
+    return PdoRegion{slave,
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     JWEC_PDO_SIZE,
+                     JWEC_PDO_SIZE};
   }
   absl::Status StartCyclic() override {
     trace_->Call("start");
@@ -2013,8 +2015,9 @@ class FirmwareProfileIo : public TestMasterIo {
     SdoBytes input;
     for (size_t i = 0; i < 2; ++i) {
       auto& profile = trace_->profiles[i];
-      (void)JoshuaEthercatProfilePdo(&profile, trace_->outputs.data() + i * 80, 80);
-      input.insert(input.end(), profile.input, profile.input + 80);
+      (void)JoshuaEthercatProfilePdo(
+          &profile, trace_->outputs.data() + i * JWEC_PDO_SIZE, JWEC_PDO_SIZE);
+      input.insert(input.end(), profile.input, profile.input + JWEC_PDO_SIZE);
     }
     return ProcessData{trace_->outputs, input, 6, 6};
   }
@@ -2024,7 +2027,10 @@ class FirmwareProfileIo : public TestMasterIo {
     const uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
                              std::chrono::steady_clock::now().time_since_epoch())
                              .count();
-    for (auto& profile : trace_->profiles) JoshuaEthercatProfileTick(&profile, now, operational_);
+    for (size_t i = 0; i < 2; ++i) {
+      JoshuaService(&trace_->channels[i], now);
+      JoshuaEthercatProfileTick(&trace_->profiles[i], now, operational_);
+    }
   }
   std::shared_ptr<FirmwareProfileTrace> trace_;
   bool operational_ = false;
@@ -2051,37 +2057,49 @@ TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
   jw_frame_t frame;
   ASSERT_EQ(jw_decode_frame(identity->data(), identity->size(), &frame), JW_RESULT_OK);
   jw_identify_response_t value;
-  ASSERT_EQ(jw_decode_identify_payload(frame.payload, frame.payload_len, &value), JW_RESULT_OK);
-  EXPECT_EQ(value.board_id, JW_BOARD_AM243);
-  EXPECT_EQ(std::string(value.fw_name), "am243-ec-jw");
+  ASSERT_EQ(jw_decode_identify_payload(frame.payload + 2, frame.payload_len - 2, &value),
+            JW_RESULT_OK);
+  EXPECT_EQ(value.protocol_min, JW_PROTO_VERSION);
+  EXPECT_EQ(std::string(value.fw_name), "am243-software");
   ASSERT_TRUE(master
                   ->StartCyclic({JoshuaWireEthercatTransport::StopImage(),
                                  JoshuaWireEthercatTransport::StopImage()})
                   .ok());
   auto command = [&](uint32_t id, uint8_t cmd, const SdoBytes& payload = SdoBytes{}) {
-    SdoBytes bytes(64);
+    SdoBytes body = payload;
+    if (cmd == kConfigure && body == SdoBytes(11)) {
+      body[0] = 0xe8;
+      body[1] = 3;
+    }
+    uint8_t data[JW_MAX_PAYLOAD_LEN];
+    jw_profile_request_t operation{
+        JW_PROFILE_ACTUATOR, 1, 0, static_cast<uint8_t>(cmd - 0x80), body.data(), body.size()};
+    int length = jw_encode_profile_request(data, sizeof(data), &operation);
+    SdoBytes bytes(JW_MAX_FRAME_LEN);
     bytes.resize(
-        jw_encode_frame(bytes.data(), bytes.size(), 7, id, cmd, 0, payload.data(), payload.size()));
+        jw_encode_frame(bytes.data(), bytes.size(), 7, id, JW_CMD_PROFILE, 0, data, length));
+
     return bytes;
   };
-  ASSERT_TRUE(endpoint->Exchange(command(3, JW_CMD_CONFIGURE_CHANNEL, SdoBytes(11))).ok());
-  auto enabled = endpoint->Exchange(command(4, JW_CMD_ENABLE));
+  ASSERT_TRUE(endpoint->Exchange(command(3, kConfigure, SdoBytes(11))).ok());
+  auto enabled = endpoint->Exchange(command(4, kEnable));
   ASSERT_TRUE(enabled.ok()) << enabled.status();
   ASSERT_EQ(jw_decode_frame(enabled->data(), enabled->size(), &frame), JW_RESULT_OK);
-  ASSERT_EQ(frame.payload_len, 1);
+  ASSERT_EQ(frame.payload_len, 2);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
   SdoBytes target(5);
   ASSERT_EQ(jw_encode_set_target_payload(target.data(), target.size(), JW_MODE_POSITION, 123.0f),
             5);
-  auto set = endpoint->Exchange(command(5, JW_CMD_SET_TARGET, target), absl::Seconds(1));
+  auto set = endpoint->Exchange(command(5, kSetTarget, target), absl::Seconds(1));
   ASSERT_TRUE(set.ok()) << set.status();
   ASSERT_EQ(jw_decode_frame(set->data(), set->size(), &frame), JW_RESULT_OK);
   EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
-  auto feedback = endpoint->Exchange(command(6, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
+  auto feedback = endpoint->Exchange(command(6, kFeedback), absl::Seconds(1));
   ASSERT_TRUE(feedback.ok()) << feedback.status();
   ASSERT_EQ(jw_decode_frame(feedback->data(), feedback->size(), &frame), JW_RESULT_OK);
   jw_feedback_t motion;
-  ASSERT_EQ(jw_decode_feedback_payload(frame.payload, frame.payload_len, &motion), JW_RESULT_OK);
+  ASSERT_EQ(jw_decode_feedback_payload(frame.payload + 2, frame.payload_len - 2, &motion),
+            JW_RESULT_OK);
   EXPECT_FLOAT_EQ(motion.position, 123.0f);
   EXPECT_EQ(motion.fault_flags, 0);
   ASSERT_TRUE(endpoint->Exchange(JwecRequest(7, JW_CMD_ESTOP)).ok());

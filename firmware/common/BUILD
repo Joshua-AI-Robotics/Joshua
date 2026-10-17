@@ -202,5 +202,6 @@ cc_library(
     deps = [
         ":joshua_wire_ethercat",
         ":joshua_wire_firmware_session",
+        ":joshua_wire_profiles",
     ],
 )
