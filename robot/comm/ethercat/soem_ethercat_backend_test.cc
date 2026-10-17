@@ -15,6 +15,7 @@
 
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_ethercat.h"
+#include "firmware/common/joshua_wire_profiles.h"
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/coe_sdo_transfer.h"
 #include "robot/comm/ethercat/ethercat_master.h"
@@ -1171,41 +1172,98 @@ uint32_t JwecU32(const uint8_t* p) {
 void JwecPut32(uint8_t* p, uint32_t value) {
   for (int i = 0; i < 4; ++i) p[i] = value >> (8 * i);
 }
+constexpr uint8_t kConfigure = 0x80, kSetTarget = 0x81, kFeedback = 0x82, kEnable = 0x83,
+                  kDisable = 0x84;
 SdoBytes JwecDescriptor() {
-  return {'J', 'W', 'E', 'C', 1,   0,   2,   0,   2,   0,   1,   0,   80, 0, 80, 0, 64, 0,
-          6,   0,   0,   0,   't', 'e', 's', 't', '-', 'j', 'w', '2', 0,  0, 0,  0, 0,  0};
+  return {'J',
+          'W',
+          'E',
+          'C',
+          JWEC_DESCRIPTOR_VERSION,
+          0,
+          JW_PROTO_VERSION,
+          0,
+          JW_PROTO_VERSION,
+          0,
+          JWEC_LAYOUT_VERSION,
+          0,
+          JWEC_PDO_SIZE,
+          0,
+          JWEC_PDO_SIZE,
+          0,
+          JW_MAX_FRAME_LEN,
+          0,
+          6,
+          0,
+          0,
+          0,
+          't',
+          'e',
+          's',
+          't',
+          '-',
+          'j',
+          'w',
+          '4',
+          0,
+          0,
+          0,
+          0,
+          0,
+          0};
 }
 SdoBytes JwecRequest(uint32_t id,
                      uint8_t command,
                      uint32_t session = 7,
                      uint8_t channel = JW_CHANNEL_NONE) {
-  SdoBytes frame(64);
+  uint8_t payload[JW_MAX_PAYLOAD_LEN];
+  size_t size = 0;
+  if (command >= kConfigure && command <= kDisable) {
+    uint8_t data[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
+    size_t length = 0;
+    if (command == kConfigure) {
+      jw_configure_step_dir_t config{};
+      config.max_pulse_rate_hz = 1000;
+      length = jw_encode_configure_step_dir_payload(data, sizeof(data), &config);
+    }
+    if (command == kSetTarget)
+      length = jw_encode_set_target_payload(data, sizeof(data), JW_MODE_POSITION, 0);
+    jw_profile_request_t profile{
+        JW_PROFILE_ACTUATOR, 1, 0, static_cast<uint8_t>(command - 0x80), data, length};
+    size = jw_encode_profile_request(payload, sizeof(payload), &profile);
+    command = JW_CMD_PROFILE;
+    if (channel == JW_CHANNEL_NONE) channel = 0;
+  } else if (command == JW_CMD_ESTOP || command == JW_CMD_RECOVER) {
+    payload[0] = payload[1] = 0;
+    size = 2;
+  }
+  SdoBytes frame(JW_MAX_FRAME_LEN);
   frame.resize(
-      jw_encode_frame(frame.data(), frame.size(), session, id, command, channel, nullptr, 0));
+      jw_encode_frame(frame.data(), frame.size(), session, id, command, channel, payload, size));
   return frame;
 }
 SdoBytes JwecReply(const SdoBytes& request, int mutation = 0) {
   jw_frame_t frame;
   EXPECT_EQ(jw_decode_frame(request.data(), request.size(), &frame), JW_RESULT_OK);
   if (mutation == 1) ++frame.message_id;
-  if (mutation == 2) frame.cmd = JW_CMD_ENABLE;
+  if (mutation == 2) frame.cmd = JW_CMD_ESTOP;
   if (mutation == 3) frame.channel = 2;
-  SdoBytes response(64);
-  const uint8_t ok = JW_STATUS_OK;
-  response.resize(jw_encode_response(response.data(), response.size(), &frame, &ok, 1));
+  SdoBytes response(JW_MAX_FRAME_LEN);
+  const uint8_t ok[] = {JW_STATUS_OK, JW_EXECUTION_COMPLETE};
+  response.resize(jw_encode_response(response.data(), response.size(), &frame, ok, sizeof(ok)));
   if (mutation == 4) response.back() ^= 1;
   return response;
 }
 
 struct JwecTrace : IoTrace {
   JwecTrace() {
-    outputs.assign(160, 0);
+    outputs.assign((2 * JWEC_PDO_SIZE), 0);
   }
   SdoBytes descriptor = JwecDescriptor();
   uint32_t sessions[2] = {};
   uint32_t accepted[2] = {};
-  SdoBytes mailbox[2] = {SdoBytes(76), SdoBytes(76)};
-  SdoBytes inputs[2] = {SdoBytes(80), SdoBytes(80)};
+  SdoBytes mailbox[2] = {SdoBytes(JWEC_MAILBOX_SIZE), SdoBytes(JWEC_MAILBOX_SIZE)};
+  SdoBytes inputs[2] = {SdoBytes(JWEC_PDO_SIZE), SdoBytes(JWEC_PDO_SIZE)};
   SdoBytes held[2];
   uint32_t held_generation[2] = {};
   std::vector<std::pair<SdoAddress, SdoBytes>> writes;
@@ -1231,7 +1289,11 @@ class JwecIo : public TestMasterIo {
   }
   absl::StatusOr<PdoRegion> GetPdoRegion(uint16_t slave) const override {
     trace_->Call("region");
-    return PdoRegion{slave, size_t((slave - 1) * 80), size_t((slave - 1) * 80), 80, 80};
+    return PdoRegion{slave,
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     JWEC_PDO_SIZE,
+                     JWEC_PDO_SIZE};
   }
   absl::StatusOr<SdoBytes> ReadSdo(SdoAddress a, size_t capacity, int budget) override {
     trace_->Call("sdo_read");
@@ -1274,10 +1336,10 @@ class JwecIo : public TestMasterIo {
       if (i == 0 && trace_->reboot.exchange(false)) {
         trace_->sessions[i] = 0;
         trace_->accepted[i] = 0;
-        trace_->inputs[i].assign(80, 0);
+        trace_->inputs[i].assign(JWEC_PDO_SIZE, 0);
         trace_->held[i].clear();
       }
-      const auto* output = trace_->outputs.data() + i * 80;
+      const auto* output = trace_->outputs.data() + i * JWEC_PDO_SIZE;
       auto& response = trace_->inputs[i];
       const uint32_t generation = JwecU32(output + 4);
       const uint32_t ack = JwecU32(output + 8);
@@ -1289,8 +1351,9 @@ class JwecIo : public TestMasterIo {
         if (generation > trace_->accepted[i] && !trace_->hold_acceptance) {
           trace_->accepted[i] = generation;
           const size_t length = output[12] | (size_t(output[13]) << 8);
-          EXPECT_LE(length, 64);
-          trace_->held[i] = SdoBytes(output + 16, output + 16 + std::min(length, size_t(64)));
+          EXPECT_LE(length, JW_MAX_FRAME_LEN);
+          trace_->held[i] =
+              SdoBytes(output + 16, output + 16 + std::min(length, size_t(JW_MAX_FRAME_LEN)));
           trace_->pdo_requests.push_back(trace_->held[i]);
           trace_->held_generation[i] = generation;
         }
@@ -1327,8 +1390,8 @@ class JwecIo : public TestMasterIo {
         EXPECT_EQ(JwecU32(bytes.data()), 1);
         trace_->sessions[i] = JwecU32(bytes.data() + 4);
         trace_->accepted[i] = 0;
-        trace_->mailbox[i].assign(76, 0);
-        trace_->inputs[i].assign(80, 0);
+        trace_->mailbox[i].assign(JWEC_MAILBOX_SIZE, 0);
+        trace_->inputs[i].assign(JWEC_PDO_SIZE, 0);
         trace_->held[i].clear();
         return SdoBytes{};
       }
@@ -1338,19 +1401,19 @@ class JwecIo : public TestMasterIo {
       return result;
     }
     if (address.index == JWEC_REQUEST_INDEX && write) {
-      EXPECT_EQ(bytes.size(), 76);
+      EXPECT_EQ(bytes.size(), JWEC_MAILBOX_SIZE);
       const size_t size = bytes[8] | (size_t(bytes[9]) << 8);
       auto frame =
           JwecReply(SdoBytes(bytes.begin() + 12, bytes.begin() + 12 + size), trace_->mutation);
       auto& response = trace_->mailbox[i];
-      response.assign(76, 0);
+      response.assign(JWEC_MAILBOX_SIZE, 0);
       std::copy_n(bytes.begin(), 8, response.begin());
       response[8] = frame.size();
       std::copy(frame.begin(), frame.end(), response.begin() + 12);
       return SdoBytes{};
     }
     if (address.index == JWEC_RESPONSE_INDEX && !write) {
-      if (trace_->hold_mailbox) return SdoBytes(76);
+      if (trace_->hold_mailbox) return SdoBytes(JWEC_MAILBOX_SIZE);
       auto response = trace_->mailbox[i];
       if (trace_->inject_old_session_mailbox.exchange(false)) JwecPut32(response.data(), 99);
       if (trace_->inject_stale_mailbox.exchange(false)) {
@@ -1363,7 +1426,7 @@ class JwecIo : public TestMasterIo {
     if (address.index == JWEC_ACK_INDEX && write) {
       EXPECT_EQ(bytes.size(), 4);
       if (JwecU32(bytes.data()) == JwecU32(trace_->mailbox[i].data() + 4))
-        trace_->mailbox[i].assign(76, 0);
+        trace_->mailbox[i].assign(JWEC_MAILBOX_SIZE, 0);
       return SdoBytes{};
     }
     return absl::InvalidArgumentError("unexpected fake object");
@@ -1375,17 +1438,17 @@ class JwecIo : public TestMasterIo {
 };
 
 TEST(JwecProfileTest, ExactDescriptorAndActionableMismatchDiagnostics) {
-  PdoRegion region{1, 0, 0, 80, 80};
+  PdoRegion region{1, 0, 0, JWEC_PDO_SIZE, JWEC_PDO_SIZE};
   EXPECT_TRUE(ValidateJoshuaWireEthercatProfile(JwecDescriptor(), region, 6).ok());
   for (size_t offset : {0, 4, 6, 8, 10, 12, 14, 16, 18, 34}) {
     auto d = JwecDescriptor();
-    d[offset] = offset == 6 ? 3 : 0;
+    d[offset] = offset == 6 ? JW_PROTO_VERSION + 1 : 0;
     if (offset == 34) d[offset] = 1;
     auto status = ValidateJoshuaWireEthercatProfile(d, region, 6);
     EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition) << offset;
     EXPECT_NE(status.message().find("test-jw"), std::string::npos);
     EXPECT_NE(status.message().find("Build and flash"), std::string::npos);
-    EXPECT_NE(status.message().find("PDO 80/80"), std::string::npos);
+    EXPECT_NE(status.message().find("PDO 112/112"), std::string::npos);
   }
   for (size_t size : {0, 8, 35, 37})
     EXPECT_FALSE(ValidateJoshuaWireEthercatProfile(SdoBytes(size), region, 6).ok());
@@ -1395,7 +1458,7 @@ TEST(JwecProfileTest, ExactDescriptorAndActionableMismatchDiagnostics) {
 
 TEST(JwecProfileTest, MismatchNeverResetsOrStartsSlaveAndClaimCannotBeReused) {
   auto trace = std::make_shared<JwecTrace>();
-  trace->descriptor[10] = 2;
+  trace->descriptor[10] = JWEC_LAYOUT_VERSION + 1;
   auto opened = EthercatMaster::Open(std::make_unique<JwecIo>(trace),
                                      "test-only",
                                      ProcessDataMode::kSplitLrdLwr,
@@ -1425,7 +1488,7 @@ TEST(JwecProfileTest, ResetRequiresExactReadbackBeforeAnyCommandCanBePublished) 
   auto endpoint = *opened_endpoint;
   EXPECT_EQ(endpoint->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION)).status().code(),
             absl::StatusCode::kDeadlineExceeded);
-  EXPECT_EQ(endpoint->Exchange(JwecRequest(2, JW_CMD_ENABLE)).status().code(),
+  EXPECT_EQ(endpoint->Exchange(JwecRequest(2, kEnable)).status().code(),
             absl::StatusCode::kFailedPrecondition);
   endpoint->Stop();
   EXPECT_TRUE(master->Stop().ok());
@@ -1482,24 +1545,23 @@ class JwecAdapterTest : public ::testing::Test {
 
 TEST_F(JwecAdapterTest, RoutingGoldenEnvelopesStaleRepliesAndSingleBusOwner) {
   auto& endpoint = endpoints[0];
-  EXPECT_FALSE(endpoint->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK)).ok());
-  EXPECT_FALSE(endpoint->Exchange(JwecRequest(2, JW_CMD_ENABLE), absl::Seconds(1)).ok());
-  EXPECT_EQ(endpoint->Send(JwecRequest(2, JW_CMD_ENABLE)).code(), absl::StatusCode::kUnimplemented);
-  EXPECT_FALSE(
-      endpoint->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK), absl::InfiniteDuration()).ok());
+  EXPECT_FALSE(endpoint->Exchange(JwecRequest(2, kFeedback)).ok());
+  EXPECT_FALSE(endpoint->Exchange(JwecRequest(2, kEnable), absl::Seconds(1)).ok());
+  EXPECT_EQ(endpoint->Send(JwecRequest(2, kEnable)).code(), absl::StatusCode::kUnimplemented);
+  EXPECT_FALSE(endpoint->Exchange(JwecRequest(2, kFeedback), absl::InfiniteDuration()).ok());
   auto identify = JwecRequest(2, JW_CMD_IDENTIFY);
   trace->inject_old_session_mailbox = true;
   auto response = endpoint->Exchange(identify);
   ASSERT_TRUE(response.ok()) << response.status();
   EXPECT_EQ(*response, JwecReply(identify));
   trace->inject_stale_pdo = true;
-  auto feedback = JwecRequest(3, JW_CMD_GET_FEEDBACK, 7, 0);
+  auto feedback = JwecRequest(3, kFeedback, 7, 0);
   response = endpoint->Exchange(feedback, absl::Seconds(1));
   ASSERT_TRUE(response.ok()) << response.status();
   EXPECT_EQ(*response, JwecReply(feedback));
   trace->inject_stale_mailbox = true;
-  ASSERT_TRUE(endpoint->Exchange(JwecRequest(4, JW_CMD_DISABLE)).ok());
-  EXPECT_FALSE(endpoint->Exchange(JwecRequest(4, JW_CMD_DISABLE)).ok());
+  ASSERT_TRUE(endpoint->Exchange(JwecRequest(4, kDisable)).ok());
+  EXPECT_FALSE(endpoint->Exchange(JwecRequest(4, kDisable)).ok());
   for (auto& e : endpoints) e->Stop();
   ASSERT_TRUE(master->Stop().ok());
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
@@ -1518,7 +1580,7 @@ TEST_F(JwecAdapterTest, RoutingGoldenEnvelopesStaleRepliesAndSingleBusOwner) {
   });
   ASSERT_NE(sent, trace->sent.end());
   EXPECT_EQ(SdoBytes(sent->begin(), sent->begin() + 16),
-            (SdoBytes{7, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0}));
+            (SdoBytes{7, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0}));
   EXPECT_TRUE(std::equal(feedback.begin(), feedback.end(), sent->begin() + 16));
 }
 
@@ -1527,25 +1589,23 @@ TEST_F(JwecAdapterTest, WrongTupleCrcGenerationAndStatusNeverCompleteSuccessfull
     const uint32_t session = 7 + mutation;
     ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, session)).ok());
     trace->mutation = mutation;
-    auto reply =
-        endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK, session, 0), absl::Seconds(1));
+    auto reply = endpoints[0]->Exchange(JwecRequest(2, kFeedback, session, 0), absl::Seconds(1));
     EXPECT_EQ(reply.status().code(), absl::StatusCode::kDataLoss) << mutation;
     EXPECT_EQ(endpoints[0]
-                  ->Exchange(JwecRequest(3, JW_CMD_GET_FEEDBACK, session), absl::Seconds(1))
+                  ->Exchange(JwecRequest(3, kFeedback, session), absl::Seconds(1))
                   .status()
                   .code(),
               absl::StatusCode::kFailedPrecondition);
   }
   trace->mutation = 0;
   EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 14)).ok());
-  EXPECT_TRUE(
-      endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK, 14), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, kFeedback, 14), absl::Seconds(1)).ok());
 }
 
 TEST_F(JwecAdapterTest, TimedOutAcceptedPdoIsInvalidatedAndLateReplyAcknowledgedWhileIdle) {
   trace->hold_pdo = true;
   auto pending = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_SET_TARGET), absl::Milliseconds(150));
+    return endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Milliseconds(150));
   });
   WaitPublished();
   EXPECT_EQ(pending.get().status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -1562,17 +1622,15 @@ TEST_F(JwecAdapterTest, TimedOutAcceptedPdoIsInvalidatedAndLateReplyAcknowledged
     }
   }
   EXPECT_TRUE(acknowledged);
-  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_SET_TARGET), absl::Seconds(1)).ok());
-  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_GET_FEEDBACK), absl::Seconds(1)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, kFeedback), absl::Seconds(1)).ok());
 }
 
 TEST_F(JwecAdapterTest, UnacceptedTimeoutCancelsWithoutLaterExecution) {
   trace->hold_acceptance = true;
-  EXPECT_EQ(endpoints[0]
-                ->Exchange(JwecRequest(2, JW_CMD_SET_TARGET), absl::Milliseconds(100))
-                .status()
-                .code(),
-            absl::StatusCode::kDeadlineExceeded);
+  EXPECT_EQ(
+      endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Milliseconds(100)).status().code(),
+      absl::StatusCode::kDeadlineExceeded);
   // Observe cancellation on the bus before letting the simulated slave accept.
   bool cancelled = false;
   for (int i = 0; i < 10; ++i) {
@@ -1586,40 +1644,39 @@ TEST_F(JwecAdapterTest, UnacceptedTimeoutCancelsWithoutLaterExecution) {
   }
   ASSERT_TRUE(cancelled);
   trace->hold_acceptance = false;
-  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_GET_FEEDBACK), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, kFeedback), absl::Seconds(1)).ok());
   endpoints[0]->Stop();
   endpoints[1]->Stop();
   EXPECT_TRUE(master->Stop().ok());
   ASSERT_EQ(trace->pdo_requests.size(), 1);
-  EXPECT_EQ(trace->pdo_requests.front(), JwecRequest(3, JW_CMD_GET_FEEDBACK));
+  EXPECT_EQ(trace->pdo_requests.front(), JwecRequest(3, kFeedback));
 }
 
 TEST_F(JwecAdapterTest, RebootClearsReadinessAndMessageIdsCannotWrapWithinSession) {
   trace->hold_pdo = true;
   auto pending = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(2, kFeedback), absl::Seconds(1));
   });
   WaitPublished();
   trace->reboot = true;
   EXPECT_EQ(pending.get().status().code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_ENABLE)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(3, kEnable)).ok());
   EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION)).ok());
   trace->hold_pdo = false;
   ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 8)).ok());
   ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(UINT32_MAX, JW_CMD_ESTOP, 8)).ok());
-  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_ENABLE, 8)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(1, kEnable, 8)).ok());
   ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 9)).ok());
-  EXPECT_TRUE(
-      endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK, 9), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, kFeedback, 9), absl::Seconds(1)).ok());
 }
 
 TEST_F(JwecAdapterTest, QueuedTimeoutDoesNotPublishAndEstopPreemptsCyclicWaiter) {
   trace->hold_acceptance = true;
   auto active = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_SET_TARGET), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Seconds(1));
   });
   WaitPublished();
-  auto expired = endpoints[0]->Exchange(JwecRequest(3, JW_CMD_SET_TARGET), absl::Milliseconds(10));
+  auto expired = endpoints[0]->Exchange(JwecRequest(3, kSetTarget), absl::Milliseconds(10));
   EXPECT_EQ(expired.status().code(), absl::StatusCode::kDeadlineExceeded);
   EXPECT_NE(expired.status().message().find("not executed"), std::string::npos);
   EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(4, JW_CMD_ESTOP)).ok());
@@ -1635,13 +1692,13 @@ TEST_F(JwecAdapterTest, QueuedTimeoutDoesNotPublishAndEstopPreemptsCyclicWaiter)
 TEST_F(JwecAdapterTest, StopWakesCallsWithoutStoppingOtherSlaveAndLastLeaseOwnsMaster) {
   trace->hold_pdo = true;
   auto active = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(2, kFeedback), absl::Seconds(1));
   });
   WaitPublished();
   endpoints[0]->Stop();
   EXPECT_EQ(active.get().status().code(), absl::StatusCode::kCancelled);
   trace->hold_pdo = false;
-  EXPECT_TRUE(endpoints[1]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[1]->Exchange(JwecRequest(2, kFeedback), absl::Seconds(1)).ok());
   std::weak_ptr<EthercatMaster> weak = master;
   master.reset();
   endpoints[0].reset();
@@ -1653,17 +1710,17 @@ TEST_F(JwecAdapterTest, StopWakesCallsWithoutStoppingOtherSlaveAndLastLeaseOwnsM
 
 TEST_F(JwecAdapterTest, MailboxTimeoutQuarantinesSessionUntilVerifiedNewReset) {
   trace->hold_mailbox = true;
-  EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_ENABLE)).status().code(),
+  EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(2, kEnable)).status().code(),
             absl::StatusCode::kDeadlineExceeded);
   // A read in progress at the overall deadline may conservatively fault the
   // master. If still running, no subsequent command may bypass a new reset.
   if (master->status().ok()) {
-    EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_ENABLE)).status().code(),
+    EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(3, kEnable)).status().code(),
               absl::StatusCode::kFailedPrecondition);
     trace->hold_mailbox = false;
     EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 8)).ok());
-    EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(4, JW_CMD_ENABLE, 7)).ok());
-    EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_ENABLE, 8)).ok());
+    EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(4, kEnable, 7)).ok());
+    EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, kEnable, 8)).ok());
   }
 }
 
@@ -1671,7 +1728,7 @@ TEST_F(JwecAdapterTest, BusFailureWakesBothPlanes) {
   allow_shutdown_failure = true;
   trace->hold_pdo = true;
   auto active = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(2, kFeedback), absl::Seconds(1));
   });
   WaitPublished();
   trace->bad_wkc = true;
@@ -1685,17 +1742,17 @@ TEST_F(JwecAdapterTest, MalformedMailboxRequiresResetAndConcurrentCyclicCallsSer
   trace->mutation = 4;
   EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_IDENTIFY)).status().code(),
             absl::StatusCode::kDataLoss);
-  EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_ENABLE)).status().code(),
+  EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(3, kEnable)).status().code(),
             absl::StatusCode::kFailedPrecondition);
   trace->mutation = 0;
   ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 8)).ok());
   trace->hold_pdo = true;
   auto first = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(2, JW_CMD_GET_FEEDBACK, 8), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(2, kFeedback, 8), absl::Seconds(1));
   });
   WaitPublished();
   auto second = std::async(std::launch::async, [&] {
-    return endpoints[0]->Exchange(JwecRequest(3, JW_CMD_GET_FEEDBACK, 8), absl::Seconds(1));
+    return endpoints[0]->Exchange(JwecRequest(3, kFeedback, 8), absl::Seconds(1));
   });
   EXPECT_EQ(second.wait_for(10ms), std::future_status::timeout);
   trace->hold_pdo = false;
@@ -1704,12 +1761,36 @@ TEST_F(JwecAdapterTest, MalformedMailboxRequiresResetAndConcurrentCyclicCallsSer
   for (auto& e : endpoints) e->Stop();
   EXPECT_TRUE(master->Stop().ok());
   ASSERT_EQ(trace->pdo_requests.size(), 2);
-  EXPECT_EQ(trace->pdo_requests[0], JwecRequest(2, JW_CMD_GET_FEEDBACK, 8));
-  EXPECT_EQ(trace->pdo_requests[1], JwecRequest(3, JW_CMD_GET_FEEDBACK, 8));
+  EXPECT_EQ(trace->pdo_requests[0], JwecRequest(2, kFeedback, 8));
+  EXPECT_EQ(trace->pdo_requests[1], JwecRequest(3, kFeedback, 8));
 }
 
 // End-to-end wire contract: the real host adapters talk to the exact portable
 // C firmware core used by the AM243 artifact, not a second protocol simulator.
+
+}  // namespace
+}  // namespace robot::comm::ethercat
+
+namespace robot::comm::ethercat {
+namespace {
+TEST_F(JwecAdapterTest, SensorAndUnknownProfilesRemainMailboxOnly) {
+  uint8_t payload[JW_PROFILE_HEADER_LEN];
+  jw_profile_request_t profile{JW_PROFILE_SENSOR, 1, 0, JW_SENSOR_READ, nullptr, 0};
+  ASSERT_EQ(jw_encode_profile_request(payload, sizeof(payload), &profile), sizeof(payload));
+  SdoBytes request(JW_MAX_FRAME_LEN);
+  request.resize(jw_encode_frame(
+      request.data(), request.size(), 7, 2, JW_CMD_PROFILE, 42, payload, sizeof(payload)));
+  EXPECT_EQ(endpoints[0]->Exchange(request, absl::Seconds(1)).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_TRUE(endpoints[0]->Exchange(request).ok());
+  // Unknown profiles remain opaque to management transport routing.
+  profile.profile_id = 999;
+  jw_encode_profile_request(payload, sizeof(payload), &profile);
+  request.resize(JW_MAX_FRAME_LEN);
+  request.resize(jw_encode_frame(
+      request.data(), request.size(), 7, 3, JW_CMD_PROFILE, 200, payload, sizeof(payload)));
+  EXPECT_TRUE(endpoints[0]->Exchange(request).ok());
+}
 
 }  // namespace
 }  // namespace robot::comm::ethercat
