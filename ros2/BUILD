@@ -320,3 +320,16 @@ ros2_py_binary(
         "//robot/perception/proto:perception_packet_py_proto",
     ] + requirement("numpy"),
 )
+
+ros2_py_binary(
+    name = "media_stream_node",
+    srcs = ["//ros2/utils:media_stream_node.py"],
+    main = "//ros2/utils:media_stream_node.py",
+    deps = [
+        ":node_runner_py",
+        "//robot/perception/proto:perception_packet_py_proto",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/utils:media_stream",
+    ] + requirement("numpy"),
+)

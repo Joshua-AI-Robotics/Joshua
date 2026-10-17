@@ -218,6 +218,49 @@ TEST(ValidationTest, JointStateValidatesStructureAndLeavesCapabilitiesToDriver) 
   EXPECT_FALSE(ros2_utils::ValidateActionMessageType(sub, actuator).ok());
 }
 }  // namespace
+
+TEST(ValidationTest, MediaStreamingRejectsConflictsAndPublicListeners) {
+  config::Config config;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        utilities {
+          media_streams {
+            node {
+              id: 5
+              node_type: MEDIA_STREAM_NODE
+              subscriptions { topic: "/image" ros2_data_type: IMAGE }
+              subscriptions { topic: "/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
+              publishers { topic: "/media/events" ros2_data_type: STRING }
+            }
+            width: 640
+            height: 480
+            fps: 15
+            bitrate_kbps: 1500
+            stream_name: "baby"
+            http_port: 8889
+            ice_port: 8189
+            rtsp_port: 8554
+          }
+        }
+      )pb",
+      &config));
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  auto* stream = config.mutable_utilities()->mutable_media_streams(0);
+  stream->set_listen_address("0.0.0.0");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_listen_address("100.87.146.64");
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  stream->set_http_port(8554);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_http_port(8889);
+  stream->mutable_node()->mutable_subscriptions(1)->set_ros2_data_type(ros2::data_type::IMAGE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->mutable_node()->mutable_subscriptions(1)->set_ros2_data_type(
+      ros2::data_type::UINT8_MULTI_ARRAY);
+  auto* store = config.mutable_ai()->mutable_data_stores()->add_single_data_stores();
+  store->mutable_node()->set_id(5);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
 }  // namespace config
 
 namespace config {

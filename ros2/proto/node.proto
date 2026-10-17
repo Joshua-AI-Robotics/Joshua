@@ -19,6 +19,7 @@ enum NodeType {
   AUDIO_PUBLISHER = 8;
   YAMNET_NODE = 9;
   VIDEO_INFERENCE_NODE = 10;
+  MEDIA_STREAM_NODE = 11;
 }
 
 enum QosReliabilityPolicy {

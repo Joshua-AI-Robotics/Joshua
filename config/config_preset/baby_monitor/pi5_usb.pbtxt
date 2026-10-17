@@ -49,3 +49,18 @@ ai {
     }
   }
 }
+
+utilities {
+  media_streams {
+    node {
+      id: 5 node_type: MEDIA_STREAM_NODE
+      subscriptions { topic: "/camera/image" ros2_data_type: IMAGE }
+      subscriptions { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
+      publishers { topic: "/media/events" ros2_data_type: STRING }
+    }
+    width: 640 height: 480 fps: 15 bitrate_kbps: 1500
+    stream_name: "baby"
+    # Empty listen_address discovers this Pi's Tailscale IPv4 address.
+    http_port: 8889 ice_port: 8189 rtsp_port: 8554
+  }
+}

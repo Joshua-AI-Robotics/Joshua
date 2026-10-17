@@ -79,6 +79,9 @@ RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
     libasound2-dev \
+    python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
+    gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-rtsp gstreamer1.0-libav \
     && rm -rf /var/lib/apt/lists/*
 # ============================================
 # Install libevdev for input device support (Xbox controller)

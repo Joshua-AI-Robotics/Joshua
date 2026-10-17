@@ -241,6 +241,10 @@ absl::Status NodeGenerator::Initialize() {
 }
 
 absl::Status NodeGenerator::IdentifyNodeTypes() {
+  for (const auto& stream : config_.utilities().media_streams()) {
+    if (!identified_nodes_.emplace(stream.node().id(), stream.node().node_type()).second)
+      return absl::InvalidArgumentError("Duplicate media stream node ID");
+  }
   // Actions
   for (const auto& single_action : config_.robot().actions().single_actions()) {
     const uint32_t node_id = single_action.node().id();
@@ -665,6 +669,10 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
 
   for (const auto& single_model : config_.ai().models().single_models()) {
     ExtractTopicsFromNode(single_model.node(), node_id, publish_topics, subscribe_topics);
+  }
+
+  for (const auto& stream : config_.utilities().media_streams()) {
+    ExtractTopicsFromNode(stream.node(), node_id, publish_topics, subscribe_topics);
   }
 
   for (const auto& single_data_store : config_.ai().data_stores().single_data_stores()) {

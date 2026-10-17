@@ -120,3 +120,12 @@ node defines the interpretation: actuator scalar position topics use native unit
 while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
+
+## Utility nodes
+
+`Config.utilities.media_streams` configures `MEDIA_STREAM_NODE` processes that
+consume existing image/audio topics. `config/proto/util.proto` defines output
+resolution/FPS/bitrate, the stream path, listener, and ports. Each utility needs
+a unique node ID. Validation rejects invalid topic contracts, conflicting ports,
+and listeners outside loopback or the Tailscale IPv4 range. An empty listener
+asks the runtime to discover this host's Tailscale address.

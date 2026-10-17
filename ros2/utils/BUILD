@@ -118,3 +118,44 @@ cc_test(
         "@ros2_deps//:rclcpp",
     ],
 )
+
+exports_files(["media_stream_node.py"])
+
+config_setting(
+    name = "media_arm64",
+    values = {"cpu": "arm64"},
+)
+
+genrule(
+    name = "media_server",
+    srcs = select({
+        ":media_arm64": ["@mediamtx_arm64//:mediamtx"],
+        "//conditions:default": ["@mediamtx_amd64//:mediamtx"],
+    }),
+    outs = ["mediamtx"],
+    cmd = "cp $(SRCS) $@ && chmod +x $@",
+)
+
+py_library(
+    name = "media_stream",
+    srcs = ["media_stream.py"],
+    data = [
+        ":media_server",
+        "@mediamtx_amd64//:LICENSE",
+    ],
+)
+
+py_test(
+    name = "media_stream_test",
+    srcs = ["media_stream_test.py"],
+    deps = [
+        ":media_stream",
+        "//config/proto:config_py_proto",
+    ],
+)
+
+py_test(
+    name = "media_stream_node_test",
+    srcs = ["media_stream_node_test.py"],
+    deps = ["//ros2:media_stream_node"],
+)

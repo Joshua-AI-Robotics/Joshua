@@ -1,5 +1,7 @@
 #include "config/validation.h"
 
+#include <arpa/inet.h>
+
 #include <cmath>
 #include <map>
 #include <set>
@@ -302,9 +304,66 @@ absl::Status ValidateMonitorModels(const config::Config& config) {
   return absl::OkStatus();
 }
 
+absl::Status ValidateMediaStreams(const config::Config& config) {
+  std::set<uint32_t> ids;
+  for (const auto& s : config.robot().perceptions().single_perceptions()) ids.insert(s.node().id());
+  for (const auto& a : config.robot().actions().single_actions()) ids.insert(a.node().id());
+  for (const auto& m : config.ai().models().single_models()) ids.insert(m.node().id());
+  for (const auto& d : config.ai().data_stores().single_data_stores()) ids.insert(d.node().id());
+  for (const auto& t : config.robot().trajectories().single_trajectories())
+    ids.insert(t.node().id());
+  std::set<uint32_t> ports;
+  for (const auto& s : config.utilities().media_streams()) {
+    const auto& n = s.node();
+    if (!ids.insert(n.id()).second || n.node_type() != ros2::node::MEDIA_STREAM_NODE)
+      return absl::InvalidArgumentError("Media stream requires a unique MEDIA_STREAM_NODE id");
+    if (s.width() < 16 || s.width() > 1920 || s.width() % 2 || s.height() < 16 ||
+        s.height() > 1080 || s.height() % 2 || s.fps() < 1 || s.fps() > 30 ||
+        s.bitrate_kbps() < 100 || s.bitrate_kbps() > 10000 || s.stream_name().empty() ||
+        s.stream_name().find_first_not_of(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
+            std::string::npos)
+      return absl::InvalidArgumentError("Invalid media dimensions, FPS, bitrate, or stream name");
+    for (auto port : {s.http_port(), s.ice_port(), s.rtsp_port()}) {
+      if (port < 1024 || port > 65535 || !ports.insert(port).second)
+        return absl::InvalidArgumentError(
+            "Media ports must be distinct and between 1024 and 65535");
+    }
+    if (!s.listen_address().empty()) {
+      in_addr address{};
+      if (inet_pton(AF_INET, s.listen_address().c_str(), &address) != 1)
+        return absl::InvalidArgumentError(
+            "Media listener must be a Tailscale or loopback IPv4 address");
+      auto ip = ntohl(address.s_addr);
+      if ((ip >> 24) != 127 && (ip & 0xffc00000U) != 0x64400000U)
+        return absl::InvalidArgumentError(
+            "Media listener must be a Tailscale or loopback IPv4 address");
+    }
+    int images = 0, audio = 0;
+    std::set<std::string> topics;
+    for (const auto& sub : n.subscriptions()) {
+      if (sub.topic().empty() || !topics.insert(sub.topic()).second)
+        return absl::InvalidArgumentError("Media input topics must be nonempty and distinct");
+      if (sub.ros2_data_type() == ros2::data_type::IMAGE)
+        ++images;
+      else if (sub.ros2_data_type() == ros2::data_type::UINT8_MULTI_ARRAY)
+        ++audio;
+      else
+        return absl::InvalidArgumentError("Media inputs must be IMAGE or UINT8_MULTI_ARRAY");
+    }
+    if (images != 1 || audio > 1 || n.publishers_size() != 1 ||
+        n.publishers(0).ros2_data_type() != ros2::data_type::STRING ||
+        n.publishers(0).topic().empty() || topics.count(n.publishers(0).topic()))
+      return absl::InvalidArgumentError(
+          "Media requires one image, optional audio, and a distinct STRING status output");
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
+  ABSL_RETURN_IF_ERROR(ValidateMediaStreams(config));
   ABSL_RETURN_IF_ERROR(ValidateMonitorModels(config));
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));

@@ -2,8 +2,8 @@
 
 This branch adds independent YAMNet and video inference processes on top of the
 reusable ALSA audio pipeline. Both publish versioned JSON events in ROS
-`std_msgs/String`. Notification delivery, browser streaming, and rolling media
-recording are later work. `av_check` is a bounded diagnostic recording, not the
+`std_msgs/String`. A separate utility streams video and audio to a browser over
+Tailscale. Notification delivery and rolling media recording are later work. `av_check` is a bounded diagnostic recording, not the
 planned two-minute ring buffer.
 
 The initial video model is EfficientDet Lite0 (COCO object labels) with a simple
@@ -108,8 +108,8 @@ After checking the local preset and connecting the webcam/microphone:
 ./joshua_monitor_main --config "$PWD/pi5_usb.pbtxt"
 ```
 
-Four processes should start: `camera_publisher`, `audio_publisher`, `yamnet_node`,
-and `video_inference_node`. Watch for ready messages from both models and for
+Five processes should start: `camera_publisher`, `audio_publisher`, `yamnet_node`,
+`video_inference_node`, and `media_stream_node`. Watch for ready messages from both models and for
 capture errors. `Ctrl-C` stops the launcher and its children.
 
 In another shell with the same ROS environment and `ROS_DOMAIN_ID`:
@@ -173,3 +173,98 @@ handling, and real bundled model execution. `//ros2:monitor_pipeline_test`
 launches the audio and video inference binaries as separate ROS processes,
 publishes synthetic PCM/images, and checks both results and stale-source events.
 It contains no sensor configuration and opens no hardware.
+
+## Private live video and audio (Tailscale)
+
+The `MEDIA_STREAM_NODE` utility subscribes to the existing camera and PCM topics.
+It does not open either device. GStreamer encodes H.264 baseline video and Opus
+sound once; the bundled, checksum-pinned MediaMTX server serves a WebRTC player.
+Both inference processes remain independent. This phase does not deliver phone
+notifications or record a rolling history.
+
+Install streaming dependencies on the Ubuntu 24.04 Pi:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libasound2t64 python3-gi \
+  gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
+  gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-rtsp
+```
+
+MediaMTX is included in `joshua_pkg`; no separate server installation or model
+runtime is needed by the streaming node. The GStreamer libraries and GI Python
+bindings come from Ubuntu and must match the package's Python version.
+
+With Tailscale connected on both devices, start the updated package with the
+updated `pi5_usb.pbtxt`. The launcher starts five nodes, including the stream.
+The node discovers its address using `tailscale ip -4` and prints the player URL:
+
+```text
+http://<Pi-Tailscale-IPv4>:8889/baby/
+```
+
+If capture/inference from an older package is already running, you can start
+only the new utility from the newly extracted package instead:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+./ros2_node_wrapper.sh media_stream_node media_stream_node 5 "$PWD/pi5_usb.pbtxt"
+```
+
+Use the same `ROS_DOMAIN_ID` as capture. Choose either this command or the full
+five-node launcher so only one streaming service owns the ports. `Ctrl-C` closes
+the utility's encoder and MediaMTX child process.
+
+Open that URL in iPhone Safari and tap the player's audio/unmute control. Keep
+Tailscale connected when switching to LTE or another Wi-Fi network. The player
+and media sockets bind only to the Tailscale address. HTTP is carried inside the
+encrypted Tailscale tunnel; there is no public HTTP listener or router port
+forwarding. Tailscale identity and tailnet grants/ACLs control viewer access;
+there is no separate player password. Restrict access to the intended viewers.
+Allow TCP 8889 and UDP/TCP 8189 to the Pi through those grants and any host
+firewall. RTSP ingest binds to localhost only on TCP 8554. These ports and the
+stream name are configurable in `utilities.media_streams`.
+
+The same URL works at home and away while Tailscale is connected. A restrictive
+network may cause Tailscale to relay traffic, affecting latency and throughput.
+No exit node, subnet router, public TURN server, or public DNS is needed for this
+private setup. Reconnect the player after a streaming restart or network change.
+
+The default is 640x480 at up to 15 FPS and a 1500 kbps H.264 target bitrate.
+The Pi 5 encodes in software. Keep raw ROS traffic on the Pi; the phone receives
+only the compressed stream. Set `listen_address: "127.0.0.1"` for local synthetic
+tests, or an explicit Tailscale IPv4 address to disable automatic discovery.
+Other listener addresses are rejected. For container deployment, use host
+networking so the Tailscale address exists inside the container network namespace.
+
+The streaming worker has one pending video frame and at most 200 ms of queued
+PCM. Old frames are discarded; audio timestamp gaps are marked discontinuous.
+Source timestamps share one pipeline timeline. Camera timestamps currently mark
+publication, not exposure, so exact hardware audio/video synchronization is not
+promised. Input older than 500 ms is dropped. If a configured source stops for
+three seconds, the encoder disconnects until fresh inputs return. The worker
+restarts the encoder/server on failures with a bounded retry delay.
+
+Inspect service transitions:
+
+```bash
+ros2 topic echo /media/events --field data
+```
+
+Events include `waiting_for_input`, `starting`, `streaming`, `input_stale`, and
+`stream_error`. A streaming state describes the local encoder, not proof of a
+connected phone. Test Safari over home Wi-Fi and then LTE, check audio/video
+alignment with a visible clap, and observe Pi CPU/temperature during inference.
+If playback stalls, check Tailscale connectivity, the printed address, firewall
+rules, and these events before reducing bitrate/FPS in the preset.
+
+Hardware-free coverage exercises bounded queues, private listeners, real H.264
+and Opus encode/decode, source loss/recovery, and media-server crash recovery:
+
+```bash
+bazel test --config=u22 --config=x86-base \
+  //ros2/utils:media_stream_test
+```
+
+The decoder test additionally needs `gstreamer1.0-libav` (included in dev images).

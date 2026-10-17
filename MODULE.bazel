@@ -122,3 +122,17 @@ http_file(
     sha256 = "2e04c53bfeac0ac2a30c057c7e2a777594ce39baaac35a92f74fb1e8c4fc4e0b",
     urls = ["https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/rpi/lite-model_efficientdet_lite0_detection_metadata_1.tflite"],
 )
+
+http_archive(
+    name = "mediamtx_amd64",
+    build_file_content = 'exports_files(["mediamtx", "LICENSE"])',
+    sha256 = "121be6e00397e473a95d83c75f4fcd3819a6af3b0e1a50889cba43ab4fab6a27",
+    urls = ["https://github.com/bluenviron/mediamtx/releases/download/v1.21.2/mediamtx_v1.21.2_linux_amd64.tar.gz"],
+)
+
+http_archive(
+    name = "mediamtx_arm64",
+    build_file_content = 'exports_files(["mediamtx", "LICENSE"])',
+    sha256 = "180a235374a548d9133cdd5e20f5dbd8b01317be1c86e0d7e66df585dc42ed6f",
+    urls = ["https://github.com/bluenviron/mediamtx/releases/download/v1.21.2/mediamtx_v1.21.2_linux_arm64.tar.gz"],
+)

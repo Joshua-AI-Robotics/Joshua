@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package config;
+
+import "ros2/proto/node.proto";
+
+// Utilities consume existing topics; they never own capture devices.
+message Utilities {
+  repeated MediaStream media_streams = 1;
+}
+
+message MediaStream {
+  // One IMAGE input, optionally one UINT8_MULTI_ARRAY audio input, and one
+  // STRING status output. A unique node id is required.
+  ros2.node.Node node = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 fps = 4;
+  uint32 bitrate_kbps = 5;
+  string stream_name = 6;
+  // Empty means discover this machine's IPv4 address using `tailscale ip -4`.
+  // Only Tailscale IPv4 or loopback addresses are accepted.
+  string listen_address = 7;
+  uint32 http_port = 8;
+  uint32 ice_port = 9;
+  uint32 rtsp_port = 10;
+}

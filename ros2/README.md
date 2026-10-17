@@ -208,3 +208,13 @@ fabricates silence. Keep subscription QoS compatible with the preset.
 Use `//robot/perception/audio:alsa_audio_test` for a hardware-free ALSA null
 plugin check. Config validation checks format bounds and duplicate device strings;
 ALSA aliases for the same physical device cannot be detected statically.
+
+## Private media streaming
+
+`MEDIA_STREAM_NODE` is a utility under `ros2/utils/`, configured through
+`utilities.media_streams`. It consumes one raw IMAGE topic and optionally one
+Joshua PCM packet topic, encodes H.264/Opus, and supervises a bundled MediaMTX
+server. Raw capture and inference stay local; a browser reads the compressed
+stream over Tailscale. No device is opened by this node. See
+[the bring-up guide](../docs/BABY_MONITOR.md#private-live-video-and-audio-tailscale)
+for runtime dependencies, ports, and phone access.

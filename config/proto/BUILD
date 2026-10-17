@@ -10,8 +10,16 @@ proto_library(
     deps = [
         ":ai_proto",
         ":robot_proto",
+        ":util_proto",
         "//simulation/proto:simulation_proto",
     ],
+)
+
+proto_library(
+    name = "util_proto",
+    srcs = ["util.proto"],
+    visibility = ["//visibility:public"],
+    deps = ["//ros2/proto:node_proto"],
 )
 
 proto_library(
@@ -29,11 +37,11 @@ proto_library(
 proto_library(
     name = "ai_proto",
     srcs = ["ai.proto"],
+    visibility = ["//visibility:public"],
     deps = [
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
     ],
-    visibility = ["//visibility:public"],
 )
 
 proto_library(
