@@ -1,0 +1,23 @@
+default_config:
+
+homeassistant:
+  name: Joshua
+  packages: !include_dir_named packages
+
+go2rtc:
+  url: http://127.0.0.1:1984
+
+recorder:
+  purge_keep_days: 3
+  exclude:
+    entities:
+      - sensor.joshua_monitor_status
+
+lovelace:
+  dashboards:
+    baby-monitor:
+      mode: yaml
+      title: Baby Monitor
+      icon: mdi:baby-face-outline
+      show_in_sidebar: true
+      filename: baby-monitor.yaml

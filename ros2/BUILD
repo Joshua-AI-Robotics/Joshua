@@ -333,3 +333,11 @@ ros2_py_binary(
         "//ros2/utils:media_stream",
     ] + requirement("numpy"),
 )
+
+ros2_py_binary(
+    name = "home_assistant_setup",
+    srcs = ["//ros2/utils:home_assistant_setup.py"],
+    data = ["//deploy/home_assistant:templates"],
+    main = "//ros2/utils:home_assistant_setup.py",
+    deps = ["//config/proto:config_py_proto"] + requirement("protobuf"),
+)

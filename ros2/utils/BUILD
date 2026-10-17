@@ -119,7 +119,10 @@ cc_test(
     ],
 )
 
-exports_files(["media_stream_node.py"])
+exports_files([
+    "home_assistant_setup.py",
+    "media_stream_node.py",
+])
 
 config_setting(
     name = "media_arm64",
@@ -158,4 +161,10 @@ py_test(
     name = "media_stream_node_test",
     srcs = ["media_stream_node_test.py"],
     deps = ["//ros2:media_stream_node"],
+)
+
+py_test(
+    name = "home_assistant_setup_test",
+    srcs = ["home_assistant_setup_test.py"],
+    deps = ["//ros2:home_assistant_setup"],
 )

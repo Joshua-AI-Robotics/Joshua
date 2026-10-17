@@ -1,0 +1,53 @@
+title: Baby Monitor
+views:
+  - title: Baby Monitor
+    path: live
+    icon: mdi:baby-face-outline
+    cards:
+      - type: picture-entity
+        entity: camera.baby_monitor
+        name: Live camera
+        camera_view: live
+        show_state: false
+      - type: entities
+        title: Monitor status
+        entities:
+          - sensor.joshua_monitor_status
+          - binary_sensor.joshua_crying
+          - binary_sensor.joshua_movement
+      - type: markdown
+        title: Latest observation
+        content: >-
+          {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
+          {{ p.get('last_event', 'Waiting for Joshua') }}
+
+          {% for topic, status in p.get('inputs', {}).items() %}
+          **{{ topic }}:** {{ status }}
+
+          {% endfor %}
+      - type: entities
+        title: Notifications
+        entities:
+          - input_boolean.joshua_notifications
+          - input_boolean.joshua_motion_notifications
+          - input_text.joshua_notification_actions
+      - type: button
+        name: Send test notification
+        icon: mdi:bell-check
+        tap_action:
+          action: perform-action
+          perform_action: script.joshua_test_notification
+          confirmation:
+            text: Send a test alert to the configured phones?
+      - type: markdown
+        content: >-
+          Add the Generic Camera integration using the RTSP URL in README.md,
+          then set its entity ID to `camera.baby_monitor`. Tap the camera for
+          playback controls and unmute audio.
+
+          Enter comma-separated phone actions above, for example
+          `notify.mobile_app_hmoon_iphone,notify.mobile_app_wife_iphone`.
+          Find your actual names under Developer Tools → Actions.
+
+          Notifications report experimental cry/motion classifications.
+          An **offline** monitor cannot provide fresh detection results.

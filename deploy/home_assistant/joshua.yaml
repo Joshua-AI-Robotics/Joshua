@@ -1,0 +1,145 @@
+input_boolean:
+  joshua_notifications:
+    name: Notifications
+    icon: mdi:bell
+  joshua_motion_notifications:
+    name: Movement notifications
+    icon: mdi:motion-sensor
+input_text:
+  joshua_notification_actions:
+    name: Phone notification actions
+    max: 255
+  joshua_last_notification:
+    name: Last delivered event ID
+    max: 255
+
+script:
+  joshua_notify_phones:
+    alias: Joshua - notify selected phones
+    mode: queued
+    max: 10
+    fields:
+      title:
+        description: Notification title
+      message:
+        description: Notification text
+    sequence:
+      - repeat:
+          for_each: >-
+            {{ states('input_text.joshua_notification_actions').split(',')
+               | map('trim') | select('match', '^notify\\.mobile_app_[a-z0-9_]+$') | list }}
+          sequence:
+            - action: '{{ repeat.item }}'
+              continue_on_error: true
+              data:
+                title: '{{ title }}'
+                message: '{{ message }}'
+                data:
+                  url: /baby-monitor/live
+                  group: joshua-baby-monitor
+  joshua_test_notification:
+    alias: Joshua - send test notification
+    sequence:
+      - if:
+          - condition: template
+            value_template: >-
+              {{ not (states('input_text.joshua_notification_actions').split(',')
+                 | map('trim') | select('match', '^notify\\.mobile_app_[a-z0-9_]+$') | list) }}
+        then:
+          - action: persistent_notification.create
+            data:
+              title: Select your phones first
+              message: >-
+                Enter the notify.mobile_app_* action names from Developer Tools →
+                Actions in the Baby Monitor dashboard's Phone notification actions.
+        else:
+          - action: script.joshua_notify_phones
+            data:
+              title: Baby Monitor test
+              message: Notifications are connected. Tap to open the live camera.
+
+automation:
+  - id: joshua_receive_events
+    alias: Joshua - receive local events
+    triggers:
+      - trigger: webhook
+        webhook_id: !secret joshua_webhook
+        allowed_methods: [POST]
+        local_only: true
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.json is defined and trigger.json.schema_version == 1
+             and trigger.json.event_id is string }}
+    actions:
+      - event: joshua_monitor
+        event_data:
+          payload: '{{ trigger.json }}'
+    mode: queued
+    max: 32
+  - id: joshua_notify_events
+    alias: Joshua - send monitor alerts
+    triggers:
+      - trigger: event
+        event_type: joshua_monitor
+    conditions:
+      - condition: state
+        entity_id: input_boolean.joshua_notifications
+        state: 'on'
+      - condition: template
+        value_template: >-
+          {% set p = trigger.event.data.payload %}
+          {{ p.get('notify', false)
+             and p.event_id != states('input_text.joshua_last_notification')
+             and p.get('expires_at_ns', 0) / 1000000000 > as_timestamp(now())
+             and (p.get('kind') != 'movement'
+                  or is_state('input_boolean.joshua_motion_notifications', 'on')) }}
+    actions:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.joshua_last_notification
+        data:
+          value: '{{ trigger.event.data.payload.event_id }}'
+      - action: script.joshua_notify_phones
+        data:
+          title: '{{ trigger.event.data.payload.title }}'
+          message: '{{ trigger.event.data.payload.message }}'
+    mode: queued
+    max: 32
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: joshua_monitor
+      - trigger: time_pattern
+        seconds: /10
+    sensor:
+      - name: Joshua monitor status
+        unique_id: joshua_monitor_status
+        state: >-
+          {% set received = as_timestamp(now()) if trigger.platform == 'event'
+             else this.attributes.get('received_at', 0) | float(0) %}
+          {{ 'online' if as_timestamp(now()) - received < 30 else 'offline' }}
+        attributes:
+          received_at: >-
+            {{ as_timestamp(now()) if trigger.platform == 'event'
+               else this.attributes.get('received_at', 0) }}
+          payload: >-
+            {{ trigger.event.data.payload if trigger.platform == 'event'
+               else this.attributes.get('payload', {}) }}
+  - binary_sensor:
+      - name: Joshua crying
+        unique_id: joshua_crying
+        availability: >-
+          {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
+          {{ is_state('sensor.joshua_monitor_status', 'online') and p.get('crying') is boolean }}
+        state: >-
+          {{ (state_attr('sensor.joshua_monitor_status', 'payload') or {}).get('crying', false) }}
+      - name: Joshua movement
+        unique_id: joshua_movement
+        device_class: motion
+        availability: >-
+          {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
+          {{ is_state('sensor.joshua_monitor_status', 'online') and p.get('moving') is boolean }}
+        state: >-
+          {{ (state_attr('sensor.joshua_monitor_status', 'payload') or {}).get('moving', false) }}
