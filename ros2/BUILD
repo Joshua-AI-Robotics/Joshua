@@ -225,3 +225,15 @@ cc_test(
         "@ros2_deps//:rclcpp",
     ],
 )
+
+ros2_cpp_binary(
+    name = "audio_publisher",
+    srcs = ["audio_publisher.cc"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//ros2:node_runner",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
+    ],
+)

@@ -14,6 +14,7 @@ enum SensorType {
   RANGE_SCAN = 3;
   IMU_6DOF = 4;
   FORCE_TORQUE = 5;
+  AUDIO = 6;
 }
 
 message OpenCvConfig {
@@ -34,6 +35,14 @@ message Lds01Config {
   robot.comm.Comm comm = 1;
 }
 
+// ALSA capture. PCM is interleaved signed 16-bit little endian.
+message AlsaAudioConfig {
+  string device = 1;  // e.g. "plughw:CARD=Webcam,DEV=0"; never inferred.
+  uint32 sample_rate_hz = 2;
+  uint32 channels = 3;
+  uint32 frames_per_chunk = 4;  // One frame contains one sample per channel.
+}
+
 message SinglePerception {
   ros2.node.Node node = 1;
   string sensor_name = 2;
@@ -43,6 +52,7 @@ message SinglePerception {
     OpenCvConfig opencv_config = 5;
     Lds01Config lds01_config = 6;
     Sts3215EncoderConfig sts3215_encoder_config = 7;
+    AlsaAudioConfig alsa_audio_config = 8;
   }
 }
 
