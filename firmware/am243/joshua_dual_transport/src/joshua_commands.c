@@ -134,7 +134,11 @@ static void safety(void* context, int action) {
   c->configured = false;
   c->target_value = 0;
   if (action == 1) c->estopped = true;
-  if (action == 2) c->estopped = false;
+  if (action == 2) {
+    c->estopped = false;
+    c->fault_flags = 0;
+    c->feedback.fault_flags = 0;
+  }
 }
 void JoshuaInit(JoshuaChannel* c, uint32_t boot, uint32_t planes) {
   memset(c, 0, sizeof(*c));
@@ -191,6 +195,14 @@ void JoshuaStop(void* context, uint16_t faults) {
   c->runtime.estopped = 1;
   c->fault_flags |= faults;
   c->feedback.fault_flags = c->fault_flags;
+  c->function.state.state = JW_STATE_UNAVAILABLE;
+  c->function.state.reason = faults ? JW_REASON_DEVICE_FAULT : JW_REASON_ESTOP;
+  c->function.state.recovery =
+      JW_RECOVERY_CLEAR_ESTOP | JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE;
+  c->function.state.stop_phase = JW_STOP_ACTION_COMPLETE;
+  c->function.state.verification = JW_SAFE_UNSUPPORTED;
+  ++c->function.state.epoch;
+  c->runtime.state = c->function.state;
 }
 bool JoshuaEnabled(void* context, uint8_t channel) {
   return channel == 0 && ((JoshuaChannel*)context)->enabled;

@@ -23,7 +23,9 @@ static TaskP_Object watchdog_task;
 static uint8_t watchdog_stack[4096] __attribute__((aligned(32)));
 
 static void TickLocked(bool op) {
-  JoshuaEthercatProfileTick(&profile, ClockP_getTimeUsec(), op);
+  const uint64_t now = ClockP_getTimeUsec();
+  JoshuaService(&channel, now);
+  JoshuaEthercatProfileTick(&profile, now, op);
 }
 static void Watchdog(void* ignored) {
   (void)ignored;
@@ -88,7 +90,7 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
       slave,
       object_index,
       output ? "JW output image" : "JW input image",
-      20,
+      JWEC_PDO_SIZE / 4,
       DEFTYPE_UNSIGNED32,
       32,
       output ? ACCESS_WRITE | OBJACCESS_RXPDOMAPPING : ACCESS_READ | OBJACCESS_TXPDOMAPPING,
@@ -100,7 +102,7 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
   EC_API_SLV_Pdo_t* pdo = NULL;
   result = EC_API_SLV_PDO_create(slave, output ? "JW RxPDO" : "JW TxPDO", pdo_index, &pdo);
   if (result) return result;
-  for (uint8_t sub = 1; sub <= 20; ++sub) {
+  for (uint8_t sub = 1; sub <= JWEC_PDO_SIZE / 4; ++sub) {
     EC_API_SLV_SCoE_ObjEntry_t* entry = NULL;
     result = EC_API_SLV_CoE_getObjectEntry(slave, object_index, sub, &entry);
     if (result) return result;
@@ -110,10 +112,8 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
   return EC_API_SLV_PDO_setFixed(slave, pdo, true);
 }
 uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
-  const JoshuaEthercatProfileConfig config = {.identity = {.board_id = JW_BOARD_AM243,
-                                                           .fw_name = "am243-ec-jw",
-                                                           .n_channels = 1,
-                                                           .channel_drives = {JW_DRIVE_STEP_DIR}},
+  JoshuaInit(&channel, (uint32_t)ClockP_getTimeUsec() | 1u, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+  const JoshuaEthercatProfileConfig config = {.identity = channel.runtime.identity,
                                               .artifact = "am243-ec-jw",
                                               .context = &channel,
                                               .command = JoshuaCommand,
@@ -136,11 +136,19 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
   result = AddObject(
       slave, JWEC_SESSION_INDEX, "JWEC reset session", DEFTYPE_OCTETSTRING, 8, ACCESS_READWRITE);
   if (result) return result;
-  result =
-      AddObject(slave, JWEC_REQUEST_INDEX, "JWEC request", DEFTYPE_OCTETSTRING, 76, ACCESS_WRITE);
+  result = AddObject(slave,
+                     JWEC_REQUEST_INDEX,
+                     "JWEC request",
+                     DEFTYPE_OCTETSTRING,
+                     JWEC_MAILBOX_SIZE,
+                     ACCESS_WRITE);
   if (result) return result;
-  result =
-      AddObject(slave, JWEC_RESPONSE_INDEX, "JWEC response", DEFTYPE_OCTETSTRING, 76, ACCESS_READ);
+  result = AddObject(slave,
+                     JWEC_RESPONSE_INDEX,
+                     "JWEC response",
+                     DEFTYPE_OCTETSTRING,
+                     JWEC_MAILBOX_SIZE,
+                     ACCESS_READ);
   if (result) return result;
   result =
       AddObject(slave, JWEC_ACK_INDEX, "JWEC response ack", DEFTYPE_UNSIGNED32, 4, ACCESS_WRITE);
