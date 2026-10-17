@@ -140,6 +140,7 @@ cc_test(
         ":joshua_wire_ethercat_transport",
         ":soem_ethercat_backend",
         "//firmware/common:joshua_wire_ethercat",
+        "//firmware/common:joshua_wire_profiles",
         "@googletest//:gtest_main",
     ],
 )
@@ -153,6 +154,7 @@ cc_library(
         ":ethercat_master",
         ":ethercat_types",
         "//firmware/common:joshua_wire_ethercat",
+        "//firmware/common:joshua_wire_profiles",
         "//robot/comm/interfaces:correlated_cyclic_transport",
         "//robot/comm/interfaces:message_transport",
         "@abseil-cpp//absl/status:status",

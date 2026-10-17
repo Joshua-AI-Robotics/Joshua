@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "firmware/common/joshua_wire_ethercat.h"
+#include "firmware/common/joshua_wire_profiles.h"
 
 namespace robot::comm::ethercat {
 namespace {
@@ -97,19 +98,21 @@ absl::Status ValidateJoshuaWireEthercatProfile(absl::Span<const uint8_t> d,
              << U16(d.data() + 14) << " frame=" << U16(d.data() + 16)
              << " transports=" << U32(d.data() + 18);
     valid = valid && !artifact.empty() && d[0] == 'J' && d[1] == 'W' && d[2] == 'E' &&
-            d[3] == 'C' && U16(d.data() + 4) == JWEC_DESCRIPTOR_VERSION && U16(d.data() + 6) <= 2 &&
-            U16(d.data() + 8) >= 2 && U16(d.data() + 10) == JWEC_LAYOUT_VERSION &&
-            U16(d.data() + 12) == JWEC_PDO_SIZE && U16(d.data() + 14) == JWEC_PDO_SIZE &&
-            U16(d.data() + 16) == JW_MAX_FRAME_LEN && U16(d.data() + 34) == 0 &&
-            (U32(d.data() + 18) & required) == required;
+            d[3] == 'C' && U16(d.data() + 4) == JWEC_DESCRIPTOR_VERSION &&
+            U16(d.data() + 6) <= JW_PROTO_VERSION && U16(d.data() + 8) >= JW_PROTO_VERSION &&
+            U16(d.data() + 10) == JWEC_LAYOUT_VERSION && U16(d.data() + 12) == JWEC_PDO_SIZE &&
+            U16(d.data() + 14) == JWEC_PDO_SIZE && U16(d.data() + 16) == JW_MAX_FRAME_LEN &&
+            U16(d.data() + 34) == 0 && (U32(d.data() + 18) & required) == required;
   } else
     observed << "descriptor bytes=" << d.size() << " artifact=<unavailable>";
   valid = valid && (required & kRequired) == kRequired && (required & ~7u) == 0 &&
           region.output_size_bytes == JWEC_PDO_SIZE && region.input_size_bytes == JWEC_PDO_SIZE;
   if (valid) return absl::OkStatus();
   observed << "; mapped PDO=" << region.output_size_bytes << '/' << region.input_size_bytes
-           << "; expected JWEC descriptor 1, protocol 2, layout 1, PDO 80/80, frame 64, transports="
-           << required << ". Build and flash the matching JoshuaWire EtherCAT firmware artifact "
+           << "; expected JWEC descriptor 1, protocol " << JW_PROTO_VERSION << ", layout "
+           << JWEC_LAYOUT_VERSION << ", PDO " << JWEC_PDO_SIZE << "/" << JWEC_PDO_SIZE << ", frame "
+           << JW_MAX_FRAME_LEN << ", transports=" << required
+           << ". Build and flash the matching JoshuaWire EtherCAT firmware artifact "
            << "separately; the TI echo demo is incompatible.";
   return absl::FailedPreconditionError(observed.str());
 }
@@ -180,10 +183,20 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
   if (!ValidTimeout(timeout) ||
       jw_decode_frame(request.data(), request.size(), &frame) != JW_RESULT_OK)
     return absl::InvalidArgumentError("invalid JW frame or timeout");
-  const bool cyclic_command = frame.cmd == JW_CMD_SET_TARGET || frame.cmd == JW_CMD_GET_FEEDBACK;
-  const bool management = frame.cmd == JW_CMD_IDENTIFY || frame.cmd == JW_CMD_CONFIGURE_CHANNEL ||
-                          frame.cmd == JW_CMD_ENABLE || frame.cmd == JW_CMD_DISABLE ||
-                          frame.cmd == JW_CMD_ESTOP || frame.cmd == JW_CMD_RESET_SESSION;
+  jw_profile_request_t profile{};
+  const bool is_profile =
+      frame.cmd == JW_CMD_PROFILE && frame.channel != JW_CHANNEL_NONE &&
+      jw_decode_profile_request(frame.payload, frame.payload_len, &profile) == JW_RESULT_OK;
+  const bool cyclic_command = is_profile && profile.profile_id == JW_PROFILE_ACTUATOR &&
+                              profile.major == JW_PROFILE_VERSION_MAJOR &&
+                              profile.minor == JW_PROFILE_VERSION_MINOR &&
+                              (profile.operation == JW_ACTUATOR_SET_TARGET ||
+                               profile.operation == JW_ACTUATOR_GET_FEEDBACK);
+  const bool management = (is_profile && !cyclic_command) || frame.cmd == JW_CMD_IDENTIFY ||
+                          frame.cmd == JW_CMD_DISCOVER || frame.cmd == JW_CMD_DESCRIBE_FUNCTION ||
+                          frame.cmd == JW_CMD_GET_STATUS || frame.cmd == JW_CMD_GET_DEPENDENCIES ||
+                          frame.cmd == JW_CMD_RECOVER || frame.cmd == JW_CMD_ESTOP ||
+                          frame.cmd == JW_CMD_RESET_SESSION;
   if ((cyclic && !cyclic_command) || (!cyclic && !management))
     return absl::InvalidArgumentError("JW command routed to wrong EtherCAT plane");
   if (frame.cmd == JW_CMD_RESET_SESSION &&
@@ -350,8 +363,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<W
       needs_reset_ = false;
       Invalidate();
       Bytes response(JW_MAX_FRAME_LEN);
-      const uint8_t ok = JW_STATUS_OK;
-      const int size = jw_encode_response(response.data(), response.size(), &frame, &ok, 1);
+      const uint8_t ok[] = {JW_STATUS_OK, JW_EXECUTION_COMPLETE};
+      const int size = jw_encode_response(response.data(), response.size(), &frame, ok, sizeof(ok));
       response.resize(size);
       return response;
     }
