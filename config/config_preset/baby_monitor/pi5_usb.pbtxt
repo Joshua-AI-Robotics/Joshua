@@ -62,6 +62,10 @@ utilities {
     stream_name: "baby"
     # Empty listen_address discovers this Pi's Tailscale IPv4 address.
     http_port: 8889 ice_port: 8189 rtsp_port: 8554
+    # Continuous A/V clips; keep 20% of the filesystem available to the system.
+    recording_directory: "~/joshua-data/recordings"
+    recording_segment_sec: 120
+    recording_reserve_percent: 20
   }
 
   notifications {

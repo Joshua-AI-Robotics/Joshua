@@ -253,6 +253,21 @@ TEST(ValidationTest, MediaStreamingRejectsConflictsAndPublicListeners) {
   stream->set_http_port(8554);
   EXPECT_FALSE(ValidateConfig(config).ok());
   stream->set_http_port(8889);
+  stream->set_recording_directory("~/joshua-data/recordings");
+  stream->set_recording_segment_sec(120);
+  stream->set_recording_reserve_percent(20);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  stream->set_recording_directory("relative");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_directory("/data/%path");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_directory("~/joshua-data/recordings");
+  stream->set_recording_reserve_percent(19);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_reserve_percent(20);
+  stream->set_recording_segment_sec(1);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_segment_sec(120);
   stream->mutable_node()->mutable_subscriptions(1)->set_ros2_data_type(ros2::data_type::IMAGE);
   EXPECT_FALSE(ValidateConfig(config).ok());
   stream->mutable_node()->mutable_subscriptions(1)->set_ros2_data_type(

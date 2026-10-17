@@ -5,6 +5,7 @@ import math
 import socket
 import struct
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -78,6 +79,11 @@ class MediaTest(unittest.TestCase):
 
         Gst.init(None)
         c = options()
+        recordings = tempfile.TemporaryDirectory(prefix="joshua-recording-test-")
+        self.addCleanup(recordings.cleanup)
+        c.recording_directory = str(Path(recordings.name) / "clips")
+        c.recording_segment_sec = 2
+        c.recording_reserve_percent = 20
         events = []
         stream = MediaStream(c, True, lambda *event: events.append(event))
         stop = threading.Event()
@@ -169,6 +175,48 @@ class MediaTest(unittest.TestCase):
                 receiver.get_by_name(kind).connect("handoff", received, kind)
             receiver.set_state(Gst.State.PLAYING)
             wait_for(lambda: counts["v"] >= 15 and counts["a"] >= 30)
+            recording_root = Path(c.recording_directory)
+            wait_for(lambda: list(recording_root.glob("run-*/*.complete")))
+            clip = next(recording_root.glob("run-*/*.complete")).with_suffix(".mp4")
+            # Read a finalized file through the real demuxer and both decoders.
+            # This checks the recording, independently of live RTSP reception.
+            file_reader = Gst.parse_launch(
+                f'uridecodebin uri="{clip.as_uri()}" name=d '
+                "d. ! queue ! videoconvert ! fakesink name=fv sync=false "
+                "signal-handoffs=true "
+                "d. ! queue ! audioconvert ! fakesink name=fa sync=false "
+                "signal-handoffs=true"
+            )
+            file_counts = {"v": 0, "a": 0}
+
+            def file_received(sink, buffer, pad, kind):
+                file_counts[kind] += 1
+
+            for kind in file_counts:
+                file_reader.get_by_name("f" + kind).connect(
+                    "handoff", file_received, kind
+                )
+            try:
+                file_reader.set_state(Gst.State.PLAYING)
+                wait_for(lambda: file_counts["v"] >= 10 and file_counts["a"] >= 30)
+            finally:
+                file_reader.set_state(Gst.State.NULL)
+            # Disk pressure pauses only the recorder while live A/V keeps flowing.
+            from unittest.mock import patch
+
+            with patch.object(stream.recorder.store, "space", return_value=(0, 1)):
+                wait_for(lambda: stream.recorder.status["state"] == "paused_low_space")
+                previous_video = counts["v"]
+                wait_for(lambda: counts["v"] >= previous_video + 10)
+                self.assertIsNone(stream.recorder.process)
+            wait_for(lambda: stream.recorder.status["state"] == "recording")
+            recorder_pid = stream.recorder.process.pid
+            stream.recorder.process.kill()
+            wait_for(
+                lambda: stream.recorder.process is not None
+                and stream.recorder.process.pid != recorder_pid
+                and stream.recorder.status["state"] == "recording"
+            )
             for stamps in timestamps.values():
                 self.assertEqual(stamps, sorted(stamps))
             self.assertLess(abs(timestamps["a"][-1] - timestamps["v"][-1]), 500_000_000)

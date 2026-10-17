@@ -130,6 +130,13 @@ a unique node ID. Validation rejects invalid topic contracts, conflicting ports,
 and listeners outside loopback or the Tailscale IPv4 range. An empty listener
 asks the runtime to discover this host's Tailscale address.
 
+Media streams can also set `recording_directory` (absolute or `~/...`),
+`recording_segment_sec` (default 120), and `recording_reserve_percent` (default
+20, minimum 20). An empty directory setting disables recording. Continuous
+encoded A/V clips use a dedicated managed directory; retention counts all usage
+on that filesystem and removes oldest completed clips to preserve the reserve.
+See [recording operations](../docs/BABY_MONITOR_GUIDE.md#continuous-recording-and-storage).
+
 `Config.utilities.notifications` configures `NOTIFICATION_NODE` processes.
 Inputs and the distinct status output are STRING topics. The preset specifies
 the Home Assistant base URL and the name of an environment variable that points

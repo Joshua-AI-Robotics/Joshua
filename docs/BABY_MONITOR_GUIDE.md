@@ -2,7 +2,7 @@
 
 This is the operating guide for the complete baby-monitor stack on
 `experimental/baby-monitor`: USB camera and microphone capture, independent
-audio/video inference, live streaming, Home Assistant notifications, and automatic
+audio/video inference, live streaming and recording, Home Assistant notifications, and automatic
 startup on the Raspberry Pi 5.
 
 The reusable audio pipeline is proposed for `develop` in
@@ -22,6 +22,7 @@ monitor.
 - [First installation on a new Pi](#first-installation-on-a-new-pi)
 - [Connect the iPhone and add the camera](#connect-the-iphone-and-add-the-camera)
 - [Configure and test notifications](#configure-and-test-notifications)
+- [Continuous recording and storage](#continuous-recording-and-storage)
 - [Operate and troubleshoot](#operate-and-troubleshoot)
 - [Where to change the implementation](#where-to-change-the-implementation)
 
@@ -47,6 +48,7 @@ The `~/joshua-*` paths below are suggested defaults, not a personal inventory.
 | Editable runtime config | `~/joshua-config/pi5_usb.pbtxt` |
 | Home Assistant data and Compose deployment | `~/joshua-home-assistant` |
 | Saved diagnostic recording | `~/joshua-data/<DIAGNOSTIC_RUN>/` |
+| Continuous audio/video recordings | `~/joshua-data/recordings/` |
 | Uploaded package | `<PACKAGE_ARCHIVE>.tar.gz` |
 | Package SHA-256 | `<PACKAGE_SHA256>` |
 
@@ -62,16 +64,18 @@ its actual entity ID or update the dashboard to match it.
 | Audio inference | YAMNet running in its own Python process |
 | Video inference | EfficientDet Lite0 plus frame-difference motion detection in a separate Python process |
 | Live video and audio | H.264/Opus through MediaMTX, with WebRTC playback |
+| Continuous recording | Approximately two-minute MP4 clips with audio, oldest-first cleanup, 20% filesystem reserve |
 | iPhone interface | Home Assistant Companion app and Baby Monitor dashboard |
 | Remote access | Private Tailscale access over Wi-Fi or cellular |
 | Phone alerts | Cry, optional movement, outage, and recovery notifications |
 | Reboot recovery | systemd starts Home Assistant and the full Joshua graph |
 | Process failure recovery | Launcher exits on a child failure; systemd restarts the graph |
 
-**Still unimplemented:** the originally requested two-minute circular recording
-buffer, saved event clips, and footage playback. `av_check` makes a short manual
-diagnostic recording; it is not continuous storage. Home Assistant's recorder
-stores entity history, not camera footage.
+Continuous recording now retains as much history as the storage budget allows,
+superseding the original two-minute total buffer request. Event-specific saved
+clips and a recording timeline inside Home Assistant are not implemented.
+`av_check` remains a separate manual diagnostic tool. Home Assistant's recorder
+stores entity history; Joshua saves the actual camera footage.
 
 YAMNet is a general sound classifier. Playback of a crying recording can be
 classified as an animal or another sound; the score is not a calibrated
@@ -531,6 +535,66 @@ sudo systemctl start joshua-monitor
 Confirm online status, restored audio/video, and a recovery push. Verify this on
 your deployment after setup. Monitoring is paused during the stop interval.
 
+## Continuous recording and storage
+
+Recording starts automatically with `joshua-monitor.service`, including after a
+reboot. The media node encodes the camera and microphone once. A separate,
+listener-free MediaMTX process reads the local RTSP stream and saves those encoded
+tracks as fragmented MP4 files; no second camera capture or encode is needed.
+
+The media-stream block in the editable runtime protobuf config controls it:
+
+```protobuf
+recording_directory: "~/joshua-data/recordings"
+recording_segment_sec: 120
+recording_reserve_percent: 20
+```
+
+An empty `recording_directory` disables recording. Use an empty, dedicated
+writable directory; relative paths other than `~/...`, percent signs, and
+newlines are rejected. The default duration is 120 seconds; keyframe alignment
+may make clips slightly longer, and shutdown or a lost input makes shorter clips.
+Each process session has a `run-<ID>/` directory containing timestamped `.mp4`
+files and `.complete` markers for finalized clips. Leave the markers in place.
+H.264 video and Opus audio can be viewed with a player that supports both, such
+as VLC. A recording timeline/download UI in Home Assistant is separate future work.
+
+The reserve is **20% of the entire filesystem containing the recordings**, not
+20% of whatever happens to be free. Existing OS, Docker, logs, packages, and other
+files count against the 80% used-space ceiling. A two-second check deletes the
+oldest completed managed clips until 20% plus a safety margin is available. The
+margin is at least 512 MiB, or twice an estimated full clip size, whichever is
+larger. Retention therefore adjusts as other applications consume storage. It
+never deletes unrelated files or the clip currently being written. Save clips
+you want to keep outside the managed directory.
+
+If it cannot reclaim enough space, it closes the recording process, makes its
+last clip eligible for cleanup, and waits for space before resuming. Live viewing,
+inference, and notifications continue. The directory is locked against concurrent
+recorders. After a restart, interrupted clips from previous sessions can expire;
+an abrupt power loss can leave the final fragment incomplete. This policy is not
+a filesystem partition or quota: unrelated applications can still consume the
+reserve between checks. Recording errors and pauses are reported in the journal,
+`status.json`, and the `recording` field of `/media/events`; they do not currently
+send a dedicated phone alert.
+
+Check recordings on the Pi:
+
+```bash
+cat "$HOME/joshua-data/recordings/status.json"
+find "$HOME/joshua-data/recordings" -name '*.complete' -type f | sort | tail
+du -sh "$HOME/joshua-data/recordings"
+df -h "$HOME/joshua-data/recordings"
+journalctl -u joshua-monitor.service -n 100 --no-pager
+```
+
+`status.json` includes state, available bytes, reserved bytes, and the number of
+clips deleted by the current recorder process. Check `observed_at_ns` as well;
+a stopped service leaves its last status file on disk. Files remain local and
+private; no footage is uploaded to Home Assistant cloud storage. Package updates
+keep recordings outside versioned releases. Edit the runtime config and restart
+`joshua-monitor.service` to change recording settings.
+
 ## Operate and troubleshoot
 
 ### Startup and service control
@@ -612,6 +676,7 @@ source /opt/ros/jazzy/setup.bash
 | Notification policy / transport | [`notification.py`](../ros2/utils/notification.py), [`notification_node.py`](../ros2/utils/notification_node.py) | Rebuild package |
 | Thresholds, devices, rates, bitrate | [`pi5_usb.pbtxt`](../config/config_preset/baby_monitor/pi5_usb.pbtxt) | Edit active Pi config and restart monitor; keep source preset in sync |
 | HA automation / dashboard | [`joshua.yaml`](../deploy/home_assistant/joshua.yaml), [`baby-monitor.yaml`](../deploy/home_assistant/baby-monitor.yaml) | Merge into active HA deployment; validate/reload or restart HA |
+| Recording / retention | [`media_recording.py`](../ros2/utils/media_recording.py), [`util.proto`](../config/proto/util.proto) | Rebuild package; preserve external recordings and runtime config |
 | Fresh HA setup | [`home_assistant_setup.py`](../ros2/utils/home_assistant_setup.py) | Rebuild package; renderer applies only to new deployments |
 | Boot behavior | [`install_services.sh`](../deploy/home_assistant/install_services.sh), [`run_monitor.sh`](../deploy/home_assistant/run_monitor.sh) | Rebuild package and rerun installer |
 | Launcher supervision | [`joshua_main.cc`](../launcher/joshua_main.cc), [`node_generator.cc`](../node_generator/node_generator.cc) | Rebuild package |

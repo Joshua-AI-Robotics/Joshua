@@ -182,6 +182,11 @@ and shared runner validation. No hardware is required.
 
 ## Audio publishing
 
+The media utility also supports continuous encoded A/V recording and filesystem
+retention in `utils/media_recording.py`. It consumes the existing local RTSP
+stream; it never owns a capture device. Configuration and operating instructions
+are in [the baby monitor guide](../docs/BABY_MONITOR_GUIDE.md#continuous-recording-and-storage).
+
 `AUDIO_PUBLISHER` owns ALSA microphones configured through `alsa_audio_config`.
 See `config/config_preset/example/publish_audio.pbtxt`. This preset opens real
 hardware; select the microphone explicitly (for example

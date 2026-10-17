@@ -147,6 +147,21 @@ py_library(
         ":media_server",
         "@mediamtx_amd64//:LICENSE",
     ],
+    deps = [":media_recording"],
+)
+
+py_library(
+    name = "media_recording",
+    srcs = ["media_recording.py"],
+)
+
+py_test(
+    name = "media_recording_test",
+    srcs = ["media_recording_test.py"],
+    deps = [
+        ":media_recording",
+        "//config/proto:config_py_proto",
+    ],
 )
 
 py_test(

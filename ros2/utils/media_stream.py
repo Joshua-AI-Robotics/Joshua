@@ -13,6 +13,8 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
+from ros2.utils.media_recording import Recorder, validate_recording
+
 
 @dataclass
 class Sample:
@@ -36,6 +38,7 @@ def private_address(value):
 
 
 def validate_options(options):
+    validate_recording(options)
     if (
         not 16 <= options.width <= 1920
         or not 16 <= options.height <= 1080
@@ -147,6 +150,7 @@ class MediaStream:
         self.stop = threading.Event()
         self.thread = None
         self.server = None
+        self.recorder = None
         self.pipeline = None
         self.sources = {}
         self.formats = {}
@@ -193,6 +197,9 @@ class MediaStream:
                     f"Missing GStreamer element: {plugin}; see BABY_MONITOR.md"
                 )
         self.Gst = Gst
+        if self.options.recording_directory:
+            self.recorder = Recorder(self.options, self.binary)
+            self.recorder.start()
         self.thread = threading.Thread(
             target=self.run, name="media-stream", daemon=True
         )
@@ -388,6 +395,9 @@ class MediaStream:
 
     def close(self):
         self.stop.set()
+        if self.recorder:
+            self.recorder.close()
+            self.recorder = None
         if self.thread:
             self.thread.join(timeout=10)
             if self.thread.is_alive():

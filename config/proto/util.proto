@@ -25,6 +25,12 @@ message MediaStream {
   uint32 http_port = 8;
   uint32 ice_port = 9;
   uint32 rtsp_port = 10;
+  // Empty disables recording. Absolute paths and ~/ paths are supported.
+  // Use a dedicated directory; only managed clips are eligible for deletion.
+  string recording_directory = 11;
+  // Zero selects 120 seconds / 20 percent respectively.
+  uint32 recording_segment_sec = 12;
+  uint32 recording_reserve_percent = 13;
 }
 
 // STRING event inputs and one distinct STRING delivery-status output.

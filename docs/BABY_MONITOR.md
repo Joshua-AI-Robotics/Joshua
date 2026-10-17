@@ -3,8 +3,9 @@
 This branch adds independent YAMNet and video inference processes on top of the
 reusable ALSA audio pipeline. Both publish versioned JSON events in ROS
 `std_msgs/String`. A separate utility streams video and audio to a browser over
-Tailscale. Notification delivery and rolling media recording are later work. `av_check` is a bounded diagnostic recording, not the
-planned two-minute ring buffer.
+Tailscale. Home Assistant delivers notifications. Continuous recording saves
+two-minute clips with a 20% filesystem reserve. `av_check` remains a separate
+bounded diagnostic recording tool.
 
 The initial video model is EfficientDet Lite0 (COCO object labels) with a simple
 whole-frame motion fraction. It is not trained to assess infant safety. YAMNet
@@ -179,8 +180,8 @@ It contains no sensor configuration and opens no hardware.
 The `MEDIA_STREAM_NODE` utility subscribes to the existing camera and PCM topics.
 It does not open either device. GStreamer encodes H.264 baseline video and Opus
 sound once; the bundled, checksum-pinned MediaMTX server serves a WebRTC player.
-Both inference processes remain independent. This phase does not deliver phone
-notifications or record a rolling history.
+Both inference processes remain independent. Continuous recording and Home
+Assistant notifications are described in the [complete operating guide](BABY_MONITOR_GUIDE.md).
 
 Install streaming dependencies on the Ubuntu 24.04 Pi:
 

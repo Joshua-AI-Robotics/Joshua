@@ -74,6 +74,7 @@ class WireTest(unittest.TestCase):
         try:
             with patch("ros2.utils.media_stream_node.MediaStream") as bridge:
                 bridge.return_value.url = "http://127.0.0.1:8889/baby/"
+                bridge.return_value.recorder = None
                 node = MediaStreamNode("media_wire_test", 5, config)
                 self.assertEqual(node.video_subscription.qos_profile.depth, 1)
                 self.assertEqual(node.audio_subscription.qos_profile.depth, 10)

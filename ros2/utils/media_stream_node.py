@@ -156,6 +156,11 @@ class MediaStreamNode(Node):
                             "url": self.stream.url,
                             "dropped_video": self.stream.pending.dropped_video,
                             "dropped_audio": self.stream.pending.dropped_audio,
+                            "recording": (
+                                self.stream.recorder.status
+                                if self.stream.recorder
+                                else {"state": "disabled"}
+                            ),
                         }
                     )
                 )
