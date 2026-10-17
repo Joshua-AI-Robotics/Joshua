@@ -138,6 +138,12 @@ disabled configuration and opt-in exercise modes. Review `--help` and use
 `--dry_run` first; hardware execution requires explicit confirmation. Recovery
 of a latched ESTOP also requires `--allow_recover`.
 
+Actuator payload decoding, supported-mode checks, admission guards, replies and
+outcome reporting use the portable C `joshua_actuator_handler`. Device callbacks
+retain pin validation, resource ownership, target limits, cached acquisition and
+hardware actions. Teensy/ESP32 register these callbacks in `joshua_stepdir_device`;
+AM243 uses `am243_software_backend` and has no physical STEP/DIR output.
+
 ## TX-fault bench record — 2026-10-25
 
 - Board: Teensy USB serial `15104350`, `/dev/ttyACM0`. Motor power was confirmed

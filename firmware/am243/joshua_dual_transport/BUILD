@@ -1,14 +1,15 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
-    name = "commands",
-    srcs = ["src/joshua_commands.c"],
-    hdrs = ["src/joshua_commands.h"],
+    name = "software_backend",
+    srcs = ["src/am243_software_backend.c"],
+    hdrs = ["src/am243_software_backend.h"],
     visibility = [
         "//robot/board:__subpackages__",
         "//robot/comm/ethercat:__pkg__",
     ],
     deps = [
+        "//firmware/common:joshua_actuator_handler",
         "//firmware/common:joshua_device_runtime",
         "//firmware/common:joshua_wire_commands",
         "//firmware/common:joshua_wire_profiles",
@@ -23,7 +24,7 @@ cc_test(
         "src/transport_uart_test.cc",
     ],
     deps = [
-        ":commands",
+        ":software_backend",
         "//firmware/common:serial_frame_transport",
         "//firmware/testing:ti_uart",
         "@googletest//:gtest_main",
@@ -48,7 +49,7 @@ cc_library(
         "JOSHUA_TARGET_WATCHDOG_US=10000",
     ],
     deps = [
-        ":commands",
+        ":software_backend",
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/testing:ti_ethercat",
     ],
@@ -58,8 +59,8 @@ cc_test(
     name = "ethercat_ti_test",
     srcs = ["src/joshua_ethercat_ti_test.cc"],
     deps = [
-        ":commands",
         ":ethercat_ti_native",
+        ":software_backend",
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/testing:ti_ethercat",
         "@googletest//:gtest_main",

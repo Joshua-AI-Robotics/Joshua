@@ -139,7 +139,7 @@ cc_test(
         ":ethercat_types",
         ":joshua_wire_ethercat_transport",
         ":soem_ethercat_backend",
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_ethercat",
         "//firmware/common:joshua_wire_profiles",
