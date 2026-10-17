@@ -40,6 +40,17 @@ message PointCloudData {
   string frame_id = 9;  // optional frame name for this cloud
 }
 
+// Audio wire contract v1. timestamp_ns on the enclosing packet is the
+// estimated Unix CLOCK_REALTIME time of the first sample (not hardware time).
+message AudioData {
+  uint32 sample_rate_hz = 1;
+  uint32 channels = 2;
+  uint32 frames = 3;
+  string encoding = 4;     // "s16le": signed, interleaved, little endian PCM.
+  bytes data = 5;          // Exactly frames * channels * 2 bytes.
+  bool discontinuity = 6;  // First chunk after startup or overrun recovery.
+}
+
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
   string perception_id = 1;
@@ -52,5 +63,6 @@ message PerceptionPacket {
     PositionData position = 5;
     SensorData sensor = 6;
     PointCloudData point_cloud = 7;
+    AudioData audio = 8;
   }
 }

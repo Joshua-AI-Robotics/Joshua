@@ -11,6 +11,8 @@
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "robot/perception/audio/alsa_audio.h"
+#include "robot/perception/audio/audio_config.h"
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
@@ -56,6 +58,12 @@ PerceptionFactory::CreatePerception(
             absl::StrCat(owner, ": position driver requires POSITION."));
       }
       return CreateSts3215PositionSensor(single_perception, boards, owner);
+    case robot::perception::SinglePerception::kAlsaAudioConfig:
+      if (single_perception.sensor_type() != AUDIO) {
+        return absl::InvalidArgumentError("ALSA driver requires AUDIO sensor_type");
+      }
+      ABSL_RETURN_IF_ERROR(ValidateAudioConfig(single_perception.alsa_audio_config()));
+      return std::make_unique<AlsaAudio>(single_perception);
     case robot::perception::SinglePerception::kOpencvConfig:
       if (single_perception.sensor_type() != IMAGE) {
         return absl::InvalidArgumentError(absl::StrCat(owner, ": camera driver requires IMAGE."));

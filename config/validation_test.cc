@@ -219,3 +219,76 @@ TEST(ValidationTest, JointStateValidatesStructureAndLeavesCapabilitiesToDriver) 
 }
 }  // namespace
 }  // namespace config
+
+namespace config {
+namespace {
+Config AudioConfig() {
+  Config config;
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->add_single_perceptions();
+  sensor->set_sensor_name("microphone");
+  sensor->set_sensor_type(robot::perception::AUDIO);
+  auto* node = sensor->mutable_node();
+  node->set_node_type(ros2::node::AUDIO_PUBLISHER);
+  node->set_id(10);
+  auto* pub = node->add_publishers();
+  pub->set_topic("/audio/pcm");
+  pub->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  auto* audio = sensor->mutable_alsa_audio_config();
+  audio->set_device("not-a-real-device");
+  audio->set_sample_rate_hz(16000);
+  audio->set_channels(1);
+  audio->set_frames_per_chunk(320);
+  return config;
+}
+TEST(AudioValidationTest, ValidatesWithoutOpeningMicrophone) {
+  EXPECT_TRUE(ValidateConfig(AudioConfig()).ok());
+}
+TEST(AudioValidationTest, RejectsInvalidFormatAndWireContract) {
+  for (int failure = 0; failure < 9; ++failure) {
+    auto config = AudioConfig();
+    auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+    switch (failure) {
+      case 0:
+        sensor->mutable_alsa_audio_config()->set_device("");
+        break;
+      case 1:
+        sensor->mutable_alsa_audio_config()->set_channels(0);
+        break;
+      case 2:
+        sensor->mutable_alsa_audio_config()->set_sample_rate_hz(0);
+        break;
+      case 3:
+        sensor->mutable_alsa_audio_config()->set_frames_per_chunk(16001);
+        break;
+      case 4:
+        sensor->mutable_node()->mutable_publishers(0)->set_ros2_data_type(ros2::data_type::IMAGE);
+        break;
+      case 5:
+        sensor->mutable_node()->mutable_publishers(0)->set_publish_rate_hz(50);
+        break;
+      case 6:
+        sensor->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
+        break;
+      case 7:
+        sensor->set_sensor_type(robot::perception::IMAGE);
+        break;
+      case 8:
+        sensor->clear_alsa_audio_config();
+        break;
+    }
+    EXPECT_FALSE(ValidateConfig(config).ok()) << failure;
+  }
+}
+TEST(AudioValidationTest, RejectsDuplicateCaptureButAllowsTopicFanout) {
+  auto config = AudioConfig();
+  auto* sensors = config.mutable_robot()->mutable_perceptions();
+  auto sensor = sensors->single_perceptions(0);
+  auto* pub = sensors->mutable_single_perceptions(0)->mutable_node()->add_publishers();
+  pub->set_topic("/audio/second");
+  pub->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  *sensors->add_single_perceptions() = sensor;
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+}  // namespace
+}  // namespace config

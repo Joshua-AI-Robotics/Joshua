@@ -16,6 +16,7 @@ enum NodeType {
   LIDAR_PUBLISHER = 5;
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
+  AUDIO_PUBLISHER = 8;
 }
 
 enum QosReliabilityPolicy {
