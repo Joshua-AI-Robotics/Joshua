@@ -7,7 +7,8 @@
 #include "robot/perception/interfaces/audio_interface.h"
 #include "robot/perception/proto/perception.pb.h"
 namespace robot::perception {
-// Nonblocking reads. Partial chunks are retained; callers retry Unavailable.
+// Nonblocking reads retain partial chunks. DeadlineExceeded means no complete
+// chunk yet; Unavailable means a device failure that requires reopening.
 class AlsaAudio : public AudioInterface {
  public:
   explicit AlsaAudio(const SinglePerception& config);

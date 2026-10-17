@@ -1,6 +1,27 @@
 #include "robot/perception/audio/alsa_audio.h"
 
+#include <cerrno>
+
 #include "gtest/gtest.h"
+
+namespace {
+bool pending_read = false;
+bool partial_read = false;
+}  // namespace
+extern "C" snd_pcm_sframes_t __real_snd_pcm_readi(snd_pcm_t*, void*, snd_pcm_uframes_t);
+extern "C" snd_pcm_sframes_t __wrap_snd_pcm_readi(snd_pcm_t* pcm,
+                                                  void* data,
+                                                  snd_pcm_uframes_t frames) {
+  if (pending_read) {
+    pending_read = false;
+    return -EAGAIN;
+  }
+  if (partial_read) {
+    partial_read = false;
+    frames /= 2;
+  }
+  return __real_snd_pcm_readi(pcm, data, frames);
+}
 namespace robot::perception {
 TEST(AlsaAudioTest, RejectsInvalidConfigWithoutDeviceAccess) {
   SinglePerception config;
@@ -19,6 +40,10 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   params->set_frames_per_chunk(320);
   AlsaAudio audio(config);
   ASSERT_TRUE(audio.Init().ok());
+  partial_read = true;
+  EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
+  pending_read = true;
+  EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
   auto first = audio.GetData();
   ASSERT_TRUE(first.ok()) << first.status();
   EXPECT_EQ(first->audio().data().size(), 1280);

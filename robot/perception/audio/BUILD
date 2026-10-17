@@ -25,9 +25,21 @@ cc_library(
 
 cc_test(
     name = "alsa_audio_test",
-    srcs = ["alsa_audio_test.cc"],
+    # Link the driver directly so the fault-injection wrapper also applies in
+    # fully dynamic ARM builds (the final linker cannot wrap calls inside a DSO).
+    srcs = [
+        "alsa_audio.cc",
+        "alsa_audio.h",
+        "alsa_audio_test.cc",
+    ],
+    linkopts = [
+        "-lasound",
+        "-Wl,--wrap=snd_pcm_readi",
+    ],
     deps = [
-        ":alsa_audio",
+        ":audio_config",
+        "//robot/perception/interfaces:audio_interface",
+        "//robot/perception/proto:perception_cc_proto",
         "@googletest//:gtest_main",
     ],
 )

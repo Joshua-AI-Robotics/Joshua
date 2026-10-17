@@ -45,6 +45,7 @@ class AudioPublisher : public rclcpp::Node {
     std::vector<rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr> publishers;
     std::chrono::steady_clock::time_point last_packet = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point retry_after{};
+    std::chrono::steady_clock::time_point next_warning{};
   };
   void Publish(const std::shared_ptr<Source>& source) {
     const auto now = std::chrono::steady_clock::now();
@@ -53,8 +54,13 @@ class AudioPublisher : public rclcpp::Node {
     for (int i = 0; i < 8; ++i) {
       auto packet = source->interface->GetData();
       if (!packet.ok()) {
-        if (now - source->last_packet > std::chrono::seconds(2)) {
+        if (now - source->last_packet > std::chrono::seconds(2) && now >= source->next_warning) {
           RCLCPP_ERROR(get_logger(), "Audio unavailable: %s", packet.status().ToString().c_str());
+          source->next_warning = now + std::chrono::seconds(1);
+        }
+        // A reopened microphone needs normal polling while its first chunk fills.
+        // Delaying pending reads by a second would overrun the ALSA buffer again.
+        if (!absl::IsDeadlineExceeded(packet.status())) {
           source->retry_after = now + std::chrono::seconds(1);
         }
         return;

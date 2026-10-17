@@ -86,14 +86,15 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
   const auto count = snd_pcm_readi(pcm_,
                                    pending_.data() + filled_ * config_.channels() * 2,
                                    config_.frames_per_chunk() - filled_);
-  if (count == -EAGAIN || count == 0) return absl::UnavailableError("Audio chunk pending");
+  if (count == -EAGAIN || count == 0) return absl::DeadlineExceededError("Audio chunk pending");
   if (count < 0) {
     // Discard partial data. Reopen on the next call; never splice across a gap.
     CloseLocked();
     return AlsaError("read audio (will reopen)", static_cast<int>(count));
   }
   filled_ += static_cast<uint32_t>(count);
-  if (filled_ != config_.frames_per_chunk()) return absl::UnavailableError("Audio chunk pending");
+  if (filled_ != config_.frames_per_chunk())
+    return absl::DeadlineExceededError("Audio chunk pending");
   PerceptionPacket packet;
   packet.set_perception_id(id_);
   packet.set_timestamp_ns(timestamp_ns_);
