@@ -18,6 +18,11 @@ The Node Generator follows a clear, sequential process to bring the robotic syst
 
 ## Usage
 
+The launcher flag `--exit_on_node_failure` makes any configured child exit stop
+the remaining graph and return a failure to an external supervisor. The monitor
+systemd deployment enables this so a failed capture/inference node is restarted
+with the full graph. The default behavior continues monitoring surviving nodes.
+
 The Node Generator is executed from the command line, pointing to a specific configuration file.
 
 ### Running the Node Generator

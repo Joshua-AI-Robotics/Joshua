@@ -35,6 +35,8 @@ class SetupTest(unittest.TestCase):
             http = json.loads((output / "config/.storage/http").read_text())["data"]
             self.assertIsNone(http["pending"])
             self.assertEqual(http["stable"]["server_host"], ["127.0.0.1"])
+            self.assertTrue((output / "install_services.sh").is_file())
+            self.assertTrue((output / "run_monitor.sh").is_file())
             with self.assertRaises(FileExistsError):
                 render(config, output, "100.87.146.64")
             self.assertEqual(secret, (output / "webhook.secret").read_text().strip())

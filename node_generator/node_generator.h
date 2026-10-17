@@ -46,7 +46,8 @@ class NodeGenerator {
 
   // Monitors launched nodes for unexpected exits and handles process cleanup.
   // This method blocks until a shutdown signal is received or all nodes exit.
-  absl::Status MonitorNodes();
+  // Optional fail-fast mode lets an external supervisor restart the whole graph.
+  absl::Status MonitorNodes(bool exit_on_node_failure = false);
 
   // Initiates a graceful shutdown of all managed nodes.
   // max_wait_ms specifies the maximum time to wait for nodes to exit after SIGINT/SIGTERM.
@@ -64,6 +65,7 @@ class NodeGenerator {
   }
 
  private:
+  friend class NodeGeneratorMonitorTest;
   // Scans the configuration to identify all unique node IDs and their types.
   absl::Status IdentifyNodeTypes();
 

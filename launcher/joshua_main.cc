@@ -9,6 +9,7 @@
 DEFINE_string(config,
               "config/config_preset/so100/teleoperate.pbtxt",
               "Path to the robot config file");
+DEFINE_bool(exit_on_node_failure, false, "Stop the full graph if any node exits");
 
 int main(int argc, char* argv[]) {
   gflags::SetVersionString(JOSHUA_VERSION);
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    auto res = node_generator.MonitorNodes();
+    auto res = node_generator.MonitorNodes(FLAGS_exit_on_node_failure);
     if (!res.ok()) {
       LOG(ERROR) << "Failed to monitor nodes";
       return 1;

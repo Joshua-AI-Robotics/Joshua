@@ -5,6 +5,8 @@ input_boolean:
   joshua_motion_notifications:
     name: Movement notifications
     icon: mdi:motion-sensor
+  joshua_health_alerted:
+    name: Monitor outage notification sent
 input_text:
   joshua_notification_actions:
     name: Phone notification actions
@@ -50,7 +52,7 @@ script:
             data:
               title: Select your phones first
               message: >-
-                Enter the notify.mobile_app_* action names from Developer Tools →
+                Enter the notify.mobile_app_* action names from Settings → Tools →
                 Actions in the Baby Monitor dashboard's Phone notification actions.
         else:
           - action: script.joshua_notify_phones
@@ -90,6 +92,8 @@ automation:
         value_template: >-
           {% set p = trigger.event.data.payload %}
           {{ p.get('notify', false)
+             and p.get('kind') not in ['input_stale', 'input_restored',
+                                       'inference_error', 'stream_error']
              and p.event_id != states('input_text.joshua_last_notification')
              and p.get('expires_at_ns', 0) / 1000000000 > as_timestamp(now())
              and (p.get('kind') != 'movement'
@@ -106,6 +110,68 @@ automation:
           message: '{{ trigger.event.data.payload.message }}'
     mode: queued
     max: 32
+  - id: joshua_health_watchdog
+    alias: Joshua - monitor health watchdog
+    triggers:
+      - trigger: time_pattern
+        seconds: /15
+    conditions:
+      - condition: state
+        entity_id: input_boolean.joshua_notifications
+        state: 'on'
+      - condition: state
+        entity_id: binary_sensor.joshua_notification_configured
+        state: 'on'
+      - condition: state
+        entity_id: input_boolean.joshua_health_alerted
+        state: 'off'
+      - condition: template
+        value_template: >-
+          {{ states('sensor.joshua_monitor_status') in ['offline', 'degraded']
+             and as_timestamp(now()) - as_timestamp(
+               states.sensor.joshua_monitor_status.last_changed) >= 15 }}
+    actions:
+      - action: script.joshua_notify_phones
+        data:
+          title: Baby Monitor needs attention
+          message: >-
+            Monitor is {{ states('sensor.joshua_monitor_status') }}.
+            {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
+            {% if as_timestamp(now()) - (state_attr('sensor.joshua_monitor_status',
+               'received_at') | float(0)) >= 30 %}
+            No heartbeat from Joshua. Live monitoring may have stopped.
+            {% else %}
+            {% for topic, status in p.get('inputs', {}).items() if status != 'ok' %}
+            {{ topic }}: {{ status }}.
+            {% endfor %}
+            {% endif %}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.joshua_health_alerted
+    mode: single
+  - id: joshua_health_recovered
+    alias: Joshua - monitor health restored
+    triggers:
+      - trigger: state
+        entity_id: sensor.joshua_monitor_status
+        to: online
+        for: '00:00:10'
+    conditions:
+      - condition: state
+        entity_id: input_boolean.joshua_health_alerted
+        state: 'on'
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.joshua_health_alerted
+      - condition: state
+        entity_id: input_boolean.joshua_notifications
+        state: 'on'
+      - action: script.joshua_notify_phones
+        data:
+          title: Baby Monitor restored
+          message: Audio, video inference, and streaming are receiving fresh input again.
+    mode: single
 
 template:
   - triggers:
@@ -119,7 +185,16 @@ template:
         state: >-
           {% set received = as_timestamp(now()) if trigger.platform == 'event'
              else this.attributes.get('received_at', 0) | float(0) %}
-          {{ 'online' if as_timestamp(now()) - received < 30 else 'offline' }}
+          {% set p = trigger.event.data.payload if trigger.platform == 'event'
+             else this.attributes.get('payload', {}) %}
+          {% set inputs = p.get('inputs', {}) %}
+          {% set good = inputs.values() | select('equalto', 'ok') | list | count %}
+          {% if as_timestamp(now()) - received >= 30 %}offline
+          {% elif not inputs %}starting
+          {% elif good == inputs | count %}online
+          {% elif good > 0 %}degraded
+          {% elif 'waiting' in inputs.values() or 'starting' in inputs.values() %}starting
+          {% else %}offline{% endif %}
         attributes:
           received_at: >-
             {{ as_timestamp(now()) if trigger.platform == 'event'
@@ -128,11 +203,18 @@ template:
             {{ trigger.event.data.payload if trigger.platform == 'event'
                else this.attributes.get('payload', {}) }}
   - binary_sensor:
+      - name: Joshua notification configured
+        unique_id: joshua_notification_configured
+        state: >-
+          {% set targets = states('input_text.joshua_notification_actions').split(',')
+             | map('trim') | select('match', '^notify\\.mobile_app_[a-z0-9_]+$') | list %}
+          {{ targets | count > 0 }}
       - name: Joshua crying
         unique_id: joshua_crying
         availability: >-
           {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
-          {{ is_state('sensor.joshua_monitor_status', 'online') and p.get('crying') is boolean }}
+          {{ as_timestamp(now()) - (state_attr('sensor.joshua_monitor_status',
+             'received_at') | float(0)) < 30 and p.get('crying') is boolean }}
         state: >-
           {{ (state_attr('sensor.joshua_monitor_status', 'payload') or {}).get('crying', false) }}
       - name: Joshua movement
@@ -140,6 +222,7 @@ template:
         device_class: motion
         availability: >-
           {% set p = state_attr('sensor.joshua_monitor_status', 'payload') or {} %}
-          {{ is_state('sensor.joshua_monitor_status', 'online') and p.get('moving') is boolean }}
+          {{ as_timestamp(now()) - (state_attr('sensor.joshua_monitor_status',
+             'received_at') | float(0)) < 30 and p.get('moving') is boolean }}
         state: >-
           {{ (state_attr('sensor.joshua_monitor_status', 'payload') or {}).get('moving', false) }}

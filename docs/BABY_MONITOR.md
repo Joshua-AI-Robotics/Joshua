@@ -108,7 +108,7 @@ After checking the local preset and connecting the webcam/microphone:
 ./joshua_monitor_main --config "$PWD/pi5_usb.pbtxt"
 ```
 
-Five processes should start: `camera_publisher`, `audio_publisher`, `yamnet_node`,
+Six processes should start: `camera_publisher`, `audio_publisher`, `yamnet_node`,
 `video_inference_node`, `media_stream_node`, and `notification_node`. Watch for ready messages from both models and for
 capture errors. `Ctrl-C` stops the launcher and its children.
 
@@ -197,7 +197,7 @@ runtime is needed by the streaming node. The GStreamer libraries and GI Python
 bindings come from Ubuntu and must match the package's Python version.
 
 With Tailscale connected on both devices, start the updated package with the
-updated `pi5_usb.pbtxt`. The launcher starts five nodes, including the stream.
+updated `pi5_usb.pbtxt`. The launcher starts six nodes, including streaming and notifications.
 The node discovers its address using `tailscale ip -4` and prints the player URL:
 
 ```text
@@ -308,3 +308,6 @@ inference, and streaming continue. The bridge reads the secret file on each
 attempt, so correcting it does not require restarting capture. Do not commit
 or print its contents. Deployment and package upgrades must preserve the
 Home Assistant `config/` directory, accounts, and generated credential.
+
+For automatic startup, deployment updates, and the independent Home Assistant
+health watchdog, see [persistent startup](../deploy/home_assistant/README.md#persistent-startup-and-updates).

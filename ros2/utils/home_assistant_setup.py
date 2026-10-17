@@ -72,7 +72,7 @@ def render(config, output, tailscale_ip):
         )
         + "\n"
     )
-    for name in ("compose.yaml", "README.md"):
+    for name in ("compose.yaml", "README.md", "install_services.sh", "run_monitor.sh"):
         data = (templates / name).read_text().replace("RTSP_URL_PLACEHOLDER", rtsp)
         (output / name).write_text(data)
     for name in ("configuration.yaml", "baby-monitor.yaml"):

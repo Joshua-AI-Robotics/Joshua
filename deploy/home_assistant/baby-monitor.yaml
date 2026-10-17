@@ -31,6 +31,7 @@ views:
           - input_boolean.joshua_notifications
           - input_boolean.joshua_motion_notifications
           - input_text.joshua_notification_actions
+          - binary_sensor.joshua_notification_configured
       - type: button
         name: Send test notification
         icon: mdi:bell-check
@@ -47,7 +48,12 @@ views:
 
           Enter comma-separated phone actions above, for example
           `notify.mobile_app_hmoon_iphone,notify.mobile_app_wife_iphone`.
-          Find your actual names under Developer Tools → Actions.
+          Find your actual names under Settings → Tools → Actions.
+
+          {% if not is_state('binary_sensor.joshua_notification_configured', 'on') %}
+          **Automatic alerts have no configured recipient.** Edit Phone notification
+          actions above, save the working iPhone action, and send a dashboard test.
+          {% endif %}
 
           Notifications report experimental cry/motion classifications.
           An **offline** monitor cannot provide fresh detection results.

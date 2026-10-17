@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "node_generator",
@@ -13,5 +13,14 @@ cc_library(
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/status:status",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "monitor_test",
+    srcs = ["monitor_test.cc"],
+    deps = [
+        ":node_generator",
+        "@googletest//:gtest_main",
     ],
 )

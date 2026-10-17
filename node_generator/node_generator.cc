@@ -474,16 +474,24 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   }
 }
 
-absl::Status NodeGenerator::MonitorNodes() {
+absl::Status NodeGenerator::MonitorNodes(bool exit_on_node_failure) {
   LOG(INFO) << "Starting node monitoring...";
+  const size_t expected_nodes = get_launched_node_count();
 
   while (!shutdown_requested_) {
     MonitorChildProcesses();
 
     bool empty;
+    bool lost_node;
     {
       std::lock_guard<std::mutex> lock(nodes_mutex_);
       empty = launched_nodes_.empty();
+      lost_node = launched_nodes_.size() < expected_nodes;
+    }
+
+    if (exit_on_node_failure && lost_node && !shutdown_requested_) {
+      LOG(ERROR) << "A configured node exited; shutting down for supervisor restart.";
+      CleanupAndExit(1);
     }
 
     if (empty) {

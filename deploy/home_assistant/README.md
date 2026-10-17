@@ -47,6 +47,15 @@ and private listener when updating the pinned Home Assistant version.
 
 ## Add the camera
 
+Before adding the camera, open Settings → System → Network and set both the
+Home Assistant URL and local network URL to the same Tailscale HTTPS address
+used by the phones. Disable automatic local URL selection if shown. Generic
+Camera's setup preview constructs an absolute HLS URL; an automatically detected
+HTTP/LAN address cannot serve that preview through this private HTTPS deployment.
+After changing the URLs, close any old camera setup dialog and start a fresh one.
+A preview left open without playback can expire after 60 seconds and log
+`Stream is not configured for format 'hls'`.
+
 Under Settings → Devices & services → Add integration → Generic Camera:
 
 - Stream source: **RTSP_URL_PLACEHOLDER** (inside the host-network container).
@@ -77,7 +86,7 @@ export JOSHUA_HA_WEBHOOK_FILE="$HOME/joshua-home-assistant/webhook.secret"
 Alternatively, export that variable before launching the full six-node monitor.
 Do not start a second full monitor alongside existing capture nodes.
 
-In Developer Tools → Actions, find each `notify.mobile_app_*` action. On the
+In Settings → Tools → Actions, find each `notify.mobile_app_*` action. On the
 Baby Monitor dashboard, enter the comma-separated action names into **Phone
 notification actions**. Press **Send test notification**. Once both phones
 receive it, enable **Notifications**. Enable **Movement notifications** only if
@@ -99,12 +108,69 @@ Test both phones over Wi-Fi and cellular: live video, unmuted audio, a locked-sc
 manual push, and opening the dashboard from the push. Then enable automatic
 notifications and test a cry event separately from actual model accuracy.
 The bridge suppresses duplicates, expires old events, and reports input state.
-HTTP acceptance is not proof that a phone displayed a notification.
+HTTP acceptance is not proof that a phone displayed a notification. Calling a
+phone action directly in Tools does not populate the dashboard's recipient
+field. Save that field and confirm **Joshua notification configured** is on.
 
-Home Assistant restarts automatically; Joshua's current manually started capture
-stack still requires its normal launch after a Pi reboot. A single Pi power/network
-failure also stops this notification sender; external uptime monitoring would be
-needed to report that failure remotely.
+Monitor status describes the whole graph: **online** requires every configured
+input to be healthy; **degraded** means some inputs have failed; **offline**
+means no healthy inputs or no bridge heartbeat for 30 seconds. Individual
+cry/movement readings become unavailable when their own input is stale.
+
+Home Assistant runs an independent watchdog every 15 seconds. With notifications
+enabled and recipients configured, an offline/degraded state lasting 15 seconds
+sends one outage alert, even if the launcher and notification node both stopped.
+Complete heartbeat loss is normally reported within 45–70 seconds. After ten
+seconds of healthy operation, it sends recovery and resets outage suppression.
+Short outages repaired before that window do not generate outage pushes.
+
+## Persistent startup and updates
+
+The archive includes all six nodes; installing it does not automatically enable
+capture. After reviewing the preset and setting up the webcam/microphone, keep
+the editable preset outside the release directory and use a stable package
+symlink. For example, on the Pi:
+
+```bash
+mkdir -p ~/joshua-config
+# Set joshua-current to an extracted release's joshua_main directory first.
+cp ~/joshua-current/joshua_monitor_main.runfiles/_main/config/config_preset/baby_monitor/pi5_usb.pbtxt \
+  ~/joshua-config/pi5_usb.pbtxt
+scripts=~/joshua-current/joshua_monitor_main.runfiles/_main/deploy/home_assistant
+sudo bash "$scripts/install_services.sh" "$HOME/joshua-current" \
+  "$HOME/joshua-config/pi5_usb.pbtxt" "$HOME/joshua-home-assistant" "$USER"
+# Stop any older launcher and standalone media/notification services first.
+sudo systemctl start joshua-monitor
+sudo journalctl -u joshua-monitor -f
+```
+
+The installer enables persistent `joshua-home-assistant.service` and
+`joshua-monitor.service`. It preserves HA configuration and credentials. The
+launcher runs as the supplied user, reads the specified protobuf config, and
+waits for local HA/Tailscale readiness. A failed child causes the graph to exit
+and systemd to restart it; an explicit `systemctl stop joshua-monitor` stays
+stopped until started or rebooted. Stopping the monitor leaves Home Assistant
+running so its watchdog can report the outage. The services are separate for
+this reason, although the archive carries everything needed to install them.
+
+Build updates from the repository root:
+
+```bash
+TARGET=//launcher:joshua_pkg docker compose run --rm build-u24-arm64
+scp dist/u24/arm64/joshua_pkg-0.2.3-u24-arm64.tar.gz hmoon@172.20.3.11:~/
+```
+
+Extract into a new release directory on the Pi. Stop `joshua-monitor`, switch
+`~/joshua-current` to that release's `joshua_main` directory, and start the service.
+Do not extract over a running package. Config-only changes need a service restart,
+not a rebuild. For changes to these installer scripts, rerun the installer before
+restarting. For HA template changes, back up and update only
+`config/packages/joshua.yaml`, check HA configuration, then restart its container;
+do not rerun `home_assistant_setup` over an existing deployment.
+
+With the services installed, both Home Assistant and the complete Joshua pipeline
+start after reboot. A single Pi power/network failure also stops Home Assistant's
+watchdog; external uptime monitoring is needed to report that failure remotely.
 
 Back up the entire deployment directory including `.storage` and private secrets.
 It contains account credentials and must not be committed. Update the pinned image
