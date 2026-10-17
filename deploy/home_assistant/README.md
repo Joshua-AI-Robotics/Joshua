@@ -159,7 +159,7 @@ Build updates from the repository root:
 
 ```bash
 TARGET=//launcher:joshua_pkg docker compose run --rm build-u24-arm64
-scp dist/u24/arm64/joshua_pkg-0.2.3-u24-arm64.tar.gz hmoon@172.20.3.11:~/
+scp dist/u24/arm64/joshua_pkg-0.2.3-u24-arm64.tar.gz "<SSH_USER>@<PI_LAN_IP>:~/"
 ```
 
 Extract into a new release directory on the Pi. Stop `joshua-monitor`, switch

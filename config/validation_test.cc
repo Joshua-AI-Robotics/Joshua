@@ -248,7 +248,7 @@ TEST(ValidationTest, MediaStreamingRejectsConflictsAndPublicListeners) {
   auto* stream = config.mutable_utilities()->mutable_media_streams(0);
   stream->set_listen_address("0.0.0.0");
   EXPECT_FALSE(ValidateConfig(config).ok());
-  stream->set_listen_address("100.87.146.64");
+  stream->set_listen_address("100.64.0.10");
   EXPECT_TRUE(ValidateConfig(config).ok());
   stream->set_http_port(8554);
   EXPECT_FALSE(ValidateConfig(config).ok());

@@ -8,14 +8,13 @@ startup on the Raspberry Pi 5.
 The reusable audio pipeline is proposed for `develop` in
 [PR #122](https://github.com/Joshua-AI-Robotics/Joshua/pull/122). The other stack
 PRs (#123–127) are closed. The complete stack now lives on
-`experimental/baby-monitor` (formerly `hsmoon5458/monitor-autostart`); the earlier
-`hmoon/experimental_babymonitor` branch was removed because its changes are
-included here. Build this branch to get the complete implementation. The audio
-PR alone does not contain the full monitor.
+`experimental/baby-monitor`; earlier stages are included here. Build this branch
+to get the complete implementation. The audio PR alone does not contain the full
+monitor.
 
 ## Contents
 
-- [Current Pi installation](#current-pi-installation)
+- [Deployment placeholders](#deployment-placeholders)
 - [What is implemented](#what-is-implemented)
 - [How the pipeline works](#how-the-pipeline-works)
 - [Build and transfer the package](#build-and-transfer-the-package)
@@ -26,38 +25,34 @@ PR alone does not contain the full monitor.
 - [Operate and troubleshoot](#operate-and-troubleshoot)
 - [Where to change the implementation](#where-to-change-the-implementation)
 
-## Current Pi installation
+## Deployment placeholders
 
-Snapshot of the working installation on **2026-10-17**, runtime commit
-**`76cef4e`**. Later documentation-only commits do not require redeployment.
+This public guide uses placeholders for deployment-specific values. Keep actual
+addresses, usernames, phone actions, package checksums, and deployment notes in
+private documentation. Replace angle-bracket placeholders before running commands.
+The `~/joshua-*` paths below are suggested defaults, not a personal inventory.
 
-| Item | Current value |
+| Item | Placeholder or default |
 | --- | --- |
-| Hardware / OS | Pi 5, Ubuntu 24.04 ARM64, ROS 2 Jazzy, Python 3.12 |
-| SSH on the LAN | `hmoon@172.20.3.11` |
-| Hostname / Tailscale IP | `pi1` / `100.87.146.64` |
-| Home Assistant address | `https://pi1.tail66db69.ts.net` |
-| Direct browser stream | `http://100.87.146.64:8889/baby/` |
+| Supported platform | Pi 5, Ubuntu 24.04 ARM64, ROS 2 Jazzy, Python 3.12 |
+| SSH on the LAN | `<SSH_USER>@<PI_LAN_IP>` |
+| Hostname / Tailscale IP | `<PI_HOSTNAME>` / `<PI_TAILSCALE_IP>` |
+| Home Assistant address | `https://<PI_TAILSCALE_HOSTNAME>` |
+| Direct browser stream | `http://<PI_TAILSCALE_IP>:8889/baby/` |
 | Camera source inside Home Assistant | `rtsp://127.0.0.1:8554/baby` |
-| Existing camera entity | `camera.camera_baby_monitor` |
-| Working iPhone action | `notify.mobile_app_hye_sungs_iphone` |
+| Existing camera entity | `camera.<YOUR_CAMERA_ENTITY>` |
+| iPhone action | `notify.mobile_app_<YOUR_PHONE>` |
 | Active package symlink | `~/joshua-current` |
-| Active release | `~/joshua-releases/76cef4e/joshua_main` |
+| Active release | `~/joshua-releases/<RELEASE_ID>/joshua_main` |
 | Editable runtime config | `~/joshua-config/pi5_usb.pbtxt` |
 | Home Assistant data and Compose deployment | `~/joshua-home-assistant` |
-| Saved diagnostic recording | `~/joshua-data/av-check-01/` |
+| Saved diagnostic recording | `~/joshua-data/<DIAGNOSTIC_RUN>/` |
+| Uploaded package | `<PACKAGE_ARCHIVE>.tar.gz` |
+| Package SHA-256 | `<PACKAGE_SHA256>` |
 
-The installed archive is
-`joshua_pkg-0.2.3-u24-arm64-autostart-76cef4e.tar.gz`; its SHA-256 is
-`267e1b6ae27823084b69051e7d8b34fc013a1c44ac1bc20a139972e77ec8b198`.
-Older package directories were cleaned up. Use `~/joshua-current`, not the old
-`~/joshua_main` path.
-
-Both systemd services are installed and enabled. The entire pipeline and Home
-Assistant were verified after reboot, including audio/video decoding. A real
-pipeline-outage notification was confirmed on the iPhone. The existing dashboard
-already references `camera.camera_baby_monitor`; leave that working entity alone.
-Fresh-install templates use `camera.baby_monitor` instead.
+Use the stable `~/joshua-current` symlink for operations. Fresh-install dashboard
+templates expect `camera.baby_monitor`; an existing installation must retain
+its actual entity ID or update the dashboard to match it.
 
 ## What is implemented
 
@@ -179,8 +174,9 @@ offline.
 With notifications enabled and recipients configured, the HA watchdog checks
 every 15 seconds and alerts when offline/degraded status has lasted 15 seconds.
 Full heartbeat loss normally produces one outage notification after roughly
-45–70 seconds; the tested outage arrived after 54 seconds. Ten seconds of healthy
-operation triggers a recovery notification and resets outage suppression. Brief
+45–70 seconds; exact timing depends on the heartbeat and watchdog schedules. Ten
+seconds of healthy operation triggers a recovery notification and resets outage
+suppression. Brief
 failures repaired before these windows may not alert.
 
 The bridge queues bounded, expiring events and retries failed HTTP requests.
@@ -234,7 +230,7 @@ cp "dist/u24/arm64/joshua_pkg-${monitor_version}-u24-arm64.tar.gz" \
   sha256sum "$monitor_archive" > "$monitor_archive.sha256"
 )
 scp "dist/u24/arm64/$monitor_archive" \
-  "dist/u24/arm64/$monitor_archive.sha256" hmoon@172.20.3.11:~/
+  "dist/u24/arm64/$monitor_archive.sha256" "<SSH_USER>@<PI_LAN_IP>:~/"
 printf 'Release: %s\nArchive: %s\n' "$monitor_release" "$monitor_archive"
 ```
 
@@ -325,12 +321,12 @@ sudo systemctl start joshua-monitor
 ```
 
 Also restore any incompatible config/HA YAML changes from the corresponding
-backup. The current Pi had older releases removed, so rolling back to a removed
-release first requires transferring and extracting its archive again.
+backup. If the previous release was removed, transfer and extract its archive again
+before rolling back.
 
 ## First installation on a new Pi
 
-Skip this section for the already configured `pi1`.
+Skip this section if your Pi is already configured.
 
 ### 1. Prepare the runtime and devices
 
@@ -422,8 +418,8 @@ processes can remain alive while their ROS data flow stops after logout.
 
 ## Connect the iPhone and add the camera
 
-1. Enable Tailscale on the iPhone. Open the Pi's HTTPS address; for the existing
-   Pi, use **`https://pi1.tail66db69.ts.net`**. Complete HA onboarding if this is a
+1. Enable Tailscale on the iPhone. Open the Pi's HTTPS address,
+   **`https://<PI_TAILSCALE_HOSTNAME>`**. Complete HA onboarding if this is a
    new installation and create your owner account.
 2. Install **Home Assistant**, published by **Nabu Casa, Inc.** Add a server
    manually using that same HTTPS address, sign in, allow notifications, and
@@ -431,7 +427,8 @@ processes can remain alive while their ROS data flow stops after logout.
 3. In HA, check **Settings → System → Network**. Both the Home Assistant URL and
    local network URL should use the Tailscale HTTPS address. Disable automatic
    local URL selection if shown. If the URLs are managed by YAML, update the
-   corresponding settings there. The current Pi already has the correct URLs.
+   corresponding settings there. Existing installations may already have the
+   correct URLs.
 4. For a new installation, open **Settings → Devices & services → Add
    integration → Generic Camera**. Set stream source to
    **`rtsp://127.0.0.1:8554/baby`**, transport to **TCP**, still-image URL blank,
@@ -439,8 +436,8 @@ processes can remain alive while their ROS data flow stops after logout.
    the phone directly.
 5. Name the device **Baby Monitor**. For a fresh dashboard, set its entity ID to
    **`camera.baby_monitor`** in entity settings. A display name and an entity ID
-   are different fields. The existing Pi uses **`camera.camera_baby_monitor`**,
-   and its deployed dashboard already matches that ID.
+   are different fields. If your existing entity has a different ID, use that ID
+   in the dashboard rather than creating a duplicate camera.
 6. Open **Baby Monitor** in the sidebar. Tap the camera for playback controls and
    unmute. iOS can require a tap before audio plays; continuous playback while
    the app is backgrounded or the phone is locked is not guaranteed.
@@ -464,8 +461,8 @@ seconds with `Stream is not configured for format 'hls'`.
    `notify.mobile_app_` and find the action registered by the iPhone. These tools
    are not a separate Developer Tools sidebar item in this installation.
 2. On the **Baby Monitor** dashboard, save that exact action in **Phone
-   notification actions**. The current working value is
-   **`notify.mobile_app_hye_sungs_iphone`**. For multiple phones, enter their
+   notification actions**. Use **`notify.mobile_app_<YOUR_PHONE>`**, replacing the
+   placeholder with the action registered by your app. For multiple phones, enter their
    actual action names separated by commas.
 3. Check that **Joshua notification configured** is on. This checks recipient
    configuration, not delivery; a misspelled or obsolete action still needs to
@@ -521,8 +518,8 @@ and an outage push in roughly 45–70 seconds. Then restart:
 sudo systemctl start joshua-monitor
 ```
 
-Confirm online status, restored audio/video, and a recovery push. The current
-installation passed this test. Monitoring is paused during the stop interval.
+Confirm online status, restored audio/video, and a recovery push. Verify this on
+your deployment after setup. Monitoring is paused during the stop interval.
 
 ## Operate and troubleshoot
 
@@ -533,7 +530,7 @@ Tailscale readiness. `joshua-monitor.service` sources ROS Jazzy, reads
 `/etc/joshua-monitor.env`, waits for HA/Tailscale, and runs:
 
 ```text
-./joshua_monitor_main --config=/home/hmoon/joshua-config/pi5_usb.pbtxt --exit_on_node_failure
+./joshua_monitor_main --config=/home/<SSH_USER>/joshua-config/pi5_usb.pbtxt --exit_on_node_failure
 ```
 
 That flag makes a child exit fail the entire graph; systemd restarts it after
@@ -585,7 +582,7 @@ source /opt/ros/jazzy/setup.bash
 | `media_stream_node: No such file or directory` | Old/incomplete package; deploy the complete `joshua_pkg` from this branch and preserve runfiles. |
 | ROS image subscriber reports incompatible reliability | Publisher uses best-effort QoS; subscriber must accept best-effort, e.g. SensorDataQoS. |
 | Raw remote ROS image viewer has long delay | Use the encoded WebRTC feed for phone viewing; raw images consume substantial bandwidth. |
-| Dashboard says entity not found | Match its camera entity to the actual integration entity, especially `camera.camera_baby_monitor` on the current Pi. |
+| Dashboard says entity not found | Match its camera entity to the actual integration entity, using `camera.<YOUR_CAMERA_ENTITY>` for an existing installation. |
 | App connects but WebRTC does not | Check Tailscale access to 18555 TCP/UDP as well as HTTPS 443. |
 | Direct player works, HA preview fails | Check HA's network URLs, exact `rtsp://` source, and refresh the setup dialog. |
 | Cry playback gets animal labels | Inspect captured audio and scores; the classifier can misclassify. Successful streaming does not establish recognition accuracy. |

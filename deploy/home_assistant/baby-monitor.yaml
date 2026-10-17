@@ -47,7 +47,7 @@ views:
           playback controls and unmute audio.
 
           Enter comma-separated phone actions above, for example
-          `notify.mobile_app_hmoon_iphone,notify.mobile_app_wife_iphone`.
+          `notify.mobile_app_phone_one,notify.mobile_app_phone_two`.
           Find your actual names under Settings → Tools → Actions.
 
           {% if not is_state('binary_sensor.joshua_notification_configured', 'on') %}

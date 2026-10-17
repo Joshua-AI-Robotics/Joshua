@@ -64,7 +64,7 @@ factory's audio dependency.
 From the build machine, substitute the actual generated filename:
 
 ```bash
-scp dist/u24/arm64/joshua_pkg-*-u24-arm64.tar.gz hmoon@172.20.3.11:~/
+scp dist/u24/arm64/joshua_pkg-*-u24-arm64.tar.gz "<SSH_USER>@<PI_LAN_IP>:~/"
 ```
 
 On the Pi, extract into a new directory and locate the bundled preset:

@@ -19,7 +19,7 @@ class SetupTest(unittest.TestCase):
         stream.rtsp_port = 28554
         with tempfile.TemporaryDirectory() as root:
             output = Path(root) / "ha"
-            render(config, output, "100.87.146.64")
+            render(config, output, "100.64.0.10")
             secret = (output / "webhook.secret").read_text().strip()
             self.assertEqual(len(secret), 64)
             self.assertIn(secret, (output / "config/secrets.yaml").read_text())
@@ -30,7 +30,7 @@ class SetupTest(unittest.TestCase):
                 "rtsp://127.0.0.1:28554/nursery", (output / "README.md").read_text()
             )
             relay = json.loads((output / "go2rtc.yaml").read_text())
-            self.assertEqual(relay["webrtc"]["listen"], "100.87.146.64:18555")
+            self.assertEqual(relay["webrtc"]["listen"], "100.64.0.10:18555")
             self.assertEqual(relay["api"]["listen"], "127.0.0.1:1984")
             http = json.loads((output / "config/.storage/http").read_text())["data"]
             self.assertIsNone(http["pending"])
@@ -38,7 +38,7 @@ class SetupTest(unittest.TestCase):
             self.assertTrue((output / "install_services.sh").is_file())
             self.assertTrue((output / "run_monitor.sh").is_file())
             with self.assertRaises(FileExistsError):
-                render(config, output, "100.87.146.64")
+                render(config, output, "100.64.0.10")
             self.assertEqual(secret, (output / "webhook.secret").read_text().strip())
 
     def test_invalid_ip_and_conflicting_port(self):
@@ -51,7 +51,7 @@ class SetupTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 render(config, output, "192.168.1.20")
             with self.assertRaises(ValueError):
-                render(config, output, "100.87.146.64")
+                render(config, output, "100.64.0.10")
             self.assertFalse(output.exists())
 
 

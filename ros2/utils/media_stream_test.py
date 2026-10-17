@@ -45,11 +45,11 @@ class MediaTest(unittest.TestCase):
         for address in ("0.0.0.0", "192.168.1.2", "8.8.8.8", "::"):
             with self.assertRaises(ValueError):
                 private_address(address)
-        self.assertEqual(private_address("100.87.146.64"), "100.87.146.64")
-        config = server_config(c, "100.87.146.64")
+        self.assertEqual(private_address("100.64.0.10"), "100.64.0.10")
+        config = server_config(c, "100.64.0.10")
         self.assertEqual(config["rtspAddress"], f"127.0.0.1:{c.rtsp_port}")
         self.assertFalse(config["webrtcIPsFromInterfaces"])
-        self.assertEqual(config["webrtcAdditionalHosts"], ["100.87.146.64"])
+        self.assertEqual(config["webrtcAdditionalHosts"], ["100.64.0.10"])
         self.assertEqual(config["authInternalUsers"][0]["ips"], ["127.0.0.0/8"])
         c.stream_name = "bad/name ! fakesink"
         with self.assertRaises(ValueError):
