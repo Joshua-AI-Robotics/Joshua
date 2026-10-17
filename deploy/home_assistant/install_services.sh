@@ -44,6 +44,7 @@ Wants=network-online.target tailscaled.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=$ha_dir
+ExecStartPre=/usr/bin/tailscale wait
 ExecStart=/usr/bin/docker compose up -d --wait --wait-timeout 120
 TimeoutStartSec=180
 
