@@ -19,6 +19,20 @@ Target: Ubuntu 24.04 ARM64, ROS 2 Jazzy, Python 3.12. Use Docker for builds:
 TARGET=//launcher:joshua_pkg docker compose run --rm build-u24-arm64
 ```
 
+With an existing Ubuntu 24.04 ARM64/Jazzy development environment, Bazel can
+also run directly from the repository:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+bazel build --config=u24 --config=arm64-base \
+  --@rules_python//python/config_settings:python_version=3.12 //launcher:joshua_pkg
+```
+
+The direct command writes `bazel-bin/launcher/joshua_pkg.tar.gz`. The Compose
+task additionally copies a versioned archive into `dist/u24/arm64/`.
+The architecture flag alone does not provide a cross-compilation sysroot;
+the build environment must supply the matching ARM64 ROS and system libraries.
+
 Models are downloaded at build time from Google's Raspberry Pi examples and
 verified by SHA-256 in `MODULE.bazel`; the package includes their model files,
 embedded labels, pinned LiteRT runtime, and Python runfiles. It does not download
@@ -133,7 +147,7 @@ reliable QoS; input subscriptions use best effort and bounded history. Inputs
 older than two seconds are rejected. Nodes report a stale source after three
 seconds without fresh input; there is no phone delivery in this milestone.
 
-All thresholds, topics, model paths, and thread counts live in the protobuf
+Detection thresholds, topics, model paths, and thread counts live in the protobuf
 preset. Model paths can override the bundled model only with the same input,
 output, and label-file contract. The experimental wrappers intentionally do not
 use the actuator-oriented `InferenceHost`/`ActionCommand` API.
