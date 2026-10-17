@@ -47,11 +47,16 @@ static void Fault(void) {
   JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_STATE);
   Unlock(key);
 }
+static uint64_t TimeUs(void) {
+  const uint64_t now = ClockP_getTimeUsec();
+  JoshuaService(&channel, now);
+  return now;
+}
 static void Watchdog(void* ignored) {
   (void)ignored;
   for (;;) {
     const uintptr_t key = Lock();
-    JoshuaEthercatProfileTick(&profile, ClockP_getTimeUsec(), profile.operational);
+    JoshuaEthercatProfileTick(&profile, TimeUs(), profile.operational);
     Unlock(key);
     ClockP_usleep(1000);
   }
@@ -205,10 +210,8 @@ static void Run(void* ignored) {
   (void)ignored;
   Drivers_open();
   DebugP_assert(Board_driversOpen() == SystemP_SUCCESS);
-  const JoshuaEthercatProfileConfig config = {.identity = {.board_id = JW_BOARD_AM243,
-                                                           .fw_name = "am243-soes-jw",
-                                                           .n_channels = 1,
-                                                           .channel_drives = {JW_DRIVE_STEP_DIR}},
+  JoshuaInit(&channel, (uint32_t)ClockP_getTimeUsec() | 1u, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+  const JoshuaEthercatProfileConfig config = {.identity = channel.runtime.identity,
                                               .artifact = "am243-soes",
                                               .context = &channel,
                                               .command = JoshuaCommand,
@@ -250,7 +253,7 @@ static void Run(void* ignored) {
                                     .vendor_id = JOSHUA_SII_VENDOR,
                                     .product_code = JOSHUA_SII_PRODUCT,
                                     .revision = JOSHUA_SII_REVISION,
-                                    .time_us = ClockP_getTimeUsec,
+                                    .time_us = TimeUs,
                                     .lock = Lock,
                                     .unlock = Unlock,
                                     .eeprom_handler = EEP_process};

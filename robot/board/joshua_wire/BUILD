@@ -70,17 +70,17 @@ cc_test(
     name = "joshua_wire_session_test",
     srcs = ["joshua_wire_session_test.cc"],
     deps = [
-        "//firmware/common/soes:joshua_ethercat_soes",
-        "//third_party/soes",
         ":joshua_wire_board",
         ":joshua_wire_session",
         "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_profiles",
+        "//firmware/common/soes:joshua_ethercat_soes",
         "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/time",
         "@googletest//:gtest_main",
+        "@soes",
     ],
 )
 

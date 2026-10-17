@@ -8,6 +8,7 @@ cc_library(
     ],
     includes = ["."],
     visibility = ["//visibility:public"],
+    deps = ["//firmware/common:joshua_wire_ethercat"],
 )
 
 cc_library(
