@@ -3,6 +3,16 @@
 
 #include <string.h>
 
+/**
+ * @brief Encode a reply with execution COMPLETE for OK/ERROR and REJECTED for other statuses.
+ *
+ * @param[out] out Buffer receiving the common reply header and optional data.
+ * @param[in] cap Size of out in bytes.
+ * @param[in] status Protocol status to include in the reply.
+ * @param[in] data Reply data; may be NULL when len is zero.
+ * @param[in] len Size of data in bytes, excluding the reply header.
+ * @return Encoded reply length in bytes, or -1 if the reply cannot be encoded.
+ */
 static int result(uint8_t* out, size_t cap, jw_status_t status, const uint8_t* data, size_t len) {
   return jw_encode_reply_payload(out,
                                  cap,
@@ -13,6 +23,22 @@ static int result(uint8_t* out, size_t cap, jw_status_t status, const uint8_t* d
                                  data,
                                  len);
 }
+
+/**
+ * @brief Dispatch an actuator-profile operation against the software channel.
+ *
+ * Successful mutations update the function state, epoch and action token.
+ * GET_FEEDBACK returns cached, command-derived feedback without changing those
+ * state fields; this backend does not measure motion or drive GPIOs.
+ *
+ * @param[in,out] context Non-null pointer to an initialized JoshuaChannel.
+ * @param[in] command Non-null parent command supplying session/message action IDs.
+ * @param[in] request Non-null decoded request whose profile/version/operation the runtime checked.
+ * @param[out] out Non-null buffer receiving the common reply header and optional feedback.
+ * @param[in] cap Size of out in bytes.
+ * @return Encoded reply length in bytes, or -1 if feedback or reply encoding
+ * fails. Rejected operations produce an encoded protocol status.
+ */
 static int profile(void* context,
                    const jw_command_t* command,
                    const jw_profile_request_t* request,
@@ -95,6 +121,17 @@ static int profile(void* context,
   }
   return data_len < 0 ? -1 : result(out, cap, status, data_len > 0 ? data : NULL, (size_t)data_len);
 }
+
+/**
+ * @brief Apply a runtime safety action, always disabling and unconfiguring the actuator.
+ *
+ * Clears the target value while retaining feedback and fault flags.
+ *
+ * @param[in,out] context Non-null pointer to an initialized JoshuaChannel.
+ * @param[in] action Runtime action: 0 resets while preserving the emergency-stop
+ * latch, 1 sets the latch, and 2 clears it for recovery. No action enables the actuator.
+ * @return None.
+ */
 static void safety(void* context, int action) {
   JoshuaChannel* c = (JoshuaChannel*)context;
   c->enabled = false;
