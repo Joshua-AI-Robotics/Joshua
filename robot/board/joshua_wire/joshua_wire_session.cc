@@ -6,13 +6,16 @@
 #include <utility>
 
 #include "firmware/common/joshua_wire.h"
+#include "firmware/common/joshua_wire_profiles.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
 namespace {
 absl::Status CheckOk(const std::vector<uint8_t>& payload) {
-  if (payload.size() != 1 || payload[0] != JW_STATUS_OK) {
-    return absl::FailedPreconditionError("JoshuaWire session management was rejected.");
+  jw_reply_t reply{};
+  if (jw_decode_reply_payload(payload.data(), payload.size(), &reply) != JW_RESULT_OK ||
+      reply.status != JW_STATUS_OK || reply.execution != JW_EXECUTION_COMPLETE) {
+    return absl::FailedPreconditionError("JoshuaWire management did not complete.");
   }
   return absl::OkStatus();
 }
@@ -44,23 +47,43 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
   else
     ready_ = false;
   const std::vector<uint8_t> request(bytes, bytes + len);
-  // One allocator/lock spans both planes. Message-only transports retain all
-  // commands; paired transports route only target/feedback through cyclic I/O.
-  auto result = cyclic_ && (cmd == JW_CMD_SET_TARGET || cmd == JW_CMD_GET_FEEDBACK)
-                    ? cyclic_->Exchange(request, cyclic_timeout_)
-                    : transport_->Exchange(request);
-  if (!result.ok()) {
-    return absl::Status(result.status().code(),
-                        std::string(result.status().message()) + "; command outcome unknown");
+  jw_profile_request_t profile{};
+  const bool on_cyclic =
+      cyclic_ && cmd == JW_CMD_PROFILE &&
+      jw_decode_profile_request(payload, payload_len, &profile) == JW_RESULT_OK &&
+      profile.profile_id == JW_PROFILE_ACTUATOR && profile.major == JW_PROFILE_VERSION_MAJOR &&
+      profile.minor == JW_PROFILE_VERSION_MINOR &&
+      (profile.operation == JW_ACTUATOR_SET_TARGET ||
+       profile.operation == JW_ACTUATOR_GET_FEEDBACK);
+  jw_frame_t sent{}, received{};
+  jw_decode_frame(request.data(), request.size(), &sent);
+  absl::Status failure = absl::UnavailableError("JoshuaWire response missing");
+  // Retry identical bytes/IDs only. The shared firmware endpoint replays its
+  // last reply without repeating side effects, including unknown outcomes.
+  std::vector<uint8_t> response;
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    auto result =
+        on_cyclic ? cyclic_->Exchange(request, cyclic_timeout_) : transport_->Exchange(request);
+    if (!result.ok()) {
+      failure = result.status();
+      continue;
+    }
+    response = std::move(*result);
+    if (jw_decode_frame(response.data(), response.size(), &received) != JW_RESULT_OK ||
+        !jw_response_matches(&sent, &received)) {
+      failure = absl::DataLossError("Uncorrelated JoshuaWire response");
+      continue;
+    }
+    jw_reply_t reply{};
+    if (jw_decode_reply_payload(received.payload, received.payload_len, &reply) != JW_RESULT_OK) {
+      failure = absl::DataLossError("Malformed JoshuaWire common reply");
+      continue;
+    }
+    if (reply.status == JW_STATUS_OUTCOME_UNKNOWN) uncertain_ = true;
+    return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
   }
-  jw_frame_t sent;
-  jw_frame_t received;
-  if (jw_decode_frame(request.data(), request.size(), &sent) != JW_RESULT_OK ||
-      jw_decode_frame(result->data(), result->size(), &received) != JW_RESULT_OK ||
-      !jw_response_matches(&sent, &received)) {
-    return absl::DataLossError("Uncorrelated JoshuaWire response; command outcome unknown.");
-  }
-  return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
+  uncertain_ = true;
+  return absl::Status(failure.code(), std::string(failure.message()) + "; command outcome unknown");
 }
 
 absl::Status JoshuaWireSession::ResetLocked() {
@@ -78,6 +101,8 @@ absl::Status JoshuaWireSession::ResetLocked() {
   ABSL_ASSIGN_OR_RETURN(auto response,
                         ExchangeLocked(JW_CMD_RESET_SESSION, JW_CHANNEL_NONE, nullptr, 0));
   ABSL_RETURN_IF_ERROR(CheckOk(response));
+  uncertain_ = false;
+  pending_.clear();
   ready_ = true;
   return absl::OkStatus();
 }
@@ -85,7 +110,7 @@ absl::Status JoshuaWireSession::ResetLocked() {
 absl::Status JoshuaWireSession::Open() {
   std::lock_guard<std::mutex> lock(mutex_);
   ready_ = false;
-  channel_configs_.clear();
+  pending_.clear();
   if (transport_ == nullptr || message_id_limit_ < 3 ||
       (cyclic_ &&
        (cyclic_timeout_ <= absl::ZeroDuration() || cyclic_timeout_ == absl::InfiniteDuration()))) {
@@ -100,31 +125,22 @@ absl::Status JoshuaWireSession::RotateLocked() {
   ready_ = false;
   // The last ID is never used for a normal command. Disable before resetting,
   // then restore configuration only; an explicit Enable is needed afterward.
-  ABSL_ASSIGN_OR_RETURN(auto stopped, ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, nullptr, 0));
+  const uint8_t domain[2] = {};
+  ABSL_ASSIGN_OR_RETURN(auto stopped, ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, 2));
   ABSL_RETURN_IF_ERROR(CheckOk(stopped));
-  ABSL_RETURN_IF_ERROR(ResetLocked());
-  ready_ = false;
-  for (const auto& [channel, payload] : channel_configs_) {
-    if (next_message_id_ >= message_id_limit_) {
-      return absl::ResourceExhaustedError("Insufficient message IDs to restore channels.");
-    }
-    ABSL_ASSIGN_OR_RETURN(auto response,
-                          ExchangeLocked(JW_CMD_CONFIGURE_CHANNEL,
-                                         channel,
-                                         payload.data(),
-                                         static_cast<uint8_t>(payload.size())));
-    ABSL_RETURN_IF_ERROR(CheckOk(response));
-  }
-  ready_ = true;
+  // Rotation never restores configuration or clears an ESTOP latch. The board
+  // must reconcile discovery/state and apply desired config explicitly.
   return absl::OkStatus();
 }
 
 absl::Status JoshuaWireSession::Close() {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (!ready_) return absl::OkStatus();
+  if (session_id_ == 0) return absl::OkStatus();
   ready_ = false;
-  auto response = ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, nullptr, 0);
-  channel_configs_.clear();
+  const uint8_t domain[2] = {};
+  auto response = ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, 2);
+  session_id_ = 0;
+  pending_.clear();
   if (!response.ok()) return response.status();
   return CheckOk(*response);
 }
@@ -142,15 +158,35 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
     return absl::FailedPreconditionError(
         "JoshuaWire session rotated; channels disabled. Enable again.");
   }
+  const bool query = command.cmd == JW_CMD_IDENTIFY || command.cmd == JW_CMD_DISCOVER ||
+                     command.cmd == JW_CMD_DESCRIBE_FUNCTION || command.cmd == JW_CMD_GET_STATUS ||
+                     command.cmd == JW_CMD_GET_DEPENDENCIES;
+  jw_profile_request_t profile{};
+  const bool is_profile =
+      command.cmd == JW_CMD_PROFILE &&
+      jw_decode_profile_request(command.payload, command.payload_len, &profile) == JW_RESULT_OK;
+  const bool profile_read =
+      is_profile &&
+      ((profile.profile_id == JW_PROFILE_ACTUATOR &&
+        profile.operation == JW_ACTUATOR_GET_FEEDBACK) ||
+       (profile.profile_id == JW_PROFILE_SENSOR && profile.operation == JW_SENSOR_READ) ||
+       (profile.profile_id == JW_PROFILE_IO && profile.operation == JW_IO_READ));
+  if ((uncertain_ || pending_.count(command.channel)) && !query && !profile_read &&
+      command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
+    return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
-  if (command.cmd == JW_CMD_CONFIGURE_CHANNEL && CheckOk(payload).ok()) {
-    auto& saved = channel_configs_[command.channel];
-    saved.clear();
-    if (command.payload_len != 0)
-      saved.assign(command.payload, command.payload + command.payload_len);
+  jw_reply_t reply{};
+  jw_decode_reply_payload(payload.data(), payload.size(), &reply);
+  if (reply.execution == JW_EXECUTION_ACCEPTED) pending_.insert(command.channel);
+  if (command.cmd == JW_CMD_GET_STATUS && reply.status == JW_STATUS_OK) {
+    jw_device_status_t state{};
+    if (jw_decode_device_status(reply.data, reply.data_len, &state) == JW_RESULT_OK &&
+        state.action_execution != JW_EXECUTION_ACCEPTED)
+      pending_.erase(command.channel);
   }
+
   return payload;
 }
 

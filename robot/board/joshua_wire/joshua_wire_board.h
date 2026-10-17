@@ -8,6 +8,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "firmware/common/joshua_wire_commands.h"
+#include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/proto/board.pb.h"
 
@@ -21,9 +22,8 @@ class JoshuaWireCommandClient;
 // Only STEP_DIR channel configuration is implemented.
 class JoshuaWireBoard : public BoardInterface {
  public:
-  JoshuaWireBoard(robot::board::BoardType expected_board_type, jw_board_id_t expected_wire_board_id)
-      : expected_board_type_(expected_board_type),
-        expected_wire_board_id_(expected_wire_board_id) {}
+  explicit JoshuaWireBoard(robot::board::BoardType expected_board_type)
+      : expected_board_type_(expected_board_type) {}
   ~JoshuaWireBoard() override {
     Teardown().IgnoreError();
   }
@@ -35,10 +35,12 @@ class JoshuaWireBoard : public BoardInterface {
  private:
   absl::Status ValidateConfig(const robot::board::Board& config) const;
   absl::Status IdentifyAndValidate(JoshuaWireCommandClient& commands,
-                                   const robot::board::Board& config) const;
+                                   const robot::board::Board& config);
 
   const robot::board::BoardType expected_board_type_;
-  const jw_board_id_t expected_wire_board_id_;
+  std::map<uint8_t, jw_function_descriptor_t> functions_;
+  uint32_t boot_id_ = 0;
+  std::map<uint8_t, jw_actuator_schema_t> schemas_;
 
   bool initialized_ = false;
   std::string name_;

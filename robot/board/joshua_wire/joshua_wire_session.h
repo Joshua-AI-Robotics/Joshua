@@ -1,13 +1,13 @@
-// Host-side JW session lifecycle, IDs, serialization and saved channel configs.
+// Host-side JW session lifecycle, IDs, serialization and uncertain outcomes.
 // Callers supply neutral commands and receive validated payloads.
 // The firmware counterpart is firmware/common/joshua_wire_firmware_session.h.
 #pragma once
 
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <vector>
 
 #include "firmware/common/joshua_wire_commands.h"
@@ -52,7 +52,8 @@ class JoshuaWireSession {
   uint32_t session_id_ = 0;
   uint32_t next_message_id_ = 1;
   bool ready_ = false;
-  std::map<uint8_t, std::vector<uint8_t>> channel_configs_;
+  bool uncertain_ = false;
+  std::set<uint8_t> pending_;
 };
 
 }  // namespace robot::board

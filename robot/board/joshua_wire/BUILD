@@ -41,6 +41,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":joshua_wire_session",
+        "//firmware/common:joshua_wire_profiles",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
@@ -50,6 +51,7 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -61,6 +63,7 @@ cc_library(
     deps = [
         "//firmware/common:joshua_wire",
         "//firmware/common:joshua_wire_commands",
+        "//firmware/common:joshua_wire_profiles",
         "//robot/comm/interfaces:correlated_cyclic_transport",
         "//robot/comm/interfaces:message_transport",
         "//utils:status_macros",
@@ -92,7 +95,9 @@ cc_test(
         ":joshua_wire_session",
         "//firmware/am243/joshua_dual_transport:commands",
         "//firmware/common:joshua_wire_endpoint",
+        "//firmware/common:joshua_wire_profiles",
         "//robot/comm/factory:comm_factory",
+        "@abseil-cpp//absl/time",
         "@googletest//:gtest_main",
     ],
 )

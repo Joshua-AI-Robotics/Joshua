@@ -5,12 +5,20 @@
 #include <utility>
 #include <vector>
 
+#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
 #include "firmware/common/joshua_wire.h"
+#include "firmware/common/joshua_wire_endpoint.h"
 #include "robot/comm/interfaces/message_transport.h"
 
 namespace robot::board {
 class FakeJoshuaWireTransport : public robot::comm::MessageTransport {
  public:
+  FakeJoshuaWireTransport() {
+    jw_endpoint_init(&endpoint);
+    JoshuaInit(&channel, 123, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+  }
+  jw_endpoint_t endpoint{};
+  JoshuaChannel channel{};
   struct Response {
     uint8_t command;
     uint8_t channel;
@@ -29,7 +37,21 @@ class FakeJoshuaWireTransport : public robot::comm::MessageTransport {
     jw_frame_t request;
     if (jw_decode_frame(bytes.data(), bytes.size(), &request) != JW_RESULT_OK)
       return absl::DataLossError("Invalid test request");
-    Response response{request.cmd, request.channel, {JW_STATUS_OK}};
+    if (queued_.empty()) {
+      std::vector<uint8_t> out(JW_MAX_FRAME_LEN);
+      const int len = jw_endpoint_process(&endpoint,
+                                          bytes.data(),
+                                          bytes.size(),
+                                          out.data(),
+                                          out.size(),
+                                          JoshuaCommand,
+                                          JoshuaReset,
+                                          &channel);
+      if (len <= 0) return absl::DataLossError("Firmware discarded request");
+      out.resize(len);
+      return out;
+    }
+    Response response{request.cmd, request.channel, {JW_STATUS_OK, JW_EXECUTION_COMPLETE}};
     if (request.cmd != JW_CMD_RESET_SESSION && request.cmd != JW_CMD_ESTOP) {
       if (queued_.empty()) return absl::UnavailableError("Missing queued test response");
       response = std::move(queued_.front());

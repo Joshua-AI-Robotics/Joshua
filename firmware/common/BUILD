@@ -123,3 +123,14 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "joshua_device_runtime",
+    srcs = ["joshua_device_runtime.c"],
+    hdrs = ["joshua_device_runtime.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire",
+        ":joshua_wire_profiles",
+    ],
+)

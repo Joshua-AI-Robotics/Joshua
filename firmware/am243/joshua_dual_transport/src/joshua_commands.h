@@ -6,9 +6,13 @@
 
 #include <stdbool.h>
 
-#include "joshua_wire_commands.h"
+#include "joshua_device_runtime.h"
 
 typedef struct {
+  jw_device_runtime_t runtime;
+  jw_runtime_function_t function;
+  uint8_t schema[JW_ACTUATOR_SCHEMA_LEN];
+  jw_feedback_t feedback;
   bool configured;
   bool enabled;
   bool estopped;
@@ -22,6 +26,7 @@ typedef struct {
 extern "C" {
 #endif
 
+void JoshuaInit(JoshuaChannel* channel, uint32_t boot_id, uint32_t planes);
 int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, size_t capacity);
 void JoshuaReset(void* context);
 // EtherCAT safety adapter for this software-only channel. A physical backend

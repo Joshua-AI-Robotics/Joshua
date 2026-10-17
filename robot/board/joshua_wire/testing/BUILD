@@ -6,7 +6,9 @@ cc_library(
     hdrs = ["fake_joshua_wire_transport.h"],
     visibility = ["//robot/board:__subpackages__"],
     deps = [
+        "//firmware/am243/joshua_dual_transport:commands",
         "//firmware/common:joshua_wire",
+        "//firmware/common:joshua_wire_endpoint",
         "//robot/comm/interfaces:message_transport",
     ],
 )

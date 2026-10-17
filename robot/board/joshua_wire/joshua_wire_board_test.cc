@@ -1,56 +1,15 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
-#include <memory>
-
-#include "absl/status/status.h"
 #include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
-#include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
-#include "robot/comm/proto/comm.pb.h"
-
 namespace robot::board {
 namespace {
-
-// A distinct identity exercises the shared engine independently of Teensy.
 class FakeJoshuaWireBoard : public JoshuaWireBoard {
  public:
-  FakeJoshuaWireBoard()
-      : JoshuaWireBoard(robot::board::BoardType::ARDUINO_UNO, JW_BOARD_ARDUINO_UNO) {}
+  FakeJoshuaWireBoard() : JoshuaWireBoard(ARDUINO_UNO) {}
 };
-
-FakeJoshuaWireTransport::Response MakeIdentifyResponse(
-    uint8_t n_channels, jw_board_id_t board_id = JW_BOARD_ARDUINO_UNO) {
-  jw_identify_response_t response{};
-  response.board_id = board_id;
-  response.n_channels = n_channels;
-  for (uint8_t i = 0; i < n_channels; i++) {
-    response.channel_drives[i] = JW_DRIVE_STEP_DIR;
-  }
-  uint8_t buf[JW_MAX_FRAME_LEN];
-  const int len = jw_encode_identify_payload(buf, sizeof(buf), &response);
-  return {JW_CMD_IDENTIFY, JW_CHANNEL_NONE, std::vector<uint8_t>(buf, buf + len)};
-}
-
-FakeJoshuaWireTransport::Response MakeStatusResponse(uint8_t cmd,
-                                                     uint8_t channel,
-                                                     jw_status_t status) {
-  uint8_t buf[JW_MAX_FRAME_LEN];
-  const int len = jw_encode_status_payload(status, buf, sizeof(buf));
-  return {cmd, channel, std::vector<uint8_t>(buf, buf + len)};
-}
-
-FakeJoshuaWireTransport::Response MakeFeedbackResponse(uint8_t channel,
-                                                       float position,
-                                                       float velocity,
-                                                       uint16_t fault_flags) {
-  jw_feedback_t feedback{position, velocity, fault_flags};
-  uint8_t buf[JW_MAX_FRAME_LEN];
-  const int len = jw_encode_feedback_payload(buf, sizeof(buf), &feedback);
-  return {JW_CMD_GET_FEEDBACK, channel, std::vector<uint8_t>(buf, buf + len)};
-}
-
 void AddStepDirChannel(robot::board::Board* board,
                        uint32_t index,
                        uint32_t step_pin,
@@ -84,276 +43,120 @@ robot::board::Board MakeBoardConfig() {
 
 class JoshuaWireBoardTest : public ::testing::Test {
  protected:
+  std::shared_ptr<FakeJoshuaWireTransport> transport_ = std::make_shared<FakeJoshuaWireTransport>();
   void SetUp() override {
-    transport_ = std::make_shared<FakeJoshuaWireTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
               std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
         });
   }
-
   void TearDown() override {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
-
-  // Init() does RESET_SESSION, IDENTIFY, then CONFIGURE_CHANNEL per configured
-  // channel (in config.channels() order, i.e. index 0, 1, ...); tests that
-  // expect Init to succeed must queue IDENTIFY plus one CONFIGURE_CHANNEL
-  // reply per channel actually declared in the config passed to Init().
-  void QueueSuccessfulInit(uint8_t n_channels = 1) {
-    transport_->QueueResponse(MakeIdentifyResponse(n_channels));
-    for (uint8_t i = 0; i < n_channels; i++) {
-      transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, i, JW_STATUS_OK));
-    }
-  }
-
-  std::shared_ptr<FakeJoshuaWireTransport> transport_;
 };
-
-TEST_F(JoshuaWireBoardTest, InitIdentifiesAndConfiguresEveryChannel) {
-  QueueSuccessfulInit();
+TEST_F(JoshuaWireBoardTest, DiscoversDescribesAndReconcilesBeforeConfiguringWithoutEnable) {
   FakeJoshuaWireBoard board;
-
   auto status = board.Init(MakeBoardConfig());
-
-  EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_calls_, 3);
-  ASSERT_EQ(transport_->written_.size(), 3u);
-  jw_frame_t reset;
-  ASSERT_EQ(jw_decode_frame(transport_->written_[0].data(), transport_->written_[0].size(), &reset),
-            JW_RESULT_OK);
-  EXPECT_EQ(reset.cmd, JW_CMD_RESET_SESSION);
-  EXPECT_EQ(reset.proto_ver, JW_PROTO_VERSION);
-}
-
-TEST_F(JoshuaWireBoardTest, EnvelopeValidatesCommandAndChannel) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
+  ASSERT_TRUE(status.ok()) << status;
+  EXPECT_TRUE(transport_->channel.configured);
+  EXPECT_FALSE(transport_->channel.enabled);
   auto channel = board.OpenChannel(0);
   ASSERT_TRUE(channel.ok());
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_DISABLE, 0, JW_STATUS_OK));
-  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kDataLoss);
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
-  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kDataLoss);
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 0, JW_STATUS_OK));
   EXPECT_TRUE((*channel)->Enable().ok());
-}
-
-TEST_F(JoshuaWireBoardTest, InitConfiguresMultipleChannelsOnOneBoard) {
-  // Multiple motors on one board: config declares two channels on distinct
-  // pins, Init() must push CONFIGURE_CHANNEL for each in order, and both
-  // channels must be independently addressable afterward.
-  auto config = MakeBoardConfig();  // Already has channel 0 on pins 2/3/4.
-  AddStepDirChannel(&config, /*index=*/1, /*step_pin=*/5, /*dir_pin=*/6, /*enable_pin=*/7);
-  QueueSuccessfulInit(/*n_channels=*/2);
-  FakeJoshuaWireBoard board;
-
-  auto status = board.Init(config);
-
-  ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_calls_, 4);  // RESET + IDENTIFY + 2 CONFIGURE_CHANNEL.
-
-  auto channel0 = board.OpenChannel(0);
-  auto channel1 = board.OpenChannel(1);
-  ASSERT_TRUE(channel0.ok());
-  ASSERT_TRUE(channel1.ok());
-
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 1, JW_STATUS_OK));
-  EXPECT_TRUE((*channel1)->Enable().ok());
-  EXPECT_EQ(transport_->last_written_[12], 1);  // Reached the wire as channel 1, not 0.
-}
-
-TEST_F(JoshuaWireBoardTest, RetiredProtocolValueIsRejectedBeforeTransportAccess) {
-  auto config = MakeBoardConfig();
-  config.set_protocol(static_cast<BoardProtocol>(1));
-  FakeJoshuaWireBoard board;
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_EQ(transport_->exchange_calls_, 0);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsWrongBoardType) {
-  auto config = MakeBoardConfig();
-  config.set_board_type(robot::board::BoardType::MOCK);
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsUnsupportedCapability) {
-  auto config = MakeBoardConfig();
-  config.mutable_comm()->set_transport_type(robot::comm::BYTE_STREAM);
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsMissingFirmwareSpec) {
-  auto config = MakeBoardConfig();
-  config.clear_firmware();
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsNonStepDirDrive) {
-  auto config = MakeBoardConfig();
-  config.mutable_channels(0)->set_drive(robot::board::DriveInterface::SERVO_BUS_UART);
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsPinOutOfMcuRange) {
-  auto config = MakeBoardConfig();
-  config.mutable_channels(0)->mutable_step_dir()->set_step_pin(300);  // Doesn't fit uint8_t.
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsStepPulseWidthOutOfWireRange) {
-  auto config = MakeBoardConfig();
-  config.mutable_channels(0)->mutable_step_dir()->set_step_pulse_width_us(
-      70000);  // Doesn't fit uint16_t.
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, ConfigureChannelSendsStepPulseWidthOnTheWire) {
-  auto config = MakeBoardConfig();
-  config.mutable_channels(0)->mutable_step_dir()->set_step_pulse_width_us(500);
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-
-  ASSERT_TRUE(board.Init(config).ok());
-
-  // CONFIGURE_CHANNEL payload: max_pulse_rate_hz(4) + invert_dir(1) +
-  // enable_active_low(1) + step_pin(1) + dir_pin(1) + enable_pin(1) +
-  // step_pulse_width_us(2, LE) — starts at byte 13.
-  ASSERT_EQ(transport_->written_.size(), 3u);
-  const auto& configure_frame = transport_->written_[2];
-  ASSERT_EQ(configure_frame[11], JW_CMD_CONFIGURE_CHANNEL);
-  EXPECT_EQ(configure_frame[22], 0xf4);  // 500 & 0xFF
-  EXPECT_EQ(configure_frame[23], 0x01);  // 500 >> 8
-}
-
-TEST_F(JoshuaWireBoardTest, InitRejectsDuplicateChannelIndex) {
-  auto config = MakeBoardConfig();
-  auto* channel = config.add_channels();
-  channel->set_index(0);  // Same index as the existing channel.
-  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(JoshuaWireBoardTest, InitFailsWhenBoardIdMismatches) {
-  // board_id mirrors BoardType value-for-value specifically so Init() can
-  // catch "wrong device on this port" (e.g. a re-enumerated serial path
-  // now pointing at a different board) instead of silently proceeding as
-  // long as channel shapes happen to match (docs/BOARD_LAYER_RFC.md §7.5).
-  transport_->QueueResponse(MakeIdentifyResponse(1, JW_BOARD_TEENSY41));
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kFailedPrecondition);
-}
-
-TEST_F(JoshuaWireBoardTest, InitFailsWhenFirmwareReportsFewerChannels) {
-  transport_->QueueResponse(MakeIdentifyResponse(/*n_channels=*/0));
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kFailedPrecondition);
-}
-
-TEST_F(JoshuaWireBoardTest, InitFailsWhenConfigureChannelReturnsError) {
-  transport_->QueueResponse(MakeIdentifyResponse(1));
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_CONFIGURE_CHANNEL, 0, JW_STATUS_ERROR));
-  FakeJoshuaWireBoard board;
-
-  EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kInternal);
-}
-
-TEST_F(JoshuaWireBoardTest, OpenChannelEnableSendsEnableFrame) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-  auto channel = board.OpenChannel(0);
-  ASSERT_TRUE(channel.ok()) << channel.status();
-
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_ENABLE, 0, JW_STATUS_OK));
-  auto status = (*channel)->Enable();
-
-  ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_written_[11], JW_CMD_ENABLE);
-  EXPECT_EQ(transport_->last_written_[12], 0);
-}
-
-TEST_F(JoshuaWireBoardTest, SetTargetPositionSendsSetTargetFrame) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-  auto channel = board.OpenChannel(0);
-  ASSERT_TRUE(channel.ok());
-
-  transport_->QueueResponse(MakeStatusResponse(JW_CMD_SET_TARGET, 0, JW_STATUS_OK));
-  auto status = (*channel)->SetTarget(TargetMode::kPosition, 1234.0f);
-
-  ASSERT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->last_written_[11], JW_CMD_SET_TARGET);
-  EXPECT_EQ(transport_->last_written_[13], JW_MODE_POSITION);
-}
-
-TEST_F(JoshuaWireBoardTest, SetTargetTorqueIsUnimplementedWithoutTouchingWire) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-  auto channel = board.OpenChannel(0);
-  ASSERT_TRUE(channel.ok());
-  const int calls_before = transport_->exchange_calls_;
-
-  EXPECT_EQ((*channel)->SetTarget(TargetMode::kTorque, 1.0f).code(),
-            absl::StatusCode::kUnimplemented);
-  EXPECT_EQ(transport_->exchange_calls_, calls_before);
-}
-
-TEST_F(JoshuaWireBoardTest, ReadFeedbackDecodesPositionAndVelocity) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-  auto channel = board.OpenChannel(0);
-  ASSERT_TRUE(channel.ok());
-
-  transport_->QueueResponse(MakeFeedbackResponse(0, 4200.0f, -15.5f, 0));
+  EXPECT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 42).ok());
   auto feedback = (*channel)->ReadFeedback();
-
   ASSERT_TRUE(feedback.ok()) << feedback.status();
-  EXPECT_FLOAT_EQ(feedback->position, 4200.0f);
-  EXPECT_FLOAT_EQ(feedback->velocity, -15.5f);
-  EXPECT_EQ(feedback->fault_flags, 0);
+  EXPECT_EQ(feedback->position, 42);
+  EXPECT_TRUE((*channel)->Disable().ok());
+  EXPECT_TRUE(board.Teardown().ok());
+  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
 }
-
-TEST_F(JoshuaWireBoardTest, OpenChannelOutOfRangeIsNotFound) {
-  QueueSuccessfulInit();
+TEST_F(JoshuaWireBoardTest, VendorAndProductAreInformational) {
+  transport_->channel.runtime.identity.vendor_id = 0xabcdef;
+  transport_->channel.runtime.identity.product_id = 0x987654;
+  FakeJoshuaWireBoard board;
+  EXPECT_TRUE(board.Init(MakeBoardConfig()).ok());
+}
+TEST_F(JoshuaWireBoardTest, RequiredUnknownOrIncompatibleProfileBlocksConfiguration) {
+  for (int scenario = 0; scenario < 3; ++scenario) {
+    transport_->channel.function.descriptor.profile_id = scenario == 0 ? 999 : JW_PROFILE_ACTUATOR;
+    transport_->channel.function.descriptor.profile_major = scenario == 1 ? 2 : 1;
+    transport_->channel.function.descriptor.operations = scenario == 2 ? 0 : 31;
+    FakeJoshuaWireBoard board;
+    EXPECT_EQ(board.Init(MakeBoardConfig()).code(), absl::StatusCode::kFailedPrecondition);
+    EXPECT_FALSE(transport_->channel.configured);
+  }
+}
+TEST_F(JoshuaWireBoardTest, HandlerBudgetAndRevisionAreCompatibilityGates) {
+  transport_->channel.runtime.identity.max_handler_us = 200000;
+  FakeJoshuaWireBoard board;
+  EXPECT_FALSE(board.Init(MakeBoardConfig()).ok());
+  transport_->channel.runtime.identity.max_handler_us = 100;
+  transport_->channel.runtime.identity.protocol_min =
+      transport_->channel.runtime.identity.protocol_max = 3;
+  EXPECT_FALSE(board.Init(MakeBoardConfig()).ok());
+}
+TEST_F(JoshuaWireBoardTest, EstopLatchSurvivesResetAndBlocksReinitialization) {
+  transport_->channel.estopped = true;
+  transport_->channel.runtime.estopped = 1;
+  FakeJoshuaWireBoard board;
+  EXPECT_FALSE(board.Init(MakeBoardConfig()).ok());
+  EXPECT_TRUE(transport_->channel.estopped);
+  EXPECT_FALSE(transport_->channel.enabled);
+}
+TEST_F(JoshuaWireBoardTest, InvalidDesiredConfigNeverTouchesTransport) {
+  for (int i = 0; i < 8; ++i) {
+    auto config = MakeBoardConfig();
+    switch (i) {
+      case 0:
+        config.set_protocol(static_cast<BoardProtocol>(1));
+        break;
+      case 1:
+        config.set_board_type(MOCK);
+        break;
+      case 2:
+        config.mutable_comm()->set_transport_type(robot::comm::BYTE_STREAM);
+        break;
+      case 3:
+        config.clear_firmware();
+        break;
+      case 4:
+        config.mutable_channels(0)->set_drive(PWM_DC);
+        break;
+      case 5:
+        config.mutable_channels(0)->mutable_step_dir()->set_step_pin(300);
+        break;
+      case 6:
+        config.mutable_channels(0)->mutable_step_dir()->set_step_pulse_width_us(70000);
+        break;
+      case 7:
+        *config.add_channels() = config.channels(0);
+        break;
+    }
+    FakeJoshuaWireBoard board;
+    EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_EQ(transport_->exchange_calls_, 0);
+  }
+}
+TEST_F(JoshuaWireBoardTest, FunctionIdsAreStableRatherThanArrayOffsets) {
+  transport_->channel.function.descriptor.function_id = 200;
+  auto config = MakeBoardConfig();
+  config.mutable_channels(0)->set_index(200);
+  FakeJoshuaWireBoard board;
+  ASSERT_TRUE(board.Init(config).ok());
+  EXPECT_TRUE(board.OpenChannel(200).ok());
+  EXPECT_FALSE(board.OpenChannel(0).ok());
+}
+TEST_F(JoshuaWireBoardTest, UnsupportedModesAndStaleSamplesAreRejected) {
   FakeJoshuaWireBoard board;
   ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-
-  auto channel = board.OpenChannel(5);
-
-  EXPECT_EQ(channel.status().code(), absl::StatusCode::kNotFound);
+  auto channel = *board.OpenChannel(0);
+  const auto count = transport_->exchange_calls_;
+  EXPECT_EQ(channel->SetTarget(TargetMode::kTorque, 1).code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(transport_->exchange_calls_, count);
+  transport_->channel.feedback.metadata.validity = JW_SAMPLE_STALE;
+  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
 }
-
-TEST_F(JoshuaWireBoardTest, TeardownDropsChannels) {
-  QueueSuccessfulInit();
-  FakeJoshuaWireBoard board;
-  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
-
-  ASSERT_TRUE(board.Teardown().ok());
-
-  EXPECT_EQ(board.OpenChannel(0).status().code(), absl::StatusCode::kFailedPrecondition);
-}
-
 }  // namespace
 }  // namespace robot::board
