@@ -34,7 +34,7 @@ ai {
         subscriptions { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
         publishers { topic: "/audio/events" ros2_data_type: STRING }
       }
-      yamnet_config { cry_threshold: 0.5 persistence_windows: 3 num_threads: 2 }
+      yamnet_config { cry_threshold: 0.5 persistence_windows: 2 num_threads: 2 }
     }
     single_models {
       model_type: VIDEO_DETECTION

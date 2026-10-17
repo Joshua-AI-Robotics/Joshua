@@ -110,7 +110,7 @@ flowchart TD
 | --- | --- | --- |
 | `camera_publisher` | Webcam → `/camera/image` (`sensor_msgs/msg/Image`) | Raw RGB, 640×480, 15 Hz publication, best-effort QoS, depth 1 |
 | `audio_publisher` | USB mic → `/audio/pcm` (`std_msgs/msg/UInt8MultiArray`) | Serialized `PerceptionPacket`, signed 16-bit little-endian PCM, 16 kHz mono, 320 frames per chunk |
-| `yamnet_node` | PCM → `/audio/events` | Approximately 0.975-second windows with half-window overlap; cry threshold 0.5, three positive windows |
+| `yamnet_node` | PCM → `/audio/events` | Approximately 0.975-second windows with half-window overlap; cry threshold 0.5, two positive windows |
 | `video_inference_node` | Images → `/video/events` | EfficientDet Lite0 at 2 Hz, object score threshold 0.5; movement when changed-pixel fraction exceeds 0.03 |
 | `media_stream_node` | Images + PCM → stream and `/media/events` | 640×480 at 15 fps, 1,500 kbps H.264, Opus audio |
 | `notification_node` | All three event topics → HA and `/notification/events` | Persistent movement for two seconds, 60-second alert cooldown, input timeout 15 seconds |
@@ -503,7 +503,7 @@ ros2 topic echo /video/events std_msgs/msg/String
 ```
 
 For audio, look for the `Baby cry, infant cry` score and `cry_started`, not just
-the top label. Three positive windows at the configured threshold are needed.
+the top label. Two positive windows at the configured threshold are needed.
 A phone test push proves the delivery path, not cry recognition. Test recordings
 and actual microphone placement/background noise separately before changing
 thresholds. Lowering a threshold can increase false alerts.
