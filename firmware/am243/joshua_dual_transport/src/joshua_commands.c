@@ -21,6 +21,7 @@ static int profile(void* context,
   JoshuaChannel* c = (JoshuaChannel*)context;
   jw_status_t status = JW_STATUS_OK;
   uint8_t data[JW_FEEDBACK_RESPONSE_PAYLOAD_LEN];
+  int data_len = 0;
   switch (request->operation) {
     case JW_ACTUATOR_CONFIGURE: {
       jw_configure_step_dir_t config;
@@ -61,8 +62,8 @@ static int profile(void* context,
         status = JW_STATUS_INVALID_PAYLOAD;
         break;
       }
-      const int len = jw_encode_feedback_payload(data, sizeof(data), &c->feedback);
-      return len < 0 ? -1 : result(out, cap, JW_STATUS_OK, data, len);
+      data_len = jw_encode_feedback_payload(data, sizeof(data), &c->feedback);
+      break;
     }
     case JW_ACTUATOR_ENABLE:
       if (request->data_len)
@@ -82,7 +83,7 @@ static int profile(void* context,
       status = JW_STATUS_UNSUPPORTED;
       break;
   }
-  if (status == JW_STATUS_OK) {
+  if (status == JW_STATUS_OK && request->operation != JW_ACTUATOR_GET_FEEDBACK) {
     jw_device_status_t* state = &c->function.state;
     ++state->epoch;
     state->state = c->enabled ? JW_STATE_ACTIVE : JW_STATE_DISABLED;
@@ -92,7 +93,7 @@ static int profile(void* context,
     state->action_status = status;
     state->action_execution = JW_EXECUTION_COMPLETE;
   }
-  return result(out, cap, status, NULL, 0);
+  return data_len < 0 ? -1 : result(out, cap, status, data_len > 0 ? data : NULL, (size_t)data_len);
 }
 static void safety(void* context, int action) {
   JoshuaChannel* c = (JoshuaChannel*)context;
