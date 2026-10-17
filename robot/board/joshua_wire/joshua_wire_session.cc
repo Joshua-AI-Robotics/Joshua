@@ -166,25 +166,31 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
       command.cmd == JW_CMD_PROFILE &&
       jw_decode_profile_request(command.payload, command.payload_len, &profile) == JW_RESULT_OK;
   const bool profile_read =
-      is_profile &&
+      is_profile && profile.major == JW_PROFILE_VERSION_MAJOR &&
+      profile.minor == JW_PROFILE_VERSION_MINOR &&
       ((profile.profile_id == JW_PROFILE_ACTUATOR &&
         profile.operation == JW_ACTUATOR_GET_FEEDBACK) ||
        (profile.profile_id == JW_PROFILE_SENSOR && profile.operation == JW_SENSOR_READ) ||
        (profile.profile_id == JW_PROFILE_IO && profile.operation == JW_IO_READ));
-  if ((uncertain_ || pending_.count(command.channel)) && !query && !profile_read &&
-      command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
+  if ((uncertain_ || pending_.count(JW_CHANNEL_NONE) || pending_.count(command.channel)) &&
+      !query && !profile_read && command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
     return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
   jw_reply_t reply{};
   jw_decode_reply_payload(payload.data(), payload.size(), &reply);
-  if (reply.execution == JW_EXECUTION_ACCEPTED) pending_.insert(command.channel);
+  if (reply.execution == JW_EXECUTION_ACCEPTED)
+    pending_[command.channel] = {session_id_, next_message_id_ - 1};
   if (command.cmd == JW_CMD_GET_STATUS && reply.status == JW_STATUS_OK) {
     jw_device_status_t state{};
     if (jw_decode_device_status(reply.data, reply.data_len, &state) == JW_RESULT_OK &&
-        state.action_execution != JW_EXECUTION_ACCEPTED)
-      pending_.erase(command.channel);
+        state.action_execution == JW_EXECUTION_COMPLETE) {
+      auto pending = pending_.find(command.channel);
+      if (pending != pending_.end() && pending->second.first == state.action_session_id &&
+          pending->second.second == state.action_message_id)
+        pending_.erase(pending);
+    }
   }
 
   return payload;

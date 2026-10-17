@@ -240,6 +240,62 @@ TEST_F(JoshuaWireSessionTest, InvalidRequestsDoNotConsumeIdsAndFailedResetKeepsC
   EXPECT_FALSE(session.Exchange(Configure()).ok());
   EXPECT_EQ(transport->requests.size(), count);
 }
+TEST_F(JoshuaWireSessionTest, PendingActionRequiresItsOriginalCompletionToken) {
+  transport->handler =
+      [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) -> int {
+    auto* channel = static_cast<JoshuaChannel*>(context);
+    const int result = JoshuaCommand(context, command, out, cap);
+    jw_profile_request_t operation{};
+    if (command->cmd == JW_CMD_PROFILE &&
+        jw_decode_profile_request(command->payload, command->payload_len, &operation) ==
+            JW_RESULT_OK &&
+        operation.operation == JW_ACTUATOR_CONFIGURE) {
+      channel->function.state.action_execution = JW_EXECUTION_ACCEPTED;
+      return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
+    }
+    return result;
+  };
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  const auto token = transport->channel.function.state.action_message_id;
+  EXPECT_EQ(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  transport->channel.function.state.action_execution = JW_EXECUTION_COMPLETE;
+  ++transport->channel.function.state.action_message_id;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+  EXPECT_EQ(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  transport->channel.function.state.action_message_id = token;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  EXPECT_TRUE(transport->channel.enabled);
+}
+TEST_F(JoshuaWireSessionTest, PendingBoardActionGatesEveryFunctionUntilMatchingCompletion) {
+  transport->handler =
+      [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) -> int {
+    const int result = JoshuaCommand(context, command, out, cap);
+    if (command->cmd == JW_CMD_ESTOP) {
+      static_cast<JoshuaChannel*>(context)->runtime.state.action_execution = JW_EXECUTION_ACCEPTED;
+      return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
+    }
+    return result;
+  };
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_ESTOP)).ok());
+  const auto count = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport->requests.size(), count);
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_GET_FEEDBACK)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+  transport->channel.runtime.state.action_execution = JW_EXECUTION_COMPLETE;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  // The reconciled session may submit again; the firmware still rejects a
+  // configure while ESTOP is latched rather than implicitly recovering.
+  auto configured = session.Exchange(Configure());
+  ASSERT_TRUE(configured.ok());
+  EXPECT_EQ((*configured)[0], JW_STATUS_UNAVAILABLE);
+}
 uint32_t ProfileU32(const uint8_t* p) {
   return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
 }

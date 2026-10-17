@@ -5,9 +5,9 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <vector>
 
 #include "firmware/common/joshua_wire_commands.h"
@@ -53,7 +53,7 @@ class JoshuaWireSession {
   uint32_t next_message_id_ = 1;
   bool ready_ = false;
   bool uncertain_ = false;
-  std::set<uint8_t> pending_;
+  std::map<uint8_t, std::pair<uint32_t, uint32_t>> pending_;
 };
 
 }  // namespace robot::board
