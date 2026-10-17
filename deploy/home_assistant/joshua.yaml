@@ -88,6 +88,50 @@ automation:
           payload: '{{ trigger.json }}'
     mode: queued
     max: 32
+  - id: joshua_cry_reminders
+    alias: Joshua - repeat alerts while crying continues
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.joshua_crying
+          - input_boolean.joshua_notifications
+          - binary_sensor.joshua_notification_configured
+        to: null
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: automation_reloaded
+    actions:
+      - repeat:
+          while:
+            - condition: state
+              entity_id: binary_sensor.joshua_crying
+              state: 'on'
+            - condition: state
+              entity_id: input_boolean.joshua_notifications
+              state: 'on'
+            - condition: state
+              entity_id: binary_sensor.joshua_notification_configured
+              state: 'on'
+          sequence:
+            - wait_template: >-
+                {{ not (is_state('binary_sensor.joshua_crying', 'on')
+                   and is_state('input_boolean.joshua_notifications', 'on')
+                   and is_state('binary_sensor.joshua_notification_configured', 'on')) }}
+              timeout: '00:01:00'
+              continue_on_timeout: true
+            - condition: template
+              value_template: >-
+                {{ not wait.completed
+                   and is_state('binary_sensor.joshua_crying', 'on')
+                   and is_state('input_boolean.joshua_notifications', 'on')
+                   and is_state('binary_sensor.joshua_notification_configured', 'on') }}
+            - action: script.joshua_notify_phones
+              data:
+                title: Baby Monitor - still crying
+                message: Crying is still detected. Open the camera to check.
+                critical_alert: true
+    mode: restart
   - id: joshua_notify_events
     alias: Joshua - send monitor alerts
     triggers:

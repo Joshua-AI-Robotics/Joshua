@@ -482,8 +482,14 @@ ordinary push text delivery does not require the VPN. This configuration does
 not upload camera snapshots with notifications. Cry-start notifications request
 the default iPhone critical sound at full volume; enable Critical Alerts for
 Home Assistant in iOS notification settings. Movement, outage, recovery, and
-the dashboard test remain ordinary notifications. This does not add reminders
-while crying continues or change the detection persistence and cooldown.
+the dashboard test remain ordinary notifications. After the initial alert,
+Home Assistant sends another critical alert approximately every minute while
+crying stays detected. Reminders stop when crying clears, audio becomes
+unavailable, Notifications is disabled, or no phone recipient is configured.
+They go to all configured phones. A new crying period or re-enabling alerts
+starts a fresh minute; HA restart or automation reload resets the reminder wait.
+Detection persistence and the 60-second cooldown for new cry-start events remain
+unchanged; the cooldown does not suppress these reminders.
 
 ### Test detection separately from delivery
 

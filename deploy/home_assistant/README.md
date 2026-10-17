@@ -97,8 +97,14 @@ infrastructure. Opening the dashboard requires Tailscale; text delivery does not
 No camera snapshots are uploaded by this configuration. Cry-start alerts request
 the default critical sound at full volume on iPhone; allow Critical Alerts in
 iOS notification settings for Home Assistant. Movement, outage, recovery, and
-dashboard test notifications use ordinary sounds. Critical alerts do not repeat
-automatically while crying continues; the existing episode/cooldown rules apply.
+dashboard test notifications use ordinary sounds. After the initial cry-start
+alert, HA sends another critical alert approximately every minute while the
+crying entity stays on. Reminders stop when crying clears, the audio becomes
+unavailable, Notifications is turned off, or no phone recipient is configured.
+Resuming crying or enabling notifications starts a fresh one-minute wait. HA
+restart/automation reload also restarts that wait; missed reminders are not
+replayed. The existing 60-second cooldown still applies to new cry-start events,
+not these continuous-cry reminders. All configured phones receive the reminders.
 
 ## Operations and acceptance checks
 
