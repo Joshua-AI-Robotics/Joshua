@@ -147,7 +147,9 @@ sudo journalctl -u joshua-monitor -f
 The installer enables persistent `joshua-home-assistant.service` and
 `joshua-monitor.service`. It preserves HA configuration and credentials. The
 launcher runs as the supplied user, reads the specified protobuf config, and
-waits for local HA/Tailscale readiness. A failed child causes the graph to exit
+waits for local HA/Tailscale readiness. The installer enables user lingering so
+logind does not remove Fast DDS shared memory when the last SSH session closes.
+A failed child causes the graph to exit
 and systemd to restart it; an explicit `systemctl stop joshua-monitor` stays
 stopped until started or rebooted. Stopping the monitor leaves Home Assistant
 running so its watchdog can report the outage. The services are separate for

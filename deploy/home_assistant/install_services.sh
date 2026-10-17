@@ -21,7 +21,7 @@ id "$run_user" >/dev/null
 [[ -x "$package/joshua_monitor_main" && -f "$config" ]]
 [[ -f "$ha_dir/compose.yaml" && -f "$ha_dir/webhook.secret" ]]
 [[ -f /opt/ros/jazzy/setup.bash ]]
-for command in docker systemctl curl tailscale; do command -v "$command" >/dev/null; done
+for command in docker systemctl loginctl curl tailscale; do command -v "$command" >/dev/null; done
 docker compose version >/dev/null
 runuser -u "$run_user" -- test -r "$config"
 runuser -u "$run_user" -- test -r "$ha_dir/webhook.secret"
@@ -74,6 +74,9 @@ TimeoutStopSec=20
 WantedBy=multi-user.target
 EOF
 systemd-analyze verify /etc/systemd/system/joshua-{home-assistant,monitor}.service
+# logind otherwise removes this non-system user's Fast DDS shared memory after
+# the last SSH/login session ends, even while a system service runs as that user.
+loginctl enable-linger "$run_user"
 systemctl daemon-reload
 systemctl enable docker.service tailscaled.service joshua-home-assistant.service joshua-monitor.service
 echo "Installed and enabled. After stopping old Joshua processes, run:"
