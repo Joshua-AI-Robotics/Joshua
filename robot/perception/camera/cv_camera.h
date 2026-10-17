@@ -36,6 +36,7 @@ class CvCamera : public CameraInterface {
   mutable robot::perception::PerceptionPacket reusable_packet_;  // Pre-allocated packet for reuse
 
   absl::Status OpenCameraLocked();
+  absl::Status ConfigureCameraLocked();
   absl::Status TeardownLocked();
 };
 

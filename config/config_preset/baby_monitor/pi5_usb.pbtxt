@@ -1,0 +1,50 @@
+# Opens webcam index 0 and the default ALSA microphone. Edit devices first.
+general { operation_mode: MODE_TEST name: "experimental_babymonitor" }
+robot {
+  perceptions {
+    single_perceptions {
+      sensor_name: "webcam"
+      sensor_type: IMAGE
+      node {
+        id: 1 node_type: CAMERA_PUBLISHER
+        qos_setting { reliability_policy: QOS_RELIABILITY_POLICY_BEST_EFFORT depth: 1 }
+        publishers { topic: "/camera/image" ros2_data_type: IMAGE publish_rate_hz: 15 }
+      }
+      opencv_config { id: 0 width: 640 height: 480 fps: 15 fourcc: "MJPG" }
+    }
+    single_perceptions {
+      sensor_name: "microphone"
+      sensor_type: AUDIO
+      node {
+        id: 2 node_type: AUDIO_PUBLISHER
+        qos_setting { reliability_policy: QOS_RELIABILITY_POLICY_BEST_EFFORT depth: 100 }
+        publishers { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
+      }
+      alsa_audio_config { device: "default" sample_rate_hz: 16000 channels: 1 frames_per_chunk: 320 }
+    }
+  }
+}
+ai {
+  models {
+    single_models {
+      model_type: YAMNET
+      node {
+        id: 3 node_type: YAMNET_NODE
+        subscriptions { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
+        publishers { topic: "/audio/events" ros2_data_type: STRING }
+      }
+      yamnet_config { cry_threshold: 0.5 persistence_windows: 3 num_threads: 2 }
+    }
+    single_models {
+      model_type: VIDEO_DETECTION
+      node {
+        id: 4 node_type: VIDEO_INFERENCE_NODE
+        subscriptions { topic: "/camera/image" ros2_data_type: IMAGE }
+        publishers { topic: "/video/events" ros2_data_type: STRING }
+      }
+      video_detection_config {
+        score_threshold: 0.5 inference_rate_hz: 2 num_threads: 2 motion_fraction_threshold: 0.03
+      }
+    }
+  }
+}

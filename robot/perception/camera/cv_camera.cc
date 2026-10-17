@@ -22,40 +22,22 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
-  absl::Status status = OpenCameraLocked();
-  if (!status.ok()) {
-    return status;
+  return OpenCameraLocked();
+}
+
+absl::Status CvCamera::ConfigureCameraLocked() {
+  // Older presets omit optional capture settings; preserve device defaults.
+  if (!opencv_config_.fourcc().empty()) {
+    if (opencv_config_.fourcc().size() != 4)
+      return absl::InvalidArgumentError("Camera fourcc must contain four characters");
+    const auto& code = opencv_config_.fourcc();
+    cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc(code[0], code[1], code[2], code[3]));
   }
-
-  if (opencv_config_.fourcc().size() < 4) {
-    LOG(ERROR) << "FourCC is not specified";
-    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
-  }
-  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
-                             cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
-                                                     opencv_config_.fourcc()[1],
-                                                     opencv_config_.fourcc()[2],
-                                                     opencv_config_.fourcc()[3]));
-  bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
-  bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
-  bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
-
-  // Some drivers return false even on success.
-  if (!set_fourcc || !set_width || !set_height || !set_fps) {
-    LOG(ERROR) << "Setting camera resolution returned false. "
-               << "set_fourcc=" << std::boolalpha << set_fourcc << ", "
-               << "set_width=" << std::boolalpha << set_width << ", "
-               << "set_height=" << std::boolalpha << set_height << ", "
-               << "set_fps=" << std::boolalpha << set_fps;
-    return absl::Status(absl::StatusCode::kInternal, "Failed to set camera resolution.");
-  }
-
-  LOG(INFO) << "Camera initialized successfully.";
-  LOG(INFO) << "ID: " << id_;
-  LOG(INFO) << "Camera resolution: " << cap_.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
-            << cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
-  LOG(INFO) << "Camera FPS: " << cap_.get(cv::CAP_PROP_FPS);
-
+  if (opencv_config_.width()) cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
+  if (opencv_config_.height()) cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
+  if (opencv_config_.fps()) cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
+  LOG(INFO) << "Camera " << id_ << " negotiated " << cap_.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
+            << cap_.get(cv::CAP_PROP_FRAME_HEIGHT) << " @ " << cap_.get(cv::CAP_PROP_FPS);
   return absl::OkStatus();
 }
 
@@ -187,6 +169,11 @@ absl::Status CvCamera::OpenCameraLocked() {
     } else {
       LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
       if (cap_.open(camera_id_, cv::CAP_V4L2)) {
+        auto configured = ConfigureCameraLocked();
+        if (!configured.ok()) {
+          cap_.release();
+          return configured;
+        }
         if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 1)) {
           LOG(ERROR) << "Could not set CAP_PROP_BUFFERSIZE to 1 for camera " << id_;
         }

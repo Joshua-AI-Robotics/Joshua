@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -236,4 +236,87 @@ ros2_cpp_binary(
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_std_msgs",
     ],
+)
+
+py_library(
+    name = "monitor_common",
+    srcs = ["monitor_common.py"],
+    deps = ["//ros2/proto:ros2_data_type_py_proto"],
+)
+
+ros2_py_binary(
+    name = "yamnet_node",
+    srcs = ["yamnet_node.py"],
+    deps = [
+        ":monitor_common",
+        ":node_runner_py",
+        "//ai/models/yamnet:processor",
+        "//ai/proto:ai_model_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+    ],
+)
+
+ros2_py_binary(
+    name = "video_inference_node",
+    srcs = ["video_inference_node.py"],
+    deps = [
+        ":monitor_common",
+        ":node_runner_py",
+        "//ai/models/video_detection:processor",
+        "//ai/proto:ai_model_py_proto",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+    ],
+)
+
+ros2_py_binary(
+    name = "av_check",
+    srcs = ["av_check.py"],
+    deps = [
+        ":monitor_common",
+        ":node_runner_py",
+        "//ai/models/video_detection:processor",
+        "//ai/models/yamnet:processor",
+        "//robot/perception/proto:perception_packet_py_proto",
+        "//robot/perception/proto:perception_py_proto",
+    ] + requirement("pillow") + requirement("numpy"),
+)
+
+py_test(
+    name = "monitor_processor_test",
+    srcs = ["monitor_processor_test.py"],
+    deps = [
+        "//ai/models/video_detection:processor",
+        "//ai/models/yamnet:processor",
+        "//robot/perception/proto:perception_packet_py_proto",
+    ] + requirement("numpy"),
+)
+
+py_test(
+    name = "monitor_pipeline_test",
+    size = "medium",
+    srcs = ["monitor_pipeline_test.py"],
+    data = [
+        ":video_inference_node",
+        ":yamnet_node",
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        ":monitor_common",
+        "//config/proto:config_py_proto",
+        "//robot/perception/proto:perception_packet_py_proto",
+    ] + requirement("protobuf") + requirement("numpy"),
+)
+
+ros2_py_binary(
+    name = "monitor_selftest",
+    srcs = ["monitor_processor_test.py"],
+    main = "monitor_processor_test.py",
+    deps = [
+        "//ai/models/video_detection:processor",
+        "//ai/models/yamnet:processor",
+        "//robot/perception/proto:perception_packet_py_proto",
+    ] + requirement("numpy"),
 )

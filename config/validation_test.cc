@@ -292,3 +292,33 @@ TEST(AudioValidationTest, RejectsDuplicateCaptureButAllowsTopicFanout) {
 }
 }  // namespace
 }  // namespace config
+
+namespace config {
+TEST(MonitorValidationTest, RejectsInvalidInferenceBeforeOpeningCaptureDevices) {
+  Config config;
+  auto* model = config.mutable_ai()->mutable_models()->add_single_models();
+  model->set_model_type(ai::models::YAMNET);
+  auto* node = model->mutable_node();
+  node->set_id(3);
+  node->set_node_type(ros2::node::YAMNET_NODE);
+  auto* sub = node->add_subscriptions();
+  sub->set_topic("/audio/pcm");
+  sub->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  auto* pub = node->add_publishers();
+  pub->set_topic("/audio/events");
+  pub->set_ros2_data_type(ros2::data_type::STRING);
+  auto* options = model->mutable_yamnet_config();
+  options->set_cry_threshold(0.5);
+  options->set_persistence_windows(3);
+  options->set_num_threads(2);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  options->set_num_threads(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  options->set_num_threads(2);
+  pub->set_topic(sub->topic());
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  pub->set_topic("/audio/events");
+  node->set_node_type(ros2::node::INFERENCE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+}  // namespace config

@@ -7,10 +7,12 @@ proto_library(
     name = "ai_model_proto",
     srcs = ["ai_model.proto"],
     deps = [
-        "//ros2/proto:node_proto",
-        "//ros2/proto:ros2_data_type_proto",
         "//ai/models/random_noise:random_noise_config_proto",
         "//ai/models/smolvla:smolvla_config_proto",
+        "//ai/models/video_detection:video_detection_config_proto",
+        "//ai/models/yamnet:yamnet_config_proto",
+        "//ros2/proto:node_proto",
+        "//ros2/proto:ros2_data_type_proto",
     ],
 )
 
@@ -18,8 +20,8 @@ proto_library(
     name = "data_store_proto",
     srcs = ["data_store.proto"],
     deps = [
-        "//ros2/proto:ros2_data_type_proto",
         "//ros2/proto:node_proto",
+        "//ros2/proto:ros2_data_type_proto",
     ],
 )
 

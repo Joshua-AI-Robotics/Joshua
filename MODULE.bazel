@@ -25,62 +25,62 @@ python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 # Python 3.10 - Default (for ROS2 Humble / Ubuntu 22.04)
 # System Python has rclpy, numpy, and all ROS2 dependencies pre-installed
 python.toolchain(
+    ignore_root_user_error = True,
     is_default = True,
     python_version = "3.10",
-    ignore_root_user_error = True,
 )
 
 # Python 3.12 - For ROS2 Jazzy / Ubuntu 24.04
 python.toolchain(
-    python_version = "3.12",
     ignore_root_user_error = True,
+    python_version = "3.12",
 )
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 
 # Python 3.10 dependencies (Default / U22)
 pip.parse(
+    timeout = 3600,
     hub_name = "project_joshua_pip_deps",
     python_version = "3.10",
     requirements_lock = "//:requirements.lock",
-    timeout = 3600,
 )
 
 # Python 3.12 dependencies (For U24/Jazzy)
 pip.parse(
+    timeout = 3600,
     hub_name = "project_joshua_pip_deps_312",
     python_version = "3.12",
     requirements_lock = "//:requirements_3.12.lock",
-    timeout = 3600,
 )
-
 use_repo(pip, "project_joshua_pip_deps")
 use_repo(pip, "project_joshua_pip_deps_312")
 
 # Per-model pip hubs (isolated dependency closures).
 pip.parse(
+    timeout = 3600,
     hub_name = "joshua_pip_smolvla",
     python_version = "3.10",
     requirements_lock = "//ai/models/smolvla:requirements.lock",
-    timeout = 3600,
 )
-
 pip.parse(
+    timeout = 3600,
     hub_name = "joshua_pip_smolvla_312",
     python_version = "3.12",
     requirements_lock = "//ai/models/smolvla:requirements_3.12.lock",
-    timeout = 3600,
 )
-
 use_repo(pip, "joshua_pip_smolvla")
 use_repo(pip, "joshua_pip_smolvla_312")
 
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")
+
 ros2_libs = use_repo_rule("//:ros2_deps_from_system.bzl", "ros2_libs_repo")
+
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 system_libs(name = "local_deps")
+
 ros2_libs(name = "ros2_deps")
 
 http_archive(
@@ -94,4 +94,31 @@ http_archive(
     sha256 = "1f1f38464c5542d8cd1b1d8f27d9af6422d03b9364a9f31ad66f1919f2898f16",
     strip_prefix = "SOEM-2.0.0",
     urls = ["https://github.com/OpenEtherCATsociety/SOEM/archive/refs/tags/v2.0.0.tar.gz"],
+)
+
+# Experimental CPU audio/video inference (no TensorFlow training dependency).
+pip.parse(
+    hub_name = "joshua_pip_monitor",
+    python_version = "3.10",
+    requirements_lock = "//ai/models/yamnet:requirements.lock",
+)
+pip.parse(
+    hub_name = "joshua_pip_monitor_312",
+    python_version = "3.12",
+    requirements_lock = "//ai/models/yamnet:requirements_3.12.lock",
+)
+use_repo(pip, "joshua_pip_monitor", "joshua_pip_monitor_312")
+
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "yamnet_tflite",
+    sha256 = "10c95ea3eb9a7bb4cb8bddf6feb023250381008177ac162ce169694d05c317de",
+    urls = ["https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/audio_classification/rpi/lite-model_yamnet_classification_tflite_1.tflite"],
+)
+
+http_file(
+    name = "efficientdet_tflite",
+    sha256 = "2e04c53bfeac0ac2a30c057c7e2a777594ce39baaac35a92f74fb1e8c4fc4e0b",
+    urls = ["https://storage.googleapis.com/download.tensorflow.org/models/tflite/task_library/object_detection/rpi/lite-model_efficientdet_lite0_detection_metadata_1.tflite"],
 )

@@ -258,9 +258,54 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
   return absl::OkStatus();
 }
 
+absl::Status ValidateMonitorModels(const config::Config& config) {
+  std::set<uint32_t> ids;
+  for (const auto& sensor : config.robot().perceptions().single_perceptions())
+    ids.insert(sensor.node().id());
+  for (const auto& action : config.robot().actions().single_actions())
+    ids.insert(action.node().id());
+  for (const auto& model : config.ai().models().single_models()) {
+    const bool audio = model.model_type() == ai::models::YAMNET;
+    const bool video = model.model_type() == ai::models::VIDEO_DETECTION;
+    const auto type = model.node().node_type();
+    if (!audio && !video && type != ros2::node::YAMNET_NODE &&
+        type != ros2::node::VIDEO_INFERENCE_NODE)
+      continue;
+    if (!ids.insert(model.node().id()).second)
+      return absl::InvalidArgumentError("Monitor node ID conflicts with another node");
+    if ((audio && type != ros2::node::YAMNET_NODE) ||
+        (video && type != ros2::node::VIDEO_INFERENCE_NODE) || (!audio && !video))
+      return absl::InvalidArgumentError("Monitor model and node type mismatch");
+    const auto& node = model.node();
+    if (node.subscriptions_size() != 1 || node.publishers_size() != 1 ||
+        node.subscriptions(0).topic().empty() || node.publishers(0).topic().empty() ||
+        node.subscriptions(0).topic() == node.publishers(0).topic() ||
+        node.publishers(0).ros2_data_type() != ros2::data_type::STRING ||
+        node.subscriptions(0).ros2_data_type() !=
+            (audio ? ros2::data_type::UINT8_MULTI_ARRAY : ros2::data_type::IMAGE))
+      return absl::InvalidArgumentError(
+          "Monitor requires one typed input and one distinct STRING event output");
+    if (audio) {
+      const auto& c = model.yamnet_config();
+      if (!(c.cry_threshold() > 0 && c.cry_threshold() <= 1) || c.persistence_windows() < 1 ||
+          c.persistence_windows() > 100 || c.num_threads() < 1 || c.num_threads() > 8)
+        return absl::InvalidArgumentError("Invalid YAMNet settings");
+    } else {
+      const auto& c = model.video_detection_config();
+      if (!(c.score_threshold() > 0 && c.score_threshold() <= 1) ||
+          !(c.inference_rate_hz() > 0 && c.inference_rate_hz() <= 15) ||
+          !(c.motion_fraction_threshold() > 0 && c.motion_fraction_threshold() <= 1) ||
+          c.num_threads() < 1 || c.num_threads() > 8)
+        return absl::InvalidArgumentError("Invalid video detection settings");
+    }
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
+  ABSL_RETURN_IF_ERROR(ValidateMonitorModels(config));
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));

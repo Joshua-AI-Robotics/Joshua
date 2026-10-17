@@ -190,3 +190,14 @@ inference plug-in system. See [`train/README.md`](train/README.md).
 
 Training (BC, RL) is not implemented. The former RL pipeline and the training
 RFC that described its planned replacement have been removed.
+
+## Experimental audio/video processors
+
+The `hmoon/experimental_babymonitor` branch adds ROS-free processors in
+`models/yamnet/` and `models/video_detection/`, hosted by separate
+`ros2/yamnet_node.py` and `ros2/video_inference_node.py` processes. These publish
+classification/detection events, so they intentionally use dedicated wrappers
+instead of the action-command adapter contract above. CPU LiteRT dependencies
+have separate Python 3.10/3.12 locks. See
+[Pi audio/video bring-up](../docs/BABY_MONITOR.md) for the preset, focused package,
+and hardware-free tests.

@@ -1,0 +1,8 @@
+syntax = "proto3";
+package ai.models;
+message YamnetConfig {
+  string model_path = 1;  // Empty uses the bundled, checksum-pinned model.
+  float cry_threshold = 2;
+  uint32 persistence_windows = 3;
+  uint32 num_threads = 4;
+}

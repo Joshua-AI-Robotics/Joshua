@@ -17,6 +17,8 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
+  YAMNET_NODE = 9;
+  VIDEO_INFERENCE_NODE = 10;
 }
 
 enum QosReliabilityPolicy {

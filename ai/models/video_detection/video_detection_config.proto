@@ -1,0 +1,9 @@
+syntax = "proto3";
+package ai.models;
+message VideoDetectionConfig {
+  string model_path = 1;  // Bundled EfficientDet Lite0 by default.
+  float score_threshold = 2;
+  float inference_rate_hz = 3;
+  uint32 num_threads = 4;
+  float motion_fraction_threshold = 5;
+}

@@ -5,12 +5,16 @@ package ai.models;
 import "ai/models/random_noise/random_noise_config.proto";
 import "ai/models/smolvla/smolvla_config.proto";
 import "ros2/proto/node.proto";
+import "ai/models/yamnet/yamnet_config.proto";
+import "ai/models/video_detection/video_detection_config.proto";
 import "ros2/proto/ros2_data_type.proto";
 
 enum ModelType {
   MODEL_TYPE_INVALID = 0;
   RANDOM_NOISE = 1;
   SMOLVLA = 2;
+  YAMNET = 3;
+  VIDEO_DETECTION = 4;
   // Add other model types here.
 }
 
@@ -23,6 +27,8 @@ message SingleModel {
   oneof model_config {
     RandomNoiseConfig random_noise_config = 5;
     SmolVLAConfig smolvla_config = 6;
+    YamnetConfig yamnet_config = 7;
+    VideoDetectionConfig video_detection_config = 8;
     // Add other model configs here.
   }
 }

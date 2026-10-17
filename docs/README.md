@@ -4,6 +4,7 @@
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Experimental Pi audio/video bring-up | [BABY_MONITOR.md](BABY_MONITOR.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | AI integration rules and proposed follow-ups (including MCP) | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
