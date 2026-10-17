@@ -119,7 +119,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m pip install pre-commit black flake8 isort --break-system-packages
+    && python3 -m pip install --ignore-installed pre-commit black flake8 isort --break-system-packages
 
 # ============================================
 # Install Python Project Dependencies
