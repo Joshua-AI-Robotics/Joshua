@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -80,6 +81,18 @@ class WireTest(unittest.TestCase):
                     Image(width=2, height=2, step=6, encoding="rgb8", data=bytes(12))
                 )
                 self.assertEqual(bridge.return_value.submit.call_count, 1)
+                bridge.return_value.pending.dropped_video = 0
+                bridge.return_value.pending.dropped_audio = 0
+                node.report("streaming", "ready")
+                node.flush_events()
+                self.assertEqual(node.last_report, ("streaming", "ready"))
+                node.last_heartbeat = time.monotonic() - 6
+                node.report("input_stale", "camera stopped")
+                node.flush_events()
+                self.assertEqual(node.last_report, ("input_stale", "camera stopped"))
+                node.last_heartbeat = time.monotonic() - 6
+                node.flush_events()
+                self.assertGreater(node.last_heartbeat, time.monotonic() - 1)
                 node.shutdown()
                 bridge.return_value.close.assert_called_once()
                 node.destroy_node()

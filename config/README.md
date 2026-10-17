@@ -129,3 +129,11 @@ resolution/FPS/bitrate, the stream path, listener, and ports. Each utility needs
 a unique node ID. Validation rejects invalid topic contracts, conflicting ports,
 and listeners outside loopback or the Tailscale IPv4 range. An empty listener
 asks the runtime to discover this host's Tailscale address.
+
+`Config.utilities.notifications` configures `NOTIFICATION_NODE` processes.
+Inputs and the distinct status output are STRING topics. The preset specifies
+the Home Assistant base URL and the name of an environment variable that points
+to a private webhook credential file, never the credential itself. It also
+specifies request timeout, event expiry, notification cooldown, sustained-motion
+duration, and input heartbeat timeout. Utility node IDs must be unique across
+all configured subsystems.

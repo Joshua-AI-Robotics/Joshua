@@ -357,6 +357,29 @@ absl::Status ValidateMediaStreams(const config::Config& config) {
       return absl::InvalidArgumentError(
           "Media requires one image, optional audio, and a distinct STRING status output");
   }
+  for (const auto& notification : config.utilities().notifications()) {
+    const auto& n = notification.node();
+    if (!ids.insert(n.id()).second || n.node_type() != ros2::node::NOTIFICATION_NODE)
+      return absl::InvalidArgumentError("Notification requires a unique NOTIFICATION_NODE id");
+    if (notification.home_assistant_url().empty() || notification.webhook_file_env().empty() ||
+        !(notification.request_timeout_sec() >= 1 && notification.request_timeout_sec() <= 10) ||
+        !(notification.max_event_age_sec() >= 5 && notification.max_event_age_sec() <= 120) ||
+        !(notification.cooldown_sec() >= 1 && notification.cooldown_sec() <= 3600) ||
+        !(notification.movement_persistence_sec() >= 0.5 &&
+          notification.movement_persistence_sec() <= 30) ||
+        !(notification.input_timeout_sec() >= 2 && notification.input_timeout_sec() <= 60))
+      return absl::InvalidArgumentError("Invalid notification endpoint or limits");
+    std::set<std::string> topics;
+    for (const auto& sub : n.subscriptions()) {
+      if (sub.topic().empty() || !topics.insert(sub.topic()).second ||
+          sub.ros2_data_type() != ros2::data_type::STRING)
+        return absl::InvalidArgumentError("Notification inputs must be distinct STRING topics");
+    }
+    if (topics.empty() || n.publishers_size() != 1 || n.publishers(0).topic().empty() ||
+        topics.count(n.publishers(0).topic()) ||
+        n.publishers(0).ros2_data_type() != ros2::data_type::STRING)
+      return absl::InvalidArgumentError("Notification requires a distinct STRING status output");
+  }
   return absl::OkStatus();
 }
 

@@ -218,3 +218,12 @@ server. Raw capture and inference stay local; a browser reads the compressed
 stream over Tailscale. No device is opened by this node. See
 [the bring-up guide](../docs/BABY_MONITOR.md#private-live-video-and-audio-tailscale)
 for runtime dependencies, ports, and phone access.
+
+## Home Assistant notifications
+
+`NOTIFICATION_NODE` lives under `ros2/utils/` and consumes STRING inference/media
+messages. `utilities.notifications` sets endpoint, credential file environment,
+freshness, persistence, and cooldowns. Delivery runs on a bounded HTTP worker;
+ROS callbacks never wait for Home Assistant. The deployment's local-only webhook
+updates dashboard state and HA automations route selected alerts to phones.
+See [deployment and iPhone setup](../deploy/home_assistant/README.md).

@@ -109,7 +109,7 @@ After checking the local preset and connecting the webcam/microphone:
 ```
 
 Five processes should start: `camera_publisher`, `audio_publisher`, `yamnet_node`,
-`video_inference_node`, and `media_stream_node`. Watch for ready messages from both models and for
+`video_inference_node`, `media_stream_node`, and `notification_node`. Watch for ready messages from both models and for
 capture errors. `Ctrl-C` stops the launcher and its children.
 
 In another shell with the same ROS environment and `ROS_DOMAIN_ID`:
@@ -159,7 +159,7 @@ Events have `schema_version`, `event_id`, `source`, `event_type`,
 `input_stale`, `input_restored`, and `inference_error`. Event subscriptions use
 reliable QoS; input subscriptions use best effort and bounded history. Inputs
 older than two seconds are rejected. Nodes report a stale source after three
-seconds without fresh input; there is no phone delivery in this milestone.
+seconds without fresh input; the optional Home Assistant bridge below handles phone delivery.
 
 Detection thresholds, topics, model paths, and thread counts live in the protobuf
 preset. Model paths can override the bundled model only with the same input,
@@ -268,3 +268,43 @@ bazel test --config=u22 --config=x86-base \
 ```
 
 The decoder test additionally needs `gstreamer1.0-libav` (included in dev images).
+
+## Home Assistant dashboard and iPhone notifications
+
+The monitor package includes `home_assistant_setup` and `notification_node`.
+See [the Home Assistant deployment guide](../deploy/home_assistant/README.md)
+for Docker setup, private HTTPS through Tailscale Serve, camera registration,
+and connecting both iPhones. The Home Assistant app is published by Nabu Casa,
+Inc.; a Cloud subscription is not required for this Tailscale setup.
+
+`utilities.notifications` configures the utility bridge's event subscriptions,
+local Home Assistant URL, credential-file environment name, timeout, freshness,
+movement persistence, and cooldown. It never owns capture devices. It uses a
+secret-protected, local-only webhook, not a Home Assistant user access token.
+The generated deployment keeps that secret outside the repository.
+
+The bridge subscribes reliably to audio/video events and periodic media status.
+It forwards cry starts, sustained movement, failures, and recovery, coalescing
+ordinary status to a five-second heartbeat. Alert delivery uses a bounded queue,
+expiry, retries, and event IDs. `/notification/events` reports HTTP acceptance,
+errors, and expiration; acceptance does not prove phone delivery. The Home
+Assistant dashboard marks bridge status offline after 30 seconds without a
+heartbeat and invalidates crying/movement values when their input is stale.
+
+Automatic phone alerts start disabled. Register each Companion app, enter its
+`notify.mobile_app_*` action on the dashboard, send a manual test, then enable
+Notifications. Movement has a separate switch. Notification taps open the
+live dashboard. Neither motion nor crying classifications are validated danger
+detectors. Test delivery separately from model accuracy.
+
+The supplied six-node preset expects this environment variable before launch:
+
+```bash
+export JOSHUA_HA_WEBHOOK_FILE="$HOME/joshua-home-assistant/webhook.secret"
+```
+
+Missing credentials leave the bridge reporting delivery errors while capture,
+inference, and streaming continue. The bridge reads the secret file on each
+attempt, so correcting it does not require restarting capture. Do not commit
+or print its contents. Deployment and package upgrades must preserve the
+Home Assistant `config/` directory, accounts, and generated credential.

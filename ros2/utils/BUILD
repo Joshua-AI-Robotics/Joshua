@@ -120,8 +120,9 @@ cc_test(
 )
 
 exports_files([
-    "home_assistant_setup.py",
     "media_stream_node.py",
+    "home_assistant_setup.py",
+    "notification_node.py",
 ])
 
 config_setting(
@@ -161,6 +162,26 @@ py_test(
     name = "media_stream_node_test",
     srcs = ["media_stream_node_test.py"],
     deps = ["//ros2:media_stream_node"],
+)
+
+py_library(
+    name = "notification",
+    srcs = ["notification.py"],
+)
+
+py_test(
+    name = "notification_test",
+    srcs = ["notification_test.py"],
+    deps = [
+        ":notification",
+        "//config/proto:config_py_proto",
+    ],
+)
+
+py_test(
+    name = "notification_node_test",
+    srcs = ["notification_node_test.py"],
+    deps = ["//ros2:notification_node"],
 )
 
 py_test(

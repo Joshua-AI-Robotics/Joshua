@@ -20,6 +20,7 @@ enum NodeType {
   YAMNET_NODE = 9;
   VIDEO_INFERENCE_NODE = 10;
   MEDIA_STREAM_NODE = 11;
+  NOTIFICATION_NODE = 12;
 }
 
 enum QosReliabilityPolicy {

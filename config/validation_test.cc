@@ -365,3 +365,32 @@ TEST(MonitorValidationTest, RejectsInvalidInferenceBeforeOpeningCaptureDevices) 
   EXPECT_FALSE(ValidateConfig(config).ok());
 }
 }  // namespace config
+
+TEST(ConfigValidationTest, NotificationContracts) {
+  config::Config config;
+  auto* notification = config.mutable_utilities()->add_notifications();
+  notification->mutable_node()->set_id(6);
+  notification->mutable_node()->set_node_type(ros2::node::NOTIFICATION_NODE);
+  auto* input = notification->mutable_node()->add_subscriptions();
+  input->set_topic("/audio/events");
+  input->set_ros2_data_type(ros2::data_type::STRING);
+  auto* output = notification->mutable_node()->add_publishers();
+  output->set_topic("/notification/events");
+  output->set_ros2_data_type(ros2::data_type::STRING);
+  notification->set_home_assistant_url("http://127.0.0.1:8123");
+  notification->set_webhook_file_env("JOSHUA_HA_WEBHOOK_FILE");
+  notification->set_request_timeout_sec(3);
+  notification->set_max_event_age_sec(30);
+  notification->set_cooldown_sec(60);
+  notification->set_movement_persistence_sec(2);
+  notification->set_input_timeout_sec(15);
+  EXPECT_TRUE(config::ValidateConfig(config).ok());
+  output->set_topic("/audio/events");
+  EXPECT_FALSE(config::ValidateConfig(config).ok());
+  output->set_topic("/notification/events");
+  notification->set_max_event_age_sec(0);
+  EXPECT_FALSE(config::ValidateConfig(config).ok());
+  notification->set_max_event_age_sec(30);
+  *config.mutable_utilities()->add_notifications() = *notification;
+  EXPECT_FALSE(config::ValidateConfig(config).ok());
+}

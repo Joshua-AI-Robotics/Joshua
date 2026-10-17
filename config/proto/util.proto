@@ -7,6 +7,7 @@ import "ros2/proto/node.proto";
 // Utilities consume existing topics; they never own capture devices.
 message Utilities {
   repeated MediaStream media_streams = 1;
+  repeated Notification notifications = 2;
 }
 
 message MediaStream {
@@ -24,4 +25,17 @@ message MediaStream {
   uint32 http_port = 8;
   uint32 ice_port = 9;
   uint32 rtsp_port = 10;
+}
+
+// STRING event inputs and one distinct STRING delivery-status output.
+message Notification {
+  ros2.node.Node node = 1;
+  string home_assistant_url = 2;
+  // Name of an environment variable holding the private webhook file path.
+  string webhook_file_env = 3;
+  double request_timeout_sec = 4;
+  double max_event_age_sec = 5;
+  double cooldown_sec = 6;
+  double movement_persistence_sec = 7;
+  double input_timeout_sec = 8;
 }

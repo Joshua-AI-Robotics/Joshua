@@ -341,3 +341,15 @@ ros2_py_binary(
     main = "//ros2/utils:home_assistant_setup.py",
     deps = ["//config/proto:config_py_proto"] + requirement("protobuf"),
 )
+
+ros2_py_binary(
+    name = "notification_node",
+    srcs = ["//ros2/utils:notification_node.py"],
+    main = "//ros2/utils:notification_node.py",
+    deps = [
+        ":node_runner_py",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/utils:notification",
+    ] + requirement("numpy"),
+)

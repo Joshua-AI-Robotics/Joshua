@@ -63,4 +63,18 @@ utilities {
     # Empty listen_address discovers this Pi's Tailscale IPv4 address.
     http_port: 8889 ice_port: 8189 rtsp_port: 8554
   }
+
+  notifications {
+    node {
+      id: 6 node_type: NOTIFICATION_NODE
+      subscriptions { topic: "/audio/events" ros2_data_type: STRING }
+      subscriptions { topic: "/video/events" ros2_data_type: STRING }
+      subscriptions { topic: "/media/events" ros2_data_type: STRING }
+      publishers { topic: "/notification/events" ros2_data_type: STRING }
+    }
+    home_assistant_url: "http://127.0.0.1:8123"
+    webhook_file_env: "JOSHUA_HA_WEBHOOK_FILE"
+    request_timeout_sec: 3 max_event_age_sec: 30 cooldown_sec: 60
+    movement_persistence_sec: 2 input_timeout_sec: 15
+  }
 }

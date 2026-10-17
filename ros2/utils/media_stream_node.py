@@ -105,6 +105,8 @@ class MediaStreamNode(Node):
         self.output = self.create_publisher(String, n.publishers[0].topic, 10)
         self.stream = MediaStream(self.options, bool(audio), self.report)
         self.last_error = 0
+        self.last_report = None
+        self.last_heartbeat = 0
         self.video_subscription = self.create_subscription(
             Image,
             images[0].topic,
@@ -133,8 +135,15 @@ class MediaStreamNode(Node):
             pass
 
     def flush_events(self):
+        # Periodic state lets downstream monitors detect a dead streaming process.
+        now = time.monotonic()
+        if self.events.empty() and self.last_report and now - self.last_heartbeat >= 5:
+            self.report(*self.last_report)
         while not self.events.empty():
             state, detail = self.events.get_nowait()
+            changed = self.last_report != (state, detail)
+            self.last_report = (state, detail)
+            self.last_heartbeat = now
             self.output.publish(
                 String(
                     data=json.dumps(
@@ -151,7 +160,8 @@ class MediaStreamNode(Node):
                     )
                 )
             )
-            self.get_logger().info(f"{state}: {detail}")
+            if changed:
+                self.get_logger().info(f"{state}: {detail}")
 
     def invalid(self, error):
         if time.monotonic() - self.last_error > 5:
