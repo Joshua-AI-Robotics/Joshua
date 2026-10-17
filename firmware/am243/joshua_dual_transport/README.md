@@ -87,7 +87,7 @@ Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
 Set `JOSHUA_ETHERCAT_PROFILE=jw`, `JOSHUA_COMM_WATCHDOG_US` and
 `JOSHUA_TARGET_WATCHDOG_US` explicitly before running `scripts/build.sh`. Both
 watchdog values must be 10000..999999999 microseconds. This selects the shared
-JW descriptor, session, CoE mailbox and correlated 80-byte PDO profile through
+JW descriptor, session, CoE mailbox and correlated 112-byte PDO profile through
 the TI stack. Its channel remains software-only. The artifact is
 `out/am243_ethercat_jw.release.appimage`, distinct from the UART/TI-demo artifact.
 
@@ -106,3 +106,33 @@ Discovery, metadata, status and recovery reach the same backend runtime as
 profile operations. Target watchdog slots use stable function IDs across the
 255-function wire space. Session resets disable/configuration-clear without
 clearing ESTOP or watchdog latches; explicit RECOVER precedes reconfiguration.
+
+## Callback ownership and stop priority
+
+All `JoshuaChannel` access, including command/reset/stop callbacks, feedback
+acquisition and enabled-state reads, belongs to one externally serialized owner.
+The generic C callbacks borrow a non-null `JoshuaChannel*` through `void*`; its
+storage outlives the endpoint/profile. The callbacks have no internal locks.
+The UART artifact uses a single task. The TI JW EtherCAT artifact uses short
+IRQ-disabled critical sections on one R5 core; FIQ handlers and other cores
+must not enter that owner. UART and JW EtherCAT do not run together.
+
+The TI stop-output callback latches a fault even when the channel is already
+disabled. A stop epoch invalidates SDK snapshots admitted before a local stop,
+watchdog fault or successful protocol ESTOP. Interrupted CoE callbacks return
+unsupported access and stale PDO snapshots are discarded before dispatch. A
+caller must reconcile status and request recovery explicitly. Reset alone
+preserves the stop/fault latches and cannot restore configuration or enable.
+
+The watchdog task runs at `TaskP_PRIORITY_HIGHEST`, above SDK 09's application
+task (`HIGHEST-1`), and checks once per 1000-us sleep interval. SDK I/O and sleeps
+remain outside the owner critical section, so a stalled vendor call cannot hold
+the channel lock. A running critical section still delays the watchdog; its
+maximum duration and actual scheduling/detection latency require R5 hardware
+qualification. This is not a measured 1-ms stop guarantee or a physical stop.
+
+`//firmware/am243/joshua_dual_transport:ethercat_ti_test` compiles the production
+TI bridge as C against native SDK substitutes. It exercises stop/enable,
+stop/recovery, stop/reset, watchdog activity during vendor I/O, stale PDO
+snapshots, repeated faults and concurrent callbacks. The broader host priority
+scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
