@@ -1,4 +1,5 @@
-# Opens webcam index 0 and the default ALSA microphone. Edit devices first.
+# Opens webcam index 0 and the PC-LM1E Camera USB microphone.
+# For other webcams, select the ALSA card name shown by arecord -l.
 general { operation_mode: MODE_TEST name: "experimental_babymonitor" }
 robot {
   perceptions {
@@ -20,7 +21,7 @@ robot {
         qos_setting { reliability_policy: QOS_RELIABILITY_POLICY_BEST_EFFORT depth: 100 }
         publishers { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
       }
-      alsa_audio_config { device: "default" sample_rate_hz: 16000 channels: 1 frames_per_chunk: 320 }
+      alsa_audio_config { device: "plughw:CARD=Camera,DEV=0" sample_rate_hz: 16000 channels: 1 frames_per_chunk: 320 }
     }
   }
 }

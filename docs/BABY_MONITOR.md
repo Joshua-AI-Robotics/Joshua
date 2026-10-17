@@ -48,6 +48,17 @@ OpenCV shared libraries, and ALSA runtime (`libasound2t64` on Ubuntu 24.04).
 It can run inside a matching Joshua container with `/dev/video*` and `/dev/snd`
 exposed. Diagnostics use `alsa-utils` and `v4l-utils`. No GPU is needed.
 
+Install the ALSA runtime on the Ubuntu 24.04 Pi before starting capture:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libasound2t64
+```
+
+Without it, both capture publishers can exit with
+`libasound.so.2: cannot open shared object file` because they share the perception
+factory's audio dependency.
+
 ## Copy and inspect
 
 From the build machine, substitute the actual generated filename:
@@ -69,9 +80,12 @@ find . -path '*/baby_monitor/pi5_usb.pbtxt'
 
 Copy the preset to `./pi5_usb.pbtxt` for local edits. Select the camera index and
 ALSA device explicitly. `arecord -l` lists hardware devices; `arecord -L` lists
-ALSA names. Prefer `plughw:CARD=<webcam-card-name>,DEV=0` over a shifting numeric
-card index. The ALSA plug device can convert the microphone's native rate to
-16 kHz, the required YAMNet input rate. `v4l2-ctl --list-devices` and
+ALSA names. This preset uses `plughw:CARD=Camera,DEV=0` for the PC-LM1E Camera
+microphone. For a different microphone, replace `Camera` with its ALSA card name.
+Using the card name avoids a shifting numeric card index. The Pi's `default`
+device may select an HDMI playback device with no capture input.
+The ALSA plug device converts the microphone's native channels and rate to mono
+16 kHz, the required YAMNet input. `v4l2-ctl --list-devices` and
 `v4l2-ctl --device=/dev/video0 --list-formats-ext` show camera device capabilities.
 Use a supported format/resolution/FPS. The preset starts at MJPG 640x480/15 FPS.
 
