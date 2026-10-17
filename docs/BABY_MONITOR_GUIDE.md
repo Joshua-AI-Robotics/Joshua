@@ -479,7 +479,11 @@ alert even though the manual action test worked.
 Notification text uses Home Assistant's push service and Apple/Google push
 infrastructure. Tailscale is required to open the private dashboard and stream;
 ordinary push text delivery does not require the VPN. This configuration does
-not upload camera snapshots with notifications or enable critical alerts.
+not upload camera snapshots with notifications. Cry-start notifications request
+the default iPhone critical sound at full volume; enable Critical Alerts for
+Home Assistant in iOS notification settings. Movement, outage, recovery, and
+the dashboard test remain ordinary notifications. This does not add reminders
+while crying continues or change the detection persistence and cooldown.
 
 ### Test detection separately from delivery
 

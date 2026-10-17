@@ -94,8 +94,11 @@ wanted. Notifications open `/baby-monitor/live` in the app.
 
 Normal alert text travels through Home Assistant's push service and Apple/Google
 infrastructure. Opening the dashboard requires Tailscale; text delivery does not.
-No camera snapshots are uploaded by this configuration. Critical alerts are not
-enabled by default.
+No camera snapshots are uploaded by this configuration. Cry-start alerts request
+the default critical sound at full volume on iPhone; allow Critical Alerts in
+iOS notification settings for Home Assistant. Movement, outage, recovery, and
+dashboard test notifications use ordinary sounds. Critical alerts do not repeat
+automatically while crying continues; the existing episode/cooldown rules apply.
 
 ## Operations and acceptance checks
 
