@@ -16,6 +16,7 @@ cc_test(
     ],
     includes = ["src"],
     deps = [
+        "//firmware/common:joshua_actuator_handler",
         "//firmware/common:joshua_device_runtime",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_resources",

@@ -6,8 +6,8 @@
 #include <deque>
 #include <vector>
 
+#include "am243_software_backend.h"
 #include "gtest/gtest.h"
-#include "joshua_commands.h"
 
 namespace {
 std::deque<uint8_t> input;

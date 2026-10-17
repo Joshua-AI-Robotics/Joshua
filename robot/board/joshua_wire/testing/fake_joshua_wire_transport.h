@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/am243_software_backend.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_endpoint.h"
 #include "robot/comm/interfaces/message_transport.h"

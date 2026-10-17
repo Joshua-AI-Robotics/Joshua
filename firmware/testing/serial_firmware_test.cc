@@ -265,6 +265,7 @@ TEST_F(SerialFirmwareTest, ResponseLargerThanWritableChunkDrainsAcrossIterations
   const auto identify = Frame(JW_CMD_IDENTIFY, 0xff);
   const auto expected = Run(identify);
   ASSERT_GT(expected.size(), 16u);
+  const auto state_before = g_functions[0].state;
   Serial.write_capacity = 16;
   Run(identify);  // Exact retry must drain the same reply in short writes.
   EXPECT_EQ(Serial.output.size(), 16u);
@@ -279,7 +280,8 @@ TEST_F(SerialFirmwareTest, ResponseLargerThanWritableChunkDrainsAcrossIterations
   }
   EXPECT_EQ(Serial.output, expected);
   EXPECT_TRUE(g_channels[0].enabled);
-  EXPECT_EQ(g_functions[0].state.reason, JW_REASON_NONE);
+  EXPECT_EQ(g_functions[0].state.reason, state_before.reason);
+  EXPECT_EQ(g_functions[0].state.epoch, state_before.epoch);
 }
 
 TEST_F(SerialFirmwareTest, BoundsNoiseDrainingPerMotorServiceIteration) {
@@ -389,6 +391,22 @@ TEST_F(SerialFirmwareTest, TxFaultNeedsExplicitRecoveryAndNeverReexecutesCachedE
   SendProfile(JW_ACTUATOR_ENABLE, 0);
   EXPECT_TRUE(g_channels[0].enabled);
 }
+
+TEST_F(SerialFirmwareTest, PhysicalPositionLimitRemainsBackendSpecific) {
+  ASSERT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  uint8_t payload[JW_SET_TARGET_PAYLOAD_LEN];
+  int len = jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, 2147483520.0f);
+  ASSERT_GT(len, 0);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_SET_TARGET, 0, Bytes(payload, payload + len)),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  len = jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, 2147483648.0f);
+  ASSERT_GT(len, 0);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_SET_TARGET, 0, Bytes(payload, payload + len)),
+            (Bytes{JW_STATUS_INVALID_PAYLOAD, JW_EXECUTION_REJECTED}));
+  EXPECT_FLOAT_EQ(g_channels[0].target_value, 2147483520.0f);
+}
+
 TEST_F(SerialFirmwareTest, ConflictingResourcesAndEnabledReconfigurationNeverChangePins) {
   ASSERT_GT(g_num_channels, 1);
   EXPECT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),

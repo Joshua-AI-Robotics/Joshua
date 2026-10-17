@@ -12,6 +12,21 @@ or I/O types. `joshua_wire_profiles` contains initial actuator, scalar sensor an
 I/O codecs. `jw_drive_t` remains actuator-only metadata. A new profile or board
 needs no framing/session change or board enum. Vendor/product IDs are informational.
 
+`joshua_device_runtime` dispatches core commands and registered profiles.
+`joshua_actuator_handler` is the portable C actuator-profile handler shared by
+AM243's software backend and Teensy/ESP32's STEP/DIR backend. It decodes typed
+requests, validates advertised modes and common admission guards, encodes replies,
+and records action outcomes. Sensor and I/O handlers register independently;
+actuator execution stays outside the core codec.
+
+Backend callbacks own device limits, resource staging/rollback, bounded acquisition,
+and physical actions. They return explicit status/execution results. Rejected work
+has no effects; accepted, failed or uncertain work retains backend-authored state
+and queryable action IDs. Only completed successful mutations get normal state
+reporting from a fresh backend snapshot. Reset/ESTOP/recovery remain board-wide
+runtime safety callbacks. This consolidation is part of F; production scheduling,
+rollback and hardware qualification gates in H/F/T remain outstanding.
+
 IDENTIFY advertises limits, supported protocol/planes, boot/generation identity
 and safety scope. DISCOVER pages at most four stable function descriptors; the
 function ID space supports 255 functions. Device IDs group multifunction devices.

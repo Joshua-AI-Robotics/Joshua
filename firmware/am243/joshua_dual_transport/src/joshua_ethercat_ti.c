@@ -10,8 +10,8 @@
 #include <kernel/dpl/TaskP.h>
 #include <string.h>
 
+#include "am243_software_backend.h"
 #include "ecSlvApiDef.h"
-#include "joshua_commands.h"
 #include "joshua_ethercat_profile.h"
 
 #if !defined(JOSHUA_COMM_WATCHDOG_US) || !defined(JOSHUA_TARGET_WATCHDOG_US)
