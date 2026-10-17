@@ -31,7 +31,8 @@ JOSHUA_OBJS := transport_uart.obj serial_frame_assembler.obj serial_frame_transp
 	joshua_wire_resources.obj joshua_device_runtime.obj joshua_wire.obj \
 	joshua_wire_firmware_session.obj joshua_wire_endpoint.obj
 ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw)
-JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire.obj \
+JOSHUA_OBJS := joshua_commands.obj joshua_wire_commands.obj joshua_wire_profiles.obj \
+	joshua_wire_resources.obj joshua_device_runtime.obj joshua_wire.obj \
 	joshua_wire_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
 INCLUDES += -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
 	-DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)

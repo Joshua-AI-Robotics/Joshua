@@ -8,6 +8,7 @@
 
 #include "joshua_wire_ethercat.h"
 #include "joshua_wire_firmware_session.h"
+#include "joshua_wire_profiles.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,8 +26,8 @@ typedef struct {
   // Synchronous payload handler; must validate command payloads and never write
   // past capacity. IDENTIFY is supplied by the profile from identity above.
   int (*command)(void*, const jw_command_t*, uint8_t*, size_t);
-  // Must physically disable ALL outputs and clear configuration/faults before
-  // returning. Called at init and on a new SID, never on a same-SID retry.
+  // Must physically disable ALL outputs and clear configuration; preserve ESTOP/fault latches
+  // before returning. Called at init and on a new SID, never on a same-SID retry.
   void (*reset)(void*);
   // Must synchronously disable ALL outputs, clear targets and latch the supplied
   // fault bits for feedback. Zero means ESTOP. Must be safe to repeat.
@@ -45,7 +46,7 @@ typedef struct {
   uint32_t last_generation[2];
   uint64_t now_us;
   uint64_t last_progress_us;
-  uint64_t last_target_us[JW_MAX_CHANNELS];
+  uint64_t last_target_us[JW_MAX_FUNCTIONS];
   uint32_t comm_timeout_us;
   uint32_t target_timeout_us;
   bool operational;
@@ -70,7 +71,7 @@ int JoshuaEthercatProfileWrite(JoshuaEthercatProfile*,
                                uint16_t index,
                                const uint8_t* data,
                                size_t size);
-// Complete 80-byte snapshot in/out. Input remains retained until acknowledged.
+// Complete JWEC_PDO_SIZE-byte snapshot in/out. Input remains retained until acknowledged.
 int JoshuaEthercatProfilePdo(JoshuaEthercatProfile*, const uint8_t* output, size_t size);
 
 #ifdef __cplusplus
