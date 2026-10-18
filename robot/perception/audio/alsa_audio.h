@@ -14,6 +14,7 @@ class AlsaAudio : public AudioInterface {
   explicit AlsaAudio(const SinglePerception& config);
   ~AlsaAudio() override;
   absl::Status Init() override;
+  AudioCaptureSchedule GetCaptureSchedule() override;
   std::string GetId() override {
     return id_;
   }
@@ -27,6 +28,7 @@ class AlsaAudio : public AudioInterface {
   AlsaAudioConfig config_;
   std::string id_;
   snd_pcm_t* pcm_ = nullptr;
+  AudioCaptureSchedule schedule_;
   std::string pending_;
   uint32_t filled_ = 0;
   uint64_t timestamp_ns_ = 0;

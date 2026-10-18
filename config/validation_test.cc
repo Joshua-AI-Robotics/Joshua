@@ -243,6 +243,17 @@ Config AudioConfig() {
 TEST(AudioValidationTest, ValidatesWithoutOpeningMicrophone) {
   EXPECT_TRUE(ValidateConfig(AudioConfig()).ok());
 }
+TEST(AudioValidationTest, ValidatesCaptureBufferDurationWithoutDeviceAccess) {
+  for (const auto duration_ms : {0u, 1u, 200u, 1000u, 1001u}) {
+    auto config = AudioConfig();
+    config.mutable_robot()
+        ->mutable_perceptions()
+        ->mutable_single_perceptions(0)
+        ->mutable_alsa_audio_config()
+        ->set_capture_buffer_duration_ms(duration_ms);
+    EXPECT_EQ(ValidateConfig(config).ok(), duration_ms >= 1 && duration_ms <= 1000) << duration_ms;
+  }
+}
 TEST(AudioValidationTest, RejectsInvalidFormatAndWireContract) {
   for (int failure = 0; failure < 9; ++failure) {
     auto config = AudioConfig();

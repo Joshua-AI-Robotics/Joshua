@@ -7,6 +7,18 @@
 #include "robot/perception/audio/audio_config.h"
 namespace robot::perception {
 namespace {
+constexpr size_t kBytesPerSample = sizeof(int16_t);  // Interleaved s16le PCM.
+constexpr int kAllowAlsaResampling = 1;
+// Batch very small packets to avoid one timer wakeup per sample. This floor is
+// overridden when the negotiated hardware buffer requires faster polling.
+constexpr auto kPreferredMinPollInterval = std::chrono::milliseconds(1);
+// Aim for two polls per chunk and require two per buffer, reserving one poll
+// interval of scheduling headroom even when tiny chunks are batched.
+constexpr int kPollsPerWindow = 2;
+std::chrono::nanoseconds FramesDuration(uint64_t frames, uint32_t rate) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::duration<double>(static_cast<double>(frames) / rate));
+}
 absl::Status AlsaError(const char* operation, int error) {
   return absl::UnavailableError(std::string(operation) + ": " + snd_strerror(error));
 }
@@ -25,6 +37,10 @@ absl::Status AlsaAudio::Init() {
   std::lock_guard<std::mutex> lock(mutex_);
   return OpenLocked();
 }
+AudioCaptureSchedule AlsaAudio::GetCaptureSchedule() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return schedule_;
+}
 absl::Status AlsaAudio::OpenLocked() {
   if (pcm_) return absl::OkStatus();
   auto valid = ValidateAudioConfig(config_);
@@ -36,23 +52,48 @@ absl::Status AlsaAudio::OpenLocked() {
     return AlsaError("open audio", error);
   }
   // ALSA's plug device may resample; the published format is exactly this request.
-  error = snd_pcm_set_params(pcm_,
-                             SND_PCM_FORMAT_S16_LE,
-                             SND_PCM_ACCESS_RW_INTERLEAVED,
-                             config_.channels(),
-                             config_.sample_rate_hz(),
-                             1,
-                             200000);
+  error = snd_pcm_set_params(
+      pcm_,
+      SND_PCM_FORMAT_S16_LE,
+      SND_PCM_ACCESS_RW_INTERLEAVED,
+      config_.channels(),
+      config_.sample_rate_hz(),
+      kAllowAlsaResampling,
+      std::chrono::duration_cast<std::chrono::microseconds>(CaptureBufferDuration(config_))
+          .count());
   if (error < 0) {
     CloseLocked();
     return AlsaError("configure audio", error);
   }
+  snd_pcm_uframes_t buffer_frames = 0;
+  snd_pcm_uframes_t period_frames = 0;
+  error = snd_pcm_get_params(pcm_, &buffer_frames, &period_frames);
+  if (error < 0) {
+    CloseLocked();
+    return AlsaError("query audio buffer", error);
+  }
+  if (buffer_frames == 0 || period_frames == 0) {
+    CloseLocked();
+    return absl::UnavailableError("ALSA negotiated an empty buffer or period");
+  }
+  const auto chunk_frames = config_.frames_per_chunk();
+  const auto preferred_interval =
+      std::max(std::chrono::duration_cast<std::chrono::nanoseconds>(kPreferredMinPollInterval),
+               FramesDuration(chunk_frames, config_.sample_rate_hz()) / kPollsPerWindow);
+  schedule_.poll_interval =
+      std::min({preferred_interval,
+                FramesDuration(period_frames, config_.sample_rate_hz()),
+                FramesDuration(buffer_frames, config_.sample_rate_hz()) / kPollsPerWindow});
+  // Round up to cover a whole buffer, plus one call for a preexisting partial
+  // packet (or a final pending read). This scales with tiny chunk sizes too.
+  schedule_.max_packets_per_poll =
+      buffer_frames / chunk_frames + (buffer_frames % chunk_frames != 0) + 1;
   error = snd_pcm_start(pcm_);
   if (error < 0) {
     CloseLocked();
     return AlsaError("start audio", error);
   }
-  pending_.resize(static_cast<size_t>(config_.frames_per_chunk()) * config_.channels() * 2);
+  pending_.resize(static_cast<size_t>(chunk_frames) * config_.channels() * kBytesPerSample);
   filled_ = 0;
   discontinuity_ = true;
   return absl::OkStatus();
@@ -79,22 +120,25 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
     const auto available = snd_pcm_avail_update(pcm_);
     const uint64_t now = RealtimeNs();
     const uint64_t age =
-        available > 0 ? static_cast<uint64_t>(available) * 1000000000ULL / config_.sample_rate_hz()
-                      : 0;
+        available > 0 ? FramesDuration(available, config_.sample_rate_hz()).count() : 0;
     timestamp_ns_ = now - std::min(now, age);
   }
-  const auto count = snd_pcm_readi(pcm_,
-                                   pending_.data() + filled_ * config_.channels() * 2,
-                                   config_.frames_per_chunk() - filled_);
-  if (count == -EAGAIN || count == 0) return absl::DeadlineExceededError("Audio chunk pending");
-  if (count < 0) {
-    // Discard partial data. Reopen on the next call; never splice across a gap.
-    CloseLocked();
-    return AlsaError("read audio (will reopen)", static_cast<int>(count));
+  // A short successful read need not mean the device is empty. Continue until
+  // a packet is complete or ALSA reports no data. Each successful read advances
+  // filled_, so even one-frame reads are bounded by the packet's frame count.
+  while (filled_ < config_.frames_per_chunk()) {
+    const auto count =
+        snd_pcm_readi(pcm_,
+                      pending_.data() + filled_ * config_.channels() * kBytesPerSample,
+                      config_.frames_per_chunk() - filled_);
+    if (count == -EAGAIN || count == 0) return absl::DeadlineExceededError("Audio chunk pending");
+    if (count < 0) {
+      // Discard partial data. Reopen on the next call; never splice across a gap.
+      CloseLocked();
+      return AlsaError("read audio (will reopen)", static_cast<int>(count));
+    }
+    filled_ += static_cast<uint32_t>(count);
   }
-  filled_ += static_cast<uint32_t>(count);
-  if (filled_ != config_.frames_per_chunk())
-    return absl::DeadlineExceededError("Audio chunk pending");
   PerceptionPacket packet;
   packet.set_perception_id(id_);
   packet.set_timestamp_ns(timestamp_ns_);

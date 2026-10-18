@@ -18,6 +18,7 @@ extern "C" snd_pcm_sframes_t __wrap_snd_pcm_readi(snd_pcm_t* pcm,
   }
   if (partial_read) {
     partial_read = false;
+    pending_read = true;
     frames /= 2;
   }
   return __real_snd_pcm_readi(pcm, data, frames);

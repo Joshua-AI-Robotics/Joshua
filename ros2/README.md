@@ -205,6 +205,26 @@ recovery but reset on process restart. Consumers must reset windows on either
 signal, sequence gaps, or stale input. A stalled source logs an error, never
 fabricates silence. Keep subscription QoS compatible with the preset.
 
+`capture_buffer_duration_ms` requests an ALSA buffer of 1..1000 ms; omitting it
+preserves the 200 ms default. Polling uses the **negotiated** buffer and period,
+since hardware may choose a different capacity. The timer aims for half a chunk
+duration, batching tiny chunks at a preferred minimum of 1 ms, but never waits
+longer than one negotiated period or half the buffer duration. The buffer limit
+overrides that preferred minimum. This reserves headroom for delayed callbacks;
+it is not a real-time scheduling guarantee.
+
+Each callback can drain a buffer's worth of packets plus one partial packet,
+then yields even if a plugin continuously supplies data. Short reads continue
+until the current packet completes or ALSA has no more data. Large chunks thus
+accumulate across polls, while small chunks have a budget proportional to their
+required throughput. After reopening, the publisher refreshes the timer from the
+newly negotiated buffer. Device failures use a one-second retry backoff; pending
+chunks keep normal polling. Sustained outages are reported after two seconds,
+with subsequent warnings at most once per second.
+
 Use `//robot/perception/audio:alsa_audio_test` for a hardware-free ALSA null
 plugin check. Config validation checks format bounds and duplicate device strings;
 ALSA aliases for the same physical device cannot be detected statically.
+`//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
+virtual time to cover large and tiny chunks, short reads, delayed polls, changed
+buffer sizes after recovery, and bounded work for always-ready sources.

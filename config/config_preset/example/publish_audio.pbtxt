@@ -15,6 +15,7 @@ robot {
         sample_rate_hz: 16000
         channels: 1
         frames_per_chunk: 320
+        capture_buffer_duration_ms: 200
       }
     }
   }
