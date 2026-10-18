@@ -8,13 +8,22 @@
 const double now = joshua::RobotTime();
 ```
 
-Actuator and perception drivers already include their shared interface headers.
-Those headers expose this utility and import `RobotTime` into `robot::action`
-and `robot::perception`, respectively. Driver implementations in those namespaces
-can call `RobotTime()` directly without another include or a per-driver Bazel
-dependency. The dependency is declared on the shared interface targets. The
-interfaces add no clock member, wrapper method, or initialization; both names
-refer to the same global function. Other helpers can include the utility directly.
+Actuator, perception and host-side board drivers already include their shared
+interface headers. Those headers expose this utility and import `RobotTime` into
+`robot::action`, `robot::perception` and `robot::board`, respectively. Board drivers
+can include either `board_channel.h` or `board_interface.h` (which includes the
+channel header). Driver implementations in those namespaces can call
+`RobotTime()` directly without another include or a per-driver Bazel dependency.
+The dependency is declared on the shared interface targets. The interfaces add
+no clock member, wrapper method, or initialization; all names refer to the same
+global function. Other helpers can include the utility directly.
+
+Exposing the accessor does not change existing `LOG()` timestamps. Logging
+integration, including communication-driver logs, is separate migration work.
+Firmware timestamps remain in the device's clock domain until that clock is
+synchronized with robot time or the host explicitly converts those timestamps
+into the robot-time domain. Reading `RobotTime()` on receipt gives a host receipt
+time, not the original firmware acquisition time.
 
 Each process owns one clock. Helpers, node callbacks and worker threads all
 reach that object; no module context or clock pointer is needed. Separate
@@ -142,11 +151,16 @@ continue using monotonic durations for deadlines, watchdogs and sleeps.
 - [x] Shared C++ accessor, install-once ownership and concurrent reads.
 - [x] Configurable PTP/UTC/local monotonic sources and startup fallback.
 - [x] Pure config validation and C++ runner initialization before construction.
+- [x] Shared accessor exposure through actuator, perception and board interfaces.
 - [x] Hardware-free unit tests for source failures, ownership and startup order.
 - [ ] Initialize launcher time before operation-mode selection and cover other
       entrypoints that do not use the C++ node runner.
 - [ ] Add exact integer timestamp access and explicit ROS timestamp conversion.
 - [ ] Migrate driver acquisition timestamps and preserve them through publishers.
+- [ ] Integrate robot time into logging, including board and communication-driver
+      logs; exposing the accessor alone does not change `LOG()` timestamps.
+- [ ] Synchronize firmware clocks or convert firmware timestamps into the
+      robot-time domain while preserving the original acquisition time.
 - [ ] Define simulation-time behavior and incoming timestamp-domain handling.
 - [ ] Discover PTP offsets automatically and monitor synchronization health.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
