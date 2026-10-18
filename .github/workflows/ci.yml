@@ -18,6 +18,17 @@ jobs:
       - name: Verify AGENTS.md link targets resolve
         run: ./hooks/agents_doc_check.sh
 
+      - name: Install skill-check dependency
+        run: python3 -m pip install PyYAML==6.0.2
+
+      - name: Verify skill docs are well formed
+        run: ./hooks/skills_doc_check.sh
+
+      - name: Test skill metadata and installation
+        run: |
+          bash -n scripts/install-skills.sh hooks/skills_doc_check.sh
+          python3 hooks/skills_framework_test.py
+
   codeowners:
     name: CODEOWNERS coverage
     runs-on: ubuntu-22.04

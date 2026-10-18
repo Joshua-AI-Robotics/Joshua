@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "config/proto/robot.pb.h"
 #include "robot/comm/interfaces/byte_stream.h"
 #include "robot/perception/interfaces/lidar_interface.h"
+#include "robot/perception/proto/perception.pb.h"
 #include "robot/perception/proto/perception_packet.pb.h"
 
 namespace robot::perception {

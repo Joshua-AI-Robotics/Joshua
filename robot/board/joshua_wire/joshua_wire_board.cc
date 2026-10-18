@@ -203,7 +203,9 @@ absl::Status JoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
 absl::StatusOr<std::shared_ptr<FrameTransport>> JoshuaWireBoard::CreateTransport(
     const robot::comm::Comm& comm) const {
   ABSL_ASSIGN_OR_RETURN(auto transport, robot::comm::CommFactory::CreateComm(comm));
-  return robot::comm::GetCommTransport<robot::comm::MessageTransport>(transport);
+  ABSL_ASSIGN_OR_RETURN(auto message,
+                        robot::comm::GetCommTransport<robot::comm::MessageTransport>(transport));
+  return robot::comm::GetLegacyMessageTransport(message);
 }
 
 absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) const {

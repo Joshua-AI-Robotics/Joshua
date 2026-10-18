@@ -8,12 +8,12 @@
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/serial/fake_serial_transport.h"
+#include "robot/comm/testing/fake_legacy_message_transport.h"
 
 namespace robot::board {
 namespace {
 
-using robot::comm::FakeSerialTransport;
+using robot::comm::FakeLegacyMessageTransport;
 
 // Builds a well-formed Feetech status/response packet with the given
 // parameter bytes and error byte, matching the checksum arithmetic in
@@ -56,7 +56,7 @@ robot::board::Board MakeArmBusBoard() {
 class FeetechBusBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeSerialTransport>();
+    transport_ = std::make_shared<FakeLegacyMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -75,7 +75,7 @@ class FeetechBusBoardTest : public ::testing::Test {
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {0x0F, 0x03}));
   }
 
-  std::shared_ptr<FakeSerialTransport> transport_;
+  std::shared_ptr<FakeLegacyMessageTransport> transport_;
 };
 
 TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
@@ -85,11 +85,11 @@ TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
   auto status = board.Init(MakeArmBusBoard());
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->atomic_read_calls_, 2);
+  EXPECT_EQ(transport_->exchange_calls_, 2);
 }
 
 TEST_F(FeetechBusBoardTest, InitFailsWhenServoDoesNotRespond) {
-  // No queued responses: FakeSerialTransport::AtomicRead returns zero bytes.
+  // No queued responses: FakeLegacyMessageTransport::SendAndReceive returns zero bytes.
   FeetechBusBoard board;
 
   auto status = board.Init(MakeArmBusBoard());

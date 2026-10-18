@@ -17,5 +17,22 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "legacy_message_transport",
+    hdrs = ["legacy_message_transport.h"],
+    deps = [":message_transport"],
+)
+
+cc_library(
+    name = "correlated_cyclic_transport",
+    hdrs = ["correlated_cyclic_transport.h"],
+    deps = [
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
     ],
 )

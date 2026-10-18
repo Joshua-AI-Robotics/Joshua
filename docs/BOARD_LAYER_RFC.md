@@ -1,7 +1,17 @@
 # Board Layer RFC
 
 Status: **phases 1–5 landed.** This revision keeps only what is still open.
-Companion to: [ARCHITECTURE.md](ARCHITECTURE.md), [am243_ethercat.md](am243_ethercat.md)
+Companion to: [ARCHITECTURE.md](ARCHITECTURE.md),
+[am243_ethercat.md](am243_ethercat.md),
+[BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md)
+
+The normative mixed-device protocol contract is [JOSHUA_WIRE.md](JOSHUA_WIRE.md).
+The detailed implementation plan for JoshuaWire revision 4 profile discovery/correlation, EtherCAT
+CoE/SDO management commands, correlated PDO commands, and board/comm dependency
+separation now lives in
+[BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md). Where that
+document makes a newer explicit decision about plane composition or command
+routing, it supersedes the corresponding open question in this RFC.
 
 The original 1,885-line RFC — full rationale for everything already built — is
 preserved in git: `git show 2dca167:docs/BOARD_LAYER_RFC.md`.

@@ -125,3 +125,5 @@ touches their area:
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Environment/setup variants** (ARM64, Isaac Sim, hardware runs): read
   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+- **Recurring tasks with a repo skill**: some tasks have a `joshua-*` skill that
+  encodes the steps — see [docs/skills/](docs/skills/README.md).

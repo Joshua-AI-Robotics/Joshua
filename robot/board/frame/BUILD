@@ -4,7 +4,7 @@ cc_library(
     name = "frame_transport",
     hdrs = ["frame_transport.h"],
     visibility = ["//visibility:public"],
-    deps = ["//robot/comm/interfaces:message_transport"],
+    deps = ["//robot/comm/interfaces:legacy_message_transport"],
 )
 
 cc_library(
