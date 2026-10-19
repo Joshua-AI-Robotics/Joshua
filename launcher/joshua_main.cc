@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
 
   auto config_or = config::config_util::LoadConfig(FLAGS_config);
   if (!config_or.ok()) {
-    LOG(ERROR) << "Failed to load config: " << FLAGS_config;
+    LOG(ERROR) << "Failed to load config: " << config_or.status();
     return 1;
   }
   const auto& config = config_or.value();
@@ -32,13 +32,13 @@ int main(int argc, char* argv[]) {
   try {
     node_generator::NodeGenerator node_generator(FLAGS_config);
 
-    if (!node_generator.Initialize().ok()) {
-      LOG(ERROR) << "Failed to initialize NodeGenerator";
+    if (const auto status = node_generator.Initialize(); !status.ok()) {
+      LOG(ERROR) << "Failed to initialize NodeGenerator: " << status;
       return 1;
     }
 
-    if (!node_generator.LaunchAllNodes().ok()) {
-      LOG(ERROR) << "Failed to launch nodes";
+    if (const auto status = node_generator.LaunchAllNodes(); !status.ok()) {
+      LOG(ERROR) << "Failed to launch nodes: " << status;
       return 1;
     }
 
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
 
     auto res = node_generator.MonitorNodes();
     if (!res.ok()) {
-      LOG(ERROR) << "Failed to monitor nodes";
+      LOG(ERROR) << "Failed to monitor nodes: " << res;
       return 1;
     }
   } catch (const std::exception& e) {

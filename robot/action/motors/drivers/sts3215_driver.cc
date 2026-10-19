@@ -28,15 +28,9 @@ absl::Status Sts3215Driver::Init() {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "STS3215 driver requires a board channel");
   }
-  // Best-effort seed of the channel's staged move speed with the actuator's
-  // configured default, matching the pre-board-layer driver's constructor
-  // (which initialized the same value locally and could not fail). Ignored
-  // on error: a channel that rejects this pre-torque-enable write still
-  // works correctly once the first explicit SetSpeed() call lands.
-  channel_
-      ->SetTarget(robot::board::TargetMode::kVelocity, action_config_.sts3215_config().move_speed())
-      .IgnoreError();
-  return absl::OkStatus();
+  // Seeding the configured speed is part of initialization; propagate failures.
+  return channel_->SetTarget(robot::board::TargetMode::kVelocity,
+                             action_config_.sts3215_config().move_speed());
 }
 
 std::string Sts3215Driver::GetId() {
@@ -61,8 +55,8 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
         case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
           return SetTorque(0.0f);
         default:
-          LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
-          return absl::OkStatus();
+          return absl::InvalidArgumentError("Unknown actuator preset: " +
+                                            std::to_string(action_packet.preset()));
       }
 
     case robot::action::ActionPacket::kJoint: {
@@ -108,8 +102,6 @@ absl::Status Sts3215Driver::SetAction(const robot::action::ActionPacket& action_
     }
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
-      LOG(WARNING) << "No action type set in STS3215 ActionPacket [ID: "
-                   << action_packet.action_id() << "]";
       return absl::InvalidArgumentError("ActionPacket requires joint or preset");
   }
 }

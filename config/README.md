@@ -120,3 +120,9 @@ node defines the interpretation: actuator scalar position topics use native unit
 while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
+
+## C++ ROS logging
+
+`general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
+`ROS2_LOG_GLOG`. It controls C++ node `JOSHUA_LOG` calls; Python and direct driver
+logging are unchanged. See [logging behavior](../ros2/README.md#c-node-logging).

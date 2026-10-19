@@ -1,6 +1,7 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -83,10 +84,14 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
     return port_res_ptr->serial;
   }
 
-  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
-  port_res_ptr->baudrate = baudrate;
-  port_res_ptr->serial = serial;
-  return serial;
+  try {
+    auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
+    port_res_ptr->baudrate = baudrate;
+    port_res_ptr->serial = serial;
+    return serial;
+  } catch (const std::exception& error) {
+    return absl::UnavailableError(error.what());
+  }
 }
 
 }  // namespace

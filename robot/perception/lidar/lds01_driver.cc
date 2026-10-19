@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <utility>
 
 #include "utils/status_macros.h"
@@ -14,6 +15,17 @@ Lds01Driver::Lds01Driver(std::shared_ptr<robot::comm::ByteStream> stream,
                          const robot::perception::SinglePerception& lidar_config)
     : stream_(std::move(stream)) {
   id_ = lidar_config.sensor_name();
+}
+
+Lds01Driver::~Lds01Driver() {
+  try {
+    const auto status = Teardown();
+    if (!status.ok()) LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << status;
+  } catch (const std::exception& error) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << error.what();
+  } catch (...) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed with an unknown exception";
+  }
 }
 
 absl::Status Lds01Driver::Init() {
@@ -28,7 +40,7 @@ absl::Status Lds01Driver::Init() {
 }
 
 absl::Status Lds01Driver::Teardown() {
-  stop_receiving_.store(true);
+  if (stop_receiving_.exchange(true)) return absl::OkStatus();
 
   // Send stop motor command
   std::vector<uint8_t> stop_cmd = {'e'};

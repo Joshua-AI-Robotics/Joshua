@@ -19,19 +19,16 @@ namespace config::config_util {
 /// @brief Loads a config::Config from a text-format protobuf file.
 /// @param config_path Path to the config file.
 /// @return Parsed config::Config object.
-/// @throws std::runtime_error if file cannot be opened or parsed.
 inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path) {
   config::Config config;
   std::ifstream input(config_path);
   if (!input) {
-    LOG(ERROR) << "Failed to open config file: " << config_path;
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Failed to open config file: " + config_path);
   }
   std::string config_content((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
   if (!google::protobuf::TextFormat::ParseFromString(config_content, &config)) {
-    LOG(ERROR) << "Failed to parse config from file: " << config_path;
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Failed to parse config from file: " + config_path);
   }

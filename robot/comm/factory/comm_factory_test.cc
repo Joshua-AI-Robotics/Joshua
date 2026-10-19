@@ -137,6 +137,20 @@ TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneSerialAcrossCapabi
   EXPECT_EQ(std::dynamic_pointer_cast<MessageTransport>(*first_stream), *message_transport);
 }
 
+TEST_F(CommFactorySerialCacheTest, SerialOpenFailureReturnsDetailedStatus) {
+  const char* test_tmpdir = std::getenv("TEST_TMPDIR");
+  ASSERT_NE(test_tmpdir, nullptr);
+  const std::string missing_port = std::string(test_tmpdir) + "/missing-serial-port";
+  comm_.mutable_serial_config()->set_port(missing_port);
+
+  auto transport = CommFactory::CreateComm(comm_);
+
+  ASSERT_EQ(transport.status().code(), absl::StatusCode::kUnavailable);
+  const std::string error(transport.status().message());
+  EXPECT_NE(error.find("Error opening serial port"), std::string::npos);
+  EXPECT_NE(error.find(missing_port), std::string::npos);
+}
+
 TEST_F(CommFactorySerialCacheTest, ConflictingBaudRateIsRejectedAndOriginalSerialIsPreserved) {
   auto first = CommFactory::CreateComm(comm_);
   ASSERT_TRUE(first.ok()) << first.status();

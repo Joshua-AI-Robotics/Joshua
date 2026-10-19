@@ -6,6 +6,18 @@ load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "logging",
+    srcs = ["logging.cc"],
+    hdrs = ["logging.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "@glog",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:rcutils",
+    ],
+)
+
+cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
     data = [
@@ -15,6 +27,7 @@ cc_library(
         "//config:config_utils",
         "//config:validation",
         "//config/proto:config_cc_proto",
+        "//ros2:logging",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -89,6 +102,7 @@ ros2_cpp_binary(
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
@@ -109,6 +123,7 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
@@ -128,6 +143,7 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
@@ -150,12 +166,12 @@ ros2_cpp_binary(
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
-        "@glog",
         "@protobuf",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
@@ -223,5 +239,18 @@ cc_test(
         "//config/proto:config_cc_proto",
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "logging_test",
+    srcs = ["logging_test.cc"],
+    deps = [
+        ":logging",
+        "//config/proto:config_cc_proto",
+        "@glog",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:rcutils",
     ],
 )
