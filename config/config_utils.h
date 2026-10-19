@@ -1,8 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <streambuf>
 #include <string>
@@ -20,16 +23,34 @@ namespace config::config_util {
 /// @param config_path Path to the config file.
 /// @return Parsed config::Config object.
 /// @throws std::runtime_error if file cannot be opened or parsed.
-inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path) {
+inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path,
+                                                 std::optional<size_t> byte_limit = std::nullopt) {
   config::Config config;
-  std::ifstream input(config_path);
+  std::ifstream input(config_path, std::ios::binary);
   if (!input) {
     LOG(ERROR) << "Failed to open config file: " << config_path;
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Failed to open config file: " + config_path);
   }
-  std::string config_content((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
+  std::string config_content;
+  std::array<char, 8192> chunk;
+  while (input) {
+    size_t available = chunk.size();
+    if (byte_limit) {
+      if (config_content.size() > *byte_limit) {
+        return absl::ResourceExhaustedError("Config exceeds the byte limit.");
+      }
+      available = std::min(available, *byte_limit - config_content.size() + 1);
+    }
+    input.read(chunk.data(), available);
+    config_content.append(chunk.data(), static_cast<size_t>(input.gcount()));
+    if (byte_limit && config_content.size() > *byte_limit) {
+      return absl::ResourceExhaustedError("Config exceeds the byte limit.");
+    }
+  }
+  if (input.bad() || (input.fail() && !input.eof())) {
+    return absl::InternalError("Failed to read config file.");
+  }
   if (!google::protobuf::TextFormat::ParseFromString(config_content, &config)) {
     LOG(ERROR) << "Failed to parse config from file: " << config_path;
     return absl::Status(absl::StatusCode::kInvalidArgument,

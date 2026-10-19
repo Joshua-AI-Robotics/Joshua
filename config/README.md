@@ -13,6 +13,27 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
 > `operation_mode` it declares. Read the preset before running it — see the
 > hardware-safety section of [AGENTS.md](../AGENTS.md).
 
+## Validate config integrity without launching Joshua
+
+Build `//config:joshua_validate_config` in the development container, then
+run the binary with exactly one `--config PATH` argument (or
+`--config=PATH`). For example:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml run --rm -T joshua-u22 bazel run --config=u22 --config=x86-base --@rules_python//python/config_settings:python_version=3.10 //config:joshua_validate_config -- --config /workspace/config/config_preset/so100/teleoperate.pbtxt
+```
+
+The command emits one JSON report on stdout with `scope=config_integrity`,
+`stage`, `result`, canonical `status_code`, and a limitation that implementation
+support and hardware readiness were not checked. Exit 0 means parse and
+`ValidateConfig` passed; exit 1 means invalid content or ordinary input
+rejection; exit 2 means usage error; exit 3 means internal or output failure.
+The input must resolve to a regular file, and reading is bounded to 10 MiB.
+Symlinks to regular files work. This command does not initialize nodes or
+drivers and does not open any device named by the config. It retains the current
+validator behavior, including acceptance of an empty config. For MCP use, see
+[the one-tool stdio adapter](../tools/mcp/README.md).
+
 ## Layout
 
 - `proto/` — the schema.
