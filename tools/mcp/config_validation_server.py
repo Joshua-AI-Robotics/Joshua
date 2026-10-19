@@ -133,7 +133,7 @@ def parse_helper_report(raw, exit_code, expected_path):
         raise ValueError("expected one JSON line")
     try:
         report = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_pairs)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
         raise ValueError("invalid JSON report") from error
     return _validate_report(report, exit_code, expected_path)
 
@@ -182,6 +182,36 @@ async def _read_capped(stream, limit):
         chunks.append(part)
 
 
+async def _discard(stream):
+    while await stream.read(4096):
+        pass
+
+
+async def _kill_drain_wait(process, deadline):
+    if process.returncode is None:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+    tasks = [
+        asyncio.create_task(_discard(process.stdout)),
+        asyncio.create_task(_discard(process.stderr)),
+        asyncio.create_task(process.wait()),
+    ]
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks), max(0, deadline - asyncio.get_running_loop().time())
+        )
+        return True
+    except asyncio.TimeoutError:
+        return False
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 class ValidationService:
     """Serializes helper calls and owns their full process lifecycle."""
 
@@ -210,40 +240,50 @@ class ValidationService:
                 return
 
     async def _cleanup(self, spawn_task, process, readers):
-        for task in readers:
-            if not task.done():
-                task.cancel()
-        if readers:
-            await asyncio.gather(*readers, return_exceptions=True)
-        if spawn_task is not None and process is None:
-            try:
-                process = await asyncio.wait_for(asyncio.shield(spawn_task), 2.0)
-            except asyncio.TimeoutError:
-                # A later spawn still gets killed, while this service remains closed.
-                def reap_later(task):
-                    if not task.cancelled() and task.exception() is None:
-                        child = task.result()
-                        if child.returncode is None:
-                            try:
-                                child.kill()
-                            except ProcessLookupError:
-                                pass
-                        asyncio.create_task(child.wait())
-
-                spawn_task.add_done_callback(reap_later)
-                return False
-            except Exception:
-                return True
+        deadline = asyncio.get_running_loop().time() + 2.0
         if process is not None and process.returncode is None:
             try:
                 process.kill()
             except ProcessLookupError:
                 pass
-        if process is not None:
+        for task in readers:
+            if not task.done():
+                task.cancel()
+        if readers:
             try:
-                await asyncio.wait_for(process.wait(), 2.0)
+                await asyncio.wait_for(
+                    asyncio.gather(*readers, return_exceptions=True),
+                    max(0, deadline - asyncio.get_running_loop().time()),
+                )
             except asyncio.TimeoutError:
                 return False
+        if spawn_task is not None and process is None:
+            try:
+                process = await asyncio.wait_for(
+                    asyncio.shield(spawn_task),
+                    max(0, deadline - asyncio.get_running_loop().time()),
+                )
+            except asyncio.TimeoutError:
+                # Keep the service unavailable after an unconfirmed late spawn.
+                def reap_later(task):
+                    if task.cancelled() or task.exception() is not None:
+                        return
+                    child = task.result()
+                    reaper = asyncio.create_task(
+                        _kill_drain_wait(child, asyncio.get_running_loop().time() + 2.0)
+                    )
+                    reaper.add_done_callback(
+                        lambda finished: (
+                            finished.exception() if not finished.cancelled() else None
+                        )
+                    )
+
+                spawn_task.add_done_callback(reap_later)
+                return False
+            except Exception:
+                return True
+        if process is not None:
+            return await _kill_drain_wait(process, deadline)
         return True
 
     async def validate(self):
@@ -402,6 +442,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     config = os.path.abspath(args.config)
     validator = os.path.abspath(args.validator)
+    try:
+        config.encode("utf-8")
+        validator.encode("utf-8")
+    except UnicodeEncodeError:
+        print("Paths must be UTF-8 encodable.", file=sys.stderr)
+        return 2
     try:
         info = os.stat(validator)
         if not stat.S_ISREG(info.st_mode) or not os.access(validator, os.X_OK):

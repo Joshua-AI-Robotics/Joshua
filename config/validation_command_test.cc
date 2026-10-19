@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -33,6 +34,21 @@ TEST_F(ValidationCommandTest, BoundedLoadAcceptsExactLimitAndRejectsNextByte) {
   EXPECT_TRUE(config_util::LoadConfig(file.string(), 3).ok());
   EXPECT_EQ(config_util::LoadConfig(file.string(), 2).status().code(),
             absl::StatusCode::kResourceExhausted);
+}
+
+TEST_F(ValidationCommandTest, BoundedLoadHandlesZeroLimit) {
+  auto file = path_ / "config.pbtxt";
+  std::ofstream(file).close();
+  EXPECT_TRUE(config_util::LoadConfig(file.string(), 0).ok());
+  std::ofstream(file) << " ";
+  EXPECT_EQ(config_util::LoadConfig(file.string(), 0).status().code(),
+            absl::StatusCode::kResourceExhausted);
+}
+
+TEST_F(ValidationCommandTest, MaximumByteLimitStillReadsToEof) {
+  auto file = path_ / "config.pbtxt";
+  std::ofstream(file) << " ";
+  EXPECT_TRUE(config_util::LoadConfig(file.string(), std::numeric_limits<size_t>::max()).ok());
 }
 
 TEST_F(ValidationCommandTest, EmptyConfigPreservesCurrentValidatorSemantics) {

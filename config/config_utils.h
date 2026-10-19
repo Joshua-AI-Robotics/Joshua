@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <fstream>
 #include <functional>
@@ -40,7 +39,10 @@ inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path,
       if (config_content.size() > *byte_limit) {
         return absl::ResourceExhaustedError("Config exceeds the byte limit.");
       }
-      available = std::min(available, *byte_limit - config_content.size() + 1);
+      const size_t remaining = *byte_limit - config_content.size();
+      if (remaining < available) {
+        available = remaining + 1;
+      }
     }
     input.read(chunk.data(), available);
     config_content.append(chunk.data(), static_cast<size_t>(input.gcount()));

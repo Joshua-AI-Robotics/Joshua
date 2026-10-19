@@ -70,6 +70,154 @@ class ReportContractTest(unittest.TestCase):
 
 
 class ServiceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_large_burst_overflow_reaps_and_recovers(self):
+        for fd in (1, 2):
+            with self.subTest(fd=fd), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "config.pbtxt"
+                path.write_text("")
+                pidfile = Path(directory) / "pid"
+                helper = fake_helper(
+                    directory,
+                    "import os, time\n"
+                    f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                    f"os.write({fd}, b'x' * 1048576)\n"
+                    "time.sleep(30)\n",
+                )
+                service = server.ValidationService(str(path), str(helper))
+                report = await asyncio.wait_for(service.validate(), 8)
+                self.assertEqual(report["status_code"], "RESOURCE_EXHAUSTED")
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int(pidfile.read_text()), 0)
+                helper.write_text(
+                    "#!/usr/bin/env python3\n"
+                    "import json\n"
+                    "print(json.dumps(" + repr(helper_report(path)) + "))\n"
+                )
+                report = await asyncio.wait_for(service.validate(), 8)
+                self.assertEqual(report["result"], "valid", report)
+
+    async def test_late_spawn_burst_drains_pipes_and_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.pbtxt"
+            path.write_text("")
+            pidfile = Path(directory) / "pid"
+            helper = fake_helper(
+                directory,
+                "import os, time\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                "os.write(1, b'x' * 1048576)\n"
+                "time.sleep(30)\n",
+            )
+            service = server.ValidationService(str(path), str(helper), timeout=0.1)
+            entered, release = asyncio.Event(), asyncio.Event()
+            spawned = []
+            original = asyncio.create_subprocess_exec
+
+            async def delayed_spawn(*args, **kwargs):
+                child = await original(*args, **kwargs)
+                spawned.append(child)
+                entered.set()
+                await release.wait()
+                return child
+
+            with mock.patch.object(
+                server.asyncio, "create_subprocess_exec", delayed_spawn
+            ):
+                pending = asyncio.create_task(service.validate())
+                await entered.wait()
+                self.assertEqual((await pending)["status_code"], "UNAVAILABLE")
+                self.assertEqual(
+                    (await service.validate())["status_code"], "RESOURCE_EXHAUSTED"
+                )
+                release.set()
+            for _ in range(300):
+                try:
+                    os.kill(int(pidfile.read_text()), 0)
+                except ProcessLookupError:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                self.fail("late-spawn helper survived cleanup")
+            for _ in range(300):
+                if spawned[0].stdout.at_eof() and spawned[0].stderr.at_eof():
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                self.fail("late-spawn helper pipes were not drained")
+            self.assertEqual(
+                (await service.validate())["status_code"], "RESOURCE_EXHAUSTED"
+            )
+
+    async def test_rejects_non_utf8_startup_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.pbtxt"
+            path.write_text("")
+            bad_path = os.fsdecode(b"/tmp/\xff")
+            for flag, config, validator in (
+                ("--config", bad_path, str(VALIDATOR)),
+                ("--validator", str(path), bad_path),
+            ):
+                with self.subTest(flag=flag):
+                    process = await asyncio.create_subprocess_exec(
+                        str(SERVER),
+                        "--validator",
+                        validator,
+                        "--config",
+                        config,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    stdout, stderr = await asyncio.wait_for(process.communicate(), 3)
+                    self.assertEqual(process.returncode, 2)
+                    self.assertEqual(stdout, b"")
+                    self.assertIn(b"UTF-8", stderr)
+                    self.assertNotIn(b"Traceback", stderr)
+                    self.assertNotIn(b"\\udcff", stderr)
+            unicode_path = Path(directory) / "config-é.pbtxt"
+            unicode_path.write_text("")
+            process = await asyncio.create_subprocess_exec(
+                str(SERVER),
+                "--validator",
+                str(VALIDATOR),
+                "--config",
+                str(unicode_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), 3)
+            self.assertEqual(process.returncode, 0)
+            self.assertEqual(stdout, b"")
+
+    async def test_deep_helper_json_is_structured_data_loss_over_sdk(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.pbtxt"
+            path.write_text("")
+            helper = fake_helper(
+                directory,
+                "import sys\n"
+                "sys.stdout.write('[' * 2000 + '0' + ']' * 2000 + '\\n')\n",
+            )
+            params = StdioServerParameters(
+                command=str(SERVER),
+                args=["--validator", str(helper), "--config", str(path)],
+            )
+            async with stdio_client(params) as (reader, writer):
+                async with ClientSession(reader, writer) as client:
+                    await client.initialize()
+                    malformed = await client.call_tool("validate_config", {})
+                    self.assertTrue(malformed.isError)
+                    self.assertEqual(
+                        malformed.structuredContent["status_code"], "DATA_LOSS"
+                    )
+                    helper.write_text(
+                        "#!/usr/bin/env python3\n"
+                        "import json\n"
+                        "print(json.dumps(" + repr(helper_report(path)) + "))\n"
+                    )
+                    valid = await client.call_tool("validate_config", {})
+                    self.assertFalse(valid.isError, valid.model_dump_json())
+                    self.assertEqual(valid.structuredContent["result"], "valid")
+
     async def test_real_sdk_stdio_exchange(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.pbtxt"
