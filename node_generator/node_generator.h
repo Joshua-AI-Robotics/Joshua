@@ -15,6 +15,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "config/proto/config.pb.h"
+#include "config/ros2_network.h"
 #include "ros2/proto/node.pb.h"
 
 namespace node_generator {
@@ -64,6 +65,7 @@ class NodeGenerator {
   }
 
  private:
+  std::unique_ptr<config::Ros2NetworkEnvironment> network_;
   // Scans the configuration to identify all unique node IDs and their types.
   absl::Status IdentifyNodeTypes();
 

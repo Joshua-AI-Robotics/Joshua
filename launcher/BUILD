@@ -52,6 +52,8 @@ cc_binary(
         ":simulation_launcher",
         ":version",
         "//config:config_utils",
+        "//config:ros2_network",
+        "//config:validation",
         "//node_generator",
         "@gflags",
         "@glog",

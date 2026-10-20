@@ -2,6 +2,8 @@
 #include <glog/logging.h>
 
 #include "config/config_utils.h"
+#include "config/ros2_network.h"
+#include "config/validation.h"
 #include "launcher/simulation_launcher.h"
 #include "node_generator/node_generator.h"
 #include "version.h"
@@ -24,6 +26,22 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   const auto& config = config_or.value();
+
+  const auto validation = config::ValidateConfig(config);
+  if (!validation.ok()) {
+    LOG(ERROR) << "Invalid config: " << validation;
+    return 1;
+  }
+  auto network = config::Ros2NetworkEnvironment::Prepare(config.general().ros2_network());
+  if (!network.ok()) {
+    LOG(ERROR) << network.status();
+    return 1;
+  }
+  const auto applied = (*network)->Apply();
+  if (!applied.ok()) {
+    LOG(ERROR) << applied;
+    return 1;
+  }
 
   if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
     return launcher::RunSimulation(FLAGS_config, config);
