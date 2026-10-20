@@ -13,6 +13,9 @@ from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
 LIMITATIONS = ["Implementation support and hardware readiness were not checked."]
+RESTART_MESSAGE = (
+    "Validation cleanup could not finish. Operator must restart the server."
+)
 REPORT_KEYS = frozenset(
     {
         "schema_version",
@@ -46,7 +49,12 @@ STATUS_CODES = frozenset(
         "UNAUTHENTICATED",
     }
 )
-INPUT_SCHEMA = {"type": "object", "properties": {}, "additionalProperties": False}
+INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {"config_path": {"type": "string"}},
+    "required": ["config_path"],
+    "additionalProperties": False,
+}
 REPORT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -138,6 +146,18 @@ def parse_helper_report(raw, exit_code, expected_path):
     return _validate_report(report, exit_code, expected_path)
 
 
+def safe_reference(path):
+    if type(path) is not str or not path or path.startswith("/") or "\x00" in path:
+        return False
+    try:
+        encoded = path.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return len(encoded) <= 4096 and all(
+        component not in ("", ".", "..") for component in path.split("/")
+    )
+
+
 def adapter_error(path, code, message):
     report = {
         "schema_version": 1,
@@ -160,12 +180,20 @@ def validate_adapter_report(report, path):
         raise ValueError("wrong adapter version")
     if report["scope"] != "config_integrity" or report["config_path"] != path:
         raise ValueError("wrong adapter scope or path")
+    if path is not None and not safe_reference(path):
+        raise ValueError("wrong adapter path")
     if (report["stage"], report["result"]) != ("adapter", "not_run"):
         raise ValueError("wrong adapter state")
     if report["status_code"] not in STATUS_CODES or report["status_code"] == "OK":
         raise ValueError("wrong adapter status")
     if type(report["message"]) is not str or report["limitations"] != LIMITATIONS:
         raise ValueError("wrong adapter message or limitations")
+    try:
+        message_size = len(report["message"].encode("utf-8"))
+    except UnicodeEncodeError as error:
+        raise ValueError("wrong adapter message encoding") from error
+    if message_size > 8192:
+        raise ValueError("wrong adapter message length")
     return report
 
 
@@ -215,16 +243,20 @@ async def _kill_drain_wait(process, deadline):
 class ValidationService:
     """Serializes helper calls and owns their full process lifecycle."""
 
-    def __init__(self, config, validator, timeout=10.0):
-        self.config = config
+    def __init__(self, config_root, validator, timeout=10.0):
         self.validator = validator
         self.timeout = timeout
+        self._root_fd = os.open(config_root, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
         self._busy = False
         self._poisoned = False
+        self._closed = False
         self._active_call = None
 
     async def close(self):
         """Cancel an in-flight call and wait for its child cleanup on disconnect."""
+        if not self._closed:
+            self._closed = True
+            os.close(self._root_fd)
         task = self._active_call
         if task is None or task.done() or task is asyncio.current_task():
             return
@@ -286,10 +318,27 @@ class ValidationService:
             return await _kill_drain_wait(process, deadline)
         return True
 
-    async def validate(self):
-        if self._busy or self._poisoned:
+    async def validate(self, config_path):
+        accepted = config_path if safe_reference(config_path) else None
+        if self._poisoned:
             return adapter_error(
-                self.config, "RESOURCE_EXHAUSTED", "Validation is already running."
+                accepted,
+                "UNAVAILABLE",
+                RESTART_MESSAGE,
+            )
+        if self._closed:
+            return adapter_error(
+                accepted, "UNAVAILABLE", "Validation server is closed."
+            )
+        if accepted is None:
+            return adapter_error(
+                None,
+                "INVALID_ARGUMENT",
+                "config_path must be a safe relative POSIX path.",
+            )
+        if self._busy:
+            return adapter_error(
+                accepted, "RESOURCE_EXHAUSTED", "Validation is already running."
             )
         self._busy = True
         self._active_call = asyncio.current_task()
@@ -298,19 +347,30 @@ class ValidationService:
         readers = []
         report = None
         cancelled = False
+        root_fd = None
         try:
+            # The duplicate belongs to the spawn coroutine through its actual
+            # subprocess creation, even if the outer deadline expires first.
+            root_fd = os.dup(self._root_fd)
 
-            async def run_child():
-                nonlocal spawn_task, process, readers
-                spawn_task = asyncio.create_task(
-                    asyncio.create_subprocess_exec(
+            async def spawn_child():
+                try:
+                    return await asyncio.create_subprocess_exec(
                         self.validator,
+                        "--config-root-fd",
+                        str(root_fd),
                         "--config",
-                        self.config,
+                        accepted,
+                        pass_fds=(root_fd,),
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                     )
-                )
+                finally:
+                    os.close(root_fd)
+
+            async def run_child():
+                nonlocal spawn_task, process, readers
+                spawn_task = asyncio.create_task(spawn_child())
                 process = await asyncio.shield(spawn_task)
                 readers = [
                     asyncio.create_task(_read_capped(process.stdout, 64 * 1024)),
@@ -322,40 +382,47 @@ class ValidationService:
             stdout, _, exit_code = await asyncio.wait_for(run_child(), self.timeout)
             if exit_code < 0:
                 raise ValueError("helper terminated by signal")
-            report = parse_helper_report(stdout, exit_code, self.config)
+            report = parse_helper_report(stdout, exit_code, accepted)
         except asyncio.CancelledError:
             cancelled = True
         except asyncio.TimeoutError:
             report = adapter_error(
-                self.config, "DEADLINE_EXCEEDED", "Validation timed out."
+                accepted, "DEADLINE_EXCEEDED", "Validation timed out."
             )
         except OverflowError:
             report = adapter_error(
-                self.config,
-                "RESOURCE_EXHAUSTED",
-                "Validation output exceeded the limit.",
+                accepted, "RESOURCE_EXHAUSTED", "Validation output exceeded the limit."
             )
-        except (OSError, PermissionError):
+        except OSError:
             report = adapter_error(
-                self.config, "UNAVAILABLE", "Validation helper could not start."
+                accepted, "UNAVAILABLE", "Validation helper could not start."
             )
         except ValueError:
             report = adapter_error(
-                self.config,
-                "DATA_LOSS",
-                "Validation helper returned an invalid report.",
+                accepted, "DATA_LOSS", "Validation helper returned an invalid report."
             )
         finally:
+            # A duplicate not yet handed to a spawn task remains ours to close.
+            if spawn_task is None and root_fd is not None:
+                os.close(root_fd)
             cleanup = asyncio.create_task(self._cleanup(spawn_task, process, readers))
             while not cleanup.done():
                 try:
                     await asyncio.shield(cleanup)
                 except asyncio.CancelledError:
                     cancelled = True
-            if cleanup.exception() is not None or not cleanup.result():
+                except Exception:
+                    break
+            if (
+                cleanup.cancelled()
+                or cleanup.exception() is not None
+                or not cleanup.result()
+            ):
                 self._poisoned = True
                 report = adapter_error(
-                    self.config, "UNAVAILABLE", "Validation cleanup could not finish."
+                    accepted,
+                    "UNAVAILABLE",
+                    RESTART_MESSAGE,
                 )
             else:
                 self._busy = False
@@ -374,8 +441,8 @@ def make_server(service):
             types.Tool(
                 name="validate_config",
                 description=(
-                    "Check the operator-selected Joshua config for parser "
-                    "and integrity errors."
+                    "Check a relative Joshua config under the operator-selected "
+                    "root for parser and integrity errors."
                 ),
                 inputSchema=INPUT_SCHEMA,
                 outputSchema=REPORT_SCHEMA,
@@ -391,24 +458,30 @@ def make_server(service):
     @app.call_tool(validate_input=False)
     async def call_tool(name, arguments):
         if name != "validate_config":
-            report = adapter_error(service.config, "INVALID_ARGUMENT", "Unknown tool.")
-        elif arguments is None or arguments == {}:
-            report = await service.validate()
-        else:
+            report = adapter_error(None, "INVALID_ARGUMENT", "Unknown tool.")
+        elif (
+            type(arguments) is not dict
+            or set(arguments) != {"config_path"}
+            or not safe_reference(arguments["config_path"])
+        ):
             report = adapter_error(
-                service.config, "INVALID_ARGUMENT", "Tool arguments must be empty."
+                None,
+                "INVALID_ARGUMENT",
+                "Require one safe relative config_path string.",
             )
+        else:
+            report = await service.validate(arguments["config_path"])
+        expected_path = report["config_path"]
         if report["stage"] == "adapter":
-            validate_adapter_report(report, service.config)
+            validate_adapter_report(report, expected_path)
         else:
             # The helper report was checked against its actual exit in validate().
-            # Check its shape once more before returning the SDK result.
             expected_exit = (
                 3
                 if report["stage"] == "input" and report["status_code"] == "INTERNAL"
                 else 0 if report["result"] == "valid" else 1
             )
-            _validate_report(report, expected_exit, service.config)
+            _validate_report(report, expected_exit, expected_path)
         encoded = json.dumps(report, ensure_ascii=True, separators=(",", ":"))
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=encoded)],
@@ -437,13 +510,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Joshua configuration integrity MCP server"
     )
-    parser.add_argument("--config", required=True)
+    parser.add_argument("--config-root", default=os.getcwd())
     parser.add_argument("--validator", required=True)
     args = parser.parse_args(argv)
-    config = os.path.abspath(args.config)
+    root = os.path.abspath(args.config_root)
     validator = os.path.abspath(args.validator)
     try:
-        config.encode("utf-8")
+        root.encode("utf-8")
         validator.encode("utf-8")
     except UnicodeEncodeError:
         print("Paths must be UTF-8 encodable.", file=sys.stderr)
@@ -455,5 +528,10 @@ def main(argv=None):
     except OSError as error:
         print(f"Validator is unavailable: {error}", file=sys.stderr)
         return 2
-    asyncio.run(run_stdio(ValidationService(config, validator)))
+    try:
+        service = ValidationService(root, validator)
+    except OSError as error:
+        print(f"Config root is unavailable: {error}", file=sys.stderr)
+        return 2
+    asyncio.run(run_stdio(service))
     return 0

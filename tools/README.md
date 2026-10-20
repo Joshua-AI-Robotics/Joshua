@@ -5,9 +5,9 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
-- [`mcp/`](mcp/README.md) — one stdio MCP tool that checks the
-  operator-selected protobuf config through the C++ integrity validator.
-  It does not start a robot or inspect hardware readiness.
+- [`mcp/`](mcp/README.md) — one stdio MCP tool that checks a per-call
+  protobuf config reference under an operator-selected root through the C++
+  integrity validator. It does not start a robot or inspect hardware readiness.
 
 - `lock_model.sh` — regenerate the per-model `requirements.lock` for one
   inference model. Model venvs install the repo-root `requirements.lock` plus

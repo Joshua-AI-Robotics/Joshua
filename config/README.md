@@ -29,7 +29,11 @@ support and hardware readiness were not checked. Exit 0 means parse and
 `ValidateConfig` passed; exit 1 means invalid content or ordinary input
 rejection; exit 2 means usage error; exit 3 means internal or output failure.
 The input must resolve to a regular file, and reading is bounded to 10 MiB.
-Symlinks to regular files work. This command does not initialize nodes or
+Symlinks to regular files work in standalone path mode. Parser failures include
+bounded, one-based line and column details in the JSON `message`. The MCP adapter
+uses the same executable with its opt-in `--config-root-fd FD` mode, which accepts
+only a relative reference below an inherited directory descriptor and rejects
+symlinks in every component. This command does not initialize nodes or
 drivers and does not open any device named by the config. It retains the current
 validator behavior, including acceptance of an empty config. For MCP use, see
 [the one-tool stdio adapter](../tools/mcp/README.md).

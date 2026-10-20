@@ -1,4 +1,4 @@
-#include "config/validation_command.h"
+#include "config/config_validation_cli.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -15,7 +15,7 @@
 
 namespace config {
 namespace {
-class ValidationCommandTest : public ::testing::Test {
+class ConfigValidationCliTest : public ::testing::Test {
  protected:
   void SetUp() override {
     path_ = std::filesystem::temp_directory_path() /
@@ -28,7 +28,7 @@ class ValidationCommandTest : public ::testing::Test {
   std::filesystem::path path_;
 };
 
-TEST_F(ValidationCommandTest, BoundedLoadAcceptsExactLimitAndRejectsNextByte) {
+TEST_F(ConfigValidationCliTest, BoundedLoadAcceptsExactLimitAndRejectsNextByte) {
   auto file = path_ / "config.pbtxt";
   std::ofstream(file) << "   ";
   EXPECT_TRUE(config_util::LoadConfig(file.string(), 3).ok());
@@ -36,7 +36,7 @@ TEST_F(ValidationCommandTest, BoundedLoadAcceptsExactLimitAndRejectsNextByte) {
             absl::StatusCode::kResourceExhausted);
 }
 
-TEST_F(ValidationCommandTest, BoundedLoadHandlesZeroLimit) {
+TEST_F(ConfigValidationCliTest, BoundedLoadHandlesZeroLimit) {
   auto file = path_ / "config.pbtxt";
   std::ofstream(file).close();
   EXPECT_TRUE(config_util::LoadConfig(file.string(), 0).ok());
@@ -45,21 +45,21 @@ TEST_F(ValidationCommandTest, BoundedLoadHandlesZeroLimit) {
             absl::StatusCode::kResourceExhausted);
 }
 
-TEST_F(ValidationCommandTest, MaximumByteLimitStillReadsToEof) {
+TEST_F(ConfigValidationCliTest, MaximumByteLimitStillReadsToEof) {
   auto file = path_ / "config.pbtxt";
   std::ofstream(file) << " ";
   EXPECT_TRUE(config_util::LoadConfig(file.string(), std::numeric_limits<size_t>::max()).ok());
 }
 
-TEST_F(ValidationCommandTest, EmptyConfigPreservesCurrentValidatorSemantics) {
+TEST_F(ConfigValidationCliTest, EmptyConfigPreservesCurrentValidatorSemantics) {
   auto file = path_ / "empty.pbtxt";
   std::ofstream(file).close();
   std::ostringstream output;
-  EXPECT_EQ(RunValidationCommand({"--config", file.string()}, output), 0);
+  EXPECT_EQ(RunConfigValidationCli({"--config", file.string()}, output), 0);
   EXPECT_NE(output.str().find("\"result\":\"valid\""), std::string::npos);
 }
 
-TEST_F(ValidationCommandTest, PinnedObjectSurvivesPathReplacement) {
+TEST_F(ConfigValidationCliTest, PinnedObjectSurvivesPathReplacement) {
   auto file = path_ / "config.pbtxt";
   std::ofstream(file) << " ";
   const int pinned = open(file.c_str(), O_PATH | O_CLOEXEC);
@@ -73,12 +73,12 @@ TEST_F(ValidationCommandTest, PinnedObjectSurvivesPathReplacement) {
   EXPECT_EQ(replacement.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(ValidationCommandTest, DetectsOutputFailure) {
+TEST_F(ConfigValidationCliTest, DetectsOutputFailure) {
   auto file = path_ / "empty.pbtxt";
   std::ofstream(file).close();
   std::ostringstream output;
   output.setstate(std::ios::badbit);
-  EXPECT_EQ(RunValidationCommand({"--config", file.string()}, output), 3);
+  EXPECT_EQ(RunConfigValidationCli({"--config", file.string()}, output), 3);
 }
 }  // namespace
 }  // namespace config

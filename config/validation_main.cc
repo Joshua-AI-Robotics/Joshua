@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "config/validation_command.h"
+#include "config/config_validation_cli.h"
 #include "glog/logging.h"
 
 int main(int argc, char** argv) {
@@ -13,5 +13,5 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   std::vector<std::string> args;
   for (int i = 1; i < argc; ++i) args.emplace_back(argv[i]);
-  return config::RunValidationCommand(args, std::cout);
+  return config::RunConfigValidationCli(args, std::cout);
 }

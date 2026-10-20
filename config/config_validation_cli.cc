@@ -1,4 +1,4 @@
-#include "config/validation_command.h"
+#include "config/config_validation_cli.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +12,9 @@
 #endif
 
 #include <algorithm>
+#include <climits>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -126,6 +128,9 @@ absl::Status InputStatus(int error) {
     case ENOENT:
     case ENOTDIR:
       return absl::NotFoundError("Configuration file was not found.");
+    case ENAMETOOLONG:
+    case ELOOP:
+      return absl::InvalidArgumentError("Configuration reference is unsafe or too long.");
     case EACCES:
     case EPERM:
       return absl::PermissionDeniedError("Configuration file is not accessible.");
@@ -134,12 +139,61 @@ absl::Status InputStatus(int error) {
   }
 }
 
+bool SafeRelativeReference(const std::string& path) {
+  if (path.empty() || path.size() > 4096 || path[0] == '/' || !IsUtf8(path) ||
+      path.find('\0') != std::string::npos)
+    return false;
+  size_t start = 0;
+  while (start < path.size()) {
+    const size_t end = path.find('/', start);
+    const std::string component = path.substr(start, end - start);
+    if (component.empty() || component == "." || component == "..") return false;
+    if (end == std::string::npos) return true;
+    start = end + 1;
+  }
+  return false;
+}
+
+absl::StatusOr<UniqueFd> PinRelativePath(int root_fd, const std::string& path) {
+  struct stat root_stat;
+  if (fstat(root_fd, &root_stat) != 0 || !S_ISDIR(root_stat.st_mode))
+    return absl::InvalidArgumentError("Config root descriptor must refer to a directory.");
+  int parent = root_fd;
+  UniqueFd directory;
+  size_t start = 0;
+  while (true) {
+    const size_t end = path.find('/', start);
+    const std::string component = path.substr(start, end - start);
+    const int fd = openat(parent, component.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0) return InputStatus(errno);
+    UniqueFd entry(new int(fd));
+    struct stat info;
+    if (fstat(fd, &info) != 0) return absl::InternalError("Failed to stat input.");
+    if (S_ISLNK(info.st_mode))
+      return absl::InvalidArgumentError("Configuration reference must not contain symlinks.");
+    if (end == std::string::npos) return entry;
+    if (!S_ISDIR(info.st_mode))
+      return absl::InvalidArgumentError("Configuration reference component is not a directory.");
+    directory = std::move(entry);
+    parent = *directory;
+    start = end + 1;
+  }
+}
+
 absl::StatusOr<std::string> OpenPinnedPath(const std::string& path,
+                                           std::optional<int> root_fd,
                                            UniqueFd* pin,
                                            UniqueFd* content) {
-  int descriptor = open(path.c_str(), O_PATH | O_CLOEXEC);
-  if (descriptor < 0) return InputStatus(errno);
-  pin->reset(new int(descriptor));
+  if (root_fd) {
+    auto relative = PinRelativePath(*root_fd, path);
+    if (!relative.ok()) return relative.status();
+    *pin = std::move(*relative);
+  } else {
+    int descriptor = open(path.c_str(), O_PATH | O_CLOEXEC);
+    if (descriptor < 0) return InputStatus(errno);
+    pin->reset(new int(descriptor));
+  }
+  const int descriptor = **pin;
   struct stat pinned_stat;
   if (fstat(descriptor, &pinned_stat) != 0) return absl::InternalError("Failed to stat input.");
   if (!S_ISREG(pinned_stat.st_mode)) {
@@ -172,6 +226,8 @@ absl::StatusOr<std::string> OpenPinnedPath(const std::string& path,
 Report Evaluate(const std::vector<std::string>& args) {
   std::optional<std::string> path;
   bool bad_args = false;
+  std::optional<int> root_fd;
+  bool saw_root_fd = false;
   for (size_t i = 0; i < args.size(); ++i) {
     const auto& arg = args[i];
     if (arg == "--config") {
@@ -185,6 +241,34 @@ Report Evaluate(const std::vector<std::string>& args) {
         bad_args = true;
       else
         path = arg.substr(9);
+    } else if (arg == "--config-root-fd" || arg.rfind("--config-root-fd=", 0) == 0) {
+      if (saw_root_fd) {
+        bad_args = true;
+        continue;
+      }
+      saw_root_fd = true;
+      std::string value;
+      if (arg == "--config-root-fd") {
+        if (i + 1 >= args.size()) {
+          bad_args = true;
+          continue;
+        }
+        value = args[++i];
+      } else {
+        value = arg.substr(sizeof("--config-root-fd=") - 1);
+      }
+      if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos) {
+        bad_args = true;
+        continue;
+      }
+      errno = 0;
+      char* tail = nullptr;
+      const long parsed = std::strtol(value.c_str(), &tail, 10);
+      if (errno != 0 || *tail != '\0' || parsed > INT_MAX) {
+        bad_args = true;
+      } else {
+        root_fd = static_cast<int>(parsed);
+      }
     } else {
       bad_args = true;
     }
@@ -194,8 +278,19 @@ Report Evaluate(const std::vector<std::string>& args) {
             "arguments",
             "not_run",
             absl::StatusCode::kInvalidArgument,
-            "Require exactly one --config PATH.",
+            "Require exactly one --config PATH and optional --config-root-fd FD.",
             2};
+  }
+  if (root_fd) {
+    struct stat root_stat;
+    if (fstat(*root_fd, &root_stat) != 0 || !S_ISDIR(root_stat.st_mode)) {
+      return {std::nullopt,
+              "arguments",
+              "not_run",
+              absl::StatusCode::kInvalidArgument,
+              "--config-root-fd must refer to a directory.",
+              2};
+    }
   }
   if (!IsUtf8(*path)) {
     return {std::nullopt,
@@ -205,8 +300,16 @@ Report Evaluate(const std::vector<std::string>& args) {
             "Configuration path must be UTF-8.",
             1};
   }
+  if (root_fd && !SafeRelativeReference(*path)) {
+    return {path,
+            "input",
+            "not_run",
+            absl::StatusCode::kInvalidArgument,
+            "Configuration reference must be a safe relative POSIX path.",
+            1};
+  }
   UniqueFd pin, content;
-  auto pinned_path = OpenPinnedPath(*path, &pin, &content);
+  auto pinned_path = OpenPinnedPath(*path, root_fd, &pin, &content);
   if (!pinned_path.ok()) {
     return {path,
             "input",
@@ -255,9 +358,9 @@ int WriteReport(const Report& report, std::ostream& output) {
 }
 }  // namespace
 
-int RunValidationCommand(const std::vector<std::string>& args, std::ostream& output) {
+int RunConfigValidationCli(const std::vector<std::string>& args, std::ostream& output) {
   if (args.size() == 1 && args[0] == "--help") {
-    output << "Usage: joshua_validate_config --config PATH\n";
+    output << "Usage: joshua_validate_config --config PATH [--config-root-fd FD]\n";
     output.flush();
     return output.good() ? 0 : 3;
   }

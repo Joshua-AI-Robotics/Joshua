@@ -83,17 +83,18 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     f"os.write({fd}, b'x' * 1048576)\n"
                     "time.sleep(30)\n",
                 )
-                service = server.ValidationService(str(path), str(helper))
-                report = await asyncio.wait_for(service.validate(), 8)
+                service = server.ValidationService(str(path.parent), str(helper))
+                self.addAsyncCleanup(service.close)
+                report = await asyncio.wait_for(service.validate("config.pbtxt"), 8)
                 self.assertEqual(report["status_code"], "RESOURCE_EXHAUSTED")
                 with self.assertRaises(ProcessLookupError):
                     os.kill(int(pidfile.read_text()), 0)
                 helper.write_text(
                     "#!/usr/bin/env python3\n"
                     "import json\n"
-                    "print(json.dumps(" + repr(helper_report(path)) + "))\n"
+                    "print(json.dumps(" + repr(helper_report("config.pbtxt")) + "))\n"
                 )
-                report = await asyncio.wait_for(service.validate(), 8)
+                report = await asyncio.wait_for(service.validate("config.pbtxt"), 8)
                 self.assertEqual(report["result"], "valid", report)
 
     async def test_late_spawn_burst_drains_pipes_and_fails_closed(self):
@@ -108,7 +109,10 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 "os.write(1, b'x' * 1048576)\n"
                 "time.sleep(30)\n",
             )
-            service = server.ValidationService(str(path), str(helper), timeout=0.1)
+            service = server.ValidationService(
+                str(path.parent), str(helper), timeout=0.1
+            )
+            self.addAsyncCleanup(service.close)
             entered, release = asyncio.Event(), asyncio.Event()
             spawned = []
             original = asyncio.create_subprocess_exec
@@ -123,11 +127,12 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             with mock.patch.object(
                 server.asyncio, "create_subprocess_exec", delayed_spawn
             ):
-                pending = asyncio.create_task(service.validate())
+                pending = asyncio.create_task(service.validate("config.pbtxt"))
                 await entered.wait()
                 self.assertEqual((await pending)["status_code"], "UNAVAILABLE")
                 self.assertEqual(
-                    (await service.validate())["status_code"], "RESOURCE_EXHAUSTED"
+                    (await service.validate("config.pbtxt"))["status_code"],
+                    "UNAVAILABLE",
                 )
                 release.set()
             for _ in range(300):
@@ -145,7 +150,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             else:
                 self.fail("late-spawn helper pipes were not drained")
             self.assertEqual(
-                (await service.validate())["status_code"], "RESOURCE_EXHAUSTED"
+                (await service.validate("config.pbtxt"))["status_code"], "UNAVAILABLE"
             )
 
     async def test_rejects_non_utf8_startup_paths(self):
@@ -154,15 +159,15 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             path.write_text("")
             bad_path = os.fsdecode(b"/tmp/\xff")
             for flag, config, validator in (
-                ("--config", bad_path, str(VALIDATOR)),
-                ("--validator", str(path), bad_path),
+                ("--config-root", bad_path, str(VALIDATOR)),
+                ("--validator", str(path.parent), bad_path),
             ):
                 with self.subTest(flag=flag):
                     process = await asyncio.create_subprocess_exec(
                         str(SERVER),
                         "--validator",
                         validator,
-                        "--config",
+                        "--config-root",
                         config,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
@@ -174,12 +179,12 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     self.assertNotIn(b"Traceback", stderr)
                     self.assertNotIn(b"\\udcff", stderr)
             unicode_path = Path(directory) / "config-é.pbtxt"
-            unicode_path.write_text("")
+            unicode_path.mkdir()
             process = await asyncio.create_subprocess_exec(
                 str(SERVER),
                 "--validator",
                 str(VALIDATOR),
-                "--config",
+                "--config-root",
                 str(unicode_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -199,12 +204,14 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             )
             params = StdioServerParameters(
                 command=str(SERVER),
-                args=["--validator", str(helper), "--config", str(path)],
+                args=["--validator", str(helper), "--config-root", str(path.parent)],
             )
             async with stdio_client(params) as (reader, writer):
                 async with ClientSession(reader, writer) as client:
                     await client.initialize()
-                    malformed = await client.call_tool("validate_config", {})
+                    malformed = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertTrue(malformed.isError)
                     self.assertEqual(
                         malformed.structuredContent["status_code"], "DATA_LOSS"
@@ -212,9 +219,13 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     helper.write_text(
                         "#!/usr/bin/env python3\n"
                         "import json\n"
-                        "print(json.dumps(" + repr(helper_report(path)) + "))\n"
+                        "print(json.dumps("
+                        + repr(helper_report("config.pbtxt"))
+                        + "))\n"
                     )
-                    valid = await client.call_tool("validate_config", {})
+                    valid = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertFalse(valid.isError, valid.model_dump_json())
                     self.assertEqual(valid.structuredContent["result"], "valid")
 
@@ -222,15 +233,15 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.pbtxt"
             path.write_text("")
-            direct = await server.ValidationService(
-                str(path), str(VALIDATOR)
-            ).validate()
+            direct_service = server.ValidationService(str(path.parent), str(VALIDATOR))
+            self.addAsyncCleanup(direct_service.close)
+            direct = await direct_service.validate("config.pbtxt")
             self.assertEqual(direct["result"], "valid", direct)
             # The SDK defaults to a restricted environment. Keep the container's
             # ROS library paths when it starts the Bazel server from this test.
             params = StdioServerParameters(
                 command=str(SERVER),
-                args=["--validator", str(VALIDATOR), "--config", str(path)],
+                args=["--validator", str(VALIDATOR), "--config-root", str(path.parent)],
                 env=os.environ.copy(),
             )
             async with stdio_client(params) as (reader, writer):
@@ -243,7 +254,8 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                         tools[0].inputSchema,
                         {
                             "type": "object",
-                            "properties": {},
+                            "properties": {"config_path": {"type": "string"}},
+                            "required": ["config_path"],
                             "additionalProperties": False,
                         },
                     )
@@ -254,28 +266,239 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     self.assertIn(
                         "adapter", tools[0].outputSchema["properties"]["stage"]["enum"]
                     )
-                    valid = await client.call_tool("validate_config", {})
+                    valid = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertFalse(valid.isError, valid.model_dump_json())
                     self.assertEqual(valid.structuredContent["result"], "valid")
                     self.assertEqual(
                         json.loads(valid.content[0].text), valid.structuredContent
                     )
                     path.write_text("unknown_field: 1")
-                    invalid = await client.call_tool("validate_config", {})
+                    invalid = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertFalse(invalid.isError)
                     self.assertEqual(invalid.structuredContent["result"], "invalid")
                     path.unlink()
-                    missing = await client.call_tool("validate_config", {})
+                    missing = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertTrue(missing.isError)
                     self.assertEqual(missing.structuredContent["stage"], "input")
-                    self.assertTrue(
-                        (
-                            await client.call_tool(
-                                "validate_config", {"path": str(path)}
-                            )
-                        ).isError
-                    )
+                    bad = await client.call_tool("validate_config", {"path": str(path)})
+                    self.assertTrue(bad.isError)
+                    self.assertIsNone(bad.structuredContent["config_path"])
                     self.assertTrue((await client.call_tool("unknown", {})).isError)
+                    for bad_args in (
+                        {},
+                        {"config_path": 7},
+                        {"config_path": "../escape"},
+                        {"config_path": "config.pbtxt", "validator": "other"},
+                        {"config_path": "x" * 4097},
+                    ):
+                        with self.subTest(bad_args=bad_args):
+                            bad = await client.call_tool("validate_config", bad_args)
+                            self.assertTrue(bad.isError)
+                            self.assertIsNone(bad.structuredContent["config_path"])
+
+    async def test_sdk_uses_request_local_paths_and_parser_detail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            params = StdioServerParameters(
+                command=str(SERVER),
+                args=["--validator", str(VALIDATOR)],
+                cwd=directory,
+                env=os.environ.copy(),
+            )
+            async with stdio_client(params) as (reader, writer):
+                async with ClientSession(reader, writer) as client:
+                    await client.initialize()
+                    tools = (await client.list_tools()).tools
+                    self.assertIn("config_path", tools[0].inputSchema["required"])
+                    self.assertFalse((root / "first.pbtxt").exists())
+                    self.assertFalse((root / "second.pbtxt").exists())
+                    (root / "first.pbtxt").write_text("")
+                    (root / "second.pbtxt").write_text("\nunknown_field: 1\n")
+                    first = await client.call_tool(
+                        "validate_config", {"config_path": "first.pbtxt"}
+                    )
+                    second = await client.call_tool(
+                        "validate_config", {"config_path": "second.pbtxt"}
+                    )
+                    self.assertFalse(first.isError)
+                    self.assertFalse(second.isError)
+                    self.assertEqual(
+                        first.structuredContent["config_path"], "first.pbtxt"
+                    )
+                    self.assertEqual(
+                        second.structuredContent["config_path"], "second.pbtxt"
+                    )
+                    self.assertIn(
+                        "line 2, column 1", second.structuredContent["message"]
+                    )
+                    self.assertIn("unknown_field", second.structuredContent["message"])
+                    self.assertEqual(
+                        json.loads(second.content[0].text), second.structuredContent
+                    )
+
+    async def test_poisoned_cleanup_requires_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            helper = fake_helper(directory, "print('unused')\n")
+            for cleanup_result in (False, RuntimeError("cleanup failed")):
+                with self.subTest(cleanup_result=cleanup_result):
+                    service = server.ValidationService(directory, str(helper))
+                    self.addAsyncCleanup(service.close)
+                    if cleanup_result is False:
+                        cleanup_patch = mock.patch.object(
+                            service, "_cleanup", return_value=False
+                        )
+                    else:
+                        cleanup_patch = mock.patch.object(
+                            service, "_cleanup", side_effect=cleanup_result
+                        )
+                    with cleanup_patch, mock.patch.object(
+                        server.asyncio,
+                        "create_subprocess_exec",
+                        side_effect=OSError("blocked"),
+                    ) as spawn:
+                        first = await service.validate("one.pbtxt")
+                        second = await service.validate("two.pbtxt")
+                        self.assertEqual(first["status_code"], "UNAVAILABLE")
+                        self.assertEqual(second["status_code"], "UNAVAILABLE")
+                        self.assertIn("restart", first["message"].lower())
+                        self.assertIn("restart", second["message"].lower())
+                        self.assertEqual(second["config_path"], "two.pbtxt")
+                        self.assertEqual(spawn.call_count, 1)
+                    await service.close()
+
+    async def test_duplication_failure_is_recoverable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "config.pbtxt").write_text("")
+            service = server.ValidationService(directory, str(VALIDATOR))
+            self.addAsyncCleanup(service.close)
+            with mock.patch.object(
+                server.os, "dup", side_effect=OSError("fd unavailable")
+            ):
+                failed = await service.validate("config.pbtxt")
+            self.assertEqual(
+                (failed["status_code"], failed["config_path"]),
+                ("UNAVAILABLE", "config.pbtxt"),
+            )
+            recovered = await service.validate("config.pbtxt")
+            self.assertEqual(
+                (recovered["result"], recovered["status_code"]), ("valid", "OK")
+            )
+
+    async def test_untransferred_duplicate_closes_before_spawn(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "config.pbtxt").write_text("")
+            service = server.ValidationService(directory, str(VALIDATOR), timeout=0)
+            self.addAsyncCleanup(service.close)
+            original_dup = os.dup
+            duplicates = []
+
+            def tracked_dup(fd):
+                duplicate = original_dup(fd)
+                duplicates.append(duplicate)
+                return duplicate
+
+            async def timeout_before_run_child(coroutine, timeout):
+                coroutine.close()
+                raise asyncio.TimeoutError
+
+            with mock.patch.object(
+                server.os, "dup", side_effect=tracked_dup
+            ), mock.patch.object(
+                server.asyncio, "wait_for", side_effect=timeout_before_run_child
+            ), mock.patch.object(
+                server.asyncio, "create_subprocess_exec"
+            ) as spawn:
+                report = await service.validate("config.pbtxt")
+            self.assertEqual(report["status_code"], "DEADLINE_EXCEEDED")
+            self.assertFalse(spawn.called)
+            self.assertEqual(len(duplicates), 1)
+            with self.assertRaises(OSError):
+                os.fstat(duplicates[0])
+
+    async def test_late_precreation_spawn_retains_duplicate_after_close(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"
+            root.mkdir()
+            (root / "config.pbtxt").write_text("original")
+            observed = Path(directory) / "observed"
+            pidfile = Path(directory) / "pid"
+            helper = fake_helper(
+                directory,
+                "import os, sys, time\n"
+                "fd = int(sys.argv[sys.argv.index('--config-root-fd') + 1])\n"
+                "child = os.open('config.pbtxt', os.O_RDONLY, dir_fd=fd)\n"
+                f"open({str(observed)!r}, 'wb').write(os.read(child, 100))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                "os.close(child)\n"
+                "time.sleep(30)\n",
+            )
+            service = server.ValidationService(str(root), str(helper), timeout=0.05)
+            self.addAsyncCleanup(service.close)
+            entered, release = asyncio.Event(), asyncio.Event()
+            original_spawn = asyncio.create_subprocess_exec
+            captured = []
+
+            async def delayed_before_actual_spawn(*args, **kwargs):
+                captured.append(kwargs["pass_fds"][0])
+                entered.set()
+                await release.wait()
+                child = await original_spawn(*args, **kwargs)
+                for _ in range(200):
+                    if observed.exists():
+                        break
+                    await asyncio.sleep(0.005)
+                return child
+
+            with mock.patch.object(
+                server.asyncio, "create_subprocess_exec", delayed_before_actual_spawn
+            ):
+                pending = asyncio.create_task(service.validate("config.pbtxt"))
+                try:
+                    await entered.wait()
+                    original = Path(directory) / "original"
+                    root.rename(original)
+                    root.mkdir()
+                    (root / "config.pbtxt").write_text("replacement")
+                    report = await pending
+                    self.assertEqual(report["status_code"], "UNAVAILABLE")
+                    self.assertIn("restart", report["message"].lower())
+                    await service.close()
+                    self.assertEqual(
+                        (os.fstat(captured[0]).st_dev, os.fstat(captured[0]).st_ino),
+                        (original.stat().st_dev, original.stat().st_ino),
+                    )
+                    refused = await service.validate("other.pbtxt")
+                    self.assertEqual(refused["status_code"], "UNAVAILABLE")
+                    self.assertIn("restart", refused["message"].lower())
+                finally:
+                    release.set()
+                for _ in range(300):
+                    if observed.exists() and pidfile.exists():
+                        break
+                    await asyncio.sleep(0.01)
+                self.assertEqual(observed.read_bytes(), b"original")
+                for _ in range(300):
+                    try:
+                        os.fstat(captured[0])
+                    except OSError:
+                        break
+                    await asyncio.sleep(0.01)
+                else:
+                    self.fail("spawn-owned root duplicate was not closed")
+                for _ in range(300):
+                    try:
+                        os.kill(int(pidfile.read_text()), 0)
+                    except ProcessLookupError:
+                        break
+                    await asyncio.sleep(0.01)
+                else:
+                    self.fail("late child was not reaped")
 
     async def test_input_internal_report_over_sdk(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -293,12 +516,14 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             )
             params = StdioServerParameters(
                 command=str(SERVER),
-                args=["--validator", str(helper), "--config", str(path)],
+                args=["--validator", str(helper), "--config-root", str(path.parent)],
             )
             async with stdio_client(params) as (reader, writer):
                 async with ClientSession(reader, writer) as client:
                     await client.initialize()
-                    result = await client.call_tool("validate_config", {})
+                    result = await client.call_tool(
+                        "validate_config", {"config_path": "config.pbtxt"}
+                    )
                     self.assertTrue(result.isError)
                     self.assertEqual(
                         (
@@ -321,13 +546,15 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             )
             params = StdioServerParameters(
                 command=str(SERVER),
-                args=["--validator", str(helper), "--config", str(path)],
+                args=["--validator", str(helper), "--config-root", str(path.parent)],
             )
             async with stdio_client(params) as (reader, writer):
                 async with ClientSession(reader, writer) as client:
                     await client.initialize()
                     pending = asyncio.create_task(
-                        client.call_tool("validate_config", {})
+                        client.call_tool(
+                            "validate_config", {"config_path": "config.pbtxt"}
+                        )
                     )
                     for _ in range(100):
                         if pidfile.exists():
@@ -352,13 +579,17 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             path = Path(directory) / "config.pbtxt"
             path.write_text("")
             overflow = fake_helper(directory, "print('x' * 70000)\n")
-            report = await server.ValidationService(str(path), str(overflow)).validate()
+            overflow_service = server.ValidationService(str(path.parent), str(overflow))
+            self.addAsyncCleanup(overflow_service.close)
+            report = await overflow_service.validate("config.pbtxt")
             self.assertEqual(
                 (report["stage"], report["status_code"]),
                 ("adapter", "RESOURCE_EXHAUSTED"),
             )
             mismatch = fake_helper(directory, "print('{}')\n")
-            report = await server.ValidationService(str(path), str(mismatch)).validate()
+            mismatch_service = server.ValidationService(str(path.parent), str(mismatch))
+            self.addAsyncCleanup(mismatch_service.close)
+            report = await mismatch_service.validate("config.pbtxt")
             self.assertEqual(
                 (report["stage"], report["status_code"]), ("adapter", "DATA_LOSS")
             )
@@ -374,8 +605,9 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
                 "time.sleep(30)\n",
             )
-            service = server.ValidationService(str(path), str(helper))
-            task = asyncio.create_task(service.validate())
+            service = server.ValidationService(str(path.parent), str(helper))
+            self.addAsyncCleanup(service.close)
+            task = asyncio.create_task(service.validate("config.pbtxt"))
             for _ in range(100):
                 if pidfile.exists():
                     break
@@ -398,21 +630,31 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
                 "time.sleep(30)\n",
             )
-            service = server.ValidationService(str(path), str(helper), timeout=0.2)
-            first = asyncio.create_task(service.validate())
+            service = server.ValidationService(
+                str(path.parent), str(helper), timeout=0.2
+            )
+            self.addAsyncCleanup(service.close)
+            first = asyncio.create_task(service.validate("config.pbtxt"))
             for _ in range(100):
                 if pidfile.exists():
                     break
                 await asyncio.sleep(0.01)
             self.assertTrue(pidfile.exists())
+            busy = await service.validate("other.pbtxt")
             self.assertEqual(
-                (await service.validate())["status_code"], "RESOURCE_EXHAUSTED"
+                (busy["status_code"], busy["config_path"]),
+                ("RESOURCE_EXHAUSTED", "other.pbtxt"),
             )
-            self.assertEqual((await first)["status_code"], "DEADLINE_EXCEEDED")
+            timed_out = await first
+            self.assertEqual(
+                (timed_out["status_code"], timed_out["config_path"]),
+                ("DEADLINE_EXCEEDED", "config.pbtxt"),
+            )
             with self.assertRaises(ProcessLookupError):
                 os.kill(int(pidfile.read_text()), 0)
             pidfile.unlink()
-            service = server.ValidationService(str(path), str(helper))
+            service = server.ValidationService(str(path.parent), str(helper))
+            self.addAsyncCleanup(service.close)
             entered, release = asyncio.Event(), asyncio.Event()
             original = asyncio.create_subprocess_exec
 
@@ -429,7 +671,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             with mock.patch.object(
                 server.asyncio, "create_subprocess_exec", delayed_spawn
             ):
-                task = asyncio.create_task(service.validate())
+                task = asyncio.create_task(service.validate("config.pbtxt"))
                 await entered.wait()
                 task.cancel()
                 release.set()
@@ -440,7 +682,10 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 os.kill(int(pidfile.read_text()), 0)
             pidfile.unlink()
 
-            service = server.ValidationService(str(path), str(helper), timeout=0.1)
+            service = server.ValidationService(
+                str(path.parent), str(helper), timeout=0.1
+            )
+            self.addAsyncCleanup(service.close)
             entered, release = asyncio.Event(), asyncio.Event()
 
             async def slow_spawn(*args, **kwargs):
@@ -452,7 +697,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             with mock.patch.object(
                 server.asyncio, "create_subprocess_exec", slow_spawn
             ):
-                task = asyncio.create_task(service.validate())
+                task = asyncio.create_task(service.validate("config.pbtxt"))
                 await entered.wait()
                 await asyncio.sleep(0.15)
                 release.set()

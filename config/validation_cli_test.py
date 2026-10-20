@@ -50,6 +50,132 @@ class ValidationCliTest(unittest.TestCase):
             self.assertEqual(process.returncode, 1)
             self.assertEqual((report["stage"], report["result"]), ("load", "invalid"))
 
+    def test_parser_detail_is_bounded_and_has_public_location(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "bad.pbtxt"
+            path.write_text("\nunknown_field: 1\n")
+            process, report = self.run_validator("--config", str(path), input_path=path)
+            self.assertEqual((process.returncode, report["stage"]), (1, "load"))
+            self.assertIn("line 2, column 1", report["message"])
+            self.assertIn("unknown_field", report["message"])
+            self.assertNotIn("/proc/self/fd", report["message"])
+            self.assertLessEqual(len(report["message"].encode()), 8192)
+
+    def test_root_descriptor_mode_confines_relative_request(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "root"
+            root.mkdir()
+            (root / "inside").mkdir()
+            (root / "inside/config.pbtxt").write_text("")
+            (root / "link.pbtxt").symlink_to(root / "inside/config.pbtxt")
+            outside = Path(temp) / "outside.pbtxt"
+            outside.write_text("unknown_field: 1")
+            (root / "escape.pbtxt").symlink_to(outside)
+            fd = os.open(root, os.O_PATH | os.O_DIRECTORY)
+            try:
+
+                def run(reference):
+                    process = subprocess.run(
+                        [
+                            str(BINARY),
+                            "--config-root-fd",
+                            str(fd),
+                            "--config",
+                            reference,
+                        ],
+                        pass_fds=(fd,),
+                        capture_output=True,
+                    )
+                    return process, json.loads(process.stdout)
+
+                valid, report = run("inside/config.pbtxt")
+                self.assertEqual(
+                    (valid.returncode, report["config_path"], report["result"]),
+                    (0, "inside/config.pbtxt", "valid"),
+                )
+                for reference in (
+                    "link.pbtxt",
+                    "escape.pbtxt",
+                    "../outside.pbtxt",
+                    "/etc/passwd",
+                    "inside/./config.pbtxt",
+                ):
+                    with self.subTest(reference=reference):
+                        process, report = run(reference)
+                        self.assertEqual(
+                            (
+                                process.returncode,
+                                report["stage"],
+                                report["status_code"],
+                            ),
+                            (1, "input", "INVALID_ARGUMENT"),
+                        )
+            finally:
+                os.close(fd)
+
+    def test_root_mode_rejects_filesystem_hazards_and_preserves_pinned_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "root"
+            root.mkdir()
+            (root / "nested").mkdir()
+            (root / "nested/valid.pbtxt").write_text("")
+            (root / "dir_link").symlink_to(root / "nested", target_is_directory=True)
+            os.mkfifo(root / "pipe.pbtxt")
+            fd = os.open(root, os.O_PATH | os.O_DIRECTORY)
+            try:
+
+                def check(reference):
+                    process = subprocess.run(
+                        [
+                            str(BINARY),
+                            "--config-root-fd",
+                            str(fd),
+                            "--config",
+                            reference,
+                        ],
+                        pass_fds=(fd,),
+                        capture_output=True,
+                    )
+                    return process, json.loads(process.stdout)
+
+                for reference, status in (
+                    ("dir_link/valid.pbtxt", "INVALID_ARGUMENT"),
+                    ("pipe.pbtxt", "INVALID_ARGUMENT"),
+                    ("nested", "INVALID_ARGUMENT"),
+                    ("missing.pbtxt", "NOT_FOUND"),
+                    ("x" * 300, "INVALID_ARGUMENT"),
+                ):
+                    with self.subTest(reference=reference[:30]):
+                        process, report = check(reference)
+                        self.assertEqual(
+                            (
+                                process.returncode,
+                                report["stage"],
+                                report["status_code"],
+                            ),
+                            (1, "input", status),
+                        )
+                root.rename(Path(temp) / "original")
+                root.mkdir()
+                (root / "nested").mkdir()
+                (root / "nested/valid.pbtxt").write_text("unknown_field: 1")
+                process, report = check("nested/valid.pbtxt")
+                self.assertEqual((process.returncode, report["result"]), (0, "valid"))
+            finally:
+                os.close(fd)
+
+    def test_parser_detail_truncates_long_input_derived_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "long.pbtxt"
+            path.write_text("unknown_" + "x" * 12000 + ": 1")
+            process, report = self.run_validator("--config", str(path), input_path=path)
+            self.assertEqual((process.returncode, report["stage"]), (1, "load"))
+            self.assertIn("line 1, column 1", report["message"])
+            self.assertIn("[truncated]", report["message"])
+            self.assertLessEqual(len(report["message"].encode("utf-8")), 8192)
+            self.assertEqual(process.stdout.count(b"\n"), 1)
+            self.assertNotIn("/proc/self/fd", report["message"])
+
     def test_missing_and_nonregular_inputs(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "missing.pbtxt"
@@ -167,6 +293,11 @@ robot {
                     (process.returncode, json.loads(process.stdout)["stage"]),
                     (2, "arguments"),
                 )
+        invalid_fd, _ = self.run_validator(
+            "--config-root-fd", "999999", "--config", "file.pbtxt"
+        )
+        self.assertEqual(invalid_fd.returncode, 2)
+        self.assertEqual(json.loads(invalid_fd.stdout)["stage"], "arguments")
         help_result, _ = self.run_validator("--help")
         self.assertEqual(help_result.returncode, 0)
         self.assertIn(b"Usage:", help_result.stdout)

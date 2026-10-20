@@ -8,7 +8,9 @@ cc_library(
     deps = [
         "//config/proto:config_cc_proto",
         "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/strings",
         "@glog",
+        "@protobuf",
     ],
 )
 
@@ -42,9 +44,9 @@ cc_test(
 )
 
 cc_library(
-    name = "validation_command",
-    srcs = ["validation_command.cc"],
-    hdrs = ["validation_command.h"],
+    name = "config_validation_cli",
+    srcs = ["config_validation_cli.cc"],
+    hdrs = ["config_validation_cli.h"],
     deps = [
         ":config_utils",
         ":validation",
@@ -58,17 +60,17 @@ cc_binary(
     srcs = ["validation_main.cc"],
     visibility = ["//visibility:public"],
     deps = [
-        ":validation_command",
+        ":config_validation_cli",
         "@glog",
     ],
 )
 
 cc_test(
-    name = "validation_command_test",
-    srcs = ["validation_command_test.cc"],
+    name = "config_validation_cli_test",
+    srcs = ["config_validation_cli_test.cc"],
     deps = [
         ":config_utils",
-        ":validation_command",
+        ":config_validation_cli",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],
