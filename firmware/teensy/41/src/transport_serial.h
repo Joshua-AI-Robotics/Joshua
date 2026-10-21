@@ -1,7 +1,13 @@
-// Incremental JoshuaWire serial receive; never waits for a partial frame.
+// Board-specific nonblocking UART/USB binding selected by the serial profile.
 #pragma once
-#include <stddef.h>
-#include <stdint.h>
-void TransportInit();
-size_t TransportReadFrame(uint8_t* frame, size_t capacity);
-void TransportWriteFrame(const uint8_t* frame, size_t size);
+
+#include "serial_frame_transport.h"
+
+using SerialTransport = serial_frame_transport_t;
+
+// Hardware settings belong to this adapter, not the JW endpoint.
+struct SerialTransportConfig {
+  unsigned long baud_rate;
+  uint32_t byte_timeout_ms;
+};
+frame_transport_t TransportSerialInit(SerialTransport* state, const SerialTransportConfig& config);

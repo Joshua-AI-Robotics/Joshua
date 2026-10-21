@@ -117,3 +117,16 @@ they vary (some are current-then-microstep, some the reverse).
 - Partial serial frames never block pulse servicing. STEP-high timing uses
   nonblocking edge servicing so dispatch and stop can run between edges.
 - Physical stop verification is not supported or advertised.
+
+## Bounded serial I/O and native tests
+
+The serial loop uses a retained transmit slot and keeps servicing STEP/DIR while
+UART output is blocked. Incoming frames use the shared revision-4 decoder; CRC,
+length and version failures never dispatch commands. Native `serial_test` builds
+the real setup/loop and transport with test-only GPIO, serial and entropy APIs.
+It does not qualify physical pulse timing or hardware stop behavior.
+
+The manual `//robot/board/joshua_wire:joshua_wire_smoke` CLI supports handshake,
+disabled configuration and opt-in exercise modes. Review `--help` and use
+`--dry_run` first; hardware execution requires explicit confirmation. Recovery
+of a latched ESTOP also requires `--allow_recover`.

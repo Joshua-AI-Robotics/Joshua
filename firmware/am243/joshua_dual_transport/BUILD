@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "commands",
@@ -12,5 +12,19 @@ cc_library(
         "//firmware/common:joshua_device_runtime",
         "//firmware/common:joshua_wire_commands",
         "//firmware/common:joshua_wire_profiles",
+    ],
+)
+
+cc_test(
+    name = "uart_transport_test",
+    srcs = [
+        "src/transport_uart.c",
+        "src/transport_uart.h",
+        "src/transport_uart_test.cc",
+    ],
+    deps = [
+        "//firmware/common:serial_frame_transport",
+        "//firmware/testing:ti_uart",
+        "@googletest//:gtest_main",
     ],
 )

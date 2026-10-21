@@ -26,7 +26,7 @@ FILES_PATH := \
 
 INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
 
-JOSHUA_OBJECTS := joshua_serial_task.obj joshua_commands.obj joshua_wire.obj \
+JOSHUA_OBJECTS := transport_uart.obj serial_frame_assembler.obj serial_frame_transport.obj joshua_serial_task.obj joshua_commands.obj joshua_wire.obj \
     joshua_wire_commands.obj joshua_wire_profiles.obj joshua_wire_firmware_session.obj \
     joshua_wire_endpoint.obj joshua_device_runtime.obj joshua_wire_stream.obj
 # SysConfig supplies RNG/SA2UL configuration for a fresh hardware boot identity.
