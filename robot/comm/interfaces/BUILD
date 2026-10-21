@@ -22,8 +22,8 @@ cc_library(
 )
 
 cc_library(
-    name = "legacy_message_transport",
-    hdrs = ["legacy_message_transport.h"],
+    name = "caller_sized_message_transport",
+    hdrs = ["caller_sized_message_transport.h"],
     deps = [":message_transport"],
 )
 

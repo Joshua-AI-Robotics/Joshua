@@ -24,7 +24,7 @@ namespace robot::comm {
 namespace {
 using Bytes = std::vector<uint8_t>;
 
-static_assert(!std::is_base_of_v<LegacyMessageTransport, JoshuaWireSerialTransport>);
+static_assert(!std::is_base_of_v<CallerSizedMessageTransport, JoshuaWireSerialTransport>);
 
 class SerialExchangeTest : public ::testing::Test {
  protected:

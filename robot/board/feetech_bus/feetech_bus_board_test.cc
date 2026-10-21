@@ -8,12 +8,12 @@
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/testing/fake_legacy_message_transport.h"
+#include "robot/comm/testing/fake_caller_sized_message_transport.h"
 
 namespace robot::board {
 namespace {
 
-using robot::comm::FakeLegacyMessageTransport;
+using robot::comm::FakeCallerSizedMessageTransport;
 
 // Builds a well-formed Feetech status/response packet with the given
 // parameter bytes and error byte, matching the checksum arithmetic in
@@ -57,7 +57,7 @@ robot::board::Board MakeArmBusBoard() {
 class FeetechBusBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeLegacyMessageTransport>();
+    transport_ = std::make_shared<FakeCallerSizedMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -76,7 +76,7 @@ class FeetechBusBoardTest : public ::testing::Test {
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {0x0F, 0x03}));
   }
 
-  std::shared_ptr<FakeLegacyMessageTransport> transport_;
+  std::shared_ptr<FakeCallerSizedMessageTransport> transport_;
 };
 
 TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
@@ -90,7 +90,7 @@ TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
 }
 
 TEST_F(FeetechBusBoardTest, InitFailsWhenServoDoesNotRespond) {
-  // No queued responses: FakeLegacyMessageTransport::SendAndReceive returns zero bytes.
+  // No queued responses: FakeCallerSizedMessageTransport::SendAndReceive returns zero bytes.
   FeetechBusBoard board;
 
   auto status = board.Init(MakeArmBusBoard());

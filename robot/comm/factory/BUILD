@@ -32,7 +32,7 @@ cc_test(
     deps = [
         ":comm_factory",
         "//robot/comm/ethercat:fake_ethercat_transport",
-        "//robot/comm/interfaces:legacy_message_transport",
+        "//robot/comm/interfaces:caller_sized_message_transport",
         "//robot/comm/proto:comm_cc_proto",
         "//robot/comm/testing:fake_transports",
         "@abseil-cpp//absl/status:status",

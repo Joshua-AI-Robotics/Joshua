@@ -11,14 +11,14 @@
 #include "absl/strings/str_cat.h"
 #include "robot/board/feetech_bus/feetech_protocol.h"
 #include "robot/comm/factory/comm_factory.h"
-#include "robot/comm/interfaces/legacy_message_transport.h"
+#include "robot/comm/interfaces/caller_sized_message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
 
 struct FeetechBusSharedState {
-  std::shared_ptr<robot::comm::LegacyMessageTransport> transport;
+  std::shared_ptr<robot::comm::CallerSizedMessageTransport> transport;
   // Allows one request/response exchange at a time on the half-duplex bus.
   std::mutex bus_mutex;
 };
@@ -201,7 +201,7 @@ absl::Status FeetechBusBoard::Init(const robot::board::Board& config) {
   ABSL_ASSIGN_OR_RETURN(auto comm, robot::comm::CommFactory::CreateComm(config.comm()));
   ABSL_ASSIGN_OR_RETURN(auto message,
                         robot::comm::GetCommTransport<robot::comm::MessageTransport>(comm));
-  ABSL_ASSIGN_OR_RETURN(state->transport, robot::comm::GetLegacyMessageTransport(message));
+  ABSL_ASSIGN_OR_RETURN(state->transport, robot::comm::GetCallerSizedMessageTransport(message));
 
   std::map<uint32_t, std::shared_ptr<BoardChannel>> channels;
   for (const auto& channel_config : config.channels()) {

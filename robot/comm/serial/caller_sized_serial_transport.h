@@ -1,15 +1,15 @@
-// Caller-sized serial transactions for vendor and JoshuaWire v1 consumers.
+// Caller-sized serial transactions for vendor-protocol consumers.
 #pragma once
 
 #include <memory>
 #include <utility>
 
-#include "robot/comm/interfaces/legacy_message_transport.h"
+#include "robot/comm/interfaces/caller_sized_message_transport.h"
 #include "robot/comm/serial/serial.h"
 
 namespace robot::comm {
 
-class CallerSizedSerialTransport final : public LegacyMessageTransport {
+class CallerSizedSerialTransport final : public CallerSizedMessageTransport {
  public:
   explicit CallerSizedSerialTransport(std::shared_ptr<Serial> serial)
       : serial_(std::move(serial)) {}

@@ -12,3 +12,14 @@ cc_library(
         "//robot/comm/interfaces:message_transport",
     ],
 )
+
+cc_library(
+    name = "board_config",
+    testonly = True,
+    hdrs = ["board_config.h"],
+    visibility = ["//robot/board:__subpackages__"],
+    deps = [
+        "//firmware/common:joshua_wire",
+        "//robot/board/proto:board_cc_proto",
+    ],
+)

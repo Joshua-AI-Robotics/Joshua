@@ -5,8 +5,7 @@ cc_library(
     hdrs = ["teensy_board.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//firmware/common:joshua_wire_v1",
-        "//robot/board/joshua_wire:legacy_joshua_wire_board",
+        "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/proto:board_cc_proto",
     ],
 )
@@ -27,8 +26,8 @@ cc_test(
     srcs = ["teensy_board_test.cc"],
     deps = [
         ":teensy_board",
-        "//firmware/common:joshua_wire_v1",
-        "//robot/board/frame:fake_frame_transport",
+        "//robot/board/joshua_wire/testing:board_config",
+        "//robot/board/joshua_wire/testing:fake_joshua_wire_transport",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/proto:comm_cc_proto",

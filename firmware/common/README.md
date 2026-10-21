@@ -29,8 +29,11 @@ changes; board backends retain responsibility for staging/rolling back hardware.
 Revision 4 is incompatible with earlier new-codec revisions. Frames remain
 96 bytes; EtherCAT layout 2's mailbox/PDO slots remain 108/112 bytes, with the
 advertised protocol range updated to revision 4 by the adapter/firmware stack.
-The unchanged `joshua_wire_v1` codec remains selected by current hardware callers.
-No hardware backend migration or flashing occurs here.
+All Joshua-authored host MCU bindings and firmware images use this revision;
+the previous codec and host implementation have been removed. Teensy/ESP32 share
+`joshua_stepdir_device`, the physical STEP/DIR backend and incremental serial
+framing. The AM243 UART overlay uses the current endpoint with its existing
+software-only actuator backend. Firmware builds never flash devices.
 
 Hardware-free tests include golden payload/frame bytes, bounded C codecs,
 session retry/reset/reboot behavior and a twelve-function mixed-device fake.

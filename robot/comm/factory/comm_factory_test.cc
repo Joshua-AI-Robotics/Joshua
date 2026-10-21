@@ -15,7 +15,7 @@
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
-#include "robot/comm/interfaces/legacy_message_transport.h"
+#include "robot/comm/interfaces/caller_sized_message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 #include "robot/comm/testing/fake_transports.h"
 
@@ -205,7 +205,7 @@ TEST_F(CommFactorySerialCacheTest, ConfiguredAdaptersExposeDifferentMessageContr
   ASSERT_TRUE(fixed.ok()) << fixed.status();
   auto fixed_message = GetCommTransport<MessageTransport>(*fixed);
   ASSERT_TRUE(fixed_message.ok());
-  EXPECT_TRUE(GetLegacyMessageTransport(*fixed_message).ok());
+  EXPECT_TRUE(GetCallerSizedMessageTransport(*fixed_message).ok());
   const std::vector<uint8_t> vendor_request{0xff, 0xff, 0x01, 0x02};
   EXPECT_EQ((*fixed_message)->Exchange(vendor_request).status().code(),
             absl::StatusCode::kUnimplemented);
@@ -215,7 +215,7 @@ TEST_F(CommFactorySerialCacheTest, ConfiguredAdaptersExposeDifferentMessageContr
   ASSERT_TRUE(framed.ok()) << framed.status();
   auto framed_message = GetCommTransport<MessageTransport>(*framed);
   ASSERT_TRUE(framed_message.ok());
-  EXPECT_EQ(GetLegacyMessageTransport(*framed_message).status().code(),
+  EXPECT_EQ(GetCallerSizedMessageTransport(*framed_message).status().code(),
             absl::StatusCode::kFailedPrecondition);
   EXPECT_EQ((*framed_message)->Exchange(vendor_request).status().code(),
             absl::StatusCode::kInvalidArgument);
@@ -238,8 +238,8 @@ TEST_F(CommFactorySerialCacheTest, CallerSizedAdapterSharesBusLockWithJoshuaWire
   ASSERT_TRUE(fixed.ok()) << fixed.status();
   auto fixed_message = GetCommTransport<MessageTransport>(*fixed);
   ASSERT_TRUE(fixed_message.ok());
-  auto legacy = GetLegacyMessageTransport(*fixed_message);
-  ASSERT_TRUE(legacy.ok());
+  auto caller_sized = GetCallerSizedMessageTransport(*fixed_message);
+  ASSERT_TRUE(caller_sized.ok());
 
   const std::vector<uint8_t> request{
       0xa5, 0x0b, 0x02, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01, 0x08, 0xff, 0x82, 0x0c};
@@ -255,7 +255,8 @@ TEST_F(CommFactorySerialCacheTest, CallerSizedAdapterSharesBusLockWithJoshuaWire
   }
   EXPECT_EQ(observed, request);
   const std::vector<uint8_t> vendor_request{0xff, 0xff, 0x01, 0x02};
-  auto writer = std::async(std::launch::async, [&] { return (*legacy)->Write(vendor_request); });
+  auto writer =
+      std::async(std::launch::async, [&] { return (*caller_sized)->Write(vendor_request); });
   EXPECT_EQ(writer.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
   EXPECT_EQ(write(master_fd_, request.data(), request.size()),

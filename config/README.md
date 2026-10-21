@@ -88,9 +88,9 @@ Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
 Serial `MESSAGE` communication requires an explicit
-`serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers and
-`LegacyJoshuaWireBoard`, or `message_adapter: JOSHUA_WIRE` for the newer
-`JoshuaWireBoard`. Existing external serial MESSAGE configs must add this field;
+`serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers,
+or `message_adapter: JOSHUA_WIRE` for Joshua-owned MCU firmware. ESP32, Teensy
+and AM243 serial presets select the current revision-4 engine and firmware. Existing external serial MESSAGE configs must add this field;
 there is no implicit framing choice. `BYTE_STREAM` leaves it unspecified.
 `exchange_timeout_ms` applies only to `JOSHUA_WIRE`; fixed-length transactions
 retain their existing timing. See [communication](../robot/comm/README.md) for

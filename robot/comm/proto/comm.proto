@@ -50,7 +50,7 @@ message SerialConfig {
   // no delay. Set 2000 for USB bridges that reset the MCU on open (e.g. CP2102).
   uint32 post_open_settle_ms = 5;
   // Required for MESSAGE; leave unspecified for BYTE_STREAM. CALLER_SIZED
-  // preserves vendor/v1 transactions, including their existing timing policy.
+  // supports vendor-protocol transactions, including their existing timing policy.
   SerialMessageAdapter message_adapter = 6;
 }
 

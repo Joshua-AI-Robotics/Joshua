@@ -33,16 +33,10 @@ class Serial : public ByteStream {
   absl::Status Write(const std::vector<uint8_t>& data) override;
   absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read) override;
 
-  // Fixed-length compatibility transaction. Preserves input flushing and the
+  // Caller-sized vendor transaction. Preserves input flushing and the
   // existing read timeout; the bus lock covers both write and read.
   absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
                                                   size_t expected_response_size);
-  // Compatibility for the comm-local vendor protocols.
-  absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& request,
-                                                      size_t expected_response_size) {
-    return AtomicRead(request, expected_response_size);
-  }
-
   absl::Status Flush();
   absl::Status Open() override;
   // Mechanism-only transaction. The adapter consumes each received byte and

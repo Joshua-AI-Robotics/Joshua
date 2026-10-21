@@ -1,4 +1,4 @@
-// Config-driven AM243 smoke for either serial joshua_wire_v1 or the retained
+// Config-driven AM243 smoke for either serial JoshuaWire revision 4 or the retained
 // EtherCAT TI demo: pbtxt -> ActionFactory -> BoardFactory -> Am243Board.
 #include <chrono>
 #include <cstdlib>

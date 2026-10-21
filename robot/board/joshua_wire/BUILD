@@ -1,40 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
-    name = "legacy_joshua_wire_board",
-    srcs = ["legacy_joshua_wire_board.cc"],
-    hdrs = ["legacy_joshua_wire_board.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//firmware/common:joshua_wire_v1",
-        "//robot/board/frame:frame_transport",
-        "//robot/board/interfaces:board_interfaces",
-        "//robot/board/proto:board_cc_proto",
-        "//robot/comm/factory:comm_factory",
-        "//robot/comm/proto:comm_cc_proto",
-        "//utils:status_macros",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-        "@abseil-cpp//absl/strings",
-    ],
-)
-
-cc_test(
-    name = "legacy_joshua_wire_board_test",
-    srcs = ["legacy_joshua_wire_board_test.cc"],
-    deps = [
-        ":legacy_joshua_wire_board",
-        "//firmware/common:joshua_wire_v1",
-        "//robot/board/frame:fake_frame_transport",
-        "//robot/board/proto:board_cc_proto",
-        "//robot/comm/factory:comm_factory",
-        "//robot/comm/proto:comm_cc_proto",
-        "@abseil-cpp//absl/status:status",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "joshua_wire_board",
     srcs = ["joshua_wire_board.cc"],
     hdrs = ["joshua_wire_board.h"],
@@ -52,6 +18,19 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "firmware_binding_test",
+    srcs = ["firmware_binding_test.cc"],
+    deps = [
+        "//firmware/common:joshua_wire_stream",
+        "//firmware/common:stepdir_test_firmware",
+        "//robot/board/factory:board_factory",
+        "//robot/board/joshua_wire/testing:board_config",
+        "//robot/comm/factory:comm_factory",
+        "@googletest//:gtest_main",
     ],
 )
 

@@ -27,8 +27,8 @@ Current combinations are:
 `ByteStream` provides ordered bytes without boundaries. `MessageTransport`
 provides complete-frame `Send` and `Exchange` calls. `CorrelatedCyclicTransport`
 provides correlated exchanges with an explicit finite timeout.
-`CallerSizedSerialTransport` implements the temporary `LegacyMessageTransport`
-interface for existing consumers while the shared board engine is migrated. EtherCAT currently
+`CallerSizedSerialTransport` implements the `CallerSizedMessageTransport`
+interface for vendor protocols. EtherCAT currently
 provides its cyclic transport directly. UDP remains rejected until its concrete
 implementation is added.
 
@@ -36,7 +36,7 @@ Serial `MESSAGE` configurations must explicitly select `serial_config.message_ad
 
 | Adapter | Boundary rule | Consumer |
 | --- | --- | --- |
-| `CALLER_SIZED` | Caller supplies each response length | Vendor drivers and `LegacyJoshuaWireBoard` |
+| `CALLER_SIZED` | Caller supplies each response length | Vendor drivers (Feetech) |
 | `JOSHUA_WIRE` | JoshuaWire sync byte and length prefix | `JoshuaWireBoard` |
 
 `JoshuaWireSerialTransport` implements `MessageTransport` directly; it does not
@@ -49,7 +49,7 @@ message settings on `BYTE_STREAM` are rejected before opening the port.
 transaction. A caller-supplied boundary callback consumes bytes under one bus
 lock across write and read; separate `Write` and `Read` calls cannot provide
 that atomicity. Adapters explicitly choose whether to preserve or discard
-pending input before a transaction. The fixed-length compatibility transaction
+pending input before a transaction. The caller-sized vendor transaction
 also holds the same lock throughout its write and read.
 
 Device command and payload parsing remains outside this layer. For example, the lidar

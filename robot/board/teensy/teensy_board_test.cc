@@ -1,110 +1,61 @@
 #include "robot/board/teensy/teensy_board.h"
 
-#include <memory>
-
-#include "absl/status/status.h"
-#include "firmware/common/joshua_wire_v1.h"
 #include "gtest/gtest.h"
-#include "robot/board/frame/fake_frame_transport.h"
-#include "robot/board/proto/board.pb.h"
+#include "robot/board/joshua_wire/testing/board_config.h"
+#include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
 #include "robot/comm/factory/comm_factory.h"
-#include "robot/comm/proto/comm.pb.h"
 
-// TeensyBoard only supplies two facts to the shared LegacyJoshuaWireBoard, as
-// constructor arguments (BoardType::TEENSY41, JW1_BOARD_TEENSY41) —
-// everything else (IDENTIFY handshake, CONFIGURE_CHANNEL, multi-channel,
-// ENABLE/SET_TARGET/GET_FEEDBACK, ...) is generic protocol orchestration,
-// tested once in robot/board/joshua_wire/joshua_wire_board_test.cc. These
-// tests only prove Teensy's identity is wired to the right values.
 namespace robot::board {
 namespace {
-
-std::vector<uint8_t> MakeIdentifyResponse(uint8_t n_channels,
-                                          jw1_board_id_t board_id = JW1_BOARD_TEENSY41) {
-  jw1_identify_response_t response{};
-  response.board_id = board_id;
-  response.n_channels = n_channels;
-  for (uint8_t i = 0; i < n_channels; i++) {
-    response.channel_drives[i] = JW1_DRIVE_STEP_DIR;
-  }
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_identify_response(buf, sizeof(buf), &response);
-  return std::vector<uint8_t>(buf, buf + len);
-}
-
-std::vector<uint8_t> MakeStatusResponse(uint8_t cmd, uint8_t channel, jw1_status_t status) {
-  uint8_t buf[JW1_MAX_FRAME_LEN];
-  const int len = jw1_encode_status_response(buf, sizeof(buf), cmd, channel, status);
-  return std::vector<uint8_t>(buf, buf + len);
-}
-
-robot::board::Board MakeTeensyBoard() {
-  robot::board::Board board;
-  board.set_name("stepper_bus");
-  board.set_board_type(robot::board::BoardType::TEENSY41);
-  auto* comm = board.mutable_comm();
-  comm->set_comm_type(robot::comm::CommType::SERIAL);
-  comm->set_transport_type(robot::comm::TransportType::MESSAGE);
-  comm->mutable_serial_config()->set_port("/dev/ttyACM0");
-  comm->mutable_serial_config()->set_baudrate(115200);
-  comm->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
-  board.mutable_firmware()->set_min_proto_version(1);
-
-  auto* channel = board.add_channels();
-  channel->set_index(0);
-  channel->set_drive(robot::board::DriveInterface::STEP_DIR);
-  channel->mutable_step_dir()->set_max_pulse_rate_hz(20000);
-  channel->mutable_step_dir()->set_invert_dir(false);
-  channel->mutable_step_dir()->set_enable_active_low(true);
-  channel->mutable_step_dir()->set_step_pin(2);
-  channel->mutable_step_dir()->set_dir_pin(3);
-  channel->mutable_step_dir()->set_enable_pin(4);
-  return board;
-}
-
 class TeensyBoardTest : public ::testing::Test {
  protected:
+  std::shared_ptr<FakeJoshuaWireTransport> transport = std::make_shared<FakeJoshuaWireTransport>();
   void SetUp() override {
-    transport_ = std::make_shared<FakeFrameTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
-              std::static_pointer_cast<robot::comm::MessageTransport>(transport_)};
+              std::static_pointer_cast<robot::comm::MessageTransport>(transport)};
         });
   }
-
   void TearDown() override {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
-
-  std::shared_ptr<FakeFrameTransport> transport_;
 };
-
-TEST_F(TeensyBoardTest, InitSucceedsAgainstRealTeensyIdentity) {
-  transport_->QueueResponse(MakeIdentifyResponse(1));
-  transport_->QueueResponse(MakeStatusResponse(JW1_CMD_CONFIGURE_CHANNEL, 0, JW1_STATUS_OK));
+TEST_F(TeensyBoardTest, CurrentEndpointDiscoversConfiguresAndControlsWithoutAutomaticEnable) {
   TeensyBoard board;
-
-  EXPECT_TRUE(board.Init(MakeTeensyBoard()).ok());
+  const auto status = board.Init(MakeStepDirBoardConfig(TEENSY41));
+  ASSERT_TRUE(status.ok()) << status;
+  EXPECT_TRUE(transport->channel.configured);
+  EXPECT_FALSE(transport->channel.enabled);
+  auto channel = board.OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  EXPECT_TRUE((*channel)->Enable().ok());
+  EXPECT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 42).ok());
+  auto feedback = (*channel)->ReadFeedback();
+  ASSERT_TRUE(feedback.ok()) << feedback.status();
+  EXPECT_EQ(feedback->position, 42);
+  EXPECT_TRUE(board.Teardown().ok());
+  EXPECT_FALSE(transport->channel.enabled);
 }
-
-TEST_F(TeensyBoardTest, InitRejectsNonTeensyBoardType) {
-  auto config = MakeTeensyBoard();
-  config.set_board_type(robot::board::BoardType::ARDUINO_UNO);
+TEST_F(TeensyBoardTest, RejectsWrongBoardBindingBeforeOpeningTransport) {
   TeensyBoard board;
-
+  EXPECT_EQ(board.Init(MakeStepDirBoardConfig(MOCK)).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(transport->exchange_calls_, 0);
+}
+TEST_F(TeensyBoardTest, RejectsCallerSizedAdapterBeforeOpeningTransport) {
+  auto config = MakeStepDirBoardConfig(TEENSY41);
+  config.mutable_comm()->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
+  TeensyBoard board;
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(transport->exchange_calls_, 0);
 }
-
-TEST_F(TeensyBoardTest, InitRejectsNonTeensyWireBoardId) {
-  // Proves TeensyBoard's constructor actually passed JW1_BOARD_TEENSY41
-  // through to LegacyJoshuaWireBoard — e.g. a re-enumerated serial path now
-  // pointing at an Arduino instead (docs/BOARD_LAYER_RFC.md §7.5).
-  transport_->QueueResponse(MakeIdentifyResponse(1, JW1_BOARD_ARDUINO_UNO));
+TEST_F(TeensyBoardTest, RejectsRetiredWireRevisionWithoutConfiguringOutputs) {
+  transport->channel.runtime.identity.protocol_min = 1;
+  transport->channel.runtime.identity.protocol_max = 1;
   TeensyBoard board;
-
-  EXPECT_EQ(board.Init(MakeTeensyBoard()).code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(board.Init(MakeStepDirBoardConfig(TEENSY41)).code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_FALSE(transport->channel.configured);
 }
-
 }  // namespace
 }  // namespace robot::board

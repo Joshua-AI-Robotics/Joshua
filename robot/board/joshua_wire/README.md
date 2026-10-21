@@ -6,13 +6,16 @@ message IDs and response matching; communication adapters own device I/O and
 timeouts. Native integration tests run the production command handler and
 firmware endpoint, with no physical device.
 
-During this intermediate migration, existing MCU consumers still use
-`LegacyJoshuaWireBoard`. The next stage switches their firmware and board
-bindings together. The correlated engine can already be instantiated directly
-with message or paired capabilities. `JoshuaWireSerialTransport` assembles
-complete frames over the serial mechanism with `message_adapter: JOSHUA_WIRE`.
-`LegacyJoshuaWireBoard` and vendor consumers select the separate
-`CallerSizedSerialTransport` with `message_adapter: CALLER_SIZED`.
+ESP32, Teensy and the AM243 serial binding use this engine directly with
+`message_adapter: JOSHUA_WIRE`. All Joshua-owned MCU images compile the current
+shared endpoint; the old protocol codec, host board, frame wrapper and test
+fakes are removed. `CallerSizedSerialTransport` serves vendor protocols such as
+Feetech and is not a JoshuaWire compatibility path.
+
+Native `firmware_binding_test` exercises the real factory, serial adapter,
+endpoint and physical STEP/DIR backend over PTYs for every migrated host binding.
+Only GPIO/clock are simulated. It covers disabled startup, motion commands,
+reply loss, pin ownership, stop/reset/recovery and rejection of retired frames.
 
 The engine uses JoshuaWire 0.2.0 / revision 4. Compatibility comes from paged
 function discovery and versioned profile metadata, not vendor/product IDs.

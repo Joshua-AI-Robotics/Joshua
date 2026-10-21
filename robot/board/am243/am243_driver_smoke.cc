@@ -1,4 +1,4 @@
-// Board-level serial smoke test for an AM243 running joshua_wire_v1.
+// Board-level serial smoke test for an AM243 running JoshuaWire 0.2.0 / revision 4.
 // This opens the configured serial port and can move physical hardware;
 // inspect the pin configuration and wiring before running it.
 //
@@ -27,8 +27,8 @@ int main(int argc, char** argv) {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port(port);
   comm->mutable_serial_config()->set_baudrate(115200);
-  comm->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
-  config.mutable_firmware()->set_min_proto_version(1);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  config.mutable_firmware()->set_min_proto_version(4);
   auto* channel = config.add_channels();
   channel->set_index(0);
   channel->set_drive(robot::board::DriveInterface::STEP_DIR);

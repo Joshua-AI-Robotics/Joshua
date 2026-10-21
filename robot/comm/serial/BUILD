@@ -35,7 +35,7 @@ cc_library(
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         ":serial",
-        "//robot/comm/interfaces:legacy_message_transport",
+        "//robot/comm/interfaces:caller_sized_message_transport",
     ],
 )
 
@@ -57,7 +57,7 @@ cc_test(
         ":joshua_wire_serial_transport",
         ":serial",
         "//firmware/common:joshua_wire",
-        "//robot/comm/interfaces:legacy_message_transport",
+        "//robot/comm/interfaces:caller_sized_message_transport",
         "@boost.asio",
         "@googletest//:gtest_main",
     ],

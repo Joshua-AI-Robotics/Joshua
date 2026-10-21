@@ -1,6 +1,4 @@
-// Temporary fixed-length compatibility seam for v1/vendor serial consumers.
-// New adapters implement MessageTransport directly. Remove this seam once those
-// consumers have protocol-aware framed adapters and use Send/Exchange only.
+// Protocol-neutral message transactions whose response size comes from the caller.
 #pragma once
 
 #include <cstddef>
@@ -10,7 +8,7 @@
 
 namespace robot::comm {
 
-class LegacyMessageTransport : public MessageTransport {
+class CallerSizedMessageTransport : public MessageTransport {
  public:
   virtual absl::Status Open() = 0;
   virtual absl::Status Write(const std::vector<uint8_t>& request) = 0;
@@ -22,15 +20,15 @@ class LegacyMessageTransport : public MessageTransport {
   }
   // Never guess a response size or silently reinterpret another protocol.
   absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t>) override {
-    return absl::UnimplementedError("Legacy transport has no framed Exchange adapter.");
+    return absl::UnimplementedError("Caller-sized transport requires an explicit response size.");
   }
 };
 
-inline absl::StatusOr<std::shared_ptr<LegacyMessageTransport>> GetLegacyMessageTransport(
+inline absl::StatusOr<std::shared_ptr<CallerSizedMessageTransport>> GetCallerSizedMessageTransport(
     const std::shared_ptr<MessageTransport>& transport) {
-  auto legacy = std::dynamic_pointer_cast<LegacyMessageTransport>(transport);
-  if (!legacy)
-    return absl::FailedPreconditionError("This protocol still requires fixed-length exchanges.");
-  return legacy;
+  auto caller_sized = std::dynamic_pointer_cast<CallerSizedMessageTransport>(transport);
+  if (!caller_sized)
+    return absl::FailedPreconditionError("This protocol requires caller-sized exchanges.");
+  return caller_sized;
 }
 }  // namespace robot::comm

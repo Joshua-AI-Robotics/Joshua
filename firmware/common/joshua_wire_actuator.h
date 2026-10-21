@@ -13,7 +13,7 @@
 #define JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN 11
 
 // Target modes reserve zero as invalid. Map host TargetMode
-// values explicitly; these IDs differ from the legacy JW1 mode values.
+// values explicitly; zero is invalid on the wire.
 typedef enum {
   JW_MODE_INVALID = 0,
   JW_MODE_POSITION = 1,
