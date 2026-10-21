@@ -12,7 +12,7 @@ bindings together. The correlated engine can already be instantiated directly
 with message or paired capabilities. `JoshuaWireSerialTransport` assembles
 complete frames over the serial mechanism with `message_adapter: JOSHUA_WIRE`.
 `LegacyJoshuaWireBoard` and vendor consumers select the separate
-`FixedLengthSerialTransport` with `message_adapter: FIXED_LENGTH`.
+`CallerSizedSerialTransport` with `message_adapter: CALLER_SIZED`.
 
 The engine uses JoshuaWire 0.2.0 / revision 4. Compatibility comes from paged
 function discovery and versioned profile metadata, not vendor/product IDs.

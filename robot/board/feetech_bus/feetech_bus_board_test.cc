@@ -44,7 +44,7 @@ robot::board::Board MakeArmBusBoard() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(1000000);
-  comm->mutable_serial_config()->set_message_adapter(robot::comm::FIXED_LENGTH);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
 
   auto* channel = board.add_channels();
   channel->set_index(1);

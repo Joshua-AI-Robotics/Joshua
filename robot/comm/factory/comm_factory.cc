@@ -7,7 +7,7 @@
 
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
-#include "robot/comm/serial/fixed_length_serial_transport.h"
+#include "robot/comm/serial/caller_sized_serial_transport.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
@@ -113,9 +113,9 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
           return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
         case TransportType::MESSAGE:
           switch (comm.serial_config().message_adapter()) {
-            case FIXED_LENGTH:
+            case CALLER_SIZED:
               return CommTransport{std::static_pointer_cast<MessageTransport>(
-                  std::make_shared<FixedLengthSerialTransport>(*serial_or))};
+                  std::make_shared<CallerSizedSerialTransport>(*serial_or))};
             case JOSHUA_WIRE:
               return CommTransport{std::static_pointer_cast<MessageTransport>(
                   std::make_shared<JoshuaWireSerialTransport>(

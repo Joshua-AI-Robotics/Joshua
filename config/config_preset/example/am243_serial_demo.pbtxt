@@ -19,7 +19,7 @@ robot {
       transport_type: MESSAGE
       serial_config {
         port: "/dev/ttyACM0" baudrate: 115200
-        message_adapter: FIXED_LENGTH
+        message_adapter: CALLER_SIZED
       }
     }
     firmware { min_proto_version: 1 }

@@ -80,7 +80,7 @@ robot::board::Board MakeBoardConfig() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
-  comm->mutable_serial_config()->set_message_adapter(robot::comm::FIXED_LENGTH);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
   board.mutable_firmware()->set_min_proto_version(1);
 
   AddStepDirChannel(&board, /*index=*/0, /*step_pin=*/2, /*dir_pin=*/3, /*enable_pin=*/4);

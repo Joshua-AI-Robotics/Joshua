@@ -136,7 +136,7 @@ TEST_F(JoshuaWireBoardTest, InvalidDesiredConfigNeverTouchesTransport) {
         break;
       case 8:
         config.mutable_comm()->mutable_serial_config()->set_message_adapter(
-            robot::comm::FIXED_LENGTH);
+            robot::comm::CALLER_SIZED);
         break;
       case 9:
         config.mutable_comm()->mutable_serial_config()->clear_message_adapter();

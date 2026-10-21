@@ -126,9 +126,9 @@ absl::Status ValidateConfig(const robot::board::Board& config) {
     return absl::InvalidArgumentError(
         absl::StrCat("FEETECH_BUS board '", config.name(), "' requires MESSAGE transport."));
   }
-  if (config.comm().serial_config().message_adapter() != robot::comm::FIXED_LENGTH) {
+  if (config.comm().serial_config().message_adapter() != robot::comm::CALLER_SIZED) {
     return absl::InvalidArgumentError(
-        absl::StrCat("FEETECH_BUS board '", config.name(), "' requires FIXED_LENGTH messages."));
+        absl::StrCat("FEETECH_BUS board '", config.name(), "' requires CALLER_SIZED messages."));
   }
   if (config.channels_size() == 0) {
     return absl::InvalidArgumentError(

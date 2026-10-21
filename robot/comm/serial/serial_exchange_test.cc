@@ -16,7 +16,7 @@
 
 #include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
-#include "robot/comm/serial/fixed_length_serial_transport.h"
+#include "robot/comm/serial/caller_sized_serial_transport.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 
@@ -220,9 +220,9 @@ TEST_F(SerialExchangeTest, InvalidDeadlineDoesNotWrite) {
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
 }
 
-TEST_F(SerialExchangeTest, FixedLengthAndSendOnlyBytesAreForwardedUnchanged) {
+TEST_F(SerialExchangeTest, CallerSizedAndSendOnlyBytesAreForwardedUnchanged) {
   // Vendor callers still supply their exact response length, not JW framing.
-  FixedLengthSerialTransport fixed(link);
+  CallerSizedSerialTransport fixed(link);
   request = {0xff, 0xff, 0x01, 0x02};
   const Bytes response = {0xff, 0xff, 0x01, 0x00, 0x03};
   auto device = std::async(std::launch::async, [&] {

@@ -197,9 +197,9 @@ absl::Status LegacyJoshuaWireBoard::ValidateComm(const robot::comm::Comm& comm,
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", board_name, "' requires MESSAGE transport."));
   }
-  if (comm.serial_config().message_adapter() != robot::comm::FIXED_LENGTH) {
+  if (comm.serial_config().message_adapter() != robot::comm::CALLER_SIZED) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Board '", board_name, "' requires FIXED_LENGTH serial messages."));
+        absl::StrCat("Board '", board_name, "' requires CALLER_SIZED serial messages."));
   }
   return absl::OkStatus();
 }

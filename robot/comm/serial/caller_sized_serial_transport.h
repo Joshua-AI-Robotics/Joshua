@@ -9,9 +9,9 @@
 
 namespace robot::comm {
 
-class FixedLengthSerialTransport final : public LegacyMessageTransport {
+class CallerSizedSerialTransport final : public LegacyMessageTransport {
  public:
-  explicit FixedLengthSerialTransport(std::shared_ptr<Serial> serial)
+  explicit CallerSizedSerialTransport(std::shared_ptr<Serial> serial)
       : serial_(std::move(serial)) {}
 
   absl::Status Open() override {

@@ -114,7 +114,7 @@ TEST(CommFactoryTest, InvalidSerialAdapterSettingsAreRejectedBeforeOpeningDevice
     serial->set_exchange_timeout_ms(timeout);
     EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
   }
-  serial->set_message_adapter(FIXED_LENGTH);
+  serial->set_message_adapter(CALLER_SIZED);
   serial->set_exchange_timeout_ms(100);
   EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
   serial->clear_exchange_timeout_ms();
@@ -200,7 +200,7 @@ TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
 
 TEST_F(CommFactorySerialCacheTest, ConfiguredAdaptersExposeDifferentMessageContracts) {
   comm_.set_transport_type(MESSAGE);
-  comm_.mutable_serial_config()->set_message_adapter(FIXED_LENGTH);
+  comm_.mutable_serial_config()->set_message_adapter(CALLER_SIZED);
   auto fixed = CommFactory::CreateComm(comm_);
   ASSERT_TRUE(fixed.ok()) << fixed.status();
   auto fixed_message = GetCommTransport<MessageTransport>(*fixed);
@@ -223,7 +223,7 @@ TEST_F(CommFactorySerialCacheTest, ConfiguredAdaptersExposeDifferentMessageContr
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
 }
 
-TEST_F(CommFactorySerialCacheTest, FixedLengthAdapterSharesBusLockWithJoshuaWireAdapter) {
+TEST_F(CommFactorySerialCacheTest, CallerSizedAdapterSharesBusLockWithJoshuaWireAdapter) {
   comm_.set_transport_type(MESSAGE);
   comm_.mutable_serial_config()->set_message_adapter(JOSHUA_WIRE);
   comm_.mutable_serial_config()->set_exchange_timeout_ms(500);
@@ -232,7 +232,7 @@ TEST_F(CommFactorySerialCacheTest, FixedLengthAdapterSharesBusLockWithJoshuaWire
   auto message = GetCommTransport<MessageTransport>(*framed);
   ASSERT_TRUE(message.ok());
 
-  comm_.mutable_serial_config()->set_message_adapter(FIXED_LENGTH);
+  comm_.mutable_serial_config()->set_message_adapter(CALLER_SIZED);
   comm_.mutable_serial_config()->clear_exchange_timeout_ms();
   auto fixed = CommFactory::CreateComm(comm_);
   ASSERT_TRUE(fixed.ok()) << fixed.status();

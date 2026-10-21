@@ -39,7 +39,7 @@ robot {
       transport_type: MESSAGE
       serial_config {
         port: "/dev/ttyUSB0" baudrate: 1000000
-        message_adapter: FIXED_LENGTH
+        message_adapter: CALLER_SIZED
       }
     }
     channels {

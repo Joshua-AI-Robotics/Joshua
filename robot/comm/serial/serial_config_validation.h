@@ -27,7 +27,7 @@ inline absl::Status ValidateSerialCommConfig(const Comm& comm) {
     return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
   }
   switch (config.message_adapter()) {
-    case FIXED_LENGTH:
+    case CALLER_SIZED:
       if (config.has_exchange_timeout_ms()) {
         return absl::InvalidArgumentError("exchange_timeout_ms requires JOSHUA_WIRE.");
       }
@@ -41,7 +41,7 @@ inline absl::Status ValidateSerialCommConfig(const Comm& comm) {
     case SERIAL_MESSAGE_ADAPTER_UNSPECIFIED:
     default:
       return absl::InvalidArgumentError(
-          "Serial MESSAGE requires message_adapter: FIXED_LENGTH or JOSHUA_WIRE.");
+          "Serial MESSAGE requires message_adapter: CALLER_SIZED or JOSHUA_WIRE.");
   }
 }
 

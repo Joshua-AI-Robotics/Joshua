@@ -8,7 +8,7 @@ cc_library(
     implementation_deps = [
         "//robot/comm/ethercat:soem_ethercat_transport",
         "//robot/comm/serial",
-        "//robot/comm/serial:fixed_length_serial_transport",
+        "//robot/comm/serial:caller_sized_serial_transport",
         "//robot/comm/serial:joshua_wire_serial_transport",
         "//robot/comm/serial:serial_config_validation",
         "@boost.asio",

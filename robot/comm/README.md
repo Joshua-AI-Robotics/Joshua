@@ -27,7 +27,7 @@ Current combinations are:
 `ByteStream` provides ordered bytes without boundaries. `MessageTransport`
 provides complete-frame `Send` and `Exchange` calls. `CorrelatedCyclicTransport`
 provides correlated exchanges with an explicit finite timeout.
-`FixedLengthSerialTransport` implements the temporary `LegacyMessageTransport`
+`CallerSizedSerialTransport` implements the temporary `LegacyMessageTransport`
 interface for existing consumers while the shared board engine is migrated. EtherCAT currently
 provides its cyclic transport directly. UDP remains rejected until its concrete
 implementation is added.
@@ -36,11 +36,11 @@ Serial `MESSAGE` configurations must explicitly select `serial_config.message_ad
 
 | Adapter | Boundary rule | Consumer |
 | --- | --- | --- |
-| `FIXED_LENGTH` | Caller supplies each response length | Vendor drivers and `LegacyJoshuaWireBoard` |
+| `CALLER_SIZED` | Caller supplies each response length | Vendor drivers and `LegacyJoshuaWireBoard` |
 | `JOSHUA_WIRE` | JoshuaWire sync byte and length prefix | `JoshuaWireBoard` |
 
 `JoshuaWireSerialTransport` implements `MessageTransport` directly; it does not
-expose fixed-length forwarding. `FIXED_LENGTH` retains existing input flushing
+expose fixed-length forwarding. `CALLER_SIZED` retains existing input flushing
 and read timing. Only `JOSHUA_WIRE` accepts `exchange_timeout_ms` (100 ms when
 omitted), covering bus-lock wait, write and read. Missing/unknown adapters and
 message settings on `BYTE_STREAM` are rejected before opening the port.

@@ -51,7 +51,7 @@ robot {
       # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
       serial_config {
         port: "/dev/ttyUSB0" baudrate: 115200
-        message_adapter: FIXED_LENGTH
+        message_adapter: CALLER_SIZED
       }
     }
     firmware {

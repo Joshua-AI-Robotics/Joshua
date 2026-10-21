@@ -30,8 +30,8 @@ cc_library(
 )
 
 cc_library(
-    name = "fixed_length_serial_transport",
-    hdrs = ["fixed_length_serial_transport.h"],
+    name = "caller_sized_serial_transport",
+    hdrs = ["caller_sized_serial_transport.h"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         ":serial",
@@ -53,7 +53,7 @@ cc_test(
     name = "serial_exchange_test",
     srcs = ["serial_exchange_test.cc"],
     deps = [
-        ":fixed_length_serial_transport",
+        ":caller_sized_serial_transport",
         ":joshua_wire_serial_transport",
         ":serial",
         "//firmware/common:joshua_wire",

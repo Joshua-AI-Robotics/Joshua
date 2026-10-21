@@ -14,7 +14,7 @@ robot {
       transport_type: MESSAGE
       serial_config {
         port: "/dev/ttyACM1" baudrate: 1000000
-        message_adapter: FIXED_LENGTH
+        message_adapter: CALLER_SIZED
       }
     }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }

@@ -17,7 +17,7 @@ config::Config MakeConfig() {
           comm {
             comm_type: SERIAL
             transport_type: MESSAGE
-            serial_config { port: "/test/bus" baudrate: 1000000 message_adapter: FIXED_LENGTH }
+            serial_config { port: "/test/bus" baudrate: 1000000 message_adapter: CALLER_SIZED }
           }
           channels {
             index: 1

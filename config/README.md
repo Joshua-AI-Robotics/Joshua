@@ -88,7 +88,7 @@ Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
 Serial `MESSAGE` communication requires an explicit
-`serial_config { ... message_adapter: FIXED_LENGTH }` for vendor drivers and
+`serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers and
 `LegacyJoshuaWireBoard`, or `message_adapter: JOSHUA_WIRE` for the newer
 `JoshuaWireBoard`. Existing external serial MESSAGE configs must add this field;
 there is no implicit framing choice. `BYTE_STREAM` leaves it unspecified.
