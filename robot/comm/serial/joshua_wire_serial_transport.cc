@@ -1,12 +1,12 @@
 // JoshuaWire sync/length framing only; deliberately does not interpret commands
 // or retry responses with invalid CRC/session/message IDs.
-#include "robot/comm/serial/framed_serial_transport.h"
+#include "robot/comm/serial/joshua_wire_serial_transport.h"
 
 #include "firmware/common/joshua_wire.h"
 
 namespace robot::comm {
 
-absl::StatusOr<std::vector<uint8_t>> FramedSerialTransport::Exchange(
+absl::StatusOr<std::vector<uint8_t>> JoshuaWireSerialTransport::Exchange(
     absl::Span<const uint8_t> request) {
   if (request.size() < JW_MIN_FRAME_LEN || request.size() > JW_MAX_FRAME_LEN ||
       request.front() != JW_SYNC_BYTE ||
@@ -15,8 +15,11 @@ absl::StatusOr<std::vector<uint8_t>> FramedSerialTransport::Exchange(
   }
   std::vector<uint8_t> response;
   size_t total = 0;
-  auto status =
-      serial_->ExchangeUntil(request, timeout_, [&](uint8_t byte) -> absl::StatusOr<bool> {
+  auto status = serial_->ExchangeUntil(
+      request,
+      timeout_,
+      Serial::InputFlushPolicy::kDiscard,
+      [&](uint8_t byte) -> absl::StatusOr<bool> {
         if (response.empty() && byte != JW_SYNC_BYTE) return false;
         response.push_back(byte);
         if (response.size() == JW_LENGTH_PREFIX_LEN) {

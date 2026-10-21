@@ -47,6 +47,7 @@ robot::board::Board MakeTeensyBoard() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::FIXED_LENGTH);
   board.mutable_firmware()->set_min_proto_version(1);
 
   auto* channel = board.add_channels();

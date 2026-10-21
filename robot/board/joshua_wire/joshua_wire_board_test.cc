@@ -35,6 +35,7 @@ robot::board::Board MakeBoardConfig() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
   board.mutable_firmware()->set_min_proto_version(JW_PROTO_VERSION);
 
   AddStepDirChannel(&board, /*index=*/0, /*step_pin=*/2, /*dir_pin=*/3, /*enable_pin=*/4);
@@ -106,7 +107,7 @@ TEST_F(JoshuaWireBoardTest, EstopLatchSurvivesResetAndBlocksReinitialization) {
   EXPECT_FALSE(transport_->channel.enabled);
 }
 TEST_F(JoshuaWireBoardTest, InvalidDesiredConfigNeverTouchesTransport) {
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < 10; ++i) {
     auto config = MakeBoardConfig();
     switch (i) {
       case 0:
@@ -132,6 +133,13 @@ TEST_F(JoshuaWireBoardTest, InvalidDesiredConfigNeverTouchesTransport) {
         break;
       case 7:
         *config.add_channels() = config.channels(0);
+        break;
+      case 8:
+        config.mutable_comm()->mutable_serial_config()->set_message_adapter(
+            robot::comm::FIXED_LENGTH);
+        break;
+      case 9:
+        config.mutable_comm()->mutable_serial_config()->clear_message_adapter();
         break;
     }
     FakeJoshuaWireBoard board;

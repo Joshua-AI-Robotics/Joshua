@@ -219,6 +219,11 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(absl::StrCat(
         "Board '", config.name(), "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
   }
+  if (config.comm().comm_type() == robot::comm::SERIAL &&
+      config.comm().serial_config().message_adapter() != robot::comm::JOSHUA_WIRE) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Board '", config.name(), "' requires JOSHUA_WIRE serial messages."));
+  }
   if (config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC &&
       config.has_am243_config())
     return absl::InvalidArgumentError(

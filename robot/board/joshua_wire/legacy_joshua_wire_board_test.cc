@@ -80,6 +80,7 @@ robot::board::Board MakeBoardConfig() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(115200);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::FIXED_LENGTH);
   board.mutable_firmware()->set_min_proto_version(1);
 
   AddStepDirChannel(&board, /*index=*/0, /*step_pin=*/2, /*dir_pin=*/3, /*enable_pin=*/4);
@@ -171,6 +172,16 @@ TEST_F(LegacyJoshuaWireBoardTest, InitRejectsMissingFirmwareSpec) {
   FakeLegacyJoshuaWireBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(LegacyJoshuaWireBoardTest, InitRejectsWrongSerialAdapterBeforeSending) {
+  for (auto adapter : {robot::comm::SERIAL_MESSAGE_ADAPTER_UNSPECIFIED, robot::comm::JOSHUA_WIRE}) {
+    auto config = MakeBoardConfig();
+    config.mutable_comm()->mutable_serial_config()->set_message_adapter(adapter);
+    FakeLegacyJoshuaWireBoard board;
+    EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_EQ(transport_->send_calls_, 0);
+  }
 }
 
 TEST_F(LegacyJoshuaWireBoardTest, InitRejectsNonStepDirDrive) {

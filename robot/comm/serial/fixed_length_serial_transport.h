@@ -1,9 +1,6 @@
-// Comm-internal JoshuaWire serial message boundaries. Serial owns the physical
-// port/transaction deadline; board sessions own CRC, version and correlation.
-// Legacy fixed-length forwarding preserves vendor consumers.
+// Caller-sized serial transactions for vendor and JoshuaWire v1 consumers.
 #pragma once
 
-#include <chrono>
 #include <memory>
 #include <utility>
 
@@ -12,10 +9,10 @@
 
 namespace robot::comm {
 
-class FramedSerialTransport final : public LegacyMessageTransport {
+class FixedLengthSerialTransport final : public LegacyMessageTransport {
  public:
-  explicit FramedSerialTransport(std::shared_ptr<Serial> serial, std::chrono::milliseconds timeout)
-      : serial_(std::move(serial)), timeout_(timeout) {}
+  explicit FixedLengthSerialTransport(std::shared_ptr<Serial> serial)
+      : serial_(std::move(serial)) {}
 
   absl::Status Open() override {
     return serial_->Open();
@@ -27,11 +24,9 @@ class FramedSerialTransport final : public LegacyMessageTransport {
                                                       size_t expected_response_size) override {
     return serial_->AtomicRead(request, expected_response_size);
   }
-  absl::StatusOr<std::vector<uint8_t>> Exchange(absl::Span<const uint8_t> request) override;
 
  private:
   std::shared_ptr<Serial> serial_;
-  std::chrono::milliseconds timeout_;
 };
 
 }  // namespace robot::comm

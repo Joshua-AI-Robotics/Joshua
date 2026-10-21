@@ -17,9 +17,14 @@
 namespace robot::comm {
 
 // A serial mechanism can provide both an ordered byte stream and atomic
-// byte transactions. Message framing belongs to FramedSerialTransport.
+// byte transactions. Protocol adapters determine response boundaries.
+// A port has one receive owner: a future continuous receiver must dispatch both
+// replies and unsolicited samples, rather than racing these synchronous reads.
 class Serial : public ByteStream {
  public:
+  enum class InputFlushPolicy { kPreserve, kDiscard };
+  using ResponseBoundary = std::function<absl::StatusOr<bool>(uint8_t)>;
+
   Serial(std::shared_ptr<boost::asio::io_context> io,
          std::string uart_port,
          int uart_baudrate,
@@ -28,6 +33,8 @@ class Serial : public ByteStream {
   absl::Status Write(const std::vector<uint8_t>& data) override;
   absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read) override;
 
+  // Fixed-length compatibility transaction. Preserves input flushing and the
+  // existing read timeout; the bus lock covers both write and read.
   absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
                                                   size_t expected_response_size);
   // Compatibility for the comm-local vendor protocols.
@@ -40,16 +47,19 @@ class Serial : public ByteStream {
   absl::Status Open() override;
   // Mechanism-only transaction. The adapter consumes each received byte and
   // returns true at its message boundary, or an error. Runs under the bus lock;
-  // callbacks must not re-enter Serial. No protocol bytes or lengths live here.
+  // callbacks must not re-enter Serial. The deadline includes bus-lock wait,
+  // write and read. Discarding pending input is an explicit request/reply policy
+  // and must not be used on an unsolicited sample stream.
   absl::Status ExchangeUntil(absl::Span<const uint8_t> request,
                              std::chrono::milliseconds timeout,
-                             const std::function<absl::StatusOr<bool>(uint8_t)>& consume);
+                             InputFlushPolicy input_flush_policy,
+                             const ResponseBoundary& consume);
 
  private:
   std::string uart_port_;
   int uart_baudrate_;
   std::shared_ptr<boost::asio::io_context> io_context_;
   std::unique_ptr<boost::asio::serial_port> serial_;
-  std::timed_mutex mutex_;  // One bus lock across byte, legacy and framed I/O.
+  std::timed_mutex mutex_;  // One bus lock across all raw and transaction I/O.
 };
 }  // namespace robot::comm

@@ -7,12 +7,16 @@
 
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
-#include "robot/comm/serial/framed_serial_transport.h"
+#include "robot/comm/serial/fixed_length_serial_transport.h"
+#include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
+#include "robot/comm/serial/serial_config_validation.h"
 
 namespace robot::comm {
 
 namespace {
+constexpr uint32_t kDefaultSerialExchangeTimeoutMs = 100;
+
 // One serial connection per port, with a fixed baud rate and shared I/O lock.
 struct PortResources {
   std::shared_ptr<boost::asio::io_context> io_context{std::make_shared<boost::asio::io_context>()};
@@ -98,13 +102,8 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
   }
   switch (comm.comm_type()) {
     case CommType::SERIAL: {
-      if (!comm.has_serial_config()) {
-        return absl::InvalidArgumentError("SERIAL comm has no serial_config.");
-      }
-      if (comm.transport_type() != TransportType::BYTE_STREAM &&
-          comm.transport_type() != TransportType::MESSAGE) {
-        return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
-      }
+      auto status = ValidateSerialCommConfig(comm);
+      if (!status.ok()) return status;
       auto serial_or = CreateSerial(comm.serial_config());
       if (!serial_or.ok()) {
         return serial_or.status();
@@ -113,12 +112,21 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
         case TransportType::BYTE_STREAM:
           return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
         case TransportType::MESSAGE:
-          return CommTransport{
-              std::static_pointer_cast<MessageTransport>(std::make_shared<FramedSerialTransport>(
-                  *serial_or,
-                  std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
-                                                ? comm.serial_config().exchange_timeout_ms()
-                                                : 100)))};
+          switch (comm.serial_config().message_adapter()) {
+            case FIXED_LENGTH:
+              return CommTransport{std::static_pointer_cast<MessageTransport>(
+                  std::make_shared<FixedLengthSerialTransport>(*serial_or))};
+            case JOSHUA_WIRE:
+              return CommTransport{std::static_pointer_cast<MessageTransport>(
+                  std::make_shared<JoshuaWireSerialTransport>(
+                      *serial_or,
+                      std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
+                                                    ? comm.serial_config().exchange_timeout_ms()
+                                                    : kDefaultSerialExchangeTimeoutMs)))};
+            case SERIAL_MESSAGE_ADAPTER_UNSPECIFIED:
+            default:
+              return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");
+          }
         case TransportType::CYCLIC:
         case TransportType::TRANSPORT_INVALID:
         default:

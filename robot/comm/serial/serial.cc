@@ -177,7 +177,8 @@ absl::Status Serial::Flush() {
 
 absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
                                    std::chrono::milliseconds timeout,
-                                   const std::function<absl::StatusOr<bool>(uint8_t)>& consume) {
+                                   InputFlushPolicy input_flush_policy,
+                                   const ResponseBoundary& consume) {
   if (request.empty() || timeout.count() <= 0 || timeout.count() > INT_MAX || !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
   // TODO: Integrate with RobotTime when it exposes a monotonic deadline API.
@@ -199,14 +200,14 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
       (void)fcntl(fd, F_SETFL, flags);
     }
   } restore{fd, flags};
-  if (tcflush(fd, TCIFLUSH) != 0) {
+  if (input_flush_policy == InputFlushPolicy::kDiscard && tcflush(fd, TCIFLUSH) != 0) {
     return absl::UnavailableError("Cannot flush serial input before exchange.");
   }
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
       const auto remaining = deadline - std::chrono::steady_clock::now();
       if (remaining <= std::chrono::steady_clock::duration::zero()) {
-        return absl::DeadlineExceededError("Serial framed exchange timed out; outcome unknown.");
+        return absl::DeadlineExceededError("Serial exchange timed out; outcome unknown.");
       }
       pollfd descriptor{fd, events, 0};
       const int poll_timeout_ms =
@@ -216,8 +217,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
       const int result = poll(&descriptor, 1, poll_timeout_ms);
       if (result < 0 && errno == EINTR) continue;
       if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
-        return absl::UnavailableError(
-            "Serial framed exchange lost its connection; outcome unknown.");
+        return absl::UnavailableError("Serial exchange lost its connection; outcome unknown.");
       }
       if (result > 0 && (descriptor.revents & events) &&
           std::chrono::steady_clock::now() < deadline)
@@ -230,7 +230,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
     if (!status.ok()) return status;
     const ssize_t count = write(fd, request.data() + written, request.size() - written);
     if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-    if (count <= 0) return absl::UnavailableError("Serial framed write failed; outcome unknown.");
+    if (count <= 0) return absl::UnavailableError("Serial write failed; outcome unknown.");
     written += static_cast<size_t>(count);
   }
   for (;;) {
@@ -239,7 +239,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
     uint8_t byte;
     const ssize_t count = read(fd, &byte, 1);
     if (count < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-    if (count <= 0) return absl::UnavailableError("Serial framed read failed; outcome unknown.");
+    if (count <= 0) return absl::UnavailableError("Serial read failed; outcome unknown.");
     auto complete = consume(byte);
     if (!complete.ok()) return complete.status();
     if (*complete) return absl::OkStatus();
