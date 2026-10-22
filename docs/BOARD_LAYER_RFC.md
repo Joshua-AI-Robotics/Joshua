@@ -1,11 +1,18 @@
 # Board Layer RFC
 
+Implementation update: Joshua-owned MCU bindings and firmware now use JoshuaWire
+0.2.0 / revision 4 together. The former codec, host board and frame wrapper are
+removed. Earlier protocol/interface names in the design history below do not
+represent a supported compatibility path. See [firmware](../firmware/README.md)
+and the [shared engine](../robot/board/joshua_wire/README.md) for current artifacts.
+
 Status: **phases 1–5 landed.** This revision keeps only what is still open.
 Companion to: [ARCHITECTURE.md](ARCHITECTURE.md),
 [am243_ethercat.md](am243_ethercat.md),
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md)
 
-The detailed implementation plan for JoshuaWire v2 correlation, EtherCAT
+The normative mixed-device protocol contract is [JOSHUA_WIRE.md](JOSHUA_WIRE.md).
+The detailed implementation plan for JoshuaWire revision 4 profile discovery/correlation, EtherCAT
 CoE/SDO management commands, correlated PDO commands, and board/comm dependency
 separation now lives in
 [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md). Where that

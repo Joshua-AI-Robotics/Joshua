@@ -120,7 +120,7 @@ link, not a channel-table pinout contract), and this firmware doesn't
 expose a Joshua-authored channel table (`docs/BOARD_LAYER_RFC.md` §7.3 —
 the EtherCAT variant stays on its vendor-specific PDO codec,
 `robot/board/am243/am243_pdo_codec.*`). `Am243Board` also supports serial
-`joshua_wire_v1`, which requires a different, Joshua-compatible firmware
+`JoshuaWire revision 4`, which requires a different, Joshua-compatible firmware
 image; that image is not this vendor demo.
 
 ## Known gaps / Troubleshooting

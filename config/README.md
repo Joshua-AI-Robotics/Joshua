@@ -87,6 +87,15 @@ position values as `Float32` commands directly between the two nodes.
 Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
 
+Serial `MESSAGE` communication requires an explicit
+`serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers,
+or `message_adapter: JOSHUA_WIRE` for Joshua-owned MCU firmware. ESP32, Teensy
+and AM243 serial presets select the current revision-4 engine and firmware. Existing external serial MESSAGE configs must add this field;
+there is no implicit framing choice. `BYTE_STREAM` leaves it unspecified.
+`exchange_timeout_ms` applies only to `JOSHUA_WIRE`; fixed-length transactions
+retain their existing timing. See [communication](../robot/comm/README.md) for
+transaction and receive-ownership contracts.
+
 `config::ValidateConfig` in [validation.h](validation.h)
 accepts the full `config::Config` and orchestrates separate checks for node assignments,
 board/channel references, serial settings, and bus ownership. These checks use

@@ -4,16 +4,16 @@
 #include <type_traits>
 
 #include "gtest/gtest.h"
-#include "robot/comm/testing/fake_legacy_message_transport.h"
+#include "robot/comm/testing/fake_caller_sized_message_transport.h"
 #include "robot/comm/testing/fake_transports.h"
 
 namespace robot::comm::testing {
 namespace {
 // Modern implementations provide only Send/Exchange (or cyclic Exchange),
-// without implementing legacy fixed-length or transport-open operations.
+// without implementing caller_sized fixed-length or transport-open operations.
 static_assert(!std::is_abstract_v<FakeMessageTransport>);
 static_assert(!std::is_abstract_v<FakeCorrelatedCyclicTransport>);
-static_assert(!std::is_base_of_v<LegacyMessageTransport, FakeMessageTransport>);
+static_assert(!std::is_base_of_v<CallerSizedMessageTransport, FakeMessageTransport>);
 static_assert(!std::is_base_of_v<MessageTransport, FakeCorrelatedCyclicTransport>);
 
 TEST(TransportContract, SendDoesNotConsumeAnExchangeResult) {
@@ -77,19 +77,19 @@ TEST(TransportContract, CyclicRejectsInvalidTimeoutBeforeRecordingWork) {
   EXPECT_EQ(fake.results.size(), 1);
 }
 
-TEST(TransportContract, LegacyIsExplicitAndCannotMasqueradeAsFramedExchange) {
+TEST(TransportContract, CallerSizedIsExplicitAndCannotMasqueradeAsFramedExchange) {
   auto modern = std::make_shared<FakeMessageTransport>();
-  EXPECT_EQ(GetLegacyMessageTransport(modern).status().code(),
+  EXPECT_EQ(GetCallerSizedMessageTransport(modern).status().code(),
             absl::StatusCode::kFailedPrecondition);
-  auto legacy = std::make_shared<FakeLegacyMessageTransport>();
-  ASSERT_TRUE(GetLegacyMessageTransport(legacy).ok());
-  MessageTransport& message = *legacy;
+  auto caller_sized = std::make_shared<FakeCallerSizedMessageTransport>();
+  ASSERT_TRUE(GetCallerSizedMessageTransport(caller_sized).ok());
+  MessageTransport& message = *caller_sized;
   ASSERT_TRUE(message.Send(Bytes{4, 5}).ok());
-  EXPECT_EQ(legacy->last_written_, (Bytes{4, 5}));
+  EXPECT_EQ(caller_sized->last_written_, (Bytes{4, 5}));
   EXPECT_EQ(message.Exchange(Bytes{6}).status().code(), absl::StatusCode::kUnimplemented);
-  EXPECT_EQ(legacy->exchange_calls_, 0);
-  legacy->QueueResponse({7});
-  const auto reply = legacy->SendAndReceive({6}, 1);
+  EXPECT_EQ(caller_sized->exchange_calls_, 0);
+  caller_sized->QueueResponse({7});
+  const auto reply = caller_sized->SendAndReceive({6}, 1);
   ASSERT_TRUE(reply.ok());
   EXPECT_EQ(*reply, (Bytes{7}));
 }

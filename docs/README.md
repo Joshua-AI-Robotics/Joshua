@@ -5,12 +5,13 @@
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
-| AI integration rules and proposed follow-ups (including MCP) | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
+| AI integration vision, requirements, user scenarios, checkpoints, feedback orchestration, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
 | Agent instructions RFC (AGENTS.md contract) | [AGENTS_RFC.md](AGENTS_RFC.md) |
 | Repository skills (agent + human playbooks) | [skills/README.md](skills/README.md) |
+| JoshuaWire core/profile contract | [JOSHUA_WIRE.md](JOSHUA_WIRE.md) |
 | AM243 EtherCAT bring-up | [am243_ethercat.md](am243_ethercat.md) |
 | Setup scripts and builds | [scripts/README.md](../scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
