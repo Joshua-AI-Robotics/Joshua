@@ -5,7 +5,6 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "robot/board/frame/frame_transport.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/proto/board.pb.h"
@@ -16,7 +15,7 @@ namespace robot::board {
 struct Am243SharedState;
 
 // AM243 supports two explicit firmware/transport variants:
-// - SERIAL: Joshua-authored joshua_wire_v1 firmware, delegated unchanged to
+// - SERIAL: current JoshuaWire firmware, delegated to
 //   the shared JoshuaWireBoard implementation.
 // - ETHERCAT: the retained TI demo PDO mapping and SOEM lifecycle.
 // The config's comm_type selects the variant; the filename does not.

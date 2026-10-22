@@ -21,6 +21,13 @@ trap 'rm -rf "$BUILD_ROOT"' EXIT
 mkdir -p "$BUILD_ROOT/build" "$BUILD_ROOT/patched"
 cp "$TI_PROJECT_DIR/linker.cmd" "$BUILD_ROOT/build/linker.cmd"
 cp "$TI_PROFILE_DIR/am243x-lp/r5fss0-0_freertos/example.syscfg" "$BUILD_ROOT/example.syscfg"
+# Generate crypto/RNG configuration in the isolated image, never edit the SDK.
+cat >> "$BUILD_ROOT/example.syscfg" <<'SYSCFG'
+const joshuaCryptoModule = scripting.addModule("/security/crypto/crypto", {}, false);
+const joshuaCrypto = joshuaCryptoModule.addInstance();
+joshuaCrypto.$name = "CONFIG_JOSHUA_CRYPTO";
+joshuaCrypto.sa2ul.$name = "CONFIG_JOSHUA_SA2UL";
+SYSCFG
 cp "$TI_PROFILE_DIR/EtherCAT_Slave_Simple.c" "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c"
 cp "$SDK_ROOT/mcu_plus_sdk/tools/boot/xipGen/xipGen.out" "$BUILD_ROOT/xipGen.out"
 patch "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c" \
@@ -35,11 +42,11 @@ make -C "$BUILD_ROOT/build" -f "$FIRMWARE_DIR/Makefile" all \
 
 mkdir -p "$FIRMWARE_DIR/out"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.out" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_v1.release.out"
+  "$FIRMWARE_DIR/out/am243_dual_transport_rev4.release.out"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.appimage" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_v1.release.appimage"
+  "$FIRMWARE_DIR/out/am243_dual_transport_rev4.release.appimage"
 cp "$BUILD_ROOT/build/ethercat_slave_simple_demo.release.appimage.hs_fs" \
-  "$FIRMWARE_DIR/out/am243_dual_transport_v1.release.appimage.hs_fs"
+  "$FIRMWARE_DIR/out/am243_dual_transport_rev4.release.appimage.hs_fs"
 
 echo "Built AM243 dual-transport firmware:"
-ls -lh "$FIRMWARE_DIR"/out/am243_dual_transport_v1.release.*
+ls -lh "$FIRMWARE_DIR"/out/am243_dual_transport_rev4.release.*

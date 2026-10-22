@@ -8,6 +8,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "robot/comm/serial/serial_config_validation.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/status_macros.h"
 
@@ -201,10 +202,9 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
-    const auto& serial = connection.comm.serial_config();
-    if (serial.port().empty() || serial.baudrate() == 0) {
-      return absl::InvalidArgumentError(
-          absl::StrCat(connection.owner, ": serial comm requires a port and baudrate."));
+    const auto status = robot::comm::ValidateSerialCommConfig(connection.comm);
+    if (!status.ok()) {
+      return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
     }
   }
   return absl::OkStatus();

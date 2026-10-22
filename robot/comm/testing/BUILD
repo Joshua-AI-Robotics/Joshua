@@ -22,18 +22,18 @@ cc_library(
 )
 
 cc_library(
-    name = "fake_legacy_message_transport",
+    name = "fake_caller_sized_message_transport",
     testonly = True,
-    hdrs = ["fake_legacy_message_transport.h"],
+    hdrs = ["fake_caller_sized_message_transport.h"],
     visibility = ["//visibility:public"],
-    deps = ["//robot/comm/interfaces:legacy_message_transport"],
+    deps = ["//robot/comm/interfaces:caller_sized_message_transport"],
 )
 
 cc_test(
     name = "transport_contract_test",
     srcs = ["transport_contract_test.cc"],
     deps = [
-        ":fake_legacy_message_transport",
+        ":fake_caller_sized_message_transport",
         ":fake_transports",
         "@googletest//:gtest_main",
     ],

@@ -90,7 +90,7 @@ Known setup bumps from bring-up:
 
 `Am243Board` supports both explicit variants. `comm_type: ETHERCAT` retains the
 TI demo PDO/SOEM path, while `comm_type: SERIAL` uses the same
-`joshua_wire_v1` frame transport as Teensy and other Joshua-firmware boards.
+`JoshuaWire revision 4` frame transport as Teensy and other Joshua-firmware boards.
 
 For the current AM243 firmware/demo, the Linux/SOEM master must force split
 LRD/LWR process data cycles. Do not retry LRW unless the board firmware or
@@ -117,7 +117,7 @@ AM243 support follows the board layer (docs/BOARD_LAYER_RFC.md):
 - Board-management tooling, including UART flashing and debug helpers, should
   stay outside the runtime actuator path.
 - Config-driven AM243 boards use `comm_type: SERIAL` and require firmware that
-  answers `joshua_wire_v1` IDENTIFY with `JW1_BOARD_AM243`. The vendor TI demo
+  answers revision-4 IDENTIFY and profile discovery. The vendor TI demo
   instead uses `comm_type: ETHERCAT` and the TI demo PDO mapping.
 
 Both examples are retained:
@@ -155,10 +155,10 @@ To test the serial Joshua board path, after confirming compatible firmware,
 the serial device, pins, and motor wiring, run:
 
 ```bash
-docker compose exec joshua-u24 bazel run //robot/comm/serial:am243_demo_smoke -- /dev/ttyACM0 10 0 250
+docker compose exec joshua-u24 bazel run //robot/board/am243:am243_driver_smoke -- /dev/ttyACM0
 ```
 
-This brings up `Am243Board` through the shared serial frame transport, verifies
+This brings up `Am243Board` through the shared revision-4 serial endpoint, verifies
 the AM243 identity, configures channel 0, and sends alternating native step
 targets.
 

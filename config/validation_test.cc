@@ -17,7 +17,7 @@ config::Config MakeConfig() {
           comm {
             comm_type: SERIAL
             transport_type: MESSAGE
-            serial_config { port: "/test/bus" baudrate: 1000000 }
+            serial_config { port: "/test/bus" baudrate: 1000000 message_adapter: CALLER_SIZED }
           }
           channels {
             index: 1
@@ -40,6 +40,18 @@ config::Config MakeConfig() {
 
 TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
   EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
+}
+TEST(ValidationTest, SerialMessagesRequireAnExplicitAdapter) {
+  auto config = MakeConfig();
+  auto* serial = config.mutable_robot()->mutable_boards(0)->mutable_comm()->mutable_serial_config();
+  serial->clear_message_adapter();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_message_adapter(static_cast<robot::comm::SerialMessageAdapter>(999));
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  serial->set_exchange_timeout_ms(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 TEST(ValidationTest, RejectsMissingBoardAndChannel) {
   auto config = MakeConfig();
@@ -70,6 +82,7 @@ TEST(ValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferentNodes) {
   auto* comm = sensor->mutable_lds01_config()->mutable_comm();
   *comm = robot.boards(0).comm();
   comm->set_transport_type(robot::comm::BYTE_STREAM);
+  comm->mutable_serial_config()->clear_message_adapter();
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 TEST(ValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
