@@ -1,8 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <streambuf>
 #include <string>
@@ -10,30 +13,82 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "config/proto/config.pb.h"
 #include "glog/logging.h"
+#include "google/protobuf/io/tokenizer.h"
 #include "google/protobuf/text_format.h"
 
 namespace config::config_util {
 
+class BoundedParseErrorCollector final : public google::protobuf::io::ErrorCollector {
+ public:
+  void RecordError(int line,
+                   google::protobuf::io::ColumnNumber column,
+                   absl::string_view message) override {
+    if (!error_.empty()) return;
+    error_ = "line " + std::to_string(line + 1) + ", column " + std::to_string(column + 1) + ": ";
+    constexpr size_t kDetailLimit = 4096;
+    const size_t remaining = error_.size() < kDetailLimit ? kDetailLimit - error_.size() : 0;
+    error_.append(message.data(), std::min(message.size(), remaining));
+    if (message.size() > remaining) error_ += "... [truncated]";
+  }
+
+  void RecordWarning(int line,
+                     google::protobuf::io::ColumnNumber column,
+                     absl::string_view message) override {
+    LOG(WARNING) << "Config parse warning at line " << line + 1 << ", column " << column + 1 << ": "
+                 << std::string(message.substr(0, 4096));
+  }
+
+  const std::string& error() const {
+    return error_;
+  }
+
+ private:
+  std::string error_;
+};
+
 /// @brief Loads a config::Config from a text-format protobuf file.
 /// @param config_path Path to the config file.
-/// @return Parsed config::Config object.
-/// @throws std::runtime_error if file cannot be opened or parsed.
-inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path) {
+/// @return Parsed config or a status with a bounded diagnostic on malformed input.
+inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path,
+                                                 std::optional<size_t> byte_limit = std::nullopt) {
   config::Config config;
-  std::ifstream input(config_path);
+  std::ifstream input(config_path, std::ios::binary);
   if (!input) {
-    LOG(ERROR) << "Failed to open config file: " << config_path;
-    return absl::Status(absl::StatusCode::kInvalidArgument,
-                        "Failed to open config file: " + config_path);
+    LOG(ERROR) << "Failed to open config file.";
+    return absl::InvalidArgumentError("Failed to open config file.");
   }
-  std::string config_content((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-  if (!google::protobuf::TextFormat::ParseFromString(config_content, &config)) {
-    LOG(ERROR) << "Failed to parse config from file: " << config_path;
-    return absl::Status(absl::StatusCode::kInvalidArgument,
-                        "Failed to parse config from file: " + config_path);
+  std::string config_content;
+  std::array<char, 8192> chunk;
+  while (input) {
+    size_t available = chunk.size();
+    if (byte_limit) {
+      if (config_content.size() > *byte_limit) {
+        return absl::ResourceExhaustedError("Config exceeds the byte limit.");
+      }
+      const size_t remaining = *byte_limit - config_content.size();
+      if (remaining < available) {
+        available = remaining + 1;
+      }
+    }
+    input.read(chunk.data(), available);
+    config_content.append(chunk.data(), static_cast<size_t>(input.gcount()));
+    if (byte_limit && config_content.size() > *byte_limit) {
+      return absl::ResourceExhaustedError("Config exceeds the byte limit.");
+    }
+  }
+  if (input.bad() || (input.fail() && !input.eof())) {
+    return absl::InternalError("Failed to read config file.");
+  }
+  BoundedParseErrorCollector errors;
+  google::protobuf::TextFormat::Parser parser;
+  parser.RecordErrorsTo(&errors);
+  if (!parser.ParseFromString(config_content, &config)) {
+    LOG(ERROR) << "Failed to parse config file.";
+    return absl::InvalidArgumentError(errors.error().empty() ? "Failed to parse config file."
+                                                             : errors.error());
   }
   return config;
 }
