@@ -23,6 +23,7 @@ cc_library(
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
         "//robot/comm/serial:serial_config_validation",
+        "//robot/perception/audio:audio_config",
         "//ros2/utils:packet_parser",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",

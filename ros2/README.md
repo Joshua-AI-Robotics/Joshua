@@ -179,3 +179,52 @@ even when it has several subscriptions.
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
+
+## Audio publishing
+
+`AUDIO_PUBLISHER` owns ALSA microphones configured through `alsa_audio_config`.
+See `config/config_preset/example/publish_audio.pbtxt`. This preset opens real
+hardware; select the microphone explicitly (for example
+`plughw:CARD=Webcam,DEV=0`) before launching it. Docker needs `/dev/snd` access.
+The images install `libasound2-dev`; deployed packages need the ALSA runtime.
+
+Each `std_msgs/msg/UInt8MultiArray.data` contains one serialized
+`robot.perception.PerceptionPacket` with the `audio` oneof. Layout is empty.
+Decode with the generated perception_packet proto. Audio is interleaved `s16le`,
+and its length is `frames * channels * 2`. Sample rate, channels, frame count,
+source name, sequence, and discontinuity are carried with every chunk.
+`timestamp_ns` estimates the first sample's Unix realtime timestamp from unread
+ALSA frames. It is not a hardware timestamp or a synchronization guarantee.
+
+The source sample rate and `frames_per_chunk` determine publication cadence;
+leave `publish_rate_hz` unset (zero). One source read fans out to all configured
+topics. Reads are nonblocking and incomplete chunks accumulate. On capture
+failure the partial chunk is discarded and the device is reopened. The first
+chunk after startup/recovery sets `discontinuity`; sequence IDs increase across
+recovery but reset on process restart. Consumers must reset windows on either
+signal, sequence gaps, or stale input. A stalled source logs an error, never
+fabricates silence. Keep subscription QoS compatible with the preset.
+
+`capture_buffer_duration_ms` requests an ALSA buffer of 1..1000 ms; omitting it
+preserves the 200 ms default. Polling uses the **negotiated** buffer and period,
+since hardware may choose a different capacity. The timer aims for half a chunk
+duration, batching tiny chunks at a preferred minimum of 1 ms, but never waits
+longer than one negotiated period or half the buffer duration. The buffer limit
+overrides that preferred minimum. This reserves headroom for delayed callbacks;
+it is not a real-time scheduling guarantee.
+
+Each callback can drain a buffer's worth of packets plus one partial packet,
+then yields even if a plugin continuously supplies data. Short reads continue
+until the current packet completes or ALSA has no more data. Large chunks thus
+accumulate across polls, while small chunks have a budget proportional to their
+required throughput. After reopening, the publisher refreshes the timer from the
+newly negotiated buffer. Device failures use a one-second retry backoff; pending
+chunks keep normal polling. Sustained outages are reported after two seconds,
+with subsequent warnings at most once per second.
+
+Use `//robot/perception/audio:alsa_audio_test` for a hardware-free ALSA null
+plugin check. Config validation checks format bounds and duplicate device strings;
+ALSA aliases for the same physical device cannot be detected statically.
+`//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
+virtual time to cover large and tiny chunks, short reads, delayed polls, changed
+buffer sizes after recovery, and bounded work for always-ready sources.

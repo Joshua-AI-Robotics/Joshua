@@ -244,3 +244,25 @@ TEST_F(PerceptionFactoryTest, RejectsLidarWithoutByteStreamConfig) {
 
 }  // namespace
 }  // namespace robot::perception
+
+namespace robot::perception {
+TEST(AudioFactoryTest, CreatesAudioLazilyAndRejectsInvalidConfig) {
+  SinglePerception config;
+  config.set_sensor_name("audio");
+  config.set_sensor_type(AUDIO);
+  auto* audio = config.mutable_alsa_audio_config();
+  audio->set_device("does-not-exist");
+  audio->set_sample_rate_hz(16000);
+  audio->set_channels(1);
+  audio->set_frames_per_chunk(320);
+  google::protobuf::RepeatedPtrField<robot::board::Board> boards;
+  auto result = PerceptionFactory::CreatePerception(config, boards);
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ((*result)->GetId(), "audio");
+  audio->set_channels(0);
+  EXPECT_FALSE(PerceptionFactory::CreatePerception(config, boards).ok());
+  audio->set_channels(1);
+  config.set_sensor_type(IMAGE);
+  EXPECT_FALSE(PerceptionFactory::CreatePerception(config, boards).ok());
+}
+}  // namespace robot::perception

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/comm/serial/serial_config_validation.h"
+#include "robot/perception/audio/audio_config.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/status_macros.h"
 
@@ -55,6 +57,21 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
       }
       return absl::OkStatus();
     }
+    case SinglePerception::kAlsaAudioConfig:
+      if (sensor.sensor_type() != SensorType::AUDIO ||
+          sensor.node().node_type() != ros2::node::AUDIO_PUBLISHER) {
+        return absl::InvalidArgumentError("ALSA requires AUDIO and AUDIO_PUBLISHER");
+      }
+      if (sensor.node().publishers().empty() || !sensor.node().subscriptions().empty())
+        return absl::InvalidArgumentError("Audio requires publishers and no subscriptions");
+      for (const auto& pub : sensor.node().publishers()) {
+        if (pub.topic().empty() || pub.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY ||
+            pub.publish_rate_hz() != 0)
+          return absl::InvalidArgumentError(
+              "Audio publishes protobuf packets as UINT8_MULTI_ARRAY; rate is determined by sample "
+              "rate / chunk frames (publish_rate_hz must be 0)");
+      }
+      return robot::perception::ValidateAudioConfig(sensor.alsa_audio_config());
     case SinglePerception::kOpencvConfig:
       if (sensor.sensor_type() != SensorType::IMAGE) {
         return absl::InvalidArgumentError(
@@ -79,7 +96,15 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
 }
 
 absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
+  std::set<std::string> audio_devices;
   for (const auto& sensor : perceptions.single_perceptions()) {
+    if ((sensor.sensor_type() == robot::perception::AUDIO ||
+         sensor.node().node_type() == ros2::node::AUDIO_PUBLISHER) &&
+        !sensor.has_alsa_audio_config())
+      return absl::InvalidArgumentError("Audio sensor/node requires alsa_audio_config");
+    if (sensor.has_alsa_audio_config() &&
+        !audio_devices.insert(sensor.alsa_audio_config().device()).second)
+      return absl::InvalidArgumentError("Audio device must have a single capture owner");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
   }
   return absl::OkStatus();
@@ -98,6 +123,7 @@ absl::StatusOr<DeviceResources> CollectSensorDependencies(
     case SinglePerception::kLds01Config:
       return DeviceResources{{}, {sensor.lds01_config().comm()}};
     case SinglePerception::kOpencvConfig:
+    case SinglePerception::kAlsaAudioConfig:
       return DeviceResources{};
     default:
       return absl::InvalidArgumentError("Cannot collect dependencies without a sensor config.");
