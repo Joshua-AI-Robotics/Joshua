@@ -59,6 +59,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
     if (delay) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     requests.emplace_back(request.begin(), request.end());
     Bytes response(JW_MAX_FRAME_LEN);
+    JoshuaService(&channel, requests.size());
     const int len = jw_endpoint_process(&endpoint,
                                         request.data(),
                                         request.size(),
@@ -200,8 +201,7 @@ TEST_F(JoshuaWireSessionTest, ReconnectDoesNotClearEstopOrRestoreConfiguration) 
   EXPECT_FALSE(transport->channel.enabled);
 }
 TEST_F(JoshuaWireSessionTest, ExhaustionStopsAndRequiresExplicitReconciliation) {
-  JoshuaWireSession small(
-      transport, [this] { return ++session_id; }, 3);
+  JoshuaWireSession small(transport, [this] { return ++session_id; }, 3);
   ASSERT_TRUE(small.Open().ok());
   ASSERT_TRUE(small.Exchange(Configure()).ok());
   EXPECT_EQ(small.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),

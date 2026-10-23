@@ -35,3 +35,8 @@ The generic runtime catalog supports independently registered profiles. Runtime
 motor bindings still select STEP/DIR. General sensor/I/O driver bindings and the
 full bounded priority scheduler/stop-preemption gate in the protocol contract
 remain follow-up work; serialized synchronous calls do not establish that gate.
+
+The manual `joshua_wire_smoke` CLI runs handshake, disabled configuration or
+explicitly authorized exercise modes through the production session. Preflight
+validates the selected JoshuaWire serial adapter without opening a device;
+`--dry_run` and PTY tests exercise the CLI without physical hardware.

@@ -1,29 +1,25 @@
 #include "transport_serial.h"
 
 #include <Arduino.h>
-#include <string.h>
-
-#include "joshua_wire_stream.h"
 
 namespace {
-jw_stream_decoder_t decoder;
+int ReadByte(void*) {
+  return Serial.available() > 0 ? Serial.read() : -1;
 }
-void TransportInit() {
-  Serial.begin(115200);
-  jw_stream_init(&decoder);
+size_t WriteBytes(void*, const uint8_t* bytes, size_t length) {
+  // Sole Serial writer. Only write bytes that fit immediately; the shared link
+  // adapter owns accepted frames and retains any unwritten remainder.
+  if (Serial.availableForWrite() < static_cast<int>(length)) return 0;
+  return Serial.write(bytes, length);
 }
-size_t TransportReadFrame(uint8_t* frame, size_t capacity) {
-  // Bound work per loop even if the producer continuously fills the UART.
-  for (size_t i = 0; i < JW_MAX_FRAME_LEN && Serial.available() > 0; ++i) {
-    const int size = jw_stream_feed(&decoder, Serial.read(), millis());
-    if (size > 0) {
-      if (static_cast<size_t>(size) > capacity) return 0;
-      memcpy(frame, decoder.bytes, size);
-      return size;
-    }
-  }
-  return 0;
+uint32_t NowMs(void*) {
+  return millis();
 }
-void TransportWriteFrame(const uint8_t* frame, size_t size) {
-  Serial.write(frame, size);
+}  // namespace
+
+frame_transport_t TransportSerialInit(SerialTransport* state, const SerialTransportConfig& config) {
+  Serial.begin(config.baud_rate);
+  const serial_frame_transport_config_t binding = {
+      nullptr, ReadByte, WriteBytes, NowMs, config.byte_timeout_ms};
+  return serial_frame_transport_init(state, &binding);
 }

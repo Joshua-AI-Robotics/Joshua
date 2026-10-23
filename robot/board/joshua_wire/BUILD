@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "joshua_wire_board",
@@ -77,6 +77,58 @@ cc_test(
         "//firmware/common:joshua_wire_profiles",
         "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/time",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "joshua_wire_smoke",
+    srcs = ["joshua_wire_smoke.cc"],
+    deps = [
+        ":serial_validation",
+        "//config:config_utils",
+        "//firmware/common:joshua_wire",
+        "//robot/comm/factory:comm_factory",
+        "//utils:status_macros",
+        "@abseil-cpp//absl/strings",
+        "@gflags",
+    ],
+)
+
+cc_library(
+    name = "serial_validation",
+    srcs = ["serial_validation.cc"],
+    hdrs = ["serial_validation.h"],
+    deps = [
+        ":joshua_wire_session",
+        "//firmware/common:joshua_wire_commands",
+        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/interfaces:message_transport",
+        "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/serial:serial_config_validation",
+        "//utils:status_macros",
+        "@abseil-cpp//absl/status:status",
+    ],
+)
+
+cc_test(
+    name = "joshua_wire_smoke_test",
+    srcs = ["joshua_wire_smoke_test.cc"],
+    data = [":joshua_wire_smoke"],
+    deps = [
+        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/common:joshua_wire_endpoint",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "serial_validation_test",
+    srcs = ["serial_validation_test.cc"],
+    deps = [
+        ":serial_validation",
+        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
 )
