@@ -1,11 +1,23 @@
 #include "robot/comm/factory/comm_factory.h"
 
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <cstdlib>
+#include <future>
+#include <limits>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
 #include "robot/comm/ethercat/fake_ethercat_transport.h"
+#include "robot/comm/interfaces/caller_sized_message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/testing/fake_transports.h"
 
 namespace robot::comm {
 namespace {
@@ -52,6 +64,234 @@ TEST(CommFactoryTest, CreateCommRejectsMissingEthercatConfig) {
   auto transport_or = CommFactory::CreateComm(comm);
 
   EXPECT_EQ(transport_or.status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, CapabilitySelectionRejectsMissingOrNullEndpoints) {
+  auto message = std::make_shared<testing::FakeMessageTransport>();
+  CommTransport selected{std::static_pointer_cast<MessageTransport>(message)};
+  ASSERT_TRUE(GetCommTransport<MessageTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  auto cyclic = std::make_shared<testing::FakeCorrelatedCyclicTransport>();
+  selected = std::static_pointer_cast<CorrelatedCyclicTransport>(cyclic);
+  ASSERT_TRUE(GetCommTransport<CorrelatedCyclicTransport>(selected).ok());
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<MessageTransport>{};
+  EXPECT_EQ(GetCommTransport<MessageTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  selected = std::shared_ptr<CorrelatedCyclicTransport>{};
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, UnsupportedCapabilitiesAreRejectedBeforeOpeningDevices) {
+  robot::comm::Comm serial;
+  serial.set_comm_type(SERIAL);
+  serial.set_transport_type(CYCLIC);
+  serial.mutable_serial_config()->set_port("never-open-this-port");
+  serial.mutable_serial_config()->set_baudrate(115200);
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  serial.set_transport_type(static_cast<TransportType>(999));
+  EXPECT_EQ(CommFactory::CreateComm(serial).status().code(), absl::StatusCode::kInvalidArgument);
+  auto ethercat = MakeEthercatComm();
+  ethercat.set_transport_type(MESSAGE);
+  EXPECT_EQ(CommFactory::CreateComm(ethercat).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(CommFactoryTest, InvalidSerialAdapterSettingsAreRejectedBeforeOpeningDevices) {
+  Comm comm;
+  comm.set_comm_type(SERIAL);
+  comm.set_transport_type(MESSAGE);
+  auto* serial = comm.mutable_serial_config();
+  serial->set_port("never-open-this-port");
+  serial->set_baudrate(115200);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  serial->set_message_adapter(static_cast<SerialMessageAdapter>(999));
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  serial->set_message_adapter(JOSHUA_WIRE);
+  for (auto timeout : {0u, std::numeric_limits<uint32_t>::max()}) {
+    serial->set_exchange_timeout_ms(timeout);
+    EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  }
+  serial->set_message_adapter(CALLER_SIZED);
+  serial->set_exchange_timeout_ms(100);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+  serial->clear_exchange_timeout_ms();
+  comm.set_transport_type(BYTE_STREAM);
+  EXPECT_EQ(CommFactory::CreateComm(comm).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
+class CommFactorySerialCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    // A fresh pseudo-terminal exercises the real serial factory without hardware.
+    master_fd_ = posix_openpt(O_RDWR | O_NOCTTY);
+    ASSERT_GE(master_fd_, 0);
+    ASSERT_EQ(grantpt(master_fd_), 0);
+    ASSERT_EQ(unlockpt(master_fd_), 0);
+    const char* port = ptsname(master_fd_);
+    ASSERT_NE(port, nullptr);
+    comm_.set_comm_type(SERIAL);
+    comm_.set_transport_type(BYTE_STREAM);
+    comm_.mutable_serial_config()->set_port(port);
+    comm_.mutable_serial_config()->set_baudrate(115200);
+  }
+
+  void TearDown() override {
+    CommFactory::ResetSerialTransportCacheForTesting();
+    if (master_fd_ >= 0) close(master_fd_);
+  }
+
+  int master_fd_ = -1;
+  robot::comm::Comm comm_;
+};
+
+TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneByteStream) {
+  auto first = CommFactory::CreateComm(comm_);
+  auto second = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+  ASSERT_TRUE(second.ok()) << second.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto second_stream = GetCommTransport<ByteStream>(*second);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(second_stream.ok());
+  EXPECT_EQ(*first_stream, *second_stream);
+}
+
+TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
+  comm_.set_transport_type(MESSAGE);
+  comm_.mutable_serial_config()->set_message_adapter(JOSHUA_WIRE);
+  comm_.mutable_serial_config()->set_exchange_timeout_ms(500);
+  auto slow = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(slow.ok()) << slow.status();
+  auto slow_message = GetCommTransport<MessageTransport>(*slow);
+  ASSERT_TRUE(slow_message.ok());
+  comm_.mutable_serial_config()->set_exchange_timeout_ms(25);
+  auto fast = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(fast.ok()) << fast.status();
+  auto fast_message = GetCommTransport<MessageTransport>(*fast);
+  ASSERT_TRUE(fast_message.ok());
+
+  const std::vector<uint8_t> request{
+      0xa5, 0x0b, 0x02, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01, 0x08, 0xff, 0x82, 0x0c};
+  auto pending = std::async(std::launch::async, [&] { return (*slow_message)->Exchange(request); });
+  std::vector<uint8_t> observed(request.size());
+  size_t received = 0;
+  pollfd descriptor{master_fd_, POLLIN, 0};
+  while (received < observed.size()) {
+    ASSERT_GT(poll(&descriptor, 1, 1000), 0);
+    const ssize_t count = read(master_fd_, observed.data() + received, observed.size() - received);
+    ASSERT_GT(count, 0);
+    received += static_cast<size_t>(count);
+  }
+  ASSERT_EQ(observed, request);  // The first exchange now owns the serial bus.
+  auto rejected = (*fast_message)->Exchange(request);
+  EXPECT_EQ(rejected.status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(rejected.status().message().find("not sent"), std::string::npos);
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+
+  ASSERT_EQ(write(master_fd_, request.data(), request.size()),
+            static_cast<ssize_t>(request.size()));
+  auto response = pending.get();
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, request);
+}
+
+TEST_F(CommFactorySerialCacheTest, ConfiguredAdaptersExposeDifferentMessageContracts) {
+  comm_.set_transport_type(MESSAGE);
+  comm_.mutable_serial_config()->set_message_adapter(CALLER_SIZED);
+  auto fixed = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(fixed.ok()) << fixed.status();
+  auto fixed_message = GetCommTransport<MessageTransport>(*fixed);
+  ASSERT_TRUE(fixed_message.ok());
+  EXPECT_TRUE(GetCallerSizedMessageTransport(*fixed_message).ok());
+  const std::vector<uint8_t> vendor_request{0xff, 0xff, 0x01, 0x02};
+  EXPECT_EQ((*fixed_message)->Exchange(vendor_request).status().code(),
+            absl::StatusCode::kUnimplemented);
+
+  comm_.mutable_serial_config()->set_message_adapter(JOSHUA_WIRE);
+  auto framed = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(framed.ok()) << framed.status();
+  auto framed_message = GetCommTransport<MessageTransport>(*framed);
+  ASSERT_TRUE(framed_message.ok());
+  EXPECT_EQ(GetCallerSizedMessageTransport(*framed_message).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ((*framed_message)->Exchange(vendor_request).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  pollfd descriptor{master_fd_, POLLIN, 0};
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+}
+
+TEST_F(CommFactorySerialCacheTest, CallerSizedAdapterSharesBusLockWithJoshuaWireAdapter) {
+  comm_.set_transport_type(MESSAGE);
+  comm_.mutable_serial_config()->set_message_adapter(JOSHUA_WIRE);
+  comm_.mutable_serial_config()->set_exchange_timeout_ms(500);
+  auto framed = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(framed.ok()) << framed.status();
+  auto message = GetCommTransport<MessageTransport>(*framed);
+  ASSERT_TRUE(message.ok());
+
+  comm_.mutable_serial_config()->set_message_adapter(CALLER_SIZED);
+  comm_.mutable_serial_config()->clear_exchange_timeout_ms();
+  auto fixed = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(fixed.ok()) << fixed.status();
+  auto fixed_message = GetCommTransport<MessageTransport>(*fixed);
+  ASSERT_TRUE(fixed_message.ok());
+  auto caller_sized = GetCallerSizedMessageTransport(*fixed_message);
+  ASSERT_TRUE(caller_sized.ok());
+
+  const std::vector<uint8_t> request{
+      0xa5, 0x0b, 0x02, 0x78, 0x56, 0x34, 0x12, 0x04, 0x03, 0x02, 0x01, 0x08, 0xff, 0x82, 0x0c};
+  auto exchange = std::async(std::launch::async, [&] { return (*message)->Exchange(request); });
+  std::vector<uint8_t> observed(request.size());
+  size_t received = 0;
+  pollfd descriptor{master_fd_, POLLIN, 0};
+  while (received < observed.size()) {
+    ASSERT_GT(poll(&descriptor, 1, 1000), 0);
+    const ssize_t count = read(master_fd_, observed.data() + received, observed.size() - received);
+    ASSERT_GT(count, 0);
+    received += static_cast<size_t>(count);
+  }
+  EXPECT_EQ(observed, request);
+  const std::vector<uint8_t> vendor_request{0xff, 0xff, 0x01, 0x02};
+  auto writer =
+      std::async(std::launch::async, [&] { return (*caller_sized)->Write(vendor_request); });
+  EXPECT_EQ(writer.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+  EXPECT_EQ(write(master_fd_, request.data(), request.size()),
+            static_cast<ssize_t>(request.size()));
+  auto response = exchange.get();
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, request);
+  EXPECT_TRUE(writer.get().ok());
+  ASSERT_GT(poll(&descriptor, 1, 1000), 0);
+  std::vector<uint8_t> vendor_observed(vendor_request.size());
+  ASSERT_EQ(read(master_fd_, vendor_observed.data(), vendor_observed.size()),
+            static_cast<ssize_t>(vendor_observed.size()));
+  EXPECT_EQ(vendor_observed, vendor_request);
+}
+
+TEST_F(CommFactorySerialCacheTest, ConflictingBaudRateIsRejectedAndOriginalSerialIsPreserved) {
+  auto first = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+
+  auto conflicting = comm_;
+  conflicting.mutable_serial_config()->set_baudrate(9600);
+  auto rejected = CommFactory::CreateComm(conflicting);
+  ASSERT_EQ(rejected.status().code(), absl::StatusCode::kInvalidArgument);
+  const std::string error(rejected.status().message());
+  EXPECT_NE(error.find(comm_.serial_config().port()), std::string::npos);
+  EXPECT_NE(error.find("115200"), std::string::npos);
+  EXPECT_NE(error.find("9600"), std::string::npos);
+
+  auto retry = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  auto first_stream = GetCommTransport<ByteStream>(*first);
+  auto retry_stream = GetCommTransport<ByteStream>(*retry);
+  ASSERT_TRUE(first_stream.ok());
+  ASSERT_TRUE(retry_stream.ok());
+  EXPECT_EQ(*first_stream, *retry_stream);
 }
 
 TEST(CommFactoryTest, CreateEthercatTransportRejectsMissingInterfaceName) {
@@ -101,6 +341,16 @@ TEST_F(CommFactoryEthercatCacheTest, SameInterfaceSharesOneMaster) {
   ASSERT_TRUE(first_or.ok()) << first_or.status();
   ASSERT_TRUE(second_or.ok()) << second_or.status();
   EXPECT_EQ(first_or->get(), second_or->get());
+}
+
+TEST_F(CommFactoryEthercatCacheTest, TiDemoDoesNotAdvertiseCorrelatedCyclicOrMailbox) {
+  auto selected = CommFactory::CreateComm(MakeEthercatComm());
+  ASSERT_TRUE(selected.ok());
+  EXPECT_TRUE(GetCommTransport<ethercat::EthercatTransport>(*selected).ok());
+  EXPECT_EQ(GetCommTransport<CorrelatedCyclicTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_EQ(GetCommTransport<MessageTransport>(*selected).status().code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST_F(CommFactoryEthercatCacheTest, DifferentInterfacesGetDifferentMasters) {

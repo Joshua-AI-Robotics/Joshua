@@ -78,6 +78,7 @@ RUN rosdep init || true && rosdep update --rosdistro=${ROS_DISTRO}
 # ============================================
 RUN apt-get update && apt-get install -y \
     libopencv-dev \
+    libasound2-dev \
     && rm -rf /var/lib/apt/lists/*
 # ============================================
 # Install libevdev for input device support (Xbox controller)
@@ -118,12 +119,13 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
 # ============================================
 # Install Python tooling
 # ============================================
+# Avoid uninstalling apt-managed dependencies, which may lack pip RECORD files.
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --upgrade pip \
-    && python3 -m pip install pre-commit black flake8 isort
+    && python3 -m pip install --ignore-installed pre-commit black flake8 isort
 
 # ============================================
 # Install Python Project Dependencies

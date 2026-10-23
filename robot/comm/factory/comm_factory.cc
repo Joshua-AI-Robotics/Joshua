@@ -1,22 +1,30 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <map>
+#include <mutex>
 #include <thread>
 
 #include "robot/comm/ethercat/ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
+#include "robot/comm/serial/caller_sized_serial_transport.h"
+#include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
+#include "robot/comm/serial/serial_config_validation.h"
 
 namespace robot::comm {
 
 namespace {
-// Shared serial resources keyed by port and baud rate.
+constexpr uint32_t kDefaultSerialExchangeTimeoutMs = 100;
+
+// One serial connection per port, with a fixed baud rate and shared I/O lock.
 struct PortResources {
   std::shared_ptr<boost::asio::io_context> io_context{std::make_shared<boost::asio::io_context>()};
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard{
       boost::asio::make_work_guard(*io_context)};
   std::thread io_context_thread{[this] { io_context->run(); }};
-  std::map<uint32_t, std::shared_ptr<robot::comm::Serial>> serials;
+  uint32_t baudrate = 0;
+  std::shared_ptr<robot::comm::Serial> serial;
   ~PortResources() {
     work_guard.reset();
     if (io_context_thread.joinable()) io_context_thread.join();
@@ -53,6 +61,42 @@ absl::StatusOr<robot::comm::ethercat::ProcessDataMode> ToTransportProcessDataMod
                           "EtherCAT config has invalid process data mode");
   }
 }
+absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialConfig& config) {
+  if (config.port().empty()) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no port");
+  }
+
+  if (config.baudrate() == 0) {
+    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no baudrate");
+  }
+
+  const std::string& port = config.port();
+  const uint32_t baudrate = config.baudrate();
+
+  std::lock_guard<std::mutex> lock(g_serial_mutex);
+  auto& port_res_ptr = g_port_resources[port];
+  if (!port_res_ptr) {
+    port_res_ptr = std::make_unique<PortResources>();
+  }
+
+  if (port_res_ptr->serial) {
+    if (port_res_ptr->baudrate != baudrate) {
+      return absl::InvalidArgumentError("Serial port " + port + " is already open at baud rate " +
+                                        std::to_string(port_res_ptr->baudrate) + "; requested " +
+                                        std::to_string(baudrate));
+    }
+    return port_res_ptr->serial;
+  }
+
+  auto serial = std::make_shared<Serial>(port_res_ptr->io_context,
+                                         port,
+                                         baudrate,
+                                         std::chrono::milliseconds(config.post_open_settle_ms()));
+  port_res_ptr->baudrate = baudrate;
+  port_res_ptr->serial = serial;
+  return serial;
+}
+
 }  // namespace
 
 absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& comm) {
@@ -61,15 +105,8 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
   }
   switch (comm.comm_type()) {
     case CommType::SERIAL: {
-      if (!comm.has_serial_config()) {
-        return absl::InvalidArgumentError("SERIAL comm has no serial_config.");
-      }
-      if (comm.transport_type() == TransportType::TRANSPORT_INVALID) {
-        return absl::InvalidArgumentError("Comm has an invalid transport_type.");
-      }
-      if (comm.transport_type() == TransportType::CYCLIC) {
-        return absl::InvalidArgumentError("SERIAL does not provide a cyclic transport.");
-      }
+      auto status = ValidateSerialCommConfig(comm);
+      if (!status.ok()) return status;
       auto serial_or = CreateSerial(comm.serial_config());
       if (!serial_or.ok()) {
         return serial_or.status();
@@ -78,7 +115,21 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
         case TransportType::BYTE_STREAM:
           return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
         case TransportType::MESSAGE:
-          return CommTransport{std::static_pointer_cast<MessageTransport>(*serial_or)};
+          switch (comm.serial_config().message_adapter()) {
+            case CALLER_SIZED:
+              return CommTransport{std::static_pointer_cast<MessageTransport>(
+                  std::make_shared<CallerSizedSerialTransport>(*serial_or))};
+            case JOSHUA_WIRE:
+              return CommTransport{std::static_pointer_cast<MessageTransport>(
+                  std::make_shared<JoshuaWireSerialTransport>(
+                      *serial_or,
+                      std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
+                                                    ? comm.serial_config().exchange_timeout_ms()
+                                                    : kDefaultSerialExchangeTimeoutMs)))};
+            case SERIAL_MESSAGE_ADAPTER_UNSPECIFIED:
+            default:
+              return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");
+          }
         case TransportType::CYCLIC:
         case TransportType::TRANSPORT_INVALID:
         default:
@@ -114,34 +165,9 @@ void CommFactory::SetCommTransportFactoryForTesting(
   g_comm_transport_factory_for_testing = std::move(factory);
 }
 
-absl::StatusOr<std::shared_ptr<Serial>> CommFactory::CreateSerial(
-    const robot::comm::SerialConfig& config) {
-  if (config.port().empty()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no port");
-  }
-
-  if (config.baudrate() == 0) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Serial config has no baudrate");
-  }
-
-  const std::string& port = config.port();
-  uint32_t baudrate = config.baudrate();
-
+void CommFactory::ResetSerialTransportCacheForTesting() {
   std::lock_guard<std::mutex> lock(g_serial_mutex);
-  auto& port_res_ptr = g_port_resources[port];
-  if (!port_res_ptr) {
-    port_res_ptr = std::make_unique<PortResources>();
-  }
-
-  auto& serials = port_res_ptr->serials;
-  auto it = serials.find(baudrate);
-  if (it != serials.end()) {
-    return it->second;
-  }
-
-  auto serial = std::make_shared<Serial>(port_res_ptr->io_context, port, baudrate);
-  serials[baudrate] = serial;
-  return serial;
+  g_port_resources.clear();
 }
 
 absl::StatusOr<std::shared_ptr<robot::comm::ethercat::EthercatTransport>>

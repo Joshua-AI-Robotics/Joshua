@@ -48,12 +48,12 @@ cc_library(
     name = "soem_ethercat_transport",
     srcs = ["soem_ethercat_transport.cc"],
     hdrs = ["soem_ethercat_transport.h"],
-    visibility = ["//visibility:public"],
+    implementation_deps = ["@soem"],
+    visibility = ["//robot/comm:__subpackages__"],
     deps = [
         ":ethercat_transport",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
-        "@soem",
     ],
 )
 

@@ -43,3 +43,9 @@ cc_library(
     hdrs = ["radar_interface.h"],
     deps = [":perception_interface"],
 )
+
+cc_library(
+    name = "audio_interface",
+    hdrs = ["audio_interface.h"],
+    deps = [":perception_interface"],
+)

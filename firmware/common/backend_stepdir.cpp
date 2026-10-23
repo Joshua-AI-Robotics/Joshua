@@ -15,7 +15,7 @@ namespace {
 // host-configurable (StepDirConfig.step_pulse_width_us,
 // docs/BOARD_LAYER_RFC.md §7.5) for a different STEP/DIR driver chip that
 // needs a different minimum HIGH time, without a firmware edit + reflash.
-constexpr unsigned int kDefaultStepPulseWidthUs = 20;
+constexpr unsigned int kDefaultStepPulseWidthUs = JW_STEPDIR_DEFAULT_PULSE_WIDTH_US;
 
 // Minimum microseconds between pulses for the channel's configured
 // max_pulse_rate_hz; 0 (unconfigured) is treated as "not ready to step".
@@ -23,7 +23,13 @@ unsigned long MinPulseIntervalUs(const ChannelState& channel) {
   if (channel.step_dir.config.max_pulse_rate_hz == 0) {
     return 0;
   }
-  return 1000000UL / channel.step_dir.config.max_pulse_rate_hz;
+  float rate = channel.step_dir.config.max_pulse_rate_hz;
+  if (channel.target_mode == JW_MODE_VELOCITY) {
+    rate = fminf(rate, fabsf(channel.target_value));
+    if (rate == 0) return 0;
+  }
+  const double interval = 1000000.0 / rate;
+  return interval > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(interval);
 }
 
 unsigned int StepPulseWidthUs(const ChannelState& channel) {
@@ -42,10 +48,9 @@ void Pulse(ChannelState* channel, bool dir_positive) {
   // mechanism). Costs a little speed on Teensy for portability everywhere
   // else; StepPulseWidthUs()'s own delay dwarfs the difference regardless.
   digitalWrite(channel->step_dir.config.step_pin, HIGH);
-  delayMicroseconds(StepPulseWidthUs(*channel));
-  digitalWrite(channel->step_dir.config.step_pin, LOW);
+  channel->step_dir.step_high = true;
   channel->step_dir.position_steps += dir_positive ? 1 : -1;
-  channel->step_dir.last_step_us = micros();
+  channel->step_dir.last_step_us = static_cast<uint32_t>(micros());
 }
 
 }  // namespace
@@ -55,12 +60,19 @@ void StepDirInit(ChannelState* channel) {
   channel->enabled = false;
 }
 
-void StepDirConfigure(ChannelState* channel, const jw1_configure_step_dir_t* config) {
+void StepDirConfigure(ChannelState* channel, const jw_configure_step_dir_t* config) {
   channel->step_dir.config = *config;
+  channel->target_mode = JW_MODE_INVALID;
+  channel->target_value = 0;
+  // Set inactive output latches before switching pins to output mode.
+  digitalWrite(config->enable_pin, config->enable_active_low ? HIGH : LOW);
+  digitalWrite(config->step_pin, LOW);
+  digitalWrite(config->dir_pin, LOW);
   pinMode(channel->step_dir.config.step_pin, OUTPUT);
   pinMode(channel->step_dir.config.dir_pin, OUTPUT);
   pinMode(channel->step_dir.config.enable_pin, OUTPUT);
   digitalWrite(channel->step_dir.config.step_pin, LOW);
+  channel->step_dir.step_high = false;
   digitalWrite(channel->step_dir.config.dir_pin, LOW);
   channel->configured = true;
   StepDirDisable(channel);  // Safe default until an explicit Enable() arrives.
@@ -80,14 +92,13 @@ void StepDirDisable(ChannelState* channel) {
   if (!channel->configured) {
     return;  // No pins to drive yet — nothing to write.
   }
+  digitalWrite(channel->step_dir.config.step_pin, LOW);
+  channel->step_dir.step_high = false;
   const bool inactive_level = channel->step_dir.config.enable_active_low ? HIGH : LOW;
   digitalWrite(channel->step_dir.config.enable_pin, inactive_level);
 }
 
-// TODO(hmoon): Accept and validate a complete structured command before updating
-// channel state. Retain a position target and its speed limit together; separate
-// velocity mode must not overwrite or masquerade as a position speed setting.
-void StepDirSetTarget(ChannelState* channel, jw1_mode_t mode, float value) {
+void StepDirSetTarget(ChannelState* channel, jw_mode_t mode, float value) {
   channel->target_mode = mode;
   channel->target_value = value;
 }
@@ -96,35 +107,46 @@ void StepDirService(ChannelState* channel) {
   if (!channel->enabled) {
     return;
   }
-  // TODO(hmoon): Derive pulse timing from requested steps/second (or the active
-  // position move's speed limit), bounded by max_pulse_rate_hz. Velocity currently
-  // uses only sign/zero below. Define zero/stop behavior and acceleration limits;
-  // keep pulse scheduling nonblocking across channels and stop at position targets.
+  // Finish the HIGH edge without blocking dispatch or emergency stops.
+  const uint32_t elapsed = uint32_t(micros()) - channel->step_dir.last_step_us;
+  if (channel->step_dir.step_high) {
+    if (elapsed >= StepPulseWidthUs(*channel)) {
+      digitalWrite(channel->step_dir.config.step_pin, LOW);
+      channel->step_dir.step_high = false;
+    }
+    return;
+  }
   const unsigned long min_interval_us = MinPulseIntervalUs(*channel);
   if (min_interval_us == 0) {
     return;  // Not yet configured via CONFIGURE_CHANNEL.
   }
-  if (micros() - channel->step_dir.last_step_us < min_interval_us) {
+  if (elapsed < min_interval_us) {
     return;  // Throttled to max_pulse_rate_hz.
   }
 
   switch (channel->target_mode) {
-    case JW1_MODE_POSITION: {
-      const long target_steps = lroundf(channel->target_value);
+    case JW_MODE_POSITION: {
+      const int32_t target_steps = static_cast<int32_t>(lround(channel->target_value));
       if (channel->step_dir.position_steps == target_steps) {
         return;
       }
       Pulse(channel, target_steps > channel->step_dir.position_steps);
       return;
     }
-    case JW1_MODE_VELOCITY: {
+    case JW_MODE_VELOCITY: {
       if (channel->target_value == 0.0f) {
         return;
       }
-      Pulse(channel, channel->target_value > 0.0f);
+      const bool positive = channel->target_value > 0;
+      if ((positive && channel->step_dir.position_steps == INT32_MAX) ||
+          (!positive && channel->step_dir.position_steps == INT32_MIN)) {
+        StepDirDisable(channel);
+        return;
+      }
+      Pulse(channel, positive);
       return;
     }
-    case JW1_MODE_TORQUE:
+    case JW_MODE_TORQUE:
     default:
       return;  // No torque target on an open-loop STEP_DIR channel.
   }

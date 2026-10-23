@@ -27,6 +27,7 @@ PERCEPTION_DATA_TYPE_FIELDS = (
     "position",
     "sensor",
     "point_cloud",
+    "audio",
 )
 
 
@@ -200,9 +201,18 @@ def require_perception_sensor(
     return packet.sensor
 
 
+def require_perception_audio(
+    packet: perception_packet_pb2.PerceptionPacket,
+) -> perception_packet_pb2.AudioData:
+    if not packet.HasField("audio"):
+        raise PacketParseError("PerceptionPacket has no audio field")
+    return packet.audio
+
+
 _PERCEPTION_REQUIRE_FIELD_BY_NAME = {
     "image": require_perception_image,
     "position": require_perception_position,
     "sensor": require_perception_sensor,
     "point_cloud": require_perception_point_cloud,
+    "audio": require_perception_audio,
 }
