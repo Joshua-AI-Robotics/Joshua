@@ -1,5 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
+# Shared revision-4 core, profiles, runtimes and transport adapters.
 cc_library(
     name = "joshua_wire_commands",
     srcs = ["joshua_wire_commands.c"],

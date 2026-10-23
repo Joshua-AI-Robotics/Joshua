@@ -1,14 +1,14 @@
-#include "robot/board/am243/am243_board.h"
-
+// AM243 factory coverage: shared JoshuaWire engine and rejection of retired
+// TI-demo configurations. No separate AM243 board implementation is needed.
 #include <memory>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "gtest/gtest.h"
+#include "robot/board/factory/board_factory.h"
 #include "robot/board/joshua_wire/testing/board_config.h"
 #include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
 #include "robot/board/proto/board.pb.h"
-#include "robot/comm/ethercat/fake_ethercat_transport.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
 
@@ -52,48 +52,35 @@ class Am243BoardTest : public ::testing::Test {
             return robot::comm::CommTransport{
                 std::static_pointer_cast<robot::comm::MessageTransport>(serial_transport_)};
           }
-          return robot::comm::CommTransport{ethercat_transport_};
+          ADD_FAILURE() << "Retired EtherCAT config reached comm construction";
+          return absl::InternalError("unexpected backend access");
         });
-    ethercat_transport_ = std::make_shared<robot::comm::ethercat::FakeEthercatTransport>();
   }
 
   void TearDown() override {
+    BoardFactory::ResetForTesting();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
     robot::comm::CommFactory::ResetEthercatTransportCacheForTesting();
   }
 
   std::shared_ptr<FakeJoshuaWireTransport> serial_transport_;
-  std::shared_ptr<robot::comm::ethercat::FakeEthercatTransport> ethercat_transport_;
 };
 
 TEST_F(Am243BoardTest, InitSucceedsAgainstAm243Identity) {
-  Am243Board board;
-
-  EXPECT_TRUE(board.Init(MakeAm243Board()).ok());
+  EXPECT_TRUE(BoardFactory::GetOrCreate(MakeAm243Board()).ok());
 }
 
-TEST_F(Am243BoardTest, InitRejectsNonAm243BoardType) {
-  auto config = MakeAm243Board();
-  config.set_board_type(robot::board::BoardType::TEENSY41);
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
-}
-
-TEST_F(Am243BoardTest, InitSupportsEthercatDemoConfig) {
-  Am243Board board;
-
-  EXPECT_TRUE(board.Init(MakeAm243EthercatBoard()).ok());
-  EXPECT_EQ(ethercat_transport_->configure_slaves_calls_, 1);
-  EXPECT_EQ(ethercat_transport_->start_cyclic_calls_, 1);
+TEST_F(Am243BoardTest, RetiredTiDemoIsRejectedBeforeOpeningTransport) {
+  auto result = BoardFactory::GetOrCreate(MakeAm243EthercatBoard());
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(result.status().message().find("retired"), std::string::npos);
 }
 
 TEST_F(Am243BoardTest, InitRejectsRetiredWireRevision) {
   serial_transport_->channel.runtime.identity.protocol_min = 1;
   serial_transport_->channel.runtime.identity.protocol_max = 1;
-  Am243Board board;
-
-  EXPECT_EQ(board.Init(MakeAm243Board()).code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(BoardFactory::GetOrCreate(MakeAm243Board()).status().code(),
+            absl::StatusCode::kFailedPrecondition);
 }
 
 }  // namespace

@@ -1,109 +1,134 @@
-# LP-AM243 — revision-4 JoshuaWire UART + vendor EtherCAT demo
+# LP-AM243 — JoshuaWire 0.2.0 serial and EtherCAT firmware
 
-This overlay builds JoshuaWire 0.2.0 / wire revision 4 on UART0 at 115200 baud
-alongside TI's existing EtherCAT simple demo. The UART endpoint uses the shared
-correlated session, device discovery, actuator profile and software-only backend
-in `src/am243_software_backend.c`. It produces no STEP/DIR GPIO output. The TI EtherCAT
-PDO state remains an independent vendor demo; it is not a second JoshuaWire
-transport or a motor-control path.
+One AM243 image that keeps TI's EtherCAT simple demo active while also serving
+JoshuaWire (JW) `0.2.0` on UART0 at 115200 baud. The build layers Joshua-owned source
+and a small patch over the externally installed TI Industrial Communications
+SDK; it does not modify or vendor the SDK.
 
-The earlier JoshuaWire codec/task is removed. Host and firmware must be updated
-from the same checkout. Historical flashing/verification of the earlier image
-does not verify this incompatible image. Builds and native tests never flash it.
+The default image serves JW UART alongside TI's EtherCAT echo demo. Its
+serial channel reports `STEP_DIR` and implements command/response handling
+in software; it does not drive STEP/DIR GPIOs or move motors.
+Its dedicated task composes the shared JW endpoint with the nonblocking
+[`transport_uart`](src/transport_uart.h) adapter. The adapter exclusively polls
+UART0's 64-byte FIFO and uses the common incremental serial assembler. It copies
+a complete response into a retained transmit slot, then drains up to 64 bytes
+whenever the FIFO is empty. The task retains additional blocked responses without
+repeating a command and yields between iterations. Binary
+UART ownership starts after SDK startup logs are disabled; no SDK UART
+transactions or other writers may share that FIFO.
+
+`src/am243_software_backend.{h,c}` registers the software channel with the shared
+`joshua_device_runtime` and `joshua_actuator_handler`. UART and JW EtherCAT reuse
+the same actuator handling as the Teensy/ESP32 STEP/DIR backend. This file owns
+software state, cached feedback and safety actions; payload decoding, common
+guards and reply encoding live in `firmware/common/`.
 
 ## Prerequisites
 
-Use the Docker development environment with the external TI Industrial
-Communications SDK 09.00.00.03, ARM Clang, PRU CGT and SysConfig installed as
-described in [the TI guide](../ti_ethercat_simple_demo_v1/README.md). The SDK and
-toolchains must be visible inside the container. Build requires `make`, `patch`,
-and TI's Python image-generation dependencies.
+- TI Industrial Communications SDK `09.00.00.03`
+- CCS/ARM Clang, PRU CGT, and SysConfig versions listed in the adjacent
+  `ti_ethercat_simple_demo_v1/README.md`
+- The SDK configured by the existing AM243 setup scripts
 
 ## Install
 
-Follow the TI guide for SDK/toolchain setup. The build script copies SDK inputs
-into a temporary tree, patches the UART task entry point, and enables RNG/SA2UL
-in that image's SysConfig for a fresh hardware boot identity. It does not modify
-or vendor SDK sources.
+Follow `../ti_ethercat_simple_demo_v1/README.md`. No additional packages are
+required beyond `patch`, `make`, and the existing TI toolchain.
 
 ## Build
 
-Inside the development container:
-
 ```bash
-INDUSTRIAL_COMMUNICATIONS_SDK_PATH=/path/to/ind_comms_sdk_am243x_09_00_00_03 \
-  firmware/am243/joshua_dual_transport/scripts/build.sh
+firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
-Artifacts are `out/am243_dual_transport_rev4.release.out` and matching `.appimage`
-variants. The shared revision-4 codec, stream decoder, bounded serial adapter, session, endpoint and runtime
-are compiled with the actual TI compiler; no previous codec is linked.
+Artifacts are written under the ignored `out/` directory. The build uses a
+temporary working tree and leaves TI SDK sources unchanged.
 
-## Flash
+The default UART outputs are `am243_dual_transport_rev4.release.*`. The script
+forwards arguments to `make`, allowing compiler/tool path overrides. EtherCAT
+in this image remains TI's echo demo; use the separate JW profile below for
+Joshua EtherCAT runtime. See [JW limits](../../README.md#joshuawire-serial)
+and the [serial validation procedure](../../../docs/JOSHUA_WIRE_VALIDATION.md).
 
-Review the built artifact and point the deliberate TI flash operation at
-`out/am243_dual_transport_rev4.release.appimage.hs_fs`. Nothing here flashes
-automatically. Confirm that this exact image is installed before running host
-commands; the host does not downgrade or probe the old protocol.
+### Opt-in JW EtherCAT profile
 
-## Verify
+The same overlay also builds a separate **EtherCAT-only** JoshuaWire artifact:
 
-Hardware-free tests exercise the real software command handler and correlated
-endpoint through `joshua_wire_session_test`. `firmware_binding_test` also checks
-the actual AM243 host binding and serial factory against the physical STEP/DIR
-firmware backend with simulated GPIO/clock over a PTY.
+```bash
+JOSHUA_ETHERCAT_PROFILE=jw \
+JOSHUA_COMM_WATCHDOG_US=500000 JOSHUA_TARGET_WATCHDOG_US=250000 \
+firmware/am243/joshua_dual_transport/scripts/build.sh
+```
 
-After an intentional flash, review the port in
-`config/config_preset/example/am243_serial_demo.pbtxt` before running its host
-smoke. It uses `message_adapter: JOSHUA_WIRE` and `min_proto_version: 4`.
-Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
+Those intervals are software-demo examples, not validated motor-safety limits.
+Both must be explicit (10000–999999999 microseconds); there are no watchdog
+defaults. Outputs are `out/am243_ethercat_jw.release.*`. The default profile
+remains `ti-demo`, building JW UART alongside TI's echo PDOs.
+The JW profile starts no UART protocol task; the console remains available for
+SDK logs. It has one software-only channel and **no STEP/DIR GPIO backend**.
 
-## Wiring / Pinout
+Source responsibilities:
 
-- UART0/XDS110: the intended LP-AM243 setup uses `/dev/ttyACM0`, 115200 8-N-1.
-- EtherCAT: TI demo IN/OUT ports and vendor wiring.
-- STEP/DIR pins are metadata only in the software actuator; no GPIO is driven.
+- `src/am243_software_backend.{h,c}`: transport-neutral software channel callbacks
+  registered with the common actuator handler, shared with the UART artifact.
+- [`../../common/joshua_ethercat_profile.h`](../../common/joshua_ethercat_profile.h)
+  and `.c`: shared board/stack-independent object/PDO protocol, one session
+  across CoE and PDO, retained replies, and per-channel freshness watchdogs.
+- `src/joshua_ethercat_ti.{h,c}`: SDK object registration, complete image copies,
+  callback serialization and an independent RTOS watchdog task. Supplies AM243
+  identity and software-channel callbacks to the shared profile; a different
+  board supplies its own stack/drive adapter, not a new host transport.
+- `patches/jwec_profile.patch`: replaces TI's demo object/PDO setup and dispatch
+  in a temporary SDK source copy. TI demo EEPROM-persistence callbacks are not
+  installed for this profile; the SDK builds the profile from its new mapping.
 
-## Known gaps / Troubleshooting
+The descriptor reports `am243-ec-jw`, JW/layout-v2, 112-byte input/output images
+and transport bits `6` (CoE + PDO). The matching fixed mapping is:
 
-- UART0 is binary after task initialization; SDK runtime text logs are disabled.
-- A single UART task owns the current JoshuaWire session and software actuator.
-  It polls the UART FIFO without blocking, retains replies under backpressure,
-  and splits frames larger than the 64-byte FIFO across service iterations.
-  The independent TI demo must not be reinterpreted as a correlated JW endpoint.
-- Firmware callbacks return cached feedback. The UART loop refreshes its
-  command-derived software sample with monotonic timestamps, including while idle.
-- A hardware RNG failure prevents the protocol task from starting rather than
-  reusing a constant boot identity.
-- TI's external evaluation stack retains its vendor runtime restrictions.
-- This revision requires separate physical flashing/handshake verification.
+| Direction | PDO | Mapped entries | Size |
+| --- | --- | --- | --- |
+| Master → slave | `0x1600` | `0x7000:01` through `:1c` (hex), 28 × UINT32 | 112 bytes |
+| Slave → master | `0x1a00` | `0x6000:01` through `:1c` (hex), 28 × UINT32 | 112 bytes |
 
-## Opt-in JW EtherCAT profile
+Assignments `0x1c12`/`0x1c13` each contain the corresponding single fixed PDO.
+The image arrays are PDO-only; CoE accesses cannot modify their contents.
+All management objects use subindex zero, without Complete Access:
+`0x2000` descriptor (36 bytes, read), `0x2001` session/reset (8, read/write),
+`0x2010` request (108, write), `0x2011` retained response (108, read), and
+`0x2012` exact-generation acknowledgment (4, write). Byte layouts are defined
+in [the shared contract](../../common/joshua_wire_ethercat.h).
 
-Set `JOSHUA_ETHERCAT_PROFILE=jw`, `JOSHUA_COMM_WATCHDOG_US` and
-`JOSHUA_TARGET_WATCHDOG_US` explicitly before running `scripts/build.sh`. Both
-watchdog values must be 10000..999999999 microseconds. This selects the shared
-JW descriptor, session, CoE mailbox and correlated 112-byte PDO profile through
-the TI stack. Its channel remains software-only. The artifact is
-`out/am243_ethercat_jw.release.appimage`, distinct from the UART/TI-demo artifact.
+The evaluation identity inherits TI's SDK vendor setting; real SII discovery
+reported `0xe000059d`, with Joshua profile product `0x4a570002` and revision
+`0x00020001`. This is not a registered
+commercial product identity. Resolve identity/redistribution requirements
+before public hardware distribution. No standalone ESI XML is provided yet;
+the mapping above documents the profile, and a cached TI-demo ESI is incompatible.
 
-Native tests use the production firmware profile and command handler to cover
-retained replies, cross-plane IDs, duplicate handling, watchdog expiry,
-operational-state loss and host interoperability. They do not qualify real
-EtherCAT timing or physical motor outputs.
+Only a **new valid command**, not repeated reads of an unchanged PDO output
+image, refreshes the command-progress watchdog. ENABLE starts the target grace
+period; successful SET_TARGET refreshes target freshness. GET_FEEDBACK can feed
+command progress but cannot keep an old target alive. An enabled host must issue
+fresh targets within both configured limits. This is deliberately stricter than
+a packet-arrival watchdog: the SDK application loop alone does not establish
+that a new EtherCAT output packet arrived.
 
-TODO: retain this TI-stack JW profile until the separate SOES replacement has
-completed AM243 hardware qualification and endurance testing, then review its
-retirement.
+The independent task checks time every 1 ms plus RTOS scheduling delay. Expiry,
+loss of OP or protocol faults disable the software channel, clear its target
+and latch ESTOP. Feedback fault bits are `0x1` command-progress timeout, `0x2`
+stale target, `0x4` state/clock fault and `0x8` malformed PDO. Reset to a
+different nonzero session preserves latches. Explicit RECOVER clears them while
+outputs stay disabled; repeating the current reset is a no-op.
+An all-zero output is an explicit stop; generation zero with the active session
+only cancels the command slot. Replies remain until the matching acknowledgment;
+duplicates never execute again or refresh watchdogs.
 
-The portable EtherCAT profile uses revision 4/layout 2, 108-byte mailbox
-objects and 112-byte PDO images. The TI dictionary maps 28 words in each PDO.
-Discovery, metadata, status and recovery reach the same backend runtime as
-profile operations. Target watchdog slots use stable function IDs across the
-255-function wire space. Session resets disable/configuration-clear without
-clearing ESTOP or watchdog latches; explicit RECOVER precedes reconfiguration.
+Native tests exercise the production core with a controlled clock and through
+the host's paired CoE/PDO adapters. Production Ethernet timing requires hardware
+qualification. Software watchdog behavior does not establish physical motor
+safety, CPU-halt coverage or hard-real-time timing.
 
-## Callback ownership and stop priority
+### Callback ownership and stop priority
 
 All `JoshuaChannel` access, including command/reset/stop callbacks, feedback
 acquisition and enabled-state reads, belongs to one externally serialized owner.
@@ -133,8 +158,70 @@ stop/recovery, stop/reset, watchdog activity during vendor I/O, stale PDO
 snapshots, repeated faults and concurrent callbacks. The broader host priority
 scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
 
-Actuator payload decoding, supported-mode checks, admission guards, replies and
-outcome reporting use the portable C `joshua_actuator_handler`. Device callbacks
-retain pin validation, resource ownership, target limits, cached acquisition and
-hardware actions. Teensy/ESP32 register these callbacks in `joshua_stepdir_device`;
-AM243 uses `am243_software_backend` and has no physical STEP/DIR output.
+### TODO: Retire TI-stack profiles after replacement qualification
+
+Keep the TI-stack JW EtherCAT profile until the separately reviewed replacement
+passes AM243 hardware qualification and more than 60 minutes of continuous
+fresh target/feedback traffic. Changing slave stacks does not resolve the known
+host NIC timing limitation. The default UART image still includes the TI demo;
+convert it to UART-only when retiring the evaluation stack.
+
+## Host integration
+
+The [JW EtherCAT config](../../../config/README.md#joshuawire-over-ethercat)
+now selects paired adapters through CommFactory and the shared board engine.
+Native integration tests run that entire path against this production firmware
+core. Native coverage does not establish production Ethernet timing or
+physical-output safety.
+
+## Flash
+
+Not automated by this target. After the image is built and reviewed, adapt the
+existing TI demo flash configuration to point at:
+
+```text
+out/am243_dual_transport_rev4.release.appimage.hs_fs
+```
+
+Use the same SDK 09 bootloader/application offsets. Verify both bootloader and
+application after flashing; do not use the vendor TI-demo application path for
+a JoshuaWire image.
+
+The separate JW EtherCAT profile uses
+`out/am243_ethercat_jw.release.appimage.hs_fs`; it is not the UART image.
+
+Flashing remains a deliberate hardware operation and must not happen as part
+of build or test.
+
+## Verify
+
+Follow the [serial validation guide](../../../docs/JOSHUA_WIRE_VALIDATION.md)
+using `//robot/board/joshua_wire:joshua_wire_smoke`. The old JW1 probe is removed.
+For EtherCAT, build the separate JW profile and follow its configuration and
+validation references above; the default UART image contains TI echo EtherCAT.
+
+## Wiring / Pinout
+
+- XDS110 UART console/protocol: 115200 8-N-1; the example uses `/dev/ttyACM0`.
+  Check the actual port after connecting the board.
+- EtherCAT: existing LP-AM243 IN/OUT ports and TI demo wiring.
+- STEP/DIR pins are accepted and retained by the serial protocol but are not
+  driven in this milestone.
+
+## Known gaps / Troubleshooting
+
+- In the `ti-demo` dual-transport artifacts, UART0 becomes a binary protocol stream after board initialization. Normal
+  EtherCAT application logs are discarded after the serial task starts so
+  they cannot corrupt frames; early bootloader logs may still appear before
+  the first request and are flushed by Joshua's host transport.
+- The dual-transport artifacts expose separate serial and EtherCAT demo state. A later command
+  arbiter must unify them before either path controls the same physical motor.
+  The separate JW EtherCAT artifact avoids simultaneous UART ownership.
+- TI's bundled EtherCAT evaluation stack retains its one-hour runtime limit
+  in the `ti-demo` and `jw` artifacts. A replacement requires hardware and
+  endurance qualification before retirement.
+- No firmware is flashed automatically.
+
+The UART artifact retains hardware-RNG boot identity and shared retained serial
+transmission. Revision-4 frames larger than the 64-byte UART FIFO drain across
+service iterations. Native builds/tests never flash devices.

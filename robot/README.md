@@ -50,6 +50,13 @@ selects between backends.
 - `perception/` — camera, encoder, and lidar drivers behind
   `perception/interfaces/`.
 
+AM243 JoshuaWire serial and EtherCAT configurations now use the shared
+`board/joshua_wire/` engine. CommFactory supplies either message-only or paired
+message/cyclic capabilities and owns the NIC lifecycle. The legacy TI-demo
+board/driver path is retired; `board/am243/` retains AM243 factory regression
+coverage, not a separate board implementation. See [JW EtherCAT configuration](../config/README.md#joshuawire-over-ethercat)
+for protocol selection and hardware-validation limits.
+
 ## Non-Goals
 
 - ROS 2 node lifecycle, topics, or message types — see [ros2/](../ros2/README.md).
@@ -78,9 +85,8 @@ units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
 STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
-use presets to enable/disable torque. TI demo supports native position/velocity/
-effort using its existing firmware scaling, but rejects SI commands. Drivers
-validate the entire payload before writes. Shared interface validation checks only
+use presets to enable/disable torque. The legacy TI demo motor driver is retired;
+AM243 examples use the stepper driver over JoshuaWire. Drivers validate the entire payload before writes. Shared interface validation checks only
 name, field presence, enum validity and finiteness; each driver's implementation
 owns supported combinations, SI conversions, float range and operational limits.
 Channel failures are returned; a
@@ -88,8 +94,7 @@ multi-field command is not a transactional hardware operation.
 
 Scalar topics retain native values: `/position` maps to position, `/speed` and
 `/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
-maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
-unsupported by runtime motor drivers. The standalone Pybricks tool defines
+maps to enable/disable presets. `/dc` remains unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
 Normalized positions map through configured operational limits once, then become

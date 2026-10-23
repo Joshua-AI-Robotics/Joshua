@@ -1,58 +1,100 @@
-# Shared firmware protocol
+# Shared firmware and JoshuaWire
 
-`joshua_wire` implements JoshuaWire **0.2.0 / wire revision 4**. The normative
-[protocol contract](../../docs/JOSHUA_WIRE.md) defines mixed-device discovery,
-versioned profiles, one session owner across all functions/transports, bounded
-callbacks and scheduling, shared resource validation, observable safety state,
-freshness/error semantics and the required stacked integration tests.
+JoshuaWire **0.2.0 / wire revision 4** connects the host board engine and MCU
+firmware. The normative [protocol contract](../../docs/JOSHUA_WIRE.md) defines
+mixed-device discovery, versioned profiles, session ownership, reply semantics,
+safety state and the H/F/T integration gates. Earlier revisions are incompatible;
+JW1 and the legacy host paths are retired in the integration stage.
 
-The core (`joshua_wire_commands`) contains discovery, common replies, profile
-selectors and board/function state schemas. It does not import actuator, sensor
-or I/O types. `joshua_wire_profiles` contains initial actuator, scalar sensor and
-I/O codecs. `jw_drive_t` remains actuator-only metadata. A new profile or board
-needs no framing/session change or board enum. Vendor/product IDs are informational.
+## Contents
 
-`joshua_device_runtime` dispatches core commands and registered profiles.
-`joshua_actuator_handler` is the portable C actuator-profile handler shared by
-AM243's software backend and Teensy/ESP32's STEP/DIR backend. It decodes typed
-requests, validates advertised modes and common admission guards, encodes replies,
-and records action outcomes. Sensor and I/O handlers register independently;
-actuator execution stays outside the core codec.
+- `joshua_wire.{h,c}`: bounded 15..96-byte complete frames, CRC and correlation.
+- `joshua_wire_commands.{h,c}`: core commands, opaque function descriptors,
+  paged discovery/dependencies, common status/execution replies and state codecs.
+- `joshua_wire_profiles.{h,c}` and actuator/sensor/I/O headers: profile v1.0
+  metadata and payload codecs. `jw_drive_t` is actuator metadata only.
+- `joshua_wire_resources.{h,c}`: atomic resource-ownership preflight/commit;
+  backends own hardware application and any necessary rollback.
+- `joshua_wire_firmware_session.{h,c}` and `joshua_wire_endpoint.{h,c}`:
+  one MCU session, exact duplicate replay and complete-frame dispatch without I/O.
+- `joshua_device_runtime.{h,c}`: bounded, allocation-free catalog, dependencies,
+  status, safety and per-function profile dispatch. Callers serialize the runtime
+  and supply stable IDs, metadata, boot identity and bounded backend callbacks.
+- `joshua_actuator_handler.{h,c}`: portable C actuator-profile execution shared
+  by AM243, Teensy and ESP32. Decodes typed requests, validates advertised modes
+  and common admission guards, encodes replies and records action outcomes.
+- `joshua_stepdir_device.{h,cpp}` / `backend_stepdir.{h,cpp}`: the shared
+  Teensy/ESP32 actuator backend. GPIO claims are checked before configuration;
+  enabled reconfiguration is BUSY. Feedback is a main-loop acquisition of counted
+  pulses/commanded values, not encoder measurement or physical-stop evidence.
+- Teensy/ESP32 use platform hardware entropy for boot identities; no persistent
+  boot-counter storage is reserved.
+- `frame_transport.h`, serial assembler/transport sources: bounded complete-frame
+  I/O and retained whole responses. Partial input or blocked transmission does
+  not repeat dispatch. Motor service continues between iterations.
+- `joshua_wire_ethercat.h`: layout-2 constants, 108-byte mailbox envelopes and
+  112-byte PDO images. `joshua_ethercat_profile.{h,c}` implements shared CoE/PDO
+  publication, retained replies, session state and function-ID watchdog slots.
 
-Backend callbacks own device limits, resource staging/rollback, bounded acquisition,
+## Actuator backend contract
+
+The shared actuator handler registers through `joshua_device_runtime`; sensor
+and I/O handlers register independently. Actuator execution stays outside the
+core codec. AM243 supplies `am243_software_backend`; Teensy/ESP32 supply the
+STEP/DIR callbacks in `joshua_stepdir_device`.
+
+Backend callbacks own device limits, resource staging/rollback, bounded acquisition
 and physical actions. They return explicit status/execution results. Rejected work
 has no effects; accepted, failed or uncertain work retains backend-authored state
 and queryable action IDs. Only completed successful mutations get normal state
-reporting from a fresh backend snapshot. Reset/ESTOP/recovery remain board-wide
-runtime safety callbacks. This consolidation is part of F; production scheduling,
-rollback and hardware qualification gates in H/F/T remain outstanding.
+reporting from a fresh backend snapshot. Successful DISABLE preserves fault and
+ESTOP recovery state. Reset/ESTOP/recovery remain board-wide runtime safety callbacks.
+This consolidation is part of F; production scheduling, rollback and hardware
+qualification gates in H/F/T remain outstanding.
 
-IDENTIFY advertises limits, supported protocol/planes, boot/generation identity
-and safety scope. DISCOVER pages at most four stable function descriptors; the
-function ID space supports 255 functions. Device IDs group multifunction devices.
-DESCRIBE_FUNCTION supplies profile metadata; GET_DEPENDENCIES enumerates shared
-shutdown effects. GET_STATUS is queryable after lost events/reconnect and separates
-firmware stop progress, physical verification support and recovery requirements.
+## Runtime behavior
 
-One `jw_endpoint_t` per MCU dispatches every transport through the same session.
-Callbacks must be bounded and return a common status/execution header plus data.
-Slow measurements use background acquisition and cached typed samples, NOT_READY
-or BUSY. Handler failure produces cached OUTCOME_UNKNOWN; exact retries cannot
-repeat side effects. `jw_resource_replace` validates ownership before registry
-changes; board backends retain responsibility for staging/rolling back hardware.
+IDENTIFY advertises protocol/planes/limits, boot identity and safety semantics.
+DISCOVER pages stable function descriptors; DESCRIBE_FUNCTION supplies versioned
+metadata. Vendor/product IDs are informational. Actuator, sensor and I/O schemas
+are separate from core framing. Unknown optional profiles remain discoverable.
+Host configuration remains the intended wiring/settings source of truth.
 
-Revision 4 is incompatible with earlier new-codec revisions. Frames remain
-96 bytes; EtherCAT layout 2's mailbox/PDO slots remain 108/112 bytes, with the
-advertised protocol range updated to revision 4 by the adapter/firmware stack.
-All Joshua-authored host MCU bindings and firmware images use this revision;
-the previous codec and host implementation have been removed. Teensy/ESP32 share
-`joshua_stepdir_device`, the physical STEP/DIR backend and incremental serial
-framing. The AM243 UART overlay uses the current endpoint with its existing
-software-only actuator backend. Firmware builds never flash devices.
+Every response starts with status/execution. Handler failure is cached as
+OUTCOME_UNKNOWN; exact retries cannot repeat side effects. RESET disables outputs
+and invalidates configuration while preserving ESTOP/fault latches. RECOVER is
+explicit and never enables. GET_STATUS exposes firmware action completion,
+recovery requirements and unsupported physical verification separately.
 
-Hardware-free tests include golden payload/frame bytes, bounded C codecs,
-session retry/reset/reboot behavior and a twelve-function mixed-device fake.
-The fake coordinator/acquisition/scheduler illustrates protocol requirements;
-production concurrency/deadline/rollback tests belong to the H/F/T stacked PRs
-identified in the protocol contract and
-[board/comm migration plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md).
+The [host engine](../../robot/board/joshua_wire/README.md) checks the complete
+catalog, dependencies and metadata before applying desired actuator settings.
+One session serializes message and cyclic operations. Paired EtherCAT admits only
+actuator v1.0 target/feedback to PDO; discovery, status and other profiles stay on
+CoE. The AM243 [TI adapter](../am243/joshua_dual_transport/README.md) maps 28 words
+per PDO and has a software-only channel. Its UART and EtherCAT artifacts are
+separate owners; simultaneous transports on one MCU still need arbitration.
+
+## Porting JW EtherCAT to another board
+
+Supply stable function/profile metadata and bounded command/reset/stop/enabled
+callbacks to the portable profile. Serialize its calls, service acquisition and
+watchdogs independently, and match SII/ESI and object/PDO mappings to layout 2.
+Reset must disable outputs and preserve safety latches; recovery never enables.
+Vendor/product IDs do not register a new core board type. A physical backend
+must validate resources and stage or roll back hardware configuration.
+
+## Validation and remaining gates
+
+Use Compose `test-u22`/`test-u24` from [CONTRIBUTING](../../CONTRIBUTING.md#testing-and-ci).
+Native tests cover golden core/profile bytes, a twelve-function mixed-device
+fixture, real host/firmware endpoint integration, stable IDs, shared IDs across
+planes, unknown outcomes, ESTOP/reset/recovery, resource conflicts, cached sample
+metadata and controlled-clock EtherCAT watchdogs. Arduino/TI fakes open no real
+hardware; PlatformIO and AM243 Makefiles build the same production sources.
+
+The full priority/deadline scheduler, stop preemption, generic host sensor/I/O
+bindings, physical-backend rollback and hardware timing/boot/safety qualification
+remain gates in the normative contract. Serialized loopback tests do not establish
+those guarantees. No firmware is flashed automatically. See the
+[manual validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md) for explicit
+hardware procedures and `--allow_recover` when recovering a latched stop.

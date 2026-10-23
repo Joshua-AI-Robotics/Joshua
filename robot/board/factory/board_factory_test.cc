@@ -33,6 +33,13 @@ TEST_F(BoardFactoryTest, SameNameSharesOneInstance) {
   EXPECT_EQ(board_a->get(), board_b->get());
 }
 
+TEST_F(BoardFactoryTest, SameNameCannotSilentlyChangeEndpointOrChannelPolicy) {
+  auto config = MakeMockBoard("same", 1);
+  ASSERT_TRUE(BoardFactory::GetOrCreate(config).ok());
+  config.mutable_comm()->mutable_ethercat_config()->set_slave_index(2);
+  EXPECT_EQ(BoardFactory::GetOrCreate(config).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST_F(BoardFactoryTest, DifferentNamesGetDifferentInstances) {
   auto board_a = BoardFactory::GetOrCreate(MakeMockBoard("bridge_1", 1));
   auto board_b = BoardFactory::GetOrCreate(MakeMockBoard("bridge_2", 1));
