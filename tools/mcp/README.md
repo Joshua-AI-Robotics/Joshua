@@ -76,6 +76,15 @@ configuration, topics, references and limits, with compatibility and hardware
 readiness explicitly unverified. Output is capped at 64 KiB; a larger report
 returns `RESOURCE_EXHAUSTED`.
 
+## Typed observation contract
+
+[`observation_source.py`](observation_source.py) provides a standalone, stdlib-only
+`ObservationSource[T]` ABC and validated frozen metadata/result records. Concrete
+adapters own payload validation, bounds and lifecycle enforcement. The
+[design and usage examples](../../docs/MCP_OBSERVATION_DESIGN.md) distinguish the
+implemented base from deferred adapters. This library exposes no new MCP tool
+and does not change the existing interfaces or response schemas.
+
 ## Optional runtime observations
 
 `get_runtime_status()`, `get_recent_logs(cursor=None, limit=50, min_level="WARN")`
