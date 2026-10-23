@@ -238,7 +238,10 @@ int Run(const std::vector<std::string>& args, std::ostream& output) {
     Set(report,
         "message",
         Text("Inspection output exceeds 64 KiB; reduce the candidate configuration."));
-    google::protobuf::util::MessageToJsonString(report, &json).IgnoreError();
+    // Protobuf appends to the destination string, including on this retry.
+    json.clear();
+    if (!google::protobuf::util::MessageToJsonString(report, &json).ok() || json.size() + 1 > 65536)
+      return 3;
     exit = 1;
   }
   output << json << '\n';
