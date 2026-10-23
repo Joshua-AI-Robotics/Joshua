@@ -58,3 +58,21 @@ guard while cyclic exchange continues. Missing support or insufficient slack
 is rejected. Mailbox counters, malformed responses, abort codes, cancellation
 and deadline overruns are covered by register fakes. The legacy TI adapter
 remains separate until factory integration.
+
+## Paired JW endpoint
+
+`JoshuaWireEthercatTransport` exposes management message and correlated cyclic
+capabilities for one compatibility-gated slave. The adapter checks the exact
+descriptor/PDO region before session reset, retains replies until exact
+acknowledgement, and validates session/message/command/channel correlation on
+both planes. Timeout, cancellation and late replies invalidate or quarantine
+the session instead of reporting unproven command execution. All bus I/O still
+belongs to the master worker. Factory assembly is introduced in the integration
+stage; the native adapter suite uses copied register/PDO data.
+
+The paired adapter now gates JoshuaWire revision 4 with layout 2: 96-byte
+frames, 108-byte mailbox envelopes and 112-byte PDO slots. Catalog, status,
+recovery and versioned sensor/I/O operations use the mailbox. Only actuator
+profile v1.0 SET_TARGET/GET_FEEDBACK are admitted to the cyclic plane; retired
+global actuator opcodes are rejected. Descriptor diagnostics print the actual
+required revision and sizes. Reset readback becomes a common OK/COMPLETE reply.
