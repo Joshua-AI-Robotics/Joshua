@@ -71,6 +71,8 @@ TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow)
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
+  EXPECT_TRUE(result->has_timestamp_ns());
+  EXPECT_GT(result->timestamp_ns(), 1000000000000000000LL);
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),
                          std::numeric_limits<double>::max(),
@@ -213,17 +215,46 @@ TEST_F(PacketParserCppTest, IntegerFeedbackDoesNotTruncateOrWrap) {
       config.topic(), 10, [&](std_msgs::msg::Int8::ConstSharedPtr message) {
         value = message->data;
       });
-  EXPECT_FALSE((*publisher)(128).ok());
-  EXPECT_FALSE((*publisher)(-129).ok());
-  EXPECT_FALSE((*publisher)(1.5).ok());
-  EXPECT_FALSE((*publisher)(std::numeric_limits<float>::quiet_NaN()).ok());
+  EXPECT_FALSE((*publisher)(128, 123).ok());
+  EXPECT_FALSE((*publisher)(-129, 123).ok());
+  EXPECT_FALSE((*publisher)(1.5, 123).ok());
+  EXPECT_FALSE((*publisher)(std::numeric_limits<float>::quiet_NaN(), 123).ok());
   // Repeat the valid sample until ROS discovery completes.
   SpinUntil([&] {
-    EXPECT_TRUE((*publisher)(42).ok());
+    EXPECT_TRUE((*publisher)(42, 123).ok());
     return value.has_value();
   });
   ASSERT_TRUE(value.has_value());
   EXPECT_EQ(*value, 42);
+}
+
+TEST_F(PacketParserCppTest, JointFeedbackPreservesAcquisitionStampThroughPublisher) {
+  robot::perception::SinglePerception sensor;
+  sensor.set_sensor_name("elbow");
+  sensor.mutable_sts3215_encoder_config();
+  ros2::node::Publisher config;
+  config.set_topic("joint_feedback");
+  config.set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  auto publish = ros2_utils::CreatePositionMessagePublisher(*node, config, sensor);
+  ASSERT_TRUE(publish.ok()) << publish.status();
+  std::optional<sensor_msgs::msg::JointState> received;
+  auto receiver = node->create_subscription<sensor_msgs::msg::JointState>(
+      config.topic(), 10, [&](sensor_msgs::msg::JointState::ConstSharedPtr message) {
+        received = *message;
+      });
+  for (int64_t ns : {int64_t{123000000456}, int64_t{0}, int64_t{-500000000}}) {
+    received.reset();
+    SpinUntil([&] {
+      EXPECT_TRUE((*publish)(2048, ns).ok());
+      return received && static_cast<int64_t>(received->header.stamp.sec) * 1000000000 +
+                                 received->header.stamp.nanosec ==
+                             ns;
+    });
+    ASSERT_TRUE(received);
+    EXPECT_EQ(received->name, std::vector<std::string>{"elbow"});
+    EXPECT_NEAR(received->position.at(0), 3.141592653589793, 1e-6);
+  }
+  EXPECT_FALSE((*publish)(2048, std::numeric_limits<int64_t>::max()).ok());
 }
 TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);

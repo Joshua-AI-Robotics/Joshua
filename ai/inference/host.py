@@ -12,7 +12,6 @@ implementations resolved via the registry.
 
 from __future__ import annotations
 
-import time
 from typing import Any, List, NamedTuple, Optional
 
 from rclpy.node import Node
@@ -34,6 +33,7 @@ from ros2.proto import ros2_data_type_pb2
 from ros2.ros2_type_resolver import resolve_message_class_from_enum
 from ros2.utils.packet_parser import denormalize_position_value
 from ros2.utils.qos_setting import create_qos_setting
+from utils.robot_time import robot_time_ns
 
 
 class _Publisher(NamedTuple):
@@ -185,7 +185,7 @@ class InferenceHost(Node):
                     topic=channel.topic,
                     role=channel.role,
                     payload=payload,
-                    timestamp_ns=time.time_ns(),
+                    timestamp_ns=robot_time_ns(),
                 )
                 commands = self.adapter.on_observation(observation)
             except Exception as e:  # noqa: BLE001 - isolate adapter failures

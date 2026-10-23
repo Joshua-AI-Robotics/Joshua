@@ -12,6 +12,7 @@ texts.
 
 - ROS2 (Robot Operating System 2): Apache-2.0 — https://docs.ros.org/en/humble/
 - Protocol Buffers: BSD-3-Clause — https://developers.google.com/protocol-buffers
+- pybind11: BSD-3-Clause — https://github.com/pybind/pybind11/blob/v2.13.6/LICENSE
 - Bazel: Apache-2.0 — https://bazel.build/
 - OpenCV: Apache-2.0 — https://opencv.org/
 - Abseil C++: Apache-2.0

@@ -44,8 +44,9 @@ message ActionPacket {
   string action_id = 1;
   // For joint, preserves the source stamp (including zero/negative
   // values). Clock domain, scheduling and freshness are not inferred.
-  // TODO(hmoon): Sync the timestamp unit and source across the system.
-  uint64 timestamp_ns = 2;
+  // Headerless ROS commands carry host receipt time from RobotTime. Presence
+  // distinguishes an explicit source time of zero from an unstamped command.
+  optional int64 timestamp_ns = 2;
   uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
   oneof action_type {

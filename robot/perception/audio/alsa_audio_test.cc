@@ -1,13 +1,28 @@
 #include "robot/perception/audio/alsa_audio.h"
 
+#include <atomic>
 #include <cerrno>
+#include <memory>
+#include <stdexcept>
 
 #include "gtest/gtest.h"
 
 namespace {
 bool pending_read = false;
 bool partial_read = false;
+class TestClock final : public joshua::RobotClock {
+ public:
+  int64_t NowNs() const override {
+    if (fail) throw std::runtime_error("test robot clock failure");
+    return now;
+  }
+  std::atomic<int64_t> now{1700000000123456789LL};
+  std::atomic<bool> fail{false};
+};
 }  // namespace
+extern "C" snd_pcm_sframes_t __wrap_snd_pcm_avail_update(snd_pcm_t*) {
+  return 320;  // Deterministic 20 ms backlog at the test's 16 kHz sample rate.
+}
 extern "C" snd_pcm_sframes_t __real_snd_pcm_readi(snd_pcm_t*, void*, snd_pcm_uframes_t);
 extern "C" snd_pcm_sframes_t __wrap_snd_pcm_readi(snd_pcm_t* pcm,
                                                   void* data,
@@ -31,6 +46,9 @@ TEST(AlsaAudioTest, RejectsInvalidConfigWithoutDeviceAccess) {
   EXPECT_TRUE(audio.Teardown().ok());
 }
 TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
+  auto clock = std::make_unique<TestClock>();
+  auto* clock_state = clock.get();
+  ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
   // ALSA's built-in null plugin does not access a microphone or other hardware.
   SinglePerception config;
   config.set_sensor_name("test_audio");
@@ -43,6 +61,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   ASSERT_TRUE(audio.Init().ok());
   partial_read = true;
   EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
+  clock_state->now = 1700000001123456789LL;
   pending_read = true;
   EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
   auto first = audio.GetData();
@@ -53,7 +72,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   EXPECT_EQ(first->audio().channels(), 2);
   EXPECT_EQ(first->audio().encoding(), "s16le");
   EXPECT_EQ(first->perception_id(), "test_audio");
-  EXPECT_GT(first->timestamp_ns(), 1000000000000000000ULL);
+  EXPECT_EQ(first->timestamp_ns(), 1700000000123456789LL - 20000000);
   EXPECT_TRUE(first->audio().discontinuity());
   PerceptionPacket decoded;
   ASSERT_TRUE(decoded.ParseFromString(first->SerializeAsString()));
@@ -62,6 +81,10 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   ASSERT_TRUE(second.ok());
   EXPECT_FALSE(second->audio().discontinuity());
   EXPECT_EQ(second->sequence_id(), first->sequence_id() + 1);
+  EXPECT_EQ(second->timestamp_ns(), 1700000001123456789LL - 20000000);
+  clock_state->fail = true;
+  EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kUnavailable);
+  clock_state->fail = false;
   ASSERT_TRUE(audio.Teardown().ok());
   auto restarted = audio.GetData();
   ASSERT_TRUE(restarted.ok());

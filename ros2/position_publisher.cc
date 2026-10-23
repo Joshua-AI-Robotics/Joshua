@@ -40,7 +40,7 @@ class PositionPublisher : public rclcpp::Node {
                       logger, "Invalid position: %s", position.status().ToString().c_str());
                   return;
                 }
-                const auto status = publish(*position);
+                const auto status = publish(*position, packet->timestamp_ns());
                 if (!status.ok()) {
                   RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
                 }
@@ -53,9 +53,8 @@ class PositionPublisher : public rclcpp::Node {
   }
 
  private:
-  // TODO(hmoon): Integrate acquisition scheduling and message timestamps with
-  // the planned system-wide clock (including PTP synchronization), retaining
-  // config-driven rates and sharing each sensor reading across its publishers.
+  // TODO(hmoon): Share sensor readings across publishers while retaining each
+  // publisher's config-driven rate. Each reading already retains RobotTime.
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
 int main(int argc, char* argv[]) {

@@ -12,6 +12,7 @@ namespace robot::perception {
 
 // Expose the process-global clock to sensors without per-sensor clock state.
 using ::joshua::RobotTime;
+using ::joshua::RobotTimeNs;
 
 // Common lifecycle and sampling interface for all sensors.
 class PerceptionInterface {

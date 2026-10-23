@@ -181,8 +181,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
                                    const ResponseBoundary& consume) {
   if (request.empty() || timeout.count() <= 0 || timeout.count() > INT_MAX || !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  // TODO: Integrate with RobotTime when it exposes a monotonic deadline API.
-  // Keep steady_clock for deadline calculations; UTC/PTP timestamps can jump.
+  // Deadlines measure elapsed time; UTC/PTP RobotTime timestamps can jump.
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   if (!lock.try_lock_until(deadline))

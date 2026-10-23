@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -24,7 +25,8 @@ absl::Status ValidatePositionMessageType(ros2::data_type::Ros2DataType type,
                                          const robot::perception::SinglePerception& sensor);
 absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscription,
                                        const robot::action::Actuator& actuator);
-using PositionMessagePublisher = std::function<absl::Status(float)>;
+// The caller supplies the original acquisition time, including zero.
+using PositionMessagePublisher = std::function<absl::Status(float, int64_t)>;
 using ActionMessageCallback = std::function<void(absl::StatusOr<robot::action::ActionPacket>)>;
 absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     rclcpp::Node& node,

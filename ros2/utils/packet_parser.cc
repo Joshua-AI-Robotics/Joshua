@@ -12,6 +12,7 @@
 #include "absl/strings/str_join.h"
 #include "rclcpp/rclcpp.hpp"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/byte.hpp"
@@ -36,6 +37,7 @@
 #include "std_msgs/msg/u_int64_multi_array.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
+#include "utils/robot_time.h"
 #include "utils/status_macros.h"
 
 namespace ros2_utils {
@@ -143,13 +145,13 @@ absl::StatusOr<float> NativeCommand(T value) {
 template <typename Message>
 absl::Status EncodePosition(float value,
                             const std::string& name,
-                            rclcpp::Node& node,
+                            int64_t timestamp_ns,
                             Message& message) {
   if constexpr (std::is_same_v<Message, sensor_msgs::msg::JointState>) {
     ABSL_ASSIGN_OR_RETURN(auto radians, CheckedNumber<double>(value / kStsTicksPerRadian));
     message.name = {name};
     message.position = {radians};
-    message.header.stamp = node.now();
+    ABSL_ASSIGN_OR_RETURN(message.header.stamp, ToRosTimestamp(timestamp_ns));
     // Do not fabricate velocity or effort measurements.
   } else if constexpr (IsVector<decltype(message.data)>::value) {
     ABSL_ASSIGN_OR_RETURN(auto converted,
@@ -181,12 +183,9 @@ absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState
         return absl::InvalidArgumentError("JointState values must be finite");
     }
   }
-  if (message.header.stamp.nanosec >= 1000000000u)
-    return absl::InvalidArgumentError("JointState stamp.nanosec must be less than 1e9");
-
   ActionPacket packet;
-  packet.set_timestamp_ns(static_cast<int64_t>(message.header.stamp.sec) * 1000000000LL +
-                          message.header.stamp.nanosec);
+  ABSL_ASSIGN_OR_RETURN(auto timestamp_ns, FromRosTimestamp(message.header.stamp));
+  packet.set_timestamp_ns(timestamp_ns);
   auto* command = packet.mutable_joint();
   command->set_units(JointCommand::SI);
   command->set_position_encoding(JointCommand::POSITION_SI);
@@ -289,9 +288,9 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     using Message = typename decltype(tag)::Type;
     auto publisher = node.create_publisher<Message>(config.topic(),
                                                     CreateQosSetting(sensor.node().qos_setting()));
-    result = [publisher, &node, name = sensor.sensor_name()](float value) {
+    result = [publisher, name = sensor.sensor_name()](float value, int64_t timestamp_ns) {
       Message message;
-      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, node, message));
+      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, timestamp_ns, message));
       publisher->publish(message);
       return absl::OkStatus();
     };
@@ -319,6 +318,16 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
         [actuator_name = action.actuator().actuator_name(), torque_gate, config, callback](
             typename Message::ConstSharedPtr message) {
           auto packet = DecodeCommand(*message, config, actuator_name);
+          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
+            if (packet.ok()) {
+              try {
+                packet->set_timestamp_ns(joshua::RobotTimeNs());
+              } catch (const std::exception& error) {
+                callback(absl::UnavailableError(error.what()));
+                return;
+              }
+            }
+          }
           if (packet.ok() && packet->has_joint() && torque_gate) {
             const double gate = packet->joint().effort();
             if (gate < 0) {

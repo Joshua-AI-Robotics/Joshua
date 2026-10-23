@@ -12,6 +12,7 @@
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 
@@ -132,7 +133,13 @@ class LidarPublisher : public rclcpp::Node {
         }
 
         sensor_msgs::msg::PointCloud2 cloud_msg;
-        cloud_msg.header.stamp = this->get_clock()->now();
+        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp_ns());
+        if (!stamp.ok()) {
+          RCLCPP_ERROR(
+              get_logger(), "Invalid lidar timestamp: %s", stamp.status().ToString().c_str());
+          continue;
+        }
+        cloud_msg.header.stamp = *stamp;
         cloud_msg.header.frame_id = cloud.frame_id().empty() ? lidar.frame_id : cloud.frame_id();
         cloud_msg.height = cloud.height() > 0 ? cloud.height() : 1;
         cloud_msg.width = cloud.width() > 0 ? cloud.width() : static_cast<uint32_t>(num_points);

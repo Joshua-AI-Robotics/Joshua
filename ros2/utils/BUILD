@@ -5,6 +5,30 @@ load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
+cc_library(
+    name = "robot_time_conversion",
+    hdrs = ["robot_time_conversion.h"],
+    deps = [
+        "@abseil-cpp//absl/status:statusor",
+        "@ros2_deps//:cpp_builtin_interfaces",
+        "@ros2_deps//:rosidl_runtime_c",
+    ],
+)
+
+cc_test(
+    name = "robot_time_conversion_test",
+    srcs = ["robot_time_conversion_test.cc"],
+    deps = [
+        ":robot_time_conversion",
+        "@googletest//:gtest_main",
+    ],
+)
+
+py_library(
+    name = "robot_time_conversion_py",
+    srcs = ["robot_time_conversion.py"],
+)
+
 ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],
@@ -74,10 +98,12 @@ cc_library(
     hdrs = ["packet_parser.h"],
     deps = [
         ":qos_setting",
+        ":robot_time_conversion",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",

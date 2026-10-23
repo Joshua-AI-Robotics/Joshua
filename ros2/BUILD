@@ -1,5 +1,5 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
@@ -31,6 +31,7 @@ py_library(
         "//config/proto:config_py_proto",
         "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:ros_python_paths_py",
+        "//utils:robot_time_py",
         # rclpy is provided by the selected Docker image's ROS2 installation.
     ] + requirement("protobuf") + requirement("PyYAML"),
 )
@@ -76,6 +77,8 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//ros2/utils:robot_time_conversion_py",
+        "//utils:robot_time_py",
     ] + requirement("numpy"),
 )
 
@@ -94,6 +97,7 @@ ros2_cpp_binary(
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -133,6 +137,7 @@ ros2_cpp_binary(
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -183,6 +188,8 @@ ros2_py_binary(
         "//ros2/proto:trajectory_py_proto",
         "//ros2/utils:packet_parser_py",
         "//ros2/utils:qos_setting_py",
+        "//ros2/utils:robot_time_conversion_py",
+        "//utils:robot_time_py",
     ] + requirement("protobuf"),
 )
 
@@ -225,6 +232,28 @@ cc_test(
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+py_test(
+    name = "robot_time_migration_test",
+    srcs = [
+        "robot_time_migration_test.py",
+        "trajectory_publisher.py",
+    ],
+    main = "robot_time_migration_test.py",
+    deps = [
+        ":image_converter",
+        ":node_runner_py",
+        "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
+        "//ros2/proto:node_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/proto:trajectory_py_proto",
+        "//ros2/utils:packet_parser_py",
+        "//ros2/utils:qos_setting_py",
+        "//ros2/utils:robot_time_conversion_py",
+        "//utils:robot_time_py",
+    ] + requirement("numpy") + requirement("protobuf"),
 )
 
 ros2_cpp_binary(

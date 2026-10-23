@@ -1,5 +1,7 @@
 #include "robot/perception/position/sts3215_position_sensor.h"
 
+#include <unistd.h>
+
 #include <memory>
 #include <string>
 
@@ -74,6 +76,27 @@ TEST(Sts3215PositionSensorTest, PublishesThePositionTheChannelReports) {
   EXPECT_FLOAT_EQ(packet->position().position(), 2048.0f);
   EXPECT_FLOAT_EQ(packet->position().velocity(), 12.0f);
   EXPECT_GT(packet->timestamp_ns(), 0);
+}
+
+class FixedClock final : public joshua::RobotClock {
+ public:
+  int64_t NowNs() const override {
+    return 1700000000123456789LL;
+  }
+};
+
+TEST(Sts3215PositionSensorTest, UsesExactConfiguredRobotTime) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+  ASSERT_EXIT(
+      {
+        if (!joshua::SetGlobalRobotClock(std::make_unique<FixedClock>()).ok()) _exit(1);
+        auto channel = std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{});
+        Sts3215PositionSensor sensor(channel, MakeSensorConfig());
+        const auto packet = sensor.GetData();
+        _exit(packet.ok() && packet->timestamp_ns() == 1700000000123456789LL ? 0 : 2);
+      },
+      testing::ExitedWithCode(0),
+      "");
 }
 
 // A sensor observes; it must never command. The channel it holds can do

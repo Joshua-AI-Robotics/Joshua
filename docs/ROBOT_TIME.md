@@ -6,6 +6,7 @@
 #include "utils/robot_time.h"
 
 const double now = joshua::RobotTime();
+const int64_t acquisition_ns = joshua::RobotTimeNs();
 ```
 
 Actuator, perception and host-side board drivers already include their shared
@@ -13,7 +14,8 @@ interface headers. Those headers expose this utility and import `RobotTime` into
 `robot::action`, `robot::perception` and `robot::board`, respectively. Board drivers
 can include either `board_channel.h` or `board_interface.h` (which includes the
 channel header). Driver implementations in those namespaces can call
-`RobotTime()` directly without another include or a per-driver Bazel dependency.
+`RobotTime()` or `RobotTimeNs()` directly without another include or a per-driver
+Bazel dependency.
 The dependency is declared on the shared interface targets. The interfaces add
 no clock member, wrapper method, or initialization; all names refer to the same
 global function. Other helpers can include the utility directly.
@@ -50,8 +52,9 @@ Drivers continue calling `RobotTime()` without depending on a concrete class.
 
 ## Initialization and ownership
 
-The C++ `ros2_utils::RunNode<T>` loads and validates the config, creates the
-selected clock, and calls `SetGlobalRobotClock()` before constructing the node.
+The launcher loads and validates the config and installs the selected clock
+before choosing the operation mode. The C++ `ros2_utils::RunNode<T>` loads and
+validates the config and calls `SetGlobalRobotClock()` before constructing the node.
 Clock setup failure returns exit code 1 before any node-owned drivers or
 workers are created. The selected source and fallback reasons are logged.
 
@@ -69,11 +72,28 @@ processes, and tests of source selection use fake system calls.
 Storage is private to `robot_time.cc` and intentionally lasts until process exit
 to avoid destruction-order problems. The OS reclaims an installed PHC descriptor
 at exit. Uninstalled clocks close their descriptors when destroyed. Custom
-`RobotClock::Now()` implementations must support concurrent calls.
+`RobotClock::NowNs()` implementations must support concurrent calls and return
+exact signed nanoseconds. `Now()` derives floating-point seconds from that reading.
 
 If native plugins are added later, they must share the owning runtime library;
 statically embedding independent copies in multiple shared objects can duplicate
-the state. This change covers the current C++ executables, with no Python binding.
+the state. The Python binding is the only native clock owner in current Python
+processes; future native plugins must share that owner rather than embedding
+another copy.
+
+Python nodes use `//utils:robot_time_py`:
+
+```python
+from utils.robot_time import robot_time, robot_time_ns
+
+acquisition_ns = robot_time_ns()
+seconds = robot_time()
+```
+
+Both accessors call the C++ implementation through pybind11. The Python node
+runner installs `general.robot_clock` before node construction, including the
+inference host after its model-environment re-exec. Importing the module does
+not read or install a clock. Initialization failures prevent node construction.
 
 ## Configuration and time domains
 
@@ -128,23 +148,76 @@ For the PHC/system time-scale distinction, see
 ## Reading and failures
 
 UTC and normalized PTP readings use a fixed platform epoch: `kRobotStartTime`
-is currently zero (the Unix epoch). The conversion is:
+is currently zero (the Unix epoch). The integer conversion uses checked wide arithmetic:
 
 ```cpp
-(static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
-    static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond
+(ts.tv_sec - utc_offset) * 1'000'000'000 + ts.tv_nsec - kRobotStartTimeNs
 ```
 
 It never subtracts a process-specific startup time. Changing the platform epoch
-later would change the time contract for every consumer. A `double` does not
-retain every nanosecond at Unix-epoch magnitudes; an exact integer accessor is
-planned before packet serialization migration.
+later would change the time contract for every consumer. `RobotTimeNs()` retains
+every nanosecond within signed 64-bit range, including negative times. Invalid
+nanosecond components and overflow are rejected at startup and at runtime.
+`RobotTime()` divides that integer by 1e9; its `double` result cannot retain every
+nanosecond at Unix-epoch magnitudes. Use the integer accessor for packets.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
 fabricated timestamp. Callers that later adopt this API must handle errors at
 their worker/callback boundary. UTC/PTP can jump when the host adjusts time;
 continue using monotonic durations for deadlines, watchdogs and sleeps.
+
+## Acquisition timestamps and ROS conversion
+
+Drivers now record RobotTime once and publishers retain it:
+
+| Producer | Meaning of the recorded timestamp |
+|----------|-----------------------------------|
+| OpenCV camera | Host capture completion, before image validation and copying |
+| STS3215 position | Host feedback receipt; firmware clock conversion remains separate |
+| LDS01 lidar | Host receipt of the scan-start marker, before the remaining scan read |
+| ALSA audio | Estimated first-sample time, subtracting unread-frame age; partial chunks retain the initial time |
+| Headerless C++ ROS commands | Host receipt/validation time; no source acquisition time is available |
+| Python inference observation | Host receive time, preserving the existing observation contract |
+| Dataset bag and episode markers | Exact host receipt/marker time; incoming message headers stay intact |
+| New trajectory/image messages | RobotTime at message creation when no source time was supplied |
+
+These are host acquisition estimates, not hardware exposure timestamps or proof
+of synchronization. Physical acquisition timestamps require device support.
+Firmware `timestamp_us` metadata remains in its own domain.
+
+`//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(int64_t)` and
+`FromRosTimestamp(builtin_interfaces::msg::Time)`. Python equivalents live in
+`ros2.utils.robot_time_conversion`. They convert the representation without reading a clock:
+
+```cpp
+auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp_ns());
+if (!stamp.ok()) return stamp.status();
+message.header.stamp = *stamp;
+```
+
+The conversion preserves exact positive, zero and negative timestamps,
+normalizes the nanosecond component to `[0, 1e9)`, and rejects values outside
+ROS's signed 32-bit seconds range. Camera and lidar publishers and JointState
+position feedback use the original packet time rather than stamping again.
+Scalar feedback messages have no timestamp field.
+
+Action and perception packet timestamps use signed `int64` nanoseconds. Positive
+timestamps retain their existing protobuf wire encoding. Action timestamp
+presence distinguishes an explicit zero from an unstamped command; older
+senders that omitted a zero cannot supply that distinction retroactively.
+Incoming JointState stamps are preserved, including zero and negative values.
+Trajectory publication preserves a supplied source stamp and uses RobotTime
+only when the field is absent. Image conversion accepts `timestamp_ns` to retain
+the original acquisition time; its default is conversion time.
+
+ROS conversion does not translate between UTC, boot-relative, firmware, or
+simulation domains. Capture and newly generated timestamps follow
+`general.robot_clock`; `use_sim_time` does not change RobotTime or select a
+simulation clock. Incoming source stamps retain their original domain. A graph
+must use compatible domains before comparing stamps. A simulation-backed
+RobotTime and domain metadata/translation remain follow-up work; no `/clock`
+integration is added here.
 
 ## Integration checklist
 
@@ -153,10 +226,11 @@ continue using monotonic durations for deadlines, watchdogs and sleeps.
 - [x] Pure config validation and C++ runner initialization before construction.
 - [x] Shared accessor exposure through actuator, perception and board interfaces.
 - [x] Hardware-free unit tests for source failures, ownership and startup order.
-- [ ] Initialize launcher time before operation-mode selection and cover other
-      entrypoints that do not use the C++ node runner.
-- [ ] Add exact integer timestamp access and explicit ROS timestamp conversion.
-- [ ] Migrate driver acquisition timestamps and preserve them through publishers.
+- [x] Initialize launcher time before operation-mode selection and initialize the
+      Python node runner before node construction.
+- [x] Add exact integer timestamp access and explicit ROS timestamp conversion.
+- [x] Migrate host driver timestamps and preserve them through C++ publishers;
+      migrate Python trajectory, image creation, and inference receive times.
 - [ ] Integrate robot time into logging, including board and communication-driver
       logs; exposing the accessor alone does not change `LOG()` timestamps.
 - [ ] Synchronize firmware clocks or convert firmware timestamps into the
@@ -165,4 +239,7 @@ continue using monotonic durations for deadlines, watchdogs and sleeps.
 - [ ] Discover PTP offsets automatically and monitor synchronization health.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Existing timestamp producers and ROS clocks are unchanged in this first PR.
+Serial deadlines, audio retry/stall detection, and trajectory pacing continue
+using monotonic elapsed time. ROS timers and logging retain their own clock
+semantics. Utility entrypoints that only display incoming stamps do not create
+new acquisition timestamps and need no clock installation.

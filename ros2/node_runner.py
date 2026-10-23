@@ -10,6 +10,7 @@ from rclpy.node import Node  # noqa: E402
 
 # Protobuf generated modules
 from config.proto import config_pb2  # noqa: E402
+from utils.robot_time import initialize_robot_clock  # noqa: E402
 
 
 def load_config(config_path: str) -> config_pb2.Config:
@@ -62,10 +63,15 @@ def run_node(
 
     try:
         cfg = load_config(config_path)
+        source = initialize_robot_clock(cfg.general.robot_clock)
+        rclpy.logging.get_logger(logger_name).info(f"Robot clock initialized: {source}")
         node = node_cls(node_name, node_id, cfg)
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        rclpy.logging.get_logger(logger_name).error(str(e))
+        return 1
     finally:
         try:
             # Call shutdown method if it exists

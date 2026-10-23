@@ -11,6 +11,7 @@
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/image.hpp"
 
 namespace {
@@ -131,7 +132,13 @@ class CameraPublisher : public rclcpp::Node {
         }
 
         auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
-        image_msg->header.stamp = this->now();
+        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp_ns());
+        if (!stamp.ok()) {
+          RCLCPP_ERROR(
+              get_logger(), "Invalid camera timestamp: %s", stamp.status().ToString().c_str());
+          continue;
+        }
+        image_msg->header.stamp = *stamp;
         image_msg->header.frame_id = "camera_frame";
         image_msg->height = image_data.height();
         image_msg->width = image_data.width();

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <limits>
+#include <stdexcept>
 
 #include "robot/perception/audio/audio_config.h"
 namespace robot::perception {
@@ -21,11 +23,6 @@ std::chrono::nanoseconds FramesDuration(uint64_t frames, uint32_t rate) {
 }
 absl::Status AlsaError(const char* operation, int error) {
   return absl::UnavailableError(std::string(operation) + ": " + snd_strerror(error));
-}
-uint64_t RealtimeNs() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
 }
 }  // namespace
 AlsaAudio::AlsaAudio(const SinglePerception& config)
@@ -118,10 +115,17 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
   if (filled_ == 0) {
     // Available capture frames estimate the oldest unread sample's age.
     const auto available = snd_pcm_avail_update(pcm_);
-    const uint64_t now = RealtimeNs();
-    const uint64_t age =
+    int64_t now;
+    try {
+      now = RobotTimeNs();
+    } catch (const std::exception& error) {
+      return absl::UnavailableError(error.what());
+    }
+    const int64_t age =
         available > 0 ? FramesDuration(available, config_.sample_rate_hz()).count() : 0;
-    timestamp_ns_ = now - std::min(now, age);
+    if (now < std::numeric_limits<int64_t>::min() + age)
+      return absl::OutOfRangeError("Audio acquisition timestamp underflow");
+    timestamp_ns_ = now - age;
   }
   // A short successful read need not mean the device is empty. Continue until
   // a packet is complete or ALSA reports no data. Each successful read advances

@@ -1,6 +1,5 @@
 #include "robot/perception/camera/cv_camera.h"
 
-#include <chrono>
 #include <opencv2/videoio.hpp>
 
 namespace robot::perception {
@@ -99,6 +98,9 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
                           "Failed to capture an image from camera with empty frame");
     }
 
+    // Host capture-completion estimate; OpenCV exposes no exposure timestamp here.
+    const auto acquisition_ns = RobotTimeNs();
+
     // Validate frame properties
     if (frame.cols <= 0 || frame.rows <= 0) {
       LOG(ERROR) << "Invalid frame dimensions from camera " << id_ << ": " << frame.cols << "x"
@@ -120,9 +122,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     // Clear and populate the reusable packet
     reusable_packet_.Clear();
     reusable_packet_.set_perception_id(id_);
-    reusable_packet_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                          std::chrono::steady_clock::now().time_since_epoch())
-                                          .count());
+    reusable_packet_.set_timestamp_ns(acquisition_ns);
 
     // Populate ImageData fields
     auto* image_data = reusable_packet_.mutable_image();

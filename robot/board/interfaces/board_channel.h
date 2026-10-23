@@ -10,6 +10,7 @@ namespace robot::board {
 
 // Expose the process-global clock to host-side board and channel drivers.
 using ::joshua::RobotTime;
+using ::joshua::RobotTimeNs;
 
 enum class TargetMode { kPosition, kVelocity, kTorque };
 

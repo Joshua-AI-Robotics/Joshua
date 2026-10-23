@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -13,6 +14,7 @@
 #include "utils/robot_time_internal.h"
 
 double RobotTimeFromHelper();
+int64_t RobotTimeNsFromHelper();
 
 namespace joshua {
 namespace {
@@ -63,8 +65,8 @@ class FakeClockIo final : public internal::ClockIo {
 class ConstantClock final : public RobotClock {
  public:
   explicit ConstantClock(double value) : value_(value) {}
-  double Now() const override {
-    return value_;
+  int64_t NowNs() const override {
+    return static_cast<int64_t>(value_ * kNanosecondsPerSecond);
   }
 
  private:
@@ -96,6 +98,39 @@ TEST(RobotClockTest, PtpConvertsToUtcAndOwnsDescriptor) {
     EXPECT_EQ(io->closes, 0);
   }
   EXPECT_EQ(io->closes, 1);
+}
+
+TEST(RobotClockTest, ExactNanosecondsSurvivePtpOffsetAndNegativeTimes) {
+  auto io = std::make_shared<FakeClockIo>();
+  config::RobotClockConfig config;
+  config.set_ptp_utc_offset_seconds(37);
+  io->ptp_time = timespec{1700000037, 123456789};
+  auto clock = internal::MakeRobotClockWithIo(config, io);
+  ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_EQ((*clock)->NowNs(), 1700000000123456789LL);
+  io->ptp_time = timespec{36, 500000000};
+  EXPECT_EQ((*clock)->NowNs(), -500000000LL);
+  EXPECT_DOUBLE_EQ((*clock)->Now(), -0.5);
+}
+
+TEST(RobotClockTest, RejectsInvalidAndOverflowingReadingsAtStartupAndRuntime) {
+  auto io = std::make_shared<FakeClockIo>();
+  config::RobotClockConfig config;
+  config.set_source(config::RobotClockConfig::UTC);
+  auto clock = internal::MakeRobotClockWithIo(config, io);
+  ASSERT_TRUE(clock.ok());
+  for (const auto& invalid : {timespec{0, -1},
+                              timespec{0, 1000000000},
+                              timespec{std::numeric_limits<int64_t>::max(), 0}}) {
+    io->utc_time = invalid;
+    EXPECT_THROW((*clock)->NowNs(), std::runtime_error);
+    EXPECT_EQ(internal::MakeRobotClockWithIo(config, io).status().code(),
+              absl::StatusCode::kOutOfRange);
+  }
+  io->utc_time = timespec{9223372036LL, 854775807};
+  EXPECT_EQ((*clock)->NowNs(), std::numeric_limits<int64_t>::max());
+  io->utc_time = timespec{-9223372037LL, 145224192};
+  EXPECT_EQ((*clock)->NowNs(), std::numeric_limits<int64_t>::min());
 }
 
 TEST(RobotClockTest, ExplicitZeroOffsetAndDefaultPtpPath) {
@@ -241,7 +276,9 @@ TEST_F(GlobalRobotClockTest, ExplicitInstallIsSharedByThreadsAndHelpers) {
         for (int i = 0; i < 16; ++i) {
           threads.emplace_back([&] {
             for (int j = 0; j < 1000; ++j) {
-              if (RobotTime() != 42.125 || RobotTimeFromHelper() != 42.125) ++errors;
+              if (RobotTime() != 42.125 || RobotTimeFromHelper() != 42.125 ||
+                  RobotTimeNs() != 42125000000LL || RobotTimeNsFromHelper() != 42125000000LL)
+                ++errors;
             }
           });
         }

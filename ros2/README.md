@@ -149,10 +149,15 @@ Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
 Position feedback still publishes one named position per sensor (using
-`sensor_name`), converted to radians with a ROS timestamp. It does not fabricate
-velocity or effort. Use an aggregator for synchronized multi-joint feedback.
+`sensor_name`), converted to radians with the original RobotTime acquisition
+timestamp. It does not fabricate velocity or effort. Use an aggregator for
+synchronized multi-joint feedback.
 Device zero references are retained; URDF offsets and mechanical calibration
 are not inferred.
+
+Camera and lidar publishers also preserve packet timestamps. ROS conversion
+checks range and retains exact integer nanoseconds; see
+[robot time](../docs/ROBOT_TIME.md#acquisition-timestamps-and-ros-conversion).
 
 Hardware and downstream constraints
 ----------------------------------
@@ -193,7 +198,7 @@ Each `std_msgs/msg/UInt8MultiArray.data` contains one serialized
 Decode with the generated perception_packet proto. Audio is interleaved `s16le`,
 and its length is `frames * channels * 2`. Sample rate, channels, frame count,
 source name, sequence, and discontinuity are carried with every chunk.
-`timestamp_ns` estimates the first sample's Unix realtime timestamp from unread
+`timestamp_ns` estimates the first sample's configured RobotTime from unread
 ALSA frames. It is not a hardware timestamp or a synchronization guarantee.
 
 The source sample rate and `frames_per_chunk` determine publication cadence;

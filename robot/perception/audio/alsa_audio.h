@@ -31,7 +31,7 @@ class AlsaAudio : public AudioInterface {
   AudioCaptureSchedule schedule_;
   std::string pending_;
   uint32_t filled_ = 0;
-  uint64_t timestamp_ns_ = 0;
+  int64_t timestamp_ns_ = 0;
   uint64_t sequence_ = 0;
   bool discontinuity_ = true;
 };

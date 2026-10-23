@@ -15,6 +15,8 @@ from ros2.node_runner import run_node
 from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.packet_parser import extract_scalar_from_action
 from ros2.utils.qos_setting import create_qos_setting
+from ros2.utils.robot_time_conversion import to_ros_timestamp
+from utils.robot_time import robot_time_ns
 
 
 @dataclass
@@ -148,15 +150,10 @@ class TrajectoryPublisher(Node):
         for field in fields:
             setattr(message, field, [getattr(joint, field)])
         message.header.frame_id = joint.frame_id
-        if packet.timestamp_ns:
-            sec, nanosec = divmod(packet.timestamp_ns, 1_000_000_000)
-            if not -(2**31) <= sec < 2**31:
-                raise ValueError("Source timestamp exceeds ROS time range")
-            message.header.stamp.sec = sec
-            message.header.stamp.nanosec = nanosec
-        else:
-            # Config waypoints normally have no source stamp; use ROS publish time.
-            message.header.stamp = self.get_clock().now().to_msg()
+        timestamp_ns = (
+            packet.timestamp_ns if packet.HasField("timestamp_ns") else robot_time_ns()
+        )
+        message.header.stamp = to_ros_timestamp(timestamp_ns)
         return message
 
     def _publish_waypoint(self, waypoint: TrajectoryWaypointEntry) -> None:
@@ -167,7 +164,7 @@ class TrajectoryPublisher(Node):
         if topic_pub.data_type == ros2_data_type_pb2.JOINT_STATE:
             try:
                 message = self._joint_state_message(waypoint.action)
-            except ValueError as exc:
+            except (ValueError, RuntimeError) as exc:
                 self.get_logger().error(
                     f"[t={waypoint.timestamp_sec:.3f}s] Invalid JointState "
                     f"on '{waypoint.topic}': {exc}; skipping"
@@ -196,6 +193,7 @@ class TrajectoryPublisher(Node):
         self._loop_timer.cancel()
 
         while self._loop_running:
+            # Pace playback with elapsed time; message timestamps use RobotTime.
             loop_start = time.monotonic()
 
             for waypoint in self._waypoints:

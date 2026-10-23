@@ -56,6 +56,7 @@ class AudioPublisher : public rclcpp::Node {
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
+    // Retry/stall deadlines use elapsed time; packet stamps come from RobotTime.
     const auto now = std::chrono::steady_clock::now();
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {

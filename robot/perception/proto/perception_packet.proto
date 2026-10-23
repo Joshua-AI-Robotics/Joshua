@@ -41,7 +41,7 @@ message PointCloudData {
 }
 
 // Audio wire contract v1. timestamp_ns on the enclosing packet is the
-// estimated Unix CLOCK_REALTIME time of the first sample (not hardware time).
+// estimated RobotTime of the first sample, adjusted for unread ALSA frames.
 message AudioData {
   uint32 sample_rate_hz = 1;
   uint32 channels = 2;
@@ -54,8 +54,9 @@ message AudioData {
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
   string perception_id = 1;
-  // TODO(hmoon): Sync the timestamp unit and source across the system.
-  uint64 timestamp_ns = 2;
+  // Host acquisition estimate in RobotTime nanoseconds. Physical exposure and
+  // firmware acquisition times require device support and domain conversion.
+  int64 timestamp_ns = 2;
   uint64 sequence_id = 3;  // Monotonically increasing sequence number for the perception packet.
 
   oneof data_type {

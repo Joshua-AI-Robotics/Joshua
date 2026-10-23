@@ -68,7 +68,7 @@ class Observation:
         role: ``ChannelRole`` enum value (image/scalar/...).
         payload: Decoded payload -- a numpy array for IMAGE (HWC, rgb8),
             a float for SCALAR. Never a raw ROS message.
-        timestamp_ns: Host receive time in nanoseconds.
+        timestamp_ns: Host receive time in RobotTime nanoseconds.
     """
 
     channel_index: int

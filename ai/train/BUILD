@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -8,7 +8,15 @@ py_library(
     srcs = ["data_store.py"],
     deps = [
         "//ai/proto:data_store_py_proto",
+        "//ros2:ros2_type_resolver",
+        "//utils:robot_time_py",
     ] + requirement("datasets") + requirement("glog"),
+)
+
+py_test(
+    name = "data_store_time_test",
+    srcs = ["data_store_time_test.py"],
+    deps = [":data_store"],
 )
 
 py_binary(
