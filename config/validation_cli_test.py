@@ -344,8 +344,23 @@ robot {
                         },
                     )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
-                    self.fail(
-                        "validator depends on hardware communication implementation"
+                    # Pure config validation is shared with the serial factory.
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/comm/serial:serial_config_validation",
+                            "//robot/comm/serial:serial_config_validation.h",
+                        },
+                        "validator depends on hardware communication implementation",
+                    )
+                if label.startswith("//robot/perception/") and "/proto:" not in label:
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/perception/audio:audio_config",
+                            "//robot/perception/audio:audio_config.h",
+                        },
+                        "validator depends on perception implementation",
                     )
                 if label.startswith("//robot/action/") and "/proto:" not in label:
                     self.fail("validator depends on action implementation")

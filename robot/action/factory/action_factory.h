@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -16,8 +17,33 @@
 #include "utils/status_macros.h"
 
 namespace robot::action {
+struct MotorImplementation {
+  MotorType type;
+  const char* support_scope;
+  std::unique_ptr<ActionInterface> (*create)(std::shared_ptr<robot::board::BoardChannel>,
+                                             const Actuator&);
+};
 class ActionFactory {
  public:
+  static const std::vector<MotorImplementation>& Implementations() {
+    static const std::vector<MotorImplementation> entries = {
+        {MOTOR_STS3215,
+         "installed",
+         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
+           return std::make_unique<Sts3215Driver>(channel, config);
+         }},
+        {MOTOR_STEPPER_NEMA17,
+         "installed",
+         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
+           return std::make_unique<StepperDriver>(channel, config);
+         }},
+        {MOTOR_TI_DEMO,
+         "demo_only",
+         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
+           return std::make_unique<TiDemoDriver>(channel, config);
+         }}};
+    return entries;
+  }
   // Board-layer factory (docs/BOARD_LAYER_RFC.md §6.5): every actuator resolves
   // board_name against `boards`, validates motor_type against the channel's
   // drive, and constructs a motor driver. Callers must pass config.robot().boards()
@@ -73,27 +99,15 @@ class ActionFactory {
     ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
     ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
 
-    switch (actuator.motor_type()) {
-      case robot::action::MotorType::MOTOR_TI_DEMO: {
-        auto driver = std::make_unique<robot::action::TiDemoDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      case robot::action::MotorType::MOTOR_STS3215: {
-        auto driver = std::make_unique<robot::action::Sts3215Driver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      case robot::action::MotorType::MOTOR_STEPPER_NEMA17: {
-        auto driver = std::make_unique<robot::action::StepperDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      default:
-        return absl::Status(absl::StatusCode::kUnimplemented,
-                            "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +
-                                " has no board-layer driver yet (docs/BOARD_LAYER_RFC.md §10).");
+    for (const auto& implementation : Implementations()) {
+      if (implementation.type != actuator.motor_type()) continue;
+      auto driver = implementation.create(channel, actuator);
+      ABSL_RETURN_IF_ERROR(driver->Init());
+      return driver;
     }
+    return absl::UnimplementedError(
+        "Motor type " + MotorType_Name(actuator.motor_type()) +
+        " has no board-layer driver yet (docs/BOARD_LAYER_RFC.md §10).");
   }
 
   ActionFactory() = default;

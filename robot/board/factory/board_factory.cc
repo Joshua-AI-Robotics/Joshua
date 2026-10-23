@@ -26,33 +26,43 @@ static std::mutex g_board_mutex;
 static std::map<std::string, CachedBoard> g_boards;  // keyed by Board.name
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::Board& config) {
-  switch (config.board_type()) {
-    case robot::board::BoardType::MOCK:
-      return std::make_shared<MockBoard>();
-    case robot::board::BoardType::AM243:
-      return std::make_shared<Am243Board>();
-    case robot::board::BoardType::FEETECH_BUS:
-      return std::make_shared<FeetechBusBoard>();
-    case robot::board::BoardType::TEENSY41:
-      return std::make_shared<TeensyBoard>();
-    case robot::board::BoardType::ESP32:
-      return std::make_shared<Esp32Board>();
-    case robot::board::BoardType::ARDUINO_UNO:
-    case robot::board::BoardType::HOST_GPIO:
-      return absl::UnimplementedError(
-          absl::StrCat("Board '",
-                       config.name(),
-                       "': board_type ",
-                       robot::board::BoardType_Name(config.board_type()),
-                       " is not implemented yet (docs/BOARD_LAYER_RFC.md §10)."));
-    case robot::board::BoardType::BOARD_INVALID:
-    default:
-      return absl::InvalidArgumentError(
-          absl::StrCat("Board '", config.name(), "' has an invalid board_type."));
+  for (const auto& implementation : BoardFactory::Implementations()) {
+    if (implementation.type != config.board_type()) continue;
+    if (implementation.create) return implementation.create();
+    return absl::UnimplementedError(
+        absl::StrCat("Board '",
+                     config.name(),
+                     "': board_type ",
+                     BoardType_Name(config.board_type()),
+                     " is not implemented yet (docs/BOARD_LAYER_RFC.md §10)."));
   }
+  return absl::InvalidArgumentError(
+      absl::StrCat("Board '", config.name(), "' has an invalid board_type."));
 }
 
 }  // namespace
+
+const std::vector<BoardImplementation>& BoardFactory::Implementations() {
+  static const std::vector<BoardImplementation> entries = {
+      {MOCK,
+       "test_only",
+       []() -> std::shared_ptr<BoardInterface> { return std::make_shared<MockBoard>(); }},
+      {AM243,
+       "installed",
+       []() -> std::shared_ptr<BoardInterface> { return std::make_shared<Am243Board>(); }},
+      {FEETECH_BUS,
+       "installed",
+       []() -> std::shared_ptr<BoardInterface> { return std::make_shared<FeetechBusBoard>(); }},
+      {TEENSY41,
+       "installed",
+       []() -> std::shared_ptr<BoardInterface> { return std::make_shared<TeensyBoard>(); }},
+      {ESP32,
+       "installed",
+       []() -> std::shared_ptr<BoardInterface> { return std::make_shared<Esp32Board>(); }},
+      {ARDUINO_UNO, "unimplemented", nullptr},
+      {HOST_GPIO, "unimplemented", nullptr}};
+  return entries;
+}
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
     const robot::board::Board& config) {
