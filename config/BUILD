@@ -25,6 +25,7 @@ cc_library(
         "//robot/comm/serial:serial_config_validation",
         "//robot/perception/audio:audio_config",
         "//ros2/utils:packet_parser",
+        "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

@@ -7,6 +7,7 @@
 #include "config/config_utils.h"
 #include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
+#include "utils/robot_time.h"
 
 namespace ros2_utils {
 
@@ -53,6 +54,22 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
     rclcpp::shutdown();
     return 1;
   }
+
+  // Install before node construction can create drivers, callbacks or workers.
+  auto clock = joshua::MakeRobotClock(config.general().robot_clock());
+  if (!clock.ok()) {
+    LOG(ERROR) << "Failed to create robot clock: " << clock.status();
+    rclcpp::shutdown();
+    return 1;
+  }
+  const std::string clock_source((*clock)->SourceName());
+  const auto clock_status = joshua::SetGlobalRobotClock(std::move(*clock));
+  if (!clock_status.ok()) {
+    LOG(ERROR) << "Failed to install robot clock: " << clock_status;
+    rclcpp::shutdown();
+    return 1;
+  }
+  LOG(INFO) << "Robot clock initialized: " << clock_source;
 
   rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
   rclcpp::shutdown();

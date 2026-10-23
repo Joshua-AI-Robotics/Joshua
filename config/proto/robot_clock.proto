@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package config;
+
+// Startup-only selection. Every process must use the same time domain.
+message RobotClockConfig {
+  enum Source {
+    PTP = 0;        // Prefer a PHC, falling back to system UTC unless required.
+    UTC = 1;        // CLOCK_REALTIME; synchronization is managed by the host.
+    MONOTONIC = 2;  // Local, boot-relative time; not comparable across hosts.
+  }
+
+  Source source = 1;
+  string ptp_device = 2;  // Empty selects /dev/ptp0.
+  // PHC seconds minus UTC seconds. Must be explicitly supplied to use PTP.
+  // The operator obtains this from the host's PTP service. Zero explicitly
+  // declares a UTC PHC. Never infer an offset from device availability.
+  optional int32 ptp_utc_offset_seconds = 3;
+  // Fail startup instead of falling back to UTC. Valid only with source PTP.
+  bool require_ptp = 4;
+}

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "config/proto/robot.proto";
 import "config/proto/ai.proto";
+import "config/proto/robot_clock.proto";
 import "simulation/proto/simulation.proto";
 
 package config;
@@ -25,6 +26,7 @@ message General {
   RobotType robot_type = 2;
   string name = 3;
   uint64 id = 4;
+  RobotClockConfig robot_clock = 5;
 }
 
 message Config {

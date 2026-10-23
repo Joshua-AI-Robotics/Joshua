@@ -17,6 +17,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":action_interface",
+        "//utils:robot_time",
         "@abseil-cpp//absl/status:statusor",
         "@glog",
     ],

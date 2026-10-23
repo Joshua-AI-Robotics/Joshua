@@ -15,6 +15,7 @@ cc_library(
         "//config:config_utils",
         "//config:validation",
         "//config/proto:config_cc_proto",
+        "//utils:robot_time",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],

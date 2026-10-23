@@ -4,8 +4,12 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "utils/robot_time.h"
 
 namespace robot::board {
+
+// Expose the process-global clock to host-side board and channel drivers.
+using ::joshua::RobotTime;
 
 enum class TargetMode { kPosition, kVelocity, kTorque };
 
