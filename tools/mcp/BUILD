@@ -50,3 +50,14 @@ py_test(
     tags = ["local"],
     deps = [":config_validation_lib"] + mcp_requirement("mcp"),
 )
+
+py_library(
+    name = "observation_source",
+    srcs = ["observation_source.py"],
+)
+
+py_test(
+    name = "observation_source_test",
+    srcs = ["observation_source_test.py"],
+    deps = [":observation_source"],
+)
