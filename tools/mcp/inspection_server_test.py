@@ -32,6 +32,17 @@ def candidate(name="camera", node_id=2):
     )
 
 
+def oversized_candidate():
+    entries = []
+    for i in range(128):
+        name = str(i) + "x" * 390
+        entries.append(
+            f'single_perceptions {{sensor_name: "{name}" sensor_type: IMAGE '
+            "opencv_config {} node {id: 2 node_type: CAMERA_PUBLISHER}}"
+        )
+    return "robot {perceptions {" + " ".join(entries) + "}}"
+
+
 class InspectionContractTest(unittest.TestCase):
     def test_seven_async_methods_have_small_backend_interfaces(self):
         spec = importlib.util.find_spec("tools.mcp.interfaces")
@@ -69,6 +80,81 @@ class InspectionContractTest(unittest.TestCase):
 
 
 class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_oversized_helper_report_is_one_bounded_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "large.pbtxt").write_text(oversized_candidate())
+            root_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    str(INSPECTOR),
+                    "--operation",
+                    "list_devices",
+                    "--config-root-fd",
+                    str(root_fd),
+                    "--config",
+                    "large.pbtxt",
+                    pass_fds=(root_fd,),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            finally:
+                os.close(root_fd)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), 10)
+            finally:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+            self.assertEqual(process.returncode, 1, stderr)
+            self.assertLessEqual(len(stdout), 65536)
+            self.assertTrue(stdout.endswith(b"\n"))
+            self.assertEqual(stdout.count(b"\n"), 1)
+            report = json.loads(stdout)
+            self.assertEqual(report["scope"], "setup_inspection")
+            self.assertEqual(report["stage"], "inspection")
+            self.assertEqual(report["status_code"], "RESOURCE_EXHAUSTED")
+            self.assertEqual(report["data"], {})
+            print(f"Bounded oversized helper report: {len(stdout)} bytes")
+
+    async def test_oversized_sdk_report_preserves_helper_error_and_recovers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "large.pbtxt").write_text(oversized_candidate())
+            Path(directory, "small.pbtxt").write_text(candidate("small"))
+            params = StdioServerParameters(
+                command=str(SERVER),
+                args=[
+                    "--validator",
+                    str(VALIDATOR),
+                    "--inspector",
+                    str(INSPECTOR),
+                    "--config-root",
+                    directory,
+                ],
+                env={"LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", "")},
+            )
+            async with stdio_client(params) as (reader, writer):
+                async with ClientSession(reader, writer) as client:
+                    await client.initialize()
+                    result = await client.call_tool(
+                        "list_devices", {"config_path": "large.pbtxt"}
+                    )
+                    self.assertTrue(result.isError, result)
+                    report = result.structuredContent
+                    self.assertLessEqual(len(json.dumps(report).encode("utf-8")), 65536)
+                    self.assertEqual(report["scope"], "setup_inspection")
+                    self.assertEqual(report["operation"], "list_devices")
+                    self.assertEqual(report["stage"], "inspection")
+                    self.assertEqual(report["status_code"], "RESOURCE_EXHAUSTED")
+                    self.assertEqual(report["data"], {})
+                    result = await client.call_tool(
+                        "list_devices", {"config_path": "small.pbtxt"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(
+                        result.structuredContent["data"]["devices"][0]["device_id"],
+                        "sensor:small",
+                    )
+
     async def test_catalog_no_config_then_multiple_candidates_and_confined_errors(self):
         with tempfile.TemporaryDirectory() as directory:
             args = [
