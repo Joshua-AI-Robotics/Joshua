@@ -9,7 +9,13 @@ exports_files([
 
 py_library(
     name = "config_validation_lib",
-    srcs = ["config_validation_server.py"],
+    srcs = [
+        "config_validation_server.py",
+        "inspection_adapters.py",
+        "inspection_server.py",
+        "interfaces.py",
+        "snapshot_observer.py",
+    ],
     deps = mcp_requirement("mcp"),
 )
 
@@ -27,5 +33,20 @@ py_test(
         ":config_validation_server",
         "//config:joshua_validate_config",
     ],
+    deps = [":config_validation_lib"] + mcp_requirement("mcp"),
+)
+
+py_test(
+    name = "inspection_server_test",
+    size = "medium",
+    timeout = "moderate",
+    srcs = ["inspection_server_test.py"],
+    data = [
+        ":config_validation_server",
+        "//config:joshua_inspect_config",
+        "//config:joshua_validate_config",
+        "//node_generator:observation_fixture",
+    ],
+    tags = ["local"],
     deps = [":config_validation_lib"] + mcp_requirement("mcp"),
 )

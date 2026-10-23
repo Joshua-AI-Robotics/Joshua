@@ -358,6 +358,20 @@ int WriteReport(const Report& report, std::ostream& output) {
 }
 }  // namespace
 
+absl::StatusOr<Config> LoadConfigForInspection(const std::string& path,
+                                               int root_fd,
+                                               std::string* stage) {
+  *stage = "input";
+  if (!SafeRelativeReference(path))
+    return absl::InvalidArgumentError(
+        "Configuration reference must be a safe relative POSIX path.");
+  UniqueFd pin, content;
+  auto pinned = OpenPinnedPath(path, root_fd, &pin, &content);
+  if (!pinned.ok()) return pinned.status();
+  *stage = "load";
+  return config_util::LoadConfig(*pinned, kConfigLimit);
+}
+
 int RunConfigValidationCli(const std::vector<std::string>& args, std::ostream& output) {
   if (args.size() == 1 && args[0] == "--help") {
     output << "Usage: joshua_validate_config --config PATH [--config-root-fd FD]\n";

@@ -7,8 +7,7 @@ import os
 import stat
 import sys
 
-from mcp import types
-from mcp.server.lowlevel import NotificationOptions, Server
+from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
@@ -319,6 +318,16 @@ class ValidationService:
         return True
 
     async def validate(self, config_path):
+        return await self.run_helper(config_path)
+
+    async def run_helper(
+        self,
+        config_path,
+        helper=None,
+        helper_args=(),
+        report_parser=parse_helper_report,
+        no_config=False,
+    ):
         accepted = config_path if safe_reference(config_path) else None
         if self._poisoned:
             return adapter_error(
@@ -330,7 +339,7 @@ class ValidationService:
             return adapter_error(
                 accepted, "UNAVAILABLE", "Validation server is closed."
             )
-        if accepted is None:
+        if accepted is None and not (no_config and config_path is None):
             return adapter_error(
                 None,
                 "INVALID_ARGUMENT",
@@ -356,11 +365,18 @@ class ValidationService:
             async def spawn_child():
                 try:
                     return await asyncio.create_subprocess_exec(
-                        self.validator,
-                        "--config-root-fd",
-                        str(root_fd),
-                        "--config",
-                        accepted,
+                        helper or self.validator,
+                        *helper_args,
+                        *(
+                            ()
+                            if no_config
+                            else (
+                                "--config-root-fd",
+                                str(root_fd),
+                                "--config",
+                                accepted,
+                            )
+                        ),
                         pass_fds=(root_fd,),
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
@@ -382,7 +398,7 @@ class ValidationService:
             stdout, _, exit_code = await asyncio.wait_for(run_child(), self.timeout)
             if exit_code < 0:
                 raise ValueError("helper terminated by signal")
-            report = parse_helper_report(stdout, exit_code, accepted)
+            report = report_parser(stdout, exit_code, accepted)
         except asyncio.CancelledError:
             cancelled = True
         except asyncio.TimeoutError:
@@ -433,63 +449,11 @@ class ValidationService:
 
 
 def make_server(service):
-    app = Server("joshua-config-validation", version="0.1.0")
+    # Compatibility entrypoint: registration and serialization live in one place.
+    from tools.mcp.inspection_adapters import CppSetupInspector
+    from tools.mcp.inspection_server import make_server as make_inspection_server
 
-    @app.list_tools()
-    async def list_tools():
-        return [
-            types.Tool(
-                name="validate_config",
-                description=(
-                    "Check a relative Joshua config under the operator-selected "
-                    "root for parser and integrity errors."
-                ),
-                inputSchema=INPUT_SCHEMA,
-                outputSchema=REPORT_SCHEMA,
-                annotations=types.ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            )
-        ]
-
-    @app.call_tool(validate_input=False)
-    async def call_tool(name, arguments):
-        if name != "validate_config":
-            report = adapter_error(None, "INVALID_ARGUMENT", "Unknown tool.")
-        elif (
-            type(arguments) is not dict
-            or set(arguments) != {"config_path"}
-            or not safe_reference(arguments["config_path"])
-        ):
-            report = adapter_error(
-                None,
-                "INVALID_ARGUMENT",
-                "Require one safe relative config_path string.",
-            )
-        else:
-            report = await service.validate(arguments["config_path"])
-        expected_path = report["config_path"]
-        if report["stage"] == "adapter":
-            validate_adapter_report(report, expected_path)
-        else:
-            # The helper report was checked against its actual exit in validate().
-            expected_exit = (
-                3
-                if report["stage"] == "input" and report["status_code"] == "INTERNAL"
-                else 0 if report["result"] == "valid" else 1
-            )
-            _validate_report(report, expected_exit, expected_path)
-        encoded = json.dumps(report, ensure_ascii=True, separators=(",", ":"))
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text=encoded)],
-            structuredContent=report,
-            isError=report["result"] == "not_run",
-        )
-
-    return app
+    return make_inspection_server(CppSetupInspector(service), validation_only=True)
 
 
 async def run_stdio(service):
@@ -512,6 +476,9 @@ def main(argv=None):
     )
     parser.add_argument("--config-root", default=os.getcwd())
     parser.add_argument("--validator", required=True)
+    parser.add_argument("--inspector")
+    parser.add_argument("--observation-dir")
+    parser.add_argument("--freshness-seconds", type=float, default=3.0)
     args = parser.parse_args(argv)
     root = os.path.abspath(args.config_root)
     validator = os.path.abspath(args.validator)
@@ -533,5 +500,20 @@ def main(argv=None):
     except OSError as error:
         print(f"Config root is unavailable: {error}", file=sys.stderr)
         return 2
-    asyncio.run(run_stdio(service))
+    if args.inspector or args.observation_dir:
+        from tools.mcp.inspection_adapters import CppSetupInspector
+        from tools.mcp.inspection_server import run_stdio as run_inspection_stdio
+        from tools.mcp.snapshot_observer import SnapshotObserver
+
+        try:
+            observer = SnapshotObserver(args.observation_dir, args.freshness_seconds)
+        except (OSError, ValueError) as error:
+            os.close(service._root_fd)
+            print(f"Observation directory is unavailable: {error}", file=sys.stderr)
+            return 2
+        asyncio.run(
+            run_inspection_stdio(CppSetupInspector(service, args.inspector), observer)
+        )
+    else:
+        asyncio.run(run_stdio(service))
     return 0

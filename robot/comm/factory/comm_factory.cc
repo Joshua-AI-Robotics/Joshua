@@ -99,65 +99,85 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
 
 }  // namespace
 
+const std::vector<CommImplementation>& CommFactory::Implementations() {
+  static const std::vector<CommImplementation> entries = {
+      {SERIAL,
+       BYTE_STREAM,
+       "installed",
+       [](const Comm& comm) -> absl::StatusOr<CommTransport> {
+         auto status = ValidateSerialCommConfig(comm);
+         if (!status.ok()) return status;
+         auto serial = CreateSerial(comm.serial_config());
+         if (!serial.ok()) return serial.status();
+         return CommTransport{std::static_pointer_cast<ByteStream>(*serial)};
+       },
+       "serial_config requires port/baudrate; message_adapter and exchange_timeout_ms must be "
+       "omitted."},
+      {SERIAL,
+       MESSAGE,
+       "installed",
+       [](const Comm& comm) -> absl::StatusOr<CommTransport> {
+         auto status = ValidateSerialCommConfig(comm);
+         if (!status.ok()) return status;
+         auto serial = CreateSerial(comm.serial_config());
+         if (!serial.ok()) return serial.status();
+         switch (comm.serial_config().message_adapter()) {
+           case CALLER_SIZED:
+             return CommTransport{std::static_pointer_cast<MessageTransport>(
+                 std::make_shared<CallerSizedSerialTransport>(*serial))};
+           case JOSHUA_WIRE:
+             return CommTransport{std::static_pointer_cast<MessageTransport>(
+                 std::make_shared<JoshuaWireSerialTransport>(
+                     *serial,
+                     std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
+                                                   ? comm.serial_config().exchange_timeout_ms()
+                                                   : kDefaultSerialExchangeTimeoutMs)))};
+           default:
+             return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");
+         }
+       },
+       "serial_config requires port/baudrate and explicit message_adapter CALLER_SIZED or "
+       "JOSHUA_WIRE; exchange_timeout_ms is JOSHUA_WIRE-only."},
+      {ETHERCAT,
+       CYCLIC,
+       "installed",
+       [](const Comm& comm) -> absl::StatusOr<CommTransport> {
+         if (!comm.has_ethercat_config()) {
+           return absl::InvalidArgumentError("ETHERCAT comm has no ethercat_config.");
+         }
+         auto transport = CreateEthercat(comm.ethercat_config());
+         if (!transport.ok()) return transport.status();
+         return CommTransport{*transport};
+       },
+       "ethercat_config requires interface_name and an explicit supported process_data_mode; "
+       "retained TI demo transport."},
+      {ETHERNET_UDP, MESSAGE, "unimplemented", nullptr, "No implementation is available."}};
+  return entries;
+}
+
 absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& comm) {
   if (g_comm_transport_factory_for_testing) {
     return g_comm_transport_factory_for_testing(comm);
   }
-  switch (comm.comm_type()) {
-    case CommType::SERIAL: {
-      auto status = ValidateSerialCommConfig(comm);
-      if (!status.ok()) return status;
-      auto serial_or = CreateSerial(comm.serial_config());
-      if (!serial_or.ok()) {
-        return serial_or.status();
-      }
-      switch (comm.transport_type()) {
-        case TransportType::BYTE_STREAM:
-          return CommTransport{std::static_pointer_cast<ByteStream>(*serial_or)};
-        case TransportType::MESSAGE:
-          switch (comm.serial_config().message_adapter()) {
-            case CALLER_SIZED:
-              return CommTransport{std::static_pointer_cast<MessageTransport>(
-                  std::make_shared<CallerSizedSerialTransport>(*serial_or))};
-            case JOSHUA_WIRE:
-              return CommTransport{std::static_pointer_cast<MessageTransport>(
-                  std::make_shared<JoshuaWireSerialTransport>(
-                      *serial_or,
-                      std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
-                                                    ? comm.serial_config().exchange_timeout_ms()
-                                                    : kDefaultSerialExchangeTimeoutMs)))};
-            case SERIAL_MESSAGE_ADAPTER_UNSPECIFIED:
-            default:
-              return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");
-          }
-        case TransportType::CYCLIC:
-        case TransportType::TRANSPORT_INVALID:
-        default:
-          return absl::InvalidArgumentError("Comm has an invalid transport_type.");
-      }
-    }
-    case CommType::ETHERCAT: {
-      if (comm.transport_type() != TransportType::CYCLIC) {
-        return absl::InvalidArgumentError("ETHERCAT requires CYCLIC transport_type.");
-      }
-      if (!comm.has_ethercat_config()) {
-        return absl::InvalidArgumentError("ETHERCAT comm has no ethercat_config.");
-      }
-      auto ethercat_or = CreateEthercat(comm.ethercat_config());
-      if (!ethercat_or.ok()) {
-        return ethercat_or.status();
-      }
-      return CommTransport{*ethercat_or};
-    }
-    case CommType::ETHERNET_UDP:
-      if (comm.transport_type() != TransportType::MESSAGE) {
-        return absl::InvalidArgumentError("ETHERNET_UDP requires MESSAGE transport_type.");
-      }
+  for (const auto& implementation : Implementations()) {
+    if (implementation.mechanism != comm.comm_type() ||
+        implementation.transport != comm.transport_type())
+      continue;
+    if (!implementation.create) {
       return absl::UnimplementedError("ETHERNET_UDP communication is not implemented.");
-    case CommType::COMM_INVALID:
-    default:
-      return absl::InvalidArgumentError("Comm has an invalid comm_type.");
+    }
+    return implementation.create(comm);
   }
+  if (comm.comm_type() == SERIAL) {
+    return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
+  }
+  if (comm.comm_type() == ETHERCAT) {
+    return absl::InvalidArgumentError("ETHERCAT requires CYCLIC transport_type.");
+  }
+  if (comm.comm_type() == ETHERNET_UDP) {
+    return absl::InvalidArgumentError("ETHERNET_UDP requires MESSAGE transport_type.");
+  }
+  return absl::InvalidArgumentError("Comm has an invalid comm_type.");
 }
 
 void CommFactory::SetCommTransportFactoryForTesting(
