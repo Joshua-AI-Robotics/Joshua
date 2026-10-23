@@ -262,6 +262,22 @@ TEST_F(SerialFirmwareTest, BoundsNoiseDrainingPerMotorServiceIteration) {
   EXPECT_EQ(Serial.input.size(), JW_MAX_FRAME_LEN * 2);
   EXPECT_TRUE(Serial.output.empty());
 }
+
+TEST_F(SerialFirmwareTest, PhysicalPositionLimitRemainsBackendSpecific) {
+  ASSERT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  uint8_t payload[JW_SET_TARGET_PAYLOAD_LEN];
+  int len = jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, 2147483520.0f);
+  ASSERT_GT(len, 0);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_SET_TARGET, 0, Bytes(payload, payload + len)),
+            (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  len = jw_encode_set_target_payload(payload, sizeof(payload), JW_MODE_POSITION, 2147483648.0f);
+  ASSERT_GT(len, 0);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_SET_TARGET, 0, Bytes(payload, payload + len)),
+            (Bytes{JW_STATUS_INVALID_PAYLOAD, JW_EXECUTION_REJECTED}));
+  EXPECT_FLOAT_EQ(g_channels[0].target_value, 2147483520.0f);
+}
+
 TEST_F(SerialFirmwareTest, ConflictingResourcesAndEnabledReconfigurationNeverChangePins) {
   ASSERT_GT(g_num_channels, 1);
   EXPECT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),

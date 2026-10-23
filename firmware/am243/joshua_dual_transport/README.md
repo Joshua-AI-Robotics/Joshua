@@ -3,7 +3,7 @@
 This overlay builds JoshuaWire 0.2.0 / wire revision 4 on UART0 at 115200 baud
 alongside TI's existing EtherCAT simple demo. The UART endpoint uses the shared
 correlated session, device discovery, actuator profile and software-only backend
-in `src/joshua_commands.c`. It produces no STEP/DIR GPIO output. The TI EtherCAT
+in `src/am243_software_backend.c`. It produces no STEP/DIR GPIO output. The TI EtherCAT
 PDO state remains an independent vendor demo; it is not a second JoshuaWire
 transport or a motor-control path.
 
@@ -77,3 +77,64 @@ Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
   reusing a constant boot identity.
 - TI's external evaluation stack retains its vendor runtime restrictions.
 - This revision requires separate physical flashing/handshake verification.
+
+## Opt-in JW EtherCAT profile
+
+Set `JOSHUA_ETHERCAT_PROFILE=jw`, `JOSHUA_COMM_WATCHDOG_US` and
+`JOSHUA_TARGET_WATCHDOG_US` explicitly before running `scripts/build.sh`. Both
+watchdog values must be 10000..999999999 microseconds. This selects the shared
+JW descriptor, session, CoE mailbox and correlated 112-byte PDO profile through
+the TI stack. Its channel remains software-only. The artifact is
+`out/am243_ethercat_jw.release.appimage`, distinct from the UART/TI-demo artifact.
+
+Native tests use the production firmware profile and command handler to cover
+retained replies, cross-plane IDs, duplicate handling, watchdog expiry,
+operational-state loss and host interoperability. They do not qualify real
+EtherCAT timing or physical motor outputs.
+
+TODO: retain this TI-stack JW profile until the separate SOES replacement has
+completed AM243 hardware qualification and endurance testing, then review its
+retirement.
+
+The portable EtherCAT profile uses revision 4/layout 2, 108-byte mailbox
+objects and 112-byte PDO images. The TI dictionary maps 28 words in each PDO.
+Discovery, metadata, status and recovery reach the same backend runtime as
+profile operations. Target watchdog slots use stable function IDs across the
+255-function wire space. Session resets disable/configuration-clear without
+clearing ESTOP or watchdog latches; explicit RECOVER precedes reconfiguration.
+
+## Callback ownership and stop priority
+
+All `JoshuaChannel` access, including command/reset/stop callbacks, feedback
+acquisition and enabled-state reads, belongs to one externally serialized owner.
+The generic C callbacks borrow a non-null `JoshuaChannel*` through `void*`; its
+storage outlives the endpoint/profile. The callbacks have no internal locks.
+The UART artifact uses a single task. The TI JW EtherCAT artifact uses short
+IRQ-disabled critical sections on one R5 core; FIQ handlers and other cores
+must not enter that owner. UART and JW EtherCAT do not run together.
+
+The TI stop-output callback latches a fault even when the channel is already
+disabled. A stop epoch invalidates SDK snapshots admitted before a local stop,
+watchdog fault or successful protocol ESTOP. Interrupted CoE callbacks return
+unsupported access and stale PDO snapshots are discarded before dispatch. A
+caller must reconcile status and request recovery explicitly. Reset alone
+preserves the stop/fault latches and cannot restore configuration or enable.
+
+The watchdog task runs at `TaskP_PRIORITY_HIGHEST`, above SDK 09's application
+task (`HIGHEST-1`), and checks once per 1000-us sleep interval. SDK I/O and sleeps
+remain outside the owner critical section, so a stalled vendor call cannot hold
+the channel lock. A running critical section still delays the watchdog; its
+maximum duration and actual scheduling/detection latency require R5 hardware
+qualification. This is not a measured 1-ms stop guarantee or a physical stop.
+
+`//firmware/am243/joshua_dual_transport:ethercat_ti_test` compiles the production
+TI bridge as C against native SDK substitutes. It exercises stop/enable,
+stop/recovery, stop/reset, watchdog activity during vendor I/O, stale PDO
+snapshots, repeated faults and concurrent callbacks. The broader host priority
+scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
+
+Actuator payload decoding, supported-mode checks, admission guards, replies and
+outcome reporting use the portable C `joshua_actuator_handler`. Device callbacks
+retain pin validation, resource ownership, target limits, cached acquisition and
+hardware actions. Teensy/ESP32 register these callbacks in `joshua_stepdir_device`;
+AM243 uses `am243_software_backend` and has no physical STEP/DIR output.
