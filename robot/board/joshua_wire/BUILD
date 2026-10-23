@@ -76,9 +76,11 @@ cc_test(
         "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_profiles",
+        "//firmware/common/soes:joshua_ethercat_soes",
         "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/time",
         "@googletest//:gtest_main",
+        "@soes",
     ],
 )
 
