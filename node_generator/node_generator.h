@@ -15,6 +15,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "config/proto/config.pb.h"
+#include "node_generator/runtime_observation.h"
 #include "ros2/proto/node.pb.h"
 
 namespace node_generator {
@@ -38,7 +39,10 @@ class NodeGenerator {
 
   // Initializes the NodeGenerator by loading the config and verifying its integrity.
   // Returns an error if loading or verification fails.
-  absl::Status Initialize();
+  absl::Status Initialize(const config::Config* loaded_config = nullptr);
+  // Preflight directory lease and sensor selection before LaunchAllNodes.
+  absl::Status ConfigureObservation(const std::string& directory, const std::string& sensor);
+  void PublishObservation(const std::string& phase) noexcept;
 
   // Launches all nodes defined in the configuration.
   // Returns an error if no nodes could be launched.
@@ -93,6 +97,7 @@ class NodeGenerator {
   // Map from node_id to node type.
   absl::flat_hash_map<uint32_t, ros2::node::NodeType> identified_nodes_;
 
+  std::unique_ptr<RuntimeObservation> observation_;
   std::string config_path_;
   config::Config config_;
 

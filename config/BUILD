@@ -50,10 +50,13 @@ cc_library(
     name = "config_validation_cli",
     srcs = ["config_validation_cli.cc"],
     hdrs = ["config_validation_cli.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":config_utils",
         ":validation",
+        "//config/proto:config_cc_proto",
         "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
         "@protobuf",
     ],
 )
@@ -91,5 +94,33 @@ py_test(
     data = [
         ":joshua_validate_config",
         ":validation_dependency_graph",
+    ],
+)
+
+cc_library(
+    name = "inspection_cli",
+    srcs = ["inspection_cli.cc"],
+    hdrs = ["inspection_cli.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":config_validation_cli",
+        ":validation",
+        "//launcher:version",
+        "//robot/action/factory:action_factory",
+        "//robot/board/factory:board_factory",
+        "//robot/comm/factory:comm_factory",
+        "//robot/perception/factory:perception_factory",
+        "@glog",
+        "@protobuf",
+    ],
+)
+
+cc_binary(
+    name = "joshua_inspect_config",
+    srcs = ["inspection_main.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":inspection_cli",
+        "@glog",
     ],
 )
