@@ -1,8 +1,8 @@
 # Node Manager
 
 `NodeManager` is the launcher's single owner for configured ROS node processes
-and simulation. Its implementation is in `node_manager.h` and `node_manager.cc`;
-the directory retains its existing `node_generator` path.
+and simulation. It lives under `launcher/node_manager/`, alongside the launcher
+entrypoints that use it, in `node_manager.h` and `node_manager.cc`.
 
 ## Lifecycle
 
@@ -17,7 +17,7 @@ and uses `MonitorNodes("simulation")` so normal simulation completion also stops
 its accompanying graph. There is no second process owner in simulation mode.
 
 ```cpp
-node_generator::NodeManager manager(config_path);
+launcher::NodeManager manager(config_path);
 joshua::ThrowIfError(manager.Initialize());
 JoshuaInit(manager.config());
 joshua::ThrowIfError(manager.LaunchAllNodes());
@@ -92,5 +92,5 @@ retain their own defensive construction checks.
 `node_manager_test.cc` exercises the manager. `node_manager_test_child.cc` is a
 **test-only executable** that simulates readiness, failures, finite completion,
 stalled processes, and descendants; it is not launched by normal robot presets.
-The Bazel targets are `//node_generator:node_manager` and
-`//node_generator:node_manager_test`. Run tests only when validation is requested.
+The Bazel targets are `//launcher/node_manager:node_manager` and
+`//launcher/node_manager:node_manager_test`. Run tests only when validation is requested.

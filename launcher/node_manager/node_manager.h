@@ -15,7 +15,7 @@
 #include "config/proto/config.pb.h"
 #include "ros2/proto/node.pb.h"
 
-namespace node_generator {
+namespace launcher {
 
 // One launcher-thread owner for configuration, node jobs, and process groups.
 class NodeManager {
@@ -134,4 +134,4 @@ class NodeManager {
   bool graph_started_ = false;
 };
 
-}  // namespace node_generator
+}  // namespace launcher

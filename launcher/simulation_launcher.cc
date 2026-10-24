@@ -1,11 +1,11 @@
 #include "launcher/simulation_launcher.h"
 
-#include "node_generator/node_manager.h"
+#include "launcher/node_manager/node_manager.h"
 #include "utils/joshua_runtime.h"
 
 namespace launcher {
 
-int RunSimulation(node_generator::NodeManager& manager) {
+int RunSimulation(NodeManager& manager) {
   if (manager.config().robot().perceptions().single_perceptions_size() > 0) {
     const auto launched = manager.LaunchAllNodes();
     if (absl::IsCancelled(launched) && manager.ShutdownRequested()) return 0;

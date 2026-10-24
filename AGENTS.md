@@ -116,7 +116,7 @@ touches their area:
   [ros2/](ros2/README.md), [simulation/](simulation/README.md),
   [ui/](ui/README.md), [firmware/](firmware/README.md),
   [scripts/](scripts/README.md), [tools/](tools/README.md),
-  [node_generator/](node_generator/README.md),
+  [launcher/node_manager/](launcher/node_manager/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of

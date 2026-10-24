@@ -45,7 +45,7 @@ is an attempt, not an acknowledgement that a device physically stopped.
 Standalone Xbox publishing accepts an optional preset path before ROS options;
 without it `JoshuaInit()` uses protobuf clock defaults, including the documented
 startup fallback. No Python RobotTime implementation is introduced. See
-[`NodeManager`](../node_generator/README.md) for process ownership and
+[`NodeManager`](../launcher/node_manager/README.md) for process ownership and
 readiness limitations.
 
 Overview
@@ -217,7 +217,7 @@ Hardware and downstream constraints
 
 The shared C++ runner (`RunNode<T>` in `node_runner.h`) loads and validates the
 full config before constructing a node, including when launched directly without
-`node_generator`. Position and actuator constructors rely on that shared check.
+`NodeManager`. Position and actuator constructors rely on that shared check.
 Config validation rejects invalid subscription settings before hardware
 initialization. JointState field and driver capability checks run on each command.
 Conversions reject non-finite values, overflow, underflow to zero, fractional integer feedback, and integer commands that lose precision

@@ -34,7 +34,7 @@ the legacy camera/encoder/lidar config wrappers have been removed.
 robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
 Phase 9, and the Pybricks bench driver moved to
 [tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
-Hardware-facing ROS 2 nodes are C++ only, and `node_generator` no longer
+Hardware-facing ROS 2 nodes are C++ only, and `NodeManager` no longer
 selects between backends.
 
 ## Responsibilities

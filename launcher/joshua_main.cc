@@ -1,8 +1,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "launcher/node_manager/node_manager.h"
 #include "launcher/simulation_launcher.h"
-#include "node_generator/node_manager.h"
 #include "utils/joshua_runtime.h"
 #include "version.h"
 
@@ -14,7 +14,7 @@ JOSHUA_MAIN(argc, argv) {
   gflags::SetVersionString(JOSHUA_VERSION);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  node_generator::NodeManager manager(FLAGS_config);
+  launcher::NodeManager manager(FLAGS_config);
   joshua::ThrowIfError(manager.Initialize());
   JoshuaInit(manager.config());
   LOG(INFO) << "Starting Joshua Platform with config: " << manager.config_path();

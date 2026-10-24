@@ -1,4 +1,4 @@
-#include "node_generator/node_manager.h"
+#include "launcher/node_manager/node_manager.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -29,7 +29,7 @@
 
 extern char** environ;
 
-namespace node_generator {
+namespace launcher {
 namespace {
 using SteadyClock = std::chrono::steady_clock;
 constexpr int kTickMs = 10;
@@ -914,4 +914,4 @@ absl::Status NodeManager::GetTopicsForNode(
   return absl::OkStatus();
 }
 
-}  // namespace node_generator
+}  // namespace launcher

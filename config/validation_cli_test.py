@@ -329,7 +329,7 @@ robot {
             with self.subTest(label=label):
                 self.assertFalse(
                     label.startswith(
-                        ("//launcher:", "//node_generator:", "//firmware:")
+                        ("//launcher:", "//launcher/", "//firmware:")
                     )
                 )
                 if label.startswith("//simulation:"):

@@ -1,4 +1,4 @@
-#include "node_generator/node_manager.h"
+#include "launcher/node_manager/node_manager.h"
 
 #include <poll.h>
 #include <signal.h>
@@ -15,7 +15,7 @@
 #include "utils/joshua_runtime.h"
 #include "utils/scope_exit.h"
 
-namespace node_generator {
+namespace launcher {
 namespace {
 using Clock = std::chrono::steady_clock;
 
@@ -28,7 +28,7 @@ class NodeManagerTest : public testing::Test {
     ASSERT_NE(runfiles, nullptr);
     ASSERT_NE(workspace, nullptr);
     fixture_ = (std::filesystem::path(runfiles) / workspace /
-                "node_generator/node_manager_test_child").string();
+                "launcher/node_manager/node_manager_test_child").string();
   }
   NodeManager::LaunchSpec Spec(const std::string& mode) {
     NodeManager::LaunchSpec spec;
@@ -268,4 +268,4 @@ TEST_F(NodeManagerTest, ParentDeathKillsTheOwnedGroup) {
 }
 
 }  // namespace
-}  // namespace node_generator
+}  // namespace launcher
