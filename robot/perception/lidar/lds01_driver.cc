@@ -69,7 +69,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         LOG(INFO) << "Found start sequence, reading full scan...";
 
         // Host receipt of scan start, retained while the rest of the scan arrives.
-        ABSL_ASSIGN_OR_RETURN(const double acquisition_time, joshua::TryRobotTime());
+        const double acquisition_time = RobotTime();
 
         ABSL_ASSIGN_OR_RETURN(auto remain_result, stream_->Read(2518));
 

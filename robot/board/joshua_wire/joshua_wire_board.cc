@@ -156,7 +156,7 @@ class JoshuaWireChannel : public BoardChannel {
     if (value.metadata.validity != JW_SAMPLE_VALID || value.metadata.boot_id != boot_ ||
         value.metadata.clock != schema_.feedback_clock)
       return absl::UnavailableError("Feedback invalid, stale, or from another boot/clock.");
-    ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
+    const double now = RobotTime();
     if (sample_seen_ && value.metadata.sequence == sequence_) {
       if (value.metadata.timestamp_us != timestamp_ || now < received_ ||
           now - received_ > schema_.max_feedback_age_us / 1'000'000.0)

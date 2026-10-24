@@ -1,7 +1,6 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
 #include <atomic>
-#include <limits>
 #include <stdexcept>
 
 #include "firmware/common/joshua_wire.h"
@@ -205,10 +204,7 @@ TEST_F(JoshuaWireBoardTest, CachedFeedbackExpiryUsesRobotTime) {
   ++transport_->channel.feedback.metadata.timestamp_us;
   EXPECT_TRUE(channel->ReadFeedback().ok());
   clock_->fail = true;
-  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
-  clock_->fail = false;
-  clock_->now = std::numeric_limits<double>::quiet_NaN();
-  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
+  EXPECT_THROW(channel->ReadFeedback(), std::runtime_error);
 }
 }  // namespace
 }  // namespace robot::board

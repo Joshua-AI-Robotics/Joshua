@@ -230,7 +230,7 @@ TEST_F(SerialExchangeTest, FrozenRobotTimeKeepsExchangePendingUntilClockResumes)
 
 TEST_F(SerialExchangeTest, RobotClockFailureDoesNotSendRequest) {
   clock_->fail = true;
-  EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kUnavailable);
+  EXPECT_THROW(serial->Exchange(request), std::runtime_error);
   pollfd descriptor{master, POLLIN, 0};
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
 }

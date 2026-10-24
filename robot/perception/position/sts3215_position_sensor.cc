@@ -32,8 +32,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Sts3215PositionSensor::GetDa
   reusable_packet_.Clear();
   reusable_packet_.set_perception_id(id_);
   // Host feedback-receipt estimate; firmware timestamps need domain conversion.
-  ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
-  reusable_packet_.set_timestamp(now);
+  reusable_packet_.set_timestamp(RobotTime());
   auto* position = reusable_packet_.mutable_position();
   position->set_position(feedback.position);
   position->set_velocity(feedback.velocity);

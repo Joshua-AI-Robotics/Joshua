@@ -57,12 +57,7 @@ class AudioPublisher : public rclcpp::Node {
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
-    const auto clock_time = joshua::TryRobotTime();
-    if (!clock_time.ok()) {
-      RCLCPP_ERROR(get_logger(), "Audio clock unavailable: %s", clock_time.status().ToString().c_str());
-      return;
-    }
-    const double now = *clock_time;
+    const double now = joshua::RobotTime();
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {
       source->last_packet = now;

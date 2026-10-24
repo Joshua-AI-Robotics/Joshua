@@ -155,8 +155,9 @@ integer seconds and nanoseconds.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
-fabricated timestamp. Status-returning callers use `TryRobotTime()`, which returns
-`absl::StatusOr<double>` and centralizes exception handling and finite-value checks.
+fabricated timestamp. Consumers call `RobotTime()` directly and leave clock failures
+to their exception boundary. `TryRobotTime()` remains available as an optional
+`absl::StatusOr<double>` accessor with exception handling and finite-value checks.
 UTC/PTP can jump when the host adjusts time. Deadline values use
 `RobotTime() + timeout_seconds`. Serial exchange timeouts follow RobotTime only:
 pausing the clock pauses the timeout, and clock adjustments change the remaining wait.

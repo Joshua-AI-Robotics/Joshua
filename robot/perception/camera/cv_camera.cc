@@ -99,8 +99,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     }
 
     // Host capture-completion estimate; OpenCV exposes no exposure timestamp here.
-    const auto acquisition_time = joshua::TryRobotTime();
-    if (!acquisition_time.ok()) return acquisition_time.status();
+    const double acquisition_time = RobotTime();
 
     // Validate frame properties
     if (frame.cols <= 0 || frame.rows <= 0) {
@@ -123,7 +122,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     // Clear and populate the reusable packet
     reusable_packet_.Clear();
     reusable_packet_.set_perception_id(id_);
-    reusable_packet_.set_timestamp(*acquisition_time);
+    reusable_packet_.set_timestamp(acquisition_time);
 
     // Populate ImageData fields
     auto* image_data = reusable_packet_.mutable_image();
