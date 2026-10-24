@@ -8,12 +8,12 @@
 #include "robot/board/proto/board.pb.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/proto/comm.pb.h"
-#include "robot/comm/testing/fake_legacy_message_transport.h"
+#include "robot/comm/testing/fake_caller_sized_message_transport.h"
 
 namespace robot::board {
 namespace {
 
-using robot::comm::FakeLegacyMessageTransport;
+using robot::comm::FakeCallerSizedMessageTransport;
 
 // Builds a well-formed Feetech status/response packet with the given
 // parameter bytes and error byte, matching the checksum arithmetic in
@@ -44,6 +44,7 @@ robot::board::Board MakeArmBusBoard() {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port("/dev/ttyACM0");
   comm->mutable_serial_config()->set_baudrate(1000000);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::CALLER_SIZED);
 
   auto* channel = board.add_channels();
   channel->set_index(1);
@@ -56,7 +57,7 @@ robot::board::Board MakeArmBusBoard() {
 class FeetechBusBoardTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    transport_ = std::make_shared<FakeLegacyMessageTransport>();
+    transport_ = std::make_shared<FakeCallerSizedMessageTransport>();
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -75,7 +76,7 @@ class FeetechBusBoardTest : public ::testing::Test {
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {0x0F, 0x03}));
   }
 
-  std::shared_ptr<FakeLegacyMessageTransport> transport_;
+  std::shared_ptr<FakeCallerSizedMessageTransport> transport_;
 };
 
 TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
@@ -89,7 +90,7 @@ TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
 }
 
 TEST_F(FeetechBusBoardTest, InitFailsWhenServoDoesNotRespond) {
-  // No queued responses: FakeLegacyMessageTransport::SendAndReceive returns zero bytes.
+  // No queued responses: FakeCallerSizedMessageTransport::SendAndReceive returns zero bytes.
   FeetechBusBoard board;
 
   auto status = board.Init(MakeArmBusBoard());
@@ -103,6 +104,16 @@ TEST_F(FeetechBusBoardTest, InitRejectsWrongBoardType) {
   FeetechBusBoard board;
 
   EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(FeetechBusBoardTest, InitRejectsWrongSerialAdapterBeforeSending) {
+  for (auto adapter : {robot::comm::SERIAL_MESSAGE_ADAPTER_UNSPECIFIED, robot::comm::JOSHUA_WIRE}) {
+    auto config = MakeArmBusBoard();
+    config.mutable_comm()->mutable_serial_config()->set_message_adapter(adapter);
+    FeetechBusBoard board;
+    EXPECT_EQ(board.Init(config).code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_EQ(transport_->exchange_calls_, 0);
+  }
 }
 
 TEST_F(FeetechBusBoardTest, InitRejectsNonServoBusDrive) {

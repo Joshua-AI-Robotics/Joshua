@@ -10,6 +10,7 @@ cc_library(
     ],
     deps = [
         "//robot/board/proto:board_cc_proto",
+        "//utils:robot_time",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],

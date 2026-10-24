@@ -11,7 +11,10 @@ robot {
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
-      serial_config { port: "/dev/ttyACM1" baudrate: 1000000 }
+      serial_config {
+        port: "/dev/ttyACM1" baudrate: 1000000
+        message_adapter: CALLER_SIZED
+      }
     }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
     channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
@@ -27,7 +30,10 @@ robot {
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
-      serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
+      serial_config {
+        port: "/dev/ttyACM0" baudrate: 1000000
+        message_adapter: CALLER_SIZED
+      }
     }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
     channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }

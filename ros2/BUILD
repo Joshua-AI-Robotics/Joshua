@@ -28,6 +28,7 @@ cc_library(
         "//config:validation",
         "//config/proto:config_cc_proto",
         "//ros2:logging",
+        "//utils:robot_time",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -252,5 +253,18 @@ cc_test(
         "@googletest//:gtest_main",
         "@ros2_deps//:rclcpp",
         "@ros2_deps//:rcutils",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "audio_publisher",
+    srcs = ["audio_publisher.cc"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//robot/perception/audio:audio_capture",
+        "//robot/perception/factory:perception_factory",
+        "//ros2:node_runner",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_std_msgs",
     ],
 )

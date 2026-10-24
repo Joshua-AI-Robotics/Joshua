@@ -8,6 +8,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//utils:robot_time",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
     ],
@@ -40,5 +41,11 @@ cc_library(
 cc_library(
     name = "radar_interface",
     hdrs = ["radar_interface.h"],
+    deps = [":perception_interface"],
+)
+
+cc_library(
+    name = "audio_interface",
+    hdrs = ["audio_interface.h"],
     deps = [":perception_interface"],
 )
