@@ -11,17 +11,15 @@
 namespace joshua {
 
 // Fixed platform epoch: Unix epoch. Never use process startup as the epoch.
-inline constexpr int64_t kNanosecondsPerSecond = 1'000'000'000;
-inline constexpr int64_t kRobotStartTimeNs = 0;
 inline constexpr double kRobotStartTime = 0.0;
+inline constexpr double kNanosecondsPerSecond = 1'000'000'000.0;
 
 // Implementations must support concurrent reads. UTC/PTP return UTC seconds
 // since kRobotStartTime; an explicitly selected MONOTONIC clock is boot-relative.
 class RobotClock {
  public:
   virtual ~RobotClock() = default;
-  virtual int64_t NowNs() const = 0;
-  double Now() const;
+  virtual double Now() const = 0;
   virtual std::string_view SourceName() const {
     return "custom";
   }
@@ -47,8 +45,10 @@ void CheckGlobalClock();
 // std::runtime_error; they never return zero, stale data or switch clock sources.
 // Use a monotonic duration clock for deadlines rather than UTC/PTP robot time.
 double RobotTime();
-// Exact signed nanoseconds in the same domain. Never round-trip through double
-// when recording acquisition times or serializing packets.
-int64_t RobotTimeNs();
+
+// Convert double seconds to the nearest integer nanosecond for packet/ROS
+// serialization. Reject non-finite and out-of-range values. This does not read
+// a clock or recover precision that the double representation cannot retain.
+absl::StatusOr<int64_t> SecondsToNanoseconds(double seconds);
 
 }  // namespace joshua

@@ -71,7 +71,6 @@ TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow)
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
-  EXPECT_TRUE(result->has_timestamp_ns());
   EXPECT_GT(result->timestamp_ns(), 1000000000000000000LL);
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),

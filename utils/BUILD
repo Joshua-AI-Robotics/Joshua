@@ -1,31 +1,4 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
-load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
-load("//:requirements.bzl", "requirement")
-
-pybind_extension(
-    name = "_robot_time",
-    srcs = ["robot_time_pybind.cc"],
-    linkstatic = True,
-    deps = [":robot_time"],
-)
-
-py_library(
-    name = "robot_time_py",
-    srcs = ["robot_time.py"],
-    data = [":_robot_time"],
-    visibility = ["//visibility:public"],
-)
-
-py_test(
-    name = "robot_time_py_test",
-    srcs = ["robot_time_test.py"],
-    main = "robot_time_test.py",
-    deps = [
-        ":robot_time_py",
-        "//config/proto:config_py_proto",
-    ] + requirement("protobuf"),
-)
 
 cc_library(
     name = "robot_time",

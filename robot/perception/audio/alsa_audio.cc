@@ -117,7 +117,9 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
     const auto available = snd_pcm_avail_update(pcm_);
     int64_t now;
     try {
-      now = RobotTimeNs();
+      const auto timestamp_ns = joshua::SecondsToNanoseconds(RobotTime());
+      if (!timestamp_ns.ok()) return timestamp_ns.status();
+      now = *timestamp_ns;
     } catch (const std::exception& error) {
       return absl::UnavailableError(error.what());
     }

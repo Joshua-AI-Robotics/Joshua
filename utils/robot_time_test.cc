@@ -8,16 +8,47 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "utils/robot_time_internal.h"
 
 double RobotTimeFromHelper();
-int64_t RobotTimeNsFromHelper();
 
 namespace joshua {
 namespace {
+
+static_assert(std::is_same_v<decltype(RobotTime()), double>);
+
+TEST(RobotTimeConversionTest, ConvertsDoubleSecondsAtPacketBoundary) {
+  for (const auto& sample :
+       std::vector<std::pair<double, int64_t>>{{0.0, 0},
+                                               {1.25, 1250000000},
+                                               {-0.5, -500000000},
+                                               {1700000000.125, 1700000000125000000LL},
+                                               {1.9999999996, 2000000000},
+                                               {-1.9999999996, -2000000000},
+                                               {0.0000000004, 0},
+                                               {0.0000000006, 1},
+                                               {-0.0000000006, -1}}) {
+    auto result = SecondsToNanoseconds(sample.first);
+    ASSERT_TRUE(result.ok()) << result.status();
+    EXPECT_EQ(*result, sample.second);
+  }
+}
+
+TEST(RobotTimeConversionTest, RejectsInvalidDoubleSecondsBeforeIntegerConversion) {
+  for (double value : {std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+    EXPECT_EQ(SecondsToNanoseconds(value).status().code(), absl::StatusCode::kInvalidArgument);
+  }
+  for (double value : {1e12, -1e12, std::numeric_limits<double>::max()}) {
+    EXPECT_EQ(SecondsToNanoseconds(value).status().code(), absl::StatusCode::kOutOfRange);
+  }
+}
 
 class FakeClockIo final : public internal::ClockIo {
  public:
@@ -65,8 +96,8 @@ class FakeClockIo final : public internal::ClockIo {
 class ConstantClock final : public RobotClock {
  public:
   explicit ConstantClock(double value) : value_(value) {}
-  int64_t NowNs() const override {
-    return static_cast<int64_t>(value_ * kNanosecondsPerSecond);
+  double Now() const override {
+    return value_;
   }
 
  private:
@@ -98,39 +129,6 @@ TEST(RobotClockTest, PtpConvertsToUtcAndOwnsDescriptor) {
     EXPECT_EQ(io->closes, 0);
   }
   EXPECT_EQ(io->closes, 1);
-}
-
-TEST(RobotClockTest, ExactNanosecondsSurvivePtpOffsetAndNegativeTimes) {
-  auto io = std::make_shared<FakeClockIo>();
-  config::RobotClockConfig config;
-  config.set_ptp_utc_offset_seconds(37);
-  io->ptp_time = timespec{1700000037, 123456789};
-  auto clock = internal::MakeRobotClockWithIo(config, io);
-  ASSERT_TRUE(clock.ok()) << clock.status();
-  EXPECT_EQ((*clock)->NowNs(), 1700000000123456789LL);
-  io->ptp_time = timespec{36, 500000000};
-  EXPECT_EQ((*clock)->NowNs(), -500000000LL);
-  EXPECT_DOUBLE_EQ((*clock)->Now(), -0.5);
-}
-
-TEST(RobotClockTest, RejectsInvalidAndOverflowingReadingsAtStartupAndRuntime) {
-  auto io = std::make_shared<FakeClockIo>();
-  config::RobotClockConfig config;
-  config.set_source(config::RobotClockConfig::UTC);
-  auto clock = internal::MakeRobotClockWithIo(config, io);
-  ASSERT_TRUE(clock.ok());
-  for (const auto& invalid : {timespec{0, -1},
-                              timespec{0, 1000000000},
-                              timespec{std::numeric_limits<int64_t>::max(), 0}}) {
-    io->utc_time = invalid;
-    EXPECT_THROW((*clock)->NowNs(), std::runtime_error);
-    EXPECT_EQ(internal::MakeRobotClockWithIo(config, io).status().code(),
-              absl::StatusCode::kOutOfRange);
-  }
-  io->utc_time = timespec{9223372036LL, 854775807};
-  EXPECT_EQ((*clock)->NowNs(), std::numeric_limits<int64_t>::max());
-  io->utc_time = timespec{-9223372037LL, 145224192};
-  EXPECT_EQ((*clock)->NowNs(), std::numeric_limits<int64_t>::min());
 }
 
 TEST(RobotClockTest, ExplicitZeroOffsetAndDefaultPtpPath) {
@@ -276,9 +274,7 @@ TEST_F(GlobalRobotClockTest, ExplicitInstallIsSharedByThreadsAndHelpers) {
         for (int i = 0; i < 16; ++i) {
           threads.emplace_back([&] {
             for (int j = 0; j < 1000; ++j) {
-              if (RobotTime() != 42.125 || RobotTimeFromHelper() != 42.125 ||
-                  RobotTimeNs() != 42125000000LL || RobotTimeNsFromHelper() != 42125000000LL)
-                ++errors;
+              if (RobotTime() != 42.125 || RobotTimeFromHelper() != 42.125) ++errors;
             }
           });
         }

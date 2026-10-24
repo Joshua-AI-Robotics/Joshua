@@ -80,12 +80,12 @@ TEST(Sts3215PositionSensorTest, PublishesThePositionTheChannelReports) {
 
 class FixedClock final : public joshua::RobotClock {
  public:
-  int64_t NowNs() const override {
-    return 1700000000123456789LL;
+  double Now() const override {
+    return 1700000000.125;
   }
 };
 
-TEST(Sts3215PositionSensorTest, UsesExactConfiguredRobotTime) {
+TEST(Sts3215PositionSensorTest, UsesConfiguredDoubleRobotTime) {
   GTEST_FLAG_SET(death_test_style, "threadsafe");
   ASSERT_EXIT(
       {
@@ -93,7 +93,7 @@ TEST(Sts3215PositionSensorTest, UsesExactConfiguredRobotTime) {
         auto channel = std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{});
         Sts3215PositionSensor sensor(channel, MakeSensorConfig());
         const auto packet = sensor.GetData();
-        _exit(packet.ok() && packet->timestamp_ns() == 1700000000123456789LL ? 0 : 2);
+        _exit(packet.ok() && packet->timestamp_ns() == 1700000000125000000LL ? 0 : 2);
       },
       testing::ExitedWithCode(0),
       "");

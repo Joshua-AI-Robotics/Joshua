@@ -4,7 +4,3 @@
 double RobotTimeFromHelper() {
   return joshua::RobotTime();
 }
-
-int64_t RobotTimeNsFromHelper() {
-  return joshua::RobotTimeNs();
-}

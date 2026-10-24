@@ -24,11 +24,6 @@ cc_test(
     ],
 )
 
-py_library(
-    name = "robot_time_conversion_py",
-    srcs = ["robot_time_conversion.py"],
-)
-
 ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],

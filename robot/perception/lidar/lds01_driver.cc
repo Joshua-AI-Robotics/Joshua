@@ -70,9 +70,9 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         LOG(INFO) << "Found start sequence, reading full scan...";
 
         // Host receipt of scan start, retained while the rest of the scan arrives.
-        int64_t acquisition_ns;
+        double acquisition_time;
         try {
-          acquisition_ns = RobotTimeNs();
+          acquisition_time = RobotTime();
         } catch (const std::exception& error) {
           return absl::UnavailableError(error.what());
         }
@@ -87,7 +87,8 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         // Clear packet then set metadata before adding points
         reusable_packet_.Clear();
         reusable_packet_.set_perception_id(GetId());
-        reusable_packet_.set_timestamp_ns(acquisition_ns);
+        ABSL_ASSIGN_OR_RETURN(auto timestamp_ns, joshua::SecondsToNanoseconds(acquisition_time));
+        reusable_packet_.set_timestamp_ns(timestamp_ns);
 
         const size_t total_len = 2 + remain_result.size();
 

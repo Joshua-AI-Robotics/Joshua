@@ -12,11 +12,11 @@ bool pending_read = false;
 bool partial_read = false;
 class TestClock final : public joshua::RobotClock {
  public:
-  int64_t NowNs() const override {
+  double Now() const override {
     if (fail) throw std::runtime_error("test robot clock failure");
     return now;
   }
-  std::atomic<int64_t> now{1700000000123456789LL};
+  std::atomic<double> now{1700000000.125};
   std::atomic<bool> fail{false};
 };
 }  // namespace
@@ -61,7 +61,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   ASSERT_TRUE(audio.Init().ok());
   partial_read = true;
   EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
-  clock_state->now = 1700000001123456789LL;
+  clock_state->now = 1700000001.125;
   pending_read = true;
   EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kDeadlineExceeded);
   auto first = audio.GetData();
@@ -72,7 +72,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   EXPECT_EQ(first->audio().channels(), 2);
   EXPECT_EQ(first->audio().encoding(), "s16le");
   EXPECT_EQ(first->perception_id(), "test_audio");
-  EXPECT_EQ(first->timestamp_ns(), 1700000000123456789LL - 20000000);
+  EXPECT_EQ(first->timestamp_ns(), 1700000000125000000LL - 20000000);
   EXPECT_TRUE(first->audio().discontinuity());
   PerceptionPacket decoded;
   ASSERT_TRUE(decoded.ParseFromString(first->SerializeAsString()));
@@ -81,7 +81,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   ASSERT_TRUE(second.ok());
   EXPECT_FALSE(second->audio().discontinuity());
   EXPECT_EQ(second->sequence_id(), first->sequence_id() + 1);
-  EXPECT_EQ(second->timestamp_ns(), 1700000001123456789LL - 20000000);
+  EXPECT_EQ(second->timestamp_ns(), 1700000001125000000LL - 20000000);
   clock_state->fail = true;
   EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kUnavailable);
   clock_state->fail = false;

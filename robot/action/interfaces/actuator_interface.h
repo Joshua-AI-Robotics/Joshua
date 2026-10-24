@@ -16,7 +16,6 @@ namespace robot::action {
 // Expose the process-global clock to drivers through their shared interface.
 // This declaration adds no per-driver clock state or initialization.
 using ::joshua::RobotTime;
-using ::joshua::RobotTimeNs;
 
 class ActuatorInterface : public ActionInterface {
  public:

@@ -6,7 +6,6 @@
 #include "utils/robot_time.h"
 
 const double now = joshua::RobotTime();
-const int64_t acquisition_ns = joshua::RobotTimeNs();
 ```
 
 Actuator, perception and host-side board drivers already include their shared
@@ -14,8 +13,7 @@ interface headers. Those headers expose this utility and import `RobotTime` into
 `robot::action`, `robot::perception` and `robot::board`, respectively. Board drivers
 can include either `board_channel.h` or `board_interface.h` (which includes the
 channel header). Driver implementations in those namespaces can call
-`RobotTime()` or `RobotTimeNs()` directly without another include or a per-driver
-Bazel dependency.
+`RobotTime()` directly without another include or a per-driver Bazel dependency.
 The dependency is declared on the shared interface targets. The interfaces add
 no clock member, wrapper method, or initialization; all names refer to the same
 global function. Other helpers can include the utility directly.
@@ -72,28 +70,14 @@ processes, and tests of source selection use fake system calls.
 Storage is private to `robot_time.cc` and intentionally lasts until process exit
 to avoid destruction-order problems. The OS reclaims an installed PHC descriptor
 at exit. Uninstalled clocks close their descriptors when destroyed. Custom
-`RobotClock::NowNs()` implementations must support concurrent calls and return
-exact signed nanoseconds. `Now()` derives floating-point seconds from that reading.
+`RobotClock::Now()` implementations must support concurrent calls and return
+`double` seconds.
 
 If native plugins are added later, they must share the owning runtime library;
 statically embedding independent copies in multiple shared objects can duplicate
-the state. The Python binding is the only native clock owner in current Python
-processes; future native plugins must share that owner rather than embedding
-another copy.
-
-Python nodes use `//utils:robot_time_py`:
-
-```python
-from utils.robot_time import robot_time, robot_time_ns
-
-acquisition_ns = robot_time_ns()
-seconds = robot_time()
-```
-
-Both accessors call the C++ implementation through pybind11. The Python node
-runner installs `general.robot_clock` before node construction, including the
-inference host after its model-environment re-exec. Importing the module does
-not read or install a clock. Initialization failures prevent node construction.
+the state. The current API and timestamp migration cover C++ only. Python ROS
+nodes and the AI directory retain their existing timestamp behavior. There is
+no Python RobotTime implementation or binding.
 
 ## Configuration and time domains
 
@@ -148,18 +132,26 @@ For the PHC/system time-scale distinction, see
 ## Reading and failures
 
 UTC and normalized PTP readings use a fixed platform epoch: `kRobotStartTime`
-is currently zero (the Unix epoch). The integer conversion uses checked wide arithmetic:
+is currently zero (the Unix epoch). The clock combines whole and fractional
+seconds directly into a `double`:
 
 ```cpp
-(ts.tv_sec - utc_offset) * 1'000'000'000 + ts.tv_nsec - kRobotStartTimeNs
+(static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
+    static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond
 ```
 
 It never subtracts a process-specific startup time. Changing the platform epoch
-later would change the time contract for every consumer. `RobotTimeNs()` retains
-every nanosecond within signed 64-bit range, including negative times. Invalid
-nanosecond components and overflow are rejected at startup and at runtime.
-`RobotTime()` divides that integer by 1e9; its `double` result cannot retain every
-nanosecond at Unix-epoch magnitudes. Use the integer accessor for packets.
+later would change the time contract for every consumer. All clock reads use
+`RobotTime()` returning `double`, and custom clocks continue implementing the
+original `virtual double Now() const` interface. Combining the parts preserves
+fractional seconds within double precision; the final value does not retain
+every nanosecond at Unix-epoch magnitudes.
+
+Packet fields and ROS messages require integer nanoseconds.
+`joshua::SecondsToNanoseconds(double)` performs that representation conversion
+when assembling a packet, rounding to the nearest nanosecond and rejecting
+non-finite or out-of-range values. It does not read a clock. Incoming integer
+timestamps remain integers throughout forwarding and ROS conversion.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
@@ -178,17 +170,14 @@ Drivers now record RobotTime once and publishers retain it:
 | LDS01 lidar | Host receipt of the scan-start marker, before the remaining scan read |
 | ALSA audio | Estimated first-sample time, subtracting unread-frame age; partial chunks retain the initial time |
 | Headerless C++ ROS commands | Host receipt/validation time; no source acquisition time is available |
-| Python inference observation | Host receive time, preserving the existing observation contract |
-| Dataset bag and episode markers | Exact host receipt/marker time; incoming message headers stay intact |
-| New trajectory/image messages | RobotTime at message creation when no source time was supplied |
 
 These are host acquisition estimates, not hardware exposure timestamps or proof
 of synchronization. Physical acquisition timestamps require device support.
 Firmware `timestamp_us` metadata remains in its own domain.
 
 `//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(int64_t)` and
-`FromRosTimestamp(builtin_interfaces::msg::Time)`. Python equivalents live in
-`ros2.utils.robot_time_conversion`. They convert the representation without reading a clock:
+`FromRosTimestamp(builtin_interfaces::msg::Time)`. They convert the integer wire
+representation without reading a clock:
 
 ```cpp
 auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp_ns());
@@ -203,13 +192,8 @@ position feedback use the original packet time rather than stamping again.
 Scalar feedback messages have no timestamp field.
 
 Action and perception packet timestamps use signed `int64` nanoseconds. Positive
-timestamps retain their existing protobuf wire encoding. Action timestamp
-presence distinguishes an explicit zero from an unstamped command; older
-senders that omitted a zero cannot supply that distinction retroactively.
+timestamps retain their existing protobuf wire encoding.
 Incoming JointState stamps are preserved, including zero and negative values.
-Trajectory publication preserves a supplied source stamp and uses RobotTime
-only when the field is absent. Image conversion accepts `timestamp_ns` to retain
-the original acquisition time; its default is conversion time.
 
 ROS conversion does not translate between UTC, boot-relative, firmware, or
 simulation domains. Capture and newly generated timestamps follow
@@ -226,11 +210,10 @@ integration is added here.
 - [x] Pure config validation and C++ runner initialization before construction.
 - [x] Shared accessor exposure through actuator, perception and board interfaces.
 - [x] Hardware-free unit tests for source failures, ownership and startup order.
-- [x] Initialize launcher time before operation-mode selection and initialize the
-      Python node runner before node construction.
-- [x] Add exact integer timestamp access and explicit ROS timestamp conversion.
-- [x] Migrate host driver timestamps and preserve them through C++ publishers;
-      migrate Python trajectory, image creation, and inference receive times.
+- [x] Initialize launcher time before operation-mode selection.
+- [x] Keep RobotTime and the virtual clock interface in double seconds; convert
+      to integer nanoseconds only at packet/ROS boundaries.
+- [x] Migrate C++ host driver timestamps and preserve them through C++ publishers.
 - [ ] Integrate robot time into logging, including board and communication-driver
       logs; exposing the accessor alone does not change `LOG()` timestamps.
 - [ ] Synchronize firmware clocks or convert firmware timestamps into the
@@ -239,7 +222,7 @@ integration is added here.
 - [ ] Discover PTP offsets automatically and monitor synchronization health.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Serial deadlines, audio retry/stall detection, and trajectory pacing continue
-using monotonic elapsed time. ROS timers and logging retain their own clock
+Serial deadlines and audio retry/stall detection continue using monotonic
+elapsed time. ROS timers and logging retain their own clock
 semantics. Utility entrypoints that only display incoming stamps do not create
 new acquisition timestamps and need no clock installation.

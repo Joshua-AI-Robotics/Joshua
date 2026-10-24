@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -52,26 +53,12 @@ class SystemClockReader final : public internal::ClockIo {
   }
 };
 
-absl::StatusOr<int64_t> ReadNanoseconds(const internal::ClockIo& reader,
-                                        clockid_t id,
-                                        int utc_offset = 0) {
+double ReadSeconds(const internal::ClockIo& reader, clockid_t id, int utc_offset = 0) {
   const auto result = reader.Read(id);
-  if (!result.ok()) return result.status();
-  const auto& ts = *result;
-  if (ts.tv_nsec < 0 || ts.tv_nsec >= kNanosecondsPerSecond)
-    return absl::OutOfRangeError("Robot clock returned invalid nanoseconds");
-  // Supported Linux compilers provide a wide intermediate for checked arithmetic.
-  const __int128 ns = (static_cast<__int128>(ts.tv_sec) - utc_offset) * kNanosecondsPerSecond +
-                      ts.tv_nsec - kRobotStartTimeNs;
-  if (ns < std::numeric_limits<int64_t>::min() || ns > std::numeric_limits<int64_t>::max())
-    return absl::OutOfRangeError("Robot clock exceeds signed nanosecond range");
-  return static_cast<int64_t>(ns);
-}
-
-int64_t ReadOrThrow(const internal::ClockIo& reader, clockid_t id, int utc_offset = 0) {
-  const auto result = ReadNanoseconds(reader, id, utc_offset);
   if (!result.ok()) throw std::runtime_error(result.status().ToString());
-  return *result;
+  const auto& ts = *result;
+  return (static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
+         static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond;
 }
 
 // Owns a PHC descriptor and normalizes its readings to the UTC time domain.
@@ -90,8 +77,8 @@ class PtpClock final : public RobotClock {
   PtpClock(const PtpClock&) = delete;
   PtpClock& operator=(const PtpClock&) = delete;
 
-  int64_t NowNs() const override {
-    return ReadOrThrow(*reader_, id_, utc_offset_);
+  double Now() const override {
+    return ReadSeconds(*reader_, id_, utc_offset_);
   }
 
   std::string_view SourceName() const override {
@@ -109,8 +96,8 @@ class UtcClock final : public RobotClock {
  public:
   explicit UtcClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
 
-  int64_t NowNs() const override {
-    return ReadOrThrow(*reader_, CLOCK_REALTIME);
+  double Now() const override {
+    return ReadSeconds(*reader_, CLOCK_REALTIME);
   }
 
   std::string_view SourceName() const override {
@@ -126,8 +113,8 @@ class MonotonicClock final : public RobotClock {
  public:
   explicit MonotonicClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
 
-  int64_t NowNs() const override {
-    return ReadOrThrow(*reader_, CLOCK_MONOTONIC);
+  double Now() const override {
+    return ReadSeconds(*reader_, CLOCK_MONOTONIC);
   }
 
   std::string_view SourceName() const override {
@@ -140,22 +127,13 @@ class MonotonicClock final : public RobotClock {
 
 absl::StatusOr<std::unique_ptr<RobotClock>> ProbeClock(std::unique_ptr<RobotClock> clock,
                                                        const internal::ClockIo& reader,
-                                                       clockid_t id,
-                                                       int utc_offset = 0) {
-  const auto result = ReadNanoseconds(reader, id, utc_offset);
+                                                       clockid_t id) {
+  const auto result = reader.Read(id);
   if (!result.ok()) return result.status();  // RAII closes any PHC descriptor.
   return clock;
 }
 
 }  // namespace
-
-double RobotClock::Now() const {
-  const int64_t ns = NowNs();
-  // Split before conversion so rounding a large integer to double cannot
-  // discard a fractional second that double seconds could have represented.
-  return static_cast<double>(ns / kNanosecondsPerSecond) +
-         static_cast<double>(ns % kNanosecondsPerSecond) / kNanosecondsPerSecond;
-}
 
 absl::Status ValidateRobotClockConfig(const config::RobotClockConfig& config) {
   if (!config::RobotClockConfig::Source_IsValid(config.source())) {
@@ -201,8 +179,7 @@ absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClockWithIo(
         auto clock =
             ProbeClock(std::make_unique<PtpClock>(io, *fd, config.ptp_utc_offset_seconds()),
                        *io,
-                       PtpClockId(*fd),
-                       config.ptp_utc_offset_seconds());
+                       PtpClockId(*fd));
         if (clock.ok()) return clock;
         ptp_status = clock.status();
       } else {
@@ -250,9 +227,19 @@ double RobotTime() {
   return GlobalState().clock->Now();
 }
 
-int64_t RobotTimeNs() {
-  CheckGlobalClock();
-  return GlobalState().clock->NowNs();
+absl::StatusOr<int64_t> SecondsToNanoseconds(double seconds) {
+  if (!std::isfinite(seconds))
+    return absl::InvalidArgumentError("Timestamp seconds must be finite");
+  double whole;
+  const double fraction = std::modf(seconds, &whole);
+  // Split before scaling so converting the large whole-seconds component does
+  // not add another double rounding step at the nanosecond boundary.
+  const long double nanoseconds = static_cast<long double>(whole) * 1'000'000'000 +
+                                  std::round(static_cast<long double>(fraction) * 1'000'000'000);
+  if (nanoseconds < static_cast<long double>(std::numeric_limits<int64_t>::min()) ||
+      nanoseconds > static_cast<long double>(std::numeric_limits<int64_t>::max()))
+    return absl::OutOfRangeError("Timestamp exceeds signed nanosecond range");
+  return static_cast<int64_t>(nanoseconds);
 }
 
 }  // namespace joshua

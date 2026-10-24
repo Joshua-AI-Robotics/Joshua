@@ -25,8 +25,7 @@ DataStore (Data Collection)
 ### Architecture
 1.  **Recording (Online)**:
     -   Uses `rosbag2_py.SequentialWriter` for high-throughput, low-latency logging.
-    -   Records exact RobotTime nanoseconds for bag receipt and episode markers;
-        incoming message headers retain their source acquisition timestamps.
+    -   Writes interleaved message streams (preserving exact timing).
 2.  **Post-Processing (Offline/Shutdown)**:
     -   **Pass 1 (Discovery)**: Scans the bag to identify all unique topics and their field structures.
     -   **Pass 2 (Conversion)**: Streams the bag, enforces the unified schema, injects `episode_index`, and writes to the target format using `datasets.Dataset.from_generator`.

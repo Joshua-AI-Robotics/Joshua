@@ -321,7 +321,12 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
           if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
             if (packet.ok()) {
               try {
-                packet->set_timestamp_ns(joshua::RobotTimeNs());
+                const auto timestamp_ns = joshua::SecondsToNanoseconds(joshua::RobotTime());
+                if (!timestamp_ns.ok()) {
+                  callback(timestamp_ns.status());
+                  return;
+                }
+                packet->set_timestamp_ns(*timestamp_ns);
               } catch (const std::exception& error) {
                 callback(absl::UnavailableError(error.what()));
                 return;
