@@ -26,12 +26,8 @@ cc_library(
     srcs = ["simulation_launcher.cc"],
     hdrs = ["simulation_launcher.h"],
     deps = [
-        "//config/proto:config_cc_proto",
-        "//node_generator",
-        "//node_generator:process_supervisor",
+        "//node_generator:node_manager",
         "//utils:joshua_runtime",
-        "//utils:scope_exit",
-        "@glog",
     ],
 )
 
@@ -55,10 +51,7 @@ cc_binary(
     deps = [
         ":simulation_launcher",
         ":version",
-        "//config:config_utils",
-        "//config:validation",
-        "//node_generator",
-        "//node_generator:process_supervisor",
+        "//node_generator:node_manager",
         "//utils:joshua_runtime",
         "@gflags",
         "@glog",

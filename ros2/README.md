@@ -45,7 +45,7 @@ is an attempt, not an acknowledgement that a device physically stopped.
 Standalone Xbox publishing accepts an optional preset path before ROS options;
 without it `JoshuaInit()` uses protobuf clock defaults, including the documented
 startup fallback. No Python RobotTime implementation is introduced. See
-[`node_generator`](../node_generator/README.md) for process ownership and
+[`NodeManager`](../node_generator/README.md) for process ownership and
 readiness limitations.
 
 Overview

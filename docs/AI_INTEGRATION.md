@@ -219,7 +219,7 @@ current implementations and example presets are indexed in the
 | Area | Current implementation | Limitation |
 |---|---|---|
 | Configuration | Protobuf schemas, presets, [`config::ValidateConfig`](../config/README.md), and a read-only [integrity CLI and MCP adapter](../tools/mcp/README.md) | The `.pbtxt` config is the source of truth. The CLI and one-tool stdio adapter check parsing and existing integrity rules only. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) edits configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
-| Execution | The launcher, [node generator](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeGenerator manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is merged into `develop`. |
+| Execution | The launcher, [node manager](../node_generator/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeManager manages ROS 2 node processes. These interfaces are subsystem-specific; no general MCP-facing runtime contract is merged into `develop`. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 

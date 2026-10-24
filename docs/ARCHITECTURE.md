@@ -61,11 +61,12 @@ not install a catch that survives an ordinary function return. ROS adapters own
 their executor and node lifetime, and worker/destructor boundaries report
 failures through the ROS-independent runtime utility.
 
-The launcher owns a `NodeGenerator`, which converts the config into process
-specs. `ProcessSupervisor` owns each job's guardian, application PID, process
-group, readiness channel, exit history, and shutdown/reaping sequence. Robot
-drivers and ROS objects remain inside their application process. See the
-[node generator guide](../node_generator/README.md) for the Linux ownership
+The launcher owns one `NodeManager` in `node_generator/node_manager.h/.cc`.
+It loads the config, resolves executables, and owns each job's guardian,
+application PID, process group, readiness channels, exit history, and shutdown
+sequence. ROS nodes and simulation share that manager and one registry of plain
+node records. Robot drivers and ROS objects remain inside their application
+process. See the [node manager guide](../node_generator/README.md) for the Linux ownership
 contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
@@ -76,4 +77,4 @@ for startup, cancellation, and cleanup.
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
 - [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
 - [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
-- [node_generator/README.md](../node_generator/README.md) — node generation from config
+- [node_generator/README.md](../node_generator/README.md) — node lifecycle and process ownership
