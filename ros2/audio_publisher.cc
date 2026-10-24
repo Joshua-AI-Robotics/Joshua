@@ -1,4 +1,3 @@
-#include <chrono>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -9,6 +8,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_timer.h"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
 namespace {
@@ -53,7 +53,7 @@ class AudioPublisher : public rclcpp::Node {
     double last_packet = RobotTime();
     double retry_after = -std::numeric_limits<double>::infinity();
     double next_warning = -std::numeric_limits<double>::infinity();
-    std::chrono::nanoseconds poll_interval{};
+    double poll_interval = 0.0;
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
@@ -78,14 +78,16 @@ class AudioPublisher : public rclcpp::Node {
     }
   }
   void UpdateTimer(const std::shared_ptr<Source>& source) {
-    const auto interval = source->interface->GetCaptureSchedule().poll_interval;
+    const double interval =
+        source->interface->GetCaptureSchedule().poll_interval.count() / 1'000'000'000.0;
     if (source->timer && source->poll_interval == interval) return;
     if (source->timer) source->timer->cancel();
     source->poll_interval = interval;
     // A weak capture avoids a Source -> timer -> Source ownership cycle.
-    source->timer = create_wall_timer(interval, [this, weak = std::weak_ptr<Source>(source)]() {
-      if (auto locked = weak.lock()) Publish(locked);
-    });
+    source->timer = ros2_utils::CreateRobotTimer(
+        *this, interval, [this, weak = std::weak_ptr<Source>(source)]() {
+          if (auto locked = weak.lock()) Publish(locked);
+        });
   }
   std::vector<std::shared_ptr<Source>> sources_;
 };

@@ -1,4 +1,3 @@
-#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -8,6 +7,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/packet_parser.h"
+#include "ros2/utils/robot_timer.h"
 
 class PositionPublisher : public rclcpp::Node {
  public:
@@ -24,8 +24,9 @@ class PositionPublisher : public rclcpp::Node {
       for (const auto& pub : sensor.node().publishers()) {
         auto publisher = ros2_utils::CreatePositionMessagePublisher(*this, pub, sensor);
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
-        timers_.push_back(create_wall_timer(
-            std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
+        timers_.push_back(ros2_utils::CreateRobotTimer(
+            *this,
+            1.0 / pub.publish_rate_hz(),
             [interface, publish = *publisher, logger = get_logger()]() {
               try {
                 auto packet = interface->GetData();

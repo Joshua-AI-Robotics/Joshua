@@ -207,6 +207,25 @@ must use compatible domains before comparing stamps. A simulation-backed
 RobotTime and domain metadata/translation remain follow-up work; no `/clock`
 integration is added here.
 
+## Publisher timers
+
+`//ros2/utils:robot_timer` provides `CreateRobotTimer(node, period, callback)`.
+The period and deadlines are double RobotTime seconds. Position, camera, lidar,
+audio and Xbox publishers use this helper. Camera and lidar timers only publish
+their own configured stream.
+
+A ROS wall timer wakes the executor at `min(period, 0.001)` seconds to check
+`RobotTime()`. The first callback is due at `RobotTime() + period`; subsequent
+checks invoke it only when its RobotTime deadline is reached. Executor delays
+can postpone callbacks. Small delays preserve the original cadence; multiple
+missed periods produce one callback and restart the cadence from the current
+RobotTime, avoiding catch-up bursts.
+
+A paused clock pauses callbacks. A backward jump waits for the existing deadline;
+a forward jump can make a callback due immediately at the next executor wakeup.
+Clock exceptions propagate. Cancelling the returned ROS timer stops the wakeups.
+Audio recreates its timer when the negotiated capture interval changes.
+
 ## Integration checklist
 
 - [x] Shared C++ accessor, install-once ownership and concurrent reads.
@@ -218,6 +237,7 @@ integration is added here.
 - [x] Keep RobotTime, the virtual clock interface, and packet timestamps in
       double seconds; convert to integer components only at ROS boundaries.
 - [x] Migrate C++ host driver timestamps and preserve them through C++ publishers.
+- [x] Schedule C++ publisher callbacks using RobotTime deadlines.
 - [ ] Integrate robot time into logging, including board and communication-driver
       logs; exposing the accessor alone does not change `LOG()` timestamps.
 - [ ] Synchronize firmware clocks or convert firmware timestamps into the
@@ -226,7 +246,7 @@ integration is added here.
 - [ ] Discover PTP offsets automatically and monitor synchronization health.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Serial deadlines, cached feedback expiry, and audio retry/stall detection use
-RobotTime seconds. OS wait durations, ROS timers and logging retain their own
-clock semantics. Utility entrypoints that only display incoming stamps do not create
-new acquisition timestamps and need no clock installation.
+Serial deadlines, cached feedback expiry, publisher schedules and audio retry/stall
+detection use RobotTime seconds. OS waits and executor wakeups use platform timers;
+logging retains its existing clock semantics. Utility entrypoints that only display
+incoming stamps do not create new acquisition timestamps and need no clock installation.

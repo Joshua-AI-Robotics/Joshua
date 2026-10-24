@@ -95,6 +95,7 @@ ros2_cpp_binary(
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -114,6 +115,7 @@ ros2_cpp_binary(
         "//ros2:node_runner",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -135,6 +137,7 @@ ros2_cpp_binary(
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -238,6 +241,7 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//ros2:node_runner",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
     ],
 )

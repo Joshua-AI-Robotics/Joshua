@@ -6,6 +6,25 @@ load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "robot_timer",
+    hdrs = ["robot_timer.h"],
+    deps = [
+        "//utils:robot_time",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "robot_timer_test",
+    srcs = ["robot_timer_test.cc"],
+    deps = [
+        ":robot_timer",
+        "//utils:robot_time",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "robot_time_conversion",
     hdrs = ["robot_time_conversion.h"],
     deps = [
@@ -28,6 +47,7 @@ ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
+        ":robot_timer",
         "//utils:xbox_controller",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",

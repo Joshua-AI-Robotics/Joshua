@@ -64,6 +64,11 @@ It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
 host sensor publishers. Position sensors and actuators must use separate bus owners
 with the current standalone node layout.
+Position, camera, lidar, audio and Xbox publisher callbacks use
+`utils/robot_timer.h` with double-second RobotTime deadlines. The executor polls
+those deadlines; a paused RobotTime pauses publication. Missed periods are
+skipped, and camera/lidar callbacks only read their own configured stream. See
+[publisher timers](../docs/ROBOT_TIME.md#publisher-timers) for clock-jump behavior.
 The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
 been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
 names and Float32 position values are unchanged.
