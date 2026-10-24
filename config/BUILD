@@ -54,6 +54,7 @@ cc_library(
         ":config_utils",
         ":validation",
         "@abseil-cpp//absl/status:status",
+        "@glog",
         "@protobuf",
     ],
 )
