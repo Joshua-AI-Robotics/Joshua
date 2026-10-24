@@ -367,9 +367,13 @@ absl::Status CreatePipe(int& read_end, int& write_end) {
 }
 
 void ConfigureRunfiles(NodeManager::LaunchSpec& spec, const std::filesystem::path& binary) {
-  const auto own_runfiles = binary.parent_path() / (binary.filename().string() + ".runfiles");
-  const auto runfiles = std::filesystem::exists(own_runfiles)
-      ? std::optional<std::filesystem::path>(own_runfiles) : GetRunfilesRoot();
+  // Bazel refreshes the launcher's runfiles, but a data dependency's standalone
+  // runfiles tree may be left over from an earlier build.
+  auto runfiles = GetRunfilesRoot();
+  if (!runfiles) {
+    const auto own_runfiles = binary.parent_path() / (binary.filename().string() + ".runfiles");
+    if (std::filesystem::is_directory(own_runfiles)) runfiles = own_runfiles;
+  }
   spec.unset_environment = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
   if (runfiles) {
     spec.environment = {{"RUNFILES_DIR", runfiles->string()}, {"TEST_SRCDIR", runfiles->string()}};

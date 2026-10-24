@@ -33,6 +33,10 @@ records do not have independent ownership behavior or wrapper classes.
 including node IDs/types and topic metadata. The API is used on the launcher
 thread; one manager may own a launcher process at a time.
 
+Configured nodes and simulation use the launcher's runfiles tree, which Bazel
+refreshes when building the launcher. A child's standalone `.runfiles` tree may
+be stale and is only used when launcher runfiles are unavailable.
+
 `StartProcess(LaunchSpec)` also registers explicitly supplied jobs, including
 the hardware-free test child. `Initialize()` and graph configuration are only
 available before any job is registered. Processes are never automatically
