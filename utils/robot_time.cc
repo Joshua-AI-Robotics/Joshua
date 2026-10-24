@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 #include <stdexcept>
@@ -223,6 +224,16 @@ void CheckGlobalClock() {
 double RobotTime() {
   CheckGlobalClock();
   return GlobalState().clock->Now();
+}
+
+absl::StatusOr<double> TryRobotTime() {
+  try {
+    const double now = RobotTime();
+    if (!std::isfinite(now)) return absl::UnavailableError("RobotTime is not finite.");
+    return now;
+  } catch (const std::exception& error) {
+    return absl::UnavailableError(error.what());
+  }
 }
 
 }  // namespace joshua

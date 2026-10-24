@@ -41,11 +41,11 @@ class Serial : public ByteStream {
   absl::Status Open() override;
   // Mechanism-only transaction. The adapter consumes each received byte and
   // returns true at its message boundary, or an error. Runs under the bus lock;
-  // callbacks must not re-enter Serial. The deadline includes bus-lock wait,
+  // callbacks must not re-enter Serial. Timeout is in seconds and includes bus-lock wait,
   // write and read. Discarding pending input is an explicit request/reply policy
   // and must not be used on an unsolicited sample stream.
   absl::Status ExchangeUntil(absl::Span<const uint8_t> request,
-                             std::chrono::milliseconds timeout,
+                             double timeout,
                              InputFlushPolicy input_flush_policy,
                              const ResponseBoundary& consume);
 

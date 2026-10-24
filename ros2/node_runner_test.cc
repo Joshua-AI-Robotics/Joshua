@@ -51,12 +51,12 @@ class ClockObservingNode : public rclcpp::Node {
       : rclcpp::Node("clock_observing_node") {
     timespec before{}, after{};
     if (clock_gettime(CLOCK_MONOTONIC, &before) != 0) _exit(10);
-    const double now = joshua::RobotTime();
+    const double now = RobotTime();
     if (clock_gettime(CLOCK_MONOTONIC, &after) != 0) _exit(11);
     if (now < before.tv_sec || now > after.tv_sec + 1.0) _exit(12);
     // Spin one callback as well as reading from the constructor.
     timer_ = create_wall_timer(std::chrono::milliseconds(1), [] {
-      if (joshua::RobotTime() <= 0) _exit(13);
+      if (RobotTime() <= 0) _exit(13);
       rclcpp::shutdown();
     });
   }
@@ -106,7 +106,7 @@ TEST_F(NodeRunnerClockTest, ClockFailurePreventsNodeConstruction) {
 TEST_F(NodeRunnerClockTest, EarlyLazyInitializationPreventsNodeConstruction) {
   ASSERT_EXIT(
       {
-        joshua::RobotTime();
+        RobotTime();
         _exit(RunWithClockConfig<MustNotConstructNode>("source: UTC"));
       },
       testing::ExitedWithCode(1),

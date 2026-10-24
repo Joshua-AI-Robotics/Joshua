@@ -148,8 +148,14 @@ class TrajectoryPublisher(Node):
         for field in fields:
             setattr(message, field, [getattr(joint, field)])
         message.header.frame_id = joint.frame_id
-        if packet.timestamp_ns:
-            sec, nanosec = divmod(packet.timestamp_ns, 1_000_000_000)
+        if packet.timestamp:
+            if not math.isfinite(packet.timestamp):
+                raise ValueError("Source timestamp must be finite")
+            sec = math.floor(packet.timestamp)
+            nanosec = math.floor((packet.timestamp - sec) * 1_000_000_000 + 0.5)
+            if nanosec == 1_000_000_000:
+                sec += 1
+                nanosec = 0
             if not -(2**31) <= sec < 2**31:
                 raise ValueError("Source timestamp exceeds ROS time range")
             message.header.stamp.sec = sec

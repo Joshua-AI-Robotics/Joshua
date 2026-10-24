@@ -1,4 +1,4 @@
-#include <chrono>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -8,14 +8,15 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_timer.h"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
 
 namespace {
 // Retry device failures without busy-looping; pending chunks keep normal polling.
-constexpr auto kCaptureRetryBackoff = std::chrono::seconds(1);
+constexpr double kCaptureRetryBackoff = 1.0;
 // Report sustained outages, then throttle repeated warnings.
-constexpr auto kCaptureStallWarningDelay = std::chrono::seconds(2);
-constexpr auto kCaptureWarningInterval = std::chrono::seconds(1);
+constexpr double kCaptureStallWarningDelay = 2.0;
+constexpr double kCaptureWarningInterval = 1.0;
 }  // namespace
 
 class AudioPublisher : public rclcpp::Node {
@@ -49,14 +50,14 @@ class AudioPublisher : public rclcpp::Node {
   struct Source {
     std::unique_ptr<robot::perception::AudioInterface> interface;
     std::vector<rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr> publishers;
-    std::chrono::steady_clock::time_point last_packet = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point retry_after{};
-    std::chrono::steady_clock::time_point next_warning{};
-    std::chrono::nanoseconds poll_interval{};
+    double last_packet = RobotTime();
+    double retry_after = -std::numeric_limits<double>::infinity();
+    double next_warning = -std::numeric_limits<double>::infinity();
+    double poll_interval = 0.0;
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
-    const auto now = std::chrono::steady_clock::now();
+    const double now = RobotTime();
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {
       source->last_packet = now;
@@ -77,14 +78,16 @@ class AudioPublisher : public rclcpp::Node {
     }
   }
   void UpdateTimer(const std::shared_ptr<Source>& source) {
-    const auto interval = source->interface->GetCaptureSchedule().poll_interval;
+    const double interval =
+        source->interface->GetCaptureSchedule().poll_interval.count() / 1'000'000'000.0;
     if (source->timer && source->poll_interval == interval) return;
     if (source->timer) source->timer->cancel();
     source->poll_interval = interval;
     // A weak capture avoids a Source -> timer -> Source ownership cycle.
-    source->timer = create_wall_timer(interval, [this, weak = std::weak_ptr<Source>(source)]() {
-      if (auto locked = weak.lock()) Publish(locked);
-    });
+    source->timer = ros2_utils::CreateRobotTimer(
+        *this, interval, [this, weak = std::weak_ptr<Source>(source)]() {
+          if (auto locked = weak.lock()) Publish(locked);
+        });
   }
   std::vector<std::shared_ptr<Source>> sources_;
 };
