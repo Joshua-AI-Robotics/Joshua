@@ -133,7 +133,7 @@ class LidarPublisher : public rclcpp::Node {
         }
 
         sensor_msgs::msg::PointCloud2 cloud_msg;
-        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp_ns());
+        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
         if (!stamp.ok()) {
           RCLCPP_ERROR(
               get_logger(), "Invalid lidar timestamp: %s", stamp.status().ToString().c_str());

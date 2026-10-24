@@ -40,7 +40,7 @@ class PositionPublisher : public rclcpp::Node {
                       logger, "Invalid position: %s", position.status().ToString().c_str());
                   return;
                 }
-                const auto status = publish(*position, packet->timestamp_ns());
+                const auto status = publish(*position, packet->timestamp());
                 if (!status.ok()) {
                   RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
                 }

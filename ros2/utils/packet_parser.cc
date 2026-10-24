@@ -145,13 +145,13 @@ absl::StatusOr<float> NativeCommand(T value) {
 template <typename Message>
 absl::Status EncodePosition(float value,
                             const std::string& name,
-                            int64_t timestamp_ns,
+                            double timestamp,
                             Message& message) {
   if constexpr (std::is_same_v<Message, sensor_msgs::msg::JointState>) {
     ABSL_ASSIGN_OR_RETURN(auto radians, CheckedNumber<double>(value / kStsTicksPerRadian));
     message.name = {name};
     message.position = {radians};
-    ABSL_ASSIGN_OR_RETURN(message.header.stamp, ToRosTimestamp(timestamp_ns));
+    ABSL_ASSIGN_OR_RETURN(message.header.stamp, ToRosTimestamp(timestamp));
     // Do not fabricate velocity or effort measurements.
   } else if constexpr (IsVector<decltype(message.data)>::value) {
     ABSL_ASSIGN_OR_RETURN(auto converted,
@@ -184,8 +184,8 @@ absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState
     }
   }
   ActionPacket packet;
-  ABSL_ASSIGN_OR_RETURN(auto timestamp_ns, FromRosTimestamp(message.header.stamp));
-  packet.set_timestamp_ns(timestamp_ns);
+  ABSL_ASSIGN_OR_RETURN(auto timestamp, FromRosTimestamp(message.header.stamp));
+  packet.set_timestamp(timestamp);
   auto* command = packet.mutable_joint();
   command->set_units(JointCommand::SI);
   command->set_position_encoding(JointCommand::POSITION_SI);
@@ -288,9 +288,9 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     using Message = typename decltype(tag)::Type;
     auto publisher = node.create_publisher<Message>(config.topic(),
                                                     CreateQosSetting(sensor.node().qos_setting()));
-    result = [publisher, name = sensor.sensor_name()](float value, int64_t timestamp_ns) {
+    result = [publisher, name = sensor.sensor_name()](float value, double timestamp) {
       Message message;
-      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, timestamp_ns, message));
+      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, timestamp, message));
       publisher->publish(message);
       return absl::OkStatus();
     };
@@ -321,12 +321,7 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
           if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
             if (packet.ok()) {
               try {
-                const auto timestamp_ns = joshua::SecondsToNanoseconds(joshua::RobotTime());
-                if (!timestamp_ns.ok()) {
-                  callback(timestamp_ns.status());
-                  return;
-                }
-                packet->set_timestamp_ns(*timestamp_ns);
+                packet->set_timestamp(joshua::RobotTime());
               } catch (const std::exception& error) {
                 callback(absl::UnavailableError(error.what()));
                 return;

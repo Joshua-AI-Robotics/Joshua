@@ -186,7 +186,7 @@ TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   command->set_joint_name("stepper_1");
   command->set_position(3.14159265358979323846 / 4.0);
   command->set_frame_id("base");
-  packet.set_timestamp_ns(123);
+  packet.set_timestamp(123.25);
   ASSERT_TRUE(driver.SetAction(packet).ok());
   EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
   EXPECT_NEAR(channel->last_value_, 400.0f, 0.001f);

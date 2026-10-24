@@ -87,8 +87,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         // Clear packet then set metadata before adding points
         reusable_packet_.Clear();
         reusable_packet_.set_perception_id(GetId());
-        ABSL_ASSIGN_OR_RETURN(auto timestamp_ns, joshua::SecondsToNanoseconds(acquisition_time));
-        reusable_packet_.set_timestamp_ns(timestamp_ns);
+        reusable_packet_.set_timestamp(acquisition_time);
 
         const size_t total_len = 2 + remain_result.size();
 

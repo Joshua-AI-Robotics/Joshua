@@ -71,7 +71,7 @@ TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow)
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
-  EXPECT_GT(result->timestamp_ns(), 1000000000000000000LL);
+  EXPECT_GT(result->timestamp(), 1000000000.0);
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),
                          std::numeric_limits<double>::max(),
@@ -125,7 +125,10 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   EXPECT_DOUBLE_EQ(command.velocity(), -0.25);
   EXPECT_DOUBLE_EQ(command.effort(), -1.125);
   EXPECT_EQ(command.frame_id(), "robot_base");
-  EXPECT_EQ(result->timestamp_ns(), 123000000456LL);
+  EXPECT_DOUBLE_EQ(result->timestamp(), 123.000000456);
+  robot::action::ActionPacket decoded;
+  ASSERT_TRUE(decoded.ParseFromString(result->SerializeAsString()));
+  EXPECT_DOUBLE_EQ(decoded.timestamp(), result->timestamp());
   EXPECT_EQ(result->joint().position_encoding(), robot::action::JointCommand::POSITION_SI);
   EXPECT_TRUE(ros2_utils::ResolvePositionEncoding(*result, 0, 4095).ok());
   EXPECT_DOUBLE_EQ(result->joint().position(), message.position[1]);
@@ -145,13 +148,13 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
     EXPECT_EQ(result->joint().has_position(), field == 0);
     EXPECT_EQ(result->joint().has_velocity(), field == 1);
     EXPECT_EQ(result->joint().has_effort(), field == 2);
-    EXPECT_EQ(result->timestamp_ns(), 0);
+    EXPECT_DOUBLE_EQ(result->timestamp(), 0.0);
   }
   message.header.stamp.sec = -1;
   message.header.stamp.nanosec = 500000000;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_EQ(result->timestamp_ns(), -500000000);
+  EXPECT_DOUBLE_EQ(result->timestamp(), -0.5);
   // Preserve double precision/range until the receiving driver validates it.
   message.effort = {std::numeric_limits<double>::max()};
   result = Send(ros2::data_type::JOINT_STATE, message);
@@ -241,19 +244,27 @@ TEST_F(PacketParserCppTest, JointFeedbackPreservesAcquisitionStampThroughPublish
       config.topic(), 10, [&](sensor_msgs::msg::JointState::ConstSharedPtr message) {
         received = *message;
       });
-  for (int64_t ns : {int64_t{123000000456}, int64_t{0}, int64_t{-500000000}}) {
+  struct Sample {
+    double timestamp;
+    int32_t sec;
+    uint32_t nanosec;
+  };
+  for (const auto& sample : std::vector<Sample>{{123.000000456, 123, 456},
+                                                {0.0, 0, 0},
+                                                {-0.5, -1, 500000000},
+                                                {1700000000.125, 1700000000, 125000000}}) {
     received.reset();
     SpinUntil([&] {
-      EXPECT_TRUE((*publish)(2048, ns).ok());
-      return received && static_cast<int64_t>(received->header.stamp.sec) * 1000000000 +
-                                 received->header.stamp.nanosec ==
-                             ns;
+      EXPECT_TRUE((*publish)(2048, sample.timestamp).ok());
+      return received && received->header.stamp.sec == sample.sec &&
+             received->header.stamp.nanosec == sample.nanosec;
     });
     ASSERT_TRUE(received);
     EXPECT_EQ(received->name, std::vector<std::string>{"elbow"});
     EXPECT_NEAR(received->position.at(0), 3.141592653589793, 1e-6);
   }
-  EXPECT_FALSE((*publish)(2048, std::numeric_limits<int64_t>::max()).ok());
+  EXPECT_FALSE((*publish)(2048, std::numeric_limits<double>::infinity()).ok());
+  EXPECT_FALSE((*publish)(2048, std::numeric_limits<double>::max()).ok());
 }
 TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);

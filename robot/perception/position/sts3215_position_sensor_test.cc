@@ -75,7 +75,7 @@ TEST(Sts3215PositionSensorTest, PublishesThePositionTheChannelReports) {
   EXPECT_EQ(packet->perception_id(), "joint_1");
   EXPECT_FLOAT_EQ(packet->position().position(), 2048.0f);
   EXPECT_FLOAT_EQ(packet->position().velocity(), 12.0f);
-  EXPECT_GT(packet->timestamp_ns(), 0);
+  EXPECT_GT(packet->timestamp(), 0);
 }
 
 class FixedClock final : public joshua::RobotClock {
@@ -93,7 +93,10 @@ TEST(Sts3215PositionSensorTest, UsesConfiguredDoubleRobotTime) {
         auto channel = std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{});
         Sts3215PositionSensor sensor(channel, MakeSensorConfig());
         const auto packet = sensor.GetData();
-        _exit(packet.ok() && packet->timestamp_ns() == 1700000000125000000LL ? 0 : 2);
+        if (!packet.ok()) _exit(2);
+        robot::perception::PerceptionPacket decoded;
+        if (!decoded.ParseFromString(packet->SerializeAsString())) _exit(3);
+        _exit(decoded.timestamp() == 1700000000.125 ? 0 : 4);
       },
       testing::ExitedWithCode(0),
       "");

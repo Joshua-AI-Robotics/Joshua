@@ -132,7 +132,7 @@ class CameraPublisher : public rclcpp::Node {
         }
 
         auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
-        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp_ns());
+        const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
         if (!stamp.ok()) {
           RCLCPP_ERROR(
               get_logger(), "Invalid camera timestamp: %s", stamp.status().ToString().c_str());

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <string_view>
 
@@ -45,10 +44,5 @@ void CheckGlobalClock();
 // std::runtime_error; they never return zero, stale data or switch clock sources.
 // Use a monotonic duration clock for deadlines rather than UTC/PTP robot time.
 double RobotTime();
-
-// Convert double seconds to the nearest integer nanosecond for packet/ROS
-// serialization. Reject non-finite and out-of-range values. This does not read
-// a clock or recover precision that the double representation cannot retain.
-absl::StatusOr<int64_t> SecondsToNanoseconds(double seconds);
 
 }  // namespace joshua

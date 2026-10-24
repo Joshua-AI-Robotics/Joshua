@@ -75,9 +75,10 @@ at exit. Uninstalled clocks close their descriptors when destroyed. Custom
 
 If native plugins are added later, they must share the owning runtime library;
 statically embedding independent copies in multiple shared objects can duplicate
-the state. The current API and timestamp migration cover C++ only. Python ROS
-nodes and the AI directory retain their existing timestamp behavior. There is
-no Python RobotTime implementation or binding.
+the state. The clock implementation and timestamp-source migration cover C++
+only. The existing Python trajectory reader follows the packet field name and
+seconds format; the AI directory retains its existing timestamp behavior.
+There is no Python RobotTime implementation or binding.
 
 ## Configuration and time domains
 
@@ -147,11 +148,10 @@ original `virtual double Now() const` interface. Combining the parts preserves
 fractional seconds within double precision; the final value does not retain
 every nanosecond at Unix-epoch magnitudes.
 
-Packet fields and ROS messages require integer nanoseconds.
-`joshua::SecondsToNanoseconds(double)` performs that representation conversion
-when assembling a packet, rounding to the nearest nanosecond and rejecting
-non-finite or out-of-range values. It does not read a clock. Incoming integer
-timestamps remain integers throughout forwarding and ROS conversion.
+Both `ActionPacket` and `PerceptionPacket` carry `double timestamp = 2` in
+seconds, matching `RobotTime()`. Drivers store that value directly and publishers
+keep it through forwarding. Only ROS message headers split the value into
+integer seconds and nanoseconds.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
@@ -175,25 +175,29 @@ These are host acquisition estimates, not hardware exposure timestamps or proof
 of synchronization. Physical acquisition timestamps require device support.
 Firmware `timestamp_us` metadata remains in its own domain.
 
-`//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(int64_t)` and
-`FromRosTimestamp(builtin_interfaces::msg::Time)`. They convert the integer wire
-representation without reading a clock:
+`//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(double)` and
+`FromRosTimestamp(builtin_interfaces::msg::Time)`, which returns double seconds.
+They convert the representation without reading a clock:
 
 ```cpp
-auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp_ns());
+auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp());
 if (!stamp.ok()) return stamp.status();
 message.header.stamp = *stamp;
 ```
 
-The conversion preserves exact positive, zero and negative timestamps,
-normalizes the nanosecond component to `[0, 1e9)`, and rejects values outside
-ROS's signed 32-bit seconds range. Camera and lidar publishers and JointState
+The conversion supports positive, zero and negative times, rounds fractional
+seconds to the nearest nanosecond with carry, and normalizes the nanosecond
+component to `[0, 1e9)`. Non-finite values and values outside ROS's signed 32-bit
+seconds range are rejected. Precision follows the double representation.
+Camera and lidar publishers and JointState
 position feedback use the original packet time rather than stamping again.
 Scalar feedback messages have no timestamp field.
 
-Action and perception packet timestamps use signed `int64` nanoseconds. Positive
-timestamps retain their existing protobuf wire encoding.
-Incoming JointState stamps are preserved, including zero and negative values.
+Incoming JointState stamps are stored as double seconds, including zero and
+negative values. Both packets changed field 2 from integer `timestamp_ns` to
+double `timestamp`. This changes the protobuf wire type from varint to fixed64;
+old integer-encoded timestamps are not wire compatible. Regenerate protobuf
+code and update communicating producers and consumers together.
 
 ROS conversion does not translate between UTC, boot-relative, firmware, or
 simulation domains. Capture and newly generated timestamps follow
@@ -211,8 +215,8 @@ integration is added here.
 - [x] Shared accessor exposure through actuator, perception and board interfaces.
 - [x] Hardware-free unit tests for source failures, ownership and startup order.
 - [x] Initialize launcher time before operation-mode selection.
-- [x] Keep RobotTime and the virtual clock interface in double seconds; convert
-      to integer nanoseconds only at packet/ROS boundaries.
+- [x] Keep RobotTime, the virtual clock interface, and packet timestamps in
+      double seconds; convert to integer components only at ROS boundaries.
 - [x] Migrate C++ host driver timestamps and preserve them through C++ publishers.
 - [ ] Integrate robot time into logging, including board and communication-driver
       logs; exposing the accessor alone does not change `LOG()` timestamps.

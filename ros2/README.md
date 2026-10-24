@@ -116,8 +116,9 @@ The decoder emits `ActionPacket.joint`, retaining optional double-valued
 position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
 m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
 preserves the selected joint name, `header.frame_id`, and the source timestamp in
-`ActionPacket.timestamp_ns`. Nanoseconds must be below 1e9; zero and negative
-source times are preserved. Metadata does not schedule execution, enforce
+`ActionPacket.timestamp` as double seconds. The ROS nanosecond component must
+be below 1e9; zero and negative source times are retained within double
+precision. Metadata does not schedule execution, enforce
 freshness, identify a clock domain, or trigger coordinate transforms. Those
 policies belong to future clock/PTP and coordinate-handling work.
 
@@ -155,8 +156,8 @@ synchronized multi-joint feedback.
 Device zero references are retained; URDF offsets and mechanical calibration
 are not inferred.
 
-Camera and lidar publishers also preserve packet timestamps. ROS conversion
-checks range and retains exact integer nanoseconds; see
+Camera and lidar publishers also preserve packet timestamps in double seconds.
+ROS conversion checks range and rounds the fractional seconds to nanoseconds; see
 [robot time](../docs/ROBOT_TIME.md#acquisition-timestamps-and-ros-conversion).
 
 Hardware and downstream constraints
@@ -198,7 +199,7 @@ Each `std_msgs/msg/UInt8MultiArray.data` contains one serialized
 Decode with the generated perception_packet proto. Audio is interleaved `s16le`,
 and its length is `frames * channels * 2`. Sample rate, channels, frame count,
 source name, sequence, and discontinuity are carried with every chunk.
-`timestamp_ns` estimates the first sample's configured RobotTime from unread
+`timestamp` estimates the first sample's configured RobotTime in seconds from unread
 ALSA frames. It is not a hardware timestamp or a synchronization guarantee.
 
 The source sample rate and `frames_per_chunk` determine publication cadence;

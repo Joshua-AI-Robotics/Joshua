@@ -34,8 +34,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Sts3215PositionSensor::GetDa
   reusable_packet_.set_perception_id(id_);
   // Host feedback-receipt estimate; firmware timestamps need domain conversion.
   try {
-    ABSL_ASSIGN_OR_RETURN(auto timestamp_ns, joshua::SecondsToNanoseconds(RobotTime()));
-    reusable_packet_.set_timestamp_ns(timestamp_ns);
+    reusable_packet_.set_timestamp(RobotTime());
   } catch (const std::exception& error) {
     return absl::UnavailableError(error.what());
   }

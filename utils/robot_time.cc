@@ -5,9 +5,7 @@
 #include <unistd.h>
 
 #include <cerrno>
-#include <cmath>
 #include <cstdint>
-#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -225,21 +223,6 @@ void CheckGlobalClock() {
 double RobotTime() {
   CheckGlobalClock();
   return GlobalState().clock->Now();
-}
-
-absl::StatusOr<int64_t> SecondsToNanoseconds(double seconds) {
-  if (!std::isfinite(seconds))
-    return absl::InvalidArgumentError("Timestamp seconds must be finite");
-  double whole;
-  const double fraction = std::modf(seconds, &whole);
-  // Split before scaling so converting the large whole-seconds component does
-  // not add another double rounding step at the nanosecond boundary.
-  const long double nanoseconds = static_cast<long double>(whole) * 1'000'000'000 +
-                                  std::round(static_cast<long double>(fraction) * 1'000'000'000);
-  if (nanoseconds < static_cast<long double>(std::numeric_limits<int64_t>::min()) ||
-      nanoseconds > static_cast<long double>(std::numeric_limits<int64_t>::max()))
-    return absl::OutOfRangeError("Timestamp exceeds signed nanosecond range");
-  return static_cast<int64_t>(nanoseconds);
 }
 
 }  // namespace joshua

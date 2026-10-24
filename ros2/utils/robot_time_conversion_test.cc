@@ -4,32 +4,39 @@
 
 namespace ros2_utils {
 namespace {
-TEST(RobotTimeConversionTest, PreservesExactPositiveZeroAndNegativeStamps) {
-  constexpr int64_t kMinRos =
-      static_cast<int64_t>(std::numeric_limits<int32_t>::min()) * 1000000000;
-  constexpr int64_t kMaxRos =
-      static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * 1000000000 + 999999999;
-  for (int64_t ns : {int64_t{0},
-                     int64_t{-1},
-                     int64_t{-1700000001},
-                     int64_t{1700000000123456789},
-                     kMinRos,
-                     kMaxRos}) {
-    auto stamp = ToRosTimestamp(ns);
+TEST(RobotTimeConversionTest, ConvertsDoubleSecondsAndNormalizesNegativeTimes) {
+  constexpr double kMinRos = std::numeric_limits<int32_t>::min();
+  constexpr double kUpperExclusive = static_cast<double>(std::numeric_limits<int32_t>::max()) + 1.0;
+  const double max_safe = std::nextafter(kUpperExclusive, 0.0);
+  for (double seconds :
+       {0.0, -0.5, -0.000000001, -1.000000001, 123.000000456, 1700000000.125, kMinRos, max_safe}) {
+    auto stamp = ToRosTimestamp(seconds);
     ASSERT_TRUE(stamp.ok()) << stamp.status();
     EXPECT_LT(stamp->nanosec, 1000000000u);
     auto result = FromRosTimestamp(*stamp);
     ASSERT_TRUE(result.ok());
-    EXPECT_EQ(*result, ns);
+    EXPECT_DOUBLE_EQ(*result, seconds);
   }
-  auto negative = ToRosTimestamp(-1);
+  auto negative = ToRosTimestamp(-0.000000001);
   ASSERT_TRUE(negative.ok());
   EXPECT_EQ(negative->sec, -1);
   EXPECT_EQ(negative->nanosec, 999999999u);
-  EXPECT_FALSE(ToRosTimestamp(kMinRos - 1).ok());
-  EXPECT_FALSE(ToRosTimestamp(kMaxRos + 1).ok());
-  EXPECT_FALSE(ToRosTimestamp(std::numeric_limits<int64_t>::min()).ok());
-  EXPECT_FALSE(ToRosTimestamp(std::numeric_limits<int64_t>::max()).ok());
+  EXPECT_FALSE(
+      ToRosTimestamp(std::nextafter(kMinRos, -std::numeric_limits<double>::infinity())).ok());
+  EXPECT_FALSE(ToRosTimestamp(kUpperExclusive).ok());
+  EXPECT_FALSE(ToRosTimestamp(std::numeric_limits<double>::max()).ok());
+}
+
+TEST(RobotTimeConversionTest, RoundsNanosecondsWithCarryAndRejectsNonFiniteSeconds) {
+  auto rounded = ToRosTimestamp(1.9999999996);
+  ASSERT_TRUE(rounded.ok());
+  EXPECT_EQ(rounded->sec, 2);
+  EXPECT_EQ(rounded->nanosec, 0u);
+  for (double value : {std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::infinity(),
+                       -std::numeric_limits<double>::infinity()}) {
+    EXPECT_EQ(ToRosTimestamp(value).status().code(), absl::StatusCode::kInvalidArgument);
+  }
 }
 
 TEST(RobotTimeConversionTest, RejectsInvalidRosNanoseconds) {

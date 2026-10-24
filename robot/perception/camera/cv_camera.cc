@@ -122,9 +122,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     // Clear and populate the reusable packet
     reusable_packet_.Clear();
     reusable_packet_.set_perception_id(id_);
-    const auto timestamp_ns = joshua::SecondsToNanoseconds(acquisition_time);
-    if (!timestamp_ns.ok()) return timestamp_ns.status();
-    reusable_packet_.set_timestamp_ns(*timestamp_ns);
+    reusable_packet_.set_timestamp(acquisition_time);
 
     // Populate ImageData fields
     auto* image_data = reusable_packet_.mutable_image();

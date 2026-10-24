@@ -3,6 +3,11 @@
 `packet_parser.cc` bridges compiled ROS message types and internal packets.
 `packet_parser.py` supplies matching field access for Python consumers.
 
+Both packets carry `double timestamp = 2` in seconds. C++ drivers use RobotTime
+directly, and ROS adapters convert between that value and `header.stamp`.
+This replaces integer `timestamp_ns` with a different protobuf wire type;
+regenerate protobuf code and update communicating endpoints together.
+
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
 velocity, and effort distinguish omission from zero. `position_encoding` selects
 `POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or

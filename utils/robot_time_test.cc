@@ -4,12 +4,9 @@
 
 #include <atomic>
 #include <cmath>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -19,36 +16,6 @@ double RobotTimeFromHelper();
 
 namespace joshua {
 namespace {
-
-static_assert(std::is_same_v<decltype(RobotTime()), double>);
-
-TEST(RobotTimeConversionTest, ConvertsDoubleSecondsAtPacketBoundary) {
-  for (const auto& sample :
-       std::vector<std::pair<double, int64_t>>{{0.0, 0},
-                                               {1.25, 1250000000},
-                                               {-0.5, -500000000},
-                                               {1700000000.125, 1700000000125000000LL},
-                                               {1.9999999996, 2000000000},
-                                               {-1.9999999996, -2000000000},
-                                               {0.0000000004, 0},
-                                               {0.0000000006, 1},
-                                               {-0.0000000006, -1}}) {
-    auto result = SecondsToNanoseconds(sample.first);
-    ASSERT_TRUE(result.ok()) << result.status();
-    EXPECT_EQ(*result, sample.second);
-  }
-}
-
-TEST(RobotTimeConversionTest, RejectsInvalidDoubleSecondsBeforeIntegerConversion) {
-  for (double value : {std::numeric_limits<double>::quiet_NaN(),
-                       std::numeric_limits<double>::infinity(),
-                       -std::numeric_limits<double>::infinity()}) {
-    EXPECT_EQ(SecondsToNanoseconds(value).status().code(), absl::StatusCode::kInvalidArgument);
-  }
-  for (double value : {1e12, -1e12, std::numeric_limits<double>::max()}) {
-    EXPECT_EQ(SecondsToNanoseconds(value).status().code(), absl::StatusCode::kOutOfRange);
-  }
-}
 
 class FakeClockIo final : public internal::ClockIo {
  public:

@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
-#include <limits>
 #include <stdexcept>
 
 #include "robot/perception/audio/audio_config.h"
@@ -115,19 +114,15 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
   if (filled_ == 0) {
     // Available capture frames estimate the oldest unread sample's age.
     const auto available = snd_pcm_avail_update(pcm_);
-    int64_t now;
+    double now;
     try {
-      const auto timestamp_ns = joshua::SecondsToNanoseconds(RobotTime());
-      if (!timestamp_ns.ok()) return timestamp_ns.status();
-      now = *timestamp_ns;
+      now = RobotTime();
     } catch (const std::exception& error) {
       return absl::UnavailableError(error.what());
     }
-    const int64_t age =
-        available > 0 ? FramesDuration(available, config_.sample_rate_hz()).count() : 0;
-    if (now < std::numeric_limits<int64_t>::min() + age)
-      return absl::OutOfRangeError("Audio acquisition timestamp underflow");
-    timestamp_ns_ = now - age;
+    const double age =
+        available > 0 ? static_cast<double>(available) / config_.sample_rate_hz() : 0.0;
+    timestamp_ = now - age;
   }
   // A short successful read need not mean the device is empty. Continue until
   // a packet is complete or ALSA reports no data. Each successful read advances
@@ -147,7 +142,7 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
   }
   PerceptionPacket packet;
   packet.set_perception_id(id_);
-  packet.set_timestamp_ns(timestamp_ns_);
+  packet.set_timestamp(timestamp_);
   packet.set_sequence_id(sequence_++);
   auto* audio = packet.mutable_audio();
   audio->set_sample_rate_hz(config_.sample_rate_hz());
