@@ -4,13 +4,20 @@ Joshua's public entrypoints are Docker Compose services from the repo root. The 
 
 ## `setup.sh`
 
-Host bootstrap for Docker only:
+Host bootstrap for Docker tooling and PTP device access:
 
 ```bash
 sudo ./scripts/setup.sh
 ```
 
-It installs/checks Docker Engine, Docker Compose v2, buildx, docker group membership, and NVIDIA Container Toolkit. It requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
+It installs/checks Docker Engine, Docker Compose v2, buildx, docker group membership, and NVIDIA Container Toolkit.
+
+It also creates a `ptp` group, adds the invoking sudo user, and installs
+`/etc/udev/rules.d/99-joshua-ptp.rules` to grant group read access (`0640`) to
+`/dev/ptp*`. The rule applies to existing and future clocks; no PTP device is
+required during setup. Log out and back in after new group membership.
+
+PTP setup grants device access. Clock synchronization and the configured PHC-to-UTC offset remain separate; see [RobotTime](../docs/ROBOT_TIME.md#configuration-and-time-domains). The bootstrap requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
 
 Verify the default GPU-enabled developer shell:
 

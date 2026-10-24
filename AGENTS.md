@@ -37,7 +37,8 @@ Development is **Docker-first** — [CONTRIBUTING.md](CONTRIBUTING.md) is
 authoritative. Native Ubuntu development is not a supported entrypoint; ROS 2,
 Bazel, Python, and CUDA all live inside the images.
 
-The host bootstrap installs Docker and NVIDIA container support only:
+The host bootstrap installs Docker and NVIDIA container support and configures
+PTP clock read access:
 
 ```bash
 sudo ./scripts/setup.sh          # add --cpu on hosts without an NVIDIA GPU

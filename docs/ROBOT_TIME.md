@@ -88,6 +88,19 @@ There is no Python RobotTime implementation or binding.
 | `UTC` | Read `CLOCK_REALTIME` | System UTC |
 | `MONOTONIC` | Read `CLOCK_MONOTONIC`; explicit selection only | Local boot-relative time, not comparable across hosts |
 
+The host bootstrap (`sudo ./scripts/setup.sh`, or `--cpu`) installs a udev rule
+granting the `ptp` group read access to `/dev/ptp*` and adds the invoking sudo
+user to that group. Log out and back in after setup for local processes to
+inherit the membership. This configures device permissions only.
+
+The standard Docker Compose developer and launcher services run as root with
+`privileged: true` and `/dev` mounted, so they already have PTP device access
+on a host exposing the clock. No image rebuild is needed for these host
+permissions. Custom unprivileged containers must expose the device, for example
+with `--device=/dev/ptp0:/dev/ptp0:r`; non-root processes also need the host
+`ptp` group's numeric GID as a supplementary group (`--group-add GID`). Host
+group membership is not automatically inherited inside a container.
+
 The default PTP path is `/dev/ptp0`. PTP requires an explicit
 `ptp_utc_offset_seconds`: PHC seconds minus UTC seconds. Obtain this value from
 the deployment's PTP service; do not copy a historical leap-second offset.
