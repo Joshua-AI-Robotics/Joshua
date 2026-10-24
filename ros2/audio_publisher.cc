@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -12,10 +14,10 @@
 
 namespace {
 // Retry device failures without busy-looping; pending chunks keep normal polling.
-constexpr auto kCaptureRetryBackoff = std::chrono::seconds(1);
+constexpr double kCaptureRetryBackoff = 1.0;
 // Report sustained outages, then throttle repeated warnings.
-constexpr auto kCaptureStallWarningDelay = std::chrono::seconds(2);
-constexpr auto kCaptureWarningInterval = std::chrono::seconds(1);
+constexpr double kCaptureStallWarningDelay = 2.0;
+constexpr double kCaptureWarningInterval = 1.0;
 }  // namespace
 
 class AudioPublisher : public rclcpp::Node {
@@ -49,15 +51,21 @@ class AudioPublisher : public rclcpp::Node {
   struct Source {
     std::unique_ptr<robot::perception::AudioInterface> interface;
     std::vector<rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr> publishers;
-    std::chrono::steady_clock::time_point last_packet = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point retry_after{};
-    std::chrono::steady_clock::time_point next_warning{};
+    double last_packet = joshua::RobotTime();
+    double retry_after = -std::numeric_limits<double>::infinity();
+    double next_warning = -std::numeric_limits<double>::infinity();
     std::chrono::nanoseconds poll_interval{};
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
-    // Retry/stall deadlines use elapsed time; packet stamps come from RobotTime.
-    const auto now = std::chrono::steady_clock::now();
+    double now;
+    try {
+      now = joshua::RobotTime();
+      if (!std::isfinite(now)) throw std::runtime_error("RobotTime is not finite");
+    } catch (const std::exception& error) {
+      RCLCPP_ERROR(get_logger(), "Audio clock unavailable: %s", error.what());
+      return;
+    }
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {
       source->last_packet = now;

@@ -7,9 +7,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -19,6 +21,7 @@
 #include "robot/comm/serial/caller_sized_serial_transport.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
+#include "utils/robot_time.h"
 
 namespace robot::comm {
 namespace {
@@ -26,14 +29,39 @@ using Bytes = std::vector<uint8_t>;
 
 static_assert(!std::is_base_of_v<CallerSizedMessageTransport, JoshuaWireSerialTransport>);
 
+class ExchangeClock final : public joshua::RobotClock {
+ public:
+  double Now() const override {
+    if (fail) throw std::runtime_error("test clock unavailable");
+    if (frozen) return 42.0;
+    return 42.0 + std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count() +
+           offset.load();
+  }
+  std::atomic<bool> fail{false};
+  std::atomic<bool> frozen{false};
+  std::atomic<double> offset{0.0};
+
+ private:
+  const std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
+};
+
 class SerialExchangeTest : public ::testing::Test {
  protected:
+  inline static ExchangeClock* clock_ = nullptr;
+  static void SetUpTestSuite() {
+    auto clock = std::make_unique<ExchangeClock>();
+    clock_ = clock.get();
+    ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
+  }
   int master = -1;
   std::shared_ptr<boost::asio::io_context> io = std::make_shared<boost::asio::io_context>();
   std::shared_ptr<Serial> link;
   std::unique_ptr<JoshuaWireSerialTransport> serial;
   Bytes request;
   void SetUp() override {
+    clock_->fail = false;
+    clock_->frozen = false;
+    clock_->offset = 0.0;
     // An allocated PTY only: no real /dev/ttyACM*, ttyUSB* or NIC is opened.
     master = posix_openpt(O_RDWR | O_NOCTTY);
     ASSERT_GE(master, 0);
@@ -176,6 +204,35 @@ TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
   EXPECT_TRUE(device.get());
   ASSERT_TRUE(actual.ok()) << actual.status();
   EXPECT_EQ(*actual, response);
+}
+
+TEST_F(SerialExchangeTest, RobotTimeAdvanceExpiresPendingExchange) {
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::seconds(1));
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  ASSERT_TRUE(ReadRequest());
+  clock_->offset = 2.0;
+  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(200)), std::future_status::ready);
+  EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
+}
+
+TEST_F(SerialExchangeTest, FrozenRobotTimeDoesNotExtendBlockingIoBudget) {
+  clock_->frozen = true;
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(25));
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  const auto ready = exchange.wait_for(std::chrono::seconds(1));
+  if (ready != std::future_status::ready) {
+    clock_->frozen = false;
+    clock_->offset = 2.0;
+  }
+  EXPECT_EQ(ready, std::future_status::ready);
+  EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
+}
+
+TEST_F(SerialExchangeTest, RobotClockFailureDoesNotSendRequest) {
+  clock_->fail = true;
+  EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kUnavailable);
+  pollfd descriptor{master, POLLIN, 0};
+  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
 }
 
 TEST_F(SerialExchangeTest, BusLockWaitIsBoundedAndExpiredRequestIsNotSent) {

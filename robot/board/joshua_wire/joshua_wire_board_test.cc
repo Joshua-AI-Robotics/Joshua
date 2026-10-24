@@ -1,11 +1,25 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
+#include <atomic>
+#include <limits>
+#include <stdexcept>
+
 #include "firmware/common/joshua_wire.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/testing/fake_joshua_wire_transport.h"
 #include "robot/comm/factory/comm_factory.h"
 namespace robot::board {
 namespace {
+class FeedbackClock final : public joshua::RobotClock {
+ public:
+  double Now() const override {
+    if (fail) throw std::runtime_error("test clock unavailable");
+    return now;
+  }
+  std::atomic<double> now{42.0};
+  std::atomic<bool> fail{false};
+};
+
 class FakeJoshuaWireBoard : public JoshuaWireBoard {
  public:
   FakeJoshuaWireBoard() : JoshuaWireBoard(ARDUINO_UNO) {}
@@ -44,8 +58,16 @@ robot::board::Board MakeBoardConfig() {
 
 class JoshuaWireBoardTest : public ::testing::Test {
  protected:
+  inline static FeedbackClock* clock_ = nullptr;
+  static void SetUpTestSuite() {
+    auto clock = std::make_unique<FeedbackClock>();
+    clock_ = clock.get();
+    ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
+  }
   std::shared_ptr<FakeJoshuaWireTransport> transport_ = std::make_shared<FakeJoshuaWireTransport>();
   void SetUp() override {
+    clock_->now = 42.0;
+    clock_->fail = false;
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(
         [this](const robot::comm::Comm&) -> absl::StatusOr<robot::comm::CommTransport> {
           return robot::comm::CommTransport{
@@ -164,6 +186,28 @@ TEST_F(JoshuaWireBoardTest, UnsupportedModesAndStaleSamplesAreRejected) {
   EXPECT_EQ(channel->SetTarget(TargetMode::kTorque, 1).code(), absl::StatusCode::kUnimplemented);
   EXPECT_EQ(transport_->exchange_calls_, count);
   transport_->channel.feedback.metadata.validity = JW_SAMPLE_STALE;
+  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
+}
+
+TEST_F(JoshuaWireBoardTest, CachedFeedbackExpiryUsesRobotTime) {
+  FakeJoshuaWireBoard board;
+  ASSERT_TRUE(board.Init(MakeBoardConfig()).ok());
+  auto channel = *board.OpenChannel(0);
+  ASSERT_TRUE(channel->ReadFeedback().ok());
+  clock_->now = 42.05;
+  EXPECT_TRUE(channel->ReadFeedback().ok());
+  clock_->now = 42.2;
+  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
+  clock_->now = 41.0;
+  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
+  clock_->now = 42.25;
+  ++transport_->channel.feedback.metadata.sequence;
+  ++transport_->channel.feedback.metadata.timestamp_us;
+  EXPECT_TRUE(channel->ReadFeedback().ok());
+  clock_->fail = true;
+  EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
+  clock_->fail = false;
+  clock_->now = std::numeric_limits<double>::quiet_NaN();
   EXPECT_EQ(channel->ReadFeedback().status().code(), absl::StatusCode::kUnavailable);
 }
 }  // namespace

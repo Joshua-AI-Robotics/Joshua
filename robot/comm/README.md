@@ -52,6 +52,9 @@ that atomicity. Adapters explicitly choose whether to preserve or discard
 pending input before a transaction. The caller-sized vendor transaction
 also holds the same lock throughout its write and read.
 
+Exchange deadlines use RobotTime seconds. Blocking waits retain an elapsed-time
+cap, covering bus-lock wait, write, and read even if the robot clock changes.
+
 Device command and payload parsing remains outside this layer. For example, the lidar
 parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`. JoshuaWire

@@ -5,13 +5,32 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <cmath>
 #include <cstring>
 #include <thread>
 
+#include "utils/robot_time.h"
+#include "utils/status_macros.h"
+
 namespace robot::comm {
+namespace {
+constexpr double kClockCheckInterval = 0.01;
+
+absl::StatusOr<double> ReadRobotTime() {
+  try {
+    const double now = joshua::RobotTime();
+    if (!std::isfinite(now)) return absl::UnavailableError("RobotTime is not finite.");
+    return now;
+  } catch (const std::exception& error) {
+    return absl::UnavailableError(error.what());
+  }
+}
+}  // namespace
+
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
                std::string uart_port,
                int uart_baudrate,
@@ -181,11 +200,24 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
                                    const ResponseBoundary& consume) {
   if (request.empty() || timeout.count() <= 0 || timeout.count() > INT_MAX || !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  // Deadlines measure elapsed time; UTC/PTP RobotTime timestamps can jump.
-  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  const auto elapsed_limit = std::chrono::steady_clock::now() + timeout;
+  ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
+  const double deadline = now + std::chrono::duration<double>(timeout).count();
+  auto remaining_time = [&]() -> absl::StatusOr<double> {
+    ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
+    // Clock adjustments must not extend the blocking I/O budget.
+    return std::min(
+        deadline - now,
+        std::chrono::duration<double>(elapsed_limit - std::chrono::steady_clock::now()).count());
+  };
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
-  if (!lock.try_lock_until(deadline))
-    return absl::DeadlineExceededError("Serial bus busy; request not sent.");
+  while (!lock.owns_lock()) {
+    ABSL_ASSIGN_OR_RETURN(const double remaining, remaining_time());
+    if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
+    lock.try_lock_for(std::chrono::duration<double>(std::min(remaining, kClockCheckInterval)));
+  }
+  ABSL_ASSIGN_OR_RETURN(const double remaining, remaining_time());
+  if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
   if (!serial_->is_open()) return absl::FailedPreconditionError("Serial port is closed.");
   const int fd = serial_->native_handle();
   const int flags = fcntl(fd, F_GETFL);
@@ -204,23 +236,22 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   }
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
-      const auto remaining = deadline - std::chrono::steady_clock::now();
-      if (remaining <= std::chrono::steady_clock::duration::zero()) {
+      ABSL_ASSIGN_OR_RETURN(const double remaining, remaining_time());
+      if (remaining <= 0) {
         return absl::DeadlineExceededError("Serial exchange timed out; outcome unknown.");
       }
       pollfd descriptor{fd, events, 0};
       const int poll_timeout_ms =
-          static_cast<int>(
-              std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count()) +
-          1;
+          static_cast<int>(std::ceil(std::min(remaining, kClockCheckInterval) * 1000));
       const int result = poll(&descriptor, 1, poll_timeout_ms);
       if (result < 0 && errno == EINTR) continue;
       if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
         return absl::UnavailableError("Serial exchange lost its connection; outcome unknown.");
       }
-      if (result > 0 && (descriptor.revents & events) &&
-          std::chrono::steady_clock::now() < deadline)
-        return absl::OkStatus();
+      if (result > 0 && (descriptor.revents & events)) {
+        ABSL_ASSIGN_OR_RETURN(const double remaining, remaining_time());
+        if (remaining > 0) return absl::OkStatus();
+      }
     }
   };
   size_t written = 0;

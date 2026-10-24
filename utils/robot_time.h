@@ -42,7 +42,6 @@ void CheckGlobalClock();
 
 // Safe from helpers, callbacks and worker threads. Runtime read failures throw
 // std::runtime_error; they never return zero, stale data or switch clock sources.
-// Use a monotonic duration clock for deadlines rather than UTC/PTP robot time.
 double RobotTime();
 
 }  // namespace joshua

@@ -1,13 +1,14 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
 #include <algorithm>
+#include <cmath>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
-#include "absl/time/clock.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
@@ -157,10 +158,16 @@ class JoshuaWireChannel : public BoardChannel {
     if (value.metadata.validity != JW_SAMPLE_VALID || value.metadata.boot_id != boot_ ||
         value.metadata.clock != schema_.feedback_clock)
       return absl::UnavailableError("Feedback invalid, stale, or from another boot/clock.");
-    const auto now = absl::Now();
+    double now;
+    try {
+      now = RobotTime();
+      if (!std::isfinite(now)) return absl::UnavailableError("RobotTime is not finite.");
+    } catch (const std::exception& error) {
+      return absl::UnavailableError(error.what());
+    }
     if (sample_seen_ && value.metadata.sequence == sequence_) {
-      if (value.metadata.timestamp_us != timestamp_ ||
-          now - received_ > absl::Microseconds(schema_.max_feedback_age_us))
+      if (value.metadata.timestamp_us != timestamp_ || now < received_ ||
+          now - received_ > schema_.max_feedback_age_us / 1'000'000.0)
         return absl::UnavailableError("Cached feedback expired or changed without acquisition.");
     } else {
       if (sample_seen_ && (int32_t(value.metadata.sequence - sequence_) <= 0 ||
@@ -187,7 +194,7 @@ class JoshuaWireChannel : public BoardChannel {
   bool sample_seen_ = false;
   uint32_t sequence_ = 0;
   uint64_t timestamp_ = 0;
-  absl::Time received_;
+  double received_ = 0.0;
 };
 absl::Status ConfigureChannel(JoshuaWireCommandClient& commands, const Channel& channel) {
   jw_configure_step_dir_t config{};

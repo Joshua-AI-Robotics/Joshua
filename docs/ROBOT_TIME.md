@@ -156,8 +156,9 @@ integer seconds and nanoseconds.
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
 fabricated timestamp. Callers that later adopt this API must handle errors at
-their worker/callback boundary. UTC/PTP can jump when the host adjusts time;
-continue using monotonic durations for deadlines, watchdogs and sleeps.
+their worker/callback boundary. UTC/PTP can jump when the host adjusts time.
+Deadline values use `RobotTime() + timeout_seconds`. Serial blocking waits also
+retain an elapsed-time cap so clock adjustments cannot extend the I/O budget.
 
 ## Acquisition timestamps and ROS conversion
 
@@ -226,7 +227,7 @@ integration is added here.
 - [ ] Discover PTP offsets automatically and monitor synchronization health.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Serial deadlines and audio retry/stall detection continue using monotonic
-elapsed time. ROS timers and logging retain their own clock
-semantics. Utility entrypoints that only display incoming stamps do not create
+Serial deadlines, cached feedback expiry, and audio retry/stall detection use
+RobotTime seconds. OS wait durations, ROS timers and logging retain their own
+clock semantics. Utility entrypoints that only display incoming stamps do not create
 new acquisition timestamps and need no clock installation.

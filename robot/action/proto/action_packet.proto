@@ -42,9 +42,6 @@ message JointCommand {
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-  // Time in seconds. JointState preserves source time (including zero/negative
-  // values); headerless C++ ROS commands use RobotTime at receipt. Clock domain,
-  // scheduling and freshness are not inferred.
   double timestamp = 2;
   uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
