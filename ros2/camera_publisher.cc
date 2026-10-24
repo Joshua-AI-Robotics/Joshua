@@ -99,70 +99,66 @@ class CameraPublisher : public rclcpp::Node {
 
  private:
   void publish_camera_data(size_t camera_index) {
-    try {
-      const auto& camera = cameras_.at(camera_index);
-      auto packet = camera.interface->GetData();
+    const auto& camera = cameras_.at(camera_index);
+    auto packet = camera.interface->GetData();
 
-      if (!packet.ok()) {
-        RCLCPP_WARN(
-            this->get_logger(), "Failed to get data from camera '%s'!", camera.topic.c_str());
-        return;
-      }
-
-      const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
-      if (!image_status.ok()) {
-        RCLCPP_WARN(this->get_logger(),
-                    "Failed to get image data from camera '%s': %s",
-                    camera.topic.c_str(),
-                    image_status.message().data());
-        return;
-      }
-
-      const auto& image_data = packet.value().image();
-
-      if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Invalid image dimensions: %dx%d, channels=%d",
-                     image_data.width(),
-                     image_data.height(),
-                     image_data.channels());
-        return;
-      }
-
-      auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
-      const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
-      if (!stamp.ok()) {
-        RCLCPP_ERROR(
-            get_logger(), "Invalid camera timestamp: %s", stamp.status().ToString().c_str());
-        return;
-      }
-      image_msg->header.stamp = *stamp;
-      image_msg->header.frame_id = "camera_frame";
-      image_msg->height = image_data.height();
-      image_msg->width = image_data.width();
-      image_msg->encoding = "rgb8";
-      image_msg->is_bigendian = false;
-      image_msg->step = image_data.width() * 3;
-
-      size_t data_size = image_data.width() * image_data.height() * 3;
-      image_msg->data.resize(data_size);
-
-      const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
-      for (size_t i = 0; i < data_size; i += 3) {
-        image_msg->data[i] = bgr_data[i + 2];
-        image_msg->data[i + 1] = bgr_data[i + 1];
-        image_msg->data[i + 2] = bgr_data[i];
-      }
-
-      camera.publisher->publish(*image_msg);
-    } catch (const std::exception& e) {
-      RCLCPP_ERROR(this->get_logger(), "Error publishing camera data: %s", e.what());
+    if (!packet.ok()) {
+      RCLCPP_WARN(
+          this->get_logger(), "Failed to get data from camera '%s'!", camera.topic.c_str());
+      return;
     }
+
+    const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
+    if (!image_status.ok()) {
+      RCLCPP_WARN(this->get_logger(),
+                  "Failed to get image data from camera '%s': %s",
+                  camera.topic.c_str(),
+                  image_status.message().data());
+      return;
+    }
+
+    const auto& image_data = packet.value().image();
+
+    if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
+      RCLCPP_ERROR(this->get_logger(),
+                   "Invalid image dimensions: %dx%d, channels=%d",
+                   image_data.width(),
+                   image_data.height(),
+                   image_data.channels());
+      return;
+    }
+
+    auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
+    const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
+    if (!stamp.ok()) {
+      RCLCPP_ERROR(
+          get_logger(), "Invalid camera timestamp: %s", stamp.status().ToString().c_str());
+      return;
+    }
+    image_msg->header.stamp = *stamp;
+    image_msg->header.frame_id = "camera_frame";
+    image_msg->height = image_data.height();
+    image_msg->width = image_data.width();
+    image_msg->encoding = "rgb8";
+    image_msg->is_bigendian = false;
+    image_msg->step = image_data.width() * 3;
+
+    size_t data_size = image_data.width() * image_data.height() * 3;
+    image_msg->data.resize(data_size);
+
+    const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
+    for (size_t i = 0; i < data_size; i += 3) {
+      image_msg->data[i] = bgr_data[i + 2];
+      image_msg->data[i + 1] = bgr_data[i + 1];
+      image_msg->data[i + 2] = bgr_data[i];
+    }
+
+    camera.publisher->publish(*image_msg);
   }
 
   std::vector<Camera> cameras_;
 };
 
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
 }

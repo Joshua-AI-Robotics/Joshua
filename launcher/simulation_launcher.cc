@@ -2,8 +2,7 @@
 
 #include <glog/logging.h>
 #include <limits.h>
-#include <signal.h>
-#include <sys/wait.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <cstdlib>
@@ -11,21 +10,16 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "node_generator/node_generator.h"
+#include "node_generator/process_supervisor.h"
+#include "utils/joshua_runtime.h"
+#include "utils/scope_exit.h"
 
 namespace launcher {
 namespace {
-
-volatile sig_atomic_t g_child_pid = 0;
-
-void ForwardSignalToChild(int sig) {
-  pid_t pid = g_child_pid;
-  if (pid > 0) {
-    kill(-pid, sig);
-  }
-}
 
 std::string GetSelfExePath() {
   char buf[PATH_MAX];
@@ -73,7 +67,7 @@ std::optional<std::filesystem::path> ResolveSimulationBinary() {
   return std::nullopt;
 }
 
-pid_t ForkExecSimulation(const std::filesystem::path& sim_bin, const std::string& config_path) {
+node_generator::ProcessSpec BuildSimulationSpec(const std::filesystem::path& sim_bin, const std::string& config_path) {
   std::string exec_path = sim_bin.string();
 
   std::filesystem::path runfiles_dir =
@@ -108,25 +102,16 @@ pid_t ForkExecSimulation(const std::filesystem::path& sim_bin, const std::string
     abs_config = std::filesystem::absolute(config_path).string();
   }
 
-  std::vector<std::string> argv_str = {exec_path, "--config", abs_config};
-  std::vector<char*> argv_ptrs;
-  argv_ptrs.reserve(argv_str.size() + 1);
-  for (auto& s : argv_str) argv_ptrs.push_back(const_cast<char*>(s.c_str()));
-  argv_ptrs.push_back(nullptr);
-
-  pid_t pid = fork();
-  if (pid == 0) {
-    setpgid(0, 0);
-    for (const auto& [k, v] : env_set) setenv(k.c_str(), v.c_str(), 1);
-    for (const auto& k : env_unset) unsetenv(k.c_str());
-    if (!work_dir.empty()) chdir(work_dir.c_str());
-
-    execv(exec_path.c_str(), argv_ptrs.data());
-    const char* msg = "Failed to execute simulation binary\n";
-    write(STDERR_FILENO, msg, strlen(msg));
-    _exit(1);
-  }
-  return pid;
+  node_generator::ProcessSpec spec;
+  spec.name = "simulation";
+  spec.executable = exec_path;
+  spec.arguments = {"--config", abs_config};
+  spec.environment = std::move(env_set);
+  spec.unset_environment = std::move(env_unset);
+  spec.working_directory = std::move(work_dir);
+  spec.require_ready = false;
+  spec.allow_completion = true;
+  return spec;
 }
 
 bool HasPerceptionNodes(const config::Config& config) {
@@ -154,46 +139,29 @@ int RunSimulation(const std::string& config_path, const config::Config& config) 
       LOG(ERROR) << "Failed to initialize NodeGenerator for perception nodes";
       return 1;
     }
-    if (!ng->LaunchAllNodes().ok()) {
-      LOG(WARNING) << "NodeGenerator launched no perception nodes";
-    }
+    const auto launched = ng->LaunchAllNodes();
+    if (absl::IsCancelled(launched) && node_generator::SupervisorShutdownRequested()) return 0;
+    joshua::ThrowIfError(launched);
   }
 
-  pid_t sim_pid = ForkExecSimulation(*sim_bin, config_path);
-  if (sim_pid <= 0) {
-    LOG(ERROR) << "Failed to fork simulation process";
-    if (ng) ng->Shutdown();
-    return 1;
+  node_generator::ProcessSupervisor simulation;
+  joshua::ScopeExit cleanup([&] {
+    if (ng) joshua::RunCleanup("simulation graph cleanup", [&] { joshua::ThrowIfError(ng->Shutdown()); });
+    joshua::RunCleanup("simulation cleanup", [&] { joshua::ThrowIfError(simulation.Shutdown()); });
+  });
+  const auto started = simulation.Start(BuildSimulationSpec(*sim_bin, config_path));
+  if (absl::IsCancelled(started) && node_generator::SupervisorShutdownRequested()) return 0;
+  joshua::ThrowIfError(started);
+  const auto ready = simulation.AwaitReady();
+  if (absl::IsCancelled(ready) && node_generator::SupervisorShutdownRequested()) return 0;
+  joshua::ThrowIfError(ready);
+  while (!node_generator::SupervisorShutdownRequested() && !joshua::ShutdownRequested()) {
+    if (ng) joshua::ThrowIfError(ng->PollNodes());
+    joshua::ThrowIfError(simulation.Poll());
+    if (!simulation.HasLiveProcesses()) break;
+    poll(nullptr, 0, 20);
   }
-  LOG(INFO) << "Simulation launched with PID: " << sim_pid;
-
-  g_child_pid = sim_pid;
-
-  struct sigaction sa = {};
-  sa.sa_handler = ForwardSignalToChild;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART;
-
-  struct sigaction old_int, old_term;
-  sigaction(SIGINT, &sa, &old_int);
-  sigaction(SIGTERM, &sa, &old_term);
-
-  int status = 0;
-  waitpid(sim_pid, &status, 0);
-
-  sigaction(SIGINT, &old_int, nullptr);
-  sigaction(SIGTERM, &old_term, nullptr);
-  g_child_pid = 0;
-
-  int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-  LOG(INFO) << "Simulation exited with code: " << exit_code;
-
-  if (ng) {
-    LOG(INFO) << "Shutting down perception nodes ...";
-    ng->Shutdown();
-  }
-
-  return exit_code;
+  return joshua::RuntimeFailed() ? 1 : 0;
 }
 
 }  // namespace launcher

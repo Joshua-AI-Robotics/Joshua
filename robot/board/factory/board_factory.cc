@@ -12,6 +12,7 @@
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
 #include "utils/status_macros.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::board {
 
@@ -82,12 +83,16 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
   return board;
 }
 
-void BoardFactory::ResetForTesting() {
+void BoardFactory::ShutdownAll() noexcept {
   std::lock_guard<std::mutex> lock(g_board_mutex);
   for (auto& [name, cached] : g_boards) {
-    cached.board->Teardown().IgnoreError();
+    joshua::RunCleanup(name.c_str(), [&] { joshua::ThrowIfError(cached.board->Teardown()); });
   }
   g_boards.clear();
+}
+
+void BoardFactory::ResetForTesting() {
+  ShutdownAll();
 }
 
 }  // namespace robot::board

@@ -104,88 +104,84 @@ class LidarPublisher : public rclcpp::Node {
 
  private:
   void publish_lidar_data(size_t lidar_index) {
-    try {
-      const auto& lidar = lidars_.at(lidar_index);
-      auto packet = lidar.interface->GetData();
+    const auto& lidar = lidars_.at(lidar_index);
+    auto packet = lidar.interface->GetData();
 
-      if (!packet.ok()) {
-        RCLCPP_WARN(
-            this->get_logger(), "Failed to get data from lidar '%s'!", lidar.topic.c_str());
-        return;
-      }
-
-      const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
-      if (!cloud_status.ok()) {
-        RCLCPP_WARN(this->get_logger(),
-                    "LiDAR '%s' packet has no point cloud: %s",
-                    lidar.topic.c_str(),
-                    cloud_status.message().data());
-        return;
-      }
-
-      const auto& cloud = packet.value().point_cloud();
-      const int num_points = cloud.x_size();
-      if (num_points == 0) {
-        RCLCPP_WARN(this->get_logger(), "Empty point cloud from '%s'!", lidar.topic.c_str());
-        return;
-      }
-
-      sensor_msgs::msg::PointCloud2 cloud_msg;
-      const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
-      if (!stamp.ok()) {
-        RCLCPP_ERROR(
-            get_logger(), "Invalid lidar timestamp: %s", stamp.status().ToString().c_str());
-        return;
-      }
-      cloud_msg.header.stamp = *stamp;
-      cloud_msg.header.frame_id = cloud.frame_id().empty() ? lidar.frame_id : cloud.frame_id();
-      cloud_msg.height = cloud.height() > 0 ? cloud.height() : 1;
-      cloud_msg.width = cloud.width() > 0 ? cloud.width() : static_cast<uint32_t>(num_points);
-      cloud_msg.is_bigendian = false;
-      cloud_msg.is_dense = cloud.is_dense();
-
-      sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
-      modifier.setPointCloud2Fields(4,
-                                    "x",
-                                    1,
-                                    sensor_msgs::msg::PointField::FLOAT32,
-                                    "y",
-                                    1,
-                                    sensor_msgs::msg::PointField::FLOAT32,
-                                    "z",
-                                    1,
-                                    sensor_msgs::msg::PointField::FLOAT32,
-                                    "intensity",
-                                    1,
-                                    sensor_msgs::msg::PointField::FLOAT32);
-      modifier.resize(num_points);
-
-      sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
-      sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
-      sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
-      sensor_msgs::PointCloud2Iterator<float> iter_i(cloud_msg, "intensity");
-
-      const int nx = cloud.x_size();
-      const int ny = cloud.y_size();
-      const int nz = cloud.z_size();
-      const int ni = cloud.intensity_size();
-      const int n = std::min({nx, ny, nz, std::max(1, ni)});
-      for (int i = 0; i < n; ++i, ++iter_x, ++iter_y, ++iter_z, ++iter_i) {
-        *iter_x = cloud.x(i);
-        *iter_y = cloud.y(i);
-        *iter_z = cloud.z(i);
-        *iter_i = (i < ni) ? cloud.intensity(i) : 0.0f;
-      }
-
-      lidar.publisher->publish(cloud_msg);
-    } catch (const std::exception& e) {
-      RCLCPP_ERROR(this->get_logger(), "Error publishing lidar data: %s", e.what());
+    if (!packet.ok()) {
+      RCLCPP_WARN(
+          this->get_logger(), "Failed to get data from lidar '%s'!", lidar.topic.c_str());
+      return;
     }
+
+    const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
+    if (!cloud_status.ok()) {
+      RCLCPP_WARN(this->get_logger(),
+                  "LiDAR '%s' packet has no point cloud: %s",
+                  lidar.topic.c_str(),
+                  cloud_status.message().data());
+      return;
+    }
+
+    const auto& cloud = packet.value().point_cloud();
+    const int num_points = cloud.x_size();
+    if (num_points == 0) {
+      RCLCPP_WARN(this->get_logger(), "Empty point cloud from '%s'!", lidar.topic.c_str());
+      return;
+    }
+
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
+    if (!stamp.ok()) {
+      RCLCPP_ERROR(
+          get_logger(), "Invalid lidar timestamp: %s", stamp.status().ToString().c_str());
+      return;
+    }
+    cloud_msg.header.stamp = *stamp;
+    cloud_msg.header.frame_id = cloud.frame_id().empty() ? lidar.frame_id : cloud.frame_id();
+    cloud_msg.height = cloud.height() > 0 ? cloud.height() : 1;
+    cloud_msg.width = cloud.width() > 0 ? cloud.width() : static_cast<uint32_t>(num_points);
+    cloud_msg.is_bigendian = false;
+    cloud_msg.is_dense = cloud.is_dense();
+
+    sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
+    modifier.setPointCloud2Fields(4,
+                                  "x",
+                                  1,
+                                  sensor_msgs::msg::PointField::FLOAT32,
+                                  "y",
+                                  1,
+                                  sensor_msgs::msg::PointField::FLOAT32,
+                                  "z",
+                                  1,
+                                  sensor_msgs::msg::PointField::FLOAT32,
+                                  "intensity",
+                                  1,
+                                  sensor_msgs::msg::PointField::FLOAT32);
+    modifier.resize(num_points);
+
+    sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
+    sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
+    sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
+    sensor_msgs::PointCloud2Iterator<float> iter_i(cloud_msg, "intensity");
+
+    const int nx = cloud.x_size();
+    const int ny = cloud.y_size();
+    const int nz = cloud.z_size();
+    const int ni = cloud.intensity_size();
+    const int n = std::min({nx, ny, nz, std::max(1, ni)});
+    for (int i = 0; i < n; ++i, ++iter_x, ++iter_y, ++iter_z, ++iter_i) {
+      *iter_x = cloud.x(i);
+      *iter_y = cloud.y(i);
+      *iter_z = cloud.z(i);
+      *iter_i = (i < ni) ? cloud.intensity(i) : 0.0f;
+    }
+
+    lidar.publisher->publish(cloud_msg);
   }
 
   std::vector<Lidar> lidars_;
 };
 
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<LidarPublisher>(argc, argv, "lidar_publisher");
 }

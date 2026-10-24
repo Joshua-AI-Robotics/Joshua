@@ -53,6 +53,9 @@ class CommFactory {
   // Serial connections are shared per port; a conflicting baud rate is rejected.
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
 
+  // Called after board/driver teardown, before ROS context shutdown.
+  static void ShutdownAll() noexcept;
+
   // Replaces the result of CreateComm without changing the consumer call
   // path or opening hardware. Pass nullptr to restore production behavior.
   // For tests.

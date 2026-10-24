@@ -28,25 +28,21 @@ class PositionPublisher : public rclcpp::Node {
             *this,
             1.0 / pub.publish_rate_hz(),
             [interface, publish = *publisher, logger = get_logger()]() {
-              try {
-                auto packet = interface->GetData();
-                if (!packet.ok()) {
-                  RCLCPP_WARN(
-                      logger, "Cannot read position: %s", packet.status().ToString().c_str());
-                  return;
-                }
-                auto position = ros2_utils::RequirePerceptionPosition(*packet);
-                if (!position.ok()) {
-                  RCLCPP_ERROR(
-                      logger, "Invalid position: %s", position.status().ToString().c_str());
-                  return;
-                }
-                const auto status = publish(*position, packet->timestamp());
-                if (!status.ok()) {
-                  RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
-                }
-              } catch (const std::exception& error) {
-                RCLCPP_ERROR(logger, "Error publishing position: %s", error.what());
+              auto packet = interface->GetData();
+              if (!packet.ok()) {
+                RCLCPP_WARN(
+                    logger, "Cannot read position: %s", packet.status().ToString().c_str());
+                return;
+              }
+              auto position = ros2_utils::RequirePerceptionPosition(*packet);
+              if (!position.ok()) {
+                RCLCPP_ERROR(
+                    logger, "Invalid position: %s", position.status().ToString().c_str());
+                return;
+              }
+              const auto status = publish(*position, packet->timestamp());
+              if (!status.ok()) {
+                RCLCPP_ERROR(logger, "Cannot publish position: %s", status.ToString().c_str());
               }
             }));
       }
@@ -58,6 +54,6 @@ class PositionPublisher : public rclcpp::Node {
   // publisher's config-driven rate. Each reading already retains RobotTime.
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
 }

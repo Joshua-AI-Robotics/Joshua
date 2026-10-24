@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "utils/robot_time.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::comm {
 namespace {
@@ -44,14 +45,9 @@ Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
 }
 
 Serial::~Serial() {
-  if (serial_->is_open()) {
-    try {
-      serial_->close();
-    } catch (const boost::system::system_error& e) {
-      LOG(ERROR) << "Error closing serial port: " << e.what();
-      throw std::runtime_error("Error closing serial port.");
-    }
-  }
+  joshua::RunCleanup("serial close", [&] {
+    if (serial_ && serial_->is_open()) serial_->close();
+  });
 }
 
 absl::Status Serial::Open() {
@@ -190,9 +186,11 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   if (request.empty() || !std::isfinite(timeout) || timeout <= 0 || timeout > INT_MAX / 1000.0 ||
       !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
+  if (joshua::CancellationRequested()) return absl::CancelledError("Serial shutdown; request not sent.");
   const double deadline = RobotTime() + timeout;
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   while (!lock.owns_lock()) {
+    if (joshua::CancellationRequested()) return absl::CancelledError("Serial shutdown; request not sent.");
     const double remaining = deadline - RobotTime();
     if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
     lock.try_lock_for(std::chrono::duration<double>(std::min(remaining, kClockCheckInterval)));
@@ -217,6 +215,8 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   }
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
+      if (joshua::CancellationRequested())
+        return absl::CancelledError("Serial shutdown; command outcome unknown.");
       const double remaining = deadline - RobotTime();
       if (remaining <= 0) {
         return absl::DeadlineExceededError("Serial exchange timed out; outcome unknown.");

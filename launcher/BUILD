@@ -28,6 +28,9 @@ cc_library(
     deps = [
         "//config/proto:config_cc_proto",
         "//node_generator",
+        "//node_generator:process_supervisor",
+        "//utils:joshua_runtime",
+        "//utils:scope_exit",
         "@glog",
     ],
 )
@@ -55,7 +58,8 @@ cc_binary(
         "//config:config_utils",
         "//config:validation",
         "//node_generator",
-        "//utils:robot_time",
+        "//node_generator:process_supervisor",
+        "//utils:joshua_runtime",
         "@gflags",
         "@glog",
     ],

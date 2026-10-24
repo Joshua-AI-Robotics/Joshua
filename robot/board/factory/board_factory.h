@@ -18,6 +18,9 @@ class BoardFactory {
   static absl::StatusOr<std::shared_ptr<BoardInterface>> GetOrCreate(
       const robot::board::Board& config);
 
+  // Release node consumers first. Tears down every cached board, even on failure.
+  static void ShutdownAll() noexcept;
+
   // Tears down and forgets every cached board. For tests.
   static void ResetForTesting();
 

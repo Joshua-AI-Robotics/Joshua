@@ -162,14 +162,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     LOG(ERROR) << "OpenCV exception in camera " << id_ << ": " << e.what();
     reusable_packet_.Clear();
     return absl::Status(absl::StatusCode::kInternal, "OpenCV exception in camera");
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Standard exception in camera " << id_ << ": " << e.what();
-    reusable_packet_.Clear();
-    return absl::Status(absl::StatusCode::kInternal, "Standard exception in camera");
-  } catch (...) {
-    LOG(ERROR) << "Unknown exception in camera " << id_;
-    reusable_packet_.Clear();
-    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
   }
 }
 

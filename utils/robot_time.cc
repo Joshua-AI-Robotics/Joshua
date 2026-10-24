@@ -222,8 +222,16 @@ void CheckGlobalClock() {
 }
 
 double RobotTime() {
-  CheckGlobalClock();
-  return GlobalState().clock->Now();
+  try {
+    CheckGlobalClock();
+    const double now = GlobalState().clock->Now();
+    if (!std::isfinite(now)) throw RobotTimeError("RobotTime is not finite.");
+    return now;
+  } catch (const RobotTimeError&) {
+    throw;
+  } catch (const std::exception& error) {
+    throw RobotTimeError(error.what());
+  }
 }
 
 absl::StatusOr<double> TryRobotTime() {

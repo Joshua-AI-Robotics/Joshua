@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stdexcept>
 #include <string_view>
 
 #include "absl/status/status.h"
@@ -8,6 +9,11 @@
 #include "config/proto/robot_clock.pb.h"
 
 namespace joshua {
+
+class RobotTimeError : public std::runtime_error {
+ public:
+  using std::runtime_error::runtime_error;
+};
 
 // Fixed platform epoch: Unix epoch. Never use process startup as the epoch.
 inline constexpr double kRobotStartTime = 0.0;
