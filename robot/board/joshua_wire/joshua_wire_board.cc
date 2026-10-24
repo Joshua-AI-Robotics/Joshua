@@ -1,10 +1,8 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 
 #include <algorithm>
-#include <cmath>
 #include <mutex>
 #include <set>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -158,13 +156,7 @@ class JoshuaWireChannel : public BoardChannel {
     if (value.metadata.validity != JW_SAMPLE_VALID || value.metadata.boot_id != boot_ ||
         value.metadata.clock != schema_.feedback_clock)
       return absl::UnavailableError("Feedback invalid, stale, or from another boot/clock.");
-    double now;
-    try {
-      now = RobotTime();
-      if (!std::isfinite(now)) return absl::UnavailableError("RobotTime is not finite.");
-    } catch (const std::exception& error) {
-      return absl::UnavailableError(error.what());
-    }
+    ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
     if (sample_seen_ && value.metadata.sequence == sequence_) {
       if (value.metadata.timestamp_us != timestamp_ || now < received_ ||
           now - received_ > schema_.max_feedback_age_us / 1'000'000.0)

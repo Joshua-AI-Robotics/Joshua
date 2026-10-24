@@ -1,5 +1,4 @@
 #include <chrono>
-#include <cmath>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -58,14 +57,12 @@ class AudioPublisher : public rclcpp::Node {
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
-    double now;
-    try {
-      now = joshua::RobotTime();
-      if (!std::isfinite(now)) throw std::runtime_error("RobotTime is not finite");
-    } catch (const std::exception& error) {
-      RCLCPP_ERROR(get_logger(), "Audio clock unavailable: %s", error.what());
+    const auto clock_time = joshua::TryRobotTime();
+    if (!clock_time.ok()) {
+      RCLCPP_ERROR(get_logger(), "Audio clock unavailable: %s", clock_time.status().ToString().c_str());
       return;
     }
+    const double now = *clock_time;
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {
       source->last_packet = now;

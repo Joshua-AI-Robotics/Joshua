@@ -1,6 +1,5 @@
 #include "robot/perception/position/sts3215_position_sensor.h"
 
-#include <stdexcept>
 #include <utility>
 
 #include "utils/status_macros.h"
@@ -33,11 +32,8 @@ absl::StatusOr<robot::perception::PerceptionPacket> Sts3215PositionSensor::GetDa
   reusable_packet_.Clear();
   reusable_packet_.set_perception_id(id_);
   // Host feedback-receipt estimate; firmware timestamps need domain conversion.
-  try {
-    reusable_packet_.set_timestamp(RobotTime());
-  } catch (const std::exception& error) {
-    return absl::UnavailableError(error.what());
-  }
+  ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
+  reusable_packet_.set_timestamp(now);
   auto* position = reusable_packet_.mutable_position();
   position->set_position(feedback.position);
   position->set_velocity(feedback.velocity);

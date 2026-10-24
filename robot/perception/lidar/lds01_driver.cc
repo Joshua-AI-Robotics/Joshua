@@ -3,7 +3,6 @@
 #include <glog/logging.h>
 
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 
 #include "utils/status_macros.h"
@@ -70,12 +69,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         LOG(INFO) << "Found start sequence, reading full scan...";
 
         // Host receipt of scan start, retained while the rest of the scan arrives.
-        double acquisition_time;
-        try {
-          acquisition_time = RobotTime();
-        } catch (const std::exception& error) {
-          return absl::UnavailableError(error.what());
-        }
+        ABSL_ASSIGN_OR_RETURN(const double acquisition_time, joshua::TryRobotTime());
 
         ABSL_ASSIGN_OR_RETURN(auto remain_result, stream_->Read(2518));
 

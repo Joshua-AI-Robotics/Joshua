@@ -44,4 +44,7 @@ void CheckGlobalClock();
 // std::runtime_error; they never return zero, stale data or switch clock sources.
 double RobotTime();
 
+// Returns finite seconds or an Unavailable status for clock read failures.
+absl::StatusOr<double> TryRobotTime();
+
 }  // namespace joshua

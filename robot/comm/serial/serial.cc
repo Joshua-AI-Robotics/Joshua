@@ -19,16 +19,6 @@
 namespace robot::comm {
 namespace {
 constexpr double kClockCheckInterval = 0.01;
-
-absl::StatusOr<double> ReadRobotTime() {
-  try {
-    const double now = joshua::RobotTime();
-    if (!std::isfinite(now)) return absl::UnavailableError("RobotTime is not finite.");
-    return now;
-  } catch (const std::exception& error) {
-    return absl::UnavailableError(error.what());
-  }
-}
 }  // namespace
 
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
@@ -201,16 +191,11 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   if (request.empty() || !std::isfinite(timeout) || timeout <= 0 || timeout > INT_MAX / 1000.0 ||
       !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  const auto elapsed_limit =
-      std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
-  ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
+  ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
   const double deadline = now + timeout;
   auto remaining_time = [&]() -> absl::StatusOr<double> {
-    ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
-    // Clock adjustments must not extend the blocking I/O budget.
-    return std::min(
-        deadline - now,
-        std::chrono::duration<double>(elapsed_limit - std::chrono::steady_clock::now()).count());
+    ABSL_ASSIGN_OR_RETURN(const double now, joshua::TryRobotTime());
+    return deadline - now;
   };
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   while (!lock.owns_lock()) {

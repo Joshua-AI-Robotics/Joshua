@@ -155,10 +155,11 @@ integer seconds and nanoseconds.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
-fabricated timestamp. Callers that later adopt this API must handle errors at
-their worker/callback boundary. UTC/PTP can jump when the host adjusts time.
-Deadline values use `RobotTime() + timeout_seconds`. Serial blocking waits also
-retain an elapsed-time cap so clock adjustments cannot extend the I/O budget.
+fabricated timestamp. Status-returning callers use `TryRobotTime()`, which returns
+`absl::StatusOr<double>` and centralizes exception handling and finite-value checks.
+UTC/PTP can jump when the host adjusts time. Deadline values use
+`RobotTime() + timeout_seconds`. Serial exchange timeouts follow RobotTime only:
+pausing the clock pauses the timeout, and clock adjustments change the remaining wait.
 
 ## Acquisition timestamps and ROS conversion
 

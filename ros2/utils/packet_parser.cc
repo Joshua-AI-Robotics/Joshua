@@ -320,12 +320,12 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
           auto packet = DecodeCommand(*message, config, actuator_name);
           if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
             if (packet.ok()) {
-              try {
-                packet->set_timestamp(joshua::RobotTime());
-              } catch (const std::exception& error) {
-                callback(absl::UnavailableError(error.what()));
+              const auto now = joshua::TryRobotTime();
+              if (!now.ok()) {
+                callback(now.status());
                 return;
               }
+              packet->set_timestamp(*now);
             }
           }
           if (packet.ok() && packet->has_joint() && torque_gate) {

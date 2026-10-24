@@ -216,16 +216,15 @@ TEST_F(SerialExchangeTest, RobotTimeAdvanceExpiresPendingExchange) {
   EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
 }
 
-TEST_F(SerialExchangeTest, FrozenRobotTimeDoesNotExtendBlockingIoBudget) {
+TEST_F(SerialExchangeTest, FrozenRobotTimeKeepsExchangePendingUntilClockResumes) {
   clock_->frozen = true;
   serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.025);
   auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
-  const auto ready = exchange.wait_for(std::chrono::seconds(1));
-  if (ready != std::future_status::ready) {
-    clock_->frozen = false;
-    clock_->offset = 2.0;
-  }
-  EXPECT_EQ(ready, std::future_status::ready);
+  EXPECT_TRUE(ReadRequest());
+  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(50)), std::future_status::timeout);
+  clock_->offset = 2.0;
+  clock_->frozen = false;
+  EXPECT_EQ(exchange.wait_for(std::chrono::seconds(1)), std::future_status::ready);
   EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
 }
 

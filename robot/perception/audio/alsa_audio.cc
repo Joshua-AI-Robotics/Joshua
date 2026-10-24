@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
-#include <stdexcept>
 
 #include "robot/perception/audio/audio_config.h"
 namespace robot::perception {
@@ -114,15 +113,11 @@ absl::StatusOr<PerceptionPacket> AlsaAudio::GetData() {
   if (filled_ == 0) {
     // Available capture frames estimate the oldest unread sample's age.
     const auto available = snd_pcm_avail_update(pcm_);
-    double now;
-    try {
-      now = RobotTime();
-    } catch (const std::exception& error) {
-      return absl::UnavailableError(error.what());
-    }
+    const auto now = joshua::TryRobotTime();
+    if (!now.ok()) return now.status();
     const double age =
         available > 0 ? static_cast<double>(available) / config_.sample_rate_hz() : 0.0;
-    timestamp_ = now - age;
+    timestamp_ = *now - age;
   }
   // A short successful read need not mean the device is empty. Continue until
   // a packet is complete or ALSA reports no data. Each successful read advances
