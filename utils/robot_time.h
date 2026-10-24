@@ -48,3 +48,5 @@ double RobotTime();
 absl::StatusOr<double> TryRobotTime();
 
 }  // namespace joshua
+
+using joshua::RobotTime;

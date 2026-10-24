@@ -190,14 +190,14 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   if (request.empty() || !std::isfinite(timeout) || timeout <= 0 || timeout > INT_MAX / 1000.0 ||
       !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  const double deadline = joshua::RobotTime() + timeout;
+  const double deadline = RobotTime() + timeout;
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   while (!lock.owns_lock()) {
-    const double remaining = deadline - joshua::RobotTime();
+    const double remaining = deadline - RobotTime();
     if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
     lock.try_lock_for(std::chrono::duration<double>(std::min(remaining, kClockCheckInterval)));
   }
-  const double remaining = deadline - joshua::RobotTime();
+  const double remaining = deadline - RobotTime();
   if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
   if (!serial_->is_open()) return absl::FailedPreconditionError("Serial port is closed.");
   const int fd = serial_->native_handle();
@@ -217,7 +217,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   }
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
-      const double remaining = deadline - joshua::RobotTime();
+      const double remaining = deadline - RobotTime();
       if (remaining <= 0) {
         return absl::DeadlineExceededError("Serial exchange timed out; outcome unknown.");
       }
@@ -230,7 +230,7 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
         return absl::UnavailableError("Serial exchange lost its connection; outcome unknown.");
       }
       if (result > 0 && (descriptor.revents & events)) {
-        const double remaining = deadline - joshua::RobotTime();
+        const double remaining = deadline - RobotTime();
         if (remaining > 0) return absl::OkStatus();
       }
     }

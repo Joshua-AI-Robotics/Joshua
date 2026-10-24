@@ -5,18 +5,15 @@
 ```cpp
 #include "utils/robot_time.h"
 
-const double now = joshua::RobotTime();
+const double now = RobotTime();
 ```
 
-Actuator, perception and host-side board drivers already include their shared
-interface headers. Those headers expose this utility and import `RobotTime` into
-`robot::action`, `robot::perception` and `robot::board`, respectively. Board drivers
-can include either `board_channel.h` or `board_interface.h` (which includes the
-channel header). Driver implementations in those namespaces can call
-`RobotTime()` directly without another include or a per-driver Bazel dependency.
-The dependency is declared on the shared interface targets. The interfaces add
-no clock member, wrapper method, or initialization; all names refer to the same
-global function. Other helpers can include the utility directly.
+The header exposes `joshua::RobotTime` through a global using declaration, so
+callers can use `RobotTime()` directly wherever the header is included.
+Actuator, perception and host-side board interfaces already include it and
+declare the Bazel dependency. Drivers using those interfaces need no additional
+include or per-driver dependency. Every call reaches the same process-global
+clock.
 
 Exposing the accessor does not change existing `LOG()` timestamps. Logging
 integration, including communication-driver logs, is separate migration work.

@@ -319,7 +319,7 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
             typename Message::ConstSharedPtr message) {
           auto packet = DecodeCommand(*message, config, actuator_name);
           if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
-            if (packet.ok()) packet->set_timestamp(joshua::RobotTime());
+            if (packet.ok()) packet->set_timestamp(RobotTime());
           }
           if (packet.ok() && packet->has_joint() && torque_gate) {
             const double gate = packet->joint().effort();

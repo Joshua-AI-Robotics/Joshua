@@ -50,14 +50,14 @@ class AudioPublisher : public rclcpp::Node {
   struct Source {
     std::unique_ptr<robot::perception::AudioInterface> interface;
     std::vector<rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr> publishers;
-    double last_packet = joshua::RobotTime();
+    double last_packet = RobotTime();
     double retry_after = -std::numeric_limits<double>::infinity();
     double next_warning = -std::numeric_limits<double>::infinity();
     std::chrono::nanoseconds poll_interval{};
     rclcpp::TimerBase::SharedPtr timer;
   };
   void Publish(const std::shared_ptr<Source>& source) {
-    const double now = joshua::RobotTime();
+    const double now = RobotTime();
     if (now < source->retry_after) return;
     const auto status = robot::perception::DrainAudio(*source->interface, [&](const auto& packet) {
       source->last_packet = now;
