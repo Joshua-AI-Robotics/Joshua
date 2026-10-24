@@ -68,8 +68,8 @@ absl::Status TiDemoDriver::SetAction(const robot::action::ActionPacket& action_p
         case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
           return SetTorque(0.0f);
         default:
-          LOG(WARNING) << "Unknown joint preset command: " << action_packet.preset();
-          return absl::OkStatus();
+          return absl::InvalidArgumentError("Unknown actuator preset: " +
+                                            std::to_string(action_packet.preset()));
       }
 
     case robot::action::ActionPacket::kJoint: {
@@ -111,8 +111,6 @@ absl::Status TiDemoDriver::SetAction(const robot::action::ActionPacket& action_p
     }
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
-      LOG(WARNING) << "No action type set in joint ActionPacket [ID: " << action_packet.action_id()
-                   << "]";
       return absl::InvalidArgumentError("ActionPacket requires joint or preset");
   }
 }

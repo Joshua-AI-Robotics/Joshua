@@ -6,6 +6,7 @@
 #include "config/proto/config.pb.h"
 #include "robot/perception/audio/audio_capture.h"
 #include "robot/perception/factory/perception_factory.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
@@ -21,6 +22,7 @@ constexpr auto kCaptureWarningInterval = std::chrono::seconds(1);
 class AudioPublisher : public rclcpp::Node {
  public:
   AudioPublisher(const std::string& name, int node_id, const config::Config& config) : Node(name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
       if (sensor.sensor_type() != robot::perception::AUDIO ||
           static_cast<int>(sensor.node().id()) != node_id)
@@ -70,7 +72,7 @@ class AudioPublisher : public rclcpp::Node {
     UpdateTimer(source);
     if (!status.ok()) {
       if (now - source->last_packet > kCaptureStallWarningDelay && now >= source->next_warning) {
-        RCLCPP_ERROR(get_logger(), "Audio unavailable: %s", status.ToString().c_str());
+        JOSHUA_LOG(ERROR) << "Audio unavailable: " << status;
         source->next_warning = now + kCaptureWarningInterval;
       }
       if (!absl::IsDeadlineExceeded(status)) source->retry_after = now + kCaptureRetryBackoff;

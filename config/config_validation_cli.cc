@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "config/config_utils.h"
 #include "config/validation.h"
+#include "glog/logging.h"
 #include "google/protobuf/struct.pb.h"
 #include "google/protobuf/util/json_util.h"
 
@@ -320,6 +321,7 @@ Report Evaluate(const std::vector<std::string>& args) {
   }
   auto parsed = config_util::LoadConfig(*pinned_path, kConfigLimit);
   if (!parsed.ok()) {
+    LOG(ERROR) << "Failed to load config: " << parsed.status();
     if (parsed.status().code() == absl::StatusCode::kResourceExhausted ||
         parsed.status().code() == absl::StatusCode::kInternal) {
       return {path,
