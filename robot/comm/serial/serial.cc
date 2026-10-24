@@ -195,14 +195,16 @@ absl::Status Serial::Flush() {
 }
 
 absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
-                                   std::chrono::milliseconds timeout,
+                                   double timeout,
                                    InputFlushPolicy input_flush_policy,
                                    const ResponseBoundary& consume) {
-  if (request.empty() || timeout.count() <= 0 || timeout.count() > INT_MAX || !consume)
+  if (request.empty() || !std::isfinite(timeout) || timeout <= 0 || timeout > INT_MAX / 1000.0 ||
+      !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  const auto elapsed_limit = std::chrono::steady_clock::now() + timeout;
+  const auto elapsed_limit =
+      std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
   ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
-  const double deadline = now + std::chrono::duration<double>(timeout).count();
+  const double deadline = now + timeout;
   auto remaining_time = [&]() -> absl::StatusOr<double> {
     ABSL_ASSIGN_OR_RETURN(const double now, ReadRobotTime());
     // Clock adjustments must not extend the blocking I/O budget.

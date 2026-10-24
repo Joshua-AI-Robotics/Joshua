@@ -52,6 +52,8 @@ that atomicity. Adapters explicitly choose whether to preserve or discard
 pending input before a transaction. The caller-sized vendor transaction
 also holds the same lock throughout its write and read.
 
+Runtime serial timeout arguments are double seconds; the factory converts
+`exchange_timeout_ms` once at the config boundary.
 Exchange deadlines use RobotTime seconds. Blocking waits retain an elapsed-time
 cap, covering bus-lock wait, write, and read even if the robot clock changes.
 
