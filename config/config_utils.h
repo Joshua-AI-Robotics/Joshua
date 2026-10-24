@@ -57,7 +57,7 @@ inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path,
   config::Config config;
   std::ifstream input(config_path, std::ios::binary);
   if (!input) {
-    return absl::InvalidArgumentError("Failed to open config file: " + config_path);
+    return absl::InvalidArgumentError("Failed to open config file.");
   }
   std::string config_content;
   std::array<char, 8192> chunk;
@@ -85,9 +85,8 @@ inline absl::StatusOr<config::Config> LoadConfig(const std::string& config_path,
   google::protobuf::TextFormat::Parser parser;
   parser.RecordErrorsTo(&errors);
   if (!parser.ParseFromString(config_content, &config)) {
-    return absl::InvalidArgumentError(
-        "Failed to parse config file: " + config_path + ": " +
-        (errors.error().empty() ? "invalid protobuf text" : errors.error()));
+    return absl::InvalidArgumentError(errors.error().empty() ? "Failed to parse config file."
+                                                             : errors.error());
   }
   return config;
 }

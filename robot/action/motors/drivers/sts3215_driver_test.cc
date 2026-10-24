@@ -77,6 +77,18 @@ TEST(Sts3215DriverTest, InitSeedsChannelWithConfiguredDefaultSpeed) {
   EXPECT_FLOAT_EQ(channel->last_value_, 3000.0f);
 }
 
+TEST(Sts3215DriverTest, InitAcceptsDisabledChannelWithoutEnablingTorque) {
+  auto channel = std::make_shared<RecordingChannel>();
+  channel->set_target_status_ = absl::FailedPreconditionError("channel is disabled");
+  Sts3215Driver driver(channel, MakeServoActuator());
+
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->disable_calls_, 0);
+  EXPECT_EQ(driver.SetSpeed(2000.0f).code(), absl::StatusCode::kFailedPrecondition);
+}
+
 TEST(Sts3215DriverTest, SetCommandsValidateInputs) {
   auto channel = std::make_shared<RecordingChannel>();
   Sts3215Driver driver(channel, MakeServoActuator());

@@ -28,9 +28,13 @@ absl::Status Sts3215Driver::Init() {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "STS3215 driver requires a board channel");
   }
-  // Seeding the configured speed is part of initialization; propagate failures.
-  return channel_->SetTarget(robot::board::TargetMode::kVelocity,
-                             action_config_.sts3215_config().move_speed());
+  // Best-effort staging preserves construction on channels that reject targets
+  // until torque is enabled. Init must not enable torque; explicit commands
+  // still return channel errors to their caller.
+  channel_
+      ->SetTarget(robot::board::TargetMode::kVelocity, action_config_.sts3215_config().move_speed())
+      .IgnoreError();
+  return absl::OkStatus();
 }
 
 std::string Sts3215Driver::GetId() {

@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -15,5 +15,17 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "lds01_driver_test",
+    srcs = ["lds01_driver_test.cc"],
+    deps = [
+        ":lds01_driver",
+        "//robot/comm/interfaces:byte_stream",
+        "//robot/perception/proto:perception_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
     ],
 )

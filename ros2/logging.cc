@@ -37,7 +37,7 @@ int RosSeverity(LogSeverity severity) {
   }
   return RCUTILS_LOG_SEVERITY_ERROR;
 }
-int GlogSeverity(LogSeverity severity) {
+google::LogSeverity GlogSeverity(LogSeverity severity) {
   switch (severity) {
     case LogSeverity::DEBUG:
     case LogSeverity::INFO:
