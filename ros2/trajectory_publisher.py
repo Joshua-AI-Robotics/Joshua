@@ -16,6 +16,9 @@ from ros2.proto import node_pb2, ros2_data_type_pb2
 from ros2.utils.packet_parser import extract_scalar_from_action
 from ros2.utils.qos_setting import create_qos_setting
 
+# Fixed packet epoch; must match kRobotStartTime in utils/robot_time.h.
+_ROBOT_TIME_EPOCH_SECONDS = 1_750_118_400  # 2025-06-17 00:00:00 UTC.
+
 
 @dataclass
 class TopicPub:
@@ -151,8 +154,9 @@ class TrajectoryPublisher(Node):
         if packet.timestamp:
             if not math.isfinite(packet.timestamp):
                 raise ValueError("Source timestamp must be finite")
-            sec = math.floor(packet.timestamp)
-            nanosec = math.floor((packet.timestamp - sec) * 1_000_000_000 + 0.5)
+            whole = math.floor(packet.timestamp)
+            sec = whole + _ROBOT_TIME_EPOCH_SECONDS
+            nanosec = math.floor((packet.timestamp - whole) * 1_000_000_000 + 0.5)
             if nanosec == 1_000_000_000:
                 sec += 1
                 nanosec = 0

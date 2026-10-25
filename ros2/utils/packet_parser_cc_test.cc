@@ -15,6 +15,7 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "std_msgs/msg/int8.hpp"
 #include "std_msgs/msg/u_int64.hpp"
+#include "utils/robot_time.h"
 
 namespace {
 class PacketParserCppTest : public testing::Test {
@@ -68,10 +69,12 @@ class PacketParserCppTest : public testing::Test {
 TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow) {
   std_msgs::msg::Float64 message;
   message.data = 12.5;
+  const double before = RobotTime();
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
-  EXPECT_GT(result->timestamp(), 1000000000.0);
+  EXPECT_GE(result->timestamp(), before);
+  EXPECT_LE(result->timestamp(), RobotTime());
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),
                          std::numeric_limits<double>::max(),
@@ -113,7 +116,7 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   message.velocity = {4, -0.25};
   message.effort = {6, -1.125};
   message.header.frame_id = "robot_base";
-  message.header.stamp.sec = 123;
+  message.header.stamp.sec = 1750118523;
   message.header.stamp.nanosec = 456;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok()) << result.status();
@@ -148,13 +151,13 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
     EXPECT_EQ(result->joint().has_position(), field == 0);
     EXPECT_EQ(result->joint().has_velocity(), field == 1);
     EXPECT_EQ(result->joint().has_effort(), field == 2);
-    EXPECT_DOUBLE_EQ(result->timestamp(), 0.0);
+    EXPECT_DOUBLE_EQ(result->timestamp(), -joshua::kRobotStartTime);
   }
   message.header.stamp.sec = -1;
   message.header.stamp.nanosec = 500000000;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_DOUBLE_EQ(result->timestamp(), -0.5);
+  EXPECT_DOUBLE_EQ(result->timestamp(), -joshua::kRobotStartTime - 0.5);
   // Preserve double precision/range until the receiving driver validates it.
   message.effort = {std::numeric_limits<double>::max()};
   result = Send(ros2::data_type::JOINT_STATE, message);
@@ -249,10 +252,11 @@ TEST_F(PacketParserCppTest, JointFeedbackPreservesAcquisitionStampThroughPublish
     int32_t sec;
     uint32_t nanosec;
   };
-  for (const auto& sample : std::vector<Sample>{{123.000000456, 123, 456},
-                                                {0.0, 0, 0},
-                                                {-0.5, -1, 500000000},
-                                                {1700000000.125, 1700000000, 125000000}}) {
+  for (const auto& sample : std::vector<Sample>{
+           {123.000000456, 1750118523, 456},
+           {0.0, 1750118400, 0},
+           {-0.5, 1750118399, 500000000},
+           {1700000000.125 - joshua::kRobotStartTime, 1700000000, 125000000}}) {
     received.reset();
     SpinUntil([&] {
       EXPECT_TRUE((*publish)(2048, sample.timestamp).ok());

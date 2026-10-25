@@ -108,6 +108,11 @@ Explicit zero declares that the PHC already follows UTC. If the offset is
 absent, default selection logs a warning and uses system UTC without opening
 the PHC. Existing presets need no changes.
 
+The fixed RobotTime epoch does not determine this offset or synchronize clocks.
+PTP still requires a synchronized PHC and its correct UTC offset. Selecting
+`source: UTC` uses the host's existing system-clock synchronization without
+manual PTP settings.
+
 For system UTC explicitly:
 
 ```text
@@ -142,26 +147,32 @@ For the PHC/system time-scale distinction, see
 
 ## Reading and failures
 
-UTC and normalized PTP readings use a fixed platform epoch: `kRobotStartTime`
-is currently zero (the Unix epoch). The clock combines whole and fractional
-seconds directly into a `double`:
+UTC and normalized PTP readings use **2025-06-17 00:00:00 UTC** as their fixed
+platform epoch. `kRobotStartTime` is `1750118400.0` Unix seconds. RobotTime is
+zero at that instant and negative before it. The clock subtracts the epoch
+from whole seconds before combining the fractional part into a `double`:
 
 ```cpp
 (static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
     static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond
 ```
 
-It never subtracts a process-specific startup time. Changing the platform epoch
-later would change the time contract for every consumer. All clock reads use
+It never subtracts a process-specific startup time or changes the hardware clock.
+The explicit `MONOTONIC` option remains boot-relative and does not subtract a UTC
+date. Changing the platform epoch later would change the time contract for every
+consumer. All clock reads use
 `RobotTime()` returning `double`, and custom clocks continue implementing the
 original `virtual double Now() const` interface. Combining the parts preserves
-fractional seconds within double precision; the final value does not retain
-every nanosecond at Unix-epoch magnitudes.
+fractional seconds within double precision. The more recent epoch reduces the
+timestamp magnitude and improves fractional resolution; it does not guarantee
+nanosecond precision for all dates.
 
 Both `ActionPacket` and `PerceptionPacket` carry `double timestamp = 2` in
 seconds, matching `RobotTime()`. Drivers store that value directly and publishers
-keep it through forwarding. Only ROS message headers split the value into
-integer seconds and nanoseconds.
+keep it through forwarding. ROS message headers use Unix seconds through the
+explicit epoch conversion below. Earlier revisions of the double packet field
+used the Unix epoch; update producers and consumers together because the field
+does not identify its epoch.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
@@ -190,13 +201,19 @@ Firmware `timestamp_us` metadata remains in its own domain.
 
 `//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(double)` and
 `FromRosTimestamp(builtin_interfaces::msg::Time)`, which returns double seconds.
-They convert the representation without reading a clock:
+They translate between UTC/PTP RobotTime's June 2025 epoch and Unix-epoch ROS
+headers without reading a clock:
 
 ```cpp
 auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp());
 if (!stamp.ok()) return stamp.status();
 message.header.stamp = *stamp;
 ```
+
+`ToRosTimestamp` adds `kRobotStartTime` to whole seconds; `FromRosTimestamp`
+subtracts it before combining the nanosecond component. Keeping epoch arithmetic
+separate from fractional seconds avoids losing precision by first forming a
+large Unix-epoch double. RobotTime zero becomes ROS `sec=1750118400, nanosec=0`.
 
 The conversion supports positive, zero and negative times, rounds fractional
 seconds to the nearest nanosecond with carry, and normalizes the nanosecond
@@ -206,19 +223,24 @@ Camera and lidar publishers and JointState
 position feedback use the original packet time rather than stamping again.
 Scalar feedback messages have no timestamp field.
 
-Incoming JointState stamps are stored as double seconds, including zero and
-negative values. Both packets changed field 2 from integer `timestamp_ns` to
+Incoming Unix-epoch JointState stamps are converted to double RobotTime seconds.
+ROS zero becomes `-1750118400.0`; negative ROS stamps remain representable, and
+the epoch translation does not assign scheduling or freshness semantics. The
+Python trajectory publisher applies the same fixed epoch to explicit packet
+stamps; its existing default-zero convention still uses ROS publish time.
+Both packets changed field 2 from integer `timestamp_ns` to
 double `timestamp`. This changes the protobuf wire type from varint to fixed64;
 old integer-encoded timestamps are not wire compatible. Regenerate protobuf
 code and update communicating producers and consumers together.
 
-ROS conversion does not translate between UTC, boot-relative, firmware, or
-simulation domains. Capture and newly generated timestamps follow
-`general.robot_clock`; `use_sim_time` does not change RobotTime or select a
-simulation clock. Incoming source stamps retain their original domain. A graph
-must use compatible domains before comparing stamps. A simulation-backed
-RobotTime and domain metadata/translation remain follow-up work; no `/clock`
-integration is added here.
+The epoch adapters assume UTC/PTP RobotTime and Unix-epoch ROS time. They do not
+translate boot-relative, firmware, or simulation clocks into UTC. `MONOTONIC`
+needs a clock-domain-aware bridge before exchanging stamps with system-time ROS
+nodes. Capture and newly generated timestamps follow `general.robot_clock`;
+`use_sim_time` does not change RobotTime or select a simulation clock. A graph
+must use compatible domains before comparing stamps. Simulation-backed
+RobotTime and incoming domain metadata/translation remain follow-up work;
+no `/clock` integration is added here.
 
 ## Publisher timers
 

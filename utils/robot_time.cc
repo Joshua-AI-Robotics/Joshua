@@ -52,11 +52,14 @@ class SystemClockReader final : public internal::ClockIo {
   }
 };
 
-double ReadSeconds(const internal::ClockIo& reader, clockid_t id, int utc_offset = 0) {
+double ReadSeconds(const internal::ClockIo& reader,
+                   clockid_t id,
+                   double epoch,
+                   int utc_offset = 0) {
   const auto result = reader.Read(id);
   if (!result.ok()) throw std::runtime_error(result.status().ToString());
   const auto& ts = *result;
-  return (static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
+  return (static_cast<double>(ts.tv_sec) - utc_offset - epoch) +
          static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond;
 }
 
@@ -77,7 +80,7 @@ class PtpClock final : public RobotClock {
   PtpClock& operator=(const PtpClock&) = delete;
 
   double Now() const override {
-    return ReadSeconds(*reader_, id_, utc_offset_);
+    return ReadSeconds(*reader_, id_, kRobotStartTime, utc_offset_);
   }
 
   std::string_view SourceName() const override {
@@ -96,7 +99,7 @@ class UtcClock final : public RobotClock {
   explicit UtcClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
 
   double Now() const override {
-    return ReadSeconds(*reader_, CLOCK_REALTIME);
+    return ReadSeconds(*reader_, CLOCK_REALTIME, kRobotStartTime);
   }
 
   std::string_view SourceName() const override {
@@ -113,7 +116,7 @@ class MonotonicClock final : public RobotClock {
   explicit MonotonicClock(std::shared_ptr<internal::ClockIo> reader) : reader_(std::move(reader)) {}
 
   double Now() const override {
-    return ReadSeconds(*reader_, CLOCK_MONOTONIC);
+    return ReadSeconds(*reader_, CLOCK_MONOTONIC, 0.0);
   }
 
   std::string_view SourceName() const override {
