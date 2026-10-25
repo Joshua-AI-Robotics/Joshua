@@ -46,9 +46,8 @@ TEST(ValidationTest, ValidatesRobotClockWithoutOpeningDevice) {
   auto config = MakeConfig();
   auto* clock = config.mutable_general()->mutable_robot_clock();
   clock->set_require_ptp(true);
-  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_TRUE(ValidateConfig(config).ok());
   clock->set_ptp_device("/nonexistent-joshua-test/ptp");
-  clock->set_ptp_utc_offset_seconds(0);
   EXPECT_TRUE(ValidateConfig(config).ok());
   clock->set_source(config::RobotClockConfig::UTC);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);

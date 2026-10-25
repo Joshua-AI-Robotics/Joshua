@@ -19,8 +19,8 @@ class RobotTimeError : public std::runtime_error {
 inline constexpr double kRobotStartTime = 1'750'118'400.0;
 inline constexpr double kNanosecondsPerSecond = 1'000'000'000.0;
 
-// Implementations must support concurrent reads. UTC/PTP return UTC seconds
-// since kRobotStartTime; an explicitly selected MONOTONIC clock is boot-relative.
+// Implementations must support concurrent reads. UTC/PTP subtract kRobotStartTime
+// from their source time; an explicitly selected MONOTONIC clock is boot-relative.
 class RobotClock {
  public:
   virtual ~RobotClock() = default;
