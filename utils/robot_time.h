@@ -15,8 +15,8 @@ class RobotTimeError : public std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
-// Fixed platform epoch: Unix epoch. Never use process startup as the epoch.
-inline constexpr double kRobotStartTime = 0.0;
+// Fixed platform epoch: 2025-06-17 00:00:00 UTC, expressed in Unix seconds.
+inline constexpr double kRobotStartTime = 1'750'118'400.0;
 inline constexpr double kNanosecondsPerSecond = 1'000'000'000.0;
 
 // Implementations must support concurrent reads. UTC/PTP return UTC seconds

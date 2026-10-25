@@ -28,6 +28,7 @@ cc_library(
     name = "robot_time_conversion",
     hdrs = ["robot_time_conversion.h"],
     deps = [
+        "//utils:robot_time",
         "@abseil-cpp//absl/status:statusor",
         "@ros2_deps//:cpp_builtin_interfaces",
         "@ros2_deps//:rosidl_runtime_c",
@@ -157,6 +158,7 @@ cc_test(
     srcs = ["packet_parser_cc_test.cc"],
     deps = [
         ":packet_parser",
+        "//utils:robot_time",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
