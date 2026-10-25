@@ -12,8 +12,6 @@ message RobotClockConfig {
 
   Source source = 1;
   string ptp_device = 2;  // Empty selects /dev/ptp0.
-  reserved 3;
-  reserved "ptp_utc_offset_seconds";
   // Fail startup instead of falling back to UTC. Valid only with source PTP.
   bool require_ptp = 4;
 }
