@@ -10,7 +10,7 @@
 
 namespace ros2_utils {
 
-// Convert UTC/PTP RobotTime seconds to/from Unix-epoch ROS headers.
+// Convert fixed-baseline RobotTime seconds to/from ROS headers.
 // This translates the epoch only; it does not synchronize clock domains.
 inline absl::StatusOr<builtin_interfaces::msg::Time> ToRosTimestamp(double timestamp) {
   if (!std::isfinite(timestamp))

@@ -97,7 +97,7 @@ TEST_F(NodeRunnerClockTest, InstallsConfiguredClockBeforeConstructionAndCallback
 
 TEST_F(NodeRunnerClockTest, ClockFailurePreventsNodeConstruction) {
   ASSERT_EXIT(_exit(RunWithClockConfig<MustNotConstructNode>(
-                  "source: PTP require_ptp: true ptp_utc_offset_seconds: 0 "
+                  "source: PTP require_ptp: true "
                   "ptp_device: '/nonexistent-joshua-test/ptp'")),
               testing::ExitedWithCode(1),
               "Failed to create robot clock");

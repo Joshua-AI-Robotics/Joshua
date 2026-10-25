@@ -12,10 +12,8 @@ message RobotClockConfig {
 
   Source source = 1;
   string ptp_device = 2;  // Empty selects /dev/ptp0.
-  // PHC seconds minus UTC seconds. Must be explicitly supplied to use PTP.
-  // The operator obtains this from the host's PTP service. Zero explicitly
-  // declares a UTC PHC. Never infer an offset from device availability.
-  optional int32 ptp_utc_offset_seconds = 3;
+  reserved 3;
+  reserved "ptp_utc_offset_seconds";
   // Fail startup instead of falling back to UTC. Valid only with source PTP.
   bool require_ptp = 4;
 }

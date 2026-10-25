@@ -17,7 +17,7 @@ It also creates a `ptp` group, adds the invoking sudo user, and installs
 `/dev/ptp*`. The rule applies to existing and future clocks; no PTP device is
 required during setup. Log out and back in after new group membership.
 
-PTP setup grants device access. Clock synchronization and the configured PHC-to-UTC offset remain separate; see [RobotTime](../docs/ROBOT_TIME.md#configuration-and-time-domains). The bootstrap requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
+PTP setup grants device access; RobotTime reads the PHC directly without a UTC-offset setting and falls back to system UTC if unavailable. See [RobotTime](../docs/ROBOT_TIME.md#configuration-and-time-domains). The bootstrap requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
 
 Verify the default GPU-enabled developer shell:
 

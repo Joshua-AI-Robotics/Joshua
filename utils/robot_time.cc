@@ -52,25 +52,19 @@ class SystemClockReader final : public internal::ClockIo {
   }
 };
 
-double ReadSeconds(const internal::ClockIo& reader,
-                   clockid_t id,
-                   double epoch,
-                   int utc_offset = 0) {
+double ReadSeconds(const internal::ClockIo& reader, clockid_t id, double epoch) {
   const auto result = reader.Read(id);
   if (!result.ok()) throw std::runtime_error(result.status().ToString());
   const auto& ts = *result;
-  return (static_cast<double>(ts.tv_sec) - utc_offset - epoch) +
+  return (static_cast<double>(ts.tv_sec) - epoch) +
          static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond;
 }
 
-// Owns a PHC descriptor and normalizes its readings to the UTC time domain.
+// Owns a PHC descriptor and reads seconds relative to the fixed baseline.
 class PtpClock final : public RobotClock {
  public:
-  PtpClock(std::shared_ptr<internal::ClockIo> reader, int fd, int utc_offset)
-      : reader_(std::move(reader)),
-        fd_(fd),
-        id_(internal::PtpClockId(fd)),
-        utc_offset_(utc_offset) {}
+  PtpClock(std::shared_ptr<internal::ClockIo> reader, int fd)
+      : reader_(std::move(reader)), fd_(fd), id_(internal::PtpClockId(fd)) {}
 
   ~PtpClock() override {
     reader_->Close(fd_);
@@ -80,7 +74,7 @@ class PtpClock final : public RobotClock {
   PtpClock& operator=(const PtpClock&) = delete;
 
   double Now() const override {
-    return ReadSeconds(*reader_, id_, kRobotStartTime, utc_offset_);
+    return ReadSeconds(*reader_, id_, kRobotStartTime);
   }
 
   std::string_view SourceName() const override {
@@ -91,7 +85,6 @@ class PtpClock final : public RobotClock {
   const std::shared_ptr<internal::ClockIo> reader_;
   const int fd_;
   const clockid_t id_;
-  const int utc_offset_;
 };
 
 class UtcClock final : public RobotClock {
@@ -142,15 +135,11 @@ absl::Status ValidateRobotClockConfig(const config::RobotClockConfig& config) {
     return absl::InvalidArgumentError("Unknown robot clock source");
   }
   if (config.source() != config::RobotClockConfig::PTP &&
-      (config.require_ptp() || !config.ptp_device().empty() ||
-       config.has_ptp_utc_offset_seconds())) {
+      (config.require_ptp() || !config.ptp_device().empty())) {
     return absl::InvalidArgumentError("PTP settings require robot clock source PTP");
   }
   if (config.ptp_device().find('\0') != std::string::npos) {
     return absl::InvalidArgumentError("PTP device path contains a null byte");
-  }
-  if (config.require_ptp() && !config.has_ptp_utc_offset_seconds()) {
-    return absl::InvalidArgumentError("Required PTP needs an explicit ptp_utc_offset_seconds");
   }
   return absl::OkStatus();
 }
@@ -173,20 +162,12 @@ absl::StatusOr<std::unique_ptr<RobotClock>> MakeRobotClockWithIo(
     return ProbeClock(std::make_unique<MonotonicClock>(io), *io, CLOCK_MONOTONIC);
   }
   if (config.source() == config::RobotClockConfig::PTP) {
-    auto ptp_status = absl::FailedPreconditionError(
-        "PTP UTC offset is unknown; configure ptp_utc_offset_seconds");
-    if (config.has_ptp_utc_offset_seconds()) {
-      const auto fd = io->OpenPtp(config.ptp_device().empty() ? "/dev/ptp0" : config.ptp_device());
-      if (fd.ok()) {
-        auto clock =
-            ProbeClock(std::make_unique<PtpClock>(io, *fd, config.ptp_utc_offset_seconds()),
-                       *io,
-                       PtpClockId(*fd));
-        if (clock.ok()) return clock;
-        ptp_status = clock.status();
-      } else {
-        ptp_status = fd.status();
-      }
+    const auto fd = io->OpenPtp(config.ptp_device().empty() ? "/dev/ptp0" : config.ptp_device());
+    auto ptp_status = fd.status();
+    if (fd.ok()) {
+      auto clock = ProbeClock(std::make_unique<PtpClock>(io, *fd), *io, PtpClockId(*fd));
+      if (clock.ok()) return clock;
+      ptp_status = clock.status();
     }
     if (config.require_ptp()) return ptp_status;
     LOG(WARNING) << "Robot clock falling back from PTP to system UTC: " << ptp_status;

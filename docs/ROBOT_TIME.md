@@ -84,8 +84,8 @@ There is no Python RobotTime implementation or binding.
 
 | Source | Behavior | Time domain |
 |--------|----------|-------------|
-| `PTP` (default) | Read the configured PHC; fall back to UTC at startup unless `require_ptp` is true | UTC after subtracting the configured PHC-to-UTC offset |
-| `UTC` | Read `CLOCK_REALTIME` | System UTC |
+| `PTP` (default) | Read the configured PHC directly; fall back to UTC at startup unless `require_ptp` is true | PHC time minus the fixed June 2025 baseline |
+| `UTC` | Read `CLOCK_REALTIME` | System UTC minus the same fixed baseline |
 | `MONOTONIC` | Read `CLOCK_MONOTONIC`; explicit selection only | Local boot-relative time, not comparable across hosts |
 
 The host bootstrap (`sudo ./scripts/setup.sh`, or `--cpu`) installs a udev rule
@@ -101,17 +101,10 @@ with `--device=/dev/ptp0:/dev/ptp0:r`; non-root processes also need the host
 `ptp` group's numeric GID as a supplementary group (`--group-add GID`). Host
 group membership is not automatically inherited inside a container.
 
-The default PTP path is `/dev/ptp0`. PTP requires an explicit
-`ptp_utc_offset_seconds`: PHC seconds minus UTC seconds. Obtain this value from
-the deployment's PTP service; do not copy a historical leap-second offset.
-Explicit zero declares that the PHC already follows UTC. If the offset is
-absent, default selection logs a warning and uses system UTC without opening
-the PHC. Existing presets need no changes.
-
-The fixed RobotTime epoch does not determine this offset or synchronize clocks.
-PTP still requires a synchronized PHC and its correct UTC offset. Selecting
-`source: UTC` uses the host's existing system-clock synchronization without
-manual PTP settings.
+The default PTP path is `/dev/ptp0`. No UTC-offset setting is required. Startup
+opens and reads the PHC directly. If opening or probing it fails, selection logs
+the actual device error and uses system UTC unless `require_ptp` is true.
+Existing presets need no clock settings to try PTP.
 
 For system UTC explicitly:
 
@@ -121,24 +114,22 @@ general {
 }
 ```
 
-Example for a PHC that the operator has configured to follow UTC:
+To require the PHC instead of allowing UTC fallback:
 
 ```text
 general {
   robot_clock {
     source: PTP
     ptp_device: "/dev/ptp0"
-    ptp_utc_offset_seconds: 0
     require_ptp: true
   }
 }
 ```
 
-`require_ptp` rejects a missing offset or an unreadable PHC. It does **not** verify
-synchronization lock. Joshua neither starts a PTP daemon nor adjusts the clock.
-The host must maintain synchronization and the operator must maintain the
-configured offset. Automatic offset discovery, leap-second updates and lock
-monitoring are follow-up work. A readable PHC alone is not proof of synchronization.
+`require_ptp` rejects an unreadable PHC. It does not verify synchronization lock.
+Joshua reads the selected clock without resetting it, starting a PTP daemon,
+or converting PHC time to UTC. Separate devices need a common source to make
+their timestamps comparable; synchronization monitoring remains follow-up work.
 
 Linux supports PHC reads through a device-derived POSIX clock ID; see the
 [kernel PTP documentation](https://www.kernel.org/doc/html/latest/driver-api/ptp.html).
@@ -147,13 +138,14 @@ For the PHC/system time-scale distinction, see
 
 ## Reading and failures
 
-UTC and normalized PTP readings use **2025-06-17 00:00:00 UTC** as their fixed
-platform epoch. `kRobotStartTime` is `1750118400.0` Unix seconds. RobotTime is
-zero at that instant and negative before it. The clock subtracts the epoch
-from whole seconds before combining the fractional part into a `double`:
+PTP and UTC readings subtract the same fixed baseline,
+**2025-06-17 00:00:00**, encoded as `kRobotStartTime = 1750118400.0`. RobotTime is
+zero when the selected clock reads that value and negative below it. The clock
+subtracts the baseline from whole seconds before combining the fractional part
+into a `double`:
 
 ```cpp
-(static_cast<double>(ts.tv_sec) - utc_offset - kRobotStartTime) +
+(static_cast<double>(ts.tv_sec) - kRobotStartTime) +
     static_cast<double>(ts.tv_nsec) / kNanosecondsPerSecond
 ```
 
@@ -169,8 +161,9 @@ nanosecond precision for all dates.
 
 Both `ActionPacket` and `PerceptionPacket` carry `double timestamp = 2` in
 seconds, matching `RobotTime()`. Drivers store that value directly and publishers
-keep it through forwarding. ROS message headers use Unix seconds through the
-explicit epoch conversion below. Earlier revisions of the double packet field
+keep it through forwarding. ROS message headers reconstruct the selected source's
+seconds through the explicit baseline conversion below. Earlier revisions of
+the double packet field
 used the Unix epoch; update producers and consumers together because the field
 does not identify its epoch.
 
@@ -201,8 +194,8 @@ Firmware `timestamp_us` metadata remains in its own domain.
 
 `//ros2/utils:robot_time_conversion` provides `ToRosTimestamp(double)` and
 `FromRosTimestamp(builtin_interfaces::msg::Time)`, which returns double seconds.
-They translate between UTC/PTP RobotTime's June 2025 epoch and Unix-epoch ROS
-headers without reading a clock:
+They add or subtract the June 2025 baseline when converting between RobotTime
+seconds and ROS headers, without reading a clock:
 
 ```cpp
 auto stamp = ros2_utils::ToRosTimestamp(packet.timestamp());
@@ -223,7 +216,7 @@ Camera and lidar publishers and JointState
 position feedback use the original packet time rather than stamping again.
 Scalar feedback messages have no timestamp field.
 
-Incoming Unix-epoch JointState stamps are converted to double RobotTime seconds.
+Incoming JointState stamps are converted to double RobotTime seconds.
 ROS zero becomes `-1750118400.0`; negative ROS stamps remain representable, and
 the epoch translation does not assign scheduling or freshness semantics. The
 Python trajectory publisher applies the same fixed epoch to explicit packet
@@ -233,10 +226,11 @@ double `timestamp`. This changes the protobuf wire type from varint to fixed64;
 old integer-encoded timestamps are not wire compatible. Regenerate protobuf
 code and update communicating producers and consumers together.
 
-The epoch adapters assume UTC/PTP RobotTime and Unix-epoch ROS time. They do not
-translate boot-relative, firmware, or simulation clocks into UTC. `MONOTONIC`
-needs a clock-domain-aware bridge before exchanging stamps with system-time ROS
-nodes. Capture and newly generated timestamps follow `general.robot_clock`;
+The baseline conversion preserves the selected clock's domain. For the UTC
+source, outgoing headers contain Unix UTC time; for PTP, they contain raw PHC
+time. Adding the baseline does not convert PHC, boot-relative, firmware, or
+simulation clocks to UTC. Capture and newly generated timestamps follow
+`general.robot_clock`;
 `use_sim_time` does not change RobotTime or select a simulation clock. A graph
 must use compatible domains before comparing stamps. Simulation-backed
 RobotTime and incoming domain metadata/translation remain follow-up work;
@@ -278,7 +272,7 @@ Audio recreates its timer when the negotiated capture interval changes.
 - [ ] Synchronize firmware clocks or convert firmware timestamps into the
       robot-time domain while preserving the original acquisition time.
 - [ ] Define simulation-time behavior and incoming timestamp-domain handling.
-- [ ] Discover PTP offsets automatically and monitor synchronization health.
+- [ ] Monitor synchronization health across configured clock sources.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
 Serial deadlines, cached feedback expiry, publisher schedules and audio retry/stall

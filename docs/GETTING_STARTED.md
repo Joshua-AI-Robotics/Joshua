@@ -13,8 +13,8 @@ docker compose version
 
 The script adds the invoking sudo user to the `docker` and `ptp` groups. Log out
 and back in to apply new group membership. Its udev rule grants group read access
-to `/dev/ptp*`, including devices added later. RobotTime's PTP source also requires
-a synchronized clock and a valid configured PHC-to-UTC offset; see
+to `/dev/ptp*`, including devices added later. RobotTime reads PTP directly,
+without a UTC-offset setting, and falls back to system UTC when unavailable; see
 [RobotTime configuration](ROBOT_TIME.md#configuration-and-time-domains).
 
 ## Docker Environments

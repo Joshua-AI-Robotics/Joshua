@@ -103,7 +103,7 @@ if [ -n "${NONROOT_USER}" ] && [ "${NONROOT_USER}" != "root" ]; then
 fi
 
 # Apply to existing clocks and future devices, including hosts with no PHC yet.
-# Clock synchronization and PHC-to-UTC offset configuration remain separate.
+# This grants read access without changing the hardware clock.
 PTP_RULES=/etc/udev/rules.d/99-joshua-ptp.rules
 install -m 0755 -d /etc/udev/rules.d
 cat > "${PTP_RULES}" <<'EOF'
@@ -158,7 +158,7 @@ fi
 
 echo -e "${GREEN}Docker host bootstrap complete.${NC}"
 echo -e "${YELLOW}Log out and back in to apply new docker/PTP group membership.${NC}"
-echo "PTP device read access is configured; synchronize the PHC and set general.robot_clock.ptp_utc_offset_seconds before selecting PTP."
+echo "PTP device read access is configured."
 echo
 echo "Next commands:"
 echo "  docker compose run --rm test-u22"
