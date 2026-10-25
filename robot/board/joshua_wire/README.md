@@ -22,6 +22,11 @@ function discovery and versioned profile metadata, not vendor/product IDs.
 Initialization validates dependencies, brackets metadata with IDENTIFY, queries
 all function and board states, then applies desired STEP/DIR configuration.
 Reset preserves an ESTOP latch; recovery and enable are explicit operations.
+Normal session close uses a fresh session reset to disable outputs and release
+firmware configuration/pin claims without creating an ESTOP latch. A later
+startup can configure disabled channels again; genuine ESTOPs still require
+explicit recovery.
+Close invalidates retained host calls even when the exchange fails or throws.
 Actuator commands use PROFILE and decode the common status/execution prefix.
 Only actuator v1.0 target/feedback operations use a paired cyclic capability.
 

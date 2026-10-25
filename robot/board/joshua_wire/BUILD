@@ -46,6 +46,7 @@ cc_library(
         "//robot/comm/interfaces:correlated_cyclic_transport",
         "//robot/comm/interfaces:message_transport",
         "//utils:status_macros",
+        "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/time",
