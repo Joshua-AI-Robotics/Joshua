@@ -7,6 +7,9 @@
 #include <kernel/dpl/ClockP.h>
 #include <kernel/dpl/HwiP.h>
 #include <kernel/dpl/TaskP.h>
+#include <security/crypto/pka/hw_include/cslr_cp_ace.h>
+#include <security/crypto/rng/rng.h>
+#include <security/crypto/sa2ul/sa2ul.h>
 
 #include <atomic>
 #include <csetjmp>
@@ -36,6 +39,11 @@ EC_API_SLV_CBStopOutputHandler_t stop_output;
 std::mutex hook_mutex;
 std::function<void()> on_state, on_output, on_input;
 Bytes output_image, input_image;
+uint32_t entropy[4] = {0x12345678, 0, 0, 0};
+enum class RngFailure { kNone, kOpen, kSetup, kRead };
+RngFailure rng_failure;
+bool trng_enabled;
+int rng_reads, rng_closes, trng_disables;
 
 void SdkCall() {
   EXPECT_EQ(irq_depth, 0u) << "Vendor I/O must not prevent the watchdog from running";
@@ -70,6 +78,11 @@ class EthercatTiTest : public ::testing::Test {
   void SetUp() override {
     ASSERT_EQ(irq_depth, 0u);
     now_us = 100;
+    entropy[0] = 0x12345678;
+    entropy[1] = entropy[2] = entropy[3] = 0;
+    rng_failure = RngFailure::kNone;
+    trng_enabled = false;
+    rng_reads = rng_closes = trng_disables = 0;
     on_state = on_output = on_input = {};
     read_object = nullptr;
     write_object = nullptr;
@@ -150,6 +163,14 @@ class EthercatTiTest : public ::testing::Test {
     EXPECT_EQ(Management(JW_CMD_PROFILE, Operation(JW_ACTUATOR_CONFIGURE, encoded), 0),
               (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
   }
+  uint32_t BootId() {
+    const auto reply = Management(JW_CMD_IDENTIFY);
+    jw_reply_t common{};
+    jw_identify_response_t identity{};
+    EXPECT_EQ(jw_decode_reply_payload(reply.data(), reply.size(), &common), JW_RESULT_OK);
+    EXPECT_EQ(jw_decode_identify_payload(common.data, common.data_len, &identity), JW_RESULT_OK);
+    return identity.boot_id;
+  }
   void Enable() {
     Configure();
     EXPECT_EQ(Management(JW_CMD_PROFILE, Operation(JW_ACTUATOR_ENABLE), 0),
@@ -183,6 +204,56 @@ TEST_F(EthercatTiTest, SafetyTaskHasPriorityAboveSdkApplication) {
   EXPECT_EQ(watchdog.stackSize, 4096u);
   RunWatchdogOnce();
   EXPECT_EQ(irq_depth, 0u);
+}
+
+TEST_F(EthercatTiTest, BootIdentityUsesFreshEntropyAndSurvivesSessionReset) {
+  EXPECT_EQ(BootId(), 0x12345678u);
+  Reset(8);
+  EXPECT_EQ(BootId(), 0x12345678u);
+  // Reproduce identical startup uptime with different hardware entropy.
+  now_us = 100;
+  entropy[0] = 0xabcdef00;
+  ASSERT_EQ(JoshuaEthercatConfigure(&slave), 0u);
+  Reset(9);
+  EXPECT_EQ(BootId(), 0xabcdef00u);
+  EXPECT_FALSE(trng_enabled);
+  EXPECT_EQ(rng_reads, 2);
+  EXPECT_EQ(rng_closes, 2);
+  EXPECT_EQ(trng_disables, 2);
+}
+
+TEST_F(EthercatTiTest, BootIdentityUsesSecondEntropyWordWhenFirstIsZero) {
+  entropy[0] = 0;
+  entropy[1] = 0x2468ace0;
+  ASSERT_EQ(JoshuaEthercatConfigure(&slave), 0u);
+  Reset(8);
+  EXPECT_EQ(BootId(), 0x2468ace0u);
+  EXPECT_FALSE(trng_enabled);
+}
+
+TEST_F(EthercatTiTest, RngFailuresAndZeroIdentityPreventProtocolStartup) {
+  for (int failure = 0; failure < 4; ++failure) {
+    SCOPED_TRACE(failure);
+    rng_failure = failure == 0   ? RngFailure::kOpen
+                  : failure == 1 ? RngFailure::kSetup
+                  : failure == 2 ? RngFailure::kRead
+                                 : RngFailure::kNone;
+    entropy[0] = entropy[1] = 0;
+    rng_reads = rng_closes = trng_disables = 0;
+    read_object = nullptr;
+    write_object = nullptr;
+    stop_output = nullptr;
+    watchdog = {};
+    EXPECT_EQ(JoshuaEthercatConfigure(&slave), uint32_t(EC_API_eERR_INVALID));
+    EXPECT_EQ(read_object, nullptr);
+    EXPECT_EQ(write_object, nullptr);
+    EXPECT_EQ(stop_output, nullptr);
+    EXPECT_EQ(watchdog.taskMain, nullptr);
+    EXPECT_FALSE(trng_enabled);
+    EXPECT_EQ(rng_reads, failure >= 2 ? 1 : 0);
+    EXPECT_EQ(rng_closes, failure == 0 ? 0 : 1);
+    EXPECT_EQ(trng_disables, 1);
+  }
 }
 
 TEST_F(EthercatTiTest, StopWhileDisabledInvalidatesAnAdmittedEnable) {
@@ -307,6 +378,46 @@ TEST(Am243StopTest, RepeatedFaultsSurviveResetAndRequireExplicitRecovery) {
 extern "C" uintptr_t HwiP_disable(void) {
   owner.lock();
   return irq_depth++;
+}
+extern "C" int32_t SA2UL_engineEnable(int32_t mask) {
+  SdkCall();
+  EXPECT_EQ(mask, CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
+  EXPECT_FALSE(trng_enabled);
+  trng_enabled = true;
+  return 0;
+}
+extern "C" int32_t SA2UL_engineDisable(int32_t mask) {
+  SdkCall();
+  EXPECT_EQ(mask, CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
+  EXPECT_TRUE(trng_enabled);
+  trng_enabled = false;
+  ++trng_disables;
+  return 0;
+}
+extern "C" RNG_Handle RNG_open(uint32_t index) {
+  SdkCall();
+  EXPECT_EQ(index, 0u);
+  EXPECT_TRUE(trng_enabled);
+  return rng_failure == RngFailure::kOpen ? nullptr : entropy;
+}
+extern "C" RNG_Return_t RNG_setup(RNG_Handle handle) {
+  SdkCall();
+  EXPECT_EQ(handle, static_cast<void*>(entropy));
+  return rng_failure == RngFailure::kSetup ? RNG_RETURN_FAILURE : RNG_RETURN_SUCCESS;
+}
+extern "C" RNG_Return_t RNG_read(RNG_Handle handle, uint32_t* out) {
+  SdkCall();
+  EXPECT_EQ(handle, static_cast<void*>(entropy));
+  ++rng_reads;
+  if (rng_failure == RngFailure::kRead) return RNG_RETURN_FAILURE;
+  std::memcpy(out, entropy, sizeof(entropy));
+  return RNG_RETURN_SUCCESS;
+}
+extern "C" RNG_Return_t RNG_close(RNG_Handle handle) {
+  SdkCall();
+  EXPECT_EQ(handle, static_cast<void*>(entropy));
+  ++rng_closes;
+  return RNG_RETURN_SUCCESS;
 }
 extern "C" void HwiP_restore(uintptr_t key) {
   EXPECT_EQ(irq_depth, key + 1);

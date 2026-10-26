@@ -6,13 +6,11 @@
 #include <kernel/dpl/ClockP.h>
 #include <kernel/dpl/DebugP.h>
 #include <kernel/dpl/TaskP.h>
-#include <security/crypto/pka/hw_include/cslr_cp_ace.h>
-#include <security/crypto/rng/rng.h>
-#include <security/crypto/sa2ul/sa2ul.h>
 #include <stdbool.h>
 #include <stddef.h>
 
 #include "am243_software_backend.h"
+#include "boot_identity.h"
 #include "joshua_wire_endpoint.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
@@ -29,21 +27,6 @@ static uint32_t boot_id;
 
 static void TransmitTimeout(void* context) {
   jw_runtime_fault(&((JoshuaChannel*)context)->runtime);
-}
-
-static bool BootId(uint32_t* boot) {
-  uint32_t entropy[4];
-  SA2UL_engineEnable(CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
-  RNG_Handle rng = RNG_open(0);
-  if (!rng) {
-    SA2UL_engineDisable(CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
-    return false;
-  }
-  bool ok = RNG_setup(rng) == RNG_RETURN_SUCCESS && RNG_read(rng, entropy) == RNG_RETURN_SUCCESS;
-  RNG_close(rng);
-  SA2UL_engineDisable(CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
-  if (ok) *boot = entropy[0] ? entropy[0] : entropy[1];
-  return ok && *boot != 0;
 }
 
 static void JoshuaSerialTask(void* args) {
@@ -81,7 +64,7 @@ static void JoshuaSerialTask(void* args) {
 }
 
 int32_t JoshuaSerialStart(void) {
-  if (!BootId(&boot_id)) return SystemP_FAILURE;
+  if (!JoshuaBootId(&boot_id)) return SystemP_FAILURE;
   TaskP_Params parameters;
   TaskP_Params_init(&parameters);
   parameters.name = "joshua_serial";

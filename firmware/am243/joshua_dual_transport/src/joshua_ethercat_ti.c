@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "am243_software_backend.h"
+#include "boot_identity.h"
 #include "ecSlvApiDef.h"
 #include "joshua_ethercat_profile.h"
 
@@ -142,7 +143,9 @@ static uint32_t AddPdo(EC_API_SLV_SHandle_t* slave, bool output) {
   return EC_API_SLV_PDO_setFixed(slave, pdo, true);
 }
 uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
-  JoshuaInit(&channel, (uint32_t)ClockP_getTimeUsec() | 1u, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+  uint32_t boot_id;
+  if (!slave || !JoshuaBootId(&boot_id)) return EC_API_eERR_INVALID;
+  JoshuaInit(&channel, boot_id, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
   const JoshuaEthercatProfileConfig config = {.identity = channel.runtime.identity,
                                               .artifact = "am243-ec-jw",
                                               .context = &channel,
@@ -150,8 +153,8 @@ uint32_t JoshuaEthercatConfigure(EC_API_SLV_SHandle_t* slave) {
                                               .reset = JoshuaReset,
                                               .stop = StopLocked,
                                               .enabled = JoshuaEnabled};
-  if (!slave || JoshuaEthercatProfileInit(
-                    &profile, &config, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US))
+  if (JoshuaEthercatProfileInit(
+          &profile, &config, JOSHUA_COMM_WATCHDOG_US, JOSHUA_TARGET_WATCHDOG_US))
     return EC_API_eERR_INVALID;
   // Distinct evaluation profile, not a registered commercial product identity.
   uint32_t result = EC_API_SLV_setProductCode(slave, 0x4a570002);

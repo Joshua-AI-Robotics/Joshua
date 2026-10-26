@@ -35,9 +35,13 @@ cc_library(
     name = "ethercat_ti_native",
     testonly = True,
     srcs = [
+        "src/boot_identity.c",
         "src/joshua_ethercat_ti.c",
     ],
-    hdrs = ["src/joshua_ethercat_ti.h"],
+    hdrs = [
+        "src/boot_identity.h",
+        "src/joshua_ethercat_ti.h",
+    ],
     # The repo uses g++ as CC; compile the actual firmware bridge as C, as TI does.
     copts = [
         "-x",
