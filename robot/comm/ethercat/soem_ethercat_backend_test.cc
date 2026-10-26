@@ -510,14 +510,16 @@ constexpr CoeSdoTransfer::Mailbox kMailbox{0x1000, 0x1080, 128, 128};
 SdoBytes SdoReply(uint8_t command,
                   const SdoBytes& payload = {},
                   uint8_t counter = 1,
-                  uint16_t index = 0x2000) {
+                  uint16_t index = 0x2000,
+                  uint8_t subindex = 0) {
   SdoBytes result(128, 0);
   result[0] = command == 0x41 ? static_cast<uint8_t>(10 + payload.size()) : 10;
   result[5] = 3 | (counter << 4);
-  result[7] = 0x30;
+  result[7] = command == 0x80 ? 0x20 : 0x30;
   result[8] = command;
   result[9] = index & 0xff;
   result[10] = index >> 8;
+  result[11] = subindex;
   if (command == 0x41) result[12] = static_cast<uint8_t>(payload.size());
   std::copy(payload.begin(), payload.end(), result.begin() + (command == 0x41 ? 16 : 12));
   return result;
@@ -742,23 +744,83 @@ TEST(CoeSdoTransferTest, RejectsOversizedSegmentedAndMalformedResponses) {
   }
 }
 
-TEST(CoeSdoTransferTest, ReportsAbortCodeAndDatagramFailureWithoutRetry) {
+TEST(CoeSdoTransferTest, ReportsUploadAndDownloadAbortsWithoutRetryAndAllowsReuse) {
+  for (bool write : {false, true}) {
+    SCOPED_TRACE(write);
+    CoeSdoTransfer transfer;
+    TestMailboxRegisters io;
+    io.after_write.push_back(SdoReply(0x80, {0, 0, 2, 6}, 5, 0x2345, 7));
+    ASSERT_TRUE(
+        transfer
+            .Begin(kMailbox, 0x2345, 7, 1, write, write ? SdoBytes{1} : SdoBytes{}, write ? 0 : 36)
+            .ok());
+    auto aborted = CompleteSdo(transfer, io);
+    EXPECT_EQ(aborted.status().code(), absl::StatusCode::kFailedPrecondition);
+    EXPECT_EQ(aborted.status().message(), "CoE SDO abort 0x06020000 at 0x2345:7");
+    EXPECT_EQ(io.writes.size(), 1);
+    EXPECT_EQ(transfer.Step(io, 500).status().code(), absl::StatusCode::kFailedPrecondition);
+    EXPECT_EQ(io.writes.size(), 1);
+
+    io.after_write.push_back(SdoReply(0x4f, {0x12}));
+    ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 2, false, {}, 1).ok());
+    auto recovered = CompleteSdo(transfer, io);
+    ASSERT_TRUE(recovered.ok()) << recovered.status();
+    ASSERT_TRUE(recovered->has_value());
+    EXPECT_EQ(**recovered, (SdoBytes{0x12}));
+    EXPECT_EQ(io.writes.size(), 2);
+  }
+}
+
+TEST(CoeSdoTransferTest, RejectsMalformedOrMismatchedAborts) {
+  for (int mutation = 0; mutation < 8; ++mutation) {
+    SCOPED_TRACE(mutation);
+    CoeSdoTransfer transfer;
+    TestMailboxRegisters io;
+    auto malformed = SdoReply(0x80, {0, 0, 2, 6});
+    switch (mutation) {
+      case 0:
+        malformed[0] = 9;
+        break;  // Truncated abort code.
+      case 1:
+        malformed[0] = 11;
+        break;  // Extra abort payload.
+      case 2:
+        malformed[0] = 255;
+        break;  // Outside mailbox.
+      case 3:
+        malformed[9] ^= 1;
+        break;  // Wrong index.
+      case 4:
+        malformed[11] = 1;
+        break;  // Wrong subindex.
+      case 5:
+        malformed[5] = 4;
+        break;  // Wrong mailbox type.
+      case 6:
+        malformed[7] = 0x30;
+        break;  // Abort encoded as an ordinary SDO response.
+      case 7:
+        malformed[7] = 0x40;
+        break;  // Unrelated CoE service.
+    }
+    io.after_write.push_back(std::move(malformed));
+    ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, 36).ok());
+    EXPECT_EQ(CompleteSdo(transfer, io).status().code(), absl::StatusCode::kDataLoss);
+    EXPECT_EQ(io.writes.size(), 1);
+  }
+}
+
+TEST(CoeSdoTransferTest, ReportsDatagramFailureWithoutRetry) {
   CoeSdoTransfer transfer;
   TestMailboxRegisters io;
-  io.after_write.push_back(SdoReply(0x80, {0, 0, 2, 6}, 5));
-  ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, 36).ok());
-  auto aborted = CompleteSdo(transfer, io);
-  EXPECT_EQ(aborted.status().code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_NE(aborted.status().message().find("0x06020000"), std::string::npos);
-  EXPECT_EQ(io.writes.size(), 1);
   ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 2, true, {1}, 0).ok());
   ASSERT_TRUE(transfer.Step(io, 500).ok());  // Drain status.
   ASSERT_TRUE(transfer.Step(io, 500).ok());  // Write status.
   io.io_status = absl::DeadlineExceededError("lost datagram");
   EXPECT_EQ(transfer.Step(io, 500).status().code(), absl::StatusCode::kDeadlineExceeded);
-  EXPECT_EQ(io.writes.size(), 2);
+  EXPECT_EQ(io.writes.size(), 1);
   EXPECT_EQ(transfer.Step(io, 500).status().code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_EQ(io.writes.size(), 2);
+  EXPECT_EQ(io.writes.size(), 1);
 }
 
 // Runs the real CoE state machine under the real owner scheduler. Only the

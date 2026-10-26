@@ -134,12 +134,17 @@ absl::StatusOr<std::optional<CoeSdoTransfer::Bytes>> CoeSdoTransfer::Decode(cons
   // Validate the CoE service/object below; JW correlation is checked above us.
   const size_t length = U16(response.data());
   if (length < 10 || length > response.size() - 6 || (response[5] & 0x0f) != 3 ||
-      (U16(response.data() + 6) >> 12) != 3 || U16(response.data() + 9) != index_ ||
-      response[11] != subindex_) {
+      U16(response.data() + 9) != index_ || response[11] != subindex_) {
     Cancel();
     return absl::DataLossError("malformed/mismatched CoE SDO response");
   }
   const uint8_t command = response[8];
+  const auto service = U16(response.data() + 6) >> 12;
+  // Slave aborts use the SDO request service; ordinary replies use SDO response.
+  if (command == 0x80 ? (service != 2 || length != 10) : service != 3) {
+    Cancel();
+    return absl::DataLossError("invalid CoE SDO service or abort length");
+  }
   if (command == 0x80) {
     std::ostringstream message;
     message << "CoE SDO abort 0x" << std::hex << std::setw(8) << std::setfill('0')
