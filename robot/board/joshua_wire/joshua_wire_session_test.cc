@@ -8,7 +8,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <functional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "firmware/am243/joshua_dual_transport/src/am243_software_backend.h"
@@ -30,6 +32,8 @@ extern "C" {
 namespace {
 std::array<uint8_t, 0x2000> soes_esc{};
 uint64_t soes_time_us;
+std::function<void()> soes_after_admission;
+decltype(ESCvar.pre_object_download_hook) soes_before_download;
 }  // namespace
 extern "C" void ESC_read(uint16_t address, void* data, uint16_t size) {
   ASSERT_LE(static_cast<size_t>(address) + size, soes_esc.size());
@@ -666,6 +670,17 @@ class SoesProfileTest : public Am243EthercatProfileTest {
     port.lock = []() -> uintptr_t { return 0; };
     port.unlock = [](uintptr_t) {};
     ASSERT_EQ(JoshuaSoesInit(&port), 0);
+    soes_after_admission = {};
+    soes_before_download = ESCvar.pre_object_download_hook;
+    ESCvar.pre_object_download_hook =
+        [](uint16_t index, uint8_t sub, void* data, size_t size, uint16_t flags) -> uint32_t {
+      const auto result = soes_before_download(index, sub, data, size, flags);
+      if (result == 0 && soes_after_admission) {
+        auto hook = std::exchange(soes_after_admission, {});
+        hook();  // Preempt the real parser between admission and copy/dispatch.
+      }
+      return result;
+    };
     ESCvar.ALstatus = ESCpreop;
     ESCvar.MBXrun = 1;
     // Initialize SOES's mailbox pointers through its state machine config.
@@ -767,7 +782,70 @@ class SoesProfileTest : public Am243EthercatProfileTest {
     }
     ASSERT_TRUE(channel.enabled);
   }
+  void ExpectRetiredRecovery(std::function<void()> stop) {
+    const uint32_t last_message = profile.session.last_message_id;
+    soes_after_admission = std::move(stop);
+    const auto recovery = Image(false, JW_CMD_RECOVER, {}, JW_CHANNEL_NONE);
+    EXPECT_EQ(Download(JWEC_REQUEST_INDEX, recovery)[8], 0x80);
+    EXPECT_EQ(profile.session.last_message_id, last_message);
+    EXPECT_TRUE(profile.fault_latched);
+    EXPECT_TRUE(channel.estopped);
+    EXPECT_FALSE(channel.configured);
+    EXPECT_FALSE(channel.enabled);
+    // Only a newly admitted post-stop recovery may clear the newer latch.
+    EXPECT_EQ(CoeCommand(JW_CMD_RECOVER, {}, JW_CHANNEL_NONE),
+              (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+    EXPECT_FALSE(profile.fault_latched);
+    EXPECT_FALSE(channel.estopped);
+    EXPECT_FALSE(channel.enabled);
+  }
 };
+
+TEST_F(SoesProfileTest, IndependentWatchdogRetiresAdmittedRecovery) {
+  ConfigureAndEnable();
+  ExpectRetiredRecovery([&] {
+    soes_time_us = 1000;
+    JoshuaEthercatProfileTick(&profile, soes_time_us, true);
+    ASSERT_TRUE(profile.fault_latched);
+  });
+}
+
+TEST_F(SoesProfileTest, ExpiryAtDispatchRetiresAdmittedRecovery) {
+  ConfigureAndEnable();
+  ExpectRetiredRecovery([] { soes_time_us = 1000; });
+}
+
+TEST_F(SoesProfileTest, RepeatedStopWhileFaultedRetiresAdmittedRecovery) {
+  ConfigureAndEnable();
+  JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_COMM);
+  ExpectRetiredRecovery([&] { JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_COMM); });
+}
+
+TEST_F(SoesProfileTest, StateLossWhileFaultedRetiresAdmittedRecovery) {
+  ConfigureAndEnable();
+  JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_COMM);
+  ExpectRetiredRecovery([] { ESC_stopoutput(); });
+}
+
+TEST_F(SoesProfileTest, IndependentWatchdogRetiresAdmittedSessionReset) {
+  ConfigureAndEnable();
+  soes_after_admission = [&] {
+    soes_time_us = 1000;
+    JoshuaEthercatProfileTick(&profile, soes_time_us, true);
+  };
+  Bytes reset(JWEC_SESSION_SIZE);
+  ProfilePut32(reset.data(), JWEC_RESET_OPERATION);
+  ProfilePut32(reset.data() + 4, 9);
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x80);
+  EXPECT_EQ(profile.session.session_id, session_id);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  // A reset admitted after the stop is still allowed and preserves the latch.
+  EXPECT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x60);
+  EXPECT_EQ(profile.session.session_id, 9u);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+}
 
 TEST_F(SoesProfileTest, RealCoeDiscoveryAndExactAccessContract) {
   const auto descriptor = Upload(JWEC_DESCRIPTOR_INDEX);

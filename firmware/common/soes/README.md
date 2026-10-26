@@ -27,6 +27,13 @@ callbacks and optionally an emulated EEPROM handler. One task calls
 Stack/HAL I/O is never performed inside that lock. The profile uses elapsed time,
 not SOES's poll-count watchdog. This is not protection against a halted CPU.
 
+Each CoE write records the shared profile's stop epoch before validation and
+checks it again under the owner lock after copying and ticking time. A newer
+watchdog fault, state-loss stop or accepted ESTOP retires that write without
+executing it. Repeated stops also advance the epoch while already faulted, so
+an earlier RECOVER cannot clear a newer stop. A newly admitted recovery remains
+available afterward. The state-loss callback latches a fault even when disabled.
+
 Management objects use subindex zero and exact sizes. Every object fits the
 512-byte mailbox, so writes must arrive in one transfer; segmented writes are
 rejected before copying or executing commands. PDO image objects cannot be
@@ -43,6 +50,8 @@ It covers descriptor/identity/reset, access and length rejection, command
 execution, duplicate retention, target expiry, OP loss, actuator admission and
 ESTOP/DISABLE status preservation. It does **not**
 validate an ESC hardware driver or timing on a real EtherCAT bus.
+Parser-level preemption tests additionally cover interrupted RECOVER/reset,
+expiry at dispatch and repeated fault/state-loss notifications.
 
 The initial [AM243 port](../../am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
 builds, but hardware qualification and evaluation-stack retirement are pending.

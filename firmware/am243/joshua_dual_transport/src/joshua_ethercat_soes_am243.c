@@ -10,6 +10,7 @@
 #include <tiescsoc.h>
 
 #include "am243_software_backend.h"
+#include "boot_identity.h"
 #include "esc.h"
 #include "esc_eep.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
@@ -210,7 +211,12 @@ static void Run(void* ignored) {
   (void)ignored;
   Drivers_open();
   DebugP_assert(Board_driversOpen() == SystemP_SUCCESS);
-  JoshuaInit(&channel, (uint32_t)ClockP_getTimeUsec() | 1u, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+  uint32_t boot_id;
+  if (!JoshuaBootId(&boot_id)) {
+    DebugP_assertNoLog(0);
+    return;  // Do not start the protocol even if assertions are disabled.
+  }
+  JoshuaInit(&channel, boot_id, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
   const JoshuaEthercatProfileConfig config = {.identity = channel.runtime.identity,
                                               .artifact = "am243-soes",
                                               .context = &channel,

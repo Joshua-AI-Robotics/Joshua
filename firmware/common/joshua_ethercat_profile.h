@@ -44,6 +44,10 @@ typedef struct {
   uint8_t last_request[2][JW_MAX_FRAME_LEN];
   uint8_t last_request_len[2];
   uint32_t last_generation[2];
+  // Advances on every fault/accepted ESTOP, including repeated stops while
+  // already faulted. Stack adapters use it to retire pre-stop admissions.
+  // Access under the same external owner lock as all other profile state.
+  uint64_t stop_epoch;
   uint64_t now_us;
   uint64_t last_progress_us;
   uint64_t last_target_us[JW_MAX_FUNCTIONS];
