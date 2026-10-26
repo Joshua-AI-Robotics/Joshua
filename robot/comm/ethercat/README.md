@@ -117,3 +117,6 @@ Changed requests reusing an ID and retries of retired IDs remain rejected.
 Quarantine gates ordinary requests but permits an exact retry or a bounded
 mailbox ESTOP in the established session. A successful ESTOP does not clear
 quarantine; a verified reset is still required to resume ordinary commands.
+The PDO stop image persists through cancelled cyclic cleanup and idle response
+draining. Only a later admitted request or verified reset resumes normal
+publication; work that predates a newer ESTOP cannot clear its stop intent.

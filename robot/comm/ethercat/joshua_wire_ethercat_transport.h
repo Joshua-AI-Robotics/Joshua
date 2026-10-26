@@ -58,6 +58,7 @@ class JoshuaWireEthercatTransport final : public MessageTransport,
   void FinishLocked(const std::shared_ptr<Work>&, absl::StatusOr<Bytes>);
   Microseconds Remaining(const std::shared_ptr<Work>&);
   absl::Status Publish(const std::shared_ptr<Work>&, Bytes);
+  absl::Status ResumeNormalOutput(const std::shared_ptr<Work>&);
   absl::StatusOr<Bytes> Execute(const std::shared_ptr<Work>&);
   absl::StatusOr<Bytes> Reset(const std::shared_ptr<Work>&);
   absl::StatusOr<Bytes> Mailbox(const std::shared_ptr<Work>&, uint32_t generation);
@@ -73,6 +74,8 @@ class JoshuaWireEthercatTransport final : public MessageTransport,
   std::mutex mutex_;
   std::condition_variable cv_;
   bool stopping_ = false;
+  bool preserve_stop_image_ = false;
+  uint64_t stop_epoch_ = 0;
   std::deque<std::shared_ptr<Work>> queue_;
   std::shared_ptr<Work> active_;
   std::mutex join_mutex_;
