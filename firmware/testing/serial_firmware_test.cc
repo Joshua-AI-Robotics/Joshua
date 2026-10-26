@@ -233,10 +233,11 @@ TEST_F(SerialFirmwareTest, BlockedResponseDoesNotRepeatCommandOrConsumeNextReque
   EXPECT_EQ(g_channels[0].step_dir.position_steps, 3);
   EXPECT_TRUE(g_channels[0].enabled);
   EXPECT_EQ(Serial.input.size(), next.size());
-  // Insufficient space must never emit the first part of a response.
+  // A smaller writable chunk advances the first reply without interleaving
+  // the retained second reply or admitting the next request.
   Serial.write_capacity = JW_FRAME_OVERHEAD;
   loop();
-  EXPECT_TRUE(Serial.output.empty());
+  EXPECT_EQ(Serial.output.size(), JW_FRAME_OVERHEAD);
   Serial.write_capacity = JW_MAX_FRAME_LEN;
   loop();
   jw_frame_t response;
@@ -256,6 +257,29 @@ TEST_F(SerialFirmwareTest, BlockedResponseDoesNotRepeatCommandOrConsumeNextReque
   EXPECT_TRUE(Serial.input.empty());
   ASSERT_EQ(jw_decode_frame(Serial.output.data(), Serial.output.size(), &response), JW_RESULT_OK);
   EXPECT_EQ(response.message_id, id);
+}
+
+TEST_F(SerialFirmwareTest, ResponseLargerThanWritableChunkDrainsAcrossIterations) {
+  SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload());
+  SendProfile(JW_ACTUATOR_ENABLE, 0);
+  const auto identify = Frame(JW_CMD_IDENTIFY, 0xff);
+  const auto expected = Run(identify);
+  ASSERT_GT(expected.size(), 16u);
+  Serial.write_capacity = 16;
+  Run(identify);  // Exact retry must drain the same reply in short writes.
+  EXPECT_EQ(Serial.output.size(), 16u);
+  EXPECT_EQ(Serial.output, Bytes(expected.begin(), expected.begin() + 16));
+  for (size_t i = 0; i < expected.size() / 16 + 1; ++i) {
+    const auto previous = Serial.output.size();
+    clock_us += 1000;
+    loop();
+    EXPECT_LE(Serial.output.size() - previous, 16u);
+    ASSERT_LE(Serial.output.size(), expected.size());
+    EXPECT_EQ(Serial.output, Bytes(expected.begin(), expected.begin() + Serial.output.size()));
+  }
+  EXPECT_EQ(Serial.output, expected);
+  EXPECT_TRUE(g_channels[0].enabled);
+  EXPECT_EQ(g_functions[0].state.reason, JW_REASON_NONE);
 }
 
 TEST_F(SerialFirmwareTest, BoundsNoiseDrainingPerMotorServiceIteration) {

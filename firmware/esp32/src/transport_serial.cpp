@@ -9,8 +9,10 @@ int ReadByte(void*) {
 size_t WriteBytes(void*, const uint8_t* bytes, size_t length) {
   // Sole Serial writer. Only write bytes that fit immediately; the shared link
   // adapter owns accepted frames and retains any unwritten remainder.
-  if (Serial.availableForWrite() < static_cast<int>(length)) return 0;
-  return Serial.write(bytes, length);
+  const int available = Serial.availableForWrite();
+  if (available <= 0) return 0;
+  const size_t count = length < static_cast<size_t>(available) ? length : available;
+  return Serial.write(bytes, count);
 }
 uint32_t NowMs(void*) {
   return millis();
