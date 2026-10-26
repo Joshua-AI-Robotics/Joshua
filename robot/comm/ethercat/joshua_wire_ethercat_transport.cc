@@ -315,17 +315,47 @@ void JoshuaWireEthercatTransport::Run() {
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Execute(const std::shared_ptr<Work>& work) {
   jw_frame_t frame;
   (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
-  if (frame.cmd == JW_CMD_RESET_SESSION) return Reset(work);
-  if (needs_reset_ || frame.session_id != session_)
+  const auto master_status = master_->status();
+  if (!master_status.ok()) return master_status;
+  const bool retry = frame.session_id == session_ && frame.message_id == last_message_ &&
+                     work->cyclic == last_cyclic_ && work->request == last_request_;
+  if (retry && last_response_) return *last_response_;
+  if (frame.cmd == JW_CMD_RESET_SESSION) {
+    if (frame.session_id == session_)
+      return absl::FailedPreconditionError("reset must propose a different nonzero session");
+    // An attempted session change retires all results from the previous one.
+    last_request_.clear();
+    last_response_.reset();
+    auto result = Reset(work);
+    if (result.ok()) {
+      last_request_ = work->request;
+      last_cyclic_ = false;
+      last_response_ = *result;
+    }
+    return result;
+  }
+  if (session_ == 0 || frame.session_id != session_ ||
+      (needs_reset_ && !retry && frame.cmd != JW_CMD_ESTOP))
     return absl::FailedPreconditionError("JW EtherCAT requires a new verified reset session");
-  if (frame.message_id <= last_message_)
+  if (frame.message_id <= last_message_ && !retry)
     return absl::FailedPreconditionError("JW message ID reused or out of order");
-  if (generation_ == UINT32_MAX || (generation_ == UINT32_MAX - 1 && frame.cmd != JW_CMD_ESTOP))
+  // Reuse an unacknowledged generation so a retry can recover its retained
+  // reply without admitting the request again. If its reply was acknowledged
+  // but invalid, a new generation asks firmware to replay the exact JW bytes/ID.
+  const bool new_generation = !retry || (work->cyclic ? pdo_ack_ : mailbox_ack_) == generation_;
+  if (new_generation &&
+      (generation_ == UINT32_MAX || (generation_ == UINT32_MAX - 1 && frame.cmd != JW_CMD_ESTOP)))
     return absl::ResourceExhaustedError(
         "JW generation exhausted; disable and establish new session");
-  last_message_ = frame.message_id;
-  const auto generation = ++generation_;
+  if (!retry) {
+    last_message_ = frame.message_id;
+    last_request_ = work->request;
+    last_cyclic_ = work->cyclic;
+    last_response_.reset();
+  }
+  const auto generation = new_generation ? ++generation_ : generation_;
   auto result = work->cyclic ? Cyclic(work, generation) : Mailbox(work, generation);
+  if (result.ok()) last_response_ = *result;
   if (work->cyclic) {
     Invalidate();
     if (absl::IsDataLoss(result.status())) needs_reset_ = true;
@@ -337,8 +367,6 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Execute(const std::shared_ptr
 absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<Work>& work) {
   jw_frame_t frame;
   (void)jw_decode_frame(work->request.data(), work->request.size(), &frame);
-  if (frame.session_id == session_)
-    return absl::FailedPreconditionError("reset must propose a different nonzero session");
   needs_reset_ = true;
   Invalidate();
   auto remaining = Remaining(work);
@@ -360,6 +388,7 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<W
       last_message_ = frame.message_id;
       generation_ = 0;
       pdo_ack_ = 0;
+      mailbox_ack_ = 0;
       needs_reset_ = false;
       Invalidate();
       Bytes response(JW_MAX_FRAME_LEN);
@@ -403,6 +432,7 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Mailbox(const std::shared_ptr
       if (remaining.count() <= 0) return Expired();
       status = master_->WriteSdo({slave_, JWEC_ACK_INDEX, 0}, ack, remaining);
       if (!status.ok()) return status;
+      mailbox_ack_ = std::max(mailbox_ack_, response_generation);
       if (response_generation == generation) return response;
     }
     if (!Pause(work)) break;
@@ -478,8 +508,17 @@ void JoshuaWireEthercatTransport::DrainLatePdo() {
   if (!input.ok() || U32(input->data()) != session_) return;
   const uint32_t generation = U32(input->data() + 8);
   if (generation != 0 && generation <= generation_) {
+    // Keep only the last request's correlated result for an explicit exact
+    // retry. Idle draining must not make a recoverable late reply disappear.
+    if (generation == generation_ && last_cyclic_ && !last_request_.empty() &&
+        U32(input->data() + 4) == generation && U16(input->data() + 14) == 0) {
+      jw_frame_t request;
+      (void)jw_decode_frame(last_request_.data(), last_request_.size(), &request);
+      auto response = Response(*input, true, request);
+      if (response.ok()) last_response_ = std::move(*response);
+    }
     pdo_ack_ = std::max(pdo_ack_, generation);
-    Invalidate();  // A late response is acknowledged, never delivered to a caller.
+    Invalidate();  // A late reply is returned only to an explicit exact retry.
   }
 }
 
