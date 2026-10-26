@@ -63,6 +63,11 @@ request a 2000 ms settle interval. See [config migration](../../config/README.md
 
 ### Dependencies and tests
 
+Pure serial and paired EtherCAT field checks live in
+[`factory/comm_config_validation.h`](factory/comm_config_validation.h), shared
+by config preflight and `CommFactory`. Config validation depends on these checks
+without linking the factory or concrete transports.
+
 Concrete serial and SOEM transport targets are visible only within `robot/comm`.
 Raw SOEM is restricted to the EtherCAT package. `CommFactory` keeps concrete
 dependencies private with `implementation_deps`; public factory headers expose

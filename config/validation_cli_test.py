@@ -344,11 +344,13 @@ robot {
                         },
                     )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
-                    # This helper checks protobuf fields without opening a bus.
+                    # These helpers check protobuf fields without opening a bus.
                     # Keep the allowlist exact so transports remain excluded.
                     self.assertIn(
                         label,
                         {
+                            "//robot/comm/factory:comm_config_validation",
+                            "//robot/comm/factory:comm_config_validation.h",
                             "//robot/comm/serial:serial_config_validation",
                             "//robot/comm/serial:serial_config_validation.h",
                         },

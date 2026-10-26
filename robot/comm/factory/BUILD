@@ -2,11 +2,22 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_cc//cc:defs.bzl", "cc_test")
 
 cc_library(
+    name = "comm_config_validation",
+    hdrs = ["comm_config_validation.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/comm/proto:comm_cc_proto",
+        "@abseil-cpp//absl/status:status",
+    ],
+)
+
+cc_library(
     name = "comm_factory",
     srcs = ["comm_factory.cc"],
     hdrs = ["comm_factory.h"],
     implementation_deps = [
-        "//firmware/common:joshua_wire_ethercat",
+        ":comm_config_validation",
         "//robot/comm/ethercat:ethercat_master",
         "//robot/comm/ethercat:joshua_wire_ethercat_transport",
         "//robot/comm/ethercat:soem_ethercat_backend",

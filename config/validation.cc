@@ -9,7 +9,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
-#include "robot/comm/factory/comm_factory.h"
+#include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/perception/audio/audio_config.h"
 #include "ros2/utils/packet_parser.h"
@@ -233,7 +233,7 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
     ABSL_RETURN_IF_ERROR(robot::comm::ValidateSerialCommConfig(connection.comm));
     const auto& serial = connection.comm.serial_config();
-    auto status = robot::comm::CommFactory::ValidateSerialConfig(serial);
+    auto status = robot::comm::ValidateSerialConfig(serial);
     if (!status.ok()) {
       return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
     }
@@ -283,7 +283,7 @@ absl::Status ValidateEthercatBoards(
     if (ec.interface_name().empty()) return absl::InvalidArgumentError("EtherCAT board has no NIC");
     const bool paired = comm.transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
     if (paired) {
-      ABSL_RETURN_IF_ERROR(robot::comm::CommFactory::ValidatePairedEthercatConfig(ec));
+      ABSL_RETURN_IF_ERROR(robot::comm::ValidatePairedEthercatConfig(ec));
       if (board.protocol() != robot::board::JOSHUA_WIRE || board.has_am243_config())
         return absl::InvalidArgumentError(
             "Paired EtherCAT requires explicit JW and endpoint config in comm");
