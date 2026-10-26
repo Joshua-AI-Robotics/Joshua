@@ -84,6 +84,8 @@ retries a published write. Unsegmented transfers cover the shared
 the object plus CoE headers. `SoemEthercatBackend` implements Begin/Step/Cancel;
 `EthercatMaster` schedules these steps within the declared mailbox budget and
 guard while cyclic exchange continues. Missing support or insufficient slack
-is rejected. Mailbox counters, malformed responses, abort codes, cancellation
+is rejected. Runtime completion rechecks the operation deadline under the owner
+mutex, so delayed publication cannot turn an expired SDO into success.
+Mailbox counters, malformed responses, abort codes, cancellation
 and deadline overruns are covered by register fakes. The legacy TI adapter
 remains separate until factory integration.

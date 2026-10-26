@@ -5,6 +5,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -25,6 +26,9 @@ namespace robot::comm::ethercat {
 // before the next dispatch, without blocking the backend exchange itself.
 class EthercatMasterTestPeer {
  public:
+  static std::unique_lock<std::mutex> Lock(EthercatMaster& master) {
+    return std::unique_lock(master.mutex_);
+  }
   static std::unique_lock<std::mutex> PauseAfterNextCycle(EthercatMaster& master) {
     std::unique_lock lock(master.mutex_);
     const auto sequence = master.snapshot_.sequence;
@@ -871,6 +875,7 @@ struct RuntimeTrace : IoTrace {
   int steps = 0;
   int cancel_calls = 0;
   std::vector<int> budgets;
+  std::function<void()> before_completion;
 };
 class TestRuntimeIo : public TestMasterIo {
  public:
@@ -894,7 +899,10 @@ class TestRuntimeIo : public TestMasterIo {
     trace_->budgets.push_back(budget);
     if (trace_->overrun_step) std::this_thread::sleep_for(5ms);
     if (!trace_->step_status.ok()) return trace_->step_status;
-    return transfer_.Step(registers_, budget);
+    auto result = transfer_.Step(registers_, budget);
+    if (result.ok() && result->has_value() && trace_->before_completion)
+      trace_->before_completion();
+    return result;
   }
   void CancelSdo() override {
     trace_->Call("sdo_cancel");
@@ -998,6 +1006,52 @@ TEST(EthercatMasterTest, StalledRuntimeMailboxKeepsCyclingUntilDeadlineThenFails
   EXPECT_GE(trace->sent.size(), 9);
   EXPECT_GE(trace->cancel_calls, 1);
   EXPECT_EQ(trace->sent.back(), (SdoBytes{0, 0, 0, 0}));
+}
+
+TEST(EthercatMasterTest, RuntimeCompletionDelayedPastDeadlineFailsClosed) {
+  for (bool write : {false, true}) {
+    SCOPED_TRACE(write);
+    auto trace = std::make_shared<RuntimeTrace>();
+    auto options = RuntimeOptions();
+    options.period = 50ms;
+    options.mailbox_step_budget = 20ms;
+    auto opened = EthercatMaster::Open(std::make_unique<TestRuntimeIo>(trace),
+                                       "test-only",
+                                       ProcessDataMode::kSplitLrdLwr,
+                                       options);
+    ASSERT_TRUE(opened.ok()) << opened.status();
+    auto master = std::move(*opened);
+    ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
+
+    std::promise<void> completed;
+    auto completion = completed.get_future();
+    std::promise<void> locked;
+    auto lock_ready = locked.get_future();
+    // The backend finishes inside its step budget. Only publication under the
+    // owner mutex is delayed, so the caller and worker both resume overdue.
+    trace->before_completion = [&] {
+      completed.set_value();
+      lock_ready.wait();
+    };
+    auto blocker = std::async(std::launch::async, [&] {
+      if (completion.wait_for(2s) != std::future_status::ready) return false;
+      auto lock = EthercatMasterTestPeer::Lock(*master);
+      locked.set_value();
+      std::this_thread::sleep_for(400ms);
+      return true;
+    });
+    const auto result = write ? master->WriteSdo({1, JWEC_REQUEST_INDEX, 0}, {1}, 700ms)
+                              : master->ReadSdo({1, JWEC_RESPONSE_INDEX, 0}, 1, 700ms).status();
+    EXPECT_TRUE(blocker.get());
+    EXPECT_EQ(result.code(), absl::StatusCode::kDeadlineExceeded);
+    EXPECT_EQ(master->status().code(), absl::StatusCode::kDeadlineExceeded);
+    EXPECT_EQ(master->ReadSdo({1, JWEC_RESPONSE_INDEX, 0}, 1, 1s).status().code(),
+              absl::StatusCode::kDeadlineExceeded);
+    EXPECT_TRUE(master->Stop().ok());
+    EXPECT_EQ(trace->steps, 5);
+    EXPECT_GE(trace->cancel_calls, 1);
+    EXPECT_EQ(trace->sent.back(), (SdoBytes{0, 0, 0, 0}));
+  }
 }
 
 TEST(EthercatMasterTest, RuntimeStopCancelsTransferAndQueuedCalls) {
