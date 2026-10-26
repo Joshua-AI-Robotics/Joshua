@@ -238,12 +238,16 @@ void EthercatMaster::Run(const std::string& interface_name, ProcessDataMode mode
       }
     }
     if (!work) {
-      // Process data comes first. Only one state check follows, no runtime SDO.
-      auto data = Exchange(outputs);
+      // A late wakeup must not send normal outputs for an already-expired cycle.
+      // Process data comes first when admitted; one state check follows, no SDO.
+      const auto deadline = next_cycle + options_.period;
+      absl::StatusOr<ProcessData> data =
+          absl::DeadlineExceededError("EtherCAT cyclic deadline missed before dispatch");
+      if (Clock::now() < deadline) data = Exchange(outputs);
       status = data.status();
       if (status.ok())
         status = io_->CheckOperational(static_cast<int>(options_.state_timeout.count()));
-      next_cycle += options_.period;
+      next_cycle = deadline;
       if (status.ok() && Clock::now() >= next_cycle)
         status = absl::DeadlineExceededError("EtherCAT cyclic deadline missed");
       {

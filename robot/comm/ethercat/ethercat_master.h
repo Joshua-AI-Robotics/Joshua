@@ -80,6 +80,7 @@ class EthercatMaster {
   absl::Status Stop();
 
  private:
+  friend class EthercatMasterTestPeer;
   using Clock = std::chrono::steady_clock;
   struct Work;
   EthercatMaster(std::unique_ptr<EthercatMasterIo> io, Options options);

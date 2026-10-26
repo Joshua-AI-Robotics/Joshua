@@ -17,6 +17,22 @@
 #include "robot/comm/ethercat/ethercat_transport.h"
 
 namespace robot::comm::ethercat {
+
+// Hold the owner mutex after a completed cycle to simulate delayed scheduling
+// before the next dispatch, without blocking the backend exchange itself.
+class EthercatMasterTestPeer {
+ public:
+  static std::unique_lock<std::mutex> PauseAfterNextCycle(EthercatMaster& master) {
+    std::unique_lock lock(master.mutex_);
+    const auto sequence = master.snapshot_.sequence;
+    EXPECT_TRUE(master.cv_.wait_for(lock, std::chrono::seconds(1), [&] {
+      return master.stopping_ || master.snapshot_.sequence > sequence;
+    }));
+    EXPECT_FALSE(master.stopping_);
+    return lock;
+  }
+};
+
 namespace {
 
 TEST(SoemEthercatTransportTest, InitRejectsEmptyInterfaceName) {
@@ -329,8 +345,9 @@ TEST(EthercatMasterTest, QueuedTimeoutIsNeverDispatched) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto first =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto first = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = master->WriteSdo({1, 0x2010, 0}, {1}, 10ms);
   trace->Release();
@@ -349,8 +366,9 @@ TEST(EthercatMasterTest, DispatchedTimeoutFaultsMasterAndDiscardsLateSuccess) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto pending =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 100ms); });
+  auto pending = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 100ms);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = pending.get();
   EXPECT_EQ(expired.status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -368,11 +386,13 @@ TEST(EthercatMasterTest, StopWakesSdoWaitersBeforeBlockedBackendReturns) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto active =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto active = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
+  });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto active_ready = active.wait_for(500ms);
   const auto queued_ready = queued.wait_for(500ms);
@@ -419,17 +439,47 @@ TEST(EthercatMasterTest, MissedCyclicDeadlineFailsRatherThanPublishingStaleSnaps
   EXPECT_TRUE(master->Stop().ok());
 }
 
+TEST(EthercatMasterTest, OverdueCycleSendsOnlyStopImagesWithoutDispatchingNormalOutputs) {
+  auto trace = std::make_shared<IoTrace>();
+  const auto options = MasterOptions();
+  auto opened = OpenMaster(trace, options);
+  ASSERT_TRUE(opened.ok());
+  auto master = std::move(*opened);
+  ASSERT_TRUE(master->StartCyclic({{0, 0}, {9, 9}}).ok());
+  ASSERT_TRUE(master->SetOutputs(1, {3, 4}).ok());
+  ASSERT_TRUE(master->SetOutputs(2, {5, 6}).ok());
+  size_t sent_before_delay;
+  {
+    auto pause = EthercatMasterTestPeer::PauseAfterNextCycle(*master);
+    sent_before_delay = trace->sent.size();
+    ASSERT_GT(sent_before_delay, 0u);
+    EXPECT_EQ(trace->sent.back(), (std::vector<uint8_t>{3, 4, 5, 6}));
+    // Delay beyond the next cycle's completion deadline, before backend I/O.
+    std::this_thread::sleep_for(options.period * 3);
+  }
+  EXPECT_EQ(master->WaitForCycle(UINT64_MAX, 1s).status().code(),
+            absl::StatusCode::kDeadlineExceeded);
+  EXPECT_EQ(master->SetOutputs(1, {7, 8}).code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_TRUE(master->Stop().ok());
+  ASSERT_EQ(trace->sent.size(), sent_before_delay + 1);
+  EXPECT_EQ(trace->sent.back(), (std::vector<uint8_t>{0, 0, 9, 9}));
+  EXPECT_EQ(std::count(trace->calls.begin(), trace->calls.end(), "state"), sent_before_delay);
+  EXPECT_EQ(trace->calls.back(), "destroy");
+}
+
 TEST(EthercatMasterTest, SdoQueuedDuringStartupCannotBypassCyclicGate) {
   auto trace = std::make_shared<IoTrace>();
   trace->hold = "start";
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto start =
-      std::async(std::launch::async, [&] { return master->StartCyclic({{0, 0}, {0, 0}}); });
+  auto start = std::async(std::launch::async, [&] {
+    return master->StartCyclic({{0, 0}, {0, 0}});
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   trace->Release();
   EXPECT_TRUE(start.get().ok());
   EXPECT_EQ(queued.get().status().code(), absl::StatusCode::kFailedPrecondition);
