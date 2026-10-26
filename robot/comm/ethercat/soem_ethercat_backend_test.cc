@@ -344,9 +344,8 @@ TEST(EthercatMasterTest, QueuedTimeoutIsNeverDispatched) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto first = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
-  });
+  auto first =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = master->WriteSdo({1, 0x2010, 0}, {1}, 10ms);
   trace->Release();
@@ -365,9 +364,8 @@ TEST(EthercatMasterTest, DispatchedTimeoutFaultsMasterAndDiscardsLateSuccess) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto pending = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 100ms);
-  });
+  auto pending =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 100ms); });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = pending.get();
   EXPECT_EQ(expired.status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -385,13 +383,11 @@ TEST(EthercatMasterTest, StopWakesSdoWaitersBeforeBlockedBackendReturns) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto active = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
-  });
+  auto active =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued = std::async(std::launch::async, [&] {
-    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
-  });
+  auto queued =
+      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto active_ready = active.wait_for(500ms);
   const auto queued_ready = queued.wait_for(500ms);
@@ -472,13 +468,11 @@ TEST(EthercatMasterTest, SdoQueuedDuringStartupCannotBypassCyclicGate) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto start = std::async(std::launch::async, [&] {
-    return master->StartCyclic({{0, 0}, {0, 0}});
-  });
+  auto start =
+      std::async(std::launch::async, [&] { return master->StartCyclic({{0, 0}, {0, 0}}); });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
-  });
+  auto queued =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
   trace->Release();
   EXPECT_TRUE(start.get().ok());
   EXPECT_EQ(queued.get().status().code(), absl::StatusCode::kFailedPrecondition);
@@ -1030,9 +1024,8 @@ TEST(EthercatMasterTest, StalledRuntimeMailboxKeepsCyclingUntilDeadlineThenFails
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto pending = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 400ms);
-  });
+  auto pending =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 400ms); });
   uint64_t sequence = 0;
   for (int i = 0; i < 8; ++i) {
     auto cycle = master->WaitForCycle(sequence, 100ms);
@@ -1120,13 +1113,11 @@ TEST(EthercatMasterTest, RuntimeStopCancelsTransferAndQueuedCalls) {
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto active = std::async(std::launch::async, [&] {
-    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
-  });
+  auto active =
+      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued = std::async(std::launch::async, [&] {
-    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
-  });
+  auto queued =
+      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto woke = active.wait_for(200ms);
   trace->Release();
