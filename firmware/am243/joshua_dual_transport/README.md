@@ -109,9 +109,9 @@ commercial product identity. Resolve identity/redistribution requirements
 before public hardware distribution. No standalone ESI XML is provided yet;
 the mapping above documents the profile, and a cached TI-demo ESI is incompatible.
 
-Both artifacts use the shared `src/boot_identity.c` hardware RNG path for a
-nonzero boot ID, preserved across session resets. The EtherCAT artifact rejects
-startup before registering objects or its watchdog when RNG acquisition fails
+All AM243 artifacts use the shared `src/boot_identity.c` hardware RNG path for a
+nonzero boot ID, preserved across session resets. The EtherCAT artifacts reject
+startup before registering objects or watchdog tasks when RNG acquisition fails
 or returns zero identity data; boot-relative uptime is never an identity source.
 
 Only a **new valid command**, not repeated reads of an unchanged PDO output
@@ -208,6 +208,13 @@ and ICSS FWHAL/PRU firmware, **not** TI's evaluation slave stack or Beckhoff SSC
 The SDK's SSC example supplies build/SysConfig rules and BSD-licensed board
 initialization only; no SSC source or stack library is compiled/linked.
 
+SOES links the same hardware RNG helper as the UART and TI EtherCAT artifacts.
+Both build scripts append `syscfg/boot_identity.syscfg`, sharing the crypto/RNG
+configuration and required SA2UL MMR firewall grant. Entropy failure prevents
+protocol startup. Native RNG regressions cover repeated startup uptime,
+session-reset stability and RNG failure; this SOES image still needs physical
+boot-identity verification after a deliberate flash.
+
 Outputs are `out/am243_ethercat_jw_soes.release.*`, including the link map.
 The upstream SOES source archive and LICENSE accompany them; the source patch
 is in `third_party/soes`. Existing TI artifacts are not overwritten.
@@ -232,6 +239,40 @@ SII/CoE identity is `0xe000059d` /
 SII contains four fixed SMs and FMMU types; the master obtains PDO mapping
 through CoE. No standalone ESI is provided. Physical EEPROM is neither loaded
 nor written; runtime identity/mapping writes and segmented CoE writes are rejected.
+
+#### SOES bench record — 2026-10-26
+
+An authorized LP-AM243 run with motor power off flashed the corrected SOES
+artifact, built with 5000000-us command-progress and 2000000-us target watchdogs.
+Its signed appimage SHA-256 was
+`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.
+The console reported SOES ready without the TI slave stack. Discovery on
+`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision
+`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.
+
+Two USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.
+Each remained stable across five session resets and 15 correlated IDENTIFY
+replies. The production master/paired adapter probe then reached OP and verified
+CoE configuration, PDO target/feedback, exact retry, ESTOP preservation across
+session reset, target-watchdog expiry, rejected re-enable and explicit recovery.
+This exercised the software channel only; it did not drive physical motor GPIOs.
+
+The planned 65-minute endurance run did **not** complete. With a 50-ms cycle,
+5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,
+it reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before
+a state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A
+second attempt widened only the state budget to 20 ms and stopped during setup
+on a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register
+timeouts remain a qualification blocker; the runs do not establish their root
+cause or resolve the documented master-side NIC issue.
+
+The console continued reporting uptime without a reboot or AL error. After
+both failed attempts, a startup-CoE check confirmed the same second boot ID,
+another five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status
+with stop action complete and explicit recovery required. The host probe was
+closed with the software channel stopped. Native preemption regressions cover
+the precise interrupted-RECOVER race; this bench did not force that interleaving
+on the R5 or qualify physical outputs, timing bounds or endurance.
 
 #### TODO: Retire TI-stack profiles after SOES qualification
 

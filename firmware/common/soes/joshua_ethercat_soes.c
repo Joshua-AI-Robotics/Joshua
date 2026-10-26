@@ -15,6 +15,11 @@ static uint32_t identity[4];
 static uint8_t descriptor[JWEC_DESCRIPTOR_SIZE], session[JWEC_SESSION_SIZE];
 static uint8_t request[JWEC_MAILBOX_SIZE], response[JWEC_MAILBOX_SIZE], ack[4];
 static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
+// SOES has one parser/poll owner. The independent watchdog only touches the
+// profile under port.lock; it may stop between pre-download and dispatch.
+static uint64_t download_epoch;
+static uint16_t download_index;
+static bool download_pending;
 
 #define ENTRY(s, t, bits, access, value, data) \
   { s, t, bits, access, "", value, data }
@@ -25,8 +30,8 @@ static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
       M(16), M(17), M(18), M(19), M(20), M(21), M(22), M(23), M(24), M(25), M(26), M(27), M(28)
 #define RXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x70000020u + ((s) << 8))
 #define TXMAP(s) CONST(s, DTYPE_UNSIGNED32, 32, 0x60000020u + ((s) << 8))
-#define RXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_WO | ATYPE_RXPDO, 0, output + 4 * ((s) - 1))
-#define TXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_RO | ATYPE_TXPDO, 0, input + 4 * ((s) - 1))
+#define RXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_WO | ATYPE_RXPDO, 0, output + 4 * ((s)-1))
+#define TXWORD(s) ENTRY(s, DTYPE_UNSIGNED32, 32, ATYPE_RO | ATYPE_TXPDO, 0, input + 4 * ((s)-1))
 static const _objd device_type[] = {CONST(0, DTYPE_UNSIGNED32, 32, 0)};
 static const _objd device_name[] = {
     ENTRY(0, DTYPE_VISIBLE_STRING, 9 * 8, ATYPE_RO, 0, "Joshua JW")};
@@ -83,7 +88,12 @@ static void Tick(void) {
 }
 static void Stop(void) {
   const uintptr_t key = port.lock();
+  const uint64_t epoch = port.profile->stop_epoch;
   JoshuaEthercatProfileTick(port.profile, port.time_us(), false);
+  // A state-loss notification is a new stop even when already disabled/faulted.
+  // Tick only stops enabled channels; still retire a pre-stop RECOVER here.
+  if (epoch == port.profile->stop_epoch)
+    JoshuaEthercatProfileFault(port.profile, JOSHUA_ECAT_FAULT_STATE);
   port.unlock(key);
 }
 static uint8_t* Writable(uint16_t index, size_t* size) {
@@ -105,6 +115,10 @@ static uint8_t* Writable(uint16_t index, size_t* size) {
 static uint32_t BeforeDownload(
     uint16_t index, uint8_t sub, void* data, size_t size, uint16_t flags) {
   (void)data;
+  download_pending = false;
+  const uintptr_t key = port.lock();
+  const uint64_t epoch = port.profile->stop_epoch;
+  port.unlock(key);
   if (flags & COMPLETE_ACCESS_FLAG) return ABORT_CA_NOT_SUPPORTED;
   size_t expected;
   if (sub || !Writable(index, &expected)) return ABORT_UNSUPPORTED;
@@ -117,16 +131,25 @@ static uint32_t BeforeDownload(
   const size_t wire_size = COE_HEADERSIZE + (expedited ? 0 : expected);
   if (sdo->mbxheader.length != wire_size || (!expedited && sdo->size != expected))
     return ABORT_TYPEMISMATCH;
+  download_epoch = epoch;
+  download_index = index;
+  download_pending = true;
   return 0;
 }
 static uint32_t AfterDownload(uint16_t index, uint8_t sub, uint16_t flags) {
+  const bool admitted = download_pending && download_index == index;
+  download_pending = false;
   size_t size;
   uint8_t* data = Writable(index, &size);
-  if (!data || sub || (flags & COMPLETE_ACCESS_FLAG)) return ABORT_UNSUPPORTED;
+  if (!admitted || !data || sub || (flags & COMPLETE_ACCESS_FLAG)) return ABORT_UNSUPPORTED;
   // Called only after SOES has copied the validated complete transfer.
   const uintptr_t key = port.lock();
   TickLocked();
-  const int result = JoshuaEthercatProfileWrite(port.profile, index, data, size);
+  // Tick may itself detect expiry. Neither that stop nor a watchdog preemption
+  // after admission may be undone by the request SOES just copied.
+  const int result = download_epoch == port.profile->stop_epoch
+                         ? JoshuaEthercatProfileWrite(port.profile, index, data, size)
+                         : -1;
   port.unlock(key);
   return result == 0 ? 0 : ABORT_UNSUPPORTED;
 }
@@ -160,6 +183,7 @@ int JoshuaSoesInit(const JoshuaSoesConfig* config) {
   if (!config || !config->profile || !config->time_us || !config->lock || !config->unlock)
     return -1;
   port = *config;
+  download_pending = false;
   identity[0] = config->vendor_id;
   identity[1] = config->product_code;
   identity[2] = config->revision;

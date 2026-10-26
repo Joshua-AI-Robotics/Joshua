@@ -2,7 +2,7 @@
 # The selected SDK example links only RTOS, drivers, board and ICSS FWHAL.
 SDK := $(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)
 TI_SOC_DIR := $(SDK)/examples/industrial_comms/ethercat_slave_beckhoff_ssc_demo
-override FILES_common := joshua_ethercat_soes_am243.c tiescsoc.c am243_software_backend.c \
+override FILES_common := joshua_ethercat_soes_am243.c tiescsoc.c boot_identity.c am243_software_backend.c \
     joshua_actuator_handler.c \
     joshua_wire_commands.c joshua_wire_profiles.c joshua_wire_resources.c joshua_device_runtime.c joshua_wire.c joshua_wire_firmware_session.c \
     joshua_ethercat_profile.c joshua_ethercat_soes.c esc.c esc_coe.c esc_eep.c ecat_slv.c \
@@ -13,6 +13,8 @@ override FILES_PATH_common := $(JOSHUA_PATCHED_SOURCE_DIR) \
     $(JOSHUA_ROOT)/firmware/common $(JOSHUA_ROOT)/firmware/common/soes \
     $(SOES_DIR)/soes generated
 include $(TI_SOC_DIR)/am243x-lp/r5fss0-0_freertos/ti-arm-clang/makefile
+LIBS += -lsecurity.am243x.r5f.ti-arm-clang.$(ConfigName).lib
+LIBS_PATH += -Wl,-i$(SDK)/mcu_plus_sdk/source/security/lib
 # Drop even unused SSC include paths, making accidental dependencies fail.
 INCLUDES := $(filter-out %/beckhoff_stack/stack_sources %/beckhoff_stack/stack_hal,$(INCLUDES))
 INCLUDES += -I$(JOSHUA_ROOT) -I$(JOSHUA_ROOT)/firmware/common \

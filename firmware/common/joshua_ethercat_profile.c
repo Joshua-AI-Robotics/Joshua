@@ -43,6 +43,7 @@ int JoshuaEthercatProfileInit(JoshuaEthercatProfile* p,
   return 0;
 }
 void JoshuaEthercatProfileFault(JoshuaEthercatProfile* p, uint16_t fault) {
+  ++p->stop_epoch;
   p->fault_latched = true;
   p->config.stop(p->config.context, fault);
 }
@@ -95,7 +96,10 @@ static int Command(void* context, const jw_frame_t* frame, uint8_t* payload, siz
     if (function && ((!was_enabled && p->config.enabled(p->config.context, frame->channel)) ||
                      (actuator && operation.operation == JW_ACTUATOR_SET_TARGET)))
       p->last_target_us[frame->channel] = p->now_us;
-    if (frame->cmd == JW_CMD_ESTOP) p->fault_latched = true;
+    if (frame->cmd == JW_CMD_ESTOP) {
+      ++p->stop_epoch;
+      p->fault_latched = true;
+    }
     if (frame->cmd == JW_CMD_RECOVER) p->fault_latched = false;
   }
   return length;

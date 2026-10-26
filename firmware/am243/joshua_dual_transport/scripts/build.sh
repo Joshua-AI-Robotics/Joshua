@@ -38,25 +38,8 @@ trap 'rm -rf "$BUILD_ROOT"' EXIT
 mkdir -p "$BUILD_ROOT/build" "$BUILD_ROOT/patched"
 cp "$TI_PROJECT_DIR/linker.cmd" "$BUILD_ROOT/build/linker.cmd"
 cp "$TI_PROFILE_DIR/am243x-lp/r5fss0-0_freertos/example.syscfg" "$BUILD_ROOT/example.syscfg"
-# Generate crypto/RNG configuration in the isolated image, never edit the SDK.
-# Match TI's AM243 RNG example: the R5 must be granted SA2UL MMR access before
-# enabling TRNG, otherwise the peripheral read raises a synchronous data abort.
-cat >> "$BUILD_ROOT/example.syscfg" <<'SYSCFG'
-const joshuaFirewallModule = scripting.addModule("/drivers/firewall/firewall", {}, false);
-const joshuaFirewall = joshuaFirewallModule.addInstance();
-joshuaFirewall.$name = "CONFIG_JOSHUA_FIREWALL";
-joshuaFirewall.regCfg.create(1);
-joshuaFirewall.regCfg[0].$name = "JOSHUA_SA2UL_MMR";
-joshuaFirewall.regCfg[0].regIndex = 1;
-joshuaFirewall.regCfg[0].instName = "SA2_UL0";
-joshuaFirewall.regCfg[0].interName = "MMRA";
-joshuaFirewall.regCfg[0].fwlCache = true;
-joshuaFirewall.regCfg[0].fwlPriv1 = "MAIN_0_R5_0_SECURE";
-const joshuaCryptoModule = scripting.addModule("/security/crypto/crypto", {}, false);
-const joshuaCrypto = joshuaCryptoModule.addInstance();
-joshuaCrypto.$name = "CONFIG_JOSHUA_CRYPTO";
-joshuaCrypto.sa2ul.$name = "CONFIG_JOSHUA_SA2UL";
-SYSCFG
+# Generate the shared RNG/firewall configuration without editing the SDK.
+cat "$FIRMWARE_DIR/syscfg/boot_identity.syscfg" >> "$BUILD_ROOT/example.syscfg"
 cp "$TI_PROFILE_DIR/EtherCAT_Slave_Simple.c" "$BUILD_ROOT/patched/EtherCAT_Slave_Simple.c"
 cp "$SDK_ROOT/mcu_plus_sdk/tools/boot/xipGen/xipGen.out" "$BUILD_ROOT/xipGen.out"
 if [[ "$JOSHUA_ETHERCAT_PROFILE" == jw ]]; then

@@ -28,6 +28,7 @@ cp "$TI_SOC_DIR/am243x-lp/tiescsoc.c" "$BUILD_ROOT/patched/"
 patch --fuzz=0 "$BUILD_ROOT/patched/tiescsoc.c" < "$FIRMWARE_DIR/patches/soes_soc.patch"
 cp "$TI_PROJECT_DIR/linker.cmd" "$BUILD_ROOT/build/"
 cp "$TI_SOC_DIR/am243x-lp/r5fss0-0_freertos/example.syscfg" "$BUILD_ROOT/"
+cat "$FIRMWARE_DIR/syscfg/boot_identity.syscfg" >> "$BUILD_ROOT/example.syscfg"
 cp "$SDK_ROOT/mcu_plus_sdk/tools/boot/xipGen/xipGen.out" "$BUILD_ROOT/xipGen.out"
 make -C "$BUILD_ROOT/build" -f "$FIRMWARE_DIR/Makefile.soes" all \
   INDUSTRIAL_COMMUNICATIONS_SDK_PATH="$SDK_ROOT" JOSHUA_ROOT="$JOSHUA_ROOT" \
