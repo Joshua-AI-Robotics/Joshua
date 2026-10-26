@@ -134,6 +134,11 @@ length and version failures never dispatch commands. Native `serial_test` builds
 the real setup/loop and transport with test-only GPIO, serial and entropy APIs.
 It does not qualify physical pulse timing or hardware stop behavior.
 
+A response retained in the adapter for 20 ms triggers a latched local fault,
+disabling and unconfiguring all channels even if a queued ESTOP cannot be read.
+See the shared [serial fault budget](../common/README.md#serial-transmit-fault-budget)
+for service timing, status, reply retention and explicit recovery requirements.
+
 The manual `//robot/board/joshua_wire:joshua_wire_smoke` CLI supports handshake,
 disabled configuration and opt-in exercise modes. Review `--help` and use
 `--dry_run` first; hardware execution requires explicit confirmation. Recovery

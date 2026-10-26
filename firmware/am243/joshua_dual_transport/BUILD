@@ -23,6 +23,7 @@ cc_test(
         "src/transport_uart_test.cc",
     ],
     deps = [
+        ":commands",
         "//firmware/common:serial_frame_transport",
         "//firmware/testing:ti_uart",
         "@googletest//:gtest_main",

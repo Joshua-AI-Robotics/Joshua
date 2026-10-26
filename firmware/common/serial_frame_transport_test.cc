@@ -9,6 +9,8 @@ namespace {
 struct Link {
   size_t allowance = 0;
   std::vector<uint8_t> output;
+  uint32_t now = 0;
+  int timeouts = 0;
 };
 int ReadByte(void*) {
   return -1;
@@ -20,8 +22,11 @@ size_t WriteBytes(void* context, const uint8_t* bytes, size_t length) {
   link->allowance -= count;
   return count;
 }
-uint32_t NowMs(void*) {
-  return 0;
+uint32_t NowMs(void* context) {
+  return static_cast<Link*>(context)->now;
+}
+void Timeout(void* context) {
+  ++static_cast<Link*>(context)->timeouts;
 }
 
 TEST(SerialFrameTransportTest, CopiesAcceptedFrameAndRetainsShortWritesWithoutInterleaving) {
@@ -52,5 +57,40 @@ TEST(SerialFrameTransportTest, CopiesAcceptedFrameAndRetainsShortWritesWithoutIn
             FRAME_NO_DATA);
   EXPECT_EQ(link.output, (std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8}));
   EXPECT_EQ(state.transmit_length, 0);
+}
+
+TEST(SerialFrameTransportTest, DeadlineSurvivesClockWrapAndPartialProgressAndRetainsFrames) {
+  Link link;
+  link.now = UINT32_MAX - 9;
+  serial_frame_transport_t state;
+  const serial_frame_transport_config_t config = {&link, ReadByte, WriteBytes, NowMs, 20};
+  const auto transport = serial_frame_transport_init(&state, &config);
+  serial_frame_transport_set_tx_timeout(&state, JW_SERIAL_TX_STOP_TIMEOUT_MS, Timeout, &link);
+  const uint8_t first[] = {1, 2, 3, 4, 5};
+  const uint8_t second[] = {6, 7, 8};
+  EXPECT_EQ(transport.try_send(transport.context, first, sizeof(first)), FRAME_OK);
+  link.now += 19;
+  link.allowance = 2;
+  EXPECT_EQ(transport.try_send(transport.context, second, sizeof(second)), FRAME_WOULD_BLOCK);
+  EXPECT_EQ(link.timeouts, 0);
+  ++link.now;
+  EXPECT_EQ(transport.try_send(transport.context, second, sizeof(second)), FRAME_WOULD_BLOCK);
+  EXPECT_EQ(link.timeouts, 1);
+  ++link.now;
+  EXPECT_EQ(transport.try_send(transport.context, second, sizeof(second)), FRAME_WOULD_BLOCK);
+  EXPECT_EQ(link.timeouts, 1);
+  // Fault notification never releases ownership or drops partially sent bytes.
+  link.allowance = sizeof(first) + sizeof(second) - 2;
+  EXPECT_EQ(transport.try_send(transport.context, second, sizeof(second)), FRAME_OK);
+  EXPECT_EQ(link.output, (std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8}));
+  link.now += 20;
+  uint8_t received[JW_MAX_FRAME_LEN];
+  size_t length;
+  transport.poll_receive(transport.context, received, sizeof(received), &length);
+  EXPECT_EQ(link.timeouts, 1);  // No fault when idle.
+  EXPECT_EQ(transport.try_send(transport.context, second, sizeof(second)), FRAME_OK);
+  link.now += 20;
+  transport.poll_receive(transport.context, received, sizeof(received), &length);
+  EXPECT_EQ(link.timeouts, 2);  // A new overdue frame has its own deadline.
 }
 }  // namespace

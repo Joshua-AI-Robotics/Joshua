@@ -4,6 +4,12 @@
 
 static void AdvanceTransmit(serial_frame_transport_t* state) {
   if (state->transmit_length == 0) return;
+  if (state->transmit_timeout_ms && !state->timeout_reported &&
+      (uint32_t)(state->config.now_ms(state->config.context) - state->transmit_started_ms) >=
+          state->transmit_timeout_ms) {
+    state->timeout_reported = 1;
+    if (state->transmit_timeout) state->transmit_timeout(state->timeout_context);
+  }
   const size_t remaining = state->transmit_length - state->transmit_offset;
   const size_t sent = state->config.write_bytes(
       state->config.context, state->transmit + state->transmit_offset, remaining);
@@ -42,8 +48,19 @@ static frame_status_t TrySend(void* context, const uint8_t* frame, size_t length
   if (state->transmit_length != 0) return FRAME_WOULD_BLOCK;
   memcpy(state->transmit, frame, length);
   state->transmit_length = length;
+  state->transmit_started_ms = state->config.now_ms(state->config.context);
+  state->timeout_reported = 0;
   AdvanceTransmit(state);
   return FRAME_OK;
+}
+
+void serial_frame_transport_set_tx_timeout(serial_frame_transport_t* state,
+                                           uint32_t timeout_ms,
+                                           void (*on_timeout)(void*),
+                                           void* context) {
+  state->transmit_timeout_ms = timeout_ms;
+  state->transmit_timeout = on_timeout;
+  state->timeout_context = context;
 }
 
 frame_transport_t serial_frame_transport_init(serial_frame_transport_t* state,

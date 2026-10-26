@@ -8,6 +8,7 @@
 
 #include "firmware/common/joshua_wire_endpoint.h"
 #include "firmware/common/joshua_wire_profiles.h"
+#include "firmware/common/serial_frame_transport.h"
 #include "firmware/common/stepdir_channel.h"
 #include "gtest/gtest.h"
 
@@ -90,13 +91,13 @@ class SerialFirmwareTest : public ::testing::Test {
     int len = jw_encode_profile_request(payload, sizeof(payload), &request);
     return Send(JW_CMD_PROFILE, channel, Bytes(payload, payload + len));
   }
-  Bytes ConfigPayload() {
+  Bytes ConfigPayload(uint8_t step_pin = 2, uint8_t dir_pin = 5, uint8_t enable_pin = 4) {
     jw_configure_step_dir_t config{};
     config.max_pulse_rate_hz = 1000;
     config.enable_active_low = true;
-    config.step_pin = 2;
-    config.dir_pin = 5;
-    config.enable_pin = 4;
+    config.step_pin = step_pin;
+    config.dir_pin = dir_pin;
+    config.enable_pin = enable_pin;
     uint8_t encoded[JW_CONFIGURE_STEP_DIR_PAYLOAD_LEN];
     const int len = jw_encode_configure_step_dir_payload(encoded, sizeof(encoded), &config);
     return Bytes(encoded, encoded + len);
@@ -261,6 +262,108 @@ TEST_F(SerialFirmwareTest, BoundsNoiseDrainingPerMotorServiceIteration) {
   Run(Bytes(JW_MAX_FRAME_LEN * 3, 0x00));
   EXPECT_EQ(Serial.input.size(), JW_MAX_FRAME_LEN * 2);
   EXPECT_TRUE(Serial.output.empty());
+}
+
+TEST_F(SerialFirmwareTest, BlockedTxDuplicateAndEstopStopWithinFaultBudget) {
+  SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload());
+  SendProfile(JW_ACTUATOR_ENABLE, 0);
+  SendProfile(JW_ACTUATOR_CONFIGURE, 1, ConfigPayload(12, 13, 14));
+  SendProfile(JW_ACTUATOR_ENABLE, 1);
+  ASSERT_TRUE(g_channels[0].enabled);
+  ASSERT_TRUE(g_channels[1].enabled);
+  Serial.write_capacity = 0;
+  const auto identify = Frame(JW_CMD_IDENTIFY, 0xff);
+  EXPECT_TRUE(Run(identify).empty());
+  EXPECT_TRUE(Run(identify).empty());  // Duplicate fills the application reply slot.
+  const auto estop = Frame(JW_CMD_ESTOP, 0xff);
+  EXPECT_TRUE(Run(estop).empty());
+  for (uint32_t i = 0; i < JW_SERIAL_TX_STOP_TIMEOUT_MS - 1; ++i) {
+    clock_us += 1000;
+    loop();
+  }
+  EXPECT_TRUE(g_channels[0].enabled);
+  clock_us += 1000;
+  loop();
+  EXPECT_FALSE(g_channels[0].enabled);
+  EXPECT_FALSE(g_channels[0].configured);
+  EXPECT_FALSE(g_channels[1].enabled);
+  EXPECT_FALSE(g_channels[1].configured);
+  EXPECT_EQ(pin_values[4], HIGH);
+  EXPECT_EQ(pin_values[14], HIGH);
+  EXPECT_EQ(pin_values[2], LOW);
+  EXPECT_EQ(pin_values[12], LOW);
+  EXPECT_EQ(Serial.input.size(), estop.size());
+  EXPECT_EQ(g_functions[0].state.reason, JW_REASON_DEVICE_FAULT);
+  EXPECT_EQ(g_functions[0].state.stop_phase, JW_STOP_ACTION_COMPLETE);
+  EXPECT_EQ(g_functions[0].state.verification, JW_SAFE_UNSUPPORTED);
+  EXPECT_EQ(g_functions[0].state.action_message_id, 0);
+
+  // Both copies of the IDENTIFY reply retain their exact correlation and bytes.
+  Serial.write_capacity = JW_MAX_FRAME_LEN;
+  loop();
+  ASSERT_EQ(Serial.output.size() % 2, 0);
+  const size_t length = Serial.output.size() / 2;
+  jw_frame_t request, reply;
+  ASSERT_EQ(jw_decode_frame(identify.data(), identify.size(), &request), JW_RESULT_OK);
+  ASSERT_EQ(jw_decode_frame(Serial.output.data(), length, &reply), JW_RESULT_OK);
+  EXPECT_TRUE(jw_response_matches(&request, &reply));
+  EXPECT_EQ(Bytes(Serial.output.begin(), Serial.output.begin() + length),
+            Bytes(Serial.output.begin() + length, Serial.output.end()));
+  Serial.output.clear();
+  loop();  // The queued ESTOP is now dispatched normally.
+  ASSERT_EQ(jw_decode_frame(Serial.output.data(), Serial.output.size(), &reply), JW_RESULT_OK);
+  EXPECT_EQ(reply.cmd, JW_CMD_ESTOP);
+  EXPECT_EQ(reply.message_id, id);
+  EXPECT_FALSE(g_channels[0].enabled);
+}
+
+TEST_F(SerialFirmwareTest, TxFaultNeedsExplicitRecoveryAndNeverReexecutesCachedEnable) {
+  SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload());
+  Serial.write_capacity = 0;
+  const auto enable = ProfileFrame(JW_ACTUATOR_ENABLE, 0);
+  EXPECT_TRUE(Run(enable).empty());
+  ASSERT_TRUE(g_channels[0].enabled);
+  clock_us += JW_SERIAL_TX_STOP_TIMEOUT_MS * 1000;
+  loop();  // No second request or ESTOP is needed to trigger the local fault.
+  EXPECT_FALSE(g_channels[0].enabled);
+  EXPECT_EQ(g_functions[0].state.reason, JW_REASON_DEVICE_FAULT);
+  Serial.write_capacity = JW_MAX_FRAME_LEN;
+  loop();
+  const auto cached_reply = Serial.output;
+  EXPECT_EQ(Run(enable), cached_reply);
+  EXPECT_FALSE(g_channels[0].enabled);
+  EXPECT_FALSE(g_channels[0].configured);
+  // The local fault is also observable through the wire status API.
+  for (const uint8_t scope : {uint8_t{0xff}, uint8_t{0}, uint8_t{1}}) {
+    const auto payload = Send(JW_CMD_GET_STATUS, scope);
+    ASSERT_GE(payload.size(), JW_REPLY_HEADER_LEN);
+    jw_device_status_t status;
+    ASSERT_EQ(
+        jw_decode_device_status(
+            payload.data() + JW_REPLY_HEADER_LEN, payload.size() - JW_REPLY_HEADER_LEN, &status),
+        JW_RESULT_OK);
+    EXPECT_EQ(status.reason, JW_REASON_DEVICE_FAULT);
+    EXPECT_EQ(status.stop_phase, JW_STOP_ACTION_COMPLETE);
+    EXPECT_EQ(status.recovery,
+              JW_RECOVERY_CLEAR_ESTOP | JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE);
+    EXPECT_EQ(status.action_session_id, 0);
+    EXPECT_EQ(status.action_message_id, 0);
+  }
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),
+            (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
+  ++session;
+  id = 0;
+  Send(JW_CMD_RESET_SESSION, 0xff);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload()),
+            (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
+  EXPECT_EQ(Send(JW_CMD_RECOVER, 0xff), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_FALSE(g_channels[0].enabled);
+  EXPECT_EQ(SendProfile(JW_ACTUATOR_ENABLE, 0),
+            (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
+  SendProfile(JW_ACTUATOR_CONFIGURE, 0, ConfigPayload());
+  EXPECT_FALSE(g_channels[0].enabled);
+  SendProfile(JW_ACTUATOR_ENABLE, 0);
+  EXPECT_TRUE(g_channels[0].enabled);
 }
 TEST_F(SerialFirmwareTest, ConflictingResourcesAndEnabledReconfigurationNeverChangePins) {
   ASSERT_GT(g_num_channels, 1);

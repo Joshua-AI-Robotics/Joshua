@@ -70,6 +70,10 @@ Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
 - A single UART task owns the current JoshuaWire session and software actuator.
   It polls the UART FIFO without blocking, retains replies under backpressure,
   and splits frames larger than the 64-byte FIFO across service iterations.
+  An adapter-owned response overdue by 20 ms latches a local fault on the next
+  service iteration and disables/unconfigures the software actuator independently
+  of pending RX or available TX capacity. See the shared
+  [serial fault budget](../../common/README.md#serial-transmit-fault-budget).
   The independent TI demo must not be reinterpreted as a correlated JW endpoint.
 - Firmware callbacks return cached feedback. The UART loop refreshes its
   command-derived software sample with monotonic timestamps, including while idle.

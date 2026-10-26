@@ -9,6 +9,10 @@ frame_transport_t transport;
 uint8_t response[JW_MAX_FRAME_LEN];
 size_t pending_response_length;
 
+void TransmitTimeout(void*) {
+  StepDirDeviceFault();
+}
+
 bool ValidOutputPin(uint8_t pin) {
   return pin < CORE_NUM_DIGITAL;
 }
@@ -21,6 +25,8 @@ uint32_t BootId() {
 void setup() {
   StepDirDeviceInit(BootId(), "teensy-stepdir", ValidOutputPin);
   transport = TransportSerialInit(&serial, {115200, 20});
+  serial_frame_transport_set_tx_timeout(
+      &serial, JW_SERIAL_TX_STOP_TIMEOUT_MS, TransmitTimeout, nullptr);
   pending_response_length = 0;
 }
 void loop() {

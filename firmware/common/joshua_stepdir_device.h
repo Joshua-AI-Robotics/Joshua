@@ -8,4 +8,5 @@
 // runs in Service, and command handlers return cached feedback without blocking.
 void StepDirDeviceInit(uint32_t boot_id, const char* name, bool (*valid_output_pin)(uint8_t));
 void StepDirDeviceService();
+void StepDirDeviceFault();
 int StepDirDeviceProcess(const uint8_t* request, size_t size, uint8_t* response, size_t capacity);

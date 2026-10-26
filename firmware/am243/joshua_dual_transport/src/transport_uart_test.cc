@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "joshua_commands.h"
 
 namespace {
 std::deque<uint8_t> input;
@@ -72,6 +73,39 @@ TEST_F(UartTransportTest, RetainsPartialReceiveAndBoundsNoiseDraining) {
             FRAME_NO_DATA);
   EXPECT_EQ(input.size(), JW_MAX_FRAME_LEN * 2);
   EXPECT_EQ(length, 0);
+}
+TEST_F(UartTransportTest, BlockedUartLatchesObservableLocalFaultWithinStopBudget) {
+  JoshuaChannel channel;
+  JoshuaInit(&channel, 123, JW_PLANE_MESSAGE);
+  channel.enabled = true;
+  channel.configured = true;
+  serial_frame_transport_set_tx_timeout(
+      &state.serial,
+      JW_SERIAL_TX_STOP_TIMEOUT_MS,
+      [](void* context) { jw_runtime_fault(&static_cast<JoshuaChannel*>(context)->runtime); },
+      &channel);
+  fifo_empty = false;
+  const uint8_t response[] = {1, 2, 3};
+  EXPECT_EQ(transport.try_send(transport.context, response, sizeof(response)), FRAME_OK);
+  clock_us = (JW_SERIAL_TX_STOP_TIMEOUT_MS - 1) * 1000;
+  EXPECT_EQ(transport.try_send(transport.context, response, sizeof(response)), FRAME_WOULD_BLOCK);
+  EXPECT_TRUE(channel.enabled);
+  clock_us += 1000;
+  EXPECT_EQ(transport.try_send(transport.context, response, sizeof(response)), FRAME_WOULD_BLOCK);
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_FALSE(channel.configured);
+  EXPECT_TRUE(channel.estopped);
+  EXPECT_TRUE(channel.runtime.estopped);
+  EXPECT_EQ(channel.runtime.state.reason, JW_REASON_DEVICE_FAULT);
+  EXPECT_EQ(channel.function.state.reason, JW_REASON_DEVICE_FAULT);
+  EXPECT_EQ(channel.function.state.stop_phase, JW_STOP_ACTION_COMPLETE);
+  EXPECT_EQ(channel.function.state.action_message_id, 0);
+  EXPECT_TRUE(output.empty());
+  fifo_empty = true;
+  uint8_t received[JW_MAX_FRAME_LEN];
+  size_t length;
+  transport.poll_receive(transport.context, received, sizeof(received), &length);
+  EXPECT_EQ(output, (std::vector<uint8_t>{1, 2, 3}));
 }
 }  // namespace
 

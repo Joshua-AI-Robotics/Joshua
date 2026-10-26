@@ -202,3 +202,7 @@ int StepDirDeviceProcess(const uint8_t* request, size_t size, uint8_t* response,
   return jw_endpoint_process(
       &endpoint, request, size, response, capacity, jw_runtime_command, jw_runtime_reset, &runtime);
 }
+
+void StepDirDeviceFault() {
+  jw_runtime_fault(&runtime);
+}

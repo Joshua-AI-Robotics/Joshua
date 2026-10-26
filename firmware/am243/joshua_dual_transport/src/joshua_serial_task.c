@@ -27,6 +27,10 @@ static JoshuaChannel channel;
 static jw_endpoint_t endpoint;
 static uint32_t boot_id;
 
+static void TransmitTimeout(void* context) {
+  jw_runtime_fault(&((JoshuaChannel*)context)->runtime);
+}
+
 static bool BootId(uint32_t* boot) {
   uint32_t entropy[4];
   SA2UL_engineEnable(CSL_CP_ACE_CMD_STATUS_TRNG_EN_MASK);
@@ -48,6 +52,8 @@ static void JoshuaSerialTask(void* args) {
   const frame_transport_t transport =
       JoshuaUartTransportInit(&uart, UART_getBaseAddr(gUartHandle[CONFIG_UART_CONSOLE]), 20u);
   JoshuaInit(&channel, boot_id, JW_PLANE_MESSAGE);
+  serial_frame_transport_set_tx_timeout(
+      &uart.serial, JW_SERIAL_TX_STOP_TIMEOUT_MS, TransmitTimeout, &channel);
   jw_endpoint_init(&endpoint);
   uint8_t response[JW_MAX_FRAME_LEN];
   size_t pending = 0;
