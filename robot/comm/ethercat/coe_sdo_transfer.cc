@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <sstream>
 
+#include "firmware/common/joshua_wire_ethercat.h"
+
 namespace robot::comm::ethercat {
 namespace {
 constexpr uint16_t kSm0Status = 0x0805;
@@ -37,13 +39,13 @@ absl::Status CoeSdoTransfer::Begin(Mailbox mailbox,
   const size_t size = write ? bytes.size() : capacity;
   // Deliberately reject segmented transfer. The object must fit in its mailbox
   // image, so a slave cannot force an unbounded segment loop.
-  if (counter == 0 || counter > 7 || size == 0 || size > 76 || mailbox.write_size < 16 ||
-      mailbox.read_size < 16 || mailbox.write_size > 1024 || mailbox.read_size > 1024 ||
-      (write && size > 4 && size > size_t(mailbox.write_size - 16)) ||
+  if (counter == 0 || counter > 7 || size == 0 || size > JWEC_MAILBOX_SIZE ||
+      mailbox.write_size < 16 || mailbox.read_size < 16 || mailbox.write_size > 1024 ||
+      mailbox.read_size > 1024 || (write && size > 4 && size > size_t(mailbox.write_size - 16)) ||
       (!write && size > 4 && size > size_t(mailbox.read_size - 16)) || (!write && !bytes.empty()) ||
       (write && capacity != 0)) {
     return absl::InvalidArgumentError(
-        "SDO requires a 1..76 byte unsegmented object and valid mailbox");
+        "SDO requires a nonempty unsegmented object within the JW envelope and mailbox limits");
   }
   mailbox_ = mailbox;
   index_ = index;

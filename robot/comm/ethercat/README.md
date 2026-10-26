@@ -79,7 +79,9 @@ physical motor stop timing or qualification of other NICs/slave images.
 ## Incremental CoE
 
 `CoeSdoTransfer` performs at most one register datagram per step and never
-retries a published write. `SoemEthercatBackend` implements Begin/Step/Cancel;
+retries a published write. Unsegmented transfers cover the shared
+`JWEC_MAILBOX_SIZE` envelope (currently 108 bytes) when the slave mailbox fits
+the object plus CoE headers. `SoemEthercatBackend` implements Begin/Step/Cancel;
 `EthercatMaster` schedules these steps within the declared mailbox budget and
 guard while cyclic exchange continues. Missing support or insufficient slack
 is rejected. Mailbox counters, malformed responses, abort codes, cancellation

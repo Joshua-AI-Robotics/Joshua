@@ -107,6 +107,7 @@ cc_library(
     name = "coe_sdo_transfer",
     srcs = ["coe_sdo_transfer.cc"],
     hdrs = ["coe_sdo_transfer.h"],
+    implementation_deps = ["//firmware/common:joshua_wire_ethercat"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         "@abseil-cpp//absl/status:status",

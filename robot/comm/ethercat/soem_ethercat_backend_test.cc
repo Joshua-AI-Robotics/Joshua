@@ -592,26 +592,35 @@ TEST(CoeSdoTransferTest, ReadGoldenRequestAndExpeditedReply) {
 }
 
 TEST(CoeSdoTransferTest, NormalUploadAndDownloadCoverFullJwEnvelope) {
-  const SdoBytes payload(76, 0xa5);
+  const SdoBytes payload(JWEC_MAILBOX_SIZE, 0xa5);
   for (bool write : {false, true}) {
+    SCOPED_TRACE(write);
     CoeSdoTransfer transfer;
     TestMailboxRegisters io;
-    io.after_write.push_back(SdoReply(write ? 0x60 : 0x41, write ? SdoBytes{} : payload));
-    ASSERT_TRUE(
-        transfer.Begin(kMailbox, 0x2000, 0, 1, write, write ? payload : SdoBytes{}, write ? 0 : 76)
-            .ok());
+    const auto index = write ? JWEC_REQUEST_INDEX : JWEC_RESPONSE_INDEX;
+    io.after_write.push_back(SdoReply(write ? 0x60 : 0x41, write ? SdoBytes{} : payload, 1, index));
+    ASSERT_TRUE(transfer
+                    .Begin(kMailbox,
+                           index,
+                           0,
+                           1,
+                           write,
+                           write ? payload : SdoBytes{},
+                           write ? 0 : payload.size())
+                    .ok());
     auto reply = CompleteSdo(transfer, io);
     ASSERT_TRUE(reply.ok()) << reply.status();
     ASSERT_TRUE(reply->has_value());
     EXPECT_EQ(**reply, write ? SdoBytes{} : payload);
     ASSERT_EQ(io.writes.size(), 1);
     if (write) {
-      EXPECT_EQ(io.writes[0][0], 86);
+      EXPECT_EQ(io.writes[0][0], 10 + payload.size());
       EXPECT_EQ(io.writes[0][8], 0x21);
-      EXPECT_EQ(io.writes[0][12], 76);
-      EXPECT_EQ(SdoBytes(io.writes[0].begin() + 16, io.writes[0].begin() + 92), payload);
-      EXPECT_TRUE(std::all_of(
-          io.writes[0].begin() + 92, io.writes[0].end(), [](uint8_t value) { return value == 0; }));
+      EXPECT_EQ(io.writes[0][12], payload.size());
+      const auto payload_end = io.writes[0].begin() + 16 + payload.size();
+      EXPECT_EQ(SdoBytes(io.writes[0].begin() + 16, payload_end), payload);
+      EXPECT_TRUE(
+          std::all_of(payload_end, io.writes[0].end(), [](uint8_t value) { return value == 0; }));
     }
   }
 }
@@ -627,6 +636,38 @@ TEST(CoeSdoTransferTest, ExpeditedWriteSizesAreExactAndNeverRetried) {
     EXPECT_EQ(io.writes[0][8], 0x23 | ((4 - size) << 2));
     EXPECT_EQ(SdoBytes(io.writes[0].begin() + 12, io.writes[0].begin() + 12 + size),
               SdoBytes(size, 0x7a));
+  }
+}
+
+TEST(CoeSdoTransferTest, RejectsEnvelopesBeyondContractOrMailboxCapacityBeforeIo) {
+  for (bool write : {false, true}) {
+    SCOPED_TRACE(write);
+    for (bool undersized_mailbox : {false, true}) {
+      SCOPED_TRACE(undersized_mailbox);
+      CoeSdoTransfer transfer;
+      TestMailboxRegisters io;
+      auto mailbox = kMailbox;
+      const size_t size = JWEC_MAILBOX_SIZE + (undersized_mailbox ? 0 : 1);
+      if (undersized_mailbox) {
+        // One byte short of the envelope plus mailbox/CoE headers.
+        if (write)
+          mailbox.write_size = JWEC_MAILBOX_SIZE + 16 - 1;
+        else
+          mailbox.read_size = JWEC_MAILBOX_SIZE + 16 - 1;
+      }
+      EXPECT_EQ(transfer
+                    .Begin(mailbox,
+                           write ? JWEC_REQUEST_INDEX : JWEC_RESPONSE_INDEX,
+                           0,
+                           1,
+                           write,
+                           write ? SdoBytes(size, 0xa5) : SdoBytes{},
+                           write ? 0 : size)
+                    .code(),
+                absl::StatusCode::kInvalidArgument);
+      EXPECT_EQ(transfer.Step(io, 500).status().code(), absl::StatusCode::kFailedPrecondition);
+      EXPECT_EQ(io.operations, 0);
+    }
   }
 }
 
@@ -705,8 +746,6 @@ TEST(CoeSdoTransferTest, BusyMailboxesYieldAndCancellationDoesNotSendAgain) {
 TEST(CoeSdoTransferTest, RejectsOversizedSegmentedAndMalformedResponses) {
   CoeSdoTransfer invalid;
   EXPECT_EQ(invalid.Begin(kMailbox, 0x2000, 0, 0, false, {}, 36).code(),
-            absl::StatusCode::kInvalidArgument);
-  EXPECT_EQ(invalid.Begin(kMailbox, 0x2000, 0, 1, false, {}, 77).code(),
             absl::StatusCode::kInvalidArgument);
   EXPECT_EQ(invalid.Begin({0x1000, 0x1080, 32, 32}, 0x2000, 0, 1, false, {}, 36).code(),
             absl::StatusCode::kInvalidArgument);
@@ -903,7 +942,14 @@ TEST(EthercatMasterTest, RuntimeSdoYieldsBetweenCyclesAndSharesSingleOwner) {
   auto read = master->ReadSdo({1, 0x2000, 0}, 36, 1s);
   ASSERT_TRUE(read.ok()) << read.status();
   EXPECT_EQ(*read, SdoBytes(36, 0x5a));
-  EXPECT_TRUE(master->WriteSdo({1, 0x2010, 0}, SdoBytes(76, 0x6b), 1s).ok());
+  auto envelope = master->ReadSdo({1, JWEC_RESPONSE_INDEX, 0}, JWEC_MAILBOX_SIZE, 1s);
+  ASSERT_TRUE(envelope.ok()) << envelope.status();
+  EXPECT_EQ(*envelope, SdoBytes(JWEC_MAILBOX_SIZE, 0x5a));
+  ASSERT_TRUE(
+      master->WriteSdo({1, JWEC_REQUEST_INDEX, 0}, SdoBytes(JWEC_MAILBOX_SIZE, 0x6b), 1s).ok());
+  auto cycle = master->WaitForCycle(0, 1s);
+  ASSERT_TRUE(cycle.ok()) << cycle.status();
+  EXPECT_TRUE(master->WaitForCycle(cycle->sequence, 1s).ok());
   EXPECT_TRUE(master->Stop().ok());
   EXPECT_GE(trace->steps, 10);
   EXPECT_EQ(trace->sdo_calls, 0);  // No blocking SOEM-style SDO after startup.
