@@ -629,6 +629,44 @@ TEST(CoeSdoTransferTest, NormalUploadAndDownloadCoverFullJwEnvelope) {
   }
 }
 
+TEST(CoeSdoTransferTest, ExpeditedUploadsHonorOptionalSizeIndicator) {
+  const struct {
+    uint8_t command;
+    size_t size;
+  } cases[] = {{0x42, 4}, {0x43, 4}, {0x47, 3}, {0x4b, 2}, {0x4f, 1}};
+  const SdoBytes payload{0x12, 0x34, 0x56, 0x78};
+  for (const auto& test : cases) {
+    SCOPED_TRACE(unsigned(test.command));
+    CoeSdoTransfer transfer;
+    TestMailboxRegisters io;
+    io.after_write.push_back(SdoReply(test.command, payload));
+    ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, 4).ok());
+    auto reply = CompleteSdo(transfer, io);
+    ASSERT_TRUE(reply.ok()) << reply.status();
+    ASSERT_TRUE(reply->has_value());
+    EXPECT_EQ(**reply, SdoBytes(payload.begin(), payload.begin() + test.size));
+    EXPECT_EQ(io.writes.size(), 1);
+  }
+}
+
+TEST(CoeSdoTransferTest, UnsizedExpeditedUploadStillValidatesCapacityAndEnvelope) {
+  for (int mutation = 0; mutation < 7; ++mutation) {
+    SCOPED_TRACE(mutation);
+    CoeSdoTransfer transfer;
+    TestMailboxRegisters io;
+    auto reply = SdoReply(0x42, {0x12, 0x34, 0x56, 0x78});
+    const size_t capacity = mutation < 3 ? mutation + 1 : 4;
+    if (mutation == 3) reply[0] = 9;     // Truncated payload.
+    if (mutation == 4) reply[0] = 11;    // Extra payload.
+    if (mutation == 5) reply[7] = 0x20;  // Wrong CoE service.
+    if (mutation == 6) reply[8] = 0x52;  // Reserved command bit.
+    io.after_write.push_back(std::move(reply));
+    ASSERT_TRUE(transfer.Begin(kMailbox, 0x2000, 0, 1, false, {}, capacity).ok());
+    EXPECT_EQ(CompleteSdo(transfer, io).status().code(), absl::StatusCode::kDataLoss);
+    EXPECT_EQ(io.writes.size(), 1);
+  }
+}
+
 TEST(CoeSdoTransferTest, ExpeditedWriteSizesAreExactAndNeverRetried) {
   for (size_t size = 1; size <= 4; ++size) {
     CoeSdoTransfer transfer;
@@ -871,6 +909,7 @@ TEST(CoeSdoTransferTest, ReportsDatagramFailureWithoutRetry) {
 struct RuntimeTrace : IoTrace {
   bool withhold_response = false;
   bool overrun_step = false;
+  uint8_t upload_command = 0x41;
   absl::Status step_status;
   int steps = 0;
   int cancel_calls = 0;
@@ -888,8 +927,10 @@ class TestRuntimeIo : public TestMasterIo {
   absl::Status BeginSdo(SdoAddress address, bool write, SdoBytes bytes, size_t capacity) override {
     trace_->Call("sdo_begin");
     if (!trace_->withhold_response)
-      registers_.after_write.push_back(SdoReply(
-          write ? 0x60 : 0x41, write ? SdoBytes{} : SdoBytes(capacity, 0x5a), 5, address.index));
+      registers_.after_write.push_back(SdoReply(write ? 0x60 : trace_->upload_command,
+                                                write ? SdoBytes{} : SdoBytes(capacity, 0x5a),
+                                                5,
+                                                address.index));
     return transfer_.Begin(
         kMailbox, address.index, address.subindex, 1, write, std::move(bytes), capacity);
   }
@@ -1006,6 +1047,23 @@ TEST(EthercatMasterTest, StalledRuntimeMailboxKeepsCyclingUntilDeadlineThenFails
   EXPECT_GE(trace->sent.size(), 9);
   EXPECT_GE(trace->cancel_calls, 1);
   EXPECT_EQ(trace->sent.back(), (SdoBytes{0, 0, 0, 0}));
+}
+
+TEST(EthercatMasterTest, UnsizedExpeditedUploadKeepsRuntimeOwnerOperational) {
+  auto trace = std::make_shared<RuntimeTrace>();
+  trace->upload_command = 0x42;
+  auto opened = OpenRuntimeMaster(trace);
+  ASSERT_TRUE(opened.ok()) << opened.status();
+  auto master = std::move(*opened);
+  ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
+  auto reply = master->ReadSdo({1, 0x1000, 0}, 4, 1s);
+  ASSERT_TRUE(reply.ok()) << reply.status();
+  EXPECT_EQ(*reply, SdoBytes(4, 0x5a));
+  auto cycle = master->WaitForCycle(0, 1s);
+  ASSERT_TRUE(cycle.ok()) << cycle.status();
+  EXPECT_TRUE(master->WaitForCycle(cycle->sequence, 1s).ok());
+  EXPECT_TRUE(master->status().ok());
+  EXPECT_TRUE(master->Stop().ok());
 }
 
 TEST(EthercatMasterTest, RuntimeCompletionDelayedPastDeadlineFailsClosed) {

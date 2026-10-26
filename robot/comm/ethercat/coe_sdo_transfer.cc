@@ -162,8 +162,9 @@ absl::StatusOr<std::optional<CoeSdoTransfer::Bytes>> CoeSdoTransfer::Decode(cons
   }
   size_t size = 0;
   size_t offset = 12;
-  if ((command & 0xe3) == 0x43 && (command & 0x10) == 0 && length == 10) {
-    size = 4 - ((command >> 2) & 3);
+  if ((command & 0xe2) == 0x42 && (command & 0x10) == 0 && length == 10) {
+    // Without a size indicator, all four expedited data bytes are valid.
+    size = (command & 1) ? 4 - ((command >> 2) & 3) : 4;
   } else if (command == 0x41) {
     size = U32(response.data() + 12);
     offset = 16;
