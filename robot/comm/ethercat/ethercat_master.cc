@@ -417,6 +417,10 @@ void EthercatMaster::MailboxStep(Clock::time_point next_cycle) {
   }
   {
     std::lock_guard lock(mutex_);
+    // Lock acquisition can outlast the operation even when StepSdo was on time.
+    // Check before publishing completion, while serialized with the waiter.
+    if (!stopping_ && result.ok() && Clock::now() >= work->deadline)
+      result = absl::DeadlineExceededError("runtime SDO exceeded deadline; outcome unknown");
     if (!stopping_ && !result.ok())
       FailLocked(result.status());
     else if (!stopping_ && result->has_value()) {
