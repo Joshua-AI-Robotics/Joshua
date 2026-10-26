@@ -26,18 +26,18 @@ FILES_PATH := \
 
 INCLUDES += -I$(JOSHUA_SOURCE_DIR) -I$(JOSHUA_COMMON_DIR)
 
-JOSHUA_OBJS := transport_uart.obj serial_frame_assembler.obj serial_frame_transport.obj joshua_wire_stream.obj joshua_serial_task.obj \
+JOSHUA_OBJS := boot_identity.obj transport_uart.obj serial_frame_assembler.obj serial_frame_transport.obj joshua_wire_stream.obj joshua_serial_task.obj \
 	am243_software_backend.obj joshua_actuator_handler.obj joshua_wire_commands.obj joshua_wire_profiles.obj \
 	joshua_wire_resources.obj joshua_device_runtime.obj joshua_wire.obj \
 	joshua_wire_firmware_session.obj joshua_wire_endpoint.obj
 ifeq ($(JOSHUA_ETHERCAT_PROFILE),jw)
-JOSHUA_OBJS := am243_software_backend.obj joshua_actuator_handler.obj joshua_wire_commands.obj joshua_wire_profiles.obj \
+JOSHUA_OBJS := boot_identity.obj am243_software_backend.obj joshua_actuator_handler.obj joshua_wire_commands.obj joshua_wire_profiles.obj \
 	joshua_wire_resources.obj joshua_device_runtime.obj joshua_wire.obj \
 	joshua_wire_firmware_session.obj joshua_ethercat_profile.obj joshua_ethercat_ti.obj
 INCLUDES += -DJOSHUA_COMM_WATCHDOG_US=$(JOSHUA_COMM_WATCHDOG_US) \
 	-DJOSHUA_TARGET_WATCHDOG_US=$(JOSHUA_TARGET_WATCHDOG_US)
 endif
-# SysConfig supplies the UART boot identity hardware RNG.
+# SysConfig supplies the shared UART/JW EtherCAT boot identity hardware RNG.
 LIBS += -lsecurity.am243x.r5f.ti-arm-clang.$(ConfigName).lib
 LIBS_PATH += -Wl,-i$(INDUSTRIAL_COMMUNICATIONS_SDK_PATH)/mcu_plus_sdk/source/security/lib
 OBJS += $(JOSHUA_OBJS)

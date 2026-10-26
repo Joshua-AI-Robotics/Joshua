@@ -24,7 +24,9 @@ and TI's Python image-generation dependencies.
 Follow the TI guide for SDK/toolchain setup. The build script copies SDK inputs
 into a temporary tree, patches the UART task entry point, and enables RNG/SA2UL
 in that image's SysConfig for a fresh hardware boot identity. It does not modify
-or vendor SDK sources.
+or vendor SDK sources. The generated firewall configuration grants the R5 core
+SA2UL MMR access, matching TI's AM243 RNG example; crypto configuration alone
+does not permit the TRNG engine-enable register access.
 
 ## Build
 
@@ -91,10 +93,34 @@ JW descriptor, session, CoE mailbox and correlated 112-byte PDO profile through
 the TI stack. Its channel remains software-only. The artifact is
 `out/am243_ethercat_jw.release.appimage`, distinct from the UART/TI-demo artifact.
 
+Both artifacts use the shared `src/boot_identity.c` hardware RNG path for a
+nonzero boot ID, preserved across session resets. The EtherCAT artifact rejects
+startup before registering objects or its watchdog when RNG acquisition fails
+or returns zero identity data; boot-relative uptime is never an identity source.
+
 Native tests use the production firmware profile and command handler to cover
 retained replies, cross-plane IDs, duplicate handling, watchdog expiry,
 operational-state loss and host interoperability. They do not qualify real
 EtherCAT timing or physical motor outputs.
+
+### Boot identity bench record — 2026-10-26 UTC
+
+An authorized LP-AM243 run with motor power off flashed the JW TI-stack image
+built with communication/target watchdogs of 20000/10000 us. Its signed appimage
+SHA-256 was `47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca`.
+The first hardware attempt exposed a missing SA2UL firewall grant: the R5 took
+a synchronous data abort while reading `0x40901000` in `SA2UL_engineEnable`.
+Adding the SDK RNG example's grant to the isolated SysConfig overlay corrected
+startup; both UART/TI-demo and JW artifacts cross-built afterward.
+
+Over the direct `enp5s0` link, the corrected image advertised `am243-ec-jw`,
+revision 4/layout 2, with 112-byte input/output PDOs. Two USB-C power cycles
+produced boot IDs `0xc9d5fe7e` and `0xaf024889`. On each boot, five distinct
+session resets and 15 correlated IDENTIFY replies preserved that boot's ID.
+The probe used startup CoE SDOs only: it never requested OPERATIONAL or sent
+actuator configuration, enable or target commands. This verifies RNG startup
+and boot/session identity behavior on this board, not entropy quality,
+EtherCAT timing, watchdog latency or physical motor safety.
 
 TODO: retain this TI-stack JW profile until the separate SOES replacement has
 completed AM243 hardware qualification and endurance testing, then review its
