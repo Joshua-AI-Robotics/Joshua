@@ -1561,7 +1561,8 @@ TEST_F(JwecAdapterTest, RoutingGoldenEnvelopesStaleRepliesAndSingleBusOwner) {
   EXPECT_EQ(*response, JwecReply(feedback));
   trace->inject_stale_mailbox = true;
   ASSERT_TRUE(endpoint->Exchange(JwecRequest(4, kDisable)).ok());
-  EXPECT_FALSE(endpoint->Exchange(JwecRequest(4, kDisable)).ok());
+  EXPECT_TRUE(endpoint->Exchange(JwecRequest(4, kDisable)).ok());
+  EXPECT_FALSE(endpoint->Exchange(JwecRequest(4, kEnable)).ok());
   for (auto& e : endpoints) e->Stop();
   ASSERT_TRUE(master->Stop().ok());
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
@@ -1622,7 +1623,7 @@ TEST_F(JwecAdapterTest, TimedOutAcceptedPdoIsInvalidatedAndLateReplyAcknowledged
     }
   }
   EXPECT_TRUE(acknowledged);
-  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Seconds(1)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Seconds(1)).ok());
   EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, kFeedback), absl::Seconds(1)).ok());
 }
 
@@ -1650,6 +1651,114 @@ TEST_F(JwecAdapterTest, UnacceptedTimeoutCancelsWithoutLaterExecution) {
   EXPECT_TRUE(master->Stop().ok());
   ASSERT_EQ(trace->pdo_requests.size(), 1);
   EXPECT_EQ(trace->pdo_requests.front(), JwecRequest(3, kFeedback));
+}
+
+TEST_F(JwecAdapterTest, ExactPdoRetryWaitsForOriginalRetainedResponse) {
+  trace->hold_pdo = true;
+  const auto request = JwecRequest(2, kSetTarget);
+  EXPECT_EQ(endpoints[0]->Exchange(request, absl::Milliseconds(150)).status().code(),
+            absl::StatusCode::kDeadlineExceeded);
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, kFeedback), absl::Seconds(1)).ok());
+  auto retry = std::async(std::launch::async,
+                          [&] { return endpoints[0]->Exchange(request, absl::Seconds(1)); });
+  EXPECT_EQ(retry.wait_for(40ms), std::future_status::timeout);
+  trace->hold_pdo = false;
+  auto response = retry.get();
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, JwecReply(request));
+  endpoints[0]->Stop();
+  endpoints[1]->Stop();
+  ASSERT_TRUE(master->Stop().ok());
+  ASSERT_EQ(trace->pdo_requests.size(), 1);
+  EXPECT_EQ(trace->pdo_requests.front(), request);
+}
+
+TEST_F(JwecAdapterTest, CachedExactRetriesDoNotPublishAgainAndRetireAtNextId) {
+  const auto reset = JwecRequest(1, JW_CMD_RESET_SESSION);
+  ASSERT_TRUE(endpoints[0]->Exchange(reset).ok());
+  const auto request = JwecRequest(2, kEnable);
+  auto response = endpoints[0]->Exchange(request);
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, kDisable)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_RESET_SESSION)).ok());
+  auto retry = endpoints[0]->Exchange(request);
+  ASSERT_TRUE(retry.ok()) << retry.status();
+  EXPECT_EQ(*retry, *response);
+  ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_IDENTIFY)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(request).ok());
+  endpoints[0]->Stop();
+  endpoints[1]->Stop();
+  ASSERT_TRUE(master->Stop().ok());
+  EXPECT_EQ(
+      std::count_if(trace->writes.begin(),
+                    trace->writes.end(),
+                    [](const auto& write) { return write.first.index == JWEC_REQUEST_INDEX; }),
+      2);
+}
+
+TEST_F(JwecAdapterTest, ExactUnacceptedPdoRetryPublishesOnlyOneAcceptedRequest) {
+  trace->hold_acceptance = true;
+  const auto request = JwecRequest(2, kSetTarget);
+  EXPECT_EQ(endpoints[0]->Exchange(request, absl::Milliseconds(100)).status().code(),
+            absl::StatusCode::kDeadlineExceeded);
+  auto cycle = master->WaitForCycle(0, 100ms);
+  ASSERT_TRUE(cycle.ok()) << cycle.status();
+  // Wait for cancellation to reach the simulated slave before allowing it to
+  // accept a new publication of the exact request.
+  for (int i = 0; i < 10 && JwecU32(cycle->data.outputs.data() + 4) != 0; ++i) {
+    cycle = master->WaitForCycle(cycle->sequence, 100ms);
+    ASSERT_TRUE(cycle.ok()) << cycle.status();
+  }
+  ASSERT_EQ(JwecU32(cycle->data.outputs.data() + 4), 0);
+  trace->hold_acceptance = false;
+  EXPECT_TRUE(endpoints[0]->Exchange(request, absl::Seconds(1)).ok());
+  endpoints[0]->Stop();
+  endpoints[1]->Stop();
+  ASSERT_TRUE(master->Stop().ok());
+  ASSERT_EQ(trace->pdo_requests.size(), 1);
+  EXPECT_EQ(trace->pdo_requests.front(), request);
+}
+
+TEST_F(JwecAdapterTest, ExactMailboxRetryAfterInvalidAcknowledgedReplyKeepsQuarantine) {
+  const auto request = JwecRequest(2, JW_CMD_IDENTIFY);
+  trace->mutation = 4;
+  EXPECT_EQ(endpoints[0]->Exchange(request).status().code(), absl::StatusCode::kDataLoss);
+  trace->mutation = 0;
+  auto response = endpoints[0]->Exchange(request);
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, JwecReply(request));
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(3, kEnable)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_ESTOP)).ok());
+  endpoints[0]->Stop();
+  endpoints[1]->Stop();
+  ASSERT_TRUE(master->Stop().ok());
+  std::vector<SdoBytes> published;
+  for (const auto& write : trace->writes)
+    if (write.first.index == JWEC_REQUEST_INDEX) published.push_back(write.second);
+  ASSERT_EQ(published.size(), 3);
+  EXPECT_EQ(JwecU32(published[0].data() + 4), 1);
+  EXPECT_EQ(JwecU32(published[1].data() + 4), 2);
+  EXPECT_EQ(SdoBytes(published[0].begin() + 12, published[0].end()),
+            SdoBytes(published[1].begin() + 12, published[1].end()));
+}
+
+TEST_F(JwecAdapterTest, QuarantinedSessionAllowsCorrelatedMailboxEstopOnly) {
+  trace->mutation = 4;
+  EXPECT_EQ(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_IDENTIFY)).status().code(),
+            absl::StatusCode::kDataLoss);
+  ASSERT_TRUE(master->status().ok());
+  trace->mutation = 0;
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(3, kEnable)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(3, JW_CMD_ESTOP, 99)).ok());
+  const auto stop = JwecRequest(3, JW_CMD_ESTOP);
+  auto response = endpoints[0]->Exchange(stop);
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, JwecReply(stop));
+  EXPECT_TRUE(endpoints[0]->Exchange(stop).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(2, JW_CMD_IDENTIFY)).ok());
+  EXPECT_FALSE(endpoints[0]->Exchange(JwecRequest(4, kEnable)).ok());
+  ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION, 8)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(2, kEnable, 8)).ok());
 }
 
 TEST_F(JwecAdapterTest, RebootClearsReadinessAndMessageIdsCannotWrapWithinSession) {

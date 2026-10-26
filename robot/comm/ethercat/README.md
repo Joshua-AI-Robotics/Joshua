@@ -107,3 +107,13 @@ recovery and versioned sensor/I/O operations use the mailbox. Only actuator
 profile v1.0 SET_TARGET/GET_FEEDBACK are admitted to the cyclic plane; retired
 global actuator opcodes are rejected. Descriptor diagnostics print the actual
 required revision and sizes. Reset readback becomes a common OK/COMPLETE reply.
+
+The endpoint retains the last complete request and validated reply for exact
+retries on the same plane. An unacknowledged retry uses the original generation
+to recover a retained response; after an invalid reply has been acknowledged,
+a new generation asks firmware to replay the same JW bytes and message ID.
+Idle PDO draining saves the last correlated reply before acknowledging it.
+Changed requests reusing an ID and retries of retired IDs remain rejected.
+Quarantine gates ordinary requests but permits an exact retry or a bounded
+mailbox ESTOP in the established session. A successful ESTOP does not clear
+quarantine; a verified reset is still required to resume ordinary commands.

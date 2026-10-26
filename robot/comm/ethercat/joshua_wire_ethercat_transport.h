@@ -7,6 +7,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 #include "robot/comm/ethercat/ethercat_master.h"
@@ -81,6 +82,10 @@ class JoshuaWireEthercatTransport final : public MessageTransport,
   uint32_t last_message_ = 0;
   uint32_t generation_ = 0;
   uint32_t pdo_ack_ = 0;
+  uint32_t mailbox_ack_ = 0;
+  Bytes last_request_;
+  bool last_cyclic_ = false;
+  std::optional<Bytes> last_response_;
   uint64_t sequence_ = 0;
   bool needs_reset_ = true;
 };
