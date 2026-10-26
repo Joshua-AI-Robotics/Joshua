@@ -31,7 +31,8 @@ class CoeSdoTransfer {
   };
 
   // Reads use capacity; writes use bytes. Supports expedited and unsegmented
-  // normal transfers up to 76 bytes, covering the plan's largest JW envelope.
+  // normal transfers up to JWEC_MAILBOX_SIZE, provided the mailbox can hold the
+  // object and CoE headers without segmentation.
   // Counter is the master's next transmit mailbox counter for this slave, in
   // 1..7. The slave's transmit counter is independent. No I/O in Begin.
   absl::Status Begin(Mailbox mailbox,
