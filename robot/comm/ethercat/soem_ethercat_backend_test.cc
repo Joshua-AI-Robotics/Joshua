@@ -1798,6 +1798,52 @@ TEST_F(JwecAdapterTest, QueuedTimeoutDoesNotPublishAndEstopPreemptsCyclicWaiter)
   EXPECT_TRUE(trace->pdo_requests.empty());
 }
 
+TEST_F(JwecAdapterTest, EstopImageSurvivesCyclicCleanupAndIdleLateReplyDraining) {
+  trace->hold_pdo = true;
+  auto active = std::async(std::launch::async, [&] {
+    return endpoints[0]->Exchange(JwecRequest(2, kSetTarget), absl::Seconds(1));
+  });
+  WaitPublished();
+  trace->hold_mailbox = true;
+  const auto stop = JwecRequest(3, JW_CMD_ESTOP);
+  auto stopping = std::async(std::launch::async, [&] { return endpoints[0]->Exchange(stop); });
+  EXPECT_EQ(active.get().status().code(), absl::StatusCode::kCancelled);
+  // Wait until the ESTOP request reaches the mailbox. The cancelled cyclic
+  // operation's cleanup has run by then, while the stop reply is still held.
+  bool mailbox_published = false;
+  for (int i = 0; i < 20 && !mailbox_published; ++i) {
+    auto cycle = master->WaitForCycle(sequence, 100ms);
+    ASSERT_TRUE(cycle.ok()) << cycle.status();
+    sequence = cycle->sequence;
+    std::lock_guard lock(trace->mutex);
+    mailbox_published = std::any_of(trace->writes.begin(), trace->writes.end(), [](const auto& w) {
+      return w.first.index == JWEC_REQUEST_INDEX;
+    });
+  }
+  EXPECT_TRUE(mailbox_published);
+  auto expect_stop_cycles = [&] {
+    for (int i = 0; i < 3; ++i) {
+      auto cycle = master->WaitForCycle(sequence, 100ms);
+      ASSERT_TRUE(cycle.ok()) << cycle.status();
+      sequence = cycle->sequence;
+      EXPECT_EQ(SdoBytes(cycle->data.outputs.begin(), cycle->data.outputs.begin() + JWEC_PDO_SIZE),
+                JoshuaWireEthercatTransport::StopImage());
+    }
+  };
+  expect_stop_cycles();
+  EXPECT_EQ(stopping.wait_for(0ms), std::future_status::timeout);
+  trace->hold_mailbox = false;
+  auto response = stopping.get();
+  ASSERT_TRUE(response.ok()) << response.status();
+  EXPECT_EQ(*response, JwecReply(stop));
+  // A late PDO reply now reaches the idle draining path, which must also keep
+  // the stop image until a later explicitly admitted request resumes traffic.
+  trace->hold_pdo = false;
+  expect_stop_cycles();
+  ASSERT_TRUE(endpoints[0]->Exchange(JwecRequest(4, JW_CMD_RECOVER)).ok());
+  EXPECT_TRUE(endpoints[0]->Exchange(JwecRequest(5, kFeedback), absl::Seconds(1)).ok());
+}
+
 TEST_F(JwecAdapterTest, StopWakesCallsWithoutStoppingOtherSlaveAndLastLeaseOwnsMaster) {
   trace->hold_pdo = true;
   auto active = std::async(std::launch::async, [&] {

@@ -122,6 +122,7 @@ struct JoshuaWireEthercatTransport::Work {
   bool cyclic = false;
   bool dispatched = false;
   bool done = false;
+  uint64_t stop_epoch = 0;
   Clock::time_point deadline;
   absl::StatusOr<Bytes> result = absl::UnknownError("pending");
 };
@@ -209,6 +210,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
   std::unique_lock lock(mutex_);
   if (stopping_) return absl::CancelledError("JW endpoint stopped");
   if (frame.cmd == JW_CMD_ESTOP) {
+    preserve_stop_image_ = true;
+    ++stop_epoch_;
     // Drop queued normal work and cancel a cyclic waiter before queuing ESTOP.
     // An in-progress SDO is not interrupted/retried; its finite deadline applies.
     for (const auto& queued : queue_)
@@ -218,6 +221,7 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Submit(absl::Span<const uint8
       FinishLocked(active_, absl::CancelledError("ESTOP; outcome unknown"));
     (void)master_->SetOutputs(slave_, StopImage());
   }
+  work->stop_epoch = stop_epoch_;
   if (queue_.size() >= 64) return absl::ResourceExhaustedError("JW endpoint queue full");
   queue_.push_back(work);
   cv_.notify_all();
@@ -273,8 +277,18 @@ absl::Status JoshuaWireEthercatTransport::Publish(const std::shared_ptr<Work>& w
 }
 void JoshuaWireEthercatTransport::Invalidate() {
   std::lock_guard lock(mutex_);
-  (void)master_->SetOutputs(slave_,
-                            stopping_ ? StopImage() : Envelope(true, session_, 0, pdo_ack_));
+  (void)master_->SetOutputs(
+      slave_,
+      (stopping_ || preserve_stop_image_) ? StopImage() : Envelope(true, session_, 0, pdo_ack_));
+}
+absl::Status JoshuaWireEthercatTransport::ResumeNormalOutput(const std::shared_ptr<Work>& work) {
+  std::lock_guard lock(mutex_);
+  // Only an admitted later request may release the stop image. Older work
+  // cannot undo a newer ESTOP that arrived while admission/reset was running.
+  if (stopping_ || work->done || Clock::now() >= work->deadline || work->stop_epoch != stop_epoch_)
+    return Expired();
+  preserve_stop_image_ = false;
+  return absl::OkStatus();
 }
 
 void JoshuaWireEthercatTransport::Run() {
@@ -347,6 +361,10 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Execute(const std::shared_ptr
       (generation_ == UINT32_MAX || (generation_ == UINT32_MAX - 1 && frame.cmd != JW_CMD_ESTOP)))
     return absl::ResourceExhaustedError(
         "JW generation exhausted; disable and establish new session");
+  if (frame.cmd != JW_CMD_ESTOP) {
+    const auto status = ResumeNormalOutput(work);
+    if (!status.ok()) return status;
+  }
   if (!retry) {
     last_message_ = frame.message_id;
     last_request_ = work->request;
@@ -383,7 +401,8 @@ absl::StatusOr<Bytes> JoshuaWireEthercatTransport::Reset(const std::shared_ptr<W
     if (*reply == object) {
       // The object readback is the reset acknowledgment. Firmware publishes it
       // only after disabling outputs and clearing both planes' retained state.
-      if (Remaining(work).count() <= 0) return Expired();
+      status = ResumeNormalOutput(work);
+      if (!status.ok()) return status;
       session_ = frame.session_id;
       last_message_ = frame.message_id;
       generation_ = 0;
