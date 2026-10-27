@@ -117,6 +117,71 @@ class ImageLifecycleTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(consumer.cancelled())
         self.assertIsNotNone(process.returncode)
 
+    async def timeout_cleanup(self, source):
+        await source._start()
+        process = source._process
+        actual_wait = process.wait
+        reaping = asyncio.Event()
+        release = asyncio.Event()
+
+        async def delayed_wait():
+            reaping.set()
+            await release.wait()
+            return await actual_wait()
+
+        process.wait = delayed_wait
+        with patch("tools.mcp.image_source.READ_TIMEOUT", 0.05):
+            consumer = asyncio.create_task(source.read_latest())
+            await asyncio.wait_for(reaping.wait(), 1)
+        return consumer, process, release
+
+    async def test_close_during_timeout_cleanup_returns_closed_after_reaping(self):
+        source = self.source("time.sleep(60)\n")
+        consumer, process, release = await self.timeout_cleanup(source)
+        completed = asyncio.Event()
+        consumer.add_done_callback(lambda _: completed.set())
+        closing = asyncio.create_task(source.aclose())
+        completed_before_cleanup = False
+        try:
+            await asyncio.wait_for(completed.wait(), 0.05)
+            completed_before_cleanup = True
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            release.set()
+            await closing
+        self.assertFalse(
+            completed_before_cleanup,
+            "Closing during timeout cleanup completed the consumer before reaping",
+        )
+        result = await consumer
+        self.assertEqual(result.unavailable_reason, UnavailableReason.CLOSED)
+        self.assertFalse(consumer.cancelled())
+        self.assertIsNotNone(process.returncode)
+
+    async def test_caller_cancel_during_timeout_cleanup_waits_before_propagating(self):
+        source = self.source("time.sleep(60)\n")
+        consumer, process, release = await self.timeout_cleanup(source)
+        completed = asyncio.Event()
+        consumer.add_done_callback(lambda _: completed.set())
+        consumer.cancel()
+        completed_before_cleanup = False
+        try:
+            await asyncio.wait_for(completed.wait(), 0.05)
+            completed_before_cleanup = True
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            release.set()
+        self.assertFalse(
+            completed_before_cleanup,
+            "Caller cancellation during timeout cleanup propagated before reaping",
+        )
+        with self.assertRaises(asyncio.CancelledError):
+            await consumer
+        self.assertTrue(consumer.cancelled())
+        self.assertIsNotNone(process.returncode)
+
     async def test_overlap_close_resolves_consumer_without_cancelling_it(self):
         source = self.source("time.sleep(60)\n")
         task, process = await self.pending(source)

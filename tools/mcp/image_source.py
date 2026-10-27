@@ -453,7 +453,12 @@ class ImageSource(ObservationSource[ImageFrame]):
         try:
             return await asyncio.wait_for(self._read(), READ_TIMEOUT)
         except asyncio.TimeoutError:
-            await self._stop()
+            cleanup = asyncio.create_task(self._stop())
+            await self._settle(cleanup)
+            if self._closed:
+                return self._unavailable(
+                    UnavailableReason.CLOSED, "Image reader closed"
+                )
             return self._unavailable(
                 UnavailableReason.TIMEOUT, "Image query exceeded five seconds"
             )
