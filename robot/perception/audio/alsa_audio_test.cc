@@ -84,7 +84,7 @@ TEST(AlsaAudioTest, NullPluginProducesFramedPacketsAndRestartDiscontinuity) {
   EXPECT_EQ(second->sequence_id(), first->sequence_id() + 1);
   EXPECT_DOUBLE_EQ(second->timestamp(), 1700000001.125 - 0.02);
   clock_state->fail = true;
-  EXPECT_EQ(audio.GetData().status().code(), absl::StatusCode::kUnavailable);
+  EXPECT_THROW(audio.GetData(), std::runtime_error);
   clock_state->fail = false;
   ASSERT_TRUE(audio.Teardown().ok());
   auto restarted = audio.GetData();
