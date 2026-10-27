@@ -6,6 +6,8 @@ cc_library(
     hdrs = ["joshua_wire_board.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//utils:joshua_runtime",
+        "//utils:scope_exit",
         ":joshua_wire_session",
         "//firmware/common:joshua_wire_profiles",
         "//robot/board/interfaces:board_interfaces",
@@ -40,6 +42,7 @@ cc_library(
     hdrs = ["joshua_wire_session.h"],
     visibility = ["//robot/board:__subpackages__"],
     deps = [
+        "//utils:scope_exit",
         "//firmware/common:joshua_wire",
         "//firmware/common:joshua_wire_commands",
         "//firmware/common:joshua_wire_profiles",

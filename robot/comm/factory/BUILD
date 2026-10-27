@@ -16,6 +16,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//utils:joshua_runtime",
         "//robot/comm/ethercat:ethercat_transport",
         "//robot/comm/interfaces:byte_stream",
         "//robot/comm/interfaces:correlated_cyclic_transport",

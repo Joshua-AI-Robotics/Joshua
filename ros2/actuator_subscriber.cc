@@ -106,30 +106,30 @@ class ActionSubscriber : public rclcpp::Node {
   }
 
   ~ActionSubscriber() {
-    std::vector<std::thread> threads;
-
-    std::set<robot::action::ActionInterface*> torn_down;
-    for (auto& actuator : actuators_) {
-      if (!torn_down.insert(actuator.interface.get()).second) continue;
-      threads.emplace_back([&actuator]() {
-        robot::action::ActionPacket teardown_packet;
-        teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
-        auto status = actuator.interface->SetAction(teardown_packet);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
+    joshua::RunCleanup("actuator shutdown", [&] {
+      std::vector<std::thread> threads;
+      threads.reserve(actuators_.size());
+      joshua::ScopeExit join([&] {
+        for (auto& thread : threads) {
+          if (thread.joinable()) thread.join();
         }
       });
-    }
-
-    for (auto& thread : threads) {
-      thread.join();
-    }
+      std::set<robot::action::ActionInterface*> torn_down;
+      for (auto& actuator : actuators_) {
+        if (!torn_down.insert(actuator.interface.get()).second) continue;
+        threads.push_back(joshua::StartWorker("actuator teardown", [&actuator] {
+          robot::action::ActionPacket packet;
+          packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
+          joshua::ThrowIfError(actuator.interface->SetAction(packet));
+        }));
+      }
+    });
   }
 
  private:
   std::list<Actuator> actuators_;
 };
 
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber");
 }

@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["serial.h"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
+        "//utils:joshua_runtime",
         "//robot/comm/interfaces:byte_stream",
         "//utils:robot_time",
         "//utils:status_macros",
@@ -55,6 +56,7 @@ cc_test(
     name = "serial_exchange_test",
     srcs = ["serial_exchange_test.cc"],
     deps = [
+        "//utils:joshua_runtime",
         ":caller_sized_serial_transport",
         ":joshua_wire_serial_transport",
         ":serial",

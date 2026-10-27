@@ -23,6 +23,7 @@
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "utils/robot_time.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::comm {
 namespace {
@@ -60,6 +61,7 @@ class SerialExchangeTest : public ::testing::Test {
   std::unique_ptr<JoshuaWireSerialTransport> serial;
   Bytes request;
   void SetUp() override {
+    ASSERT_EQ(joshua::RunGuarded("serial exchange test", [] { return 0; }), 0);
     clock_->fail = false;
     clock_->frozen = false;
     clock_->offset = 0.0;
@@ -233,6 +235,21 @@ TEST_F(SerialExchangeTest, RobotClockFailureDoesNotSendRequest) {
   EXPECT_THROW(serial->Exchange(request), std::runtime_error);
   pollfd descriptor{master, POLLIN, 0};
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+}
+
+TEST_F(SerialExchangeTest, ShutdownCancelsAnExchangeWithFrozenRobotTime) {
+  clock_->frozen = true;
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  EXPECT_TRUE(ReadRequest());
+  joshua::RequestShutdown();
+  const auto result = exchange.wait_for(std::chrono::seconds(1));
+  EXPECT_EQ(result, std::future_status::ready);
+  // Keep a failing test bounded if cancellation regresses.
+  if (result != std::future_status::ready) {
+    clock_->offset = 2.0;
+    clock_->frozen = false;
+  }
+  EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kCancelled);
 }
 
 TEST_F(SerialExchangeTest, BusLockWaitIsBoundedAndExpiredRequestIsNotSent) {

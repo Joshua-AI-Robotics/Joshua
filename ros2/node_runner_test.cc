@@ -11,10 +11,12 @@
 #include "gtest/gtest.h"
 
 namespace {
+bool unexpected_construction = false;
 class MustNotConstructNode : public rclcpp::Node {
  public:
   MustNotConstructNode(const std::string&, int, const config::Config&)
       : rclcpp::Node("unexpected_node") {
+    unexpected_construction = true;
     throw std::logic_error("Node constructed before config validation");
   }
 };
@@ -43,6 +45,7 @@ TEST(NodeRunnerTest, RejectsInvalidConfigBeforeConstructingNode) {
   std::string node_id = "1";
   char* argv[] = {binary.data(), node_name.data(), node_id.data(), config_path.data(), nullptr};
   EXPECT_EQ(ros2_utils::RunNode<MustNotConstructNode>(4, argv, "node_runner_test"), 1);
+  EXPECT_FALSE(unexpected_construction);
 }
 
 class ClockObservingNode : public rclcpp::Node {
@@ -111,5 +114,26 @@ TEST_F(NodeRunnerClockTest, EarlyLazyInitializationPreventsNodeConstruction) {
       },
       testing::ExitedWithCode(1),
       "already initialized");
+}
+
+class FailingCallbackNode : public rclcpp::Node {
+ public:
+  FailingCallbackNode(const std::string&, int, const config::Config&)
+      : rclcpp::Node("failing_callback") {
+    timer_ = create_wall_timer(std::chrono::milliseconds(1), [] {
+      throw std::runtime_error("fixture callback failure");
+    });
+  }
+  ~FailingCallbackNode() override { destroyed = true; }
+  inline static bool destroyed = false;
+ private:
+  rclcpp::TimerBase::SharedPtr timer_;
+};
+
+TEST_F(NodeRunnerClockTest, CallbackFailureDestroysNodeAndShutsDownRos) {
+  ASSERT_EXIT({
+    const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC");
+    _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
+  }, testing::ExitedWithCode(0), "fixture callback failure");
 }
 }  // namespace

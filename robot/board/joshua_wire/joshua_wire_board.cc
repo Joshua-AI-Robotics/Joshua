@@ -1,4 +1,5 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
+#include "utils/scope_exit.h"
 
 #include <algorithm>
 #include <mutex>
@@ -32,7 +33,7 @@ class JoshuaWireCommandClient {
                                             pair ? pair->response_timeout : absl::ZeroDuration());
   }
   ~JoshuaWireCommandClient() {
-    Close().IgnoreError();
+    joshua::RunCleanup("JoshuaWire client close", [&] { joshua::ThrowIfError(Close()); });
   }
   absl::Status Open() {
     std::lock_guard lock(mutex_);
@@ -42,9 +43,11 @@ class JoshuaWireCommandClient {
     std::lock_guard lock(mutex_);
     if (closed_) return absl::OkStatus();
     closed_ = true;
+    joshua::ScopeExit release([&] {
+      session_.reset();
+      transport_.reset();
+    });
     auto status = session_ ? session_->Close() : absl::OkStatus();
-    session_.reset();
-    transport_.reset();  // Retained channels no longer keep a NIC lease alive.
     return status;
   }
   uint32_t protocol_version() const {
@@ -486,10 +489,12 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 }
 
 absl::Status JoshuaWireBoard::Teardown() {
+  joshua::ScopeExit release([&] {
+    channels_.clear();
+    commands_.reset();
+    initialized_ = false;
+  });
   const auto status = commands_ ? commands_->Close() : absl::OkStatus();
-  channels_.clear();
-  commands_.reset();
-  initialized_ = false;
   return status;
 }
 

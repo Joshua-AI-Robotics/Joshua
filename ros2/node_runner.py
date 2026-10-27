@@ -1,3 +1,4 @@
+import os
 import sys
 
 from ros2.utils.ros_python_paths import setup_import_paths
@@ -63,6 +64,14 @@ def run_node(
     try:
         cfg = load_config(config_path)
         node = node_cls(node_name, node_id, cfg)
+        ready_fd = os.environ.pop("JOSHUA_READY_FD", None)
+        if ready_fd is not None:
+            fd = int(ready_fd)
+            try:
+                os.set_inheritable(fd, False)
+                os.write(fd, b"R")
+            finally:
+                os.close(fd)
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

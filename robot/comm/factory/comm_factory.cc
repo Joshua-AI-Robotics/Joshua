@@ -11,6 +11,7 @@
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::comm {
 
@@ -22,11 +23,12 @@ struct PortResources {
   std::shared_ptr<boost::asio::io_context> io_context{std::make_shared<boost::asio::io_context>()};
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard{
       boost::asio::make_work_guard(*io_context)};
-  std::thread io_context_thread{[this] { io_context->run(); }};
+  std::thread io_context_thread{joshua::StartWorker("serial io_context", [this] { io_context->run(); })};
   uint32_t baudrate = 0;
   std::shared_ptr<robot::comm::Serial> serial;
   ~PortResources() {
     work_guard.reset();
+    io_context->stop();
     if (io_context_thread.joinable()) io_context_thread.join();
   }
 };
@@ -222,5 +224,16 @@ void CommFactory::ResetEthercatTransportCacheForTesting() {
     cached.transport->Teardown().IgnoreError();
   }
   g_ethercat_transports.clear();
+}
+
+void CommFactory::ShutdownAll() noexcept {
+  joshua::RunCleanup("serial transport shutdown", [] { ResetSerialTransportCacheForTesting(); });
+  joshua::RunCleanup("EtherCAT transport shutdown", [] {
+    std::lock_guard<std::mutex> lock(g_ethercat_mutex);
+    for (auto& [name, cached] : g_ethercat_transports) {
+      joshua::RunCleanup(name.c_str(), [&] { joshua::ThrowIfError(cached.transport->Teardown()); });
+    }
+    g_ethercat_transports.clear();
+  });
 }
 }  // namespace robot::comm

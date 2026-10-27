@@ -91,6 +91,6 @@ class AudioPublisher : public rclcpp::Node {
   }
   std::vector<std::shared_ptr<Source>> sources_;
 };
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<AudioPublisher>(argc, argv, "audio_publisher");
 }

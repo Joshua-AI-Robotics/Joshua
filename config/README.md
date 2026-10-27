@@ -50,7 +50,7 @@ validator behavior, including acceptance of an empty config. For MCP use, see
   (`so100/`, `example/`).
 - `config_utils.h` — `LoadConfig`, which opens a `.pbtxt` and parses it into a
   `config::Config`. Parsing only; semantic checks happen later, in the
-  factories and `node_generator/`.
+  factories and `launcher/node_manager/`.
 
 ## Responsibilities
 
@@ -58,7 +58,7 @@ validator behavior, including acceptance of an empty config. For MCP use, see
 - Stay the only place a robot-specific value appears: ports, joint limits, gear
   ratios, servo IDs, topic names, model paths.
 - Carry enough structure that an inconsistent setup can be rejected during
-  startup — in the factories and `node_generator/` — rather than at first
+  startup — in the factories and `launcher/node_manager/` — rather than at first
   motion.
 
 ## Non-Goals

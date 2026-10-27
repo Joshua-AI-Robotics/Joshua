@@ -12,6 +12,10 @@ cc_library(
         "//config/config_preset:config_presets",
     ],
     deps = [
+        "//robot/board/factory:board_factory",
+        "//robot/comm/factory:comm_factory",
+        "//utils:joshua_runtime",
+        "//utils:scope_exit",
         "//config:config_utils",
         "//config:validation",
         "//config/proto:config_cc_proto",

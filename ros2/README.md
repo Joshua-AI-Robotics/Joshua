@@ -1,6 +1,53 @@
 ROS 2 Type Resolver Utilities  
 ==============================
 
+Process runtime and failure handling
+------------------------------------
+
+Managed C++ node entrypoints use `JOSHUA_MAIN(argc, argv)` from
+`utils/joshua_runtime.h`. The macro generates a guarded `main()` and delegates
+the written body to an ordinary function. It covers argument parsing, clock and
+node initialization, and callbacks executed by the node's executor. Direct
+`RunNode<T>()` calls use the same guard; nested runners reuse the outer boundary.
+
+```cpp
+JOSHUA_MAIN(argc, argv) {
+  return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
+}
+```
+
+`RunNode<T>()` validates the config, calls `JoshuaInit(config)` to install the
+process clock, constructs the node, registers its executor, and notifies the
+launcher of readiness. A finite executor wait also observes worker failures.
+`rclcpp` handles shutdown signals through its handler thread; the shutdown
+callback requests cancellation of ordinary RobotTime-based serial waits.
+
+On exit the runner cancels ordinary work, releases executor/node resources,
+tears down the board cache, releases communication resources and their workers,
+and shuts down the ROS context. If ROS already received a shutdown signal its
+context may have stopped first. Cleanup catches and reports failures while
+continuing to other resources. It cannot make a throwing C++ destructor safe
+from outside that destructor; device destructors use the shared `RunCleanup()`
+boundary themselves.
+
+Use `joshua::StartWorker(name, callback)` for owned worker threads, and join them
+from their owner. A worker exception reports failure and requests process
+shutdown; it never escapes the thread entrypoint. Unexpected callback/clock
+exceptions propagate to the process guard. Expected device errors continue
+through status returns. A cleanup failure preserves a nonzero process result.
+Diagnostics do not depend on RobotTime.
+
+Cleanup scopes allow best-effort stop commands after ordinary waits have been
+cancelled. These commands still use RobotTime deadlines; a frozen clock or hung
+device can require the launcher's bounded SIGTERM/SIGKILL escalation. Teardown
+is an attempt, not an acknowledgement that a device physically stopped.
+
+Standalone Xbox publishing accepts an optional preset path before ROS options;
+without it `JoshuaInit()` uses protobuf clock defaults, including the documented
+startup fallback. No Python RobotTime implementation is introduced. See
+[`NodeManager`](../launcher/node_manager/README.md) for process ownership and
+readiness limitations.
+
 Overview
 --------
 `ros2/ros2_type_resolver.py` centralizes ROS 2 type handling for the codebase.
@@ -170,7 +217,7 @@ Hardware and downstream constraints
 
 The shared C++ runner (`RunNode<T>` in `node_runner.h`) loads and validates the
 full config before constructing a node, including when launched directly without
-`node_generator`. Position and actuator constructors rely on that shared check.
+`NodeManager`. Position and actuator constructors rely on that shared check.
 Config validation rejects invalid subscription settings before hardware
 initialization. JointState field and driver capability checks run on each command.
 Conversions reject non-finite values, overflow, underflow to zero, fractional integer feedback, and integer commands that lose precision

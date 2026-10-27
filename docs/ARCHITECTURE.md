@@ -53,6 +53,23 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - **Extensibility** — new sensors and action types without breaking the core
 - **Modularity** — clear split between config, runtime packets, and ROS 2 topics
 
+## Process runtime
+
+The C++ `JOSHUA_MAIN` entrypoint macro delegates to a shared exception guard.
+`JoshuaInit(config)` installs process services, starting with RobotTime; it does
+not install a catch that survives an ordinary function return. ROS adapters own
+their executor and node lifetime, and worker/destructor boundaries report
+failures through the ROS-independent runtime utility.
+
+The launcher owns one `NodeManager` in `launcher/node_manager/node_manager.h/.cc`.
+It loads the config, resolves executables, and owns each job's guardian,
+application PID, process group, readiness channels, exit history, and shutdown
+sequence. ROS nodes and simulation share that manager and one registry of plain
+node records. Robot drivers and ROS objects remain inside their application
+process. See the [node manager guide](../launcher/node_manager/README.md) for the
+Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
+for startup, cancellation, and cleanup.
+
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
@@ -60,4 +77,4 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
 - [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
 - [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
-- [node_generator/README.md](../node_generator/README.md) — node generation from config
+- [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership

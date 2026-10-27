@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstring>
 #include <thread>
+#include <stdexcept>
 #include <vector>
 
 #include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
@@ -103,6 +104,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
       return altered;
     }
     last_response = response;
+    if (throw_after_response) throw std::runtime_error("clock failed after device accepted request");
     return response;
   }
   jw_endpoint_t endpoint{};
@@ -112,6 +114,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
   Bytes retained;
   Bytes last_response;
   bool timeout = false;
+  bool throw_after_response = false;
   bool delay = false;
   int corrupt_field = -1;
   std::atomic<int> active{0};
@@ -141,6 +144,31 @@ class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
   std::shared_ptr<FirmwareTransport> firmware;
   int calls = 0;
 };
+
+TEST_F(JoshuaWireSessionTest, ExceptionAfterDeviceMutationKeepsOutcomeUnknown) {
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  transport->throw_after_response = true;
+  EXPECT_THROW(session.Exchange(Profile(JW_ACTUATOR_ENABLE)), std::runtime_error);
+  EXPECT_TRUE(transport->channel.enabled);
+  transport->throw_after_response = false;
+  const auto requests = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport->requests.size(), requests);
+  EXPECT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+}
+
+TEST_F(JoshuaWireSessionTest, CloseExceptionStillInvalidatesTheSession) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->throw_after_response = true;
+  EXPECT_THROW(session.Close(), std::runtime_error);
+  transport->throw_after_response = false;
+  const auto requests = transport->requests.size();
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_EQ(transport->requests.size(), requests);
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+}
 TEST_F(JoshuaWireSessionTest, CommonRepliesAndProfileRoutingShareOneIdAllocator) {
   auto cyclic = std::make_shared<RoutedCyclic>(transport);
   JoshuaWireSession routed(

@@ -8,6 +8,7 @@
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "utils/status_macros.h"
+#include "utils/scope_exit.h"
 
 namespace robot::board {
 namespace {
@@ -61,6 +62,10 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
   // Retry identical bytes/IDs only. The shared firmware endpoint replays its
   // last reply without repeating side effects, including unknown outcomes.
   std::vector<uint8_t> response;
+  bool completed = false;
+  joshua::ScopeExit track_outcome([&] {
+    if (!completed) uncertain_ = true;
+  });
   for (int attempt = 0; attempt < 2; ++attempt) {
     auto result =
         on_cyclic ? cyclic_->Exchange(request, cyclic_timeout_) : transport_->Exchange(request);
@@ -80,7 +85,9 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
       continue;
     }
     if (reply.status == JW_STATUS_OUTCOME_UNKNOWN) uncertain_ = true;
-    return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
+    std::vector<uint8_t> reply_payload(received.payload, received.payload + received.payload_len);
+    completed = true;
+    return reply_payload;
   }
   uncertain_ = true;
   return absl::Status(failure.code(), std::string(failure.message()) + "; command outcome unknown");
@@ -138,9 +145,11 @@ absl::Status JoshuaWireSession::Close() {
   if (session_id_ == 0) return absl::OkStatus();
   ready_ = false;
   const uint8_t domain[2] = {};
+  joshua::ScopeExit clear_session([&] {
+    session_id_ = 0;
+    pending_.clear();
+  });
   auto response = ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, 2);
-  session_id_ = 0;
-  pending_.clear();
   if (!response.ok()) return response.status();
   return CheckOk(*response);
 }
@@ -175,6 +184,10 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
   if ((uncertain_ || pending_.count(JW_CHANNEL_NONE) || pending_.count(command.channel)) &&
       !query && !profile_read && command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
     return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
+  bool recorded = false;
+  joshua::ScopeExit record_outcome([&] {
+    if (!recorded) uncertain_ = true;
+  });
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
@@ -193,6 +206,7 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
     }
   }
 
+  recorded = true;
   return payload;
 }
 
