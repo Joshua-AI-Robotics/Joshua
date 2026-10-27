@@ -251,8 +251,8 @@ def validate_snapshot(s):
         if (
             f["state"] != "available"
             or type(sample["position"]) not in (int, float)
-            or not math.isfinite(sample["position"])
             or abs(sample["position"]) > 1e9
+            or not math.isfinite(sample["position"])
             or sample["units"] != "radians"
             or sample["reference"] != "device_zero"
             or sample["acquisition_freshness"] != "unknown"

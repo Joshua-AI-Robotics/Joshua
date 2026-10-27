@@ -73,8 +73,9 @@ Inventory includes at most 128 entries with identities of at most 512 UTF-8
 bytes and reports the omitted count. A description searches the complete
 candidate and rejects an absent or ambiguous identity. Reports include declared
 configuration, topics, references and limits, with compatibility and hardware
-readiness explicitly unverified. Output is capped at 64 KiB; a larger report
-returns `RESOURCE_EXHAUSTED`.
+readiness explicitly unverified. Helper output and each MCP text report are
+capped at 64 KiB, including Unicode escaping; a larger report returns
+`RESOURCE_EXHAUSTED`. The session remains usable for subsequent requests.
 
 ## Typed observation contract
 

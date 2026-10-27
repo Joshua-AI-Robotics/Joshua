@@ -155,6 +155,53 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                         "sensor:small",
                     )
 
+    async def test_non_ascii_mcp_report_is_bounded_and_recovers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            text = "\u6f22" * 12000
+            large = candidate().replace('name: "camera"', f'name: "{text}"', 1)
+            Path(directory, "large.pbtxt").write_text(large, encoding="utf-8")
+            Path(directory, "small.pbtxt").write_text(candidate("small"))
+            backend = CppSetupInspector(
+                ValidationService(directory, str(VALIDATOR)), str(INSPECTOR)
+            )
+            self.addAsyncCleanup(backend.aclose)
+            report = await backend.list_devices("large.pbtxt")
+            self.assertEqual(report["status_code"], "OK", report)
+            self.assertLess(len(json.dumps(report, ensure_ascii=False).encode()), 65536)
+            self.assertGreater(len(json.dumps(report, ensure_ascii=True)), 65536)
+            params = StdioServerParameters(
+                command=str(SERVER),
+                args=[
+                    "--validator",
+                    str(VALIDATOR),
+                    "--inspector",
+                    str(INSPECTOR),
+                    "--config-root",
+                    directory,
+                ],
+                env={"LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", "")},
+            )
+            async with stdio_client(params) as (reader, writer):
+                async with ClientSession(reader, writer) as client:
+                    await client.initialize()
+                    result = await client.call_tool(
+                        "list_devices", {"config_path": "large.pbtxt"}
+                    )
+                    self.assertTrue(result.isError)
+                    self.assertEqual(
+                        result.structuredContent["status_code"], "RESOURCE_EXHAUSTED"
+                    )
+                    self.assertEqual(result.structuredContent["data"], {})
+                    self.assertLessEqual(len(result.content[0].text.encode()), 65536)
+                    result = await client.call_tool(
+                        "list_devices", {"config_path": "small.pbtxt"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(
+                        result.structuredContent["data"]["devices"][0]["device_id"],
+                        "sensor:small",
+                    )
+
     async def test_catalog_no_config_then_multiple_candidates_and_confined_errors(self):
         with tempfile.TemporaryDirectory() as directory:
             args = [
@@ -480,6 +527,26 @@ class SnapshotBehaviorTest(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(
             Path(self.directory.name, "snapshot.json").stat().st_size, 65536
         )
+
+    async def test_oversized_position_integer_returns_data_loss_for_each_tool(self):
+        await self.stop_fixture()
+        path = Path(self.directory.name, "snapshot.json")
+        original = json.loads(path.read_text())
+        for position in (10**400, -(10**400)):
+            bad = copy.deepcopy(original)
+            bad["feedback"]["sample"]["position"] = position
+            path.write_text(json.dumps(bad))
+            for operation, arguments in (
+                (self.reader.get_runtime_status, ()),
+                (self.reader.get_recent_logs, ()),
+                (self.reader.get_feedback, ("encoder",)),
+            ):
+                with self.subTest(position_sign=position > 0, tool=operation.__name__):
+                    report = await operation(*arguments)
+                    self.assertEqual(report["status_code"], "DATA_LOSS")
+                    self.assertEqual(report["availability"], "unavailable")
+        path.write_text(json.dumps(original))
+        self.assertEqual((await self.reader.get_runtime_status())["status_code"], "OK")
 
     async def test_snapshot_rejection_freshness_cursor_and_directory_pinning(self):
         await self.mode("burst")

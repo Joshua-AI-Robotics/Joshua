@@ -210,6 +210,23 @@ def make_server(inspector, observer=None, validation_only=False):
         encoded = json.dumps(
             report, ensure_ascii=True, separators=(",", ":"), allow_nan=False
         )
+        if len(encoded) > 65536:
+            message = "MCP report exceeds 64 KiB; reduce the requested output."
+            if report["scope"] == "config_integrity":
+                report = adapter_error(
+                    report["config_path"], "RESOURCE_EXHAUSTED", message
+                )
+            elif report["scope"] == "setup_inspection":
+                report = setup_error(
+                    name, report["config_path"], "RESOURCE_EXHAUSTED", message
+                )
+            else:
+                from tools.mcp.snapshot_observer import observation_error
+
+                report = observation_error(name, "RESOURCE_EXHAUSTED", message)
+            encoded = json.dumps(
+                report, ensure_ascii=True, separators=(",", ":"), allow_nan=False
+            )
         is_error = (
             report["result"] == "not_run"
             if report["scope"] == "config_integrity"
