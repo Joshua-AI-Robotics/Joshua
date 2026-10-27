@@ -1,3 +1,4 @@
+load("//:requirements.bzl", "requirement")
 load(":requirements.bzl", "mcp_requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
@@ -12,6 +13,7 @@ py_library(
     srcs = [
         "config_validation_server.py",
         "hardware_catalog.py",
+        "image_source.py",
         "inspection_adapters.py",
         "inspection_server.py",
         "interfaces.py",
@@ -21,7 +23,7 @@ py_library(
         "//docs:hardware_catalog.json",
         "//docs:hardware_test_records.json",
     ],
-    deps = mcp_requirement("mcp"),
+    deps = [":observation_source"] + mcp_requirement("mcp"),
 )
 
 py_binary(
@@ -79,6 +81,39 @@ py_test(
     name = "observation_source_test",
     srcs = ["observation_source_test.py"],
     deps = [":observation_source"],
+)
+
+py_test(
+    name = "image_source_test",
+    size = "medium",
+    timeout = "moderate",
+    srcs = ["image_source_test.py"],
+    data = [
+        ":config_validation_server",
+        "//config:joshua_inspect_config",
+        "//config:joshua_validate_config",
+        "//ros2:image_observer",
+        "//ros2:image_observer_codec_failure_fixture",
+        "//ros2:image_observer_codec_oversize_fixture",
+        "//ros2:image_observer_fixture",
+        "//ros2:image_observer_manifest_race_fixture",
+        "//ros2:image_observer_race_fixture",
+    ],
+    tags = ["local"],
+    deps = [
+        ":config_validation_lib",
+        ":observation_source",
+    ] + mcp_requirement("mcp") + requirement("pillow"),
+)
+
+py_test(
+    name = "image_source_lifecycle_test",
+    size = "medium",
+    srcs = ["image_source_lifecycle_test.py"],
+    deps = [
+        ":config_validation_lib",
+        ":observation_source",
+    ],
 )
 
 py_binary(

@@ -1,11 +1,12 @@
 # Observation sources for MCP
 
-**Status: basic contract and metadata implemented; adapters remain proposed.**
-[observation_source.py](../tools/mcp/observation_source.py) defines a reusable
-Python reader contract. This increment adds no MCP tool or concrete adapter.
-The existing setup inspection, runtime status, partial ROS logs and selected
-position feedback in draft PR #130 retain their current interfaces and schemas.
-Camera retrieval remains deferred.
+**Status: typed contract and one configured camera image adapter implemented.**
+[ImageSource](../tools/mcp/image_source.py) composes a persistent passive
+[C++ ROS image helper](../ros2/image_observer_backend.cc). The opt-in
+`get_camera_image(camera_id)` returns standard MCP JPEG content for fresh
+samples and metadata only for stale samples. The original seven tool contracts,
+validation-only startup and snapshot schema stay compatible. See the
+[camera setup and limits](../tools/mcp/README.md#optional-configured-camera-image).
 
 ## Goal and placement
 
@@ -15,7 +16,7 @@ image adapter; a different measurement type can need another typed adapter.
 
 Joshua's C++ [PerceptionInterface](../robot/perception/interfaces/perception_interface.h)
 and [PerceptionPacket](../robot/perception/proto/perception_packet.proto) remain
-the hardware contracts. Future readers sit above tested backend operations:
+the hardware contracts. Readers sit above tested backend operations:
 
 ```mermaid
 flowchart LR
@@ -26,8 +27,8 @@ flowchart LR
 ```
 
 The launcher owns processes; backends own ROS access and validation. Reader close
-releases query resources without stopping a robot or camera. A future adapter can
-compose behind [RuntimeObserver](../tools/mcp/interfaces.py); this increment
+releases query resources without stopping a robot or camera. Other adapters can
+compose behind [RuntimeObserver](../tools/mcp/interfaces.py); the image adapter
 does not migrate that interface or the existing snapshot reader. SetupInspector
 continues describing configured components.
 
@@ -150,12 +151,11 @@ asyncio.run(inspect(FakeObservationSource(NumericReading(2.5), lambda: 1_000_000
 
 ## Deferred adapters and scaling
 
-These responsibilities are future work, not empty classes to scaffold now:
+The camera adapter is implemented; these other responsibilities remain future work:
 
 | Proposed adapter | Payload and role | When to add it |
 |---|---|---|
-| `JointPositionSource` | Position, units, zero/reference and timestamps | First real adapter; reuse the existing snapshot reader |
-| `ImageSource` | Bounded image, dimensions, encoding and timing | When image retrieval is approved |
+| `JointPositionSource` | Position, units, zero/reference and timestamps | Reuse the existing snapshot reader when position composition is needed |
 | `AudioSource` | Bounded chunk, rate, channels, sequence and discontinuities | With an audio workflow |
 | `RangeScanSource` | Ranges/point-cloud data, frame and units | With a verified matching backend |
 | `InputStateSource` | Defined button/axis state | With an implemented input path/schema |
@@ -167,10 +167,10 @@ synchronized groups need separate contracts.
 
 Choose on-demand queries or bounded persistent subscriptions using measured
 frequency, latency and resource needs. Avoid a worker per device by default;
-keep heavy media work outside monitoring/control callbacks. This increment
-contains no system scalability benchmark or production enforcement engine.
+keep heavy media work outside monitoring/control callbacks. The image adapter enforces its one-camera limits; this is not a system
+scalability benchmark.
 
-Typed MCP tools can later convert numeric results to structured data and images to
+Typed MCP tools can convert numeric results to structured data; the image tool uses
 standard [MCP image content](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#image-content).
 MCP objects stay outside the base; recognition belongs to a client or separately
 designed inference capability.
@@ -199,13 +199,49 @@ fresh-to-stale transition, missing/invalid data, typed reasons, bounded overlap,
 deadline cleanup, caller cancellation, concurrent close and read-after-close.
 Those examples prove the fake's behavior, not arbitrary subclasses' enforcement.
 
-Future adapter increments must independently verify real payload validation and
+Every adapter increment must independently verify real payload validation and
 ownership, deadlines/concurrency/cleanup, source association, restart and
 clock/freshness behavior. Preserve all seven MCP tools, validation-only mode and
 response schemas. Real media needs malformed/oversized and decodability checks;
 ROS adapters need domain isolation, publisher replacement and hidden endpoint
 evidence tested through actual SDK exchanges on both supported ROS stacks.
 
-Camera, audio, position composition and other concrete sources remain deferred.
+Audio, position composition and other concrete sources remain deferred.
 Observation alone never proves physical readiness or task completion;
 [AI integration requirements](AI_INTEGRATION.md#requirements) govern those workflows.
+
+
+## Implemented camera boundary
+
+The launcher derives a bounded camera manifest from protobuf under its existing
+private directory lease. It requires the selected publisher process to have one
+camera and one IMAGE publisher, avoiding the existing multi-camera timer fanout.
+The helper never links a hardware factory. It retains one validated RGB8/BGR8
+sample and original receipt time, checks the sole endpoint and actual message
+GID, and JPEG-encodes only on query. Its nonce/counter sample ID is independent
+of the generic optional sequence field.
+
+A binding change includes launcher instance, camera ID, domain, topic,
+node/namespace or fixed ROS type. The old helper is reaped before a new context
+can start; failures poison the reader. Manifest boot/time namespace and heartbeat
+must be comparable and fresh. Binding and graph changes during a query suppress
+the image. Silence ages the original sample to stale without restamping it.
+The ROS source stamp remains publication metadata; acquisition freshness is unknown.
+
+The source owns query/cleanup tasks so closing resolves pending readers CLOSED
+without cancelling consumer tasks. Caller cancellation waits for cleanup; one
+five-second read and one two-second cleanup budget bound observation work.
+Late spawn ownership includes a duplicated directory FD and a reaper callback.
+Synchronous physical OpenCV calls are not bounded by these observer deadlines.
+DDS can allocate message storage before application validation, so accepted frame
+bounds are not a strict process memory guarantee.
+
+[Image SDK tests](../tools/mcp/image_source_test.py) use a synthetic C++ ROS
+publisher without hardware factory dependencies and decode the real MCP JPEG.
+[Lifecycle tests](../tools/mcp/image_source_lifecycle_test.py) use real disposable
+processes to test framing, timeout, cancellation, late spawn and poisoned cleanup.
+A test-only encoder callback changes the manifest after real JPEG encoding and
+verifies the production post-encode binding check rejects the old image and
+reaps its helper. The production executable has no test codec controls.
+These software checks do not establish a chosen AI client's physical camera
+acceptance or unplug/recovery behavior.

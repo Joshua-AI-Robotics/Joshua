@@ -380,3 +380,15 @@ ALSA aliases for the same physical device cannot be detected statically.
 `//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
 virtual time to cover large and tiny chunks, short reads, delayed polls, changed
 buffer sizes after recovery, and bounded work for always-ready sources.
+
+
+Configured camera observation
+-----------------------------
+`camera_publisher` validates packet encoding, channels, signed dimensions and
+exact byte length before RGB conversion. Its ROS timestamp is publication time.
+`image_observer` is a separate passive C++ ROS helper owned by the optional MCP
+reader. It checks the sole expected endpoint and received publisher GID, retains
+one bounded RGB8/BGR8 sample (including row padding), and encodes a small JPEG
+on query. It has no capture-driver or hardware-factory dependency. Camera/backend
+I/O remains in the existing publisher process. See the
+[MCP camera guide](../tools/mcp/README.md#optional-configured-camera-image).

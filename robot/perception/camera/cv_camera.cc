@@ -1,13 +1,45 @@
 #include "robot/perception/camera/cv_camera.h"
 
+#include <chrono>
+#include <climits>
 #include <opencv2/videoio.hpp>
+#include <thread>
 
 namespace robot::perception {
-CvCamera::CvCamera(const robot::perception::SinglePerception& camera_config) {
-  opencv_config_ = camera_config.opencv_config();
-  camera_id_ = opencv_config_.id();
-  id_ = camera_config.sensor_name();
-}
+
+namespace {
+class OpenCvCapture final : public CameraCapture {
+ public:
+  bool Open(int index, int backend) override {
+    return capture_.open(index, backend);
+  }
+  bool IsOpened() const override {
+    return capture_.isOpened();
+  }
+  bool Set(int property, double value) override {
+    return capture_.set(property, value);
+  }
+  double Get(int property) const override {
+    return capture_.get(property);
+  }
+  bool Read(cv::Mat& frame) override {
+    return capture_.read(frame);
+  }
+  void Release() override {
+    capture_.release();
+  }
+
+ private:
+  cv::VideoCapture capture_;
+};
+}  // namespace
+CvCamera::CvCamera(const SinglePerception& config)
+    : CvCamera(config, std::make_unique<OpenCvCapture>()) {}
+CvCamera::CvCamera(const SinglePerception& config, std::unique_ptr<CameraCapture> capture)
+    : cap_(std::move(capture)),
+      id_(config.sensor_name()),
+      camera_id_(config.opencv_config().id()),
+      opencv_config_(config.opencv_config()) {}
 
 CvCamera::~CvCamera() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
@@ -20,42 +52,12 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
-  // Protect direct driver callers before indexing the four-character format.
-  // Full preset validation belongs to config::ValidateConfig.
-  if (opencv_config_.fourcc().size() != 4) {
-    return absl::InvalidArgumentError("OpenCV FourCC requires exactly four characters");
+  try {
+    return OpenCameraLocked();
+  } catch (...) {
+    (void)TeardownLocked();
+    return absl::InternalError("Camera initialization failed.");
   }
-
-  absl::Status status = OpenCameraLocked();
-  if (!status.ok()) {
-    return status;
-  }
-
-  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
-                             cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
-                                                     opencv_config_.fourcc()[1],
-                                                     opencv_config_.fourcc()[2],
-                                                     opencv_config_.fourcc()[3]));
-  bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
-  bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
-  bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());
-
-  // Some drivers return false even on success.
-  if (!set_fourcc || !set_width || !set_height || !set_fps) {
-    return absl::Status(
-        absl::StatusCode::kInternal,
-        "Failed to configure camera " + id_ + ": fourcc=" + std::to_string(set_fourcc) +
-            ", width=" + std::to_string(set_width) + ", height=" + std::to_string(set_height) +
-            ", fps=" + std::to_string(set_fps));
-  }
-
-  LOG(INFO) << "Camera initialized successfully.";
-  LOG(INFO) << "ID: " << id_;
-  LOG(INFO) << "Camera resolution: " << cap_.get(cv::CAP_PROP_FRAME_WIDTH) << "x"
-            << cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
-  LOG(INFO) << "Camera FPS: " << cap_.get(cv::CAP_PROP_FPS);
-
-  return absl::OkStatus();
 }
 
 absl::Status CvCamera::Teardown() {
@@ -65,14 +67,16 @@ absl::Status CvCamera::Teardown() {
 
 absl::Status CvCamera::TeardownLocked() {
   try {
-    if (cap_.isOpened()) {
-      cap_.release();
+    if (cap_ && cap_->IsOpened()) {
+      cap_->Release();
     }
   } catch (const std::exception& e) {
+    LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal,
                         "Failed to teardown camera " + id_ + ": " + e.what());
   } catch (...) {
-    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera " + id_);
+    LOG(ERROR) << "Unknown exception in camera " << id_;
+    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
   }
   return absl::OkStatus();
 }
@@ -87,10 +91,13 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     }
 
     cv::Mat frame;
-    cap_ >> frame;
+    const bool captured = cap_->Read(frame);
 
-    if (frame.empty()) {
+    if (!captured || frame.empty()) {
+      LOG(ERROR) << "Failed to capture an image from camera " << id_
+                 << " (camera_id: " << camera_id_ << ")";
       reusable_packet_.Clear();
+      (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
                           "Failed to capture an image from camera with empty frame");
     }
@@ -100,17 +107,22 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
 
     // Validate frame properties
     if (frame.cols <= 0 || frame.rows <= 0) {
+      LOG(ERROR) << "Invalid frame dimensions from camera " << id_ << ": " << frame.cols << "x"
+                 << frame.rows;
       reusable_packet_.Clear();
+      (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
-                          "Invalid frame dimensions for camera " + id_ + ": " +
-                              std::to_string(frame.cols) + "x" + std::to_string(frame.rows));
+                          "Failed to capture an image from camera with invalid frame dimensions");
     }
 
-    if (frame.channels() != 3) {
+    if (frame.channels() != 3 || frame.depth() != CV_8U) {
+      LOG(ERROR) << "Unexpected number of channels from camera " << id_ << ": " << frame.channels()
+                 << " (expected 3 for BGR)";
       reusable_packet_.Clear();
-      return absl::Status(absl::StatusCode::kInternal,
-                          "Unexpected channels for camera " + id_ + ": " +
-                              std::to_string(frame.channels()) + " (expected 3)");
+      (void)TeardownLocked();
+      return absl::Status(
+          absl::StatusCode::kInternal,
+          "Failed to capture an image from camera with unexpected number of channels");
     }
 
     // Clear and populate the reusable packet
@@ -132,13 +144,17 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     const size_t data_size = static_cast<size_t>(frame.total()) * frame.elemSize();
 
     if (data_size == 0) {
+      LOG(ERROR) << "Frame data size is 0 for camera " << id_;
       reusable_packet_.Clear();
+      (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
                           "Failed to capture an image from camera with frame data size is 0");
     }
 
     if (frame.data == nullptr) {
+      LOG(ERROR) << "Frame data pointer is null for camera " << id_;
       reusable_packet_.Clear();
+      (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
                           "Failed to capture an image from camera with frame data pointer is null");
     }
@@ -151,9 +167,21 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     return reusable_packet_;
 
   } catch (const cv::Exception& e) {
+    LOG(ERROR) << "OpenCV exception in camera " << id_ << ": " << e.what();
     reusable_packet_.Clear();
+    (void)TeardownLocked();
     return absl::Status(absl::StatusCode::kInternal,
                         "OpenCV exception in camera " + id_ + ": " + e.what());
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Standard exception in camera " << id_ << ": " << e.what();
+    reusable_packet_.Clear();
+    (void)TeardownLocked();
+    return absl::Status(absl::StatusCode::kInternal, "Standard exception in camera");
+  } catch (...) {
+    LOG(ERROR) << "Unknown exception in camera " << id_;
+    reusable_packet_.Clear();
+    (void)TeardownLocked();
+    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
   }
 }
 
@@ -162,30 +190,43 @@ std::string CvCamera::GetId() {
 }
 
 absl::Status CvCamera::OpenCameraLocked() {
-  absl::Status status;
-
-  for (uint8_t i = 0; i < MAX_CAMERA_OPEN_TRIES_; i++) {
-    if (cap_.isOpened()) {
-      status = absl::OkStatus();
-      break;
-    } else {
-      if (cap_.open(camera_id_, cv::CAP_V4L2)) {
-        // Keep the next frame queued while the previous buffer is dequeued.
-        // A single buffer can starve continuous capture and drop frame rate.
-        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 2)) {
-          LOG(ERROR) << "Could not set camera capture buffer count to 2 for " << id_;
-        }
-      }
+  const auto& c = opencv_config_;
+  if (!cap_ || camera_id_ > INT_MAX || c.width() == 0 || c.height() == 0 || c.fps() == 0 ||
+      c.width() > INT_MAX || c.height() > INT_MAX || c.fps() > INT_MAX)
+    return absl::InvalidArgumentError(
+        "Camera runtime requires index <= INT_MAX, positive dimensions and FPS fitting int.");
+  // Defend direct driver calls; complete preset validation belongs to config::ValidateConfig.
+  if (c.fourcc().size() != 4)
+    return absl::InvalidArgumentError("OpenCV FourCC requires exactly four characters");
+  {
+    for (unsigned char ch : c.fourcc())
+      if (ch < 32 || ch > 126)
+        return absl::InvalidArgumentError("FourCC must contain printable ASCII bytes.");
+  }
+  if (cap_->IsOpened()) return absl::OkStatus();
+  for (int attempt = 0; attempt < MAX_CAMERA_OPEN_TRIES_; ++attempt) {
+    if (attempt) std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    if (!cap_->Open(static_cast<int>(camera_id_), cv::CAP_V4L2)) continue;
+    bool okay = true;
+    if (!c.fourcc().empty())
+      okay = cap_->Set(
+          cv::CAP_PROP_FOURCC,
+          cv::VideoWriter::fourcc(c.fourcc()[0], c.fourcc()[1], c.fourcc()[2], c.fourcc()[3]));
+    okay = cap_->Set(cv::CAP_PROP_FRAME_WIDTH, c.width()) && okay;
+    okay = cap_->Set(cv::CAP_PROP_FRAME_HEIGHT, c.height()) && okay;
+    okay = cap_->Set(cv::CAP_PROP_FPS, c.fps()) && okay;
+    // Match the capture foundation: keep a second buffer queued for continuous capture.
+    (void)cap_->Set(cv::CAP_PROP_BUFFERSIZE, 2);
+    if (!okay) {
+      cap_->Release();
+      return absl::InternalError("Camera rejected requested capture settings.");
     }
+    LOG(INFO) << "Camera " << id_ << " negotiated " << cap_->Get(cv::CAP_PROP_FRAME_WIDTH) << "x"
+              << cap_->Get(cv::CAP_PROP_FRAME_HEIGHT) << " at " << cap_->Get(cv::CAP_PROP_FPS)
+              << " FPS";
+    return absl::OkStatus();
   }
-  if (cap_.isOpened()) {
-    status = absl::OkStatus();
-  } else {
-    status = absl::Status(absl::StatusCode::kInternal,
-                          "Could not open camera with id " + std::to_string(camera_id_));
-  }
-
-  return status;
+  return absl::UnavailableError("Could not open camera after three attempts.");
 }
 
 }  // namespace robot::perception

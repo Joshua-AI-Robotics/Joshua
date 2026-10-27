@@ -72,7 +72,9 @@ class NodeManager {
   NodeManager& operator=(const NodeManager&) = delete;
 
   absl::Status Initialize();
-  absl::Status ConfigureObservation(const std::string& directory, const std::string& sensor);
+  absl::Status ConfigureObservation(const std::string& directory,
+                                    const std::string& sensor,
+                                    const std::string& camera = "");
   absl::Status LaunchAllNodes();
   absl::Status LaunchSimulation();
   absl::Status StartProcess(const LaunchSpec& spec);

@@ -478,8 +478,16 @@ def main(argv=None):
     parser.add_argument("--validator", required=True)
     parser.add_argument("--inspector")
     parser.add_argument("--observation-dir")
+    parser.add_argument("--image-observer")
+    parser.add_argument("--camera-id")
     parser.add_argument("--freshness-seconds", type=float, default=3.0)
     args = parser.parse_args(argv)
+    if bool(args.image_observer) != bool(args.camera_id) or (
+        args.image_observer and not args.observation_dir
+    ):
+        parser.error(
+            "--image-observer and --camera-id require each other and --observation-dir"
+        )
     root = os.path.abspath(args.config_root)
     validator = os.path.abspath(args.validator)
     try:
@@ -507,12 +515,21 @@ def main(argv=None):
 
         try:
             observer = SnapshotObserver(args.observation_dir, args.freshness_seconds)
+            image_source = None
+            if args.image_observer:
+                from tools.mcp.image_source import ImageSource
+
+                image_source = ImageSource(
+                    args.observation_dir, args.image_observer, args.camera_id
+                )
         except (OSError, ValueError) as error:
             os.close(service._root_fd)
             print(f"Observation directory is unavailable: {error}", file=sys.stderr)
             return 2
         asyncio.run(
-            run_inspection_stdio(CppSetupInspector(service, args.inspector), observer)
+            run_inspection_stdio(
+                CppSetupInspector(service, args.inspector), observer, image_source
+            )
         )
     else:
         asyncio.run(run_stdio(service))

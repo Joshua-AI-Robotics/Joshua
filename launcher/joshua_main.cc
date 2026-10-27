@@ -16,6 +16,7 @@ DEFINE_string(config,
               "Path to the robot config file");
 
 DEFINE_string(observation_dir, "", "Existing private passive snapshot directory (opt-in)");
+DEFINE_string(observe_camera, "", "One configured IMAGE camera to observe (sensor name)");
 DEFINE_string(observe_sensor, "", "One configured POSITION/JOINT_STATE sensor to observe");
 
 JOSHUA_MAIN(argc, argv) {
@@ -26,7 +27,8 @@ JOSHUA_MAIN(argc, argv) {
     std::string flag(argv[i]);
     for (const auto& alias :
          {std::pair<std::string, std::string>{"--observation-dir", "--observation_dir"},
-          {"--observe-sensor", "--observe_sensor"}})
+          {"--observe-sensor", "--observe_sensor"},
+          {"--observe-camera", "--observe_camera"}})
       if (flag == alias.first || flag.rfind(alias.first + "=", 0) == 0)
         flag.replace(0, alias.first.size(), alias.second);
     flag_storage.push_back(std::move(flag));
@@ -42,15 +44,17 @@ JOSHUA_MAIN(argc, argv) {
   JoshuaInit(manager.config());
   LOG(INFO) << "Starting Joshua Platform with config: " << manager.config_path();
 
-  if (!FLAGS_observe_sensor.empty() && FLAGS_observation_dir.empty())
-    throw std::invalid_argument("--observe_sensor requires --observation_dir");
+  if ((!FLAGS_observe_sensor.empty() || !FLAGS_observe_camera.empty()) &&
+      FLAGS_observation_dir.empty())
+    throw std::invalid_argument("--observe_sensor/--observe_camera require --observation_dir");
   if (manager.config().general().operation_mode() == config::General::MODE_SIMULATION) {
     if (!FLAGS_observation_dir.empty())
       throw std::invalid_argument("Simulation passive observation is unsupported");
     return launcher::RunSimulation(manager);
   }
   if (!FLAGS_observation_dir.empty())
-    joshua::ThrowIfError(manager.ConfigureObservation(FLAGS_observation_dir, FLAGS_observe_sensor));
+    joshua::ThrowIfError(manager.ConfigureObservation(
+        FLAGS_observation_dir, FLAGS_observe_sensor, FLAGS_observe_camera));
 
   const auto launched = manager.LaunchAllNodes();
   if (absl::IsCancelled(launched) && manager.ShutdownRequested()) return 0;

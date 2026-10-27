@@ -20,10 +20,12 @@ struct ProcessFact {
 // forks; Start is called only after all forks. Failures never stop children.
 class RuntimeObservation {
  public:
-  static absl::StatusOr<std::unique_ptr<RuntimeObservation>> Prepare(const config::Config& config,
-                                                                     const std::string& source,
-                                                                     const std::string& directory,
-                                                                     const std::string& sensor);
+  static absl::StatusOr<std::unique_ptr<RuntimeObservation>> Prepare(
+      const config::Config& config,
+      const std::string& source,
+      const std::string& directory,
+      const std::string& sensor,
+      const std::string& camera = "");
   ~RuntimeObservation();
   void Start() noexcept;
   void RecordExit(const ProcessFact& process, int wait_status) noexcept;

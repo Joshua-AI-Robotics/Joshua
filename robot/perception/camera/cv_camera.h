@@ -3,6 +3,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <opencv2/videoio.hpp>
 #include <string>
@@ -15,10 +16,24 @@
 
 namespace robot::perception {
 
+// Narrow capture boundary: tests substitute returning calls without opening devices.
+class CameraCapture {
+ public:
+  virtual ~CameraCapture() = default;
+  virtual bool Open(int index, int backend) = 0;
+  virtual bool IsOpened() const = 0;
+  virtual bool Set(int property, double value) = 0;
+  virtual double Get(int property) const = 0;
+  virtual bool Read(cv::Mat& frame) = 0;
+  virtual void Release() = 0;
+};
+
 // Image sensor backed by an OpenCV capture device.
 class CvCamera : public CameraInterface {
  public:
   explicit CvCamera(const robot::perception::SinglePerception& camera_config);
+  CvCamera(const robot::perception::SinglePerception& config,
+           std::unique_ptr<CameraCapture> capture);
   ~CvCamera() override;
 
   absl::Status Init() override;
@@ -28,7 +43,7 @@ class CvCamera : public CameraInterface {
 
  private:
   const uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
-  cv::VideoCapture cap_;
+  std::unique_ptr<CameraCapture> cap_;
   mutable std::mutex cap_mutex_;
   std::string id_;
   uint64_t camera_id_;
