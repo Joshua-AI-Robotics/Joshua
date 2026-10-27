@@ -70,6 +70,18 @@ int JoshuaCommand(void* context, const jw_command_t* frame, uint8_t* response, s
 void JoshuaReset(void* context);
 
 /**
+ * @brief Refresh cached software feedback outside command dispatch.
+ *
+ * Samples position or velocity from the commanded target, updates the timestamp
+ * and increments the sample sequence. No physical motion is measured.
+ *
+ * @param[in,out] channel Non-null pointer to an initialized JoshuaChannel.
+ * @param[in] now_us Current monotonic time in microseconds for the feedback sample.
+ * @return None.
+ */
+void JoshuaService(JoshuaChannel* channel, uint64_t now_us);
+
+/**
  * @brief Latch a software emergency stop and accumulate fault flags for EtherCAT safety handling.
  *
  * Disables the actuator, discards its configuration, clears its target and

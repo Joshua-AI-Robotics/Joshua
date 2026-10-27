@@ -14,19 +14,22 @@
 
 #include "joshua_commands.h"
 #include "joshua_wire_endpoint.h"
-#include "joshua_wire_stream.h"
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
+#include "transport_uart.h"
 
 #define JOSHUA_SERIAL_TASK_STACK_SIZE 4096U
 #define JOSHUA_SERIAL_TASK_PRIORITY (TaskP_PRIORITY_HIGHEST - 4U)
-#define JOSHUA_SERIAL_BYTE_TIMEOUT_US 20000U
 
 static uint8_t task_stack[JOSHUA_SERIAL_TASK_STACK_SIZE] __attribute__((aligned(32)));
 static TaskP_Object task_object;
 static JoshuaChannel channel;
 static jw_endpoint_t endpoint;
-static jw_stream_decoder_t decoder;
+static uint32_t boot_id;
+
+static void TransmitTimeout(void* context) {
+  jw_runtime_fault(&((JoshuaChannel*)context)->runtime);
+}
 
 static bool BootId(uint32_t* boot) {
   uint32_t entropy[4];
@@ -43,50 +46,42 @@ static bool BootId(uint32_t* boot) {
   return ok && *boot != 0;
 }
 
-static bool UartRead(uint8_t* byte) {
-  UART_Transaction transaction;
-  UART_Transaction_init(&transaction);
-  transaction.buf = byte;
-  transaction.count = 1;
-  transaction.timeout = ClockP_usecToTicks(JOSHUA_SERIAL_BYTE_TIMEOUT_US);
-  return UART_read(gUartHandle[CONFIG_UART_CONSOLE], &transaction) == SystemP_SUCCESS &&
-         transaction.count == 1;
-}
-static bool UartWrite(const uint8_t* bytes, size_t size) {
-  UART_Transaction transaction;
-  UART_Transaction_init(&transaction);
-  transaction.buf = (void*)bytes;
-  transaction.count = size;
-  transaction.timeout = ClockP_usecToTicks(JOSHUA_SERIAL_BYTE_TIMEOUT_US);
-  return UART_write(gUartHandle[CONFIG_UART_CONSOLE], &transaction) == SystemP_SUCCESS;
-}
 static void JoshuaSerialTask(void* args) {
   (void)args;
+  JoshuaUartTransport uart;
+  const frame_transport_t transport =
+      JoshuaUartTransportInit(&uart, UART_getBaseAddr(gUartHandle[CONFIG_UART_CONSOLE]), 20u);
+  JoshuaInit(&channel, boot_id, JW_PLANE_MESSAGE);
+  serial_frame_transport_set_tx_timeout(
+      &uart.serial, JW_SERIAL_TX_STOP_TIMEOUT_MS, TransmitTimeout, &channel);
+  jw_endpoint_init(&endpoint);
+  uint8_t response[JW_MAX_FRAME_LEN];
+  size_t pending = 0;
   for (;;) {
-    channel.feedback.metadata.timestamp_us = ClockP_getTimeUsec();
-    ++channel.feedback.metadata.sequence;
-    uint8_t byte;
-    if (!UartRead(&byte)) continue;
-    int size = jw_stream_feed(&decoder, byte, (uint32_t)(ClockP_getTimeUsec() / 1000U));
-    if (size <= 0) continue;
-    uint8_t response[JW_MAX_FRAME_LEN];
-    const int result = jw_endpoint_process(&endpoint,
-                                           decoder.bytes,
-                                           size,
-                                           response,
-                                           sizeof(response),
-                                           JoshuaCommand,
-                                           JoshuaReset,
-                                           &channel);
-    if (result > 0) (void)UartWrite(response, result);
+    if (!pending) {
+      uint8_t request[JW_MAX_FRAME_LEN];
+      size_t size = 0;
+      if (transport.poll_receive(transport.context, request, sizeof(request), &size) == FRAME_OK) {
+        const int result = jw_endpoint_process(&endpoint,
+                                               request,
+                                               size,
+                                               response,
+                                               sizeof(response),
+                                               JoshuaCommand,
+                                               JoshuaReset,
+                                               &channel);
+        if (result > 0) pending = (size_t)result;
+      }
+    }
+    if (pending && transport.try_send(transport.context, response, pending) == FRAME_OK)
+      pending = 0;
+    JoshuaService(&channel, ClockP_getTimeUsec());
+    ClockP_usleep(1000u);
   }
 }
+
 int32_t JoshuaSerialStart(void) {
-  uint32_t boot;
-  if (!BootId(&boot)) return SystemP_FAILURE;
-  JoshuaInit(&channel, boot, JW_PLANE_MESSAGE);
-  jw_endpoint_init(&endpoint);
-  jw_stream_init(&decoder);
+  if (!BootId(&boot_id)) return SystemP_FAILURE;
   TaskP_Params parameters;
   TaskP_Params_init(&parameters);
   parameters.name = "joshua_serial";

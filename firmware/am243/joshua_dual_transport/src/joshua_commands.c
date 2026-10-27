@@ -76,10 +76,6 @@ static int profile(void* context,
       else {
         c->target_mode = target.mode;
         c->target_value = target.value;
-        c->feedback.position = target.mode == JW_MODE_POSITION ? target.value : 0;
-        c->feedback.velocity = target.mode == JW_MODE_VELOCITY ? target.value : 0;
-        ++c->feedback.metadata.sequence;
-        ++c->feedback.metadata.timestamp_us;
       }
       break;
     }
@@ -198,4 +194,11 @@ void JoshuaStop(void* context, uint16_t faults) {
 }
 bool JoshuaEnabled(void* context, uint8_t channel) {
   return channel == 0 && ((JoshuaChannel*)context)->enabled;
+}
+
+void JoshuaService(JoshuaChannel* c, uint64_t now_us) {
+  c->feedback.position = c->target_mode == JW_MODE_POSITION ? c->target_value : 0;
+  c->feedback.velocity = c->target_mode == JW_MODE_VELOCITY ? c->target_value : 0;
+  c->feedback.metadata.timestamp_us = now_us;
+  ++c->feedback.metadata.sequence;
 }

@@ -41,3 +41,26 @@ The fake coordinator/acquisition/scheduler illustrates protocol requirements;
 production concurrency/deadline/rollback tests belong to the H/F/T stacked PRs
 identified in the protocol contract and
 [board/comm migration plan](../../docs/BOARD_COMM_SEPARATION_PLAN.md).
+
+## Serial transmit fault budget
+
+Teensy, ESP32 and AM243 UART install a local-fault callback on the shared serial
+adapter. A response must leave its adapter-owned TX slot within 20 ms. The
+deadline is checked on every receive poll and send attempt, even when the
+application holds a second response and cannot admit another request. Partial
+writes do not extend the deadline. At 115200 baud a maximum 96-byte frame takes
+about 8.4 ms on the wire; the 20 ms budget allows normal frame draining while
+bounding a blocked connection. Expiry invokes the stop callback on the next
+serial service iteration (AM243 normally services every 1 ms); it is not a
+hardware watchdog against a stalled firmware loop.
+
+The callback disables and unconfigures every actuator, latches the runtime's
+stop interlock, and exposes `DEVICE_FAULT` with `ACTION_COMPLETE` and unsupported
+physical verification through `GET_STATUS`. It has no host action token. A queued
+ESTOP can remain unread until TX resumes, but outputs stop independently of it.
+Both response slots and the exact-retry cache retain their original bytes and
+ownership. A cached successful ENABLE reply therefore records the earlier action,
+not the current safety state; hosts must reconcile through `GET_STATUS`.
+Session reset preserves the latch. Recovery requires `RECOVER`, reconfiguration
+and explicit enable. These tests establish simulated output disabling, not a
+physical stop-time guarantee.

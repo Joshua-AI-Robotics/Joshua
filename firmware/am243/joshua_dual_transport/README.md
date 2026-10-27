@@ -36,7 +36,7 @@ INDUSTRIAL_COMMUNICATIONS_SDK_PATH=/path/to/ind_comms_sdk_am243x_09_00_00_03 \
 ```
 
 Artifacts are `out/am243_dual_transport_rev4.release.out` and matching `.appimage`
-variants. The shared revision-4 codec, stream parser, session, endpoint and runtime
+variants. The shared revision-4 codec, stream decoder, bounded serial adapter, session, endpoint and runtime
 are compiled with the actual TI compiler; no previous codec is linked.
 
 ## Flash
@@ -68,6 +68,12 @@ Verify the vendor EtherCAT PDO sample separately with its low-level smoke.
 
 - UART0 is binary after task initialization; SDK runtime text logs are disabled.
 - A single UART task owns the current JoshuaWire session and software actuator.
+  It polls the UART FIFO without blocking, retains replies under backpressure,
+  and splits frames larger than the 64-byte FIFO across service iterations.
+  An adapter-owned response overdue by 20 ms latches a local fault on the next
+  service iteration and disables/unconfigures the software actuator independently
+  of pending RX or available TX capacity. See the shared
+  [serial fault budget](../../common/README.md#serial-transmit-fault-budget).
   The independent TI demo must not be reinterpreted as a correlated JW endpoint.
 - Firmware callbacks return cached feedback. The UART loop refreshes its
   command-derived software sample with monotonic timestamps, including while idle.

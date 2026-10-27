@@ -125,3 +125,21 @@ MCU — but treat that as a prediction until it's actually been run.
 - USB-UART bridges may reset the MCU on open. The preset declares
   `post_open_settle_ms: 2000`, applied once by the shared serial mechanism.
 - UART0 pins 1/3, flash pins 6–11 and input-only GPIOs cannot be actuator outputs.
+
+## Bounded serial I/O and native tests
+
+The serial loop uses a retained transmit slot and keeps servicing STEP/DIR while
+UART output is blocked. Incoming frames use the shared revision-4 decoder; CRC,
+length and version failures never dispatch commands. Native `serial_test` builds
+the real setup/loop and transport with test-only GPIO, serial and entropy APIs.
+It does not qualify physical pulse timing or hardware stop behavior.
+
+A response retained in the adapter for 20 ms triggers a latched local fault,
+disabling and unconfiguring all channels even if a queued ESTOP cannot be read.
+See the shared [serial fault budget](../common/README.md#serial-transmit-fault-budget)
+for service timing, status, reply retention and explicit recovery requirements.
+
+The manual `//robot/board/joshua_wire:joshua_wire_smoke` CLI supports handshake,
+disabled configuration and opt-in exercise modes. Review `--help` and use
+`--dry_run` first; hardware execution requires explicit confirmation. Recovery
+of a latched ESTOP also requires `--allow_recover`.
