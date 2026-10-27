@@ -7,7 +7,6 @@ cc_library(
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         "//robot/comm/interfaces:byte_stream",
-        "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

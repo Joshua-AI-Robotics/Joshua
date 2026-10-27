@@ -152,7 +152,7 @@ into a `double`:
 It never subtracts a process-specific startup time or changes the hardware clock.
 The explicit `MONOTONIC` option remains boot-relative and does not subtract a UTC
 date. Changing the platform epoch later would change the time contract for every
-consumer. All clock reads use
+consumer. Timestamp reads use
 `RobotTime()` returning `double`, and custom clocks continue implementing the
 original `virtual double Now() const` interface. Combining the parts preserves
 fractional seconds within double precision. The more recent epoch reduces the
@@ -172,9 +172,11 @@ Once selected, the clock source stays fixed. Runtime read errors throw
 fabricated timestamp. Consumers call `RobotTime()` directly and leave clock failures
 to their exception boundary. `TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
-UTC/PTP can jump when the host adjusts time. Deadline values use
-`RobotTime() + timeout_seconds`. Serial exchange timeouts follow RobotTime only:
-pausing the clock pauses the timeout, and clock adjustments change the remaining wait.
+UTC/PTP can jump when the host adjusts time. RobotTime-based deadlines use
+`RobotTime() + timeout_seconds`, so clock adjustments change their remaining wait.
+Serial exchange timeouts use `std::chrono::steady_clock` to bound elapsed bus-lock
+wait, write, and read time independently of RobotTime adjustments, pauses, or
+read failures. These deadlines apply per attempt; a retry has its own timeout.
 
 ## Acquisition timestamps and ROS conversion
 
@@ -275,7 +277,8 @@ Audio recreates its timer when the negotiated capture interval changes.
 - [ ] Monitor synchronization health across configured clock sources.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Serial deadlines, cached feedback expiry, publisher schedules and audio retry/stall
-detection use RobotTime seconds. OS waits and executor wakeups use platform timers;
+Cached feedback expiry, publisher schedules and audio retry/stall detection use
+RobotTime seconds. Serial exchange deadlines use `std::chrono::steady_clock`.
+OS waits and executor wakeups use platform timers;
 logging retains its existing clock semantics. Utility entrypoints that only display
 incoming stamps do not create new acquisition timestamps and need no clock installation.

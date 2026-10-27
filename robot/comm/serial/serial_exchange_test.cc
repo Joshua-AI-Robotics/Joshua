@@ -207,42 +207,70 @@ TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
   EXPECT_EQ(*actual, response);
 }
 
-TEST_F(SerialExchangeTest, RobotTimeAdvanceExpiresPendingExchange) {
+TEST_F(SerialExchangeTest, RobotTimeAdvanceDoesNotExpirePendingExchange) {
   serial = std::make_unique<JoshuaWireSerialTransport>(link, 1.0);
   auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
   ASSERT_TRUE(ReadRequest());
   clock_->offset = 2.0;
-  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(200)), std::future_status::ready);
+  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(50)), std::future_status::timeout);
+  const auto response = Reply(1);
+  EXPECT_EQ(write(master, response.data(), response.size()), static_cast<ssize_t>(response.size()));
+  auto actual = exchange.get();
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
+}
+
+TEST_F(SerialExchangeTest, RobotTimeBackwardStepDoesNotExtendExchangeTimeout) {
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.05);
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  ASSERT_TRUE(ReadRequest());
+  clock_->offset = -2.0;
+  const auto state = exchange.wait_for(std::chrono::milliseconds(500));
+  clock_->offset = 0.0;
+  EXPECT_EQ(state, std::future_status::ready);
   EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
 }
 
-TEST_F(SerialExchangeTest, FrozenRobotTimeKeepsExchangePendingUntilClockResumes) {
+TEST_F(SerialExchangeTest, FrozenRobotTimeDoesNotExtendExchangeTimeout) {
   clock_->frozen = true;
   serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.025);
   auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
   EXPECT_TRUE(ReadRequest());
-  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(50)), std::future_status::timeout);
+  const auto state = exchange.wait_for(std::chrono::milliseconds(500));
+  // Resume before joining so a RobotTime-based timeout regression also finishes.
   clock_->offset = 2.0;
   clock_->frozen = false;
-  EXPECT_EQ(exchange.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+  EXPECT_EQ(state, std::future_status::ready);
   EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
 }
 
-TEST_F(SerialExchangeTest, RobotClockFailureDoesNotSendRequest) {
+TEST_F(SerialExchangeTest, RobotClockFailureDoesNotPreventExchange) {
   clock_->fail = true;
-  EXPECT_THROW(serial->Exchange(request), std::runtime_error);
-  pollfd descriptor{master, POLLIN, 0};
-  EXPECT_EQ(poll(&descriptor, 1, 10), 0);
+  const auto response = Reply(1);
+  auto device = std::async(std::launch::async, [&] {
+    if (!ReadRequest()) return false;
+    return write(master, response.data(), response.size()) == static_cast<ssize_t>(response.size());
+  });
+  auto actual = serial->Exchange(request);
+  EXPECT_TRUE(device.get());
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
 }
 
-TEST_F(SerialExchangeTest, BusLockWaitIsBoundedAndExpiredRequestIsNotSent) {
-  JoshuaWireSerialTransport slow(link, 0.3);
+TEST_F(SerialExchangeTest, BusLockWaitIsBoundedWithFrozenRobotTimeAndExpiredRequestIsNotSent) {
+  clock_->frozen = true;
+  JoshuaWireSerialTransport slow(link, 0.5);
   JoshuaWireSerialTransport fast(link, 0.025);
   auto first = std::async(std::launch::async, [&] { return slow.Exchange(request); });
   ASSERT_TRUE(ReadRequest());  // The first transaction now owns the physical bus.
-  auto second = fast.Exchange(request);
-  EXPECT_EQ(second.status().code(), absl::StatusCode::kDeadlineExceeded);
-  EXPECT_NE(second.status().message().find("not sent"), std::string::npos);
+  auto second = std::async(std::launch::async, [&] { return fast.Exchange(request); });
+  const auto state = second.wait_for(std::chrono::milliseconds(200));
+  clock_->offset = 2.0;
+  clock_->frozen = false;
+  EXPECT_EQ(state, std::future_status::ready);
+  auto result = second.get();
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(result.status().message().find("not sent"), std::string::npos);
   pollfd descriptor{master, POLLIN, 0};
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
   EXPECT_EQ(first.get().status().code(), absl::StatusCode::kDeadlineExceeded);

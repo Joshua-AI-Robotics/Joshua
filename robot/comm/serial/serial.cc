@@ -13,11 +13,9 @@
 #include <cstring>
 #include <thread>
 
-#include "utils/robot_time.h"
-
 namespace robot::comm {
 namespace {
-constexpr double kClockCheckInterval = 0.01;
+constexpr double kWaitCheckIntervalSeconds = 0.01;
 }  // namespace
 
 Serial::Serial(std::shared_ptr<boost::asio::io_context> io,
@@ -190,14 +188,21 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   if (request.empty() || !std::isfinite(timeout) || timeout <= 0 || timeout > INT_MAX / 1000.0 ||
       !consume)
     return absl::InvalidArgumentError("Invalid serial transaction or deadline.");
-  const double deadline = RobotTime() + timeout;
+  using Clock = std::chrono::steady_clock;
+  // Use elapsed time so UTC/PTP adjustments cannot extend hardware waits.
+  const auto deadline =
+      Clock::now() + std::chrono::ceil<Clock::duration>(std::chrono::duration<double>(timeout));
+  const auto remaining_seconds = [&] {
+    return std::chrono::duration<double>(deadline - Clock::now()).count();
+  };
   std::unique_lock<std::timed_mutex> lock(mutex_, std::defer_lock);
   while (!lock.owns_lock()) {
-    const double remaining = deadline - RobotTime();
+    const double remaining = remaining_seconds();
     if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
-    lock.try_lock_for(std::chrono::duration<double>(std::min(remaining, kClockCheckInterval)));
+    lock.try_lock_for(
+        std::chrono::duration<double>(std::min(remaining, kWaitCheckIntervalSeconds)));
   }
-  const double remaining = deadline - RobotTime();
+  const double remaining = remaining_seconds();
   if (remaining <= 0) return absl::DeadlineExceededError("Serial bus busy; request not sent.");
   if (!serial_->is_open()) return absl::FailedPreconditionError("Serial port is closed.");
   const int fd = serial_->native_handle();
@@ -217,20 +222,20 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> request,
   }
   auto wait = [&](short events) -> absl::Status {
     for (;;) {
-      const double remaining = deadline - RobotTime();
+      const double remaining = remaining_seconds();
       if (remaining <= 0) {
         return absl::DeadlineExceededError("Serial exchange timed out; outcome unknown.");
       }
       pollfd descriptor{fd, events, 0};
       const int poll_timeout_ms =
-          static_cast<int>(std::ceil(std::min(remaining, kClockCheckInterval) * 1000));
+          static_cast<int>(std::ceil(std::min(remaining, kWaitCheckIntervalSeconds) * 1000));
       const int result = poll(&descriptor, 1, poll_timeout_ms);
       if (result < 0 && errno == EINTR) continue;
       if (result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
         return absl::UnavailableError("Serial exchange lost its connection; outcome unknown.");
       }
       if (result > 0 && (descriptor.revents & events)) {
-        const double remaining = deadline - RobotTime();
+        const double remaining = remaining_seconds();
         if (remaining > 0) return absl::OkStatus();
       }
     }
