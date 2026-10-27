@@ -123,6 +123,7 @@ class ImageSource(ObservationSource[ImageFrame]):
         self._executable = os.path.abspath(executable)
         self._closed = self._poisoned = False
         self._process = self._query = self._stderr_task = self._spawn_task = None
+        self._query_started = False
         self._cleanup_task = None
         self._late_reaper = None
         self._stderr_size = self._counter = 0
@@ -446,6 +447,9 @@ class ImageSource(ObservationSource[ImageFrame]):
             )
 
     async def _bounded_read(self):
+        self._query_started = True
+        if self._closed:
+            return self._unavailable(UnavailableReason.CLOSED, "Image reader closed")
         try:
             return await asyncio.wait_for(self._read(), READ_TIMEOUT)
         except asyncio.TimeoutError:
@@ -454,7 +458,8 @@ class ImageSource(ObservationSource[ImageFrame]):
                 UnavailableReason.TIMEOUT, "Image query exceeded five seconds"
             )
         except asyncio.CancelledError:
-            await self._stop()
+            cleanup = asyncio.create_task(self._stop())
+            await self._settle(cleanup)
             if self._closed:
                 return self._unavailable(
                     UnavailableReason.CLOSED, "Image reader closed"
@@ -473,6 +478,7 @@ class ImageSource(ObservationSource[ImageFrame]):
             return self._unavailable(
                 UnavailableReason.BUSY, "One image query is already active"
             )
+        self._query_started = False
         task = self._query = asyncio.create_task(self._bounded_read())
         try:
             return await asyncio.shield(task)
@@ -492,7 +498,9 @@ class ImageSource(ObservationSource[ImageFrame]):
         self._closed = True
         query = self._query
         if query is not None and not query.done():
-            if first_close:
+            # An unstarted coroutine cannot catch cancellation; let its closed
+            # check resolve the pending read before it opens any helper resources.
+            if first_close and self._query_started:
                 query.cancel()
             try:
                 await self._settle(query)

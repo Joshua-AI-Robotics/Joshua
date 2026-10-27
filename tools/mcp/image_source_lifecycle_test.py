@@ -41,6 +41,82 @@ class ImageLifecycleTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.01)
         self.fail("helper did not spawn")
 
+    async def test_close_before_owned_query_starts_returns_closed(self):
+        source = self.source("time.sleep(60)\n")
+        consumer = asyncio.create_task(source.read_latest())
+        await asyncio.sleep(0)
+        self.assertIsNotNone(source._query)
+        self.assertIsNone(source._process)
+        self.assertIsNone(source._spawn_task)
+        with patch("tools.mcp.image_source.asyncio.create_subprocess_exec") as spawn:
+            await source.aclose()
+            result = await consumer
+            spawn.assert_not_called()
+        self.assertEqual(result.unavailable_reason, UnavailableReason.CLOSED)
+        self.assertFalse(consumer.cancelled())
+        self.assertIsNone(source._query)
+        self.assertIsNone(source._fd)
+
+    async def test_gather_read_and_close_returns_closed_without_starting_helper(self):
+        source = self.source("time.sleep(60)\n")
+        with patch("tools.mcp.image_source.asyncio.create_subprocess_exec") as spawn:
+            result, closed = await asyncio.gather(source.read_latest(), source.aclose())
+            spawn.assert_not_called()
+        self.assertEqual(result.unavailable_reason, UnavailableReason.CLOSED)
+        self.assertIsNone(closed)
+        self.assertIsNone(source._query)
+
+    async def test_caller_cancel_before_query_start_propagates_during_close(self):
+        source = self.source("time.sleep(60)\n")
+        consumer = asyncio.create_task(source.read_latest())
+        await asyncio.sleep(0)
+        self.assertIsNotNone(source._query)
+        self.assertIsNone(source._process)
+        consumer.cancel()
+        await source.aclose()
+        with self.assertRaises(asyncio.CancelledError):
+            await consumer
+        self.assertTrue(consumer.cancelled())
+        self.assertIsNone(source._process)
+
+    async def test_caller_cancellation_during_close_still_propagates_after_reaping(
+        self,
+    ):
+        source = self.source("time.sleep(60)\n")
+        consumer, process = await self.pending(source)
+        actual_wait = process.wait
+        reaping = asyncio.Event()
+        release = asyncio.Event()
+
+        async def delayed_wait():
+            reaping.set()
+            await release.wait()
+            return await actual_wait()
+
+        process.wait = delayed_wait
+        closing = asyncio.create_task(source.aclose())
+        await reaping.wait()
+        propagated = asyncio.Event()
+        consumer.add_done_callback(lambda _: propagated.set())
+        consumer.cancel()
+        propagated_before_cleanup = False
+        try:
+            await asyncio.wait_for(propagated.wait(), 0.05)
+            propagated_before_cleanup = True
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            release.set()
+            await closing
+        self.assertFalse(
+            propagated_before_cleanup,
+            "Caller cancellation propagated before source cleanup completed",
+        )
+        with self.assertRaises(asyncio.CancelledError):
+            await consumer
+        self.assertTrue(consumer.cancelled())
+        self.assertIsNotNone(process.returncode)
+
     async def test_overlap_close_resolves_consumer_without_cancelling_it(self):
         source = self.source("time.sleep(60)\n")
         task, process = await self.pending(source)
