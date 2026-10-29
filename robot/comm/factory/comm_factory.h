@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -48,8 +49,16 @@ absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport&
   return *selected;
 }
 
+struct CommImplementation {
+  CommType mechanism;
+  TransportType transport;
+  const char* support_scope;
+  absl::StatusOr<CommTransport> (*create)(const Comm&);
+  const char* configuration_constraints;
+};
 class CommFactory {
  public:
+  static const std::vector<CommImplementation>& Implementations();
   // Serial connections are shared per port; a conflicting baud rate is rejected.
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
 

@@ -225,10 +225,14 @@ NodeGenerator::~NodeGenerator() {
   instance_ = nullptr;
 }
 
-absl::Status NodeGenerator::Initialize() {
+absl::Status NodeGenerator::Initialize(const config::Config* loaded_config) {
   LOG(INFO) << "Initializing NodeGenerator with config: " << config_path_;
 
-  ABSL_ASSIGN_OR_RETURN(config_, config::config_util::LoadConfig(config_path_));
+  if (loaded_config)
+    config_ = *loaded_config;
+  else {
+    ABSL_ASSIGN_OR_RETURN(config_, config::config_util::LoadConfig(config_path_));
+  }
 
   ABSL_RETURN_IF_ERROR(IdentifyNodeTypes());
   ABSL_RETURN_IF_ERROR(CheckConfigIntegrity());
@@ -304,6 +308,27 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
 
 absl::Status NodeGenerator::CheckConfigIntegrity() {
   return config::ValidateConfig(config_);
+}
+
+absl::Status NodeGenerator::ConfigureObservation(const std::string& directory,
+                                                 const std::string& sensor) {
+  ABSL_ASSIGN_OR_RETURN(observation_,
+                        RuntimeObservation::Prepare(config_, config_path_, directory, sensor));
+  return absl::OkStatus();
+}
+
+void NodeGenerator::PublishObservation(const std::string& phase) noexcept {
+  if (!observation_) return;
+  try {
+    std::vector<ProcessFact> processes;
+    {
+      std::lock_guard<std::mutex> lock(nodes_mutex_);
+      for (const auto& [pid, n] : launched_nodes_)
+        processes.push_back({pid, n.node_id, n.node_name, n.node_type});
+    }
+    observation_->Tick(processes, identified_nodes_.size(), phase);
+  } catch (...) { /* Passive publication never owns runtime lifecycle. */
+  }
 }
 
 absl::Status NodeGenerator::LaunchAllNodes() {
@@ -467,9 +492,12 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
 
 absl::Status NodeGenerator::MonitorNodes() {
   LOG(INFO) << "Starting node monitoring...";
+  // All process forks are complete before any ROS/DDS context exists here.
+  if (observation_) observation_->Start();
 
   while (!shutdown_requested_) {
     MonitorChildProcesses();
+    PublishObservation("monitoring");
 
     bool empty;
     {
@@ -523,6 +551,9 @@ void NodeGenerator::MonitorChildProcesses() {
         LOG(ERROR) << "Node " << it->second.node_name << " (PID " << pid
                    << ") terminated by signal: " << WTERMSIG(status);
       }
+      if (observation_)
+        observation_->RecordExit(
+            {pid, it->second.node_id, it->second.node_name, it->second.node_type}, status);
       launched_nodes_.erase(it);
     } else {
       // This might happen if a child double-forked or is not tracked.
@@ -552,6 +583,9 @@ bool NodeGenerator::WaitForNodesToExit(int timeout_ms) {
 
       auto it = launched_nodes_.find(pid);
       if (it != launched_nodes_.end()) {
+        if (observation_)
+          observation_->RecordExit(
+              {pid, it->second.node_id, it->second.node_name, it->second.node_type}, status);
         launched_nodes_.erase(it);
       }
     }
@@ -628,10 +662,12 @@ void NodeGenerator::SetupSignalHandlers() {
 }
 
 void NodeGenerator::CleanupAndExit(int exit_code) {
+  PublishObservation("shutdown_requested");
   auto res = Shutdown();
   if (!res.ok()) {
     LOG(ERROR) << "Failed to shutdown nodes";
   }
+  PublishObservation("monitor_finished");
   exit(exit_code);
 }
 

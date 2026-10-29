@@ -354,6 +354,15 @@ robot {
                         },
                         "validator depends on hardware communication implementation",
                     )
+                if label.startswith("//robot/perception/") and "/proto:" not in label:
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/perception/audio:audio_config",
+                            "//robot/perception/audio:audio_config.h",
+                        },
+                        "validator depends on perception implementation",
+                    )
                 if label.startswith("//robot/action/") and "/proto:" not in label:
                     self.fail("validator depends on action implementation")
 

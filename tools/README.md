@@ -5,9 +5,10 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
-- [`mcp/`](mcp/README.md) — one stdio MCP tool that checks a per-call
-  protobuf config reference under an operator-selected root through the C++
-  integrity validator. It does not start a robot or inspect hardware readiness.
+- [`mcp/`](mcp/README.md) — seven read-only stdio MCP tools for config-free factory discovery,
+  per-call protobuf validation and device inspection, and optional private
+  runtime snapshots. The adapter never controls runtime or certifies hardware
+  readiness; validation-only startup remains available.
 
 - `lock_model.sh` — regenerate the per-model `requirements.lock` for one
   inference model. Model venvs install the repo-root `requirements.lock` plus
