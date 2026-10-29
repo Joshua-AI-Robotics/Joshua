@@ -5,8 +5,8 @@
 ## Principles
 
 - **Evidence first:** include identity, configuration, timestamps, units, and freshness.
-- **Honest results:** missing or stale evidence is `UNKNOWN`; observation does not certify safety.
-- **Low token use:** compute checks continuously; give the LLM summaries and targeted details.
+- **Honest results:** missing, stale, or misassociated evidence is `UNKNOWN`; observation does not certify safety.
+- **Low token use:** checks run without an LLM; summaries and targeted details are requested on demand.
 - **Replaceable storage:** one observability ABC, consistent behavior across providers.
 - **Local control:** protobuf remains authoritative; controllers/drives own enforcement and stopping.
 
@@ -20,12 +20,17 @@ roughly one second is desirable. Measure observation-to-MCP delay, excluding AI 
 
 **Queries:** AI client → MCP → `ObservabilityBackend(ABC)` → storage.
 
+No separate live-state service initially.
+
 Reuse [ROS diagnostics](https://github.com/ros/diagnostics); initially export through
 [Vector to VictoriaLogs](https://docs.victoriametrics.com/victorialogs/data-ingestion/vector/).
 Check existing feedback at the appropriate rate, publish status around once per
 second, and retain brief/recovered faults. Preserve device ownership, source
 identity, and duplicate detection. Expected inventory comes from deployment and
 [protobuf configuration](../config/README.md), including never-seen machines.
+Follow [message units and capabilities](../ros2/README.md#typed-position-and-actuator-messages):
+command acceptance or leader readings do not establish follower motion.
+Unknown units, calibration, or clock mapping yield `UNKNOWN`.
 
 ## Observability ABC
 
@@ -35,16 +40,15 @@ provider implements these asynchronous operations:
 | Method | Input | Output |
 |---|---|---|
 | `health_summary` | Machine/robot scope, fault lookback | Expected/reporting counts, verdicts, freshness, top issues |
-| `inspect_issue` | Machine/check, run/config, time window | Measurements, units, limits, and relevant events as of that window |
+| `inspect_issue` | Machine/check, run/config, time window | Measurements/limits at window end; events within the window |
 | `search_logs` | Scope/time, severity/tags, literal or regex filter | Bounded matching records and continuation when needed |
 | `aclose` | None; internal only | Release query resources |
 
 Shared guarantees: authorized scope, current-versus-historical context,
 `PASS`/`VIOLATION`/`UNKNOWN`, recent-fault visibility, and explicit errors.
+Summary counts cover the requested scope within authorization.
 Delayed replay must not appear current. Enforce configurable deadlines and
-record/byte limits; report truncation. Finalize concrete models and policy values
-with the first adapter. Optional provider metadata may extend these results
-without changing their meaning.
+record/byte limits; report truncation. Finalize models/policies during implementation.
 
 ## Provider selection and comparison
 
@@ -64,8 +68,9 @@ These are fit judgments, not benchmark rankings.
 
 ## First implementation and validation
 
-Start with one setup/motion diagnostic, buffered export, the VictoriaLogs
-adapter, and bounded MCP tools. Replay multi-machine data with brief faults,
-recovery, missing/stale feedback, duplicates, and restart/backlog. Verify results,
-scope and response limits. Target p95 freshness ≤5 seconds; measure peak delay,
+Start with one setup/motion diagnostic, its custom ROS adapter, buffered export,
+the VictoriaLogs adapter, and bounded MCP tools. Replay multi-machine data with
+brief faults, recovery, missing/stale feedback, config/clock changes, duplicates,
+and restart/backlog. Verify results, scope and response limits.
+Target p95 freshness ≤5 seconds; measure peak delay,
 resource use, and response size before choosing retention/capacity.
