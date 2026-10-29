@@ -1,102 +1,118 @@
-# ROS 2 observability through VictoriaLogs and MCP
+# ROS 2 observability design
 
-**Status:** Proposed; no runtime implementation or hardware verification.
+**Status:** Proposed architecture; this PR implements documentation only.
 
-## Goal and decision
+## Principles
 
-Debug multiple machines: is the expected setup present, is measured motion
-following commands, and are observed values within configured limits? Target
-five-second observation-to-MCP freshness; roughly one second is desirable.
-Minimize LLM tokens through deterministic checks and bounded summaries.
+- Report observed evidence, its source, coverage, and freshness; missing evidence
+  is `UNKNOWN`.
+- Keep robot configuration authoritative in protobuf. Observability records
+  reference the active revision rather than introducing another control policy.
+- Keep control, limit enforcement, and protective stopping local to their
+  implementing subsystem. Observation does not certify physical readiness.
+- Perform continuous checks and aggregation without an LLM. Return small
+  summaries first and detailed evidence only on request.
+- Separate MCP transport, observability contracts, and storage providers. User
+  selection changes the provider, not tool names or response semantics.
+- Reuse ROS diagnostics and existing feedback interfaces; preserve device/bus
+  ownership and measure performance before promising latency.
 
-Use central VictoriaLogs for structured diagnostic records and searchable logs.
-MCP queries it directly; start without a separate live-state service. This is a
-provisional choice pending representative replay measurements.
+## Goal
 
-## Data flow
+Answer whether each ROS 2 machine matches its expected setup, measured motion
+follows commands, and observed values meet configured limits. Target five-second
+observation-to-MCP freshness; roughly one second is desirable. AI prose generation
+is outside that budget. Process presence and command acceptance alone do not
+establish correct physical motion.
+
+## Collection and diagnostic pipeline
 
 ```mermaid
 flowchart LR
     R[Existing ROS feedback and logs] --> D[Per-machine checks and ROS diagnostics]
-    D --> V[Vector with bounded disk buffer]
-    V --> L[Central VictoriaLogs]
-    L --> M[Read-only bounded MCP]
+    D --> C[Buffered collector]
+    C --> S[Selected storage provider]
+    S --> B[ObservabilityBackend ABC implementation]
+    B --> M[Backend-neutral MCP tools]
     M --> A[AI client]
 ```
 
-Reuse [diagnostic_updater and diagnostic_aggregator](https://github.com/ros/diagnostics)
-for publishing and grouping diagnostics. Joshua-specific checks compare the
-[authoritative protobuf config](../config/README.md) with observed device/runtime
-identity, topic connectivity, and calibrated command/feedback values. Subscribe
-to existing feedback; preserve device/bus ownership. A leader sensor or accepted
-command does not establish follower motion. Respect each
-[message's units and feedback capabilities](../ros2/README.md#typed-position-and-actuator-messages).
+Reuse [ROS diagnostics](https://github.com/ros/diagnostics) for publication and
+aggregation. Joshua-specific checks compare [protobuf expectations](../config/README.md)
+with existing feedback using the [documented unit contracts](../ros2/README.md#typed-position-and-actuator-messages).
+Preserve device/bus ownership; leader feedback does not verify follower motion.
+Evaluate at the appropriate feedback rate, emit status around once per second,
+and preserve brief-fault events. Assign one collector per source, including
+stdout/stderr provenance, to prevent duplicate counting.
 
-Evaluate checks at the appropriate feedback rate. Emit periodic status around
-once per second even when unchanged, plus brief-fault events/counters so
-one-second summaries do not hide observed excursions. Sampled data cannot prove
-what occurred between samples. Capture relevant stdout/stderr alongside ROS logs;
-assign one owner per source to prevent domain-wide collection duplicates.
+Initially, [Vector sends JSONL to VictoriaLogs](https://docs.victoriametrics.com/victorialogs/data-ingestion/vector/)
+with bounded disk buffering, retries, overflow policy, and delivery-error
+reporting. Future providers need matching collector destinations/schema mappings.
+Buffering aids recovery but does not keep queries available during a central outage.
 
-[Vector](https://docs.victoriametrics.com/victorialogs/data-ingestion/vector/)
-batches JSONL records and sends them to VictoriaLogs. Configure disk buffering,
-retry, capacity/overflow policy, and delivery-error reporting. Buffering aids
-recovery; it does not preserve query availability during a database outage.
+## Evidence and freshness
 
-## Evidence and freshness contract
+Records preserve identity/config revision, producer boot/sequence, provenance,
+source time/clock domain, receipt time, measurements/units, and limits/tolerances.
+Expected inventory includes never-seen hosts. Summaries combine current status
+for the active run/config with deduplicated recent faults, including recovered
+excursions. Missing/stale/misassociated or uncalibrated evidence is `UNKNOWN`;
+`PASS` covers only the stated observed checks. Freshness is per signal; delayed
+replay must not appear live. Sampling cannot prove behavior between samples.
 
-Each record carries machine/robot/run/device identity, node/logger, event kind,
-severity, active config revision, producer boot/sequence identity, source
-provenance, measurement time/clock domain, and collector receipt time. Diagnostic
-records additionally carry check ID, measurements, units, applicable limits or
-tolerance references, coverage, and verdict: `PASS`, `VIOLATION`, or `UNKNOWN`.
-Limits are versioned evidence derived from config, never an independent policy.
+Measure collection through query time together. VictoriaLogs documents
+[up to one second of ingestion visibility delay](https://docs.victoriametrics.com/victorialogs/#forced-flush);
+routine forced flushes are discouraged.
 
-Publish expected inventory from deployment assignments and protobuf config;
-queries must identify machines that have never reported. Select coherent latest
-records per check and active run/config. Summaries also include deduplicated
-fault counts and recent excursions over a bounded lookback; recovery must not
-erase recent violations. Unknown units/calibration, mismatched
-identity/config, unavailable measurements, clock uncertainty, missing records,
-or stale feedback produce `UNKNOWN`. `PASS` covers only the stated observed
-checks, not physical readiness. Freshness thresholds are signal-specific,
-independent of the five-second display budget; delayed replay must not look live.
+## Abstract observability interface and MCP
 
-VictoriaLogs documents [up to one second of ingestion visibility delay](https://docs.victoriametrics.com/victorialogs/#forced-flush).
-Budget collection, buffering, transport, visibility, and query time together.
-Use bounded snapshot queries; routine forced flushes are discouraged.
+`ObservabilityBackend(ABC)` defines storage-independent typed operations.
+`ObservabilityMcpServer` validates requests, supplies trusted authorization/query
+budgets, delegates, and bounds serialized output. Providers translate queries
+and normalize results. The [contract](OBSERVABILITY_BACKEND_CONTRACT.md) defines
+types, errors, settings, and lifecycle.
 
-## Low-token MCP interface
+| ABC operation / MCP tool | Input | Output and hard initial bounds |
+|---|---|---|
+| `health_summary` | Scope and bounded fault lookback | Inventory/check counts, freshness, recent faults, up to five issues; 2 KiB |
+| `inspect_issue` | Machine, check, run/config, optional device, window | Evidence as of window end, limits, recent faults/log context; 20 records, 4 KiB |
+| `search_logs` | Time/scope, severity/tags, substring or regex, cursor | Selected normalized log fields; 20 records, 4 KiB |
+| `aclose` (internal only) | None | Release query-client resources |
 
-Expose two typed operations backed by server-side filters/aggregates:
+Use health summaries first and drill down on demand. Tool arguments contain no
+provider syntax, endpoints, credentials, or backend selector. Monitoring invokes
+no LLM. The vendor MCP does not supply this custom contract or its hard limits.
 
-| Operation | Proposed hard response bounds |
-|---|---|
-| `health_summary(scope, time_range)` | Counts/coverage, freshness, at most five top issues; 2 KiB |
-| `inspect_issue(machine_id, check_id, time_range)` | Measurements, limits, provenance, selected log context; 20 events, 4 KiB |
+## Provider choice and technology comparison
 
-Enforce time windows, query deadlines, output bytes, and truncation/pagination
-in code. Authenticated scope authorizes which machines may be queried. Use
-query-only backend access and expose no control operations. The
-[vendor MCP server](https://github.com/VictoriaMetrics/mcp-victorialogs)
-provides query tools; these typed contracts and hard bounds remain custom work.
-Monitoring invokes no LLM. The AI requests summaries and drills down on demand;
-the freshness target ends at the MCP result, not completion of AI prose.
+The operator selects `backend` in MCP deployment settings. Its default is
+`victorialogs`; the initial implementation supplies only
+`VictoriaLogsObservabilityBackend`. This PR remains documentation-only.
+Unimplemented selections fail startup, without silent fallback. Other adapters
+must pass the same contract tests before registration.
 
-## Boundaries and acceptance
+| Provider | Implementation plan | Best fit | Main tradeoff |
+|---|---|---|---|
+| [`victorialogs`](https://docs.victoriametrics.com/victorialogs/keyconcepts/) | Default; only initial provider | Shared diagnostic/log search | ROS export, checks, and typed adapter still need implementation |
+| [`clickhouse`](https://clickhouse.com/docs/reference/engines/table-engines/mergetree-family/textindexes) | Future; unimplemented | Telemetry joins and SQL analytics | More schema/index/ingestion design |
+| [`loki`](https://grafana.com/docs/loki/latest/get-started/overview/) | Future; unimplemented | Existing Grafana deployments | Body searches scan selected chunks |
+| [`sqlite_fts5`](https://www.sqlite.org/wal.html) | Future; unimplemented | Local archives/offline debugging | One writer; shared service requires integration |
 
-Limit enforcement and protective stopping belong to local controllers/drives;
-this proposal neither implements nor verifies them. This layer neither starts
-hardware nor owns runtime lifecycle. Raw sensor recordings,
-automatic repair, a metrics database, and database clustering are outside the
-initial increment. Reconsider ClickHouse if numerical telemetry joins dominate;
-evaluate ros2_medkit before building broader remote-diagnostic gateway features.
+These are fit judgments, not benchmarks. Prometheus/VictoriaMetrics could add
+numeric trends, and ros2_medkit could add ROS discovery/fault access; neither
+replaces this complete query contract or is an initial dependency.
 
-Replay a representative multi-machine recording containing a brief tracking
-fault, missing host, stale/misassociated feedback, config change, duplicate
-delivery, clock skew, and collector restart/backlog. Verify expected verdicts,
-read-only scope and response bounds. Acceptance proposal: p95 end-to-end freshness
-at most five seconds under the stated workload, reporting p99, peak delay, ingest
-lag, query latency, RAM/disk growth, and response bytes. Attempt one second
-without promising it. Before production, choose measured retention/capacity,
-buffer overflow behavior, and acceptable downtime/data loss.
+## Initial increment and acceptance
+
+Implement one configuration/command-feedback diagnostic, normalized records,
+buffered export, VictoriaLogs adapter, and bounded MCP tools. Raw sensor capture,
+automatic repair, a separate live-state service, and clustering are outside this
+increment. Local enforcement/protective stopping require separate verification.
+
+Replay multi-host data with brief/recovered faults, missing hosts, stale/wrong
+feedback, config changes, duplicates, clock skew, and collector restart/backlog.
+Verify verdicts, authorization, output bounds, and provider selection/failure.
+Proposed acceptance: p95 observation-to-MCP freshness at most five seconds under
+a stated workload; report p99/peak delay, ingest/query latency, resource use,
+and response bytes. Attempt one second without promising it. Choose retention,
+buffer capacity/overflow, and availability/data-loss requirements before production.
