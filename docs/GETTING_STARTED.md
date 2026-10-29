@@ -4,14 +4,18 @@ Joshua is Docker-first and GPU-first for development. The host should provide Do
 
 ## Host Bootstrap
 
-Use the bootstrap script to prepare Docker and NVIDIA host tooling:
+Use the bootstrap script to prepare Docker and NVIDIA host tooling and PTP clock read access:
 
 ```bash
 sudo ./scripts/setup.sh
 docker compose version
 ```
 
-If the script adds your user to the `docker` group, log out and back in before running Docker without `sudo`.
+The script adds the invoking sudo user to the `docker` and `ptp` groups. Log out
+and back in to apply new group membership. Its udev rule grants group read access
+to `/dev/ptp*`, including devices added later. RobotTime reads PTP directly,
+without a UTC-offset setting, and falls back to system UTC when unavailable; see
+[RobotTime configuration](ROBOT_TIME.md#configuration-and-time-domains).
 
 ## Docker Environments
 

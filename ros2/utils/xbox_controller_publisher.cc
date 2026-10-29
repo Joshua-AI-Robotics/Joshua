@@ -1,6 +1,7 @@
 #include <csignal>
 
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/utils/robot_timer.h"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include "utils/xbox_controller/xbox_controller.h"
 
@@ -9,8 +10,7 @@ class XboxControllerPublisher : public rclcpp::Node {
   XboxControllerPublisher() : Node("xbox_controller_publisher") {
     publisher_ =
         this->create_publisher<std_msgs::msg::Float32MultiArray>("xbox_controller_data", 10);
-    timer_ = this->create_wall_timer(std::chrono::milliseconds(16),  // 60Hz update rate
-                                     std::bind(&XboxControllerPublisher::publish_message, this));
+    timer_ = ros2_utils::CreateRobotTimer(*this, 0.016, [this]() { publish_message(); });
 
     // Initialize Xbox controller
     if (!xbox_controller_.Init()) {

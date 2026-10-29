@@ -9,12 +9,12 @@
 
 namespace joshua {
 
-// Fixed platform epoch: Unix epoch. Never use process startup as the epoch.
-inline constexpr double kRobotStartTime = 0.0;
+// Fixed platform epoch: 2025-06-17 00:00:00 UTC, expressed in Unix seconds.
+inline constexpr double kRobotStartTime = 1'750'118'400.0;
 inline constexpr double kNanosecondsPerSecond = 1'000'000'000.0;
 
-// Implementations must support concurrent reads. UTC/PTP return UTC seconds
-// since kRobotStartTime; an explicitly selected MONOTONIC clock is boot-relative.
+// Implementations must support concurrent reads. UTC/PTP subtract kRobotStartTime
+// from their source time; an explicitly selected MONOTONIC clock is boot-relative.
 class RobotClock {
  public:
   virtual ~RobotClock() = default;
@@ -42,7 +42,11 @@ void CheckGlobalClock();
 
 // Safe from helpers, callbacks and worker threads. Runtime read failures throw
 // std::runtime_error; they never return zero, stale data or switch clock sources.
-// Use a monotonic duration clock for deadlines rather than UTC/PTP robot time.
 double RobotTime();
 
+// Returns finite seconds or an Unavailable status for clock read failures.
+absl::StatusOr<double> TryRobotTime();
+
 }  // namespace joshua
+
+using joshua::RobotTime;

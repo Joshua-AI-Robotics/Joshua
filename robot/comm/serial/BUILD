@@ -7,6 +7,7 @@ cc_library(
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
         "//robot/comm/interfaces:byte_stream",
+        "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
@@ -58,6 +59,7 @@ cc_test(
         ":serial",
         "//firmware/common:joshua_wire",
         "//robot/comm/interfaces:caller_sized_message_transport",
+        "//utils:robot_time",
         "@boost.asio",
         "@googletest//:gtest_main",
     ],

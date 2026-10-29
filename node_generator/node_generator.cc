@@ -362,7 +362,7 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
   std::vector<std::string> env_to_unset;
   std::string work_dir;
 
-  // 1) Try to execute the native binary with its own runfiles when available (Bazel run).
+  // 1) Try to execute the native binary (Bazel run).
   if (auto native_bin = ResolveNativeBinaryInBazelBin(exec_name)) {
     exec_path = native_bin->string();
     if (!std::filesystem::exists(exec_path)) {
@@ -371,35 +371,27 @@ pid_t NodeGenerator::LaunchNode(const ros2::node::NodeType& node_type,
       return -1;
     }
 
-    std::filesystem::path bin_path(exec_path);
-    std::filesystem::path runfiles_dir =
-        bin_path.parent_path() / (bin_path.filename().string() + ".runfiles");
+    // Bazel refreshes the launcher's runfiles, but a data dependency's standalone
+    // runfiles tree may be left over from an earlier build.
+    auto runfiles_dir = GetRunfilesRoot();
+    if (!runfiles_dir) {
+      const std::filesystem::path own_runfiles(exec_path + ".runfiles");
+      if (std::filesystem::is_directory(own_runfiles)) {
+        runfiles_dir = own_runfiles;
+      }
+    }
 
-    if (std::filesystem::exists(runfiles_dir)) {
-      env_to_set.push_back({"RUNFILES_DIR", runfiles_dir.string()});
-      env_to_set.push_back({"TEST_SRCDIR", runfiles_dir.string()});
+    if (runfiles_dir) {
+      env_to_set.push_back({"RUNFILES_DIR", runfiles_dir->string()});
+      env_to_set.push_back({"TEST_SRCDIR", runfiles_dir->string()});
       env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
 
-      std::filesystem::path wd = runfiles_dir / "_main";
+      std::filesystem::path wd = *runfiles_dir / "_main";
       if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
         work_dir = wd.string();
       }
     } else {
-      // If the child binary does not have its own runfiles (e.g. data dependency),
-      // try to inherit the parent's runfiles.
-      if (auto parent_runfiles = GetRunfilesRoot()) {
-        env_to_set.push_back({"RUNFILES_DIR", parent_runfiles->string()});
-        env_to_set.push_back({"TEST_SRCDIR", parent_runfiles->string()});
-        env_to_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
-
-        // Try to set work_dir relative to parent runfiles
-        std::filesystem::path wd = *parent_runfiles / "_main";
-        if (std::filesystem::exists(wd) && std::filesystem::is_directory(wd)) {
-          work_dir = wd.string();
-        }
-      } else {
-        env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
-      }
+      env_to_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
     }
 
     argv_strings = {exec_path, node_name, std::to_string(node_id), config_path_};

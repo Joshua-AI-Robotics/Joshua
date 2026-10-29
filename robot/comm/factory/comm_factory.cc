@@ -123,9 +123,10 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
               return CommTransport{std::static_pointer_cast<MessageTransport>(
                   std::make_shared<JoshuaWireSerialTransport>(
                       *serial_or,
-                      std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
-                                                    ? comm.serial_config().exchange_timeout_ms()
-                                                    : kDefaultSerialExchangeTimeoutMs)))};
+                      (comm.serial_config().has_exchange_timeout_ms()
+                           ? comm.serial_config().exchange_timeout_ms()
+                           : kDefaultSerialExchangeTimeoutMs) /
+                          1000.0))};
             case SERIAL_MESSAGE_ADAPTER_UNSPECIFIED:
             default:
               return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");

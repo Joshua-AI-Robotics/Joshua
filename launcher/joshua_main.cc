@@ -1,9 +1,14 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <string>
+#include <utility>
+
 #include "config/config_utils.h"
+#include "config/validation.h"
 #include "launcher/simulation_launcher.h"
 #include "node_generator/node_generator.h"
+#include "utils/robot_time.h"
 #include "version.h"
 
 DEFINE_string(config,
@@ -24,6 +29,24 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   const auto& config = config_or.value();
+
+  const auto valid = config::ValidateConfig(config);
+  if (!valid.ok()) {
+    LOG(ERROR) << "Invalid config: " << valid;
+    return 1;
+  }
+  auto clock = joshua::MakeRobotClock(config.general().robot_clock());
+  if (!clock.ok()) {
+    LOG(ERROR) << "Failed to create robot clock: " << clock.status();
+    return 1;
+  }
+  const std::string clock_source((*clock)->SourceName());
+  const auto installed = joshua::SetGlobalRobotClock(std::move(*clock));
+  if (!installed.ok()) {
+    LOG(ERROR) << "Failed to install robot clock: " << installed;
+    return 1;
+  }
+  LOG(INFO) << "Robot clock initialized: " << clock_source;
 
   if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
     return launcher::RunSimulation(FLAGS_config, config);

@@ -2,7 +2,6 @@
 // deadline; board sessions own CRC, version and correlation.
 #pragma once
 
-#include <chrono>
 #include <memory>
 #include <utility>
 
@@ -13,8 +12,7 @@ namespace robot::comm {
 
 class JoshuaWireSerialTransport final : public MessageTransport {
  public:
-  explicit JoshuaWireSerialTransport(std::shared_ptr<Serial> serial,
-                                     std::chrono::milliseconds timeout)
+  explicit JoshuaWireSerialTransport(std::shared_ptr<Serial> serial, double timeout)
       : serial_(std::move(serial)), timeout_(timeout) {}
 
   absl::Status Send(absl::Span<const uint8_t> request) override {
@@ -24,7 +22,7 @@ class JoshuaWireSerialTransport final : public MessageTransport {
 
  private:
   std::shared_ptr<Serial> serial_;
-  std::chrono::milliseconds timeout_;
+  double timeout_;
 };
 
 }  // namespace robot::comm
