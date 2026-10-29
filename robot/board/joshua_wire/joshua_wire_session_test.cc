@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -69,6 +70,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
                                         JoshuaReset,
                                         &channel);
     --active;
+    if (throw_response) throw std::runtime_error("Response read failed");
     if (timeout || len == 0) return absl::DeadlineExceededError("Response lost");
     if (len < 0) return absl::InternalError("Firmware handler failed");
     response.resize(len);
@@ -113,6 +115,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
   Bytes retained;
   Bytes last_response;
   bool timeout = false;
+  bool throw_response = false;
   bool delay = false;
   int corrupt_field = -1;
   std::atomic<int> active{0};
@@ -160,6 +163,98 @@ TEST_F(JoshuaWireSessionTest, CommonRepliesAndProfileRoutingShareOneIdAllocator)
     EXPECT_EQ(frame.message_id, expected++);
   }
 }
+TEST_F(JoshuaWireSessionTest, CloseDisablesOutputsAndReopensWithoutRecovery) {
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_TRUE(transport->requests.empty());
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  ASSERT_TRUE(transport->channel.enabled);
+  jw_frame_t opened{};
+  ASSERT_EQ(jw_decode_frame(transport->requests.front().data(),
+                            transport->requests.front().size(),
+                            &opened),
+            JW_RESULT_OK);
+
+  ASSERT_TRUE(session.Close().ok());
+  EXPECT_FALSE(transport->channel.enabled);
+  EXPECT_FALSE(transport->channel.configured);
+  EXPECT_FALSE(transport->channel.estopped);
+  jw_frame_t closed{};
+  ASSERT_EQ(jw_decode_frame(transport->requests.back().data(),
+                            transport->requests.back().size(),
+                            &closed),
+            JW_RESULT_OK);
+  EXPECT_EQ(closed.cmd, JW_CMD_RESET_SESSION);
+  EXPECT_NE(closed.session_id, opened.session_id);
+  EXPECT_EQ(closed.message_id, 1u);
+  const auto count = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_EQ(transport->requests.size(), count);
+
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  EXPECT_TRUE(transport->channel.configured);
+  EXPECT_FALSE(transport->channel.enabled);
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  EXPECT_TRUE(transport->channel.enabled);
+  for (const auto& bytes : transport->requests) {
+    jw_frame_t frame{};
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+    EXPECT_NE(frame.cmd, JW_CMD_ESTOP);
+    EXPECT_NE(frame.cmd, JW_CMD_RECOVER);
+  }
+}
+
+TEST_F(JoshuaWireSessionTest, ClosePreservesExistingEstop) {
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_ESTOP)).ok());
+  ASSERT_TRUE(transport->channel.estopped);
+  ASSERT_TRUE(session.Close().ok());
+  EXPECT_TRUE(transport->channel.estopped);
+  EXPECT_FALSE(transport->channel.enabled);
+  ASSERT_TRUE(session.Open().ok());
+  auto configured = session.Exchange(Configure());
+  ASSERT_TRUE(configured.ok());
+  ASSERT_FALSE(configured->empty());
+  EXPECT_EQ((*configured)[0], JW_STATUS_UNAVAILABLE);
+  EXPECT_FALSE(transport->channel.configured);
+  EXPECT_TRUE(transport->channel.estopped);
+}
+
+TEST_F(JoshuaWireSessionTest, LostCloseReplyIsReportedAndSessionStaysClosed) {
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  transport->timeout = true;
+  EXPECT_EQ(session.Close().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_FALSE(transport->channel.enabled);
+  EXPECT_FALSE(transport->channel.estopped);
+  ASSERT_GE(transport->requests.size(), 2u);
+  EXPECT_EQ(transport->requests.back(), transport->requests[transport->requests.size() - 2]);
+  transport->timeout = false;
+  const auto count = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Command(JW_CMD_IDENTIFY)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_EQ(transport->requests.size(), count);
+}
+
+TEST_F(JoshuaWireSessionTest, CloseExceptionInvalidatesSession) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->throw_response = true;
+  EXPECT_THROW(session.Close(), std::runtime_error);
+  transport->throw_response = false;
+  const auto count = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Command(JW_CMD_IDENTIFY)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_EQ(transport->requests.size(), count);
+}
+
 TEST_F(JoshuaWireSessionTest, UnknownOutcomeRetriesIdenticalBytesAndGatesMutations) {
   ASSERT_TRUE(session.Open().ok());
   ASSERT_TRUE(session.Exchange(Configure()).ok());

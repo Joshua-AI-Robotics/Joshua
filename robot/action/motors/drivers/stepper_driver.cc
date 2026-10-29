@@ -162,11 +162,10 @@ absl::Status StepperDriver::SetIdlePosition() {
 }
 
 absl::Status StepperDriver::Teardown() {
-  auto idle_status = SetIdlePosition();
-  if (!idle_status.ok()) {
-    return idle_status;
-  }
-  return SetTorque(0.0f);
+  const auto idle_status = SetIdlePosition();
+  const auto disable_status = SetTorque(0.0f);
+  if (!disable_status.ok()) return disable_status;
+  return idle_status;
 }
 
 }  // namespace robot::action
