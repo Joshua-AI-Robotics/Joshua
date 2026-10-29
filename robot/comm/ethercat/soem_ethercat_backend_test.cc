@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "firmware/am243/joshua_dual_transport/src/am243_software_backend.h"
+#include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire_ethercat.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "gtest/gtest.h"
@@ -1922,6 +1924,191 @@ TEST_F(JwecAdapterTest, MalformedMailboxRequiresResetAndConcurrentCyclicCallsSer
 
 // End-to-end wire contract: the real host adapters talk to the exact portable
 // C firmware core used by the AM243 artifact, not a second protocol simulator.
+struct FirmwareProfileTrace : IoTrace {
+  FirmwareProfileTrace() {
+    outputs.assign((2 * JWEC_PDO_SIZE), 0);
+    for (size_t i = 0; i < 2; ++i) {
+      JoshuaEthercatProfileConfig config{};
+      JoshuaInit(&channels[i], 100 + i, JW_PLANE_MESSAGE | JW_PLANE_CYCLIC);
+      config.identity = channels[i].runtime.identity;
+      std::memcpy(config.artifact, "am243-software", 11);
+      config.context = &channels[i];
+      config.command = JoshuaCommand;
+      config.reset = JoshuaReset;
+      config.stop = JoshuaStop;
+      config.enabled = JoshuaEnabled;
+      EXPECT_EQ(JoshuaEthercatProfileInit(&profiles[i], &config, 2000000, 1000000), 0);
+    }
+  }
+  JoshuaChannel channels[2]{};
+  JoshuaEthercatProfile profiles[2];
+  uint16_t incompatible_slave = 0;  // Set before opening the owner.
+  std::atomic<int> starts{0};
+  std::atomic<int> teardowns{0};
+};
+class FirmwareProfileIo : public TestMasterIo {
+ public:
+  explicit FirmwareProfileIo(std::shared_ptr<FirmwareProfileTrace> trace)
+      : TestMasterIo(trace), trace_(std::move(trace)) {}
+  bool HasIncrementalSdo() const override {
+    return true;
+  }
+  absl::StatusOr<PdoRegion> GetPdoRegion(uint16_t slave) const override {
+    return PdoRegion{slave,
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     size_t((slave - 1) * JWEC_PDO_SIZE),
+                     JWEC_PDO_SIZE,
+                     JWEC_PDO_SIZE};
+  }
+  absl::Status StartCyclic() override {
+    trace_->Call("start");
+    ++trace_->starts;
+    operational_ = true;
+    return absl::OkStatus();
+  }
+  absl::Status StopCyclic() override {
+    trace_->Call("stop");
+    operational_ = false;
+    return absl::OkStatus();
+  }
+  absl::Status Teardown() override {
+    ++trace_->teardowns;
+    return TestMasterIo::Teardown();
+  }
+  absl::StatusOr<SdoBytes> ReadSdo(SdoAddress a, size_t capacity, int) override {
+    trace_->Call("read_profile");
+    Tick();
+    SdoBytes result(capacity);
+    if (JoshuaEthercatProfileRead(&trace_->profiles[a.slave - 1], a.index, result.data(), capacity))
+      return absl::InvalidArgumentError("firmware rejected SDO read");
+    if (a.index == JWEC_DESCRIPTOR_INDEX && a.slave == trace_->incompatible_slave) result[0] = 0;
+    return result;
+  }
+  absl::Status WriteSdo(SdoAddress a, const SdoBytes& bytes, int) override {
+    trace_->Call("write_profile");
+    Tick();
+    if (JoshuaEthercatProfileWrite(
+            &trace_->profiles[a.slave - 1], a.index, bytes.data(), bytes.size()))
+      return absl::InvalidArgumentError("firmware rejected SDO write");
+    return absl::OkStatus();
+  }
+  absl::Status BeginSdo(SdoAddress a, bool write, SdoBytes bytes, size_t capacity) override {
+    address_ = a;
+    write_ = write;
+    bytes_ = std::move(bytes);
+    capacity_ = capacity;
+    return absl::OkStatus();
+  }
+  absl::StatusOr<std::optional<SdoBytes>> StepSdo(int timeout) override {
+    if (write_) {
+      const auto status = WriteSdo(address_, bytes_, timeout);
+      if (!status.ok()) return status;
+      return std::optional<SdoBytes>(SdoBytes{});
+    }
+    auto response = ReadSdo(address_, capacity_, timeout);
+    if (!response.ok()) return response.status();
+    return std::optional<SdoBytes>(std::move(*response));
+  }
+  absl::StatusOr<ProcessData> ExchangeProcessData(int) override {
+    trace_->Call("exchange");
+    Tick();
+    SdoBytes input;
+    for (size_t i = 0; i < 2; ++i) {
+      auto& profile = trace_->profiles[i];
+      (void)JoshuaEthercatProfilePdo(
+          &profile, trace_->outputs.data() + i * JWEC_PDO_SIZE, JWEC_PDO_SIZE);
+      input.insert(input.end(), profile.input, profile.input + JWEC_PDO_SIZE);
+    }
+    return ProcessData{trace_->outputs, input, 6, 6};
+  }
+
+ private:
+  void Tick() {
+    const uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now().time_since_epoch())
+                             .count();
+    for (size_t i = 0; i < 2; ++i) {
+      JoshuaService(&trace_->channels[i], now);
+      JoshuaEthercatProfileTick(&trace_->profiles[i], now, operational_);
+    }
+  }
+  std::shared_ptr<FirmwareProfileTrace> trace_;
+  bool operational_ = false;
+  SdoAddress address_{};
+  bool write_ = false;
+  SdoBytes bytes_;
+  size_t capacity_ = 0;
+};
+
+TEST(JwecProfileTest, HostAdaptersInteroperateWithProductionAm243FirmwareCore) {
+  auto trace = std::make_shared<FirmwareProfileTrace>();
+  auto opened = EthercatMaster::Open(std::make_unique<FirmwareProfileIo>(trace),
+                                     "test-only",
+                                     ProcessDataMode::kSplitLrdLwr,
+                                     RuntimeOptions());
+  ASSERT_TRUE(opened.ok());
+  std::shared_ptr<EthercatMaster> master(std::move(*opened));
+  auto connected = JoshuaWireEthercatTransport::Open(master, 1, {1s, 5ms});
+  ASSERT_TRUE(connected.ok()) << connected.status();
+  auto endpoint = *connected;
+  ASSERT_TRUE(endpoint->Exchange(JwecRequest(1, JW_CMD_RESET_SESSION)).ok());
+  auto identity = endpoint->Exchange(JwecRequest(2, JW_CMD_IDENTIFY));
+  ASSERT_TRUE(identity.ok()) << identity.status();
+  jw_frame_t frame;
+  ASSERT_EQ(jw_decode_frame(identity->data(), identity->size(), &frame), JW_RESULT_OK);
+  jw_identify_response_t value;
+  ASSERT_EQ(jw_decode_identify_payload(frame.payload + 2, frame.payload_len - 2, &value),
+            JW_RESULT_OK);
+  EXPECT_EQ(value.protocol_min, JW_PROTO_VERSION);
+  EXPECT_EQ(std::string(value.fw_name), "am243-software");
+  ASSERT_TRUE(master
+                  ->StartCyclic({JoshuaWireEthercatTransport::StopImage(),
+                                 JoshuaWireEthercatTransport::StopImage()})
+                  .ok());
+  auto command = [&](uint32_t id, uint8_t cmd, const SdoBytes& payload = SdoBytes{}) {
+    SdoBytes body = payload;
+    if (cmd == kConfigure && body == SdoBytes(11)) {
+      body[0] = 0xe8;
+      body[1] = 3;
+    }
+    uint8_t data[JW_MAX_PAYLOAD_LEN];
+    jw_profile_request_t operation{
+        JW_PROFILE_ACTUATOR, 1, 0, static_cast<uint8_t>(cmd - 0x80), body.data(), body.size()};
+    int length = jw_encode_profile_request(data, sizeof(data), &operation);
+    SdoBytes bytes(JW_MAX_FRAME_LEN);
+    bytes.resize(
+        jw_encode_frame(bytes.data(), bytes.size(), 7, id, JW_CMD_PROFILE, 0, data, length));
+
+    return bytes;
+  };
+  ASSERT_TRUE(endpoint->Exchange(command(3, kConfigure, SdoBytes(11))).ok());
+  auto enabled = endpoint->Exchange(command(4, kEnable));
+  ASSERT_TRUE(enabled.ok()) << enabled.status();
+  ASSERT_EQ(jw_decode_frame(enabled->data(), enabled->size(), &frame), JW_RESULT_OK);
+  ASSERT_EQ(frame.payload_len, 2);
+  EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
+  SdoBytes target(5);
+  ASSERT_EQ(jw_encode_set_target_payload(target.data(), target.size(), JW_MODE_POSITION, 123.0f),
+            5);
+  auto set = endpoint->Exchange(command(5, kSetTarget, target), absl::Seconds(1));
+  ASSERT_TRUE(set.ok()) << set.status();
+  ASSERT_EQ(jw_decode_frame(set->data(), set->size(), &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.payload[0], JW_STATUS_OK);
+  auto feedback = endpoint->Exchange(command(6, kFeedback), absl::Seconds(1));
+  ASSERT_TRUE(feedback.ok()) << feedback.status();
+  ASSERT_EQ(jw_decode_frame(feedback->data(), feedback->size(), &frame), JW_RESULT_OK);
+  jw_feedback_t motion;
+  ASSERT_EQ(jw_decode_feedback_payload(frame.payload + 2, frame.payload_len - 2, &motion),
+            JW_RESULT_OK);
+  EXPECT_FLOAT_EQ(motion.position, 123.0f);
+  EXPECT_EQ(motion.fault_flags, 0);
+  ASSERT_TRUE(endpoint->Exchange(JwecRequest(7, JW_CMD_ESTOP)).ok());
+  endpoint->Stop();
+  ASSERT_TRUE(master->Stop().ok());
+  EXPECT_FALSE(trace->channels[0].enabled);
+  EXPECT_TRUE(trace->channels[0].estopped);
+  for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
+}
 
 }  // namespace
 }  // namespace robot::comm::ethercat

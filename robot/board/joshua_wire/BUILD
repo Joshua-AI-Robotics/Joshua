@@ -72,7 +72,8 @@ cc_test(
     deps = [
         ":joshua_wire_board",
         ":joshua_wire_session",
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
+        "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_profiles",
         "//robot/comm/factory:comm_factory",
@@ -116,7 +117,7 @@ cc_test(
     srcs = ["joshua_wire_smoke_test.cc"],
     data = [":joshua_wire_smoke"],
     deps = [
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
@@ -127,7 +128,7 @@ cc_test(
     srcs = ["serial_validation_test.cc"],
     deps = [
         ":serial_validation",
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
