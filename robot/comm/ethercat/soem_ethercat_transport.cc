@@ -1,6 +1,7 @@
 #include "robot/comm/ethercat/soem_ethercat_transport.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
@@ -43,11 +44,13 @@ int ExpectedWorkingCount(const ec_groupt& group) {
 }
 
 absl::Status ValidateRegionBounds(const PdoRegion& region, const ec_groupt& group) {
-  if (region.output_offset_bytes + region.output_size_bytes > group.Obytes) {
+  if (region.output_offset_bytes > group.Obytes ||
+      region.output_size_bytes > group.Obytes - region.output_offset_bytes) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "SOEM EtherCAT output PDO region is outside mapped outputs");
   }
-  if (region.input_offset_bytes + region.input_size_bytes > group.Ibytes) {
+  if (region.input_offset_bytes > group.Ibytes ||
+      region.input_size_bytes > group.Ibytes - region.input_offset_bytes) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "SOEM EtherCAT input PDO region is outside mapped inputs");
   }
@@ -86,8 +89,7 @@ std::string BuildMappingFailureMessage(ecx_contextt* context, bool zero_identity
     const uint32_t sii_revision =
         etohl(ecx_readeeprom(context, slave_index, ECT_SII_REV, EC_TIMEOUTEEP));
 
-    message << " slave[" << slave_index << "]"
-            << " name=\"" << slave.name << "\""
+    message << " slave[" << slave_index << "]" << " name=\"" << slave.name << "\""
             << " Obits=" << slave.Obits << " Ibits=" << slave.Ibits << " Obytes=" << slave.Obytes
             << " Ibytes=" << slave.Ibytes << " blockLRW=" << static_cast<int>(slave.blockLRW)
             << " configadr=" << Hex16(slave.configadr) << " al_status=" << Hex16(al_status)
@@ -133,6 +135,7 @@ struct SoemEthercatTransport::State {
   bool initialized = false;
   bool configured = false;
   bool cyclic_started = false;
+  bool mailbox_closed = false;
 };
 
 SoemEthercatTransport::SoemEthercatTransport() : state_(std::make_unique<State>()) {
@@ -253,6 +256,7 @@ absl::Status SoemEthercatTransport::StartCyclic() {
   if (state_->cyclic_started) {
     return absl::OkStatus();
   }
+  state_->mailbox_closed = true;
 
   constexpr uint8_t kDefaultGroup = 0;
   ecx_contextt* context = &state_->context;
@@ -306,6 +310,7 @@ absl::Status SoemEthercatTransport::Teardown() {
   state_->configured = false;
   state_->cyclic_started = false;
   state_->io_map.clear();
+  state_->mailbox_closed = false;
   state_->slaves.clear();
   state_->pdo_regions.clear();
   interface_name_.clear();
@@ -377,6 +382,11 @@ absl::StatusOr<std::vector<uint8_t>> SoemEthercatTransport::ReadInputs(
 }
 
 absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData() {
+  return ExchangeProcessData(EC_TIMEOUTRET);
+}
+
+absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData(int timeout_us) {
+  if (timeout_us <= 0) return absl::InvalidArgumentError("process timeout must be positive");
   if (!state_->configured) {
     return NotConfiguredStatus("ExchangeProcessData");
   }
@@ -389,7 +399,7 @@ absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData() {
   ec_groupt& group = context->grouplist[kDefaultGroup];
 
   ecx_send_processdata_group(context, kDefaultGroup);
-  const int working_count = ecx_receive_processdata_group(context, kDefaultGroup, EC_TIMEOUTRET);
+  const int working_count = ecx_receive_processdata_group(context, kDefaultGroup, timeout_us);
 
   ProcessData process_data;
   process_data.expected_working_count = ExpectedWorkingCount(group);
@@ -401,6 +411,87 @@ absl::StatusOr<ProcessData> SoemEthercatTransport::ExchangeProcessData() {
     process_data.inputs.assign(group.inputs, group.inputs + group.Ibytes);
   }
   return process_data;
+}
+
+absl::Status SoemEthercatTransport::CheckOperational(int timeout_us) {
+  if (!state_->cyclic_started) return NotStartedStatus("CheckOperational");
+  if (timeout_us <= 0) return absl::InvalidArgumentError("state timeout must be positive");
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(timeout_us);
+  auto* context = &state_->context;
+  for (int i = 1; i <= context->slavecount; ++i) {
+    const auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(
+                               deadline - std::chrono::steady_clock::now())
+                               .count();
+    if (remaining <= 0) return absl::DeadlineExceededError("AL state check exceeded budget");
+    uint16_t state = 0;
+    const int wkc = ecx_FPRD(&context->port,
+                             context->slavelist[i].configadr,
+                             ECT_REG_ALSTAT,
+                             sizeof(state),
+                             &state,
+                             static_cast<int>(remaining));
+    if (wkc != 1 || etohs(state) != EC_STATE_OPERATIONAL)
+      return absl::UnavailableError("EtherCAT slave " + std::to_string(i) + " is not OPERATIONAL");
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SoemEthercatTransport::ValidateSdo(SdoAddress address,
+                                                size_t size,
+                                                int timeout_us) const {
+  if (!state_->configured) return NotConfiguredStatus("SDO access");
+  if (state_->mailbox_closed)
+    return absl::FailedPreconditionError("blocking SOEM SDO is forbidden during cyclic operation");
+  if (address.slave == 0 || address.slave > state_->slaves.size() || size == 0 || size > 4096 ||
+      timeout_us <= 0)
+    return absl::InvalidArgumentError("invalid SDO slave, size (1..4096), or timeout");
+  const auto& slave = state_->context.slavelist[address.slave];
+  if (!(slave.mbx_proto & ECT_MBXPROT_COE) || slave.mbx_l < 16 || slave.mbx_rl < 16)
+    return absl::FailedPreconditionError("slave has no usable CoE mailbox");
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<uint8_t>> SoemEthercatTransport::ReadSdo(SdoAddress address,
+                                                                    size_t capacity,
+                                                                    int timeout_us) {
+  const auto valid = ValidateSdo(address, capacity, timeout_us);
+  if (!valid.ok()) return valid;
+  std::vector<uint8_t> bytes(capacity);
+  int size = static_cast<int>(capacity);
+  // Pinned SOEM 2.0.0 src/ec_coe.c uses EC_TIMEOUTTXM and repeated receive
+  // waits internally. This argument does not bound total transfer duration.
+  const int wkc = ecx_SDOread(&state_->context,
+                              address.slave,
+                              address.index,
+                              address.subindex,
+                              FALSE,
+                              &size,
+                              bytes.data(),
+                              timeout_us);
+  if (wkc <= 0) return absl::UnavailableError("SOEM SDO read failed (abort or transport failure)");
+  if (size < 0 || static_cast<size_t>(size) > capacity)
+    return absl::DataLossError("SOEM returned an invalid SDO size");
+  bytes.resize(static_cast<size_t>(size));
+  return bytes;
+}
+
+absl::Status SoemEthercatTransport::WriteSdo(SdoAddress address,
+                                             const std::vector<uint8_t>& bytes,
+                                             int timeout_us) {
+  const auto valid = ValidateSdo(address, bytes.size(), timeout_us);
+  if (!valid.ok()) return valid;
+  const int wkc = ecx_SDOwrite(&state_->context,
+                               address.slave,
+                               address.index,
+                               address.subindex,
+                               FALSE,
+                               static_cast<int>(bytes.size()),
+                               bytes.data(),
+                               timeout_us);
+  if (wkc <= 0)
+    return absl::UnavailableError(
+        "SOEM SDO write failed (abort or transport failure); outcome unknown");
+  return absl::OkStatus();
 }
 
 }  // namespace robot::comm::ethercat
