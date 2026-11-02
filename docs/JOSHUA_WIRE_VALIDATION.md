@@ -10,17 +10,18 @@ Follow the [hardware-safety rules](../AGENTS.md#hardware-safety--read-this-first
 Start with motor power disconnected, a secured mechanism and no other process
 using the port. Even the handshake changes hardware state: opening serial may
 reset the MCU, RESET_SESSION disables all channels and clears configuration,
-and cleanup sends board-wide ESTOP. Loss of holding torque can be hazardous.
+and cleanup sends a fresh RESET_SESSION with the same disabling behavior. Loss
+of holding torque can be hazardous.
 
 `--confirm_hardware` acknowledges setup; it is not a wiring check or interlock.
 The probe opens only the selected board and does not honor
 `general.operation_mode`. It requires explicit `protocol: JOSHUA_WIRE`
 and never falls back to JW1. The older JW1 smoke tool is removed.
 
-Serial firmware has no communication-loss watchdog. Cleanup attempts ESTOP after
-command failure or SIGINT/SIGTERM, but a lost link, crash or SIGKILL can prevent
-it. A timeout means the command outcome may be unknown. Keep a physical
-motor-power cutoff available; USB disconnect is not an emergency stop.
+Serial firmware has no communication-loss watchdog. Cleanup attempts
+RESET_SESSION after command failure or SIGINT/SIGTERM, but a lost link, crash or
+SIGKILL can prevent it. A timeout means the command outcome may be unknown. Keep
+a physical motor-power cutoff available; USB disconnect is not an emergency stop.
 Targets are absolute native steps, bypassing actuator conversions and joint
 limits. Feedback counts commanded pulses, not measured motor movement.
 
@@ -53,14 +54,15 @@ zero to test only the configured runtime post-open delay.
 1. Deliberately flash the matching [JW artifact](../firmware/README.md#joshuawire-serial).
    AM243 UART has a software-only channel; Teensy/ESP32 can drive GPIO.
 2. Replace `--dry_run` with `--confirm_hardware`. The default handshake runs
-   RESET_SESSION, IDENTIFY and ESTOP, without configuring or enabling channels.
+   RESET_SESSION, IDENTIFY and a fresh RESET_SESSION, without configuring or
+   enabling channels.
 3. Add `--mode=configure --channel=0`, first as a dry-run. This configures the
    channel and reads feedback without enabling it. Configuration writes GPIO
    on Teensy/ESP32, so review pins even with motor power disconnected.
 4. With motor power disconnected, optionally add `--mode=exercise --channel=0
    --allow_enable --target_steps=<reviewed-absolute-target>`. The probe sets a
    hold target, enables, sends the target, reads feedback once, disables and
-   ESTOPs. It does not wait for arrival or test a trajectory.
+   resets the session. It does not wait for arrival or test a trajectory.
 5. Use `--sessions=2` for fresh sessions on one open port. For reboot/reconnect
    recovery, close the probe, safely reboot/reconnect, verify the enumerated
    port and start a new probe.
@@ -91,5 +93,6 @@ Full regression: `docker compose run --rm test-u22` and `test-u24`.
 Revision 4 preserves ESTOP across reset/reconnect. Configure/exercise mode stops
 if a latch is present unless `--allow_recover` explicitly permits recovery. That
 operation keeps outputs disabled; enabling still requires `--allow_enable`.
-Repeated configure/exercise sessions need the same explicit recovery permission
-after the previous cleanup stop. Handshake mode never clears the latch.
+Normal cleanup disables outputs and releases configuration without creating an
+ESTOP latch, so repeated configure/exercise sessions do not require recovery.
+Existing ESTOP latches survive cleanup; handshake mode never clears them.

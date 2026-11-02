@@ -350,8 +350,9 @@ TEST(EthercatMasterTest, QueuedTimeoutIsNeverDispatched) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto first =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto first = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = master->WriteSdo({1, 0x2010, 0}, {1}, 10ms);
   trace->Release();
@@ -370,8 +371,9 @@ TEST(EthercatMasterTest, DispatchedTimeoutFaultsMasterAndDiscardsLateSuccess) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto pending =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 100ms); });
+  auto pending = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 100ms);
+  });
   ASSERT_TRUE(trace->WaitEntered());
   auto expired = pending.get();
   EXPECT_EQ(expired.status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -389,11 +391,13 @@ TEST(EthercatMasterTest, StopWakesSdoWaitersBeforeBlockedBackendReturns) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto active =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto active = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
+  });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto active_ready = active.wait_for(500ms);
   const auto queued_ready = queued.wait_for(500ms);
@@ -474,11 +478,13 @@ TEST(EthercatMasterTest, SdoQueuedDuringStartupCannotBypassCyclicGate) {
   auto opened = OpenMaster(trace);
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
-  auto start =
-      std::async(std::launch::async, [&] { return master->StartCyclic({{0, 0}, {0, 0}}); });
+  auto start = std::async(std::launch::async, [&] {
+    return master->StartCyclic({{0, 0}, {0, 0}});
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   trace->Release();
   EXPECT_TRUE(start.get().ok());
   EXPECT_EQ(queued.get().status().code(), absl::StatusCode::kFailedPrecondition);
@@ -1030,8 +1036,9 @@ TEST(EthercatMasterTest, StalledRuntimeMailboxKeepsCyclingUntilDeadlineThenFails
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto pending =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 400ms); });
+  auto pending = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 400ms);
+  });
   uint64_t sequence = 0;
   for (int i = 0; i < 8; ++i) {
     auto cycle = master->WaitForCycle(sequence, 100ms);
@@ -1119,11 +1126,13 @@ TEST(EthercatMasterTest, RuntimeStopCancelsTransferAndQueuedCalls) {
   ASSERT_TRUE(opened.ok());
   auto master = std::move(*opened);
   ASSERT_TRUE(master->StartCyclic({{0, 0}, {0, 0}}).ok());
-  auto active =
-      std::async(std::launch::async, [&] { return master->ReadSdo({1, 0x2000, 0}, 36, 1s); });
+  auto active = std::async(std::launch::async, [&] {
+    return master->ReadSdo({1, 0x2000, 0}, 36, 1s);
+  });
   ASSERT_TRUE(trace->WaitEntered());
-  auto queued =
-      std::async(std::launch::async, [&] { return master->WriteSdo({1, 0x2010, 0}, {1}, 1s); });
+  auto queued = std::async(std::launch::async, [&] {
+    return master->WriteSdo({1, 0x2010, 0}, {1}, 1s);
+  });
   auto stopping = std::async(std::launch::async, [&] { return master->Stop(); });
   const auto woke = active.wait_for(200ms);
   trace->Release();
@@ -2190,7 +2199,8 @@ TEST_F(JwecFactoryTest, BoardEngineRoutesBothPlanesAndClosingOnePreservesOtherSl
   EXPECT_EQ(trace->teardowns, 1);  // Retained board/channel handles hold no NIC lease.
   for (const auto& channel : trace->channels) {
     EXPECT_FALSE(channel.enabled);
-    EXPECT_TRUE(channel.estopped);
+    EXPECT_FALSE(channel.configured);
+    EXPECT_FALSE(channel.estopped);
   }
   for (const auto& thread : trace->threads) EXPECT_EQ(thread, trace->threads.front());
 }
@@ -2317,10 +2327,16 @@ TEST_F(JwecFactoryTest, InvalidBoardPolicyDoesNotOpenNicAndFailedIdentifyRelease
   EXPECT_FALSE(robot::board::BoardFactory::GetOrCreate(config).ok());
   EXPECT_EQ(trace->teardowns, 1);
   auto retry = robot::board::BoardFactory::GetOrCreate(PairedBoard());
-  EXPECT_EQ(retry.status().code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_TRUE(
-      trace->channels[0].estopped);  // A new factory lease cannot clear the prior cleanup stop.
+  ASSERT_TRUE(retry.ok()) << retry.status();
   EXPECT_EQ(opens, 2);
+  auto channel = (*retry)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok()) << channel.status();
+  ASSERT_TRUE((*channel)->Enable().ok());  // Cleanup did not create a recovery requirement.
+  ASSERT_TRUE((*retry)->Teardown().ok());
+  EXPECT_EQ(trace->teardowns, 2);
+  EXPECT_FALSE(trace->channels[0].enabled);
+  EXPECT_FALSE(trace->channels[0].configured);
+  EXPECT_FALSE(trace->channels[0].estopped);
 }
 
 }  // namespace
