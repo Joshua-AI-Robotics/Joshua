@@ -1,17 +1,29 @@
 // AM243's transport-neutral, software-only channel and command/reset callbacks.
 // UART and EtherCAT artifacts reuse these semantics with separate lifecycle
-// wrappers. No GPIO or TI SDK dependency. Simultaneous UART/EtherCAT ownership
-// still requires an arbiter; the JW EtherCAT artifact does not start UART.
-// Callers must serialize access to a shared JoshuaChannel.
+// wrappers. No GPIO or TI SDK dependency.
+//
+// Ownership: every call and every read/write of a JoshuaChannel must use one
+// externally serialized owner, including stop, reset, service and enabled reads.
+// These functions have no internal locks and are non-reentrant. The UART task
+// is its channel's sole owner; the TI EtherCAT adapter serializes its callbacks
+// and higher-priority watchdog on one R5 core. Do not call from an independent
+// ISR/FIQ/core. Simultaneous UART/EtherCAT ownership requires a shared arbiter;
+// the JW EtherCAT artifact does not start UART.
+//
+// Callback context is a borrowed, non-null JoshuaChannel*. The generic C
+// endpoint/profile stores it as void* to avoid depending on this board's type;
+// the adapter casts it back without allocating or transferring ownership.
+// The initialized channel must outlive the endpoint/profile and all callbacks.
 #pragma once
 
 #include <stdbool.h>
 
-#include "joshua_device_runtime.h"
+#include "joshua_actuator_handler.h"
 
 typedef struct {
   jw_device_runtime_t runtime;
   jw_runtime_function_t function;
+  jw_actuator_handler_t actuator;
   uint8_t schema[JW_ACTUATOR_SCHEMA_LEN];
   jw_feedback_t feedback;
   bool configured;
@@ -32,6 +44,7 @@ extern "C" {
  *
  * Clears all previous channel state, including configuration, feedback and fault
  * and emergency-stop latches, and installs the runtime callbacks and schema.
+ * Initialize fresh or stopped storage only; do not reinitialize a live safety latch.
  *
  * @param[out] channel Non-null channel storage. Keep it at the same address after
  * initialization because the runtime retains pointers into this storage.
@@ -85,13 +98,14 @@ void JoshuaService(JoshuaChannel* channel, uint64_t now_us);
  * @brief Latch a software emergency stop and accumulate fault flags for EtherCAT safety handling.
  *
  * Disables the actuator, discards its configuration, clears its target and
- * copies the accumulated fault flags into feedback.
+ * copies the accumulated fault flags into feedback. Repeated calls are safe
+ * under the serialized owner and never recover implicitly.
  *
  * @param[in,out] context Non-null pointer to an initialized JoshuaChannel.
  * @param[in] faults Fault bitmask to OR into the existing flags; zero still triggers a stop.
  * @return None.
  * @note A physical backend must disable hardware synchronously, not merely
- * change these software state fields.
+ * change these software state fields. Stop scheduling and priority belong to the owner.
  */
 void JoshuaStop(void* context, uint16_t faults);
 
