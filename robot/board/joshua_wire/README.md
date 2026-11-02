@@ -6,6 +6,11 @@ message IDs and response matching; communication adapters own device I/O and
 timeouts. Native integration tests run the production command handler and
 firmware endpoint, with no physical device.
 
+Declare one board name per JoshuaWire serial MCU and reference its channels
+from all consumers. BoardFactory rejects a second name for an already-owned
+JW serial port before starting another session or resetting existing outputs.
+This reservation follows the board cache lifetime, including explicit teardown.
+
 ESP32, Teensy and the AM243 serial binding use this engine directly with
 `message_adapter: JOSHUA_WIRE`. All Joshua-owned MCU images compile the current
 shared endpoint; the old protocol codec, host board, frame wrapper and test

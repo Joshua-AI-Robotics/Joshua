@@ -22,10 +22,20 @@ struct CachedBoard {
   robot::board::BoardType board_type;
   std::string config_key;
   std::shared_ptr<BoardInterface> board;
+  std::string joshua_serial_port;
 };
 
 static std::mutex g_board_mutex;
 static std::map<std::string, CachedBoard> g_boards;  // keyed by Board.name
+
+std::string JoshuaSerialPort(const robot::board::Board& config) {
+  const auto type = config.board_type();
+  if ((type == AM243 || type == TEENSY41 || type == ESP32) &&
+      config.comm().comm_type() == robot::comm::SERIAL &&
+      config.comm().serial_config().message_adapter() == robot::comm::JOSHUA_WIRE)
+    return config.comm().serial_config().port();
+  return {};
+}
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::Board& config) {
   switch (config.board_type()) {
@@ -88,9 +98,22 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
     return it->second.board;
   }
 
+  const auto port = JoshuaSerialPort(config);
+  if (!port.empty()) {
+    for (const auto& [name, cached] : g_boards) {
+      if (cached.joshua_serial_port == port)
+        return absl::AlreadyExistsError(absl::StrCat(
+            "JoshuaWire serial port '",
+            port,
+            "' already belongs to board '",
+            name,
+            "'; reference that board's channels instead of creating a second session."));
+    }
+  }
   ABSL_ASSIGN_OR_RETURN(auto board, CreateBoard(config));
   ABSL_RETURN_IF_ERROR(board->Init(config));
-  g_boards[config.name()] = CachedBoard{config.board_type(), config.SerializeAsString(), board};
+  g_boards[config.name()] =
+      CachedBoard{config.board_type(), config.SerializeAsString(), board, port};
   return board;
 }
 

@@ -135,6 +135,51 @@ TEST_P(FirmwareBindingTest, FactoryDiscoversCurrentFirmwareAndDrivesConfiguredBa
   }
 }
 
+TEST_P(FirmwareBindingTest, SerialAliasIsRejectedBeforeResettingTheExistingSession) {
+  auto first = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto retained = (*first)->OpenChannel(0);
+  ASSERT_TRUE(retained.ok());
+  ASSERT_TRUE((*retained)->Enable().ok());
+  uint32_t epoch;
+  {
+    std::lock_guard lock(firmware_mutex);
+    epoch = g_functions[0].state.epoch;
+  }
+  auto alias = config;
+  alias.set_name("same_port_second_board");
+  auto second = BoardFactory::GetOrCreate(alias);
+  EXPECT_EQ(second.status().code(), absl::StatusCode::kAlreadyExists);
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_TRUE(g_channels[0].enabled);
+    EXPECT_TRUE(g_channels[0].configured);
+    EXPECT_EQ(g_functions[0].state.epoch, epoch);
+  }
+  ASSERT_TRUE((*retained)->SetTarget(TargetMode::kPosition, 10).ok());
+  auto shared = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(shared.ok());
+  EXPECT_EQ(shared->get(), first->get());
+  ASSERT_TRUE((*first)->Teardown().ok());
+  EXPECT_EQ(BoardFactory::GetOrCreate(alias).status().code(), absl::StatusCode::kAlreadyExists);
+  BoardFactory::ResetForTesting();
+  auto reopened = BoardFactory::GetOrCreate(alias);
+  ASSERT_TRUE(reopened.ok()) << reopened.status();
+}
+
+TEST_P(FirmwareBindingTest, FailedInitializationDoesNotReserveSerialEndpoint) {
+  auto invalid = config;
+  invalid.mutable_channels(0)->set_index(200);  // Not exposed by the actual firmware.
+  EXPECT_FALSE(BoardFactory::GetOrCreate(invalid).ok());
+  auto retry = config;
+  retry.set_name("retry_after_failed_initialization");
+  auto board = BoardFactory::GetOrCreate(retry);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto channel = (*board)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  EXPECT_TRUE((*channel)->Enable().ok());
+}
+
 TEST_P(FirmwareBindingTest, NormalShutdownAndReopenKeepOutputsDisabledWithoutEstop) {
   for (int restart = 0; restart < 2; ++restart) {
     auto board = BoardFactory::GetOrCreate(config);

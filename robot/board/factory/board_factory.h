@@ -15,6 +15,9 @@ class BoardFactory {
   // §5.3). The first call for a name creates the board and runs Init();
   // later calls return the same instance, and fail if their config names a
   // different board_type than the cached one.
+  // A JoshuaWire serial port may belong to only one cached board name. Reject
+  // aliases before Init can reset/disable an already-owned MCU. The reservation
+  // lasts with the cache, including after explicit board teardown.
   static absl::StatusOr<std::shared_ptr<BoardInterface>> GetOrCreate(
       const robot::board::Board& config);
 
