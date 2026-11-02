@@ -1,0 +1,16 @@
+// Shared by all AM243 artifacts. Match TI's RNG example: grant the R5
+// SA2UL MMR access before enabling TRNG, then configure the crypto/RNG driver.
+const joshuaFirewallModule = scripting.addModule("/drivers/firewall/firewall", {}, false);
+const joshuaFirewall = joshuaFirewallModule.addInstance();
+joshuaFirewall.$name = "CONFIG_JOSHUA_FIREWALL";
+joshuaFirewall.regCfg.create(1);
+joshuaFirewall.regCfg[0].$name = "JOSHUA_SA2UL_MMR";
+joshuaFirewall.regCfg[0].regIndex = 1;
+joshuaFirewall.regCfg[0].instName = "SA2_UL0";
+joshuaFirewall.regCfg[0].interName = "MMRA";
+joshuaFirewall.regCfg[0].fwlCache = true;
+joshuaFirewall.regCfg[0].fwlPriv1 = "MAIN_0_R5_0_SECURE";
+const joshuaCryptoModule = scripting.addModule("/security/crypto/crypto", {}, false);
+const joshuaCrypto = joshuaCryptoModule.addInstance();
+joshuaCrypto.$name = "CONFIG_JOSHUA_CRYPTO";
+joshuaCrypto.sa2ul.$name = "CONFIG_JOSHUA_SA2UL";

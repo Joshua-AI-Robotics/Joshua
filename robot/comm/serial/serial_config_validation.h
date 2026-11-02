@@ -8,6 +8,8 @@
 
 namespace robot::comm {
 
+inline constexpr uint32_t kDefaultSerialExchangeTimeoutMs = 100;
+
 inline absl::Status ValidateSerialCommConfig(const Comm& comm) {
   if (comm.comm_type() != SERIAL || !comm.has_serial_config()) {
     return absl::InvalidArgumentError("SERIAL comm requires serial_config.");

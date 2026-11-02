@@ -96,8 +96,8 @@ was not.
 without `sim` in its name as dangerous. The launcher branches on
 `general.operation_mode`, not the name, and the categories cross:
 `so100/sim_mirror.pbtxt` is `MODE_SIMULATION` yet opens `/dev/ttyACM1`, and
-`example/am243_ethercat_demo.pbtxt` names no `/dev` path yet drives a real
-EtherCAT bus over the `ethercat0` NIC. The heuristic was therefore wrong in the
+an EtherCAT preset can name no `/dev` path yet drive a real bus through its
+`interface_name` NIC (as the now-retired TI-demo preset did). The heuristic was therefore wrong in the
 *unsafe* direction — it labelled a real-device preset as the safe default.
 Agents are told to read the preset instead. Removing the mock drivers
 ([BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) §10 Phase 9) sharpened this: no preset

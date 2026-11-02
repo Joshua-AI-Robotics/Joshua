@@ -23,10 +23,10 @@ DEFINE_string(target_steps,
               "Absolute native-step position; required for exercise. No joint-limit enforcement.");
 DEFINE_bool(allow_recover, false, "Permit explicit ESTOP recovery before configure/exercise.");
 DEFINE_bool(allow_enable, false, "Explicitly permit enabling outputs in exercise mode.");
-DEFINE_bool(
-    confirm_hardware,
-    false,
-    "Confirm setup is ready and no other process owns this port. Reset/ESTOP affect all channels.");
+DEFINE_bool(confirm_hardware,
+            false,
+            "Confirm setup is ready and no other process owns this port. Session resets affect all "
+            "channels.");
 DEFINE_bool(dry_run, false, "Validate and print the selected operation without opening hardware.");
 DEFINE_int32(sessions, 1, "Fresh reset/identify sessions, 1..10; does not reopen the serial port.");
 DEFINE_int32(settle_ms, 2000, "Diagnostic post-open boot wait, 0..10000 ms.");
@@ -68,8 +68,10 @@ absl::Status Run() {
             << " baud=" << board->comm().serial_config().baudrate()
             << " protocol=JW version=" << JW_VERSION_STRING << " mode=" << options.mode
             << " sessions=" << options.sessions << " settle_ms=" << options.settle_ms << '\n';
-  std::cout << "Reset clears ALL channel configuration; cleanup sends board-wide ESTOP.\n"
-            << "No watchdog: lost communication/process termination can leave outputs enabled.\n";
+  std::cout
+      << "Session open and cleanup reset ALL channels: outputs disabled, configuration cleared;\n"
+      << "existing ESTOP latches preserved.\n"
+      << "No watchdog: lost communication/process termination can leave outputs enabled.\n";
   if (options.mode != "handshake") {
     for (const auto& channel : board->channels()) {
       if (channel.index() == static_cast<uint32_t>(options.channel))
@@ -99,7 +101,7 @@ absl::Status Run() {
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage(
-      "Manual JoshuaWire serial probe. Default: reset/identify/ESTOP only. Use --dry_run "
+      "Manual JoshuaWire serial probe. Default: reset/identify/reset only. Use --dry_run "
       "first.");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (argc != 1) {

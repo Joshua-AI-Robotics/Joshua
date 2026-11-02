@@ -251,16 +251,21 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     )
                     self.assertIn("CALLER_SIZED", serial["configuration_constraints"])
                     self.assertIn("JOSHUA_WIRE", serial["configuration_constraints"])
-                    self.assertNotIn(
+                    self.assertIn(
                         "MESSAGE_AND_CYCLIC",
                         {x["transport"] for x in catalog["communication"]},
                     )
-                    self.assertEqual(
-                        next(
-                            x for x in catalog["motors"] if x["name"] == "MOTOR_TI_DEMO"
-                        )["support_scope"],
-                        "demo_only",
+                    self.assertNotIn(
+                        "MOTOR_TI_DEMO", {x["name"] for x in catalog["motors"]}
                     )
+                    self.assertNotIn(
+                        "CYCLIC", {x["transport"] for x in catalog["communication"]}
+                    )
+                    ethercat = next(
+                        x for x in catalog["communication"] if x["name"] == "ETHERCAT"
+                    )
+                    self.assertEqual(ethercat["support_scope"], "installed")
+                    self.assertIn("timing", ethercat["configuration_constraints"])
                     audio = next(x for x in catalog["sensors"] if x["name"] == "AUDIO")
                     self.assertEqual(audio["sensor_config"], "alsa_audio_config")
                     self.assertEqual(audio["support_scope"], "installed")

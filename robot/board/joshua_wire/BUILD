@@ -46,6 +46,7 @@ cc_library(
         "//robot/comm/interfaces:correlated_cyclic_transport",
         "//robot/comm/interfaces:message_transport",
         "//utils:status_macros",
+        "@abseil-cpp//absl/cleanup",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/time",
@@ -72,12 +73,15 @@ cc_test(
     deps = [
         ":joshua_wire_board",
         ":joshua_wire_session",
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
+        "//firmware/common:joshua_ethercat_profile",
         "//firmware/common:joshua_wire_endpoint",
         "//firmware/common:joshua_wire_profiles",
+        "//firmware/common/soes:joshua_ethercat_soes",
         "//robot/comm/factory:comm_factory",
         "@abseil-cpp//absl/time",
         "@googletest//:gtest_main",
+        "@soes",
     ],
 )
 
@@ -116,7 +120,7 @@ cc_test(
     srcs = ["joshua_wire_smoke_test.cc"],
     data = [":joshua_wire_smoke"],
     deps = [
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],
@@ -127,7 +131,7 @@ cc_test(
     srcs = ["serial_validation_test.cc"],
     deps = [
         ":serial_validation",
-        "//firmware/am243/joshua_dual_transport:commands",
+        "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_wire_endpoint",
         "@googletest//:gtest_main",
     ],

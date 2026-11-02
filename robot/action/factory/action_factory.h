@@ -10,7 +10,6 @@
 #include "robot/action/interfaces/action_interface.h"
 #include "robot/action/motors/drivers/stepper_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
-#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/board/factory/motor_channel_validation.h"
@@ -36,11 +35,6 @@ class ActionFactory {
          "installed",
          [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
            return std::make_unique<StepperDriver>(channel, config);
-         }},
-        {MOTOR_TI_DEMO,
-         "demo_only",
-         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
-           return std::make_unique<TiDemoDriver>(channel, config);
          }}};
     return entries;
   }
@@ -84,6 +78,12 @@ class ActionFactory {
           "Actuator '" + actuator.actuator_name() +
               "' sets deprecated actuator_type; omit it and set motor_type + board_name + "
               "channel (docs/BOARD_LAYER_RFC.md §6.3).");
+    }
+    if (actuator.motor_type() == robot::action::MOTOR_TI_DEMO ||
+        actuator.has_am243_ethercat_config()) {
+      return absl::InvalidArgumentError(
+          "The TI-demo motor/actuator config is retired; configure a supported motor "
+          "and a JoshuaWire board instead.");
     }
     if (actuator.motor_type() == robot::action::MotorType::MOTOR_INVALID) {
       return absl::Status(absl::StatusCode::kInvalidArgument,

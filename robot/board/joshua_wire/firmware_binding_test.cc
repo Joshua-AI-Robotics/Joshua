@@ -135,6 +135,34 @@ TEST_P(FirmwareBindingTest, FactoryDiscoversCurrentFirmwareAndDrivesConfiguredBa
   }
 }
 
+TEST_P(FirmwareBindingTest, NormalShutdownAndReopenKeepOutputsDisabledWithoutEstop) {
+  for (int restart = 0; restart < 2; ++restart) {
+    auto board = BoardFactory::GetOrCreate(config);
+    ASSERT_TRUE(board.ok()) << board.status();
+    auto channel = (*board)->OpenChannel(0);
+    ASSERT_TRUE(channel.ok());
+    {
+      std::lock_guard lock(firmware_mutex);
+      EXPECT_TRUE(g_channels[0].configured);
+      EXPECT_FALSE(g_channels[0].enabled);
+    }
+    ASSERT_TRUE((*channel)->Enable().ok());
+    ASSERT_TRUE((*channel)->SetTarget(TargetMode::kVelocity, 100).ok());
+    ASSERT_TRUE((*board)->Teardown().ok());
+    {
+      std::lock_guard lock(firmware_mutex);
+      EXPECT_FALSE(g_channels[0].configured);
+      EXPECT_FALSE(g_channels[0].enabled);
+      EXPECT_EQ(g_functions[0].state.recovery & JW_RECOVERY_CLEAR_ESTOP, 0);
+      EXPECT_EQ(pins[4], 1);
+      EXPECT_EQ(pins[2], 0);
+    }
+    EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+    BoardFactory::ResetForTesting();
+    robot::comm::CommFactory::ResetSerialTransportCacheForTesting();
+  }
+}
+
 TEST_P(FirmwareBindingTest, LostReplyReplaysWithoutRepeatingBackendMutation) {
   auto board = BoardFactory::GetOrCreate(config);
   ASSERT_TRUE(board.ok()) << board.status();

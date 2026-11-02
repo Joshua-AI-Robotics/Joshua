@@ -5,6 +5,7 @@
 #include <random>
 #include <utility>
 
+#include "absl/cleanup/cleanup.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "utils/status_macros.h"
@@ -136,13 +137,12 @@ absl::Status JoshuaWireSession::RotateLocked() {
 absl::Status JoshuaWireSession::Close() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (session_id_ == 0) return absl::OkStatus();
-  ready_ = false;
-  const uint8_t domain[2] = {};
-  auto response = ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, 2);
-  session_id_ = 0;
-  pending_.clear();
-  if (!response.ok()) return response.status();
-  return CheckOk(*response);
+  absl::Cleanup invalidate_session = [this] {
+    ready_ = false;
+    session_id_ = 0;
+    pending_.clear();
+  };
+  return ResetLocked();
 }
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_command_t& command) {

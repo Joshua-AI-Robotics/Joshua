@@ -29,11 +29,11 @@ class JoshuaWireSession {
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
   absl::Status Open();
-  // Transport calls have a bounded I/O deadline. Close waits for that exchange,
-  // sends ESTOP if the session is usable, then rejects retained channel calls.
+  // Reset with a fresh session to disable outputs, preserving existing ESTOPs.
+  // Retained calls are rejected after any close attempt, including failures.
   absl::Status Close();
   // The command payload is borrowed for the call; the returned payload is owned.
-  // RESET_SESSION is reserved for Open/rotation, not callable as a normal command.
+  // RESET_SESSION is managed by the lifecycle, not callable as a normal command.
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command);
 
  private:

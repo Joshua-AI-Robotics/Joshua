@@ -66,7 +66,9 @@ transports, motors and sensors. Enumeration calls no creator or driver.
 `installed`, `test_only`, `demo_only` and `unimplemented` describe software
 selection, with transport configuration requirements attached to each entry.
 They do not certify a particular combination or physical hardware. `MOCK` is
-only C++ test infrastructure; TI demo support retains its demo scope.
+only C++ test infrastructure. The retired TI-demo motor and standalone EtherCAT
+cyclic transport are not listed; JoshuaWire EtherCAT exposes paired message and
+cyclic transport with explicit endpoint and timing requirements.
 
 Device identities are `board:<name>`, `actuator:<name>` or `sensor:<name>`.
 Inventory includes at most 128 entries with identities of at most 512 UTF-8

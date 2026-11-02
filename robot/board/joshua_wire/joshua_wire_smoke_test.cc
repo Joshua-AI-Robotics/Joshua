@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/am243_software_backend.h"
 #include "firmware/common/joshua_wire_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -34,7 +34,7 @@ uint8_t RecordedCommand(const jw_frame_t& frame) {
   return frame.cmd;
 }
 using Bytes = std::vector<uint8_t>;
-enum class Fault { kNone, kLostEnableReply, kWrongMessageId, kLostEstopReply, kSignalAfterEnable };
+enum class Fault { kNone, kLostEnableReply, kWrongMessageId, kLostCloseReply, kSignalAfterEnable };
 
 class SmokeCliTest : public ::testing::Test {
  protected:
@@ -119,7 +119,9 @@ class SmokeCliTest : public ::testing::Test {
         ASSERT_EQ(kill(child, SIGTERM), 0);
       }
     }
-    if (fault == Fault::kLostEstopReply && request.cmd == JW_CMD_ESTOP) return;
+    if (fault == Fault::kLostCloseReply && request.cmd == JW_CMD_RESET_SESSION &&
+        commands.size() > 1)
+      return;
     if (fault == Fault::kWrongMessageId && request.cmd == JW_CMD_IDENTIFY) {
       jw_frame_t reply{};
       ASSERT_EQ(jw_decode_frame(response, size, &reply), JW_RESULT_OK);
@@ -212,27 +214,28 @@ TEST_F(SmokeCliTest, DefaultHandshakeAndFreshSessions) {
   EXPECT_EQ(commands,
             (Bytes{JW_CMD_RESET_SESSION,
                    JW_CMD_IDENTIFY,
-                   JW_CMD_ESTOP,
+                   JW_CMD_RESET_SESSION,
                    JW_CMD_RESET_SESSION,
                    JW_CMD_IDENTIFY,
-                   JW_CMD_ESTOP}));
+                   JW_CMD_RESET_SESSION}));
   ASSERT_EQ(sessions.size(), 6);
   EXPECT_NE(sessions[0], sessions[3]);
   EXPECT_FALSE(state.configured);
   EXPECT_FALSE(state.enabled);
-  EXPECT_NE(output.find("ESTOP cleanup: OK"), std::string::npos);
+  EXPECT_NE(output.find("RESET_SESSION cleanup: OK"), std::string::npos);
 }
 
 TEST_F(SmokeCliTest, ConfigureRemainsDisabled) {
   Run({"--mode=configure", "--channel=0"});
   ASSERT_EQ(exit_code, 0) << output;
-  EXPECT_EQ(commands,
-            (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, kConfigure, kFeedback, JW_CMD_ESTOP}));
+  EXPECT_EQ(
+      commands,
+      (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, kConfigure, kFeedback, JW_CMD_RESET_SESSION}));
   EXPECT_FALSE(state.configured);
   EXPECT_FALSE(state.enabled);
 }
 
-TEST_F(SmokeCliTest, ExerciseEnablesThenDisablesAndEstops) {
+TEST_F(SmokeCliTest, ExerciseEnablesThenDisablesAndResets) {
   Run(ExerciseFlags());
   ASSERT_EQ(exit_code, 0) << output;
   EXPECT_EQ(commands,
@@ -245,51 +248,75 @@ TEST_F(SmokeCliTest, ExerciseEnablesThenDisablesAndEstops) {
                    kSetTarget,
                    kFeedback,
                    kDisable,
-                   JW_CMD_ESTOP}));
+                   JW_CMD_RESET_SESSION}));
   EXPECT_TRUE(saw_enabled);
   EXPECT_FALSE(state.enabled);
-  EXPECT_TRUE(state.estopped);
+  EXPECT_FALSE(state.estopped);
+  EXPECT_FALSE(state.configured);
   EXPECT_FLOAT_EQ(state.target_value, 0);
 }
 
-TEST_F(SmokeCliTest, LostEnableReplyFailsAndStillEstops) {
+TEST_F(SmokeCliTest, LostEnableReplyFailsAndStillResets) {
   fault = Fault::kLostEnableReply;
   Run(ExerciseFlags());
   ASSERT_EQ(exit_code, 1) << output;
   EXPECT_TRUE(saw_enabled);
   ASSERT_EQ(commands.size(), 8);
-  EXPECT_EQ(commands.back(), JW_CMD_ESTOP);
+  EXPECT_EQ(commands.back(), JW_CMD_RESET_SESSION);
   EXPECT_FALSE(state.enabled);
   EXPECT_NE(output.find("DEADLINE_EXCEEDED"), std::string::npos);
-  EXPECT_NE(output.find("ESTOP cleanup: OK"), std::string::npos);
+  EXPECT_NE(output.find("RESET_SESSION cleanup: OK"), std::string::npos);
 }
 
 TEST_F(SmokeCliTest, WrongCorrelationFailsBeforeConfiguration) {
   fault = Fault::kWrongMessageId;
   Run(ExerciseFlags());
   ASSERT_EQ(exit_code, 1) << output;
-  EXPECT_EQ(commands, (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_ESTOP}));
+  EXPECT_EQ(commands, (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_RESET_SESSION}));
   EXPECT_FALSE(state.configured);
   EXPECT_NE(output.find("DATA_LOSS"), std::string::npos);
 }
 
 TEST_F(SmokeCliTest, UnconfirmedCleanupReportsUnknownState) {
-  fault = Fault::kLostEstopReply;
+  fault = Fault::kLostCloseReply;
   Run();
   ASSERT_EQ(exit_code, 1) << output;
-  EXPECT_EQ(commands, (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_ESTOP, JW_CMD_ESTOP}));
-  EXPECT_NE(output.find("ESTOP unconfirmed, hardware state unknown"), std::string::npos);
+  EXPECT_EQ(
+      commands,
+      (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_RESET_SESSION, JW_CMD_RESET_SESSION}));
+  EXPECT_NE(output.find("RESET_SESSION unconfirmed, hardware state unknown"), std::string::npos);
 }
 
-TEST_F(SmokeCliTest, SigtermAfterEnableStillEstops) {
+TEST_F(SmokeCliTest, SigtermAfterEnableStillResets) {
   fault = Fault::kSignalAfterEnable;
   Run(ExerciseFlags());
   ASSERT_EQ(exit_code, 1) << output;
   EXPECT_TRUE(saw_enabled);
   ASSERT_EQ(commands.size(), 7);
-  EXPECT_EQ(commands.back(), JW_CMD_ESTOP);
+  EXPECT_EQ(commands.back(), JW_CMD_RESET_SESSION);
   EXPECT_FALSE(state.enabled);
   EXPECT_NE(output.find("CANCELLED"), std::string::npos);
+}
+
+TEST_F(SmokeCliTest, RepeatedExerciseSessionsDoNotRequireRecovery) {
+  auto flags = ExerciseFlags();
+  flags.push_back("--sessions=2");
+  Run(flags);
+  ASSERT_EQ(exit_code, 0) << output;
+  EXPECT_TRUE(saw_enabled);
+  EXPECT_FALSE(state.enabled);
+  EXPECT_FALSE(state.configured);
+  EXPECT_FALSE(state.estopped);
+}
+
+TEST_F(SmokeCliTest, CleanupPreservesExistingEstop) {
+  JoshuaReset(&state);
+  JoshuaStop(&state, 0);
+  Run();
+  ASSERT_EQ(exit_code, 0) << output;
+  EXPECT_FALSE(state.enabled);
+  EXPECT_FALSE(state.configured);
+  EXPECT_TRUE(state.estopped);
 }
 
 TEST_F(SmokeCliTest, DryRunDoesNotOpenPort) {

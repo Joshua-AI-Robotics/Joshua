@@ -26,108 +26,61 @@ void Safety(void*, int) {
   jw_resource_table_init(g_stepdir_resources, 3u * g_num_channels);
 }
 
-int Profile(void* context,
-            const jw_command_t* command,
-            const jw_profile_request_t* request,
-            uint8_t* out,
-            size_t capacity) {
-  auto* channel = static_cast<ChannelState*>(context);
-  jw_status_t status = JW_STATUS_OK;
-  uint8_t data[JW_FEEDBACK_RESPONSE_PAYLOAD_LEN];
-  int size = 0;
-  switch (request->operation) {
-    case JW_ACTUATOR_CONFIGURE: {
-      jw_configure_step_dir_t config;
-      if (jw_decode_configure_step_dir_payload(request->data, request->data_len, &config) !=
-              JW_RESULT_OK ||
-          !valid_pin || !valid_pin(config.step_pin) || !valid_pin(config.dir_pin) ||
-          !valid_pin(config.enable_pin) || !config.max_pulse_rate_hz ||
-          config.max_pulse_rate_hz >
-              1000000u / (1u + (config.step_pulse_width_us ? config.step_pulse_width_us
-                                                           : JW_STEPDIR_DEFAULT_PULSE_WIDTH_US))) {
-        status = JW_STATUS_INVALID_PAYLOAD;
-      } else if (runtime.estopped) {
-        status = JW_STATUS_UNAVAILABLE;
-      } else if (channel->enabled) {
-        status = JW_STATUS_BUSY;
-      } else {
-        const jw_resource_claim_t claims[] = {
-            {command->channel, JW_RESOURCE_PIN, config.step_pin, 0, 0},
-            {command->channel, JW_RESOURCE_PIN, config.dir_pin, 0, 0},
-            {command->channel, JW_RESOURCE_PIN, config.enable_pin, 0, 0}};
-        status = jw_resource_replace(
-            g_stepdir_resources, 3u * g_num_channels, command->channel, claims, 3, nullptr);
-        if (status == JW_STATUS_OK) {
-          // Preflight is complete before any GPIO/state changes. The validated
-          // Arduino GPIO operations have no fallible peripheral allocation.
-          StepDirDisable(channel);
-          StepDirConfigure(channel, &config);
-        }
-      }
-      break;
-    }
-    case JW_ACTUATOR_SET_TARGET: {
-      jw_set_target_t target;
-      if (jw_decode_set_target_payload(request->data, request->data_len, &target) != JW_RESULT_OK)
-        status = JW_STATUS_INVALID_PAYLOAD;
-      else if (runtime.estopped || !channel->configured)
-        status = JW_STATUS_UNAVAILABLE;
-      else if (target.mode != JW_MODE_POSITION && target.mode != JW_MODE_VELOCITY)
-        status = JW_STATUS_UNSUPPORTED;
-      else if (target.mode == JW_MODE_POSITION &&
-               (double(target.value) < INT32_MIN || double(target.value) > INT32_MAX))
-        status = JW_STATUS_INVALID_PAYLOAD;
-      else
-        StepDirSetTarget(channel, target.mode, target.value);
-      break;
-    }
-    case JW_ACTUATOR_GET_FEEDBACK:
-      if (request->data_len)
-        status = JW_STATUS_INVALID_PAYLOAD;
-      else if (!channel->configured)
-        status = JW_STATUS_UNAVAILABLE;
-      else
-        size = jw_encode_feedback_payload(data, sizeof(data), &channel->feedback);
-      break;
-    case JW_ACTUATOR_ENABLE:
-      if (request->data_len)
-        status = JW_STATUS_INVALID_PAYLOAD;
-      else if (!channel->configured || runtime.estopped)
-        status = JW_STATUS_UNAVAILABLE;
-      else
-        StepDirEnable(channel);
-      break;
-    case JW_ACTUATOR_DISABLE:
-      if (request->data_len)
-        status = JW_STATUS_INVALID_PAYLOAD;
-      else
-        StepDirDisable(channel);
-      break;
-    default:
-      status = JW_STATUS_UNSUPPORTED;
-      break;
-  }
-  if (status == JW_STATUS_OK && request->operation != JW_ACTUATOR_GET_FEEDBACK) {
-    auto& state = g_functions[command->channel].state;
-    ++state.epoch;
-    state.state = channel->enabled ? JW_STATE_ACTIVE : JW_STATE_DISABLED;
-    state.reason = JW_REASON_NONE;
-    state.recovery =
-        channel->configured ? 0 : JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE;
-    state.action_session_id = command->session_id;
-    state.action_message_id = command->message_id;
-    state.action_status = status;
-    state.action_execution = JW_EXECUTION_COMPLETE;
-  }
-  return size < 0 ? -1
-                  : jw_encode_reply_payload(
-                        out,
-                        capacity,
-                        status,
-                        status == JW_STATUS_OK ? JW_EXECUTION_COMPLETE : JW_EXECUTION_REJECTED,
-                        size ? data : nullptr,
-                        size);
+jw_actuator_state_t State(void* context) {
+  const auto* channel = static_cast<ChannelState*>(context);
+  return {channel->configured, channel->enabled, runtime.estopped != 0};
 }
+jw_actuator_result_t Configure(void* context, const jw_configure_step_dir_t* config) {
+  auto* channel = static_cast<ChannelState*>(context);
+  if (!valid_pin || !valid_pin(config->step_pin) || !valid_pin(config->dir_pin) ||
+      !valid_pin(config->enable_pin) || !config->max_pulse_rate_hz ||
+      config->max_pulse_rate_hz >
+          1000000u / (1u + (config->step_pulse_width_us ? config->step_pulse_width_us
+                                                        : JW_STEPDIR_DEFAULT_PULSE_WIDTH_US)))
+    return jw_actuator_sync_result(JW_STATUS_INVALID_PAYLOAD);
+  const uint8_t id = static_cast<uint8_t>(channel - g_channels);
+  const jw_resource_claim_t claims[] = {{id, JW_RESOURCE_PIN, config->step_pin, 0, 0},
+                                        {id, JW_RESOURCE_PIN, config->dir_pin, 0, 0},
+                                        {id, JW_RESOURCE_PIN, config->enable_pin, 0, 0}};
+  jw_resource_conflict_t conflict{};
+  const auto status =
+      jw_resource_replace(g_stepdir_resources, 3u * g_num_channels, id, claims, 3, &conflict);
+  auto result = jw_actuator_sync_result(status);
+  if (status != JW_STATUS_OK) {
+    result.conflict = conflict;
+    return result;
+  }
+  // Validate all resources before changing output latches or configuration.
+  StepDirDisable(channel);
+  StepDirConfigure(channel, config);
+  return result;
+}
+jw_actuator_result_t SetTarget(void* context, const jw_set_target_t* target) {
+  if (target->mode == JW_MODE_POSITION &&
+      (double(target->value) < INT32_MIN || double(target->value) > INT32_MAX))
+    return jw_actuator_sync_result(JW_STATUS_INVALID_PAYLOAD);
+  StepDirSetTarget(static_cast<ChannelState*>(context), target->mode, target->value);
+  return jw_actuator_sync_result(JW_STATUS_OK);
+}
+jw_actuator_result_t Enable(void* context) {
+  StepDirEnable(static_cast<ChannelState*>(context));
+  return jw_actuator_sync_result(JW_STATUS_OK);
+}
+jw_actuator_result_t Disable(void* context) {
+  StepDirDisable(static_cast<ChannelState*>(context));
+  return jw_actuator_sync_result(JW_STATUS_OK);
+}
+jw_actuator_result_t Feedback(void* context, jw_feedback_t* value) {
+  const auto* channel = static_cast<ChannelState*>(context);
+  if (!channel->configured) return jw_actuator_sync_result(JW_STATUS_UNAVAILABLE);
+  *value = channel->feedback;
+  const uint64_t now = timestamp_us + uint32_t(micros() - previous_micros);
+  if (now - value->metadata.timestamp_us > kMaxFeedbackAgeUs)
+    value->metadata.validity = JW_SAMPLE_STALE;
+  return jw_actuator_sync_result(JW_STATUS_OK);
+}
+const jw_actuator_backend_ops_t kBackendOps = {
+    State, Configure, SetTarget, Enable, Disable, Feedback};
 }  // namespace
 
 void StepDirDeviceInit(uint32_t boot_id, const char* name, bool (*valid_output_pin)(uint8_t)) {
@@ -171,8 +124,9 @@ void StepDirDeviceInit(uint32_t boot_id, const char* name, bool (*valid_output_p
                            0};
     function.schema = schema;
     function.schema_len = sizeof(schema);
-    function.handler = Profile;
-    function.context = &g_channels[i];
+    g_channels[i].actuator = {&function, description, &kBackendOps, &g_channels[i]};
+    function.handler = jw_actuator_handle;
+    function.context = &g_channels[i].actuator;
     g_channels[i].feedback.metadata.boot_id = identity.boot_id;
     g_channels[i].feedback.metadata.clock = JW_CLOCK_BOOT_MONOTONIC_US;
   }

@@ -1,6 +1,7 @@
 #include "config/validation.h"
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -9,6 +10,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/perception/audio/audio_config.h"
 #include "ros2/utils/packet_parser.h"
@@ -227,11 +229,30 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 }
 
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
+  std::map<std::string, std::pair<uint64_t, uint32_t>> physical_policies;
+  std::map<std::string, uint32_t> joshua_timeouts;
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
-    const auto status = robot::comm::ValidateSerialCommConfig(connection.comm);
+    ABSL_RETURN_IF_ERROR(robot::comm::ValidateSerialCommConfig(connection.comm));
+    const auto& serial = connection.comm.serial_config();
+    auto status = robot::comm::ValidateSerialConfig(serial);
     if (!status.ok()) {
       return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
+    }
+    // Match CommFactory: all users share physical settings, but only JW users
+    // select an exchange deadline. Adapter selection is local to each consumer.
+    const auto physical_policy = std::make_pair(serial.baudrate(), serial.post_open_settle_ms());
+    const auto [it, inserted] = physical_policies.emplace(serial.port(), physical_policy);
+    if (!inserted && it->second != physical_policy)
+      return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
+    if (serial.message_adapter() == robot::comm::JOSHUA_WIRE) {
+      const uint32_t timeout = serial.has_exchange_timeout_ms()
+                                   ? serial.exchange_timeout_ms()
+                                   : robot::comm::kDefaultSerialExchangeTimeoutMs;
+      const auto [timeout_it, timeout_inserted] = joshua_timeouts.emplace(serial.port(), timeout);
+      if (!timeout_inserted && timeout_it->second != timeout)
+        return absl::InvalidArgumentError(
+            "Serial port has conflicting JoshuaWire exchange timeouts");
     }
   }
   return absl::OkStatus();
@@ -240,15 +261,17 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
 absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
   std::map<std::string, uint32_t> port_to_node_id;
   for (const auto& connection : connections) {
-    // Serial ports are process-owned. Other transports can add their own
-    // ownership rules here without introducing sensor-specific cases.
-    if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
-    const auto& port = connection.comm.serial_config().port();
+    // Both serial buses and EtherCAT NICs must have one node-process owner.
+    const bool serial = connection.comm.comm_type() == robot::comm::SERIAL;
+    const bool ethercat = connection.comm.comm_type() == robot::comm::ETHERCAT;
+    if (!serial && !ethercat) continue;
+    const std::string port =
+        serial ? "Serial port '" + connection.comm.serial_config().port()
+               : "EtherCAT NIC '" + connection.comm.ethercat_config().interface_name();
     const auto [it, inserted] = port_to_node_id.emplace(port, connection.node_id);
     if (!inserted && it->second != connection.node_id) {
       return absl::InvalidArgumentError(
-          absl::StrCat("Serial port '",
-                       port,
+          absl::StrCat(port,
                        "' is assigned to multiple node_ids (",
                        it->second,
                        " and ",
@@ -259,11 +282,56 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
   return absl::OkStatus();
 }
 
+absl::Status ValidateEthercatBoards(
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+  std::map<std::string, std::string> policies;
+  std::map<std::pair<std::string, uint32_t>, std::string> endpoints;
+  for (const auto& board : boards) {
+    const auto& comm = board.comm();
+    if (comm.comm_type() != robot::comm::ETHERCAT) continue;
+    const auto& ec = comm.ethercat_config();
+    if (ec.interface_name().empty()) return absl::InvalidArgumentError("EtherCAT board has no NIC");
+    const bool paired = comm.transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
+    if (paired) {
+      ABSL_RETURN_IF_ERROR(robot::comm::ValidatePairedEthercatConfig(ec));
+      if (board.protocol() != robot::board::JOSHUA_WIRE || board.has_am243_config())
+        return absl::InvalidArgumentError(
+            "Paired EtherCAT requires explicit JW and endpoint config in comm");
+      if (!endpoints.emplace(std::make_pair(ec.interface_name(), ec.slave_index()), board.name())
+               .second)
+        return absl::InvalidArgumentError(
+            "Multiple boards declare the same EtherCAT slave endpoint");
+    } else {
+      return absl::InvalidArgumentError(
+          "Legacy TI-demo EtherCAT is retired; explicit JW with MESSAGE_AND_CYCLIC is required");
+    }
+    const std::string policy = std::to_string(comm.transport_type()) + ":" +
+                               std::to_string(ec.process_data_mode()) + ":" +
+                               ec.timing().SerializeAsString();
+    const auto [it, added] = policies.emplace(ec.interface_name(), policy);
+    if (!added && it->second != policy)
+      return absl::InvalidArgumentError("EtherCAT NIC has conflicting profile or timing policies");
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
   ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
   const auto& robot = config.robot();
+  ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
+  for (const auto& board : robot.boards()) {
+    if (board.has_am243_config())
+      return absl::InvalidArgumentError(
+          "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
+  }
+  for (const auto& action : robot.actions().single_actions()) {
+    if (action.has_actuator() && (action.actuator().motor_type() == robot::action::MOTOR_TI_DEMO ||
+                                  action.actuator().has_am243_ethercat_config()))
+      return absl::InvalidArgumentError(
+          "Legacy TI-demo motor/actuator config is retired; configure a supported motor");
+  }
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));

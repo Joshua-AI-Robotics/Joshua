@@ -35,6 +35,16 @@ These principles guide development:
 - **Use the existing robot configuration.** Hardware identity, wiring,
   calibration, and limits come from protobuf configuration. Capability claims
   match the installed version and merged, verified implementations.
+- **Expose robot-level capabilities.** Once a robot is configured, the LLM
+  should be able to discover its supported actions and observations through
+  MCP, including their parameters, units and reference frames where applicable,
+  limits, prerequisites, and verification methods. Users should be able to
+  request supported tasks without assembling individual actuator commands.
+  Joshua owns the mapping from these capabilities to tested subsystem
+  operations, actuators, and sensors; component details remain available for
+  setup and diagnostics. Configured components alone do not establish a
+  composed task capability: an arm, gripper, and camera do not imply verified
+  pick-and-place support.
 - **Make every task explicit and bounded.** Resolve the target, movement,
   units, speed, repetition count, and any variations into a validated plan.
   Feedback-driven plans also specify allowed next actions, selection conditions,
@@ -149,6 +159,11 @@ Expand hardware coverage alongside them.
 A user connects an AI IDE or chat client and asks, “What can this setup do, and
 is my configuration valid?” Joshua reports its installed version, configured
 devices, supported capabilities, and validation errors without opening devices.
+Demonstrate that the LLM can explain what a named robot can do, the parameters,
+limits, and prerequisites of those capabilities, how outcomes can be verified,
+and what capabilities are missing for a requested task. Discovery reports
+configured support backed by merged implementations and verification evidence;
+it does not establish current connection, availability, or physical readiness.
 This establishes a working client connection and inspection flow. Live
 connection probes are separate approved backend steps that respect device
 ownership.

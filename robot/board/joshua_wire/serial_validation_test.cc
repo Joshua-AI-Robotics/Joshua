@@ -6,7 +6,7 @@
 #include <sstream>
 #include <vector>
 
-#include "firmware/am243/joshua_dual_transport/src/joshua_commands.h"
+#include "firmware/am243/joshua_dual_transport/src/am243_software_backend.h"
 #include "firmware/common/joshua_wire_endpoint.h"
 #include "gtest/gtest.h"
 
@@ -52,7 +52,9 @@ class Firmware : public robot::comm::MessageTransport {
                                         JoshuaCommand,
                                         JoshuaReset,
                                         &state);
-    if (RecordedCommand(request) == fail_cmd || len <= 0)
+    if (RecordedCommand(request) == fail_cmd ||
+        (lose_close_reply && request.cmd == JW_CMD_RESET_SESSION && commands.size() > 1) ||
+        len <= 0)
       return absl::DeadlineExceededError("lost reply after execution");
     response.resize(len);
     if (request.cmd == JW_CMD_IDENTIFY && wrong_identity) {
@@ -72,6 +74,7 @@ class Firmware : public robot::comm::MessageTransport {
   std::vector<uint32_t> sessions;
   int fail_cmd = -1;
   bool wrong_identity = false;
+  bool lose_close_reply = false;
 };
 
 class ValidationTest : public ::testing::Test {
@@ -113,7 +116,8 @@ class ValidationTest : public ::testing::Test {
 
 TEST_F(ValidationTest, DefaultNeverConfiguresEnablesOrTargets) {
   ASSERT_TRUE(Run().ok());
-  EXPECT_EQ(firmware->commands, (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_ESTOP}));
+  EXPECT_EQ(firmware->commands,
+            (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_RESET_SESSION}));
   EXPECT_FALSE(firmware->state.enabled);
   EXPECT_FALSE(firmware->state.configured);
 }
@@ -121,8 +125,9 @@ TEST_F(ValidationTest, ConfigureStaysDisabled) {
   options.mode = "configure";
   options.channel = 0;
   ASSERT_TRUE(Run().ok());
-  EXPECT_EQ(firmware->commands,
-            (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, kConfigure, kFeedback, JW_CMD_ESTOP}));
+  EXPECT_EQ(
+      firmware->commands,
+      (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, kConfigure, kFeedback, JW_CMD_RESET_SESSION}));
   EXPECT_FALSE(firmware->state.enabled);
   EXPECT_FALSE(firmware->state.configured);
 }
@@ -151,41 +156,66 @@ TEST_F(ValidationTest, ExerciseHoldsBeforeEnableAndStopsAfterTarget) {
                    kSetTarget,
                    kFeedback,
                    kDisable,
-                   JW_CMD_ESTOP}));
+                   JW_CMD_RESET_SESSION}));
   EXPECT_FALSE(firmware->state.enabled);
-  EXPECT_TRUE(firmware->state.estopped);
+  EXPECT_FALSE(firmware->state.estopped);
+  EXPECT_FALSE(firmware->state.configured);
   EXPECT_FLOAT_EQ(firmware->state.target_value, 0);
 }
-TEST_F(ValidationTest, TimeoutAfterEnableStillAttemptsEstop) {
+TEST_F(ValidationTest, TimeoutAfterEnableStillResets) {
   Exercise();
   firmware->fail_cmd = kEnable;
   EXPECT_EQ(Run().code(), absl::StatusCode::kDeadlineExceeded);
-  EXPECT_EQ(firmware->commands.back(), JW_CMD_ESTOP);
+  EXPECT_EQ(firmware->commands.back(), JW_CMD_RESET_SESSION);
   EXPECT_FALSE(firmware->state.enabled);
 }
 TEST_F(ValidationTest, FailedCleanupReportsUnknownState) {
-  firmware->fail_cmd = JW_CMD_ESTOP;
+  firmware->lose_close_reply = true;
   const auto status = Run();
-  EXPECT_FALSE(status.ok());
-  EXPECT_NE(status.message().find("hardware state unknown"), std::string::npos);
+  EXPECT_EQ(status.code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(status.message().find("RESET_SESSION unconfirmed, hardware state unknown"),
+            std::string::npos);
+  EXPECT_EQ(
+      firmware->commands,
+      (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_RESET_SESSION, JW_CMD_RESET_SESSION}));
+  EXPECT_FALSE(firmware->state.enabled);
+  EXPECT_FALSE(firmware->state.configured);
+  EXPECT_FALSE(firmware->state.estopped);
 }
 TEST_F(ValidationTest, CancellationAfterEnableStillStops) {
   Exercise();
   EXPECT_EQ(Run([this] { return firmware->state.enabled; }).code(), absl::StatusCode::kCancelled);
-  EXPECT_EQ(firmware->commands.back(), JW_CMD_ESTOP);
+  EXPECT_EQ(firmware->commands.back(), JW_CMD_RESET_SESSION);
   EXPECT_FALSE(firmware->state.enabled);
 }
 TEST_F(ValidationTest, IdentityMismatchPreventsConfiguration) {
   Exercise();
   firmware->wrong_identity = true;
   EXPECT_EQ(Run().code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_EQ(firmware->commands, (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_ESTOP}));
+  EXPECT_EQ(firmware->commands,
+            (Bytes{JW_CMD_RESET_SESSION, JW_CMD_IDENTIFY, JW_CMD_RESET_SESSION}));
 }
 TEST_F(ValidationTest, RepeatedSessionsUseFreshIdsWithoutPhysicalReopen) {
   options.sessions = 2;
   ASSERT_TRUE(Run().ok());
   ASSERT_EQ(firmware->commands.size(), 6);
   EXPECT_NE(firmware->sessions[0], firmware->sessions[3]);
+}
+TEST_F(ValidationTest, RepeatedExerciseSessionsDoNotRequireRecovery) {
+  Exercise();
+  options.sessions = 2;
+  ASSERT_TRUE(Run().ok()) << output.str();
+  EXPECT_FALSE(firmware->state.enabled);
+  EXPECT_FALSE(firmware->state.configured);
+  EXPECT_FALSE(firmware->state.estopped);
+}
+TEST_F(ValidationTest, CleanupPreservesExistingEstop) {
+  JoshuaReset(&firmware->state);
+  JoshuaStop(&firmware->state, 0);
+  ASSERT_TRUE(Run().ok());
+  EXPECT_FALSE(firmware->state.enabled);
+  EXPECT_FALSE(firmware->state.configured);
+  EXPECT_TRUE(firmware->state.estopped);
 }
 TEST_F(ValidationTest, RejectsMissingOrWrongFramingBeforeTransportUse) {
   auto* serial = board.mutable_comm()->mutable_serial_config();
