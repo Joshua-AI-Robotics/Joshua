@@ -105,6 +105,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":config_validation_cli",
+        ":robot_capabilities",
         ":validation",
         "//launcher:version",
         "//robot/action/factory:action_factory",
@@ -123,5 +124,30 @@ cc_binary(
     deps = [
         ":inspection_cli",
         "@glog",
+    ],
+)
+
+cc_library(
+    name = "robot_capabilities",
+    srcs = ["robot_capabilities.cc"],
+    hdrs = ["robot_capabilities.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//launcher:version",
+        "//robot/board/factory:board_resolver",
+        "//ros2/utils:packet_parser",
+        "@protobuf",
+    ],
+)
+
+cc_test(
+    name = "robot_capabilities_test",
+    srcs = ["robot_capabilities_test.cc"],
+    data = ["//config/config_preset:config_presets"],
+    deps = [
+        ":config_utils",
+        ":robot_capabilities",
+        "@googletest//:gtest_main",
+        "@protobuf",
     ],
 )

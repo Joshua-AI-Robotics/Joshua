@@ -1,9 +1,10 @@
 # Read-only inspection MCP tools
 
-`config_validation_server` exposes seven read-only tools over stdio when started
+`config_validation_server` exposes eight read-only tools over stdio when started
 with `--inspector`. `list_supported_components()` discovers factory-owned build
 metadata without a config. `validate_config(config_path)`,
-`list_devices(config_path)` and `describe_device(config_path, device_id)` inspect
+`list_devices(config_path)`, `describe_device(config_path, device_id)` and
+`describe_robot_capabilities(config_path)` inspect
 candidate protobuf files beneath an operator-selected root. One session can
 inspect several candidates. For example:
 
@@ -78,6 +79,26 @@ configuration, topics, references and limits, with compatibility and hardware
 readiness explicitly unverified. Helper output and each MCP text report are
 capped at 64 KiB, including Unicode escaping; a larger report returns
 `RESOURCE_EXHAUSTED`. The session remains usable for subsequent requests.
+
+## Robot capability report
+
+`describe_robot_capabilities(config_path)` groups configured joint position
+commands and position observations, with target identifiers, native position
+units, device-zero references, per-joint limits, declared ROS endpoints,
+prerequisites, source/test evidence and verification gaps. Initial evidence
+covers STS3215 on FEETECH_BUS with SERIAL MESSAGE CALLER_SIZED; other valid
+paths report explicit gaps. Driver acceptance, declared ROS exposure and MCP
+availability are separate. Reports reject oversize rather than omit contracts.
+
+The SO100 teleoperation preset exposes native Float32 position topics; broader
+driver SI, speed and preset acceptance does not add endpoints. Its six leader
+sensors belong to a different bus from the follower actuators, so shared topic
+names do not verify follower position. Float32 streams are not accessible through
+`get_feedback`, which requires a selected exclusive JOINT_STATE publisher.
+Operational position limits do not constrain every preset: idle/teardown bypass
+them, and the second joint's configured idle value is outside its lower bound.
+Readiness remains unknown; no motion, calibrated Cartesian planning,
+pick-and-place or verified cyclic task executor is supplied by this report.
 
 ## Typed observation contract
 

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "config/config_validation_cli.h"
+#include "config/robot_capabilities.h"
 #include "config/validation.h"
 #include "google/protobuf/struct.pb.h"
 #include "google/protobuf/util/json_util.h"
@@ -157,7 +158,8 @@ int Run(const std::vector<std::string>& args, std::ostream& output) {
   std::string code = "OK", message = "Inspection completed.";
   int exit = 0;
   if (bad ||
-      (op != "list_supported_components" && op != "list_devices" && op != "describe_device") ||
+      (op != "list_supported_components" && op != "list_devices" && op != "describe_device" &&
+       op != "describe_robot_capabilities") ||
       (op == "list_supported_components"
            ? (!path.empty() || !id.empty())
            : (root < 0 || path.empty() || (op == "describe_device" ? id.empty() : !id.empty())))) {
@@ -183,7 +185,8 @@ int Run(const std::vector<std::string>& args, std::ostream& output) {
         message = std::string(valid.message());
         exit = 1;
       } else {
-        data = Devices(*loaded);
+        data = op == "describe_robot_capabilities" ? config::BuildRobotCapabilities(*loaded)
+                                                   : Devices(*loaded);
         Set(report, "stage", Text("inspection"));
         if (op == "describe_device") {
           Value found;

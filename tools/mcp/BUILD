@@ -45,6 +45,7 @@ py_test(
         ":config_validation_server",
         "//config:joshua_inspect_config",
         "//config:joshua_validate_config",
+        "//config/config_preset:config_presets",
         "//node_generator:observation_fixture",
     ],
     tags = ["local"],
