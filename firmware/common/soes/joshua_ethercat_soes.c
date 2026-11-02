@@ -20,6 +20,9 @@ static uint8_t output[JWEC_PDO_SIZE], input[JWEC_PDO_SIZE];
 static uint64_t download_epoch;
 static uint16_t download_index;
 static bool download_pending;
+// SOES invokes safeoutput_override once while establishing its initial state,
+// before accepting peer work. That notification is not an operational loss.
+static bool initializing;
 
 #define ENTRY(s, t, bits, access, value, data) \
   { s, t, bits, access, "", value, data }
@@ -92,7 +95,7 @@ static void Stop(void) {
   JoshuaEthercatProfileTick(port.profile, port.time_us(), false);
   // A state-loss notification is a new stop even when already disabled/faulted.
   // Tick only stops enabled channels; still retire a pre-stop RECOVER here.
-  if (epoch == port.profile->stop_epoch)
+  if (!initializing && epoch == port.profile->stop_epoch)
     JoshuaEthercatProfileFault(port.profile, JOSHUA_ECAT_FAULT_STATE);
   port.unlock(key);
 }
@@ -196,7 +199,9 @@ int JoshuaSoesInit(const JoshuaSoesConfig* config) {
                      .post_object_download_hook = AfterDownload,
                      .pre_object_upload_hook = BeforeUpload,
                      .esc_hw_eep_handler = config->eeprom_handler};
+  initializing = true;
   ecat_slv_init(&stack);
+  initializing = false;
   return 0;
 }
 void JoshuaSoesPoll(void) {

@@ -749,8 +749,10 @@ TEST_F(Am243EthercatProfileTest, SparseFunctionIdsHaveIndependentWatchdogSlots) 
 // object dictionary and real PDO packing. No separate development probe files.
 class SoesProfileTest : public Am243EthercatProfileTest {
  protected:
+  virtual void BeforeSoesInit() {}
   void SetUp() override {
     Am243EthercatProfileTest::SetUp();
+    BeforeSoesInit();
     soes_esc.fill(0);
     soes_esc[ESCREG_DLSTATUS] = 1;
     soes_time_us = 0;
@@ -894,6 +896,60 @@ class SoesProfileTest : public Am243EthercatProfileTest {
     EXPECT_FALSE(channel.enabled);
   }
 };
+
+TEST_F(SoesProfileTest, ColdBootConfiguresWithoutRecoveryAndStillRequiresExplicitEnable) {
+  EXPECT_FALSE(profile.fault_latched);
+  EXPECT_FALSE(channel.estopped);
+  EXPECT_FALSE(channel.enabled);
+  const auto bytes = CoeCommand(JW_CMD_GET_STATUS, {}, JW_CHANNEL_NONE);
+  jw_device_status_t state{};
+  ASSERT_EQ(bytes.size(), JW_REPLY_HEADER_LEN + JW_DEVICE_STATUS_LEN);
+  ASSERT_EQ(jw_decode_device_status(
+                bytes.data() + JW_REPLY_HEADER_LEN, bytes.size() - JW_REPLY_HEADER_LEN, &state),
+            JW_RESULT_OK);
+  EXPECT_EQ(state.recovery & JW_RECOVERY_CLEAR_ESTOP, 0);
+  SetOp();
+  EXPECT_EQ(CoeCommand(kConfigure, Bytes(11)), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_TRUE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_EQ(CoeCommand(kEnable), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_TRUE(channel.enabled);
+}
+
+TEST_F(SoesProfileTest, StateLossWhileDisabledStillLatchesAndSurvivesReset) {
+  ASSERT_FALSE(profile.fault_latched);
+  ASSERT_FALSE(channel.enabled);
+  const auto epoch = profile.stop_epoch;
+  ESC_stopoutput();
+  EXPECT_GT(profile.stop_epoch, epoch);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  Bytes reset(JWEC_SESSION_SIZE);
+  ProfilePut32(reset.data(), JWEC_RESET_OPERATION);
+  ProfilePut32(reset.data() + 4, 9);
+  ASSERT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x60);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  EXPECT_FALSE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+}
+
+class InitiallyFaultedSoesProfileTest : public SoesProfileTest {
+ protected:
+  void BeforeSoesInit() override {
+    JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_STATE);
+  }
+};
+
+TEST_F(InitiallyFaultedSoesProfileTest, InitializationNeverClearsExistingSafetyLatch) {
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  SetOp();
+  EXPECT_EQ(CoeCommand(kConfigure, Bytes(11)),
+            (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
+  EXPECT_FALSE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+}
 
 TEST_F(SoesProfileTest, IndependentWatchdogRetiresAdmittedRecovery) {
   ConfigureAndEnable();
