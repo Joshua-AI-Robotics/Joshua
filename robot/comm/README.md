@@ -22,15 +22,67 @@ Current combinations are:
 | --- | --- | --- | --- |
 | Serial | yes | yes | no |
 | UDP | no | planned | no |
-| EtherCAT | no | no | yes |
+| EtherCAT | no | JW paired only | JW paired only |
 
-`ByteStream` provides ordered bytes without boundaries. `MessageTransport`
-provides complete-frame `Send` and `Exchange` calls. `CorrelatedCyclicTransport`
-provides correlated exchanges with an explicit finite timeout.
-`CallerSizedSerialTransport` implements the `CallerSizedMessageTransport`
-interface for vendor protocols. EtherCAT currently
-provides its cyclic transport directly. UDP remains rejected until its concrete
-implementation is added.
+`ByteStream` provides ordered bytes without boundaries.
+[`MessageTransport`](interfaces/message_transport.h) exposes only `Send` and
+`Exchange` over borrowed byte spans; the adapter supplies response framing and
+returns owned bytes. Factory-created message adapters are ready to use, so a
+JW session reset does not reopen the physical link.
+
+[`CorrelatedCyclicTransport`](interfaces/correlated_cyclic_transport.h) is a
+separate interface with a finite exchange timeout and correlation/stop contract.
+Its JW EtherCAT adapter is supplied together with a message endpoint when
+`transport_type: MESSAGE_AND_CYCLIC` is selected.
+The legacy TI-demo API has been retired. `CommTransport` can
+represent either capability or `PairedTransports`, which holds both and the
+configured response deadline. UDP remains rejected.
+
+The [EtherCAT owner worker](ethercat/README.md#owner-worker-and-factory-assembly)
+now provides background process-data exchange, blocking startup SDO and an
+explicitly budgeted incremental runtime SDO path for unsegmented objects up to
+76 bytes. Blocking SDO closes before
+cyclic operation. The [paired JW adapter](ethercat/README.md#paired-joshuawire-adapters)
+adds the compatibility gate, reset-object handshake, CoE management envelopes,
+PDO correlation and shared endpoint lifetime. Factory assembly validates all
+discovered slaves before OP, then leases one endpoint per configured slave on a
+shared NIC owner. The separate AM243 JW firmware profile implements this
+contract; it is not the TI demo. See [config selection](../../config/README.md#joshuawire-over-ethercat).
+
+Device protocol parsing remains outside this layer. For example, the lidar
+parser interprets bytes received through `ByteStream`, while a board codec
+interprets complete exchanges received through `MessageTransport`.
+
+### Serial link timing
+
+`post_open_settle_ms` defaults to zero and applies once per physical open.
+Consumers of a port must agree on baudrate and settle policy. JoshuaWire adapters
+also agree on their exchange timeout; raw byte-stream and caller-sized consumers
+share the bus lock without selecting JoshuaWire timing. ESP32 examples explicitly
+request a 2000 ms settle interval. See [config migration](../../config/README.md#serial-timing).
+
+### Dependencies and tests
+
+Pure serial and paired EtherCAT field checks live in
+[`factory/comm_config_validation.h`](factory/comm_config_validation.h), shared
+by config preflight and `CommFactory`. Config validation depends on these checks
+without linking the factory or concrete transports.
+
+Concrete serial and SOEM transport targets are visible only within `robot/comm`.
+Raw SOEM is restricted to the EtherCAT package. `CommFactory` keeps concrete
+dependencies private with `implementation_deps`; public factory headers expose
+capabilities, not concrete classes. All EtherCAT I/O/metadata headers are now
+comm-internal; no raw bus alternative is exposed by the factory.
+
+[`testing/fake_transports.h`](testing/fake_transports.h) supplies maintained,
+test-only message/cyclic doubles with queued results. They do not simulate bus
+timing, workers or correlation; those require adapter tests. The vendor caller-sized fake lives in
+[`testing/fake_caller_sized_message_transport.h`](testing/fake_caller_sized_message_transport.h)
+so board tests do not pull in the concrete serial implementation.
+`transport_contract_test` checks the interfaces and fakes;
+`transport_boundary_test` fails during Bazel analysis if implementation headers
+leak through the public factory/capability dependencies. Both run in the normal
+Compose test services, without hardware.
 
 Serial `MESSAGE` configurations must explicitly select `serial_config.message_adapter`:
 

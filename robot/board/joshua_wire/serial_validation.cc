@@ -255,12 +255,12 @@ absl::Status RunSerialValidation(const Board& board,
     output << "Session " << i + 1 << ": RESET_SESSION OK (outputs disabled, config cleared)\n";
     const auto status = RunSession(session, board, options, output, cancelled);
     const auto stopped = session.Close();  // Also runs after rejected/failed commands.
-    output << "ESTOP cleanup: " << stopped << '\n';
+    output << "RESET_SESSION cleanup: " << stopped << '\n';
     if (!stopped.ok()) {
-      return absl::Status(
-          stopped.code(),
-          std::string(status.message()) +
-              "; ESTOP unconfirmed, hardware state unknown: " + std::string(stopped.message()));
+      return absl::Status(stopped.code(),
+                          std::string(status.message()) +
+                              "; RESET_SESSION unconfirmed, hardware state unknown: " +
+                              std::string(stopped.message()));
     }
     ABSL_RETURN_IF_ERROR(status);
   }

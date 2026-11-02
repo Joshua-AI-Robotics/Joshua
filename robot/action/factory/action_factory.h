@@ -9,7 +9,6 @@
 #include "robot/action/interfaces/action_interface.h"
 #include "robot/action/motors/drivers/stepper_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
-#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/board/factory/motor_channel_validation.h"
@@ -59,6 +58,12 @@ class ActionFactory {
               "' sets deprecated actuator_type; omit it and set motor_type + board_name + "
               "channel (docs/BOARD_LAYER_RFC.md §6.3).");
     }
+    if (actuator.motor_type() == robot::action::MOTOR_TI_DEMO ||
+        actuator.has_am243_ethercat_config()) {
+      return absl::InvalidArgumentError(
+          "The TI-demo motor/actuator config is retired; configure a supported motor "
+          "and a JoshuaWire board instead.");
+    }
     if (actuator.motor_type() == robot::action::MotorType::MOTOR_INVALID) {
       return absl::Status(absl::StatusCode::kInvalidArgument,
                           "Actuator '" + actuator.actuator_name() + "' has no motor_type.");
@@ -74,11 +79,6 @@ class ActionFactory {
     ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
 
     switch (actuator.motor_type()) {
-      case robot::action::MotorType::MOTOR_TI_DEMO: {
-        auto driver = std::make_unique<robot::action::TiDemoDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
       case robot::action::MotorType::MOTOR_STS3215: {
         auto driver = std::make_unique<robot::action::Sts3215Driver>(channel, actuator);
         ABSL_RETURN_IF_ERROR(driver->Init());

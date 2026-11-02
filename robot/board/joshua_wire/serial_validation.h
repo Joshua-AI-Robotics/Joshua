@@ -29,8 +29,9 @@ struct SerialValidationOptions {
 absl::Status ValidateSerialOptions(const Board& board, const SerialValidationOptions& options);
 
 // Each session resets, checks identity, optionally exercises a channel, and
-// attempts ESTOP on exit. Repeated sessions do not physically reopen the port.
-// Cancellation is checked between exchanges; cleanup still attempts ESTOP.
+// attempts a fresh RESET_SESSION on exit to disable outputs and clear configuration
+// while preserving existing ESTOP latches. Repeated sessions do not physically
+// reopen the port. Cancellation is checked between exchanges; cleanup still runs.
 absl::Status RunSerialValidation(const Board& board,
                                  const SerialValidationOptions& options,
                                  std::shared_ptr<robot::comm::MessageTransport> transport,
