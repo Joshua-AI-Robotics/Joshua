@@ -37,6 +37,67 @@ absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSt
 
 }  // namespace
 
+const std::vector<SensorImplementation>& PerceptionFactory::Implementations() {
+  static const std::vector<SensorImplementation> entries = {
+      {SinglePerception::kSts3215EncoderConfig,
+       POSITION,
+       "installed",
+       [](const SinglePerception& sensor,
+          const auto& boards) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         return CreateSts3215PositionSensor(
+             sensor, boards, absl::StrCat("Sensor '", sensor.sensor_name(), "'"));
+       },
+       "position driver requires POSITION."},
+      {SinglePerception::kAlsaAudioConfig,
+       AUDIO,
+       "installed",
+       [](const SinglePerception& sensor,
+          const auto&) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         ABSL_RETURN_IF_ERROR(ValidateAudioConfig(sensor.alsa_audio_config()));
+         return std::make_unique<AlsaAudio>(sensor);
+       },
+       "ALSA driver requires AUDIO sensor_type",
+       false},
+      {SinglePerception::kOpencvConfig,
+       IMAGE,
+       "installed",
+       [](const SinglePerception& sensor,
+          const auto&) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         return std::make_unique<CvCamera>(sensor);
+       },
+       "camera driver requires IMAGE."},
+      {SinglePerception::kLds01Config,
+       RANGE_SCAN,
+       "installed",
+       [](const SinglePerception& sensor,
+          const auto&) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         if (sensor.lds01_config().comm().transport_type() != robot::comm::BYTE_STREAM)
+           return absl::InvalidArgumentError(
+               absl::StrCat("Sensor '",
+                            sensor.sensor_name(),
+                            "': LDS01 requires RANGE_SCAN and BYTE_STREAM comm."));
+         ABSL_ASSIGN_OR_RETURN(auto comm,
+                               robot::comm::CommFactory::CreateComm(sensor.lds01_config().comm()));
+         ABSL_ASSIGN_OR_RETURN(auto stream,
+                               robot::comm::GetCommTransport<robot::comm::ByteStream>(comm));
+         auto lidar = std::make_unique<Lds01Driver>(stream, sensor);
+         ABSL_RETURN_IF_ERROR(lidar->Init());
+         return lidar;
+       },
+       "LDS01 requires RANGE_SCAN and BYTE_STREAM comm."},
+      {SinglePerception::SENSOR_CONFIG_NOT_SET,
+       IMU_6DOF,
+       "unimplemented",
+       nullptr,
+       "No IMU driver is available."},
+      {SinglePerception::SENSOR_CONFIG_NOT_SET,
+       FORCE_TORQUE,
+       "unimplemented",
+       nullptr,
+       "No force/torque driver is available."}};
+  return entries;
+}
+
 absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>
 PerceptionFactory::CreatePerception(
     const robot::perception::SinglePerception& single_perception,
@@ -51,43 +112,19 @@ PerceptionFactory::CreatePerception(
     return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
   }
 
-  switch (single_perception.sensor_config_case()) {
-    case robot::perception::SinglePerception::kSts3215EncoderConfig:
-      if (single_perception.sensor_type() != POSITION) {
-        return absl::InvalidArgumentError(
-            absl::StrCat(owner, ": position driver requires POSITION."));
-      }
-      return CreateSts3215PositionSensor(single_perception, boards, owner);
-    case robot::perception::SinglePerception::kAlsaAudioConfig:
-      if (single_perception.sensor_type() != AUDIO) {
-        return absl::InvalidArgumentError("ALSA driver requires AUDIO sensor_type");
-      }
-      ABSL_RETURN_IF_ERROR(ValidateAudioConfig(single_perception.alsa_audio_config()));
-      return std::make_unique<AlsaAudio>(single_perception);
-    case robot::perception::SinglePerception::kOpencvConfig:
-      if (single_perception.sensor_type() != IMAGE) {
-        return absl::InvalidArgumentError(absl::StrCat(owner, ": camera driver requires IMAGE."));
-      }
-      // Preserve lazy camera acquisition: GetData opens the configured camera.
-      return std::make_unique<CvCamera>(single_perception);
-    case robot::perception::SinglePerception::kLds01Config: {
-      if (single_perception.sensor_type() != RANGE_SCAN ||
-          single_perception.lds01_config().comm().transport_type() != robot::comm::BYTE_STREAM) {
-        return absl::InvalidArgumentError(
-            absl::StrCat(owner, ": LDS01 requires RANGE_SCAN and BYTE_STREAM comm."));
-      }
-      ABSL_ASSIGN_OR_RETURN(
-          auto comm, robot::comm::CommFactory::CreateComm(single_perception.lds01_config().comm()));
-      ABSL_ASSIGN_OR_RETURN(auto stream,
-                            robot::comm::GetCommTransport<robot::comm::ByteStream>(comm));
-      auto lidar = std::make_unique<Lds01Driver>(stream, single_perception);
-      ABSL_RETURN_IF_ERROR(lidar->Init());
-      return lidar;
+  for (const auto& implementation : Implementations()) {
+    if (implementation.config_case != single_perception.sensor_config_case() ||
+        !implementation.create)
+      continue;
+    if (implementation.type != single_perception.sensor_type()) {
+      return absl::InvalidArgumentError(
+          implementation.include_owner_in_error
+              ? absl::StrCat(owner, ": ", implementation.mismatch_message)
+              : implementation.mismatch_message);
     }
-    case robot::perception::SinglePerception::SENSOR_CONFIG_NOT_SET:
-    default:
-      return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+    return implementation.create(single_perception, boards);
   }
+  return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
 }
 
 }  // namespace robot::perception

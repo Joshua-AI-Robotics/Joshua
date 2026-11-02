@@ -36,7 +36,14 @@ only a relative reference below an inherited directory descriptor and rejects
 symlinks in every component. This command does not initialize nodes or
 drivers and does not open any device named by the config. It retains the current
 validator behavior, including acceptance of an empty config. For MCP use, see
-[the one-tool stdio adapter](../tools/mcp/README.md).
+[the read-only stdio adapter](../tools/mcp/README.md).
+
+`//config:joshua_inspect_config` supplies config-free `list_supported_components`
+and confined `list_devices`/`describe_device` operations through the MCP adapter.
+Its metadata shares implementing factory tables and never invokes their
+creators. Device reports show declared configuration with compatibility and
+hardware readiness unverified. The inventory and report are bounded; see the
+[adapter guide](../tools/mcp/README.md) for identities and limits.
 
 ## Layout
 

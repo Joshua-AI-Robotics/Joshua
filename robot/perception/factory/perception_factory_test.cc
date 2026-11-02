@@ -226,9 +226,13 @@ TEST_F(PerceptionFactoryTest, RejectsWrongDirectSensorTypesBeforeOpeningComm) {
   config::Robot robot;
   auto sensor = MakeLidar();
   sensor.set_sensor_type(POSITION);
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "Sensor 'front_scan': LDS01 requires RANGE_SCAN and BYTE_STREAM comm.");
   EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().code(),
             absl::StatusCode::kInvalidArgument);
   sensor.mutable_opencv_config();
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "Sensor 'front_scan': camera driver requires IMAGE.");
   EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().code(),
             absl::StatusCode::kInvalidArgument);
   EXPECT_FALSE(called);
@@ -240,6 +244,27 @@ TEST_F(PerceptionFactoryTest, RejectsLidarWithoutByteStreamConfig) {
   sensor.mutable_lds01_config()->mutable_comm()->set_transport_type(robot::comm::MESSAGE);
   EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().code(),
             absl::StatusCode::kInvalidArgument);
+}
+
+TEST_F(PerceptionFactoryTest, PreservesMergedAudioValidationAndLazyConstruction) {
+  config::Robot robot;
+  SinglePerception sensor;
+  sensor.set_sensor_name("microphone");
+  sensor.set_sensor_type(AUDIO);
+  auto* audio = sensor.mutable_alsa_audio_config();
+  auto invalid = PerceptionFactory::CreatePerception(sensor, robot.boards());
+  EXPECT_EQ(invalid.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(invalid.status().message().find("ALSA requires device"), std::string::npos);
+  audio->set_device("declared-but-never-opened-test-device");
+  audio->set_sample_rate_hz(16000);
+  audio->set_channels(1);
+  audio->set_frames_per_chunk(160);
+  auto result = PerceptionFactory::CreatePerception(sensor, robot.boards());
+  ASSERT_TRUE(result.ok()) << result.status();
+  EXPECT_EQ((*result)->GetId(), "microphone");
+  sensor.set_sensor_type(IMAGE);
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "ALSA driver requires AUDIO sensor_type");
 }
 
 }  // namespace
