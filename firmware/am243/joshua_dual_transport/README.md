@@ -109,9 +109,9 @@ commercial product identity. Resolve identity/redistribution requirements
 before public hardware distribution. No standalone ESI XML is provided yet;
 the mapping above documents the profile, and a cached TI-demo ESI is incompatible.
 
-Both artifacts use the shared `src/boot_identity.c` hardware RNG path for a
-nonzero boot ID, preserved across session resets. The EtherCAT artifact rejects
-startup before registering objects or its watchdog when RNG acquisition fails
+All AM243 artifacts use the shared `src/boot_identity.c` hardware RNG path for a
+nonzero boot ID, preserved across session resets. The EtherCAT artifacts reject
+startup before registering objects or watchdog tasks when RNG acquisition fails
 or returns zero identity data; boot-relative uptime is never an identity source.
 
 Only a **new valid command**, not repeated reads of an unchanged PDO output
@@ -186,13 +186,116 @@ stop/recovery, stop/reset, watchdog activity during vendor I/O, stale PDO
 snapshots, repeated faults and concurrent callbacks. The broader host priority
 scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
 
-### TODO: Retire TI-stack profiles after replacement qualification
+### Opt-in SOES replacement
 
-Keep the TI-stack JW EtherCAT profile until the separately reviewed replacement
-passes AM243 hardware qualification and more than 60 minutes of continuous
-fresh target/feedback traffic. Changing slave stacks does not resolve the known
-host NIC timing limitation. The default UART image still includes the TI demo;
-convert it to UART-only when retiring the evaluation stack.
+**Candidate; hardware qualification incomplete.**
+Register receive deadlines remain affected by the
+[master-side NIC timing issue](../../../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+The TI profiles remain available until the replacement passes real-board
+qualification and a continuous run beyond one hour. No proprietary timeout
+is patched out.
+
+```bash
+JOSHUA_ETHERCAT_PROFILE=jw-soes \
+JOSHUA_COMM_WATCHDOG_US=2000000 JOSHUA_TARGET_WATCHDOG_US=1000000 \
+firmware/am243/joshua_dual_transport/scripts/build.sh
+```
+
+Run with the external SDK/toolchain available in the development container.
+`curl` downloads the hash-verified [SOES revision](../../../third_party/soes/README.md).
+The build uses SDK `09.00.00.03` hardware configuration, RTOS/driver libraries,
+and ICSS FWHAL/PRU firmware, **not** TI's evaluation slave stack or Beckhoff SSC.
+The SDK's SSC example supplies build/SysConfig rules and BSD-licensed board
+initialization only; no SSC source or stack library is compiled/linked.
+
+SOES links the same hardware RNG helper as the UART and TI EtherCAT artifacts.
+Both build scripts append `syscfg/boot_identity.syscfg`, sharing the crypto/RNG
+configuration and required SA2UL MMR firewall grant. Entropy failure prevents
+protocol startup. Native RNG regressions cover repeated startup uptime,
+session-reset stability and RNG failure; this SOES image still needs physical
+boot-identity verification after a deliberate flash.
+
+Outputs are `out/am243_ethercat_jw_soes.release.*`, including the link map.
+The upstream SOES source archive and LICENSE accompany them; the source patch
+is in `third_party/soes`. Existing TI artifacts are not overwritten.
+
+Production source roles:
+
+- [`../../common/soes/`](../../common/soes/README.md): shared SOES dictionary,
+  JW CoE/PDO binding and stack settings; no AM243 dependencies.
+- `src/joshua_ethercat_soes_am243.c`: AM243 boot, PRU register/mailbox/triple-buffer
+  access, read-only RAM SII and independent watchdog task. Reuses the software
+  channel and common actuator handler through `am243_software_backend`; no UART
+  protocol or motor GPIOs. Polls at an initial 1 ms cadence,
+  which is **not** a validated end-to-end cycle-time guarantee.
+- `Makefile.soes`, `scripts/build_soes.sh`, `patches/soes_soc.patch`: isolated
+  firmware build, pinned dependency download and removal of the unused SSC
+  header from a temporary copy of TI's board initialization source.
+
+The descriptor label is `am243-soes`; IDENTIFY uses the shared backend's
+`am243-software` name. The layout and host transport are unchanged. Bench
+SII/CoE identity is `0xe000059d` /
+`0x4a570002` / revision `0x00020002`, **not a registered product identity**.
+SII contains four fixed SMs and FMMU types; the master obtains PDO mapping
+through CoE. No standalone ESI is provided. Physical EEPROM is neither loaded
+nor written; runtime identity/mapping writes and segmented CoE writes are rejected.
+
+#### SOES bench record — 2026-10-26
+
+An authorized LP-AM243 run with motor power off flashed the corrected SOES
+artifact, built with 5000000-us command-progress and 2000000-us target watchdogs.
+Its signed appimage SHA-256 was
+`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.
+The console reported SOES ready without the TI slave stack. Discovery on
+`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision
+`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.
+
+Two USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.
+Each remained stable across five session resets and 15 correlated IDENTIFY
+replies. The production master/paired adapter probe then reached OP and verified
+CoE configuration, PDO target/feedback, exact retry, ESTOP preservation across
+session reset, target-watchdog expiry, rejected re-enable and explicit recovery.
+This exercised the software channel only; it did not drive physical motor GPIOs.
+
+The planned 65-minute endurance run did **not** complete. With a 50-ms cycle,
+5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,
+it reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before
+a state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A
+second attempt widened only the state budget to 20 ms and stopped during setup
+on a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register
+timeouts remain a qualification blocker; the runs do not establish their root
+cause or resolve the documented master-side NIC issue.
+
+The console continued reporting uptime without a reboot or AL error. After
+both failed attempts, a startup-CoE check confirmed the same second boot ID,
+another five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status
+with stop action complete and explicit recovery required. The host probe was
+closed with the software channel stopped. Native preemption regressions cover
+the precise interrupted-RECOVER race; this bench did not force that interleaving
+on the R5 or qualify physical outputs, timing bounds or endurance.
+
+#### TODO: Retire TI-stack profiles after SOES qualification
+
+Keep `JOSHUA_ETHERCAT_PROFILE=jw` available as a comparison implementation
+during SOES bring-up. Retirement requires:
+
+- [ ] Resolve the master-side NIC receive timing issue on the intended host.
+- [ ] Qualify SOES discovery, PREOP/SAFEOP/OP, reset/IDENTIFY, both command
+  planes, retry/ack behavior, watchdog expiry, OP/link loss and recovery.
+- [ ] Run fresh SOES target/feedback traffic for **more than 60 minutes without
+  rebooting**, confirming continued commands and console uptime.
+- [ ] Remove the TI-stack JW EtherCAT profile and its adapter/build assets.
+- [ ] Make the default JW UART image UART-only, removing its TI EtherCAT demo
+  dependency so current runtime images no longer link the evaluation slave stack.
+
+Changing stacks alone does not resolve host timing issues; native tests and a
+successful image build do not satisfy hardware qualification. TI SDK hardware
+and PRU dependencies remain external inputs after slave-stack retirement.
+
+SOES is GPLv2 with its upstream linking exception. TI's hardware interface and
+PRU firmware retain their own licenses and remain external SDK inputs. This is
+not a claim that every part of the AM243 firmware is open source or ready for
+commercial redistribution.
 
 ## Host integration
 
@@ -217,6 +320,7 @@ a JoshuaWire image.
 
 The separate JW EtherCAT profile uses
 `out/am243_ethercat_jw.release.appimage.hs_fs`; it is not the UART image.
+The SOES candidate uses `out/am243_ethercat_jw_soes.release.appimage.hs_fs`.
 
 Flashing remains a deliberate hardware operation and must not happen as part
 of build or test.
@@ -246,8 +350,8 @@ validation references above; the default UART image contains TI echo EtherCAT.
   arbiter must unify them before either path controls the same physical motor.
   The separate JW EtherCAT artifact avoids simultaneous UART ownership.
 - TI's bundled EtherCAT evaluation stack retains its one-hour runtime limit
-  in the `ti-demo` and `jw` artifacts. A replacement requires hardware and
-  endurance qualification before retirement.
+  in the `ti-demo` and `jw` artifacts. The `jw-soes` candidate excludes that
+  stack, but hardware/endurance qualification is required before retirement.
 - No firmware is flashed automatically.
 
 The UART artifact retains hardware-RNG boot identity and shared retained serial
