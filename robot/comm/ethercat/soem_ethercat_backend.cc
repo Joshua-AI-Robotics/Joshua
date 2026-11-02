@@ -179,7 +179,8 @@ std::string BuildMappingFailureMessage(ecx_contextt* context, bool zero_identity
     const uint32_t sii_revision =
         etohl(ecx_readeeprom(context, slave_index, ECT_SII_REV, EC_TIMEOUTEEP));
 
-    message << " slave[" << slave_index << "]" << " name=\"" << slave.name << "\""
+    message << " slave[" << slave_index << "]"
+            << " name=\"" << slave.name << "\""
             << " Obits=" << slave.Obits << " Ibits=" << slave.Ibits << " Obytes=" << slave.Obytes
             << " Ibytes=" << slave.Ibytes << " blockLRW=" << static_cast<int>(slave.blockLRW)
             << " configadr=" << Hex16(slave.configadr) << " al_status=" << Hex16(al_status)
@@ -306,6 +307,15 @@ absl::Status SoemEthercatBackend::ConfigureSlaves() {
   if (io_map_size <= 0) {
     return absl::Status(absl::StatusCode::kUnavailable,
                         BuildMappingFailureMessage(context, zero_identity_retry_attempted));
+  }
+  // SOEM returns the required size but takes no buffer capacity. Mapping only
+  // establishes pointers; reject oversized maps before any process-data copy
+  // or exchange can dereference them. Region bounds against group.Obytes/Ibytes
+  // alone do not protect the actual allocation.
+  if (static_cast<size_t>(io_map_size) > state_->io_map.size()) {
+    return absl::ResourceExhaustedError(
+        "SOEM EtherCAT PDO map requires " + std::to_string(io_map_size) +
+        " bytes; backing buffer capacity is " + std::to_string(state_->io_map.size()));
   }
 
   ecx_configdc(context);
