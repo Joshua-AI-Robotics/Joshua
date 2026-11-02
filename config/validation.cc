@@ -1,6 +1,7 @@
 #include "config/validation.h"
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -228,7 +229,8 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 }
 
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
-  std::map<std::string, robot::comm::SerialConfig> policies;
+  std::map<std::string, std::pair<uint64_t, uint32_t>> physical_policies;
+  std::map<std::string, uint32_t> joshua_timeouts;
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
     ABSL_RETURN_IF_ERROR(robot::comm::ValidateSerialCommConfig(connection.comm));
@@ -237,13 +239,21 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
     if (!status.ok()) {
       return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
     }
-    auto normalized = serial;
-    normalized.clear_id();
-    if (!normalized.has_exchange_timeout_ms())
-      normalized.set_exchange_timeout_ms(robot::comm::kDefaultSerialExchangeTimeoutMs);
-    const auto [it, inserted] = policies.emplace(serial.port(), normalized);
-    if (!inserted && it->second.SerializeAsString() != normalized.SerializeAsString())
+    // Match CommFactory: all users share physical settings, but only JW users
+    // select an exchange deadline. Adapter selection is local to each consumer.
+    const auto physical_policy = std::make_pair(serial.baudrate(), serial.post_open_settle_ms());
+    const auto [it, inserted] = physical_policies.emplace(serial.port(), physical_policy);
+    if (!inserted && it->second != physical_policy)
       return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
+    if (serial.message_adapter() == robot::comm::JOSHUA_WIRE) {
+      const uint32_t timeout = serial.has_exchange_timeout_ms()
+                                   ? serial.exchange_timeout_ms()
+                                   : robot::comm::kDefaultSerialExchangeTimeoutMs;
+      const auto [timeout_it, timeout_inserted] = joshua_timeouts.emplace(serial.port(), timeout);
+      if (!timeout_inserted && timeout_it->second != timeout)
+        return absl::InvalidArgumentError(
+            "Serial port has conflicting JoshuaWire exchange timeouts");
+    }
   }
   return absl::OkStatus();
 }

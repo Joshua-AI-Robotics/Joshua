@@ -118,8 +118,10 @@ writing and receiving a complete frame. Omitted means 100 ms; explicit values
 must be 1..INT_MAX milliseconds. Fixed-length vendor operations retain their
 existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
 and runs once after physical open, not per request or session reset. All users
-of one port must agree on baudrate and timing; omitted timeout and explicit
-100 ms are equivalent. Invalid/conflicting settings fail before another open.
+of one port must agree on baudrate and settle delay. Only JoshuaWire users must
+agree on exchange timeout; omitted timeout and explicit 100 ms are equivalent.
+CALLER_SIZED and BYTE_STREAM consumers can share that port without selecting a
+JoshuaWire timeout. Invalid/conflicting settings fail before another open.
 
 **ESP32 config migration:** the board-specific 2-second sleep has been removed.
 For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`

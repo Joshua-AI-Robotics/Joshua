@@ -217,6 +217,93 @@ TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
   robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(2000);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+
+config::Config MakeMixedSerialConfig() {
+  auto config = MakeConfig();
+  auto* robot = config.mutable_robot();
+  robot->clear_perceptions();
+  robot->mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_baudrate(115200);
+  auto jw_board = robot->boards(0);
+  jw_board.set_name("jw");
+  jw_board.set_board_type(robot::board::ESP32);
+  jw_board.set_protocol(robot::board::JOSHUA_WIRE);
+  auto* serial = jw_board.mutable_comm()->mutable_serial_config();
+  serial->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  serial->set_exchange_timeout_ms(500);
+  jw_board.clear_channels();
+  auto* channel = jw_board.add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::STEP_DIR);
+  auto* step = channel->mutable_step_dir();
+  step->set_max_pulse_rate_hz(1000);
+  step->set_step_pin(2);
+  step->set_dir_pin(3);
+  step->set_enable_pin(4);
+  *robot->add_boards() = jw_board;
+  for (const auto& board : robot->boards()) {
+    auto* action = robot->mutable_actions()->add_single_actions();
+    action->mutable_node()->set_id(1);
+    action->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+    action->mutable_actuator()->set_actuator_name(board.name());
+    action->mutable_actuator()->set_board_name(board.name());
+    action->mutable_actuator()->set_channel(board.channels(0).index());
+    action->mutable_actuator()->set_motor_type(board.board_type() == robot::board::ESP32
+                                                   ? robot::action::MOTOR_STEPPER_NEMA17
+                                                   : robot::action::MOTOR_STS3215);
+  }
+  return config;
+}
+
+TEST(ValidationTest, SharedSerialPortAllowsCallerSizedAndJoshuaWireAdapters) {
+  for (bool jw_first : {false, true}) {
+    for (uint32_t timeout : {0, 100, 500}) {
+      SCOPED_TRACE(::testing::Message() << "jw_first=" << jw_first << " timeout=" << timeout);
+      auto config = MakeMixedSerialConfig();
+      auto* serial =
+          config.mutable_robot()->mutable_boards(1)->mutable_comm()->mutable_serial_config();
+      if (timeout == 0)
+        serial->clear_exchange_timeout_ms();
+      else
+        serial->set_exchange_timeout_ms(timeout);
+      if (jw_first)
+        config.mutable_robot()->mutable_actions()->mutable_single_actions()->SwapElements(0, 1);
+      const auto status = ValidateConfig(config);
+      EXPECT_TRUE(status.ok()) << status;
+    }
+  }
+}
+
+TEST(ValidationTest, MixedSerialPortStillRequiresMatchingBaudrateAndSettleDelay) {
+  auto config = MakeMixedSerialConfig();
+  auto* serial = config.mutable_robot()->mutable_boards(1)->mutable_comm()->mutable_serial_config();
+  serial->set_baudrate(9600);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_baudrate(115200);
+  serial->set_post_open_settle_ms(2000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_post_open_settle_ms(0);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, MixedSerialPortRequiresMatchingTimeoutsAmongJoshuaWireUsers) {
+  auto config = MakeMixedSerialConfig();
+  auto* robot = config.mutable_robot();
+  auto third_board = robot->boards(1);
+  third_board.set_name("third");
+  third_board.mutable_comm()->mutable_serial_config()->clear_exchange_timeout_ms();
+  *robot->add_boards() = third_board;
+  auto third_action = robot->actions().single_actions(1);
+  third_action.mutable_actuator()->set_actuator_name("third");
+  third_action.mutable_actuator()->set_board_name("third");
+  *robot->mutable_actions()->add_single_actions() = third_action;
+  // A vendor consumer between JW consumers must not reset the recorded JW timeout.
+  robot->mutable_actions()->mutable_single_actions()->SwapElements(0, 1);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  robot->mutable_boards(2)->mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(500);
+  const auto status = ValidateConfig(config);
+  EXPECT_TRUE(status.ok()) << status;
+}
+
 TEST(ValidationTest, RejectsDriverAndMeasurementMismatchBeforeResourceResolution) {
   auto config = MakeConfig();
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
