@@ -37,7 +37,9 @@ Only actuator v1.0 target/feedback operations use a paired cyclic capability.
 
 Lost or malformed replies get one exact-byte retry. An unresolved outcome gates
 mutations until explicit reset/reconciliation; status queries and stop remain
-available. ID exhaustion stops the board and requires reinitialization without
+available. Confirmed completion of a board-wide stop or recovery retires canceled
+pending function tokens; it does not resolve a lost command's historical outcome.
+ID exhaustion stops the board and requires reinitialization without
 replaying settings or enabling outputs. Feedback validates acquisition validity,
 boot/clock, sequence continuity and local cached-sample age.
 

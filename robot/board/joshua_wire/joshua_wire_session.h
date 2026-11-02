@@ -53,7 +53,13 @@ class JoshuaWireSession {
   uint32_t next_message_id_ = 1;
   bool ready_ = false;
   bool uncertain_ = false;
-  std::map<uint8_t, std::pair<uint32_t, uint32_t>> pending_;
+  struct PendingAction {
+    uint32_t session_id;
+    uint32_t message_id;
+    // A completed successful board-wide stop/recovery supersedes function work.
+    bool cancels_functions;
+  };
+  std::map<uint8_t, PendingAction> pending_;
 };
 
 }  // namespace robot::board

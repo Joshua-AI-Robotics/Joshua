@@ -180,16 +180,28 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
   jw_reply_t reply{};
   jw_decode_reply_payload(payload.data(), payload.size(), &reply);
+  const bool board_safety = (command.cmd == JW_CMD_ESTOP || command.cmd == JW_CMD_RECOVER) &&
+                            command.channel == JW_CHANNEL_NONE && command.payload_len == 2 &&
+                            command.payload[0] == 0 && command.payload[1] == 0;
+  // Board-wide safety actions replace the firmware's function action tokens.
+  // Their confirmed completion retires canceled work, not its historical outcome.
+  // Preserve uncertain_: a stop does not prove whether a lost mutation executed.
+  if (board_safety && reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE)
+    pending_.clear();
   if (reply.execution == JW_EXECUTION_ACCEPTED)
-    pending_[command.channel] = {session_id_, next_message_id_ - 1};
+    pending_[command.channel] = {session_id_, next_message_id_ - 1, board_safety};
   if (command.cmd == JW_CMD_GET_STATUS && reply.status == JW_STATUS_OK) {
     jw_device_status_t state{};
     if (jw_decode_device_status(reply.data, reply.data_len, &state) == JW_RESULT_OK &&
         state.action_execution == JW_EXECUTION_COMPLETE) {
       auto pending = pending_.find(command.channel);
-      if (pending != pending_.end() && pending->second.first == state.action_session_id &&
-          pending->second.second == state.action_message_id)
-        pending_.erase(pending);
+      if (pending != pending_.end() && pending->second.session_id == state.action_session_id &&
+          pending->second.message_id == state.action_message_id) {
+        if (pending->second.cancels_functions && state.action_status == JW_STATUS_OK)
+          pending_.clear();
+        else
+          pending_.erase(pending);
+      }
     }
   }
 
