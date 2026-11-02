@@ -17,31 +17,27 @@ namespace robot::comm::ethercat {
 // Synchronous low-level I/O: retained TI-demo callers serialize it themselves.
 // For the new path, transfer exclusive ownership to EthercatMaster. SOEM types
 // never cross this boundary. SDO methods are forbidden after cyclic startup.
-class SoemEthercatTransport : public EthercatMasterIo {
+class SoemEthercatTransport : public EthercatTransport {
  public:
   SoemEthercatTransport();
-  ~SoemEthercatTransport() override;
+  ~SoemEthercatTransport();
 
-  absl::Status Init(const std::string& interface_name, ProcessDataMode process_data_mode) override;
-  absl::Status ConfigureSlaves() override;
-  absl::Status StartCyclic() override;
-  absl::Status StopCyclic() override;
-  absl::Status Teardown() override;
+  absl::Status Init(const std::string& interface_name, ProcessDataMode process_data_mode);
+  absl::Status ConfigureSlaves();
+  absl::Status StartCyclic();
+  absl::Status StopCyclic();
+  absl::Status Teardown();
 
-  absl::StatusOr<std::vector<SlaveIdentity>> GetSlaves() const override;
-  absl::StatusOr<PdoRegion> GetPdoRegion(uint16_t slave_index) const override;
+  absl::StatusOr<std::vector<SlaveIdentity>> GetSlaves() const;
+  absl::StatusOr<PdoRegion> GetPdoRegion(uint16_t slave_index) const;
 
-  absl::Status WriteOutputs(const PdoRegion& region, const std::vector<uint8_t>& outputs) override;
-  absl::StatusOr<std::vector<uint8_t>> ReadInputs(const PdoRegion& region) const override;
-  absl::StatusOr<ProcessData> ExchangeProcessData() override;
-  absl::StatusOr<ProcessData> ExchangeProcessData(int timeout_us) override;
-  absl::Status CheckOperational(int timeout_us) override;
-  absl::StatusOr<std::vector<uint8_t>> ReadSdo(SdoAddress address,
-                                               size_t capacity,
-                                               int timeout_us) override;
-  absl::Status WriteSdo(SdoAddress address,
-                        const std::vector<uint8_t>& bytes,
-                        int timeout_us) override;
+  absl::Status WriteOutputs(const PdoRegion& region, const std::vector<uint8_t>& outputs);
+  absl::StatusOr<std::vector<uint8_t>> ReadInputs(const PdoRegion& region) const;
+  absl::StatusOr<ProcessData> ExchangeProcessData();
+  absl::StatusOr<ProcessData> ExchangeProcessData(int timeout_us);
+  absl::Status CheckOperational(int timeout_us);
+  absl::StatusOr<std::vector<uint8_t>> ReadSdo(SdoAddress address, size_t capacity, int timeout_us);
+  absl::Status WriteSdo(SdoAddress address, const std::vector<uint8_t>& bytes, int timeout_us);
 
  private:
   struct State;
