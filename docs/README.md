@@ -10,6 +10,7 @@
 | Typed observation base contract, metadata and proposed adapters | [MCP_OBSERVATION_DESIGN.md](MCP_OBSERVATION_DESIGN.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
+| Host GPIO and board pin profiles plan | [HOST_GPIO_AND_BOARD_PROFILES_PLAN.md](HOST_GPIO_AND_BOARD_PROFILES_PLAN.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
 | Shared JoshuaWire code, test layout and migration adapters | [../firmware/common/README.md](../firmware/common/README.md) |
 | JoshuaWire serial validation procedure | [JOSHUA_WIRE_VALIDATION.md](JOSHUA_WIRE_VALIDATION.md) |
