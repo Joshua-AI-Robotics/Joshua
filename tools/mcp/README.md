@@ -176,3 +176,5 @@ python3 -m venv /tmp/mcp-lock-env
 
 Use `requirements_3.12.lock` for the Python 3.12 run. Root and model lockfiles
 are independent of this tool.
+
+For a real AI-client example, see the [Codex inspection walkthrough](../../docs/MCP_CLIENT_WALKTHROUGH.md).
