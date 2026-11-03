@@ -1,6 +1,7 @@
 #include "config/robot_capabilities.h"
 
 #include <cmath>
+#include <map>
 #include <set>
 #include <string>
 
@@ -100,9 +101,29 @@ Value Operation(const std::string& name,
 }  // namespace
 Value BuildRobotCapabilities(const Config& cfg) {
   Value data = Object(), positions = Array(), observations = Array(), gaps = Array();
+  std::map<std::string, size_t> actuator_names, sensor_names;
+  for (const auto& action : cfg.robot().actions().single_actions())
+    ++actuator_names[action.actuator().actuator_name()];
+  for (const auto& sensor : cfg.robot().perceptions().single_perceptions())
+    ++sensor_names[sensor.sensor_name()];
+  for (const auto& [name, count] : actuator_names) {
+    if (count > 1)
+      Gap(gaps,
+          "actuator:" + name,
+          "Configured actuator identity is ambiguous; duplicate names cannot identify an "
+          "independently addressable target.");
+  }
+  for (const auto& [name, count] : sensor_names) {
+    if (count > 1)
+      Gap(gaps,
+          "sensor:" + name,
+          "Configured sensor identity is ambiguous; duplicate names cannot identify an "
+          "independently addressable observation or feedback association.");
+  }
   for (const auto& action : cfg.robot().actions().single_actions()) {
     const auto& a = action.actuator();
     const std::string id = "actuator:" + a.actuator_name();
+    if (actuator_names.at(a.actuator_name()) != 1) continue;
     if (action.action_type() != robot::action::ACTUATOR ||
         a.motor_type() != robot::action::MOTOR_STS3215 || !a.has_sts3215_config() ||
         !FeetechPath(cfg, a.board_name(), a.channel())) {
@@ -121,6 +142,13 @@ Value BuildRobotCapabilities(const Config& cfg) {
           id,
           "Position contract has nonfinite or reversed descriptive bounds/idle values; no numeric "
           "capability is evidenced.");
+      continue;
+    }
+    if (a.operational_lower_limit() < 0 || a.operational_upper_limit() > 65535) {
+      Gap(gaps,
+          id,
+          "Operational position bounds exceed the FEETECH_BUS uint16 wire range [0, 65535]; "
+          "the board clamps these values, so the configured numeric contract is not evidenced.");
       continue;
     }
     Value target = Target(id, a.board_name(), a.channel()), endpoints = Array(), feedback = Array();
@@ -144,11 +172,16 @@ Value BuildRobotCapabilities(const Config& cfg) {
                   "or preset endpoints.");
       }
     }
+    bool ambiguous_feedback = false;
     for (const auto& s : cfg.robot().perceptions().single_perceptions()) {
       if (s.sensor_type() == robot::perception::POSITION && s.has_sts3215_encoder_config() &&
           s.sts3215_encoder_config().board_name() == a.board_name() &&
-          s.sts3215_encoder_config().channel() == a.channel())
-        Add(feedback, Text("sensor:" + s.sensor_name()));
+          s.sts3215_encoder_config().channel() == a.channel()) {
+        if (sensor_names.at(s.sensor_name()) != 1)
+          ambiguous_feedback = true;
+        else
+          Add(feedback, Text("sensor:" + s.sensor_name()));
+      }
     }
     if (a.sts3215_config().idle_position() < a.operational_lower_limit() ||
         a.sts3215_config().idle_position() > a.operational_upper_limit())
@@ -159,8 +192,11 @@ Value BuildRobotCapabilities(const Config& cfg) {
     if (feedback.list_value().values().empty())
       Gap(gaps,
           id,
-          "No configured POSITION sensor on this actuator's board/channel; matching topics do not "
-          "establish feedback association.");
+          ambiguous_feedback
+              ? "Configured POSITION feedback has an ambiguous sensor identity; no unique "
+                "feedback association is evidenced."
+              : "No configured POSITION sensor on this actuator's board/channel; matching topics "
+                "do not establish feedback association.");
     if (endpoints.list_value().values().empty())
       Gap(gaps, id, "No evidenced position command endpoint on ACTUATOR_SUBSCRIBER.");
     Set(target,
@@ -172,6 +208,7 @@ Value BuildRobotCapabilities(const Config& cfg) {
   }
   for (const auto& s : cfg.robot().perceptions().single_perceptions()) {
     const std::string id = "sensor:" + s.sensor_name();
+    if (sensor_names.at(s.sensor_name()) != 1) continue;
     if (s.sensor_type() != robot::perception::POSITION || !s.has_sts3215_encoder_config() ||
         !FeetechPath(
             cfg, s.sts3215_encoder_config().board_name(), s.sts3215_encoder_config().channel())) {

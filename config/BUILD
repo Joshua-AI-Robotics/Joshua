@@ -147,6 +147,7 @@ cc_test(
     deps = [
         ":config_utils",
         ":robot_capabilities",
+        ":validation",
         "@googletest//:gtest_main",
         "@protobuf",
     ],

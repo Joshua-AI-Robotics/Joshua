@@ -88,7 +88,10 @@ units, device-zero references, per-joint limits, declared ROS endpoints,
 prerequisites, source/test evidence and verification gaps. Initial evidence
 covers STS3215 on FEETECH_BUS with SERIAL MESSAGE CALLER_SIZED; other valid
 paths report explicit gaps. Driver acceptance, declared ROS exposure and MCP
-availability are separate. Reports reject oversize rather than omit contracts.
+availability are separate. Duplicate identities within either device kind and operational
+position bounds outside the board's uint16 wire range produce explicit gaps instead of
+advertised targets; ambiguous sensors are also excluded from feedback associations.
+Reports reject oversize rather than omit contracts.
 
 The SO100 teleoperation preset exposes native Float32 position topics; broader
 driver SI, speed and preset acceptance does not add endpoints. Its six leader
