@@ -62,8 +62,34 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. Position sensors and actuators must use separate bus owners
-with the current standalone node layout.
+host sensor publishers. The standalone position/actuator nodes require separate
+bus owners. Mixed JoshuaWire scalar/actuator setups use `MCU_BUS` instead.
+
+Mixed MCU bus
+-------------
+
+[`mcu_bus`](mcu_bus.h) hosts scalar subscriptions and actuator commands in one
+process, sharing the production board cache and coordinator. Give all consumers
+of the MCU the same `node.id` and `node_type: MCU_BUS`. The reference
+[preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real
+hardware and must be reviewed before a deliberate run.
+
+Startup configures outputs but leaves them disabled. A BOOL `/<actuator>/torque`
+command explicitly enables/disables them; position topics retain native driver
+units. `~/estop` is a Trigger service in a separate callback group with two executor
+threads, so a blocked ordinary callback cannot hold the stop behind it. Stop
+acknowledgment is protocol evidence; physical stop verification is unsupported.
+After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
+steps. No subscription, enable or target is automatically restored.
+
+Scalar topics publish serialized `PerceptionPacket` messages as
+`std_msgs/UInt8MultiArray`, retaining the named sensor, native unit code, validity,
+boot/clock identity, acquisition sequence/time, receipt age and loss counters.
+The packet's top-level timestamp is unset: no device-to-ROS clock mapping exists.
+The companion `<topic>/health` String reports usable, invalid/stale, or the source
+error. Record both topics; decoding uses `perception_packet.proto`. Receipt
+freshness does not establish absolute device acquisition age.
+
 Position, camera, lidar, audio and Xbox publisher callbacks use
 `utils/robot_timer.h` with double-second RobotTime deadlines. The executor polls
 those deadlines; a paused RobotTime pauses publication. Missed periods are

@@ -30,6 +30,7 @@ struct BoardChannelReference {
 struct DeviceResources {
   std::vector<BoardChannelReference> board_channels;
   std::vector<robot::comm::Comm> comms;
+  std::vector<std::string> scalar_boards;
 };
 
 struct DeviceDependencies {
@@ -55,6 +56,21 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
     return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
   }
   switch (sensor.sensor_config_case()) {
+    case SinglePerception::kJoshuaWireScalarConfig: {
+      const auto& c = sensor.joshua_wire_scalar_config();
+      if (sensor.sensor_type() != SensorType::SCALAR ||
+          sensor.node().node_type() != ros2::node::MCU_BUS || c.function_id() >= 255 ||
+          !c.period_us() || sensor.node().publishers().empty() ||
+          !sensor.node().subscriptions().empty())
+        return absl::InvalidArgumentError(
+            "Scalar streaming requires MCU_BUS, function/period and publishers");
+      for (const auto& p : sensor.node().publishers())
+        if (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY || p.topic().empty() ||
+            !p.publish_rate_hz() || p.publish_rate_hz() > 1000)
+          return absl::InvalidArgumentError(
+              "Scalar publishes PerceptionPacket as UINT8_MULTI_ARRAY at 1..1000 Hz");
+      return absl::OkStatus();
+    }
     case SinglePerception::kSts3215EncoderConfig: {
       if (sensor.sensor_type() != SensorType::POSITION) {
         return absl::InvalidArgumentError(
@@ -103,6 +119,8 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
 absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
   std::set<std::string> audio_devices;
   for (const auto& sensor : perceptions.single_perceptions()) {
+    if (sensor.node().node_type() == ros2::node::MCU_BUS && !sensor.has_joshua_wire_scalar_config())
+      return absl::InvalidArgumentError("MCU_BUS supports JoshuaWire scalar perceptions");
     if ((sensor.sensor_type() == robot::perception::AUDIO ||
          sensor.node().node_type() == ros2::node::AUDIO_PUBLISHER) &&
         !sensor.has_alsa_audio_config())
@@ -121,6 +139,8 @@ absl::StatusOr<DeviceResources> CollectSensorDependencies(
     const robot::perception::SinglePerception& sensor) {
   using robot::perception::SinglePerception;
   switch (sensor.sensor_config_case()) {
+    case SinglePerception::kJoshuaWireScalarConfig:
+      return DeviceResources{{}, {}, {sensor.joshua_wire_scalar_config().board_name()}};
     case SinglePerception::kSts3215EncoderConfig: {
       const auto& config = sensor.sts3215_encoder_config();
       return DeviceResources{{{config.board_name(), config.channel()}}, {}};
@@ -190,7 +210,9 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
     }
   }
   for (const auto& action : robot.actions().single_actions()) {
-    if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER) continue;
+    if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
+        action.node().node_type() != ros2::node::MCU_BUS)
+      continue;
     const auto& actuator = action.actuator();
     for (const auto& sub : action.node().subscriptions()) {
       ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
@@ -217,11 +239,23 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
     const std::vector<DeviceDependencies>& devices) {
   std::vector<Connection> connections;
   for (const auto& device : devices) {
+    for (const auto& name : device.resources.scalar_boards) {
+      ABSL_ASSIGN_OR_RETURN(auto board,
+                            robot::board::ResolveBoardConfig(boards, device.owner, name));
+      if (board->comm().transport_type() != robot::comm::FRAME_STREAM ||
+          !board->joshua_wire_host_policy().telemetry_bytes_per_second())
+        return absl::InvalidArgumentError(
+            "Scalar board requires FRAME_STREAM and telemetry reservation");
+      connections.push_back({device.owner, device.node.id(), board->comm()});
+    }
     for (const auto& reference : device.resources.board_channels) {
       ABSL_ASSIGN_OR_RETURN(auto resolved,
                             robot::board::ResolveChannelConfig(
                                 boards, device.owner, reference.board_name, reference.channel));
       connections.push_back({device.owner, device.node.id(), resolved.board->comm()});
+      if (device.node.node_type() == ros2::node::MCU_BUS &&
+          resolved.board->comm().transport_type() != robot::comm::FRAME_STREAM)
+        return absl::InvalidArgumentError("MCU_BUS actuator requires FRAME_STREAM board");
     }
     for (const auto& comm : device.resources.comms) {
       connections.push_back({device.owner, device.node.id(), comm});
@@ -347,6 +381,7 @@ absl::Status ValidateConfig(const config::Config& config) {
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
   for (const auto& board : robot.boards()) {
+    ABSL_RETURN_IF_ERROR(robot::board::ValidateWatchdogPolicy(board));
     if (board.has_joshua_wire_host_policy()) {
       if (board.comm().comm_type() != robot::comm::SERIAL ||
           board.comm().transport_type() != robot::comm::FRAME_STREAM ||
@@ -362,6 +397,11 @@ absl::Status ValidateConfig(const config::Config& config) {
           "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
   }
   for (const auto& action : robot.actions().single_actions()) {
+    if (action.node().node_type() == ros2::node::MCU_BUS &&
+        (!action.has_actuator() ||
+         action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17 ||
+         !action.actuator().stepper_config().require_explicit_enable()))
+      return absl::InvalidArgumentError("MCU_BUS requires a stepper with require_explicit_enable");
     if (action.has_actuator() && (action.actuator().motor_type() == robot::action::MOTOR_TI_DEMO ||
                                   action.actuator().has_am243_ethercat_config()))
       return absl::InvalidArgumentError(

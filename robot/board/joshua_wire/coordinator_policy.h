@@ -21,6 +21,7 @@ struct CoordinatorPolicy {
   size_t max_notifications = 32;
   size_t max_streams = 16;
   uint32_t telemetry_bytes_per_second = 0;
+  uint32_t heartbeat_period_ms = 0;
   auto Values() const {
     return std::tie(operation_timeout_ms,
                     attempt_timeout_ms,
@@ -32,7 +33,8 @@ struct CoordinatorPolicy {
                     scheduling_guard_ms,
                     max_notifications,
                     max_streams,
-                    telemetry_bytes_per_second);
+                    telemetry_bytes_per_second,
+                    heartbeat_period_ms);
   }
   bool operator==(const CoordinatorPolicy& p) const {
     return Values() == p.Values();
@@ -57,6 +59,7 @@ inline CoordinatorPolicy ResolveCoordinatorPolicy(const JoshuaWireHostPolicy& p)
   JW_POLICY_FIELD(max_streams);
 #undef JW_POLICY_FIELD
   o.telemetry_bytes_per_second = p.telemetry_bytes_per_second();
+  o.heartbeat_period_ms = p.heartbeat_period_ms();
   return o;
 }
 inline absl::Status ValidateCoordinatorPolicy(const CoordinatorPolicy& p) {
@@ -71,8 +74,26 @@ inline absl::Status ValidateCoordinatorPolicy(const CoordinatorPolicy& p) {
       p.max_pending_operations == 0 || p.max_pending_operations > 1024 ||
       p.max_pending_bytes < 192 || p.max_pending_bytes > 1048576 || p.max_priority_burst == 0 ||
       p.max_priority_burst > 1024 || p.max_notifications == 0 || p.max_notifications > 256 ||
-      p.max_streams == 0 || p.max_streams > 255)
+      p.max_streams == 0 || p.max_streams > 255 || p.heartbeat_period_ms > INT_MAX)
     return absl::InvalidArgumentError("Invalid coordinator queue/retry/stream limits");
+  return absl::OkStatus();
+}
+inline absl::Status ValidateWatchdogPolicy(const Board& b) {
+  const auto& f = b.firmware();
+  const auto p = ResolveCoordinatorPolicy(b.joshua_wire_host_policy());
+  if (!f.communication_watchdog_us() && !f.target_watchdog_us() && !p.heartbeat_period_ms)
+    return absl::OkStatus();
+  if (b.comm().transport_type() != robot::comm::FRAME_STREAM ||
+      f.communication_watchdog_us() < 10000 || f.communication_watchdog_us() > 10000000 ||
+      f.target_watchdog_us() < 10000 || f.target_watchdog_us() > 10000000 ||
+      !p.heartbeat_period_ms ||
+      (uint64_t(p.heartbeat_period_ms) + p.operation_timeout_ms + p.polling_timeout_ms +
+       p.scheduling_guard_ms) *
+              1000 >=
+          f.communication_watchdog_us())
+    return absl::InvalidArgumentError(
+        "Explicit watchdogs require FRAME_STREAM and heartbeat + "
+        "operation + polling + guard below communication timeout");
   return absl::OkStatus();
 }
 }  // namespace robot::board

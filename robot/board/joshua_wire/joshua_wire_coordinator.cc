@@ -62,6 +62,7 @@ struct JoshuaWireCoordinator::Operation::State {
   mutable std::mutex mutex;
   std::condition_variable changed;
   bool done = false;
+  bool internal = false;
   Result result;
 };
 
@@ -96,6 +97,7 @@ struct JoshuaWireCoordinator::Impl {
   uint32_t routed_session = 0;
   // Accessed by the worker only, including the session's scheduling hook.
   uint32_t last_attempt_session = 0, last_attempt_message = 0;
+  Clock::time_point next_heartbeat = Clock::time_point::max();
 
   Impl(std::shared_ptr<Link> connection,
        CoordinatorPolicy p,
@@ -194,7 +196,7 @@ struct JoshuaWireCoordinator::Impl {
     return running && std::this_thread::get_id() == worker_id;
   }
   void Complete(const Work& work, absl::Status status, bool counted = true) {
-    if (counted) {
+    if (counted && !work->internal) {
       std::lock_guard lock(mutex);
       if (work->priority == 0)
         diagnostics.stop_pending = false;
@@ -420,18 +422,33 @@ struct JoshuaWireCoordinator::Impl {
       }
       Complete(startup, status, false);
       if (!status.ok()) Fault(status);
+      if (policy.heartbeat_period_ms)
+        next_heartbeat = Clock::now() + Ms(policy.heartbeat_period_ms);
       for (;;) {
         ExpireQueued();
         Work work;
+        bool heartbeat = false;
         {
           std::lock_guard lock(mutex);
           if (closing) break;
-          work = SelectLocked();
+          if (policy.heartbeat_period_ms && Clock::now() >= next_heartbeat && queues[0].empty()) {
+            // Independent admission: ordinary producers cannot consume this slot.
+            // A stop still retires it through the same frame-boundary mechanism.
+            work = std::make_shared<Operation::State>();
+            work->internal = true;
+            work->command = JW_CMD_GET_STATUS;
+            work->priority = 3;
+            work->deadline = Clock::now() + Ms(policy.polling_timeout_ms);
+            heartbeat = true;
+          } else {
+            work = SelectLocked();
+          }
           active = work;
         }
         if (!work) {
-          auto frame = link->Receive(Clock::time_point::max());
+          auto frame = link->Receive(next_heartbeat);
           if (!frame.ok()) {
+            if (absl::IsDeadlineExceeded(frame.status())) continue;
             if (absl::IsCancelled(frame.status()) && link->status().ok()) continue;
             Fault(frame.status());
             break;
@@ -468,6 +485,19 @@ struct JoshuaWireCoordinator::Impl {
             auto response = session.Exchange(command);
             result = response.status();
             if (response.ok()) work->result.payload = std::move(*response);
+            if (heartbeat && result.ok()) {
+              jw_reply_t reply{};
+              jw_device_status_t state{};
+              if (jw_decode_reply_payload(work->result.payload.data(),
+                                          work->result.payload.size(),
+                                          &reply) != JW_RESULT_OK ||
+                  reply.status != JW_STATUS_OK || reply.execution != JW_EXECUTION_COMPLETE ||
+                  jw_decode_device_status(reply.data, reply.data_len, &state) != JW_RESULT_OK ||
+                  state.state == JW_STATE_FAULT || state.reason == JW_REASON_DEVICE_FAULT ||
+                  (state.recovery & JW_RECOVERY_CLEAR_ESTOP))
+                result =
+                    absl::FailedPreconditionError("Heartbeat reports invalid/faulted MCU state");
+            }
           }
         }
         UpdateSession();
@@ -475,7 +505,16 @@ struct JoshuaWireCoordinator::Impl {
           std::lock_guard lock(mutex);
           active.reset();
         }
-        Complete(work, result);
+        Complete(work, result, !heartbeat);
+        if (heartbeat) {
+          next_heartbeat = Clock::now() + Ms(policy.heartbeat_period_ms);
+          {
+            std::lock_guard lock(mutex);
+            ++diagnostics.heartbeats;
+            if (!result.ok() && !work->cancel) ++diagnostics.heartbeat_failures;
+          }
+          if (!result.ok() && !work->cancel) Fault(result);
+        }
       }
     } catch (...) {
       Fault(absl::InternalError("Coordinator operation threw"));

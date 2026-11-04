@@ -101,6 +101,9 @@ message Channel {
 // boards (FEETECH_BUS) and for HOST_GPIO / MOCK.
 message FirmwareSpec {
   uint32 min_proto_version = 1;
+  // Required for images advertising CONFIGURABLE_WATCHDOGS; zero means absent.
+  uint32 communication_watchdog_us = 2;
+  uint32 target_watchdog_us = 3;
 }
 
 // Retired TI-demo schema: retained only to diagnose old configs; never executed.
@@ -162,4 +165,7 @@ message JoshuaWireHostPolicy {
   // Explicit aggregate telemetry reservation, in complete-frame bytes/second.
   // Zero (default) prevents subscriptions until a workload budget is selected.
   uint32 telemetry_bytes_per_second = 11;
+  // Reserved internal GET_STATUS cadence. Zero disables heartbeat. Never
+  // refreshes actuator targets. Requires explicit firmware watchdog budgets.
+  uint32 heartbeat_period_ms = 12;
 }

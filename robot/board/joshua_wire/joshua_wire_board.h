@@ -30,7 +30,10 @@ class JoshuaWireBoard : public BoardInterface {
 
   absl::Status Init(const robot::board::Board& config) final;
   absl::StatusOr<std::shared_ptr<BoardChannel>> OpenChannel(uint32_t index) final;
+  absl::StatusOr<std::shared_ptr<ScalarSensor>> SubscribeScalar(uint32_t function,
+                                                                uint32_t period_us) final;
   absl::Status Teardown() final;
+  absl::Status EmergencyStop() final;
 
  private:
   absl::Status ValidateConfig(const robot::board::Board& config) const;

@@ -47,6 +47,24 @@ hardware readiness unverified. The inventory and report are bounded; see the
 
 ## Layout
 
+The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
+uses `FRAME_STREAM` and one `MCU_BUS` process for actuator and scalar consumers.
+`joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
+`period_us`; it does not declare an actuator channel. The firmware catalog must
+advertise that exact sensor/schema and period support. Subscriptions require an
+explicit aggregate `telemetry_bytes_per_second` reservation. The candidate uses
+100 Hz acquisition and 50 Hz latest-value publication; coalescing is observable.
+
+Images advertising configurable watchdogs require explicit
+`firmware.communication_watchdog_us` and `target_watchdog_us` (10000..10000000).
+`joshua_wire_host_policy.heartbeat_period_ms` must be positive and its period plus
+the ordinary-operation budget, polling budget and scheduling guard must be below
+the communication watchdog. A reserved internal GET_STATUS maintains communication
+and detects faults; it never refreshes targets. The mixed stepper configuration
+requires `require_explicit_enable: true`. Startup validation checks one process
+per serial bus before opening any device. These configured budgets remain subject
+to physical qualification.
+
 - `proto/` — the schema.
   - `robot.proto` — top-level `Robot`; composes the others.
   - `config.proto` — `General`, including `operation_mode`, which the launcher

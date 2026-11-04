@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implementation authorized 2026-11-03; P1–P4 protocol, host foundations and mixed Teensy firmware implemented and software-tested. Runtime integration and hardware qualification remain open. |
+| Status | P1–P5 implemented and software-tested. Physical qualification remains open; P6 separates software evidence from bench measurements. |
 | Planning baseline | Committed checkout `258e3e4` on `kangjin/serial-comm-improve`. |
 | Scope decision | Include continuous sensor streaming and actuator commands on the same MCU serial connection, plus the demo's Feetech and LDS01 paths. |
 | Created / last reviewed | 2026-11-03 |
@@ -318,7 +318,7 @@ software acceptance evidence and stay reviewable; passing an early phase does no
 | P2 — Serial I/O foundation | Implemented: one nonblocking owner, configurable total/idle deadlines and bounded admission, internal cancellation/publication results, port identity/lifetime, raw/vendor compatibility, and read-only diagnostics. | P0 owner/policy choices; retains request-only behavior. | PTY coverage for queued expiry/cancel without publication, partial reads/writes, backpressure, disconnect, aliases, shutdown races and generation retirement, independent ports, and fragmented full lidar/vendor responses. Both Compose services passed all 51 targets on 2026-11-03. Physical timing remains unqualified. |
 | P3 — Host coordinator and streams | Implemented: continuous reception, shared scheduling, bounded retries, reserved stop retirement/interlock, typed subscriptions/caches, and deliberate reconnect. | P1, P2. | Both Compose services pass 53 targets; detailed evidence below. |
 | P4 — Production mixed firmware | Implemented: selected Teensy 4.1 ADC binding, bounded acquisition/dispatch, TX arbitration, subscription/resource ownership, and explicit communication/target watchdogs. | P1 and frozen host/firmware contracts. | Both Compose services pass 55 targets; actual mixed firmware service loop tested with simulated ADC/GPIO/clock faults and backpressure. Pinned PlatformIO candidate cross-build succeeds. Physical timing and stopping remain unqualified. |
-| P5 — End-to-end runtime integration | Actuator and sensor handles in one bus-owning process; config/perception/ROS integration, firmware artifact, preset, and diagnostic recording. | P3, P4. | Same serial connection runs streaming and actuation through production paths; Feetech/LDS01 regressions pass; second link fixture reuses protocol/stream logic. |
+| P5 — End-to-end runtime integration | Implemented: FRAME_STREAM board coordinator, explicit watchdog policy, reserved heartbeat, generic scalar/perception binding, metadata publication, MCU_BUS process and reference preset. | P3, P4. | Production board/perception factories and ROS node run over a PTY against the actual mixed firmware loop. Tests cover holding outputs beyond communication timeout, independent target expiry, invalid ADC samples, shared consumers, reserved stop during lost replies, reboot/reopen, retained handles and disabled startup. Independent memory-link tests reuse the same protocol/stream logic. |
 | P6 — Qualification and release evidence | Frozen artifacts, hardware procedures, measured workload/fault results, operator recovery guide, and support matrix. | P5 and deliberate hardware authorization/setup. | Bench metrics plus applicable Docker services; physical and simulated claims recorded separately. |
 
 P3 is split into reviewable increments:
@@ -346,8 +346,10 @@ P3 is split into reviewable increments:
    loss/regression/invalid data, lost and malformed create/cancel acknowledgments,
    boot discontinuity, failed reconciliation and retained old handles across reconnect.
 
-P3 software foundations and P4 mixed firmware are implemented. Runtime
-board/perception integration remains P5; physical qualification remains P6.
+P3 software foundations, P4 mixed firmware and P5 runtime integration are
+implemented. Physical qualification remains P6.
+Both Compose test services passed all 56 targets on 2026-11-04, including the
+production mixed binding and ROS process tests plus vendor/lidar regressions.
 The normative H/F/T integration gates remain open until that evidence exists.
 
 The ROS bus-owning process and generic sensor binding are required dependencies

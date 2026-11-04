@@ -204,6 +204,59 @@ TEST_F(CoordinatorTest, RepeatedAcquireSharesOneSessionAndEffectivePolicy) {
   EXPECT_EQ(frame.session_id, 41);
   EXPECT_EQ(frame.message_id, 2);
 }
+
+TEST_F(CoordinatorTest, HeartbeatUsesReservedAdmissionAndExistingSessionWhileQueueIsFull) {
+  policy.set_operation_timeout_ms(100);
+  policy.set_attempt_timeout_ms(30);
+  policy.set_polling_timeout_ms(80);
+  policy.set_heartbeat_period_ms(10);
+  policy.set_max_pending_operations(1);
+  std::atomic<unsigned> heartbeat_count{0};
+  link->on_write = [&](const jw_frame_t& frame) {
+    if (frame.cmd != JW_CMD_GET_STATUS) return false;
+    jw_device_status_t state{};
+    state.state = JW_STATE_DISABLED;
+    state.reason = JW_REASON_SESSION_RESET;
+    state.recovery = JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE;
+    state.verification = JW_SAFE_UNSUPPORTED;
+    state.action_status = JW_STATUS_INVALID;
+    state.action_execution = JW_EXECUTION_REJECTED;
+    uint8_t data[JW_MAX_PAYLOAD_LEN], payload[JW_MAX_PAYLOAD_LEN], response[JW_MAX_FRAME_LEN];
+    const int size = jw_encode_device_status(data, sizeof(data), &state);
+    const int length = jw_encode_reply_payload(
+        payload, sizeof(payload), JW_STATUS_OK, JW_EXECUTION_COMPLETE, data, size);
+    const int count = jw_encode_response(response, sizeof(response), &frame, payload, length);
+    link->incoming.push_back({Bytes(response, response + count), Clock::now()});
+    ++heartbeat_count;
+    return true;
+  };
+  Open();
+  link->blocked_command = JW_CMD_IDENTIFY;
+  auto first = coordinator->Submit(Command(JW_CMD_IDENTIFY));
+  ASSERT_TRUE(link->WaitWrites(2));
+  EXPECT_TRUE(
+      absl::IsResourceExhausted(coordinator->Submit(Command(JW_CMD_IDENTIFY)).Wait().status));
+  EXPECT_FALSE(first.Wait().status.ok());
+  const auto end = Clock::now() + 500ms;
+  while (heartbeat_count == 0 && Clock::now() < end) std::this_thread::sleep_for(1ms);
+  EXPECT_GT(heartbeat_count, 0);
+  EXPECT_FALSE(coordinator->Snapshot().faulted);
+  EXPECT_EQ(coordinator->Snapshot().pending_operations, 0);
+}
+
+TEST_F(CoordinatorTest, LostHeartbeatFaultsConnectionWithoutTargetReplay) {
+  policy.set_operation_timeout_ms(60);
+  policy.set_attempt_timeout_ms(10);
+  policy.set_polling_timeout_ms(40);
+  policy.set_heartbeat_period_ms(5);
+  link->blocked_command = JW_CMD_GET_STATUS;
+  Open();
+  const auto end = Clock::now() + 500ms;
+  while (!coordinator->Snapshot().closed && Clock::now() < end) std::this_thread::sleep_for(1ms);
+  EXPECT_TRUE(coordinator->Snapshot().faulted);
+  EXPECT_TRUE(coordinator->Snapshot().closed);
+  EXPECT_EQ(coordinator->Snapshot().heartbeat_failures, 1);
+}
 TEST_F(CoordinatorTest, StopHasReservedCapacityAndRetiresPublishedOrdinaryWork) {
   policy.set_max_pending_operations(1);
   policy.set_max_pending_bytes(192);

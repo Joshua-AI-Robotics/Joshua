@@ -27,6 +27,12 @@ code.
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
+JoshuaWire scalar sensors resolve a board and function ID through the same board
+cache as actuators. A FRAME_STREAM board shares one coordinator/session and a
+reserved status heartbeat; it never refreshes actuator targets. The mixed runtime
+requires `stepper_config.require_explicit_enable`. Scalar packets preserve device
+acquisition and local receipt clocks separately, validity, units, boot identity
+and loss counters. Device timestamps are not converted to ROS time.
 All perceptions select a concrete driver through `SinglePerception.sensor_config`;
 the legacy camera/encoder/lidar config wrappers have been removed.
 
