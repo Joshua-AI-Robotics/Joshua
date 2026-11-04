@@ -624,6 +624,7 @@ JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_
   if (work->priority == 0) {
     impl_->diagnostics.stop_pending = true;
     impl_->diagnostics.safety_interlock = true;
+    impl_->RetireStreamsLocked();
     if (impl_->active && impl_->active->priority != 0) {
       impl_->active->cancel = true;
       ++impl_->diagnostics.retired;

@@ -135,3 +135,20 @@ images remain request/response only and advertise no streaming operations.
 The [SOES binding](soes/README.md) supplies a separately pinned slave stack,
 fixed object dictionary and PDO packing. It reuses the same revision-4 profile
 and remains subject to the same AM243 hardware qualification gates.
+
+## Mixed scalar serial reference
+
+`joshua_scalar_sensor` supplies typed cached READ/stream handling and bounded
+start/poll/cancel acquisition hooks. Resource preflight precedes subscription
+commit; last cancel/reset/fault releases pin/ADC claims. Invalid conversions remain
+observable; acquisition overwrites increment the saturating omission counter.
+`joshua_mixed_serial` arbitrates separate ordinary/safety reply slots before
+latest telemetry, without pausing RX or replacing the endpoint's replay cache.
+Unreplyable work is not dispatched and triggers a local output fault.
+
+`joshua_watchdogs` implements the opt-in eight-byte core 0x12 policy. The Arduino
+`joshua_mixed_device` composes it with the existing STEP/DIR application and one
+intrinsic scalar function. Native tests compile the actual application and
+Teensy setup/loop/register adapter against controlled clock, ADC and GPIO hooks.
+The explicit Teensy candidate is described in the board README; physical
+qualification and P5 runtime wiring remain separate.

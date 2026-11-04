@@ -104,6 +104,7 @@ Lengths below exclude the common response prefix.
 | 0e GET_STATUS | empty | 19-byte board/function state below |
 | 0f GET_DEPENDENCIES | generation:u32, cursor:u16 | generation:u32, next:u16, count:u8, up to sixteen dependency records |
 | 10 RECOVER | safety domain:u16 | empty, ACCEPTED or COMPLETE; never enables actuators |
+| 12 CONFIGURE_WATCHDOGS (opt-in) | communication_us:u32, target_us:u32 | exact eight-byte policy echo, COMPLETE; disabled-only |
 
 IDENTIFY data, in order:
 
@@ -168,6 +169,33 @@ Discovery pages are at most 61 bytes and dependency pages 71 bytes before the
 reply prefix, so board size never grows a response beyond the frame bound.
 Metadata that cannot fit must use a separately versioned, bounded profile
 operation; this revision does not imply a generic bulk-transfer service.
+
+### Opt-in configurable software watchdogs
+
+`JW_SAFETY_CONFIGURABLE_WATCHDOGS` (IDENTIFY safety bit 4) advertises core command
+0x12. It is board-scoped, negotiated, and optional in revision 4. The request and
+successful reply data are exactly eight little-endian bytes: communication timeout
+then target-freshness timeout, both in microseconds. Each must be 10000..10000000;
+zero or out-of-range values are rejected without changing the prior policy.
+Configuration requires every actuator disabled and no ESTOP/fault latch. It never
+enables outputs. The ordinary session owns IDs, replay, uncertainty and the common
+reply; a duplicate policy request does not restart a watchdog deadline.
+
+The mixed reference image requires this policy before actuator enable or sensor
+subscribe. Only newly dispatched successful commands refresh communication; exact
+cached retries do not. Only fresh accepted target/enable commands refresh the
+per-channel target deadline. Queries cannot refresh a moving target. A completed
+position goal or zero velocity has no moving-target deadline, while enabled
+holding outputs still require communication. Sensor-only streaming also requires
+communication. Evaluation runs before motor servicing and independently of RX,
+TX and conversion progress. Expiry disables/unconfigures outputs, cancels streams
+and conversions, latches DEVICE_FAULT with ACTION_COMPLETE and unsupported physical
+verification. It is a software-loop bound, not an independent hardware watchdog.
+Reset preserves the latch and clears policy; recovery never restores targets,
+subscriptions, configuration or enable state. Explicit recovery, policy/configure
+and enable are required again. The existing independent 20 ms serial TX-fault
+mechanism remains in force. Physical timeout/stop claims require qualification.
+
 
 ## One session owner per MCU, across all functions and transports
 
