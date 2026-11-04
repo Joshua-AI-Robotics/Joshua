@@ -25,6 +25,7 @@ static int command_adapter(void* context,
     case JW_CMD_ESTOP:
     case JW_CMD_GET_DEPENDENCIES:
     case JW_CMD_RECOVER:
+    case JW_CMD_CONFIGURE_WATCHDOGS:
       valid_scope = request->channel == JW_CHANNEL_NONE;
       break;
     case JW_CMD_GET_STATUS:
