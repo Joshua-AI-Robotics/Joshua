@@ -191,6 +191,25 @@ where practical and explicitly review necessary API changes. Cancellation wakes
 waiters and retires their work; closing cannot leave callbacks referencing destroyed
 state. Teardown is idempotent and nonthrowing with a bounded owner shutdown path.
 
+P2 freezes the Linux mechanism as nonblocking POSIX I/O with poll/eventfd, one
+worker per physical port, and synchronous facades over owned queued requests.
+The internal cancellation handle returns typed publication/progress, with
+cancellation completed by the worker. Admission is bounded FIFO for request-only
+compatibility; reserved stop capacity and scheduling priorities belong to P3.
+The public capability interfaces remain unchanged. Read-only factory diagnostic
+snapshots expose generation/state, queue/byte/error counters, and observed queue
+and operation latency. Close is terminal and joins the worker; old handles never
+reopen a connection. Alias identity, a process claim, flock, and TIOCEXCL prevent
+cooperating duplicate owners; preexisting/privileged external descriptors remain
+an OS limitation.
+
+The [config policy](../config/README.md#serial-timing) now freezes configurable
+raw/vendor total and idle budgets and queue/transfer limits. Defaults are software
+policy, not baud-derived timing or hardware qualification. Explicit defaults and
+omitted fields compare equally. The P2 owner does not continuously consume idle
+input, route samples, own protocol sessions, or provide reconnect reconciliation.
+Those remain P3 requirements before mixed telemetry/control is enabled.
+
 ### 4.4 Buffering and subscription lifetime
 
 The proposed default for live observation is one latest sample per stream, with
@@ -266,8 +285,8 @@ the hardware lifecycle.
 ## 5. Delivery sequence and review gates
 
 The operator authorized implementation on 2026-11-03. Software protocol choices
-for the P1 increment are recorded below. Physical hardware, performance budgets,
-and later API/configuration decisions remain gates for their corresponding
+for P1 and the P2 owner/policy increment are recorded below. Physical hardware,
+performance budgets, and later API/configuration decisions remain gates for their corresponding
 integration phases. Each increment must include its own software acceptance
 evidence and stay
 reviewable; passing an early phase does not imply the complete branch is ready.
@@ -276,7 +295,7 @@ reviewable; passing an early phase does not imply the complete branch is ready.
 | --- | --- | --- | --- |
 | P0 — Increment design agreement | Freeze the decisions needed by each increment: wire/version/schema for P1, public seams and I/O policy for P2/P3, hardware/workload/watchdogs before production integration and qualification. | This plan and existing normative contracts. | Record resolved contracts and remaining dependent gates. P1 protocol choices are selected; later hardware, scheduling, and API/config decisions remain open. |
 | P1 — Protocol extension | Implemented: normative streaming contract, capability negotiation helper, codecs, portable subscription lifecycle, and compatibility fixtures. | P0 protocol choices. | Golden frames, request/sample namespace collision, malformed data, unsupported capability/version, exact retries after lost create/cancel replies, reset invalidation, and host query gating. Both Compose services passed all 50 targets on 2026-11-03. |
-| P2 — Serial I/O foundation | One nonblocking owner, bounded read/write/wait/cancel/close, port identity/lifetime, raw/vendor compatibility, and port diagnostics. | P0; retain existing request-only behavior. | PTY tests for silence, partial data, backpressure, disconnect, aliases, shutdown, and full-size lidar/vendor traffic. |
+| P2 — Serial I/O foundation | Implemented: one nonblocking owner, configurable total/idle deadlines and bounded admission, internal cancellation/publication results, port identity/lifetime, raw/vendor compatibility, and read-only diagnostics. | P0 owner/policy choices; retains request-only behavior. | PTY coverage for queued expiry/cancel without publication, partial reads/writes, backpressure, disconnect, aliases, shutdown races and generation retirement, independent ports, and fragmented full lidar/vendor responses. Both Compose services passed all 51 targets on 2026-11-03. Physical timing remains unqualified. |
 | P3 — Host coordinator and streams | Shared scheduling/session owner, frame routing, subscriptions, bounded caches, unknown outcomes, priority/fairness, and reconnect. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
 | P4 — Production mixed firmware | Selected MCU binding, one typed sensor backend, bounded acquisition/dispatch, TX arbitration, subscription state, and watchdog/fault policy. | P1 and frozen host/firmware contracts. | Production firmware service loop with simulated sensor/GPIO/clock faults; no blocking acquisition, control/stop starvation, or implicit enable. |
 | P5 — End-to-end runtime integration | Actuator and sensor handles in one bus-owning process; config/perception/ROS integration, firmware artifact, preset, and diagnostic recording. | P3, P4. | Same serial connection runs streaming and actuation through production paths; Feetech/LDS01 regressions pass; second link fixture reuses protocol/stream logic. |
@@ -339,7 +358,7 @@ firmware flashing or physical actuation.
 | Recovery | Proposed: deliberate reconnect/reconciliation; never implicit actuator enable or replay of uncertain actions. |
 | Wire/version and typed payload | Selected for P1: additive SENSOR v1.1 operations 1–3 and firmware-to-host STREAM_SAMPLE kind 0x11 within revision-4 framing. First payload is scalar-f32 with existing measurement metadata; token is the SUBSCRIBE message ID, scoped by session/function. See [normative contract](JOSHUA_WIRE.md#opt-in-sensor-profile-11-streaming). |
 | Hardware and numerical budgets | Open at P0: exact device kit, native USB versus UART, rates, capacities, and acceptance bounds. |
-| API/config migration | Open at P0: subscription capability, cancellation/result representation, policy schema, and existing-preset migration. |
+| API/config migration | P2 freezes internal cancellation/publication results, serial `io_policy`, owner lifetime, and read-only factory diagnostics while preserving capability facades. Subscription API and coordinator/reconnect policy remain P3 gates; existing presets inherit documented software defaults. |
 
 Treat remaining P0 items as design work before their dependent implementation.
 P1 supplies codecs and a portable subscription lifecycle, not production

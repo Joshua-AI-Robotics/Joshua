@@ -197,6 +197,21 @@ TEST(ValidationTest, RejectsInvalidSerialTimingWithoutHardware) {
   EXPECT_TRUE(ValidateConfig(config).ok());
 }
 
+TEST(ValidationTest, SerialIoPolicyIsValidatedBeforeHardwareAccess) {
+  auto config = MakeConfig();
+  auto* policy = config.mutable_robot()
+                     ->mutable_boards(0)
+                     ->mutable_comm()
+                     ->mutable_serial_config()
+                     ->mutable_io_policy();
+  policy->set_write_timeout_ms(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  policy->set_write_timeout_ms(100);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  policy->set_max_pending_operations(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
   auto config = MakeConfig();
   config.mutable_robot()
@@ -214,6 +229,13 @@ TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
   sensor.mutable_sts3215_encoder_config()->set_board_name("second");
   *robot->mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_TRUE(ValidateConfig(config).ok());  // Explicit 100 equals the JoshuaWire default.
+  auto* policy =
+      robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->mutable_io_policy();
+  policy->set_read_timeout_ms(500);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  policy->set_read_timeout_ms(501);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  policy->clear_read_timeout_ms();
   robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(2000);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }

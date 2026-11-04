@@ -230,6 +230,7 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
   std::map<std::string, std::pair<uint64_t, uint32_t>> physical_policies;
+  std::map<std::string, robot::comm::SerialIoOptions> io_policies;
   std::map<std::string, uint32_t> joshua_timeouts;
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
@@ -245,6 +246,10 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
     const auto [it, inserted] = physical_policies.emplace(serial.port(), physical_policy);
     if (!inserted && it->second != physical_policy)
       return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
+    const auto [io_it, io_inserted] =
+        io_policies.emplace(serial.port(), robot::comm::SerialOptions(serial));
+    if (!io_inserted && io_it->second != robot::comm::SerialOptions(serial))
+      return absl::InvalidArgumentError("Serial port has conflicting I/O policy");
     if (serial.message_adapter() == robot::comm::JOSHUA_WIRE) {
       const uint32_t timeout = serial.has_exchange_timeout_ms()
                                    ? serial.exchange_timeout_ms()

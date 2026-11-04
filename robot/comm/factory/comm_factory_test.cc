@@ -7,6 +7,7 @@
 #include <chrono>
 #include <climits>
 #include <cstdlib>
+#include <filesystem>
 #include <future>
 #include <limits>
 #include <memory>
@@ -160,6 +161,50 @@ TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneByteStream) {
   ASSERT_TRUE(first_stream.ok());
   ASSERT_TRUE(second_stream.ok());
   EXPECT_EQ(*first_stream, *second_stream);
+}
+
+TEST_F(CommFactorySerialCacheTest, AliasesShareOwnerAndLastLeaseRetiresGeneration) {
+  uint64_t generation;
+  const auto alias = std::string(::testing::TempDir()) + "serial-alias-" + std::to_string(getpid());
+  std::error_code error;
+  std::filesystem::create_symlink(comm_.serial_config().port(), alias, error);
+  ASSERT_FALSE(error) << error.message();
+  {
+    auto first = CommFactory::CreateComm(comm_);
+    ASSERT_TRUE(first.ok()) << first.status();
+    auto config = comm_;
+    config.mutable_serial_config()->set_port(alias);
+    auto second = CommFactory::CreateComm(config);
+    std::filesystem::remove(alias, error);
+    ASSERT_TRUE(second.ok()) << second.status();
+    EXPECT_EQ(*GetCommTransport<ByteStream>(*first), *GetCommTransport<ByteStream>(*second));
+    auto snapshots = CommFactory::SnapshotSerialConnections();
+    ASSERT_EQ(snapshots.size(), 1);
+    generation = snapshots.front().generation;
+    EXPECT_EQ(snapshots.front().configured_port, comm_.serial_config().port());
+    EXPECT_EQ(snapshots.front().state, SerialLinkState::kReady);
+  }
+  EXPECT_TRUE(CommFactory::SnapshotSerialConnections().empty());
+  auto reopened = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(reopened.ok()) << reopened.status();
+  EXPECT_GT(CommFactory::SnapshotSerialConnections().front().generation, generation);
+}
+
+TEST_F(CommFactorySerialCacheTest, EffectiveIoPolicyMustAgreeWithoutReplacingLiveOwner) {
+  auto first = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto config = comm_;
+  auto* policy = config.mutable_serial_config()->mutable_io_policy();
+  policy->set_read_timeout_ms(500);  // An explicit default matches an omitted field.
+  auto matching = CommFactory::CreateComm(config);
+  ASSERT_TRUE(matching.ok()) << matching.status();
+  EXPECT_EQ(*GetCommTransport<ByteStream>(*first), *GetCommTransport<ByteStream>(*matching));
+  policy->set_read_timeout_ms(501);
+  EXPECT_TRUE(absl::IsInvalidArgument(CommFactory::CreateComm(config).status()));
+  policy->set_read_timeout_ms(500);
+  policy->set_max_pending_operations(15);
+  EXPECT_TRUE(absl::IsInvalidArgument(CommFactory::CreateComm(config).status()));
+  EXPECT_EQ(CommFactory::SnapshotSerialConnections().size(), 1);
 }
 
 TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
@@ -399,3 +444,22 @@ TEST(CommFactoryTest, SerialPtyHonorsTimingAndSharesOnePhysicalOpen) {
 
 }  // namespace
 }  // namespace robot::comm
+
+TEST(SerialPolicyValidationTest, RejectsInvalidLimitsWithoutOpeningHardware) {
+  robot::comm::SerialConfig config;
+  config.set_port("never-open-this-device");
+  config.set_baudrate(115200);
+  auto* policy = config.mutable_io_policy();
+  policy->set_read_timeout_ms(0);
+  EXPECT_TRUE(absl::IsInvalidArgument(robot::comm::CommFactory::ValidateSerialConfig(config)));
+  policy->set_read_timeout_ms(UINT32_MAX);
+  EXPECT_TRUE(absl::IsInvalidArgument(robot::comm::CommFactory::ValidateSerialConfig(config)));
+  policy->clear_read_timeout_ms();
+  policy->set_max_pending_operations(1025);
+  EXPECT_TRUE(absl::IsInvalidArgument(robot::comm::CommFactory::ValidateSerialConfig(config)));
+  policy->clear_max_pending_operations();
+  policy->set_max_pending_bytes(10);
+  EXPECT_TRUE(absl::IsInvalidArgument(robot::comm::CommFactory::ValidateSerialConfig(config)));
+  policy->set_max_transfer_bytes(10);
+  EXPECT_TRUE(robot::comm::CommFactory::ValidateSerialConfig(config).ok());
+}

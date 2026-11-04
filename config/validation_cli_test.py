@@ -353,6 +353,8 @@ robot {
                             "//robot/comm/factory:comm_config_validation.h",
                             "//robot/comm/serial:serial_config_validation",
                             "//robot/comm/serial:serial_config_validation.h",
+                            "//robot/comm/serial:serial_io_options",
+                            "//robot/comm/serial:serial_io_options.h",
                         },
                         "validator depends on hardware communication implementation",
                     )

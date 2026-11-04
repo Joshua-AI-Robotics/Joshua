@@ -29,7 +29,6 @@ static_assert(!std::is_base_of_v<CallerSizedMessageTransport, JoshuaWireSerialTr
 class SerialExchangeTest : public ::testing::Test {
  protected:
   int master = -1;
-  std::shared_ptr<boost::asio::io_context> io = std::make_shared<boost::asio::io_context>();
   std::shared_ptr<Serial> link;
   std::unique_ptr<JoshuaWireSerialTransport> serial;
   Bytes request;
@@ -39,7 +38,9 @@ class SerialExchangeTest : public ::testing::Test {
     ASSERT_GE(master, 0);
     ASSERT_EQ(grantpt(master), 0);
     ASSERT_EQ(unlockpt(master), 0);
-    link = std::make_shared<Serial>(io, ptsname(master), 115200);
+    auto opened = Serial::Create(ptsname(master), 115200);
+    ASSERT_TRUE(opened.ok()) << opened.status();
+    link = *opened;
     serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(100));
     request.resize(JW_MAX_FRAME_LEN);
     const int len = jw_encode_frame(request.data(), request.size(), 100, 5, 1, 0xff, nullptr, 0);
@@ -164,7 +165,10 @@ TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
   const auto elapsed = std::chrono::steady_clock::now() - start;
   EXPECT_GE(elapsed, std::chrono::milliseconds(25));
   EXPECT_LT(elapsed, std::chrono::seconds(1));
-  ASSERT_TRUE(ReadRequest());
+  // Scheduling can consume the entire short queue-inclusive budget. A request
+  // that expires before dispatch is correctly unsent; drain it if published.
+  pollfd descriptor{master, POLLIN, 0};
+  if (poll(&descriptor, 1, 10) > 0) ASSERT_TRUE(ReadRequest());
   serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(500));
   auto response = Reply(1);
   auto device = std::async(std::launch::async, [&] {

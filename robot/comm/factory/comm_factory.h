@@ -14,6 +14,7 @@
 #include "robot/comm/interfaces/byte_stream.h"
 #include "robot/comm/interfaces/correlated_cyclic_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
+#include "robot/comm/interfaces/serial_diagnostics.h"
 #include "robot/comm/proto/comm.pb.h"
 
 namespace robot::comm {
@@ -62,6 +63,8 @@ class CommFactory {
   static const std::vector<CommImplementation>& Implementations();
   // Serial connections share one port and must agree on baud rate and timing.
   static absl::StatusOr<CommTransport> CreateComm(const robot::comm::Comm& config);
+  // Read-only snapshots of currently leased physical serial connections.
+  static std::vector<SerialDiagnostics> SnapshotSerialConnections();
   // Pure validation, safe before opening hardware and usable by config checks.
   static absl::Status ValidatePairedEthercatConfig(const robot::comm::EthercatConfig& config);
   static absl::Status ValidateSerialConfig(const robot::comm::SerialConfig& config);
