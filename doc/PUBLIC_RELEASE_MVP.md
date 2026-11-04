@@ -13,11 +13,8 @@ This guide defines the release outcome, implementation gaps, and evidence needed
 to close them. It does not establish hardware readiness or authorize a hardware
 run. Update it as implementation and verification land.
 
-The camera-head plan supersedes the two-axis tabletop pusher and ACT-first
-imitation-learning proposal. Linear rails, external linear encoders, homing
-switches, two-channel STEP/DIR firmware, and linear-transmission conversion are
-removed from this demo's critical path. Existing implementation gates remain
-open; evidence for an earlier design must be reassessed against this scope.
+Implementation gates remain open; supporting evidence must be assessed against
+the camera-head demo scope.
 
 ## 1. Audience and product promise
 
