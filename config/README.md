@@ -140,7 +140,7 @@ Optional `serial_config.io_policy` controls its software budgets and admission:
 
 All four timeouts must be 1..INT_MAX milliseconds. Progress renews only the idle
 budget, never the total deadline. JoshuaWire uses `exchange_timeout_ms` for its
-total deadline and no separate idle deadline. Framed requests reserve their
+total deadline and no separate idle deadline. Request-only framed requests reserve their
 maximum response budget at admission. Oversized/full-queue requests fail before
 publication. Raw/vendor partial responses return an error through the existing
 interfaces; internal operation results retain actual read/write progress.
@@ -165,6 +165,50 @@ For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
 as in the checked-in ESP32 example. Native USB or other links may need a
 different value; board type no longer guesses it. The manual JW probe's
 `--settle_ms` remains an additional diagnostic wait, not a runtime setting.
+
+### Continuous frame capability (P3a)
+
+`transport_type: FRAME_STREAM` with `message_adapter: JOSHUA_WIRE` selects the
+host integration capability for a future shared MCU coordinator. It exposes
+`FrameStreamTransport`, rather than `MessageTransport` or `ByteStream`. Existing
+board/session consumers and demo presets remain request-only; this capability
+alone does not enable sensor streaming or implement the coordinator.
+
+```text
+comm_type: SERIAL
+transport_type: FRAME_STREAM
+serial_config {
+  port: "/dev/serial/by-id/<configured-controller>"
+  baudrate: 115200
+  message_adapter: JOSHUA_WIRE
+  frame_policy {
+    frame_idle_timeout_ms: 100
+    max_reply_frames: 4
+    max_notification_frames: 32
+  }
+}
+```
+
+`frame_policy` is accepted only in this mode. Its omitted fields use the shown
+software defaults. Partial-frame idle timeout must be 1..INT_MAX milliseconds;
+reply and notification capacities must each be 1..256 frames. `io_policy` still
+controls physical write time and admission limits; `max_transfer_bytes` must be
+at least 96. `exchange_timeout_ms` is rejected: the forthcoming coordinator owns
+the complete operation/retry deadline above this duplex link.
+
+All consumers of a physical port must select the same receive mode and effective
+policies. A continuous receiver cannot share that port with raw/vendor or
+request-only JoshuaWire users, including through path aliases. Frame-mode users
+share one lease; exactly one coordinator must consume it. The last lease closes
+the receiver. There is no automatic reopen or protocol reset.
+
+Replies have reserved capacity and are returned before notifications. Pending
+notifications with the same session/token/function are replaced by the most
+recent arrival; when notification capacity is full, the oldest whole notification
+is dropped. Counters report both forms of loss. Reply overflow faults the link
+and wakes receivers instead of silently losing reply ownership. Profile metadata,
+subscription identity, sequence ordering and freshness still require coordinator
+validation; a received frame alone is not a usable sensor observation.
 
 ## JoshuaWire over EtherCAT
 

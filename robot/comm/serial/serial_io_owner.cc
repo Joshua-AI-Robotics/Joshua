@@ -60,6 +60,7 @@ struct SerialIoOwner::Operation::State {
 struct SerialIoOwner::Impl {
   using Work = std::shared_ptr<Operation::State>;
   SerialIoOptions policy;
+  std::optional<Receiver> receiver;
   PortIdentity identity;
   bool claimed = false;
   bool exclusive = false;
@@ -176,10 +177,20 @@ struct SerialIoOwner::Impl {
       };
       auto now = Clock::now();
       if (active && active->cancel) {
+        if (receiver && active->result.bytes_written > 0 &&
+            active->result.bytes_written < active->request.bytes.size()) {
+          Fault(absl::UnavailableError("Cannot retire a partially written frame"));
+          continue;
+        }
         finish(absl::CancelledError("Serial operation canceled; inspect publication state"));
         continue;
       }
       if (active && now >= active->deadline) {
+        if (receiver && active->result.bytes_written > 0 &&
+            active->result.bytes_written < active->request.bytes.size()) {
+          Fault(absl::UnavailableError("Partial frame write expired; link retired"));
+          continue;
+        }
         finish(absl::DeadlineExceededError("Serial operation deadline; inspect publication state"));
         continue;
       }
@@ -235,7 +246,8 @@ struct SerialIoOwner::Impl {
                     INT_MAX));
       pollfd descriptors[] = {{wake_fd, POLLIN, 0},
                               {port->native_handle(),
-                               static_cast<short>(active ? (reading ? POLLIN : POLLOUT) : 0),
+                               static_cast<short>((receiver ? POLLIN : 0) |
+                                                  (active ? (reading ? POLLIN : POLLOUT) : 0)),
                                0}};
       const int result = poll(descriptors, 2, timeout);
       if (result < 0 && errno == EINTR) continue;
@@ -247,7 +259,31 @@ struct SerialIoOwner::Impl {
         DrainWake();
         continue;
       }
-      if (result == 0 || !active) continue;
+      if (result == 0) continue;
+      if (receiver && (descriptors[1].revents & POLLIN)) {
+        uint8_t bytes[256];
+        const ssize_t count = read(port->native_handle(), bytes, sizeof(bytes));
+        if (count > 0) {
+          {
+            std::lock_guard lock(mutex);
+            diagnostics.bytes_read += count;
+          }
+          try {
+            auto status = receiver->bytes(bytes, count);
+            if (!status.ok()) {
+              Fault(std::move(status));
+              continue;
+            }
+          } catch (...) {
+            Fault(absl::InternalError("Serial receiver threw"));
+            continue;
+          }
+        } else if (count == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
+          Fault(absl::UnavailableError("Continuous serial read failed"));
+          continue;
+        }
+      }
+      if (!active) continue;
       // Recheck cancellation/deadline after poll before any new publication.
       if (active->cancel || Clock::now() >= active->deadline) continue;
       if (!reading && (descriptors[1].revents & POLLOUT)) {
@@ -310,6 +346,13 @@ struct SerialIoOwner::Impl {
     if (active) Complete(active, reason);
     for (const auto& work : abandoned) Complete(work, reason);
     ClosePort();
+    if (receiver && receiver->stopped) {
+      try {
+        receiver->stopped(reason);
+      } catch (...) {
+        Fault(absl::InternalError("Serial stopped callback threw"));
+      }
+    }
     std::lock_guard lock(mutex);
     running = false;
     if (diagnostics.state != SerialLinkState::kFaulted)
@@ -328,19 +371,25 @@ absl::StatusOr<SerialIoOwner::PortIdentity> SerialIoOwner::Identify(const std::s
                       std::to_string(device.st_dev) + ":" + std::to_string(device.st_rdev)};
 }
 
-absl::StatusOr<std::shared_ptr<SerialIoOwner>> SerialIoOwner::Open(const std::string& path,
-                                                                   int baudrate,
-                                                                   std::chrono::milliseconds settle,
-                                                                   SerialIoOptions options) {
+absl::StatusOr<std::shared_ptr<SerialIoOwner>> SerialIoOwner::Open(
+    const std::string& path,
+    int baudrate,
+    std::chrono::milliseconds settle,
+    SerialIoOptions options,
+    std::optional<Receiver> receiver) {
   if (baudrate <= 0 || settle.count() < 0 || settle.count() > INT_MAX)
     return absl::InvalidArgumentError("Invalid serial baudrate/settle policy");
   auto valid = ValidateSerialOptions(options);
   if (!valid.ok()) return valid;
+  if (receiver && (!receiver->bytes || receiver->max_write_bytes == 0 ||
+                   receiver->max_write_bytes > options.max_transfer_bytes))
+    return absl::InvalidArgumentError("Invalid continuous serial receiver policy");
   auto identified = Identify(path);
   if (!identified.ok()) return identified.status();
   auto state = std::make_shared<Impl>();
   state->identity = *identified;
   state->policy = options;
+  state->receiver = std::move(receiver);
   {
     auto& claims = PortClaims();
     std::lock_guard lock(claims.mutex);
@@ -404,11 +453,18 @@ SerialIoOwner::Operation SerialIoOwner::Submit(Request request) {
   else if (impl_->closing)
     rejected =
         impl_->fault.ok() ? absl::FailedPreconditionError("Serial owner is closed") : impl_->fault;
+  else if (impl_->receiver &&
+           (r.response_bytes != 0 || r.consume || r.input != InputFlushPolicy::kPreserve ||
+            r.bytes.size() > impl_->receiver->max_write_bytes))
+    rejected =
+        absl::FailedPreconditionError("Continuous receiver owns all input; frame writes only");
   else if (r.timeout.count() <= 0 || r.timeout.count() > INT_MAX ||
            r.read_idle_timeout.count() < 0 || r.read_idle_timeout.count() > INT_MAX ||
            (r.consume && r.response_bytes == 0) ||
            (r.input != InputFlushPolicy::kDiscard && r.input != InputFlushPolicy::kPreserve))
     rejected = absl::InvalidArgumentError("Invalid serial operation/deadline");
+  else if (r.deadline && *r.deadline <= work->admitted)
+    rejected = absl::DeadlineExceededError("Serial absolute deadline expired before admission");
   else if (r.bytes.size() > impl_->policy.max_transfer_bytes ||
            r.response_bytes > impl_->policy.max_transfer_bytes - r.bytes.size())
     rejected = absl::ResourceExhaustedError("Serial transfer exceeds configured byte limit");
@@ -424,6 +480,7 @@ SerialIoOwner::Operation SerialIoOwner::Submit(Request request) {
     work->done = true;
   } else {
     work->deadline = work->admitted + r.timeout;
+    if (r.deadline) work->deadline = std::min(work->deadline, *r.deadline);
     work->owner = impl_;
     try {
       impl_->queue.push_back(work);

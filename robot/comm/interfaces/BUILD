@@ -41,3 +41,13 @@ cc_library(
     name = "serial_diagnostics",
     hdrs = ["serial_diagnostics.h"],
 )
+
+cc_library(
+    name = "frame_stream_transport",
+    hdrs = ["frame_stream_transport.h"],
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+    ],
+)

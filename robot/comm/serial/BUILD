@@ -43,6 +43,7 @@ cc_library(
     hdrs = ["serial_config_validation.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":serial_frame_options",
         ":serial_io_options",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
@@ -91,6 +92,39 @@ cc_test(
     deps = [
         ":serial",
         ":serial_io_owner",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_frame_options",
+    hdrs = ["serial_frame_options.h"],
+    visibility = ["//visibility:public"],
+    deps = ["@abseil-cpp//absl/status:status"],
+)
+
+cc_library(
+    name = "joshua_wire_frame_stream",
+    srcs = ["joshua_wire_frame_stream.cc"],
+    hdrs = ["joshua_wire_frame_stream.h"],
+    implementation_deps = [
+        "//firmware/common:joshua_wire",
+        "//firmware/common:joshua_wire_stream",
+    ],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":serial_frame_options",
+        ":serial_io_owner",
+        "//robot/comm/interfaces:frame_stream_transport",
+    ],
+)
+
+cc_test(
+    name = "joshua_wire_frame_stream_test",
+    srcs = ["joshua_wire_frame_stream_test.cc"],
+    deps = [
+        ":joshua_wire_frame_stream",
+        "//firmware/common:joshua_wire_sensor_stream",
         "@googletest//:gtest_main",
     ],
 )

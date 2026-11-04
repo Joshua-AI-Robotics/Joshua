@@ -19,6 +19,9 @@ enum TransportType {
   CYCLIC = 3;  // Generic capability; standalone EtherCAT/TI-demo use is retired.
   // Paired management/correlated-cyclic capabilities (JW EtherCAT today).
   MESSAGE_AND_CYCLIC = 4;
+  // Continuous complete frames, consumed by one shared protocol coordinator.
+  // SERIAL/JOSHUA_WIRE only. Cannot share a port with raw/request-only users.
+  FRAME_STREAM = 5;
 }
 
 message Comm {
@@ -55,6 +58,14 @@ message SerialConfig {
   // Shared physical-owner admission and raw/vendor I/O policy. All users of
   // one port must agree on effective values, including defaults.
   SerialIoPolicy io_policy = 7;
+  // FRAME_STREAM only; separate reserved reply and bounded telemetry storage.
+  SerialFramePolicy frame_policy = 8;
+}
+
+message SerialFramePolicy {
+  optional uint32 frame_idle_timeout_ms = 1;    // Default 100, partial frames only.
+  optional uint32 max_reply_frames = 2;         // Default 4, range 1..256.
+  optional uint32 max_notification_frames = 3;  // Default 32, range 1..256.
 }
 
 message SerialIoPolicy {

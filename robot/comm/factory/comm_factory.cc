@@ -9,6 +9,7 @@
 #include "robot/comm/ethercat/soem_ethercat_backend.h"
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/caller_sized_serial_transport.h"
+#include "robot/comm/serial/joshua_wire_frame_stream.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
@@ -21,6 +22,7 @@ namespace {
 // The owner's process claim remains reserved throughout close/destruction.
 struct PortResources {
   std::weak_ptr<Serial> serial;
+  std::weak_ptr<JoshuaWireFrameStream> frames;
   SerialConfig config;
   std::optional<uint32_t> joshua_timeout_ms;
 };
@@ -151,7 +153,7 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   std::lock_guard lock(g_serial_mutex);
   // Prune retired metadata rather than retaining every port path forever.
   for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
-    if (it->second.serial.expired())
+    if (it->second.serial.expired() && it->second.frames.expired())
       it = g_port_resources.erase(it);
     else
       ++it;
@@ -159,6 +161,8 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   auto found = g_port_resources.find(identity.key);
   if (found != g_port_resources.end()) {
     auto& resources = found->second;
+    if (!resources.frames.expired())
+      return absl::InvalidArgumentError("FRAME_STREAM cannot share a port with request-only users");
     if (auto serial = resources.serial.lock()) {
       const auto& existing = resources.config;
       if (existing.baudrate() != config.baudrate())
@@ -194,10 +198,61 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   return serial;
 }
 
+absl::StatusOr<CommTransport> CreateFrameStream(const Comm& comm) {
+  ABSL_RETURN_IF_ERROR(ValidateSerialCommConfig(comm));
+  const auto& config = comm.serial_config();
+  ABSL_RETURN_IF_ERROR(CommFactory::ValidateSerialConfig(config));
+  ABSL_ASSIGN_OR_RETURN(auto identity, SerialIoOwner::Identify(config.port()));
+  std::lock_guard lock(g_serial_mutex);
+  for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
+    if (it->second.serial.expired() && it->second.frames.expired())
+      it = g_port_resources.erase(it);
+    else
+      ++it;
+  }
+  auto found = g_port_resources.find(identity.key);
+  if (found != g_port_resources.end()) {
+    auto& resources = found->second;
+    if (!resources.serial.expired())
+      return absl::InvalidArgumentError("Request-only port cannot acquire a continuous receiver");
+    if (auto frames = resources.frames.lock()) {
+      const auto& existing = resources.config;
+      if (existing.baudrate() != config.baudrate() ||
+          existing.post_open_settle_ms() != config.post_open_settle_ms() ||
+          SerialOptions(existing) != SerialOptions(config) ||
+          SerialFramePolicyOptions(existing) != SerialFramePolicyOptions(config))
+        return absl::InvalidArgumentError("Frame stream port already has different I/O policy");
+      ABSL_RETURN_IF_ERROR(frames->status());
+      return CommTransport{std::static_pointer_cast<FrameStreamTransport>(frames)};
+    }
+  }
+  ABSL_ASSIGN_OR_RETURN(
+      auto frames,
+      JoshuaWireFrameStream::Open(config.port(),
+                                  static_cast<int>(config.baudrate()),
+                                  std::chrono::milliseconds(config.post_open_settle_ms()),
+                                  SerialOptions(config),
+                                  SerialFramePolicyOptions(config)));
+  if (frames->identity().key != identity.key)
+    return absl::UnavailableError("Serial device changed during frame stream open");
+  PortResources resources;
+  resources.frames = frames;
+  resources.config = config;
+  g_port_resources[identity.key] = std::move(resources);
+  return CommTransport{std::static_pointer_cast<FrameStreamTransport>(frames)};
+}
+
 }  // namespace
 
 const std::vector<CommImplementation>& CommFactory::Implementations() {
   static const std::vector<CommImplementation> entries = {
+      {SERIAL,
+       FRAME_STREAM,
+       "installed",
+       &CreateFrameStream,
+       "Host integration capability; existing board consumers remain request-only. "
+       "JOSHUA_WIRE continuous receive only; one coordinator, exclusive from raw/request-only "
+       "users."},
       {SERIAL,
        BYTE_STREAM,
        "installed",
@@ -265,7 +320,8 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
     return implementation.create(comm);
   }
   if (comm.comm_type() == SERIAL) {
-    return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
+    return absl::InvalidArgumentError(
+        "SERIAL requires BYTE_STREAM, MESSAGE, or FRAME_STREAM transport_type.");
   }
   if (comm.comm_type() == ETHERCAT) {
     return absl::InvalidArgumentError(
@@ -289,6 +345,9 @@ std::vector<SerialDiagnostics> CommFactory::SnapshotSerialConnections() {
   for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
     if (auto serial = it->second.serial.lock()) {
       result.push_back(serial->Snapshot());
+      ++it;
+    } else if (auto frames = it->second.frames.lock()) {
+      result.push_back(frames->Snapshot());
       ++it;
     } else {
       it = g_port_resources.erase(it);

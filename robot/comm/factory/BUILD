@@ -23,6 +23,7 @@ cc_library(
         "//robot/comm/ethercat:soem_ethercat_backend",
         "//robot/comm/serial",
         "//robot/comm/serial:caller_sized_serial_transport",
+        "//robot/comm/serial:joshua_wire_frame_stream",
         "//robot/comm/serial:joshua_wire_serial_transport",
         "//robot/comm/serial:serial_config_validation",
         "//utils:status_macros",
@@ -31,6 +32,7 @@ cc_library(
     deps = [
         "//robot/comm/interfaces:byte_stream",
         "//robot/comm/interfaces:correlated_cyclic_transport",
+        "//robot/comm/interfaces:frame_stream_transport",
         "//robot/comm/interfaces:message_transport",
         "//robot/comm/interfaces:serial_diagnostics",
         "//robot/comm/proto:comm_cc_proto",
