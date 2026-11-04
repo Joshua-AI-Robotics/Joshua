@@ -1,5 +1,8 @@
 # Documentation
 
+[Mixed serial qualification](SERIAL_COMM_QUALIFICATION.md) records the software
+evidence workflow and the outstanding physical qualification gates.
+
 | Topic | Guide |
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |

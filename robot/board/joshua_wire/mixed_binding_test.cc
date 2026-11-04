@@ -1,6 +1,8 @@
 // Production board/perception + MCU_BUS over a PTY and the actual mixed loop.
 // Only GPIO, ADC and time are native hooks; no device is opened or flashed.
 #include <fcntl.h>
+#include <spawn.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <array>
@@ -8,8 +10,11 @@
 #include <chrono>
 #include <cstring>
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <future>
 #include <mutex>
+#include <sstream>
 #include <thread>
 
 #include "config/config_utils.h"
@@ -18,11 +23,14 @@
 #include "firmware/common/joshua_mixed_serial.h"
 #include "firmware/common/joshua_wire_stream.h"
 #include "gtest/gtest.h"
+#include "rclcpp/version.h"
 #include "robot/board/factory/board_factory.h"
+#include "robot/board/joshua_wire/serial_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/mcu_bus.h"
 #include "std_msgs/msg/bool.hpp"
+extern char** environ;
 
 ChannelState g_channels[1];
 jw_runtime_function_t g_functions[1];
@@ -57,6 +65,8 @@ class MixedBindingTest : public ::testing::Test {
   void SetUp() override {
     ASSERT_NE(getenv("TEST_TMPDIR"), nullptr);
     ASSERT_EQ(setenv("ROS_LOG_DIR", getenv("TEST_TMPDIR"), 1), 0);
+    ASSERT_EQ(setenv("ROS_DOMAIN_ID", RCLCPP_VERSION_MAJOR >= 20 ? "84" : "83", 1), 0);
+    ASSERT_EQ(setenv("ROS_LOCALHOST_ONLY", "1", 1), 0);
     if (!rclcpp::ok()) rclcpp::init(0, nullptr);
     auto loaded =
         config::config_util::LoadConfig("config/config_preset/example/teensy_mixed_scalar.pbtxt");
@@ -94,7 +104,6 @@ class MixedBindingTest : public ::testing::Test {
         [](void* ctx, const uint8_t* bytes, size_t size) {
           auto* s = static_cast<MixedBindingTest*>(ctx);
           jw_frame_t frame{};
-          jw_profile_request_t p{};
           if (s->drop_all) return FRAME_OK;
           if (jw_decode_frame(bytes, size, &frame) == JW_RESULT_OK && frame.cmd == JW_CMD_PROFILE &&
               s->drop_targets && frame.channel == 0) {
@@ -240,10 +249,47 @@ TEST_F(MixedBindingTest, ReservedStopRetiresLostTargetReplyWithoutReplayingOrEna
   ASSERT_TRUE(Await([&] { return targets.load() > 0; }));
   const auto begin = Clock::now();
   ASSERT_TRUE((*board)->EmergencyStop().ok());
+  RecordProperty(
+      "software_stop_ack_us",
+      std::to_string(
+          std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - begin).count()));
   EXPECT_LT(Clock::now() - begin, 100ms);
   EXPECT_FALSE(pending.get().ok());
   EXPECT_FALSE(Enabled());
   EXPECT_FALSE((*channel)->Enable().ok());
+}
+
+TEST_F(MixedBindingTest, OperatorRecoveryProbeClearsLatchButNeverEnablesOrRestoresStream) {
+  auto board = robot::board::BoardFactory::GetOrCreate(config.robot().boards(0));
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto stream = (*board)->SubscribeScalar(128, 10000);
+  ASSERT_TRUE(stream.ok());
+  ASSERT_TRUE((*board)->EmergencyStop().ok());
+  robot::board::BoardFactory::ResetForTesting();
+  robot::comm::CommFactory::ResetSerialTransportCacheForTesting();
+  auto recovery = config.robot().boards(0);
+  recovery.mutable_comm()->set_transport_type(robot::comm::MESSAGE);
+  recovery.clear_joshua_wire_host_policy();
+  auto comm = robot::comm::CommFactory::CreateComm(recovery.comm());
+  ASSERT_TRUE(comm.ok()) << comm.status();
+  auto message = robot::comm::GetCommTransport<robot::comm::MessageTransport>(*comm);
+  ASSERT_TRUE(message.ok());
+  robot::board::diagnostics::SerialValidationOptions options;
+  options.mode = "configure";
+  options.channel = 0;
+  options.allow_recover = true;
+  options.settle_ms = 0;
+  std::ostringstream report;
+  ASSERT_TRUE(
+      robot::board::diagnostics::RunSerialValidation(recovery, options, *message, report).ok())
+      << report.str();
+  EXPECT_FALSE((*stream)->Latest().ok());
+  std::lock_guard lock(firmware_mutex);
+  EXPECT_FALSE(StepDirDeviceRuntime()->estopped);
+  EXPECT_FALSE(g_channels[0].configured);
+  EXPECT_FALSE(g_channels[0].enabled);
+  EXPECT_FALSE(mixed.sensor.subscription.state.active);
+  EXPECT_FALSE(mixed.watchdogs.configured);
 }
 
 TEST_F(MixedBindingTest, SensorFailureIsObservableAndDoesNotBlockControlOrSharedConsumer) {
@@ -300,32 +346,79 @@ TEST_F(MixedBindingTest, RebootAndMissingHeartbeatRequireDeliberateNewGeneration
 }
 
 TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicitEnableAndStop) {
-  auto runtime = std::make_shared<McuBus>("mixed_integration", 1, config);
+  // Concurrent stacks must never send commands to each other or real runtimes.
+  const std::string name = "joshua_test_" + std::to_string(getpid()) + "_" +
+                           std::to_string(Clock::now().time_since_epoch().count());
+  const std::string prefix = "/" + name + "/";
+  auto local = config;
+  const std::string actuator = name + "_stepper";
+  for (auto& a : *local.mutable_robot()->mutable_actions()->mutable_single_actions()) {
+    a.mutable_actuator()->set_actuator_name(actuator);
+    for (auto& sub : *a.mutable_node()->mutable_subscriptions())
+      sub.set_topic(actuator + sub.topic().substr(sub.topic().find_last_of('/')));
+  }
+  for (auto& s : *local.mutable_robot()->mutable_perceptions()->mutable_single_perceptions())
+    for (auto& pub : *s.mutable_node()->mutable_publishers()) pub.set_topic(prefix + pub.topic());
+  auto runtime = std::make_shared<McuBus>(name, 1, local);
   EXPECT_FALSE(Enabled());
-  auto client = std::make_shared<rclcpp::Node>("mixed_client");
+  auto client = std::make_shared<rclcpp::Node>(name + "_client");
   std::atomic<bool> observed{false};
   auto sub = client->create_subscription<std_msgs::msg::UInt8MultiArray>(
-      "analog_a0/observation", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
+      prefix + "analog_a0/observation", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
         robot::perception::PerceptionPacket p;
         if (p.ParseFromArray(msg->data.data(), msg->data.size()) && p.scalar().usable() &&
             p.scalar().boot_id() == 1234)
           observed = true;
       });
-  auto enable = client->create_publisher<std_msgs::msg::Bool>("mixed_stepper/torque", 1);
-  auto stop = client->create_client<std_srvs::srv::Trigger>("/mixed_integration/estop");
+  auto enable = client->create_publisher<std_msgs::msg::Bool>(actuator + "/torque", 1);
+  auto stop = client->create_client<std_srvs::srv::Trigger>("/" + name + "/estop");
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
   executor.add_node(runtime);
   executor.add_node(client);
   std::thread spin([&] { executor.spin(); });
   EXPECT_TRUE(
       Await([&] { return observed.load() && enable->get_subscription_count() > 0; }, 5000ms));
+  const std::string recorder = std::filesystem::absolute("tools/serial/record_scalar").string();
+  const std::string capture = std::string(getenv("TEST_TMPDIR")) + "/scalar.jsonl";
+  std::vector<std::string> args = {recorder,
+                                   "--topic",
+                                   prefix + "analog_a0/observation",
+                                   "--sensor",
+                                   "analog_a0",
+                                   "--seconds",
+                                   "3",
+                                   "--output",
+                                   capture};
+  std::vector<char*> argv;
+  for (auto& arg : args) argv.push_back(arg.data());
+  argv.push_back(nullptr);
+  pid_t child;
+  const int spawned = posix_spawn(&child, recorder.c_str(), nullptr, nullptr, argv.data(), environ);
+  EXPECT_EQ(spawned, 0);
+  if (spawned == 0) {
+    int status = 0;
+    EXPECT_EQ(waitpid(child, &status, 0), child);
+    EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    std::ifstream file(capture);
+    std::string line;
+    bool metadata = false;
+    while (std::getline(file, line)) {
+      if (line.find("\"boot_id\": 1234") != std::string::npos &&
+          line.find("\"sensor\": \"analog_a0\"") != std::string::npos &&
+          line.find("\"unit\": 65535") != std::string::npos)
+        metadata = true;
+    }
+    EXPECT_TRUE(metadata);
+  }
   std_msgs::msg::Bool enabled;
   enabled.data = true;
   enable->publish(enabled);
   EXPECT_TRUE(Await([&] { return Enabled(); }));
   auto result = stop->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
   EXPECT_EQ(result.wait_for(2s), std::future_status::ready);
-  if (result.wait_for(0s) == std::future_status::ready) EXPECT_TRUE(result.get()->success);
+  if (result.wait_for(0s) == std::future_status::ready) {
+    EXPECT_TRUE(result.get()->success);
+  }
   EXPECT_TRUE(Await([&] { return !Enabled(); }));
   executor.cancel();
   spin.join();

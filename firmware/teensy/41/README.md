@@ -228,3 +228,7 @@ exhaustion faults outputs locally without dispatching the unreplyable request.
 The 20 ms serial adapter TX-fault path remains active. All these claims have
 software tests; ADC voltage/accuracy, physical GPIO/stop timing and endurance are
 still unqualified. Nothing in build/test commands flashes the board.
+
+Use the [mixed serial qualification kit](../../../docs/SERIAL_COMM_QUALIFICATION.md)
+for artifact/source manifests, the frozen workload, metadata recording, deliberate
+disabled recovery and the outstanding physical evidence gates.

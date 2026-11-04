@@ -5,6 +5,11 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
+  scalar/health recording to JSONL. It preserves validity and separate clock
+  domains, opens no board and sends no commands. See the
+  [serial qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
+
 - [`mcp/`](mcp/README.md) — seven read-only stdio MCP tools for config-free factory discovery,
   per-call protobuf validation and device inspection, and optional private
   runtime snapshots. The adapter never controls runtime or certifies hardware

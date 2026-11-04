@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | P1–P5 implemented and software-tested. Physical qualification remains open; P6 separates software evidence from bench measurements. |
+| Status | P1–P5 implemented and software-tested. P6 software qualification kit implemented; physical measurements and release qualification remain open. |
 | Planning baseline | Committed checkout `258e3e4` on `kangjin/serial-comm-improve`. |
 | Scope decision | Include continuous sensor streaming and actuator commands on the same MCU serial connection, plus the demo's Feetech and LDS01 paths. |
 | Created / last reviewed | 2026-11-03 |
@@ -319,7 +319,7 @@ software acceptance evidence and stay reviewable; passing an early phase does no
 | P3 — Host coordinator and streams | Implemented: continuous reception, shared scheduling, bounded retries, reserved stop retirement/interlock, typed subscriptions/caches, and deliberate reconnect. | P1, P2. | Both Compose services pass 53 targets; detailed evidence below. |
 | P4 — Production mixed firmware | Implemented: selected Teensy 4.1 ADC binding, bounded acquisition/dispatch, TX arbitration, subscription/resource ownership, and explicit communication/target watchdogs. | P1 and frozen host/firmware contracts. | Both Compose services pass 55 targets; actual mixed firmware service loop tested with simulated ADC/GPIO/clock faults and backpressure. Pinned PlatformIO candidate cross-build succeeds. Physical timing and stopping remain unqualified. |
 | P5 — End-to-end runtime integration | Implemented: FRAME_STREAM board coordinator, explicit watchdog policy, reserved heartbeat, generic scalar/perception binding, metadata publication, MCU_BUS process and reference preset. | P3, P4. | Production board/perception factories and ROS node run over a PTY against the actual mixed firmware loop. Tests cover holding outputs beyond communication timeout, independent target expiry, invalid ADC samples, shared consumers, reserved stop during lost replies, reboot/reopen, retained handles and disabled startup. Independent memory-link tests reuse the same protocol/stream logic. |
-| P6 — Qualification and release evidence | Frozen artifacts, hardware procedures, measured workload/fault results, operator recovery guide, and support matrix. | P5 and deliberate hardware authorization/setup. | Bench metrics plus applicable Docker services; physical and simulated claims recorded separately. |
+| P6 — Qualification and release evidence | Software kit implemented: build-only artifact/source/package/image manifests, repeated hardware-free fault/soak report, bounded scalar recorder, disabled recovery preset/probe, frozen workload and operator/support matrix. | P5; bench execution requires deliberate hardware authorization/setup. | [Qualification procedure](SERIAL_COMM_QUALIFICATION.md). Software results cannot close physical acquisition, USB throughput, output/motor stopping, or endurance gates. Exact sensor part, wiring, drive/load and measured bench results remain required. |
 
 P3 is split into reviewable increments:
 
@@ -405,16 +405,17 @@ firmware flashing or physical actuation.
 | Mixed streaming and control scope | Agreed: required on the same MCU connection. |
 | Protocol ownership | Reuse one transport-independent MCU coordinator/session; extend the existing JoshuaWire contract. |
 | Receive ownership | One event-driven owner per physical serial link; no competing synchronous receive path in streaming mode. |
-| Live data overflow | Proposed: bounded latest-per-stream cache with explicit loss counters; bounded recording rings only when requested. |
-| Recovery | Proposed: deliberate reconnect/reconciliation; never implicit actuator enable or replay of uncertain actions. |
+| Live data overflow | Implemented: bounded latest-per-stream cache with explicit loss counters; bounded recording rings only when requested. |
+| Recovery | Implemented: deliberate reconnect/reconciliation; never implicit actuator enable or replay of uncertain actions. |
 | Wire/version and typed payload | Selected for P1: additive SENSOR v1.1 operations 1–3 and firmware-to-host STREAM_SAMPLE kind 0x11 within revision-4 framing. First payload is scalar-f32 with existing measurement metadata; token is the SUBSCRIBE message ID, scoped by session/function. See [normative contract](JOSHUA_WIRE.md#opt-in-sensor-profile-11-streaming). |
-| Hardware and numerical budgets | Open at P0: exact device kit, native USB versus UART, rates, capacities, and acceptance bounds. |
+| Hardware and numerical budgets | Selected Teensy 4.1 native USB + scalar A0 reference, rates and software budgets in P4/P5 and the qualification procedure. Exact sensor part, drive/load and measured physical acceptance remain bench inputs. |
 | API/config migration | P2 freezes internal cancellation/publication results, serial `io_policy`, owner lifetime, and read-only factory diagnostics while preserving capability facades. P3a selects the separate FRAME_STREAM capability and frame_policy with exclusive receive mode; P3b/P3c select typed pull observations, reference-counted subscriptions and interlocked deliberate reconnect; existing presets inherit documented software defaults. |
 
 Treat remaining P0 items as design work before their dependent implementation.
 P1 supplies codecs and a portable subscription lifecycle, not production
 streaming. Queue/rate enforcement, host routing/scheduling, physical sensor
-selection, runtime integration, and measured qualification remain open.
+selection and runtime integration are implemented for the selected Teensy scalar
+candidate; measured physical qualification remains open.
 
 ### P3b selected coordinator contract
 
