@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,12 +23,22 @@ class SerialIoOwner {
   enum class InputFlushPolicy { kPreserve, kDiscard };
   enum class Publication { kNotSent, kMayHaveReachedDevice };
   using ResponseBoundary = std::function<absl::StatusOr<bool>(uint8_t)>;
+  struct Receiver {
+    // Comm framing only, bounded/nonblocking, no owner reentry/destruction.
+    // Storage is borrowed for the call. Failure faults the physical owner.
+    std::function<absl::Status(const uint8_t*, size_t)> bytes;
+    std::function<void(absl::Status)> stopped;
+    size_t max_write_bytes = 0;
+  };
   struct Request {
     std::vector<uint8_t> bytes;
     // Exact response length, or byte limit when consume is set. Partial bytes
     // remain in Result on failure; legacy Read() facades discard them on error.
     size_t response_bytes = 0;
     std::chrono::milliseconds timeout{0};
+    // Optional upper bound from a caller's complete operation budget. Never
+    // renew it when copying/admitting an already prepared frame.
+    std::optional<std::chrono::steady_clock::time_point> deadline;
     std::chrono::milliseconds read_idle_timeout{0};  // Zero disables idle limit.
     InputFlushPolicy input = InputFlushPolicy::kPreserve;
     // Comm framing only: bounded/nonblocking, owned captures, no owner reentry
@@ -64,7 +75,8 @@ class SerialIoOwner {
       const std::string& path,
       int baudrate,
       std::chrono::milliseconds post_open_settle = std::chrono::milliseconds(0),
-      SerialIoOptions options = {});
+      SerialIoOptions options = {},
+      std::optional<Receiver> receiver = std::nullopt);
   ~SerialIoOwner();
   SerialIoOwner(const SerialIoOwner&) = delete;
   SerialIoOwner& operator=(const SerialIoOwner&) = delete;

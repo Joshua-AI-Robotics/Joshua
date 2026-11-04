@@ -90,6 +90,27 @@ TEST_F(SerialIoOwnerTest, QueuedDeadlineExpiresDuringAnotherOperationWithoutPubl
   EXPECT_TRUE(absl::IsCancelled(first.Wait().status));
 }
 
+TEST_F(SerialIoOwnerTest, AbsoluteDeadlineSurvivesAdmissionAndBoundsQueuedWait) {
+  auto active = owner->Submit(Request({1}, 1, 30s));
+  ASSERT_TRUE(Observe({1}));
+  auto request = Request({2}, 0, 30s);
+  request.deadline = Clock::now() + 40ms;
+  const auto start = Clock::now();
+  auto result = owner->Submit(request).Wait();
+  EXPECT_TRUE(absl::IsDeadlineExceeded(result.status));
+  EXPECT_EQ(result.publication, Owner::Publication::kNotSent);
+  EXPECT_LT(Clock::now() - start, 1s);
+  request.deadline = Clock::now() - 1ms;
+  auto rejected = owner->Submit(request);
+  EXPECT_TRUE(rejected.Ready());
+  EXPECT_TRUE(absl::IsDeadlineExceeded(rejected.Wait().status));
+  EXPECT_EQ(rejected.Wait().bytes_written, 0);
+  EXPECT_FALSE(active.Ready());
+  ExpectUnsent();
+  active.Cancel();
+  active.Wait();
+}
+
 TEST_F(SerialIoOwnerTest, CancellationDistinguishesUnsentAndPublishedRequests) {
   auto first = owner->Submit(Request({1}));
   ASSERT_TRUE(Observe({1}));
@@ -289,6 +310,36 @@ TEST_F(SerialIoOwnerTest, SeparatePortsMakeProgressIndependently) {
   close(second_master);
   blocked.Cancel();
   EXPECT_TRUE(absl::IsCancelled(blocked.Wait().status));
+}
+
+TEST_F(SerialIoOwnerTest, ContinuousReceiveRejectsOtherReadsAndPartialFrameRetirementFaults) {
+  owner.reset();
+  auto stopped = std::make_shared<std::promise<absl::Status>>();
+  Owner::Receiver receiver;
+  receiver.max_write_bytes = 65536;  // Generic owner fixture, not a JW frame size.
+  receiver.bytes = [](const uint8_t*, size_t) { return absl::OkStatus(); };
+  receiver.stopped = [stopped](absl::Status status) { stopped->set_value(std::move(status)); };
+  auto opened = Owner::Open(path, 230400, 0ms, {}, receiver);
+  ASSERT_TRUE(opened.ok()) << opened.status();
+  owner = std::move(*opened);
+  EXPECT_TRUE(absl::IsFailedPrecondition(owner->Submit(Request({}, 1)).Wait().status));
+  auto flush = Request({}, 0);
+  flush.input = Owner::InputFlushPolicy::kDiscard;
+  EXPECT_TRUE(absl::IsFailedPrecondition(owner->Submit(flush).Wait().status));
+  auto partial = owner->Submit(Request(Bytes(65536, 0x42), 0, 2s));
+  ASSERT_TRUE(Observe({0x42}));
+  auto next = owner->Submit(Request({0x99}, 0));
+  partial.Cancel();
+  const auto result = partial.Wait();
+  EXPECT_TRUE(absl::IsUnavailable(result.status));
+  EXPECT_GT(result.bytes_written, 0);
+  EXPECT_LT(result.bytes_written, 65536);
+  EXPECT_EQ(result.publication, Owner::Publication::kMayHaveReachedDevice);
+  const auto unsent = next.Wait();
+  EXPECT_TRUE(absl::IsUnavailable(unsent.status));
+  EXPECT_EQ(unsent.publication, Owner::Publication::kNotSent);
+  EXPECT_TRUE(absl::IsUnavailable(stopped->get_future().get()));
+  EXPECT_EQ(owner->Snapshot().state, SerialLinkState::kFaulted);
 }
 
 TEST_F(SerialIoOwnerTest, InvalidRequestsFailBeforePublication) {

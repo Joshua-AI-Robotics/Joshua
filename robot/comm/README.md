@@ -16,13 +16,13 @@ Consumers never switch on `comm_type` and never construct mechanism adapters.
 `CommFactory` validates the requested combination, opens or reuses the concrete
 link, and returns the configured capability in `CommTransport`.
 
-Current combinations are:
+Current combinations are (continuous frames are a host integration capability):
 
-| Mechanism | Byte stream | Message | Cyclic |
-| --- | --- | --- | --- |
-| Serial | yes | yes | no |
-| UDP | no | planned | no |
-| EtherCAT | no | JW paired only | JW paired only |
+| Mechanism | Byte stream | Message | Cyclic | Continuous frames |
+| --- | --- | --- | --- | --- |
+| Serial | yes | yes | no | JW integration |
+| UDP | no | planned | no | no |
+| EtherCAT | no | JW paired only | JW paired only | no |
 
 `ByteStream` provides ordered bytes without boundaries.
 [`MessageTransport`](interfaces/message_transport.h) exposes only `Send` and
@@ -153,12 +153,43 @@ parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`. JoshuaWire
 CRC, version and session correlation remain in the board/session layer.
 
-There must be one receive owner per port. The P3 shared continuous receiver
-must dispatch both replies and unsolicited sensor samples; it must not compete
-with synchronous reads on the same port. Request/reply input flushing discards
-samples, so it is unsuitable for that receive mode. The P2 owner preserves an
-explicit input policy but does not implement continuous reception or
-allow independent readers to share incoming bytes safely.
+### Continuous frame reception (P3a)
+
+[`FrameStreamTransport`](interfaces/frame_stream_transport.h) is a separate
+complete-frame capability for one protocol coordinator. `FRAME_STREAM` selects it
+through `CommFactory`; it cannot be obtained as `MessageTransport` or
+`ByteStream`. Existing presets and board/session paths remain request-only. The
+shared MCU coordinator, subscription management, priority scheduler and deliberate
+reconnect reconciliation remain subsequent P3 work.
+
+[`JoshuaWireFrameStream`](serial/joshua_wire_frame_stream.cc) runs the existing
+bounded decoder on the same physical I/O worker. It receives between writes,
+without input flushing, and validates revision/length/CRC. Receive work is bounded
+per poll iteration so incoming telemetry cannot indefinitely defer a writable
+frame. There is no additional reader thread or worker per consumer. Framed mode
+rejects raw reads, request/response reads and input flushes; factory checks prevent
+mixing either receive mode on one physical port, including aliases.
+
+`WriteFrame` accepts one valid host frame and an absolute deadline, retains the
+configured write cap, and reports bytes accepted by the OS. It does not wait for
+a reply or allocate protocol IDs. A partial-write failure retires the link before
+another frame can be written. Complete-frame bytes already buffered by the OS
+cannot be recalled. `Receive` waits until its deadline; `Interrupt` retains one
+pending scheduling wake without discarding frames. Close is terminal and wakes
+waiters. Exactly one coordinator owns receive consumption and terminal close.
+
+Reply storage is separate from notification storage and has priority on receive.
+Notification arrival coalesces the same session/token/function; a full queue
+replaces its oldest whole notification. Receipt timestamps survive queueing and
+coalescing. Reply overflow faults the link, invalidates queued frames and wakes
+waiters. Bounded snapshots expose assembly/queue occupancy, received/malformed
+frames, partial-frame expiry, telemetry loss, and reply overflows. An incomplete
+frame's idle expiry is applied and counted on the next input byte.
+
+This layer recognizes only the notification envelope kind; it does not validate
+sensor payload/schema, live subscription, boot, sequence or freshness. Those
+remain shared protocol responsibilities. No frame can satisfy a command until
+that coordinator validates correlation. See [configuration and defaults](../../config/README.md#continuous-frame-capability-p3a).
 
 The validated interfaces configure timeout policy in adapters rather than adding
 a deadline argument to every message call. The factory owns concrete adapters;

@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implementation authorized 2026-11-03; P1 protocol foundation implemented and software-tested. Production streaming and hardware qualification remain open. |
+| Status | Implementation authorized 2026-11-03; P1/P2 implemented and software-tested; P3a continuous-frame capability implemented and software-tested. Production streaming and hardware qualification remain open. |
 | Planning baseline | Committed checkout `258e3e4` on `kangjin/serial-comm-improve`. |
 | Scope decision | Include continuous sensor streaming and actuator commands on the same MCU serial connection, plus the demo's Feetech and LDS01 paths. |
 | Created / last reviewed | 2026-11-03 |
@@ -210,6 +210,27 @@ omitted fields compare equally. The P2 owner does not continuously consume idle
 input, route samples, own protocol sessions, or provide reconnect reconciliation.
 Those remain P3 requirements before mixed telemetry/control is enabled.
 
+P3a selects a separate `FRAME_STREAM` capability, represented by
+`FrameStreamTransport` in the public comm factory. It provides complete-frame
+writes with absolute deadlines and typed byte progress, interruptible receive,
+terminal close, original receipt timestamps, and bounded diagnostic snapshots.
+It has one consumer: the forthcoming shared MCU coordinator, which will reuse
+the existing session/ID policy. It is not a subscription API or an alternative
+session allocator. Existing raw/vendor and request-only message consumers keep
+their current capabilities; receive modes cannot share a physical port.
+
+The serial implementation feeds the existing revision-4 decoder on the P2 owner
+and never flushes input in this mode. Frame assembly idle and separate reply /
+notification capacities are configured through `serial_config.frame_policy`.
+[Defaults and bounds](../config/README.md#continuous-frame-capability-p3a) are
+software limits, not measured device throughput or timing. Replies precede
+telemetry. Only complete, unconsumed notifications may be coalesced by envelope
+identity or dropped oldest on overload; every such loss increments a counter.
+Reply overflow faults the link. A partial frame-write failure retires the owner
+before another frame can be published. Profile/schema/boot/freshness validation,
+request correlation, admission priorities and unknown-outcome policy stay above
+this link. No production firmware advertises streaming as a result of P3a.
+
 ### 4.4 Buffering and subscription lifetime
 
 The proposed default for live observation is one latest sample per stream, with
@@ -285,21 +306,40 @@ the hardware lifecycle.
 ## 5. Delivery sequence and review gates
 
 The operator authorized implementation on 2026-11-03. Software protocol choices
-for P1 and the P2 owner/policy increment are recorded below. Physical hardware,
-performance budgets, and later API/configuration decisions remain gates for their corresponding
-integration phases. Each increment must include its own software acceptance
-evidence and stay
-reviewable; passing an early phase does not imply the complete branch is ready.
+for P1, P2 owner/policy, and P3a continuous reception are recorded below. Physical hardware,
+performance budgets, and later API/configuration decisions remain gates for
+their corresponding integration phases. Each increment must include its own
+software acceptance evidence and stay reviewable; passing an early phase does not imply the complete branch is ready.
 
 | Phase | Deliverable | Dependencies | Completion evidence |
 | --- | --- | --- | --- |
 | P0 — Increment design agreement | Freeze the decisions needed by each increment: wire/version/schema for P1, public seams and I/O policy for P2/P3, hardware/workload/watchdogs before production integration and qualification. | This plan and existing normative contracts. | Record resolved contracts and remaining dependent gates. P1 protocol choices are selected; later hardware, scheduling, and API/config decisions remain open. |
 | P1 — Protocol extension | Implemented: normative streaming contract, capability negotiation helper, codecs, portable subscription lifecycle, and compatibility fixtures. | P0 protocol choices. | Golden frames, request/sample namespace collision, malformed data, unsupported capability/version, exact retries after lost create/cancel replies, reset invalidation, and host query gating. Both Compose services passed all 50 targets on 2026-11-03. |
 | P2 — Serial I/O foundation | Implemented: one nonblocking owner, configurable total/idle deadlines and bounded admission, internal cancellation/publication results, port identity/lifetime, raw/vendor compatibility, and read-only diagnostics. | P0 owner/policy choices; retains request-only behavior. | PTY coverage for queued expiry/cancel without publication, partial reads/writes, backpressure, disconnect, aliases, shutdown races and generation retirement, independent ports, and fragmented full lidar/vendor responses. Both Compose services passed all 51 targets on 2026-11-03. Physical timing remains unqualified. |
-| P3 — Host coordinator and streams | Shared scheduling/session owner, frame routing, subscriptions, bounded caches, unknown outcomes, priority/fairness, and reconnect. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
+| P3 — Host coordinator and streams | In progress: P3a implements continuous frame reception and isolated reply/telemetry storage. Shared scheduling/session owner, typed subscriptions/caches, unknown outcomes, priority/fairness, and reconnect remain open. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
 | P4 — Production mixed firmware | Selected MCU binding, one typed sensor backend, bounded acquisition/dispatch, TX arbitration, subscription state, and watchdog/fault policy. | P1 and frozen host/firmware contracts. | Production firmware service loop with simulated sensor/GPIO/clock faults; no blocking acquisition, control/stop starvation, or implicit enable. |
 | P5 — End-to-end runtime integration | Actuator and sensor handles in one bus-owning process; config/perception/ROS integration, firmware artifact, preset, and diagnostic recording. | P3, P4. | Same serial connection runs streaming and actuation through production paths; Feetech/LDS01 regressions pass; second link fixture reuses protocol/stream logic. |
 | P6 — Qualification and release evidence | Frozen artifacts, hardware procedures, measured workload/fault results, operator recovery guide, and support matrix. | P5 and deliberate hardware authorization/setup. | Bench metrics plus applicable Docker services; physical and simulated claims recorded separately. |
+
+P3 is split into reviewable increments:
+
+1. **P3a — Continuous frame capability:** one physical receiver, bounded framing,
+   separate reply/telemetry storage, whole-frame write failure behavior, factory
+   lease/mode checks, and PTY evidence. This is infrastructure only; existing
+   runtime board consumers do not yet select it.
+   Implemented and software-tested: both Compose services passed all 52 targets
+   on 2026-11-03. Tests cover idle reception, interleaving and same-number
+   reply/sample isolation, overload/coalescing order, write progress under
+   telemetry, partial-write retirement, absolute deadlines, aliases, and shutdown.
+2. **P3b — Shared coordinator (open):** reuse the existing session/ID policy above this
+   capability; bounded command admission, reserved stop capacity, frame routing,
+   exact retries within one total budget, unknown outcomes, and priority/fairness.
+3. **P3c — Subscription and recovery lifecycle (open):** compatible consumer sharing,
+   typed latest-sample validation/loss/freshness, uncertain create/cancel handling,
+   old-generation invalidation, deliberate reconnect, and a second link fixture.
+
+P3 is complete only when all three increments meet the original acceptance
+criteria. P3a does not close the H integration gate or enable production streaming.
 
 The ROS bus-owning process and generic sensor binding are required dependencies
 for the demo, even though they live above serial. Track them explicitly rather
@@ -358,7 +398,7 @@ firmware flashing or physical actuation.
 | Recovery | Proposed: deliberate reconnect/reconciliation; never implicit actuator enable or replay of uncertain actions. |
 | Wire/version and typed payload | Selected for P1: additive SENSOR v1.1 operations 1–3 and firmware-to-host STREAM_SAMPLE kind 0x11 within revision-4 framing. First payload is scalar-f32 with existing measurement metadata; token is the SUBSCRIBE message ID, scoped by session/function. See [normative contract](JOSHUA_WIRE.md#opt-in-sensor-profile-11-streaming). |
 | Hardware and numerical budgets | Open at P0: exact device kit, native USB versus UART, rates, capacities, and acceptance bounds. |
-| API/config migration | P2 freezes internal cancellation/publication results, serial `io_policy`, owner lifetime, and read-only factory diagnostics while preserving capability facades. Subscription API and coordinator/reconnect policy remain P3 gates; existing presets inherit documented software defaults. |
+| API/config migration | P2 freezes internal cancellation/publication results, serial `io_policy`, owner lifetime, and read-only factory diagnostics while preserving capability facades. P3a selects the separate FRAME_STREAM capability and frame_policy with exclusive receive mode; subscription API and coordinator/reconnect policy remain P3b/P3c gates; existing presets inherit documented software defaults. |
 
 Treat remaining P0 items as design work before their dependent implementation.
 P1 supplies codecs and a portable subscription lifecycle, not production

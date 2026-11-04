@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/serial/serial_frame_options.h"
 #include "robot/comm/serial/serial_io_options.h"
 
 namespace robot::comm {
@@ -38,6 +39,15 @@ inline absl::Status ValidateSerialOptions(const SerialIoOptions& p) {
   return absl::OkStatus();
 }
 
+inline SerialFrameOptions SerialFramePolicyOptions(const SerialConfig& config) {
+  SerialFrameOptions options;
+  const auto& p = config.frame_policy();
+  if (p.has_frame_idle_timeout_ms()) options.frame_idle_timeout_ms = p.frame_idle_timeout_ms();
+  if (p.has_max_reply_frames()) options.max_reply_frames = p.max_reply_frames();
+  if (p.has_max_notification_frames())
+    options.max_notification_frames = p.max_notification_frames();
+  return options;
+}
 inline absl::Status ValidateSerialCommConfig(const Comm& comm) {
   if (comm.comm_type() != SERIAL || !comm.has_serial_config()) {
     return absl::InvalidArgumentError("SERIAL comm requires serial_config.");
@@ -48,6 +58,15 @@ inline absl::Status ValidateSerialCommConfig(const Comm& comm) {
   if (config.port().empty() || config.baudrate() == 0) {
     return absl::InvalidArgumentError("Serial comm requires a port and baudrate.");
   }
+  if (comm.transport_type() == FRAME_STREAM) {
+    if (config.message_adapter() != JOSHUA_WIRE || config.has_exchange_timeout_ms() ||
+        SerialOptions(config).max_transfer_bytes < 96)
+      return absl::InvalidArgumentError(
+          "FRAME_STREAM requires JOSHUA_WIRE, no exchange_timeout_ms, and transfer limit >=96");
+    return ValidateSerialFrameOptions(SerialFramePolicyOptions(config));
+  }
+  if (config.has_frame_policy())
+    return absl::InvalidArgumentError("frame_policy requires FRAME_STREAM");
   if (comm.transport_type() == BYTE_STREAM) {
     if (config.message_adapter() != SERIAL_MESSAGE_ADAPTER_UNSPECIFIED ||
         config.has_exchange_timeout_ms()) {

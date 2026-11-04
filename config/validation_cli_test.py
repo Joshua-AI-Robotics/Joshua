@@ -364,6 +364,8 @@ robot {
                             "//robot/comm/serial:serial_device_identity.h",
                             "//robot/comm/serial:serial_io_options",
                             "//robot/comm/serial:serial_io_options.h",
+                            "//robot/comm/serial:serial_frame_options",
+                            "//robot/comm/serial:serial_frame_options.h",
                         },
                         "validator depends on hardware communication implementation",
                     )
