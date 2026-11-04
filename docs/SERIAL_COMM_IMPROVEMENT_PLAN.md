@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implementation authorized 2026-11-03; P1/P2 implemented and software-tested; P3a continuous-frame capability implemented and software-tested. Production streaming and hardware qualification remain open. |
+| Status | Implementation authorized 2026-11-03; P1/P2 implemented and software-tested; P3a reception and P3b shared coordinator implemented and software-tested. Production streaming and hardware qualification remain open. |
 | Planning baseline | Committed checkout `258e3e4` on `kangjin/serial-comm-improve`. |
 | Scope decision | Include continuous sensor streaming and actuator commands on the same MCU serial connection, plus the demo's Feetech and LDS01 paths. |
 | Created / last reviewed | 2026-11-03 |
@@ -316,7 +316,7 @@ software acceptance evidence and stay reviewable; passing an early phase does no
 | P0 — Increment design agreement | Freeze the decisions needed by each increment: wire/version/schema for P1, public seams and I/O policy for P2/P3, hardware/workload/watchdogs before production integration and qualification. | This plan and existing normative contracts. | Record resolved contracts and remaining dependent gates. P1 protocol choices are selected; later hardware, scheduling, and API/config decisions remain open. |
 | P1 — Protocol extension | Implemented: normative streaming contract, capability negotiation helper, codecs, portable subscription lifecycle, and compatibility fixtures. | P0 protocol choices. | Golden frames, request/sample namespace collision, malformed data, unsupported capability/version, exact retries after lost create/cancel replies, reset invalidation, and host query gating. Both Compose services passed all 50 targets on 2026-11-03. |
 | P2 — Serial I/O foundation | Implemented: one nonblocking owner, configurable total/idle deadlines and bounded admission, internal cancellation/publication results, port identity/lifetime, raw/vendor compatibility, and read-only diagnostics. | P0 owner/policy choices; retains request-only behavior. | PTY coverage for queued expiry/cancel without publication, partial reads/writes, backpressure, disconnect, aliases, shutdown races and generation retirement, independent ports, and fragmented full lidar/vendor responses. Both Compose services passed all 51 targets on 2026-11-03. Physical timing remains unqualified. |
-| P3 — Host coordinator and streams | In progress: P3a implements continuous frame reception and isolated reply/telemetry storage. Shared scheduling/session owner, typed subscriptions/caches, unknown outcomes, priority/fairness, and reconnect remain open. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
+| P3 — Host coordinator and streams | In progress: P3a implements continuous frame reception and isolated reply/telemetry storage. P3b implements shared session scheduling, bounded retries, reserved stop retirement and interlock. Typed subscriptions/caches and reconnect remain P3c work. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
 | P4 — Production mixed firmware | Selected MCU binding, one typed sensor backend, bounded acquisition/dispatch, TX arbitration, subscription state, and watchdog/fault policy. | P1 and frozen host/firmware contracts. | Production firmware service loop with simulated sensor/GPIO/clock faults; no blocking acquisition, control/stop starvation, or implicit enable. |
 | P5 — End-to-end runtime integration | Actuator and sensor handles in one bus-owning process; config/perception/ROS integration, firmware artifact, preset, and diagnostic recording. | P3, P4. | Same serial connection runs streaming and actuation through production paths; Feetech/LDS01 regressions pass; second link fixture reuses protocol/stream logic. |
 | P6 — Qualification and release evidence | Frozen artifacts, hardware procedures, measured workload/fault results, operator recovery guide, and support matrix. | P5 and deliberate hardware authorization/setup. | Bench metrics plus applicable Docker services; physical and simulated claims recorded separately. |
@@ -331,9 +331,13 @@ P3 is split into reviewable increments:
    on 2026-11-03. Tests cover idle reception, interleaving and same-number
    reply/sample isolation, overload/coalescing order, write progress under
    telemetry, partial-write retirement, absolute deadlines, aliases, and shutdown.
-2. **P3b — Shared coordinator (open):** reuse the existing session/ID policy above this
+2. **P3b — Shared coordinator (implemented):** reuse the existing session/ID policy above this
    capability; bounded command admission, reserved stop capacity, frame routing,
    exact retries within one total budget, unknown outcomes, and priority/fairness.
+   Both Compose services passed all 53 targets on 2026-11-03. Memory-link and
+   production serial/PTy fixtures cover shared reset/IDs, exact retries, bounded
+   admission/expiry, reserved stop retirement/interlock, telemetry isolation,
+   deadline-slack fairness, disconnect and terminal teardown.
 3. **P3c — Subscription and recovery lifecycle (open):** compatible consumer sharing,
    typed latest-sample validation/loss/freshness, uncertain create/cancel handling,
    old-generation invalidation, deliberate reconnect, and a second link fixture.
@@ -404,3 +408,28 @@ Treat remaining P0 items as design work before their dependent implementation.
 P1 supplies codecs and a portable subscription lifecycle, not production
 streaming. Queue/rate enforcement, host routing/scheduling, physical sensor
 selection, runtime integration, and measured qualification remain open.
+
+### P3b selected coordinator contract
+
+The shared `JoshuaWireCoordinator` owns a bounded queue and one existing
+`JoshuaWireSession`, reused through a comm-neutral exchange hook. No new allocator
+or retry cache is introduced. One protocol worker per physical duplex lease
+routes input during exchanges and while idle; application callbacks stay outside.
+`Acquire` shares the same coordinator and first reset across local consumers.
+A retiring lease remains reserved until close finishes. Close sends a bounded
+fresh disabled reset when the link is healthy, closes it, and invalidates queued
+work. Faults never automatically reopen or replay configuration/targets.
+
+`Board.joshua_wire_host_policy` freezes finite total/attempt/poll budgets, exact
+retry count, count/byte admission, scheduling guard/burst, and bounded raw
+notification storage. See the config reference for defaults and validation.
+ESTOP reserves one slot independently of ordinary admission. It retires an
+ordinary reply wait, never a partially written frame, and publishes a higher ID.
+All further mutations are interlocked until deliberate disabled reset/reconnect;
+queries/recovery remain available. Uncertainty is tracked by the existing session
+and is not cleared by a query or stop acknowledgment.
+
+Priority/fairness uses complete remaining lower-priority budgets and control
+slack, not an assumed baud-derived response duration. No feasible capacity is
+inferred from software defaults. Typed stream lifecycle, schema/clock/boot checks,
+subscription reconciliation and deliberate reconnect remain P3c dependencies.

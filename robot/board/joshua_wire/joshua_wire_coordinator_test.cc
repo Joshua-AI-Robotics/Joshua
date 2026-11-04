@@ -1,0 +1,454 @@
+// Transport-independent protocol fixture. No devices or serial implementation.
+#include "robot/board/joshua_wire/joshua_wire_coordinator.h"
+
+#include <fcntl.h>
+#include <poll.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include <condition_variable>
+#include <deque>
+#include <future>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include "firmware/common/joshua_wire.h"
+#include "firmware/common/joshua_wire_profiles.h"
+#include "firmware/common/joshua_wire_sensor_stream.h"
+#include "firmware/common/joshua_wire_stream.h"
+#include "gtest/gtest.h"
+#include "robot/comm/factory/comm_factory.h"
+
+namespace robot::board {
+namespace {
+using namespace std::chrono_literals;
+using Bytes = std::vector<uint8_t>;
+using Link = robot::comm::FrameStreamTransport;
+using Coordinator = JoshuaWireCoordinator;
+using Clock = Link::Clock;
+class MemoryLink : public Link {
+ public:
+  mutable std::mutex mutex;
+  std::condition_variable changed;
+  std::deque<ReceivedFrame> incoming;
+  std::vector<Bytes> writes;
+  bool interrupted = false;
+  absl::Status failure;
+  uint8_t blocked_command = 0;
+  uint8_t blocked_operation = 255;
+  unsigned drop = 0;
+  std::function<void(const jw_frame_t&)> on_write;
+  static Bytes Reply(const jw_frame_t& request, jw_execution_t execution = JW_EXECUTION_COMPLETE) {
+    Bytes out(JW_MAX_FRAME_LEN);
+    const uint8_t payload[] = {JW_STATUS_OK, static_cast<uint8_t>(execution)};
+    out.resize(jw_encode_response(out.data(), out.size(), &request, payload, 2));
+    return out;
+  }
+  WriteResult WriteFrame(absl::Span<const uint8_t> bytes, Clock::time_point deadline) override {
+    std::unique_lock lock(mutex);
+    if (!failure.ok()) return {failure, 0};
+    if (Clock::now() >= deadline) return {absl::DeadlineExceededError("Memory write expired"), 0};
+    jw_frame_t frame{};
+    if (jw_decode_frame(bytes.data(), bytes.size(), &frame) != JW_RESULT_OK)
+      return {absl::DataLossError("Invalid test frame"), 0};
+    writes.emplace_back(bytes.begin(), bytes.end());
+    if (on_write) on_write(frame);
+    jw_profile_request_t profile{};
+    const bool blocked =
+        frame.cmd == blocked_command ||
+        (frame.cmd == JW_CMD_PROFILE &&
+         jw_decode_profile_request(frame.payload, frame.payload_len, &profile) == JW_RESULT_OK &&
+         profile.operation == blocked_operation);
+    if (drop)
+      --drop;
+    else if (!blocked)
+      incoming.push_back({Reply(frame), Clock::now()});
+    lock.unlock();
+    changed.notify_all();
+    return {absl::OkStatus(), bytes.size()};
+  }
+  absl::StatusOr<ReceivedFrame> Receive(Clock::time_point deadline) override {
+    std::unique_lock lock(mutex);
+    if (!changed.wait_until(
+            lock, deadline, [&] { return !failure.ok() || interrupted || !incoming.empty(); }))
+      return absl::DeadlineExceededError("Memory receive expired");
+    if (!failure.ok()) return failure;
+    if (interrupted) {
+      interrupted = false;
+      return absl::CancelledError("wake");
+    }
+    auto frame = std::move(incoming.front());
+    incoming.pop_front();
+    return frame;
+  }
+  void Interrupt() override {
+    {
+      std::lock_guard lock(mutex);
+      interrupted = true;
+    }
+    changed.notify_all();
+  }
+  absl::Status status() const override {
+    std::lock_guard lock(mutex);
+    return failure;
+  }
+  absl::Status Close() override {
+    {
+      std::lock_guard lock(mutex);
+      if (failure.ok()) failure = absl::CancelledError("Memory link closed");
+    }
+    changed.notify_all();
+    return absl::OkStatus();
+  }
+  Diagnostics SnapshotFrames() const override {
+    return {};
+  }
+  void Inject(Bytes bytes) {
+    {
+      std::lock_guard lock(mutex);
+      incoming.push_back({std::move(bytes), Clock::now()});
+    }
+    changed.notify_all();
+  }
+  bool WaitWrites(size_t size) {
+    std::unique_lock lock(mutex);
+    return changed.wait_for(lock, 2s, [&] { return writes.size() >= size; });
+  }
+  Bytes Written(size_t index) {
+    std::lock_guard lock(mutex);
+    return writes.at(index);
+  }
+  void Fault() {
+    {
+      std::lock_guard lock(mutex);
+      failure = absl::UnavailableError("Disconnected");
+    }
+    changed.notify_all();
+  }
+};
+
+class CoordinatorTest : public ::testing::Test {
+ protected:
+  std::shared_ptr<MemoryLink> link = std::make_shared<MemoryLink>();
+  std::shared_ptr<Coordinator> coordinator;
+  JoshuaWireHostPolicy policy;
+  void SetUp() override {
+    policy.set_operation_timeout_ms(2000);
+    policy.set_attempt_timeout_ms(300);
+    policy.set_polling_timeout_ms(1000);
+  }
+  void Open() {
+    auto next = std::make_shared<uint32_t>(40);
+    auto opened = Coordinator::Acquire(link, policy, [next] { return ++*next; });
+    ASSERT_TRUE(opened.ok()) << opened.status();
+    coordinator = *opened;
+  }
+  void TearDown() override {
+    if (coordinator) coordinator->Close().IgnoreError();
+  }
+  static jw_command_t Command(uint8_t code, uint8_t function = JW_CHANNEL_NONE) {
+    static const uint8_t domain[] = {0, 0};
+    return {0,
+            0,
+            code,
+            function,
+            code == JW_CMD_ESTOP ? domain : nullptr,
+            code == JW_CMD_ESTOP ? 2u : 0u};
+  }
+  static Bytes ProfilePayload(uint8_t operation, uint16_t profile = JW_PROFILE_ACTUATOR) {
+    Bytes bytes(JW_PROFILE_HEADER_LEN);
+    jw_profile_request_t request{profile, 1, 0, operation, nullptr, 0};
+    EXPECT_EQ(jw_encode_profile_request(bytes.data(), bytes.size(), &request), bytes.size());
+    return bytes;
+  }
+  Coordinator::Operation Profile(uint8_t op) {
+    auto payload = ProfilePayload(op);
+    return coordinator->Submit({0, 0, JW_CMD_PROFILE, 2, payload.data(), payload.size()});
+  }
+  void Respond(size_t index, jw_execution_t execution = JW_EXECUTION_COMPLETE) {
+    auto bytes = link->Written(index);
+    jw_frame_t frame{};
+    ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+    link->Inject(MemoryLink::Reply(frame, execution));
+  }
+  static Bytes Sample(uint32_t session, uint32_t token, uint32_t sequence) {
+    jw_stream_sample_t s{};
+    s.session_id = session;
+    s.function_id = 2;
+    s.subscription_id = token;
+    s.sample.value = 42;
+    s.sample.metadata = {JW_SAMPLE_VALID, JW_CLOCK_BOOT_MONOTONIC_US, 9, sequence, sequence};
+    Bytes bytes(JW_STREAM_SAMPLE_FRAME_LEN);
+    EXPECT_EQ(jw_encode_stream_sample(bytes.data(), bytes.size(), &s), bytes.size());
+    return bytes;
+  }
+};
+TEST_F(CoordinatorTest, RepeatedAcquireSharesOneSessionAndEffectivePolicy) {
+  Open();
+  auto second = Coordinator::Acquire(link, policy);
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(*second, coordinator);
+  EXPECT_EQ(coordinator->Snapshot().resets, 1);
+  auto conflict = policy;
+  conflict.set_max_priority_burst(9);
+  EXPECT_TRUE(absl::IsInvalidArgument(Coordinator::Acquire(link, conflict).status()));
+  EXPECT_TRUE(coordinator->Exchange(Command(JW_CMD_IDENTIFY)).ok());
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto bytes = link->Written(1);
+  jw_frame_t frame{};
+  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.session_id, 41);
+  EXPECT_EQ(frame.message_id, 2);
+}
+TEST_F(CoordinatorTest, StopHasReservedCapacityAndRetiresPublishedOrdinaryWork) {
+  policy.set_max_pending_operations(1);
+  policy.set_max_pending_bytes(192);
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  auto target = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto rejected = Profile(JW_ACTUATOR_CONFIGURE).Wait();
+  EXPECT_TRUE(absl::IsResourceExhausted(rejected.status));
+  EXPECT_FALSE(rejected.published);
+  auto stop = coordinator->Submit(Command(JW_CMD_ESTOP));
+  auto stopped = stop.Wait();
+  EXPECT_TRUE(stopped.status.ok()) << stopped.status;
+  auto retired = target.Wait();
+  EXPECT_TRUE(absl::IsCancelled(retired.status));
+  EXPECT_TRUE(retired.published);
+  EXPECT_GT(stopped.message_id, retired.message_id);
+  EXPECT_EQ(coordinator->Snapshot().retired, 1);
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+  Respond(1);  // Retired late reply must not satisfy a subsequent query.
+  EXPECT_TRUE(coordinator->Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  EXPECT_TRUE(absl::IsFailedPrecondition(Profile(JW_ACTUATOR_ENABLE).Wait().status));
+  EXPECT_EQ(coordinator->Snapshot().retries, 0);
+}
+TEST_F(CoordinatorTest, RetriesUseExactlyTheSameBytesAndOneCompleteBudget) {
+  policy.set_attempt_timeout_ms(60);
+  policy.set_operation_timeout_ms(200);
+  policy.set_polling_timeout_ms(150);
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->drop = 1;
+  }
+  auto result = Profile(JW_ACTUATOR_SET_TARGET).Wait();
+  ASSERT_TRUE(result.status.ok()) << result.status;
+  ASSERT_TRUE(link->WaitWrites(3));
+  EXPECT_EQ(link->Written(1), link->Written(2));
+  EXPECT_EQ(coordinator->Snapshot().retries, 1);
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  const auto start = Clock::now();
+  auto failure = Profile(JW_ACTUATOR_SET_TARGET).Wait();
+  EXPECT_TRUE(absl::IsDeadlineExceeded(failure.status));
+  EXPECT_TRUE(failure.published);
+  EXPECT_LT(Clock::now() - start, 1s);
+  EXPECT_TRUE(absl::IsFailedPrecondition(Profile(JW_ACTUATOR_ENABLE).Wait().status));
+}
+TEST_F(CoordinatorTest, QueuedCancellationAndExpiryDoNotPublishOrConsumeIds) {
+  policy.set_polling_timeout_ms(40);
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  auto target = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto canceled = Profile(JW_ACTUATOR_CONFIGURE);
+  canceled.Cancel();
+  auto c = canceled.Wait();
+  EXPECT_TRUE(absl::IsCancelled(c.status));
+  EXPECT_FALSE(c.published);
+  auto expired = coordinator->Submit(Command(JW_CMD_GET_STATUS)).Wait();
+  EXPECT_TRUE(absl::IsDeadlineExceeded(expired.status));
+  EXPECT_FALSE(expired.published);
+  EXPECT_EQ(expired.message_id, 0);
+  EXPECT_FALSE(target.Ready());
+  Respond(1);
+  EXPECT_TRUE(target.Wait().status.ok());
+  auto next = Profile(JW_ACTUATOR_CONFIGURE);
+  ASSERT_TRUE(link->WaitWrites(3));
+  Respond(2);
+  EXPECT_EQ(next.Wait().message_id, 3);
+}
+TEST_F(CoordinatorTest, StopInterlockBlocksQueuedMutationEvenWhenOrdinaryOutcomeIsKnown) {
+  Open();
+  EXPECT_TRUE(Profile(JW_ACTUATOR_SET_TARGET).Wait().status.ok());
+  EXPECT_TRUE(coordinator->Exchange(Command(JW_CMD_ESTOP)).ok());
+  EXPECT_TRUE(coordinator->Snapshot().safety_interlock);
+  EXPECT_FALSE(coordinator->Snapshot().uncertain);
+  const auto result = Profile(JW_ACTUATOR_ENABLE).Wait();
+  EXPECT_TRUE(absl::IsFailedPrecondition(result.status));
+  EXPECT_FALSE(result.published);
+  EXPECT_TRUE(coordinator->Exchange(Command(JW_CMD_GET_STATUS)).ok());
+}
+
+TEST_F(CoordinatorTest, SamplesCannotSatisfyRepliesEvenWithIdenticalIdsAndRemainBounded) {
+  policy.set_max_notifications(2);
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  auto target = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  for (uint32_t seq = 1; seq <= 10; ++seq) link->Inject(Sample(41, 2, seq));
+  link->Inject(Sample(40, 2, 11));
+  std::this_thread::sleep_for(10ms);
+  EXPECT_FALSE(target.Ready());
+  Respond(1);
+  ASSERT_TRUE(target.Wait().status.ok());
+  const auto frames = coordinator->DrainNotifications();
+  ASSERT_EQ(frames.size(), 1);
+  EXPECT_EQ(frames.front().bytes, Sample(41, 2, 10));
+  EXPECT_EQ(coordinator->Snapshot().notifications_dropped, 9);
+  EXPECT_EQ(coordinator->Snapshot().stale_notifications, 1);
+}
+TEST_F(CoordinatorTest, PollingUsesAvailableSlackAfterPriorityBurst) {
+  policy.set_max_priority_burst(1);
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_operation = JW_ACTUATOR_SET_TARGET;
+  }
+  auto first = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto control = Profile(JW_ACTUATOR_DISABLE);
+  auto poll = coordinator->Submit(Command(JW_CMD_GET_STATUS));
+  Respond(1);
+  EXPECT_TRUE(first.Wait().status.ok());
+  EXPECT_TRUE(poll.Wait().status.ok());
+  EXPECT_TRUE(control.Wait().status.ok());
+  auto bytes = link->Written(2);
+  jw_frame_t frame{};
+  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.cmd, JW_CMD_GET_STATUS);
+}
+TEST_F(CoordinatorTest, DisconnectInvalidatesEveryWaiterAndNeverReopensOldLease) {
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  auto target = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto queued = Profile(JW_ACTUATOR_CONFIGURE);
+  link->Fault();
+  EXPECT_TRUE(absl::IsUnavailable(target.Wait().status));
+  EXPECT_TRUE(absl::IsUnavailable(queued.Wait().status));
+  EXPECT_TRUE(coordinator->Snapshot().faulted);
+  EXPECT_FALSE(Coordinator::Acquire(link, policy).ok());
+  EXPECT_FALSE(coordinator->Exchange(Command(JW_CMD_IDENTIFY)).ok());
+}
+TEST_F(CoordinatorTest, CloseRetiresWaitersResetsDisabledAndIsIdempotent) {
+  Open();
+  {
+    std::lock_guard lock(link->mutex);
+    link->blocked_command = JW_CMD_PROFILE;
+  }
+  auto target = Profile(JW_ACTUATOR_SET_TARGET);
+  ASSERT_TRUE(link->WaitWrites(2));
+  auto queued = Profile(JW_ACTUATOR_CONFIGURE);
+  ASSERT_TRUE(coordinator->Close().ok());
+  EXPECT_TRUE(absl::IsCancelled(target.Wait().status));
+  EXPECT_TRUE(absl::IsCancelled(queued.Wait().status));
+  EXPECT_TRUE(coordinator->Close().ok());
+  EXPECT_TRUE(coordinator->Snapshot().closed);
+  auto bytes = link->Written(2);
+  jw_frame_t frame{};
+  ASSERT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &frame), JW_RESULT_OK);
+  EXPECT_EQ(frame.cmd, JW_CMD_RESET_SESSION);
+  EXPECT_NE(frame.session_id, 41);
+  EXPECT_FALSE(Coordinator::Acquire(link, policy).ok());
+}
+TEST(CoordinatorSerialTest, ProductionFrameOwnerRoutesInterleavedTelemetryWithoutInputFlush) {
+  const int master = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
+  ASSERT_GE(master, 0);
+  ASSERT_EQ(grantpt(master), 0);
+  ASSERT_EQ(unlockpt(master), 0);
+  robot::comm::Comm config;
+  config.set_comm_type(robot::comm::SERIAL);
+  config.set_transport_type(robot::comm::FRAME_STREAM);
+  auto* serial = config.mutable_serial_config();
+  serial->set_port(ptsname(master));
+  serial->set_baudrate(115200);
+  serial->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  auto transport = robot::comm::CommFactory::CreateComm(config);
+  ASSERT_TRUE(transport.ok()) << transport.status();
+  auto capability = robot::comm::GetCommTransport<Link>(*transport);
+  ASSERT_TRUE(capability.ok()) << capability.status();
+  auto peer = std::async(std::launch::async, [master] {
+    jw_stream_decoder_t decoder;
+    jw_stream_init_timeout(&decoder, 1000);
+    int replies = 0;
+    const auto end = Clock::now() + 5s;
+    while (replies < 3 && Clock::now() < end) {
+      pollfd descriptor{master, POLLIN, 0};
+      if (poll(&descriptor, 1, 1000) <= 0) continue;
+      uint8_t byte;
+      if (read(master, &byte, 1) != 1) return false;
+      const auto ms =
+          std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch())
+              .count();
+      const int length = jw_stream_feed(&decoder, byte, ms);
+      if (length <= 0) continue;
+      jw_frame_t request{};
+      if (jw_decode_frame(decoder.bytes, length, &request) != JW_RESULT_OK) return false;
+      if (request.cmd == JW_CMD_IDENTIFY) {
+        jw_stream_sample_t sample{};
+        sample.session_id = request.session_id;
+        sample.subscription_id = request.message_id;
+        sample.function_id = 2;
+        sample.sample.value = 42;
+        sample.sample.metadata = {JW_SAMPLE_VALID, JW_CLOCK_BOOT_MONOTONIC_US, 9, 1, 1};
+        uint8_t frame[JW_STREAM_SAMPLE_FRAME_LEN];
+        const int size = jw_encode_stream_sample(frame, sizeof(frame), &sample);
+        if (write(master, frame, size) != size) return false;
+      }
+      auto response = MemoryLink::Reply(request);
+      if (write(master, response.data(), response.size()) != static_cast<ssize_t>(response.size()))
+        return false;
+      ++replies;
+    }
+    return replies == 3;
+  });
+  JoshuaWireHostPolicy policy;
+  policy.set_operation_timeout_ms(2000);
+  policy.set_attempt_timeout_ms(500);
+  policy.set_polling_timeout_ms(1000);
+  auto id = std::make_shared<uint32_t>(10);
+  auto owner = Coordinator::Acquire(*capability, policy, [id] { return ++*id; });
+  ASSERT_TRUE(owner.ok()) << owner.status();
+  auto response = (*owner)->Exchange({0, 0, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, nullptr, 0});
+  EXPECT_TRUE(response.ok()) << response.status();
+  const auto until = Clock::now() + 2s;
+  while ((*owner)->Snapshot().notifications == 0 && Clock::now() < until)
+    std::this_thread::sleep_for(1ms);
+  EXPECT_EQ((*owner)->DrainNotifications().size(), 1);
+  EXPECT_TRUE((*owner)->Close().ok());
+  EXPECT_TRUE(peer.get());
+  close(master);
+}
+
+TEST(CoordinatorPolicyTest, RejectsInvalidBudgetsAndQueueSizesWithoutAConnection) {
+  JoshuaWireHostPolicy config;
+  config.set_operation_timeout_ms(0);
+  EXPECT_TRUE(absl::IsInvalidArgument(ValidateCoordinatorPolicy(ResolveCoordinatorPolicy(config))));
+  config.set_operation_timeout_ms(100);
+  config.set_max_attempts(5);
+  EXPECT_TRUE(absl::IsInvalidArgument(ValidateCoordinatorPolicy(ResolveCoordinatorPolicy(config))));
+  config.set_max_attempts(2);
+  config.set_max_pending_bytes(191);
+  EXPECT_TRUE(absl::IsInvalidArgument(ValidateCoordinatorPolicy(ResolveCoordinatorPolicy(config))));
+}
+
+}  // namespace
+}  // namespace robot::board

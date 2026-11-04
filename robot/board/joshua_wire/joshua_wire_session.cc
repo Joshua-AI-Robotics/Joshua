@@ -27,11 +27,15 @@ JoshuaWireSession::JoshuaWireSession(std::shared_ptr<robot::comm::MessageTranspo
                                      SessionIdSource source,
                                      uint32_t message_id_limit,
                                      std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic,
-                                     absl::Duration cyclic_timeout)
+                                     absl::Duration cyclic_timeout,
+                                     ExchangeHook hook,
+                                     uint32_t max_attempts)
     : transport_(std::move(transport)),
       cyclic_(std::move(cyclic)),
       cyclic_timeout_(cyclic_timeout),
       source_(source ? std::move(source) : [] { return std::random_device{}(); }),
+      hook_(std::move(hook)),
+      max_attempts_(max_attempts),
       message_id_limit_(message_id_limit) {}
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t cmd,
@@ -63,14 +67,24 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
   // Retry identical bytes/IDs only. The shared firmware endpoint replays its
   // last reply without repeating side effects, including unknown outcomes.
   std::vector<uint8_t> response;
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    auto result =
-        on_cyclic ? cyclic_->Exchange(request, cyclic_timeout_) : transport_->Exchange(request);
-    if (!result.ok()) {
-      failure = result.status();
+  bool published = false;
+  for (uint32_t attempt = 0; attempt < max_attempts_; ++attempt) {
+    ExchangeOutcome outcome;
+    if (hook_) {
+      outcome = hook_(request);
+    } else {
+      auto result =
+          on_cyclic ? cyclic_->Exchange(request, cyclic_timeout_) : transport_->Exchange(request);
+      outcome.status = result.status();
+      if (result.ok()) outcome.response = std::move(*result);
+    }
+    published = published || outcome.published;
+    if (!outcome.status.ok()) {
+      failure = outcome.status;
+      if (!outcome.retryable || absl::IsCancelled(failure)) break;
       continue;
     }
-    response = std::move(*result);
+    response = std::move(outcome.response);
     if (jw_decode_frame(response.data(), response.size(), &received) != JW_RESULT_OK ||
         !jw_response_matches(&sent, &received)) {
       failure = absl::DataLossError("Uncorrelated JoshuaWire response");
@@ -84,8 +98,10 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
     if (reply.status == JW_STATUS_OUTCOME_UNKNOWN) uncertain_ = true;
     return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
   }
-  uncertain_ = true;
-  return absl::Status(failure.code(), std::string(failure.message()) + "; command outcome unknown");
+  if (published) uncertain_ = true;
+  return published ? absl::Status(failure.code(),
+                                  std::string(failure.message()) + "; command outcome unknown")
+                   : failure;
 }
 
 absl::Status JoshuaWireSession::ResetLocked() {
@@ -113,7 +129,7 @@ absl::Status JoshuaWireSession::Open() {
   std::lock_guard<std::mutex> lock(mutex_);
   ready_ = false;
   pending_.clear();
-  if (transport_ == nullptr || message_id_limit_ < 3 ||
+  if ((!transport_ && !hook_) || message_id_limit_ < 3 || max_attempts_ == 0 || max_attempts_ > 4 ||
       (cyclic_ &&
        (cyclic_timeout_ <= absl::ZeroDuration() || cyclic_timeout_ == absl::InfiniteDuration()))) {
     return absl::InvalidArgumentError("Invalid JoshuaWire session configuration.");
@@ -121,6 +137,11 @@ absl::Status JoshuaWireSession::Open() {
   // CommFactory provides an open link; Open here starts a protocol session,
   // not a second physical connection or transport lifecycle.
   return ResetLocked();
+}
+
+JoshuaWireSession::Snapshot JoshuaWireSession::Inspect() {
+  std::lock_guard lock(mutex_);
+  return {session_id_, next_message_id_, ready_, uncertain_};
 }
 
 absl::Status JoshuaWireSession::RotateLocked() {
@@ -146,19 +167,7 @@ absl::Status JoshuaWireSession::Close() {
   return ResetLocked();
 }
 
-absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_command_t& command) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (!ready_) return absl::FailedPreconditionError("JoshuaWire requires a successful reset.");
-  if (command.payload_len > JW_MAX_PAYLOAD_LEN ||
-      (command.payload_len != 0 && command.payload == nullptr) ||
-      command.cmd == JW_CMD_RESET_SESSION || command.cmd == JW_CMD_STREAM_SAMPLE) {
-    return absl::InvalidArgumentError("Invalid command supplied to JW session.");
-  }
-  if (next_message_id_ >= message_id_limit_) {
-    ABSL_RETURN_IF_ERROR(RotateLocked());
-    return absl::FailedPreconditionError(
-        "JoshuaWire session rotated; channels disabled. Enable again.");
-  }
+bool JoshuaWireSession::IsReadOnly(const jw_command_t& command) {
   const bool query = command.cmd == JW_CMD_IDENTIFY || command.cmd == JW_CMD_DISCOVER ||
                      command.cmd == JW_CMD_DESCRIBE_FUNCTION || command.cmd == JW_CMD_GET_STATUS ||
                      command.cmd == JW_CMD_GET_DEPENDENCIES;
@@ -178,9 +187,24 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
       profile.major == JW_PROFILE_VERSION_MAJOR && profile.minor == JW_SENSOR_STREAM_MINOR &&
       profile.data_len == 0 &&
       (profile.operation == JW_SENSOR_READ || profile.operation == JW_SENSOR_GET_SUBSCRIPTION);
+  return query || legacy_read || stream_read;
+}
+
+absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_command_t& command) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!ready_) return absl::FailedPreconditionError("JoshuaWire requires a successful reset.");
+  if (command.payload_len > JW_MAX_PAYLOAD_LEN ||
+      (command.payload_len != 0 && command.payload == nullptr) ||
+      command.cmd == JW_CMD_RESET_SESSION || command.cmd == JW_CMD_STREAM_SAMPLE) {
+    return absl::InvalidArgumentError("Invalid command supplied to JW session.");
+  }
+  if (next_message_id_ >= message_id_limit_) {
+    ABSL_RETURN_IF_ERROR(RotateLocked());
+    return absl::FailedPreconditionError(
+        "JoshuaWire session rotated; channels disabled. Enable again.");
+  }
   if ((uncertain_ || pending_.count(JW_CHANNEL_NONE) || pending_.count(command.channel)) &&
-      !query && !legacy_read && !stream_read && command.cmd != JW_CMD_ESTOP &&
-      command.cmd != JW_CMD_RECOVER)
+      !IsReadOnly(command) && command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
     return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
   ABSL_ASSIGN_OR_RETURN(
       auto payload,

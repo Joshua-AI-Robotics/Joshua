@@ -343,6 +343,32 @@ while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
 
+### JoshuaWire host coordinator policy
+
+For a Joshua `FRAME_STREAM` board, `joshua_wire_host_policy` configures the shared
+protocol queue. It is rejected on request-only/vendor boards. Omitted optional
+fields resolve to these software defaults:
+
+| Field | Default | Bound / meaning |
+| --- | --- | --- |
+| `operation_timeout_ms` | 200 | Queue plus all exact-byte attempts, 1..INT_MAX |
+| `attempt_timeout_ms` | 50 | One write/reply attempt, no larger than operation budget |
+| `polling_timeout_ms` | 40 | Total polling budget, no larger than operation budget |
+| `max_attempts` | 2 | 1..4, identical IDs/bytes only |
+| `max_pending_operations` | 16 | 1..1024 ordinary operations, including active |
+| `max_pending_bytes` | 4096 | 192..1048576 reserved request plus maximum reply bytes |
+| `max_priority_burst` | 8 | 1..1024 before considering lower priority with sufficient slack |
+| `scheduling_guard_ms` | 1 | Positive scheduling margin, at most INT_MAX |
+| `max_notifications` | 32 | 1..256 diagnostic latest raw envelopes |
+| `max_streams` | 16 | 1..255 shared subscriptions (P3c) |
+| `telemetry_bytes_per_second` | 0 | Explicit aggregate complete-frame reservation; zero prevents subscribing |
+
+ESTOP has an independent single admission slot. All MCU handles must agree on
+effective policy, including defaults. Polling fairness requires enough deadline
+slack; admission and deadlines report overload instead of promising an infeasible
+workload. Physical control/stop latency and telemetry capacity still require P6
+qualification. Runtime board/perception integration follows in P5.
+
 ## C++ ROS logging
 
 `general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or

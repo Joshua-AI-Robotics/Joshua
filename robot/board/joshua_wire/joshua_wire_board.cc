@@ -213,6 +213,9 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not a ", type_name, " board."));
   }
+  if (config.has_joshua_wire_host_policy() &&
+      config.comm().transport_type() != robot::comm::FRAME_STREAM)
+    return absl::InvalidArgumentError("JoshuaWire host policy requires FRAME_STREAM");
   if (config.comm().transport_type() != robot::comm::MESSAGE &&
       config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC) {
     return absl::InvalidArgumentError(absl::StrCat(
