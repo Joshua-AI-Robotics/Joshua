@@ -83,6 +83,46 @@ cc_library(
 )
 
 cc_library(
+    name = "joshua_wire_sensor_stream",
+    srcs = ["joshua_wire_sensor_stream.c"],
+    hdrs = ["joshua_wire_sensor_stream.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire",
+        ":joshua_wire_profiles",
+    ],
+)
+
+cc_library(
+    name = "joshua_stream_subscription",
+    srcs = ["joshua_stream_subscription.c"],
+    hdrs = ["joshua_stream_subscription.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [":joshua_wire_sensor_stream"],
+)
+
+cc_test(
+    name = "joshua_wire_sensor_stream_test",
+    srcs = ["joshua_wire_sensor_stream_test.cc"],
+    deps = [
+        ":joshua_wire_sensor_stream",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "joshua_stream_subscription_test",
+    srcs = ["joshua_stream_subscription_test.cc"],
+    deps = [
+        ":joshua_stream_subscription",
+        ":joshua_wire_endpoint",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "joshua_wire_resources",
     srcs = ["joshua_wire_resources.c"],
     hdrs = ["joshua_wire_resources.h"],

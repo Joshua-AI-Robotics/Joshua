@@ -13,6 +13,11 @@ JW1 and the legacy host paths are retired in the integration stage.
   paged discovery/dependencies, common status/execution replies and state codecs.
 - `joshua_wire_profiles.{h,c}` and actuator/sensor/I/O headers: profile v1.0
   metadata and payload codecs. `jw_drive_t` is actuator metadata only.
+- `joshua_wire_sensor_stream.{h,c}`: opt-in sensor-profile 1.1 subscription
+  codecs and 46-byte typed notifications, separate from ordinary reply matching.
+- `joshua_stream_subscription.{h,c}`: allocation-free create/query/cancel state
+  transitions, composed with the endpoint's existing exact-retry/session behavior.
+  These modules provide no acquisition, I/O owner, scheduler, or enabled backend.
 - `joshua_wire_resources.{h,c}`: atomic resource-ownership preflight/commit;
   backends own hardware application and any necessary rollback.
 - `joshua_wire_firmware_session.{h,c}` and `joshua_wire_endpoint.{h,c}`:
@@ -121,6 +126,11 @@ remain gates in the normative contract. Serialized loopback tests do not establi
 those guarantees. No firmware is flashed automatically. See the
 [manual validation guide](../../docs/JOSHUA_WIRE_VALIDATION.md) for explicit
 hardware procedures and `--allow_recover` when recovering a latched stop.
+
+The sensor-stream increment defines an additive minor-version extension and
+tests golden layouts, capability negotiation, replay after lost create/cancel
+replies, reset invalidation, and request/notification isolation. Production
+images remain request/response only and advertise no streaming operations.
 
 The [SOES binding](soes/README.md) supplies a separately pinned slave stack,
 fixed object dictionary and PDO packing. It reuses the same revision-4 profile

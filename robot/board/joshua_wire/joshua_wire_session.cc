@@ -8,6 +8,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
+#include "firmware/common/joshua_wire_sensor_stream.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -150,7 +151,7 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
   if (!ready_) return absl::FailedPreconditionError("JoshuaWire requires a successful reset.");
   if (command.payload_len > JW_MAX_PAYLOAD_LEN ||
       (command.payload_len != 0 && command.payload == nullptr) ||
-      command.cmd == JW_CMD_RESET_SESSION) {
+      command.cmd == JW_CMD_RESET_SESSION || command.cmd == JW_CMD_STREAM_SAMPLE) {
     return absl::InvalidArgumentError("Invalid command supplied to JW session.");
   }
   if (next_message_id_ >= message_id_limit_) {
@@ -165,15 +166,21 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
   const bool is_profile =
       command.cmd == JW_CMD_PROFILE &&
       jw_decode_profile_request(command.payload, command.payload_len, &profile) == JW_RESULT_OK;
-  const bool profile_read =
+  const bool legacy_read =
       is_profile && profile.major == JW_PROFILE_VERSION_MAJOR &&
       profile.minor == JW_PROFILE_VERSION_MINOR &&
       ((profile.profile_id == JW_PROFILE_ACTUATOR &&
         profile.operation == JW_ACTUATOR_GET_FEEDBACK) ||
        (profile.profile_id == JW_PROFILE_SENSOR && profile.operation == JW_SENSOR_READ) ||
        (profile.profile_id == JW_PROFILE_IO && profile.operation == JW_IO_READ));
+  const bool stream_read =
+      is_profile && profile.profile_id == JW_PROFILE_SENSOR &&
+      profile.major == JW_PROFILE_VERSION_MAJOR && profile.minor == JW_SENSOR_STREAM_MINOR &&
+      profile.data_len == 0 &&
+      (profile.operation == JW_SENSOR_READ || profile.operation == JW_SENSOR_GET_SUBSCRIPTION);
   if ((uncertain_ || pending_.count(JW_CHANNEL_NONE) || pending_.count(command.channel)) &&
-      !query && !profile_read && command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
+      !query && !legacy_read && !stream_read && command.cmd != JW_CMD_ESTOP &&
+      command.cmd != JW_CMD_RECOVER)
     return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
