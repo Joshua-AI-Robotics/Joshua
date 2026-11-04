@@ -7,6 +7,7 @@ cc_library(
     hdrs = [
         "board_channel.h",
         "board_interface.h",
+        "scalar_sensor.h",
     ],
     deps = [
         "//robot/board/proto:board_cc_proto",

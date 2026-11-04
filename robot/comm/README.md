@@ -143,9 +143,10 @@ CRC, version and session correlation remain in the board/session layer.
 [`FrameStreamTransport`](interfaces/frame_stream_transport.h) is a separate
 complete-frame capability for one protocol coordinator. `FRAME_STREAM` selects it
 through `CommFactory`; it cannot be obtained as `MessageTransport` or
-`ByteStream`. Existing presets and board/session paths remain request-only. The
-shared MCU coordinator, subscription management, priority scheduler and deliberate
-reconnect reconciliation remain subsequent P3 work.
+`ByteStream`. Request-only presets retain their existing path. FRAME_STREAM
+JoshuaWire boards use the shared MCU coordinator for sessions, subscriptions,
+priority scheduling and deliberate reconnect reconciliation. The mixed Teensy
+reference preset binds actuator and scalar consumers in one MCU_BUS process.
 
 [`JoshuaWireFrameStream`](serial/joshua_wire_frame_stream.cc) runs the existing
 bounded decoder on the same physical I/O worker. It receives between writes,

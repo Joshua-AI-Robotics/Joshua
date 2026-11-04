@@ -39,6 +39,7 @@ class JoshuaWireCoordinator : public std::enable_shared_from_this<JoshuaWireCoor
     uint64_t retries = 0, resets = 0, retired = 0, stale_replies = 0;
     uint64_t notifications = 0, notifications_dropped = 0, stale_notifications = 0;
     uint64_t invalid_samples = 0, sequence_gaps = 0, boot_discontinuities = 0;
+    uint64_t heartbeats = 0, heartbeat_failures = 0;
     size_t active_streams = 0, retired_streams = 0;
     std::string last_error;
   };

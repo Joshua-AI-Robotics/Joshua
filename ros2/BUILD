@@ -141,7 +141,10 @@ ros2_cpp_binary(
 
 ros2_cpp_binary(
     name = "actuator_subscriber",
-    srcs = ["actuator_subscriber.cc"],
+    srcs = [
+        "action_subscriber.h",
+        "actuator_subscriber.cc",
+    ],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -162,6 +165,34 @@ ros2_cpp_binary(
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+cc_library(
+    name = "mcu_bus_node",
+    hdrs = [
+        "action_subscriber.h",
+        "mcu_bus.h",
+    ],
+    deps = [
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/action/factory:action_factory",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/board/factory:board_factory",
+        "//robot/perception/factory:perception_factory",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@glog",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "mcu_bus",
+    srcs = ["mcu_bus.cc"],
+    deps = [":mcu_bus_node"],
 )
 
 ros2_py_binary(

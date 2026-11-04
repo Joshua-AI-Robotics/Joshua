@@ -2,6 +2,7 @@
 // Only neutral command payloads cross the public API; only JW frames reach comm.
 #include "robot/board/joshua_wire/joshua_wire_session.h"
 
+#include <algorithm>
 #include <atomic>
 #include <random>
 #include <utility>
@@ -109,6 +110,12 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
       continue;
     }
     if (reply.status == JW_STATUS_OUTCOME_UNKNOWN) uncertain_ = true;
+    if (cmd == JW_CMD_CONFIGURE_WATCHDOGS && reply.status == JW_STATUS_OK &&
+        (reply.execution != JW_EXECUTION_COMPLETE || reply.data_len != payload_len ||
+         !std::equal(payload, payload + payload_len, reply.data))) {
+      failure = absl::DataLossError("Watchdog acknowledgment does not echo the requested policy");
+      continue;
+    }
     if (profile_valid && profile.profile_id == JW_PROFILE_SENSOR &&
         profile.major == JW_PROFILE_VERSION_MAJOR && profile.minor == JW_SENSOR_STREAM_MINOR &&
         reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE &&

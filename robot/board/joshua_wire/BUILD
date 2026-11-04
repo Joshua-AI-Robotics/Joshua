@@ -6,7 +6,9 @@ cc_library(
     hdrs = ["joshua_wire_board.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":joshua_wire_coordinator",
         ":joshua_wire_session",
+        "//firmware/common:joshua_watchdogs",
         "//firmware/common:joshua_wire_profiles",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/proto:board_cc_proto",
@@ -18,6 +20,27 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@abseil-cpp//absl/time",
+    ],
+)
+
+cc_test(
+    name = "mixed_binding_test",
+    srcs = ["mixed_binding_test.cc"],
+    data = ["//config/config_preset:config_presets"],
+    deps = [
+        "//config:config_utils",
+        "//config:validation",
+        "//firmware/common:joshua_mixed_serial",
+        "//firmware/common:joshua_wire_stream",
+        "//firmware/common:mixed_test_firmware",
+        "//robot/board/factory:board_factory",
+        "//robot/comm/factory:comm_factory",
+        "//robot/perception/factory:perception_factory",
+        "//ros2:mcu_bus_node",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
     ],
 )
 
