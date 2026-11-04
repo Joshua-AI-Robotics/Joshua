@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <map>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <thread>
 #include <tuple>
 #include <utility>
@@ -15,6 +18,7 @@
 #include "firmware/common/joshua_wire_profiles.h"
 #include "firmware/common/joshua_wire_sensor_stream.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
+#include "utils/status_macros.h"
 
 namespace robot::board {
 namespace {
@@ -61,6 +65,15 @@ struct JoshuaWireCoordinator::Operation::State {
   Result result;
 };
 
+struct JoshuaWireCoordinator::Subscription::State {
+  uint8_t function = 0;
+  uint32_t session = 0, token = 0, period = 0, boot = 0;
+  jw_sensor_schema_t schema{};
+  size_t consumers = 0;
+  bool active = false, retired = false;
+  std::optional<Observation> latest;
+};
+
 struct JoshuaWireCoordinator::Impl {
   using Work = std::shared_ptr<Operation::State>;
   std::shared_ptr<Link> link;
@@ -68,6 +81,8 @@ struct JoshuaWireCoordinator::Impl {
   JoshuaWireSession session;
   mutable std::mutex mutex;
   std::mutex close_mutex;
+  std::timed_mutex subscription_mutex;  // Caller management only; never held by worker.
+  std::map<uint8_t, std::shared_ptr<Subscription::State>> streams;
   std::array<std::deque<Work>, 4> queues;
   Work active;
   Work startup = std::make_shared<Operation::State>();
@@ -96,6 +111,85 @@ struct JoshuaWireCoordinator::Impl {
             [this](absl::Span<const uint8_t> bytes) { return ExchangeFrame(bytes); },
             p.max_attempts) {}
 
+  void RetireStreamsLocked() {
+    for (auto& [id, stream] : streams) {
+      if (!stream->retired) ++diagnostics.retired_streams;
+      stream->retired = true;
+      stream->active = false;
+      stream->latest.reset();
+    }
+    diagnostics.active_streams = 0;
+  }
+  void Wake() {
+    std::shared_ptr<Link> connection;
+    {
+      std::lock_guard lock(mutex);
+      connection = link;
+    }
+    if (connection) connection->Interrupt();
+  }
+  // Called with mutex held. Returns true on a boot discontinuity.
+  bool StoreSample(const std::shared_ptr<Subscription::State>& stream,
+                   const Link::ReceivedFrame& frame) {
+    if (!stream->active || stream->retired) return false;
+    if (frame.received_at > Clock::now()) {
+      ++diagnostics.invalid_samples;
+      return false;
+    }
+    jw_frame_t envelope{};
+    if (jw_decode_frame(frame.bytes.data(), frame.bytes.size(), &envelope) != JW_RESULT_OK ||
+        envelope.session_id != stream->session || envelope.message_id != stream->token ||
+        envelope.channel != stream->function)
+      return false;
+    jw_stream_sample_t sample{};
+    if (jw_decode_stream_sample(frame.bytes.data(), frame.bytes.size(), &sample) != JW_RESULT_OK) {
+      ++diagnostics.invalid_samples;
+      return false;
+    }
+    if (sample.session_id != stream->session || sample.subscription_id != stream->token ||
+        sample.function_id != stream->function)
+      return false;
+    if (sample.sample.metadata.boot_id != stream->boot) {
+      ++diagnostics.boot_discontinuities;
+      return true;
+    }
+    if (sample.sample.metadata.clock != stream->schema.clock) {
+      ++diagnostics.invalid_samples;
+      return false;
+    }
+    uint64_t gaps = 0, overwritten = 0;
+    if (stream->latest) {
+      auto& old = *stream->latest;
+      const auto& a = old.sample.sample.metadata;
+      const auto& b = sample.sample.metadata;
+      const uint32_t delta = b.sequence - a.sequence;
+      if (delta == 0) {
+        const bool same_value =
+            sample.sample.value == old.sample.sample.value ||
+            (std::isnan(sample.sample.value) && std::isnan(old.sample.sample.value));
+        if (b.timestamp_us != a.timestamp_us || !same_value ||
+            sample.dropped_acquisitions < old.sample.dropped_acquisitions) {
+          ++diagnostics.invalid_samples;
+          return false;
+        }
+        // Validity/loss reporting may change without a new acquisition; do not
+        // change the original receipt time or manufacture a new sample age.
+        old.sample = sample;
+        return false;
+      }
+      if (delta > INT32_MAX || b.timestamp_us < a.timestamp_us ||
+          sample.dropped_acquisitions < old.sample.dropped_acquisitions) {
+        ++diagnostics.invalid_samples;
+        return false;
+      }
+      gaps = old.sequence_gaps + delta - 1;
+      overwritten = old.overwritten + 1;
+      diagnostics.sequence_gaps += delta - 1;
+    }
+    stream->latest = Observation{
+        sample, stream->schema, frame.received_at, std::chrono::microseconds(0), gaps, overwritten};
+    return false;
+  }
   bool OnWorker() const {
     return running && std::this_thread::get_id() == worker_id;
   }
@@ -147,17 +241,22 @@ struct JoshuaWireCoordinator::Impl {
     return limit;
   }
   void Fault(absl::Status status) {
-    std::lock_guard lock(mutex);
-    if (failure.ok()) failure = std::move(status);
-    diagnostics.faulted = true;
-    diagnostics.ready = false;
-    diagnostics.last_error = failure.ToString().substr(0, 512);
-    closing = true;
+    {
+      std::lock_guard lock(mutex);
+      if (failure.ok()) failure = std::move(status);
+      diagnostics.faulted = true;
+      diagnostics.ready = false;
+      diagnostics.last_error = failure.ToString().substr(0, 512);
+      closing = true;
+      if (active) active->cancel = true;
+      RetireStreamsLocked();
+    }
+    Wake();
   }
   void RouteNotification(Link::ReceivedFrame frame) {
     jw_frame_t decoded{};
     if (jw_decode_frame(frame.bytes.data(), frame.bytes.size(), &decoded) != JW_RESULT_OK) return;
-    std::lock_guard lock(mutex);
+    std::unique_lock lock(mutex);
     if (decoded.session_id != routed_session) {
       ++diagnostics.stale_notifications;
       return;
@@ -176,7 +275,12 @@ struct JoshuaWireCoordinator::Impl {
       notifications.pop_front();
       ++diagnostics.notifications_dropped;
     }
+    auto found = streams.find(decoded.channel);
+    const bool reboot = found != streams.end() && StoreSample(found->second, frame);
     notifications.push_back(std::move(frame));
+    lock.unlock();
+    if (reboot)
+      Fault(absl::UnavailableError("MCU boot changed; all handles require deliberate reconnect"));
   }
   JoshuaWireSession::ExchangeOutcome ExchangeFrame(absl::Span<const uint8_t> bytes) {
     JoshuaWireSession::ExchangeOutcome outcome;
@@ -438,11 +542,13 @@ absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Ac
   struct Entry {
     std::weak_ptr<JoshuaWireCoordinator> owner;
     std::weak_ptr<Impl> reservation;
+    std::weak_ptr<Link> connection;
   };
   static auto* cache = new std::map<Link*, Entry>;
   std::lock_guard lock(*mutex);
   for (auto it = cache->begin(); it != cache->end();) {
-    if (it->second.owner.expired() && it->second.reservation.expired())
+    if (it->second.connection.expired() ||
+        (it->second.owner.expired() && it->second.reservation.expired()))
       it = cache->erase(it);
     else
       ++it;
@@ -462,7 +568,7 @@ absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Ac
   if (!status.ok()) return status;
   auto state = std::make_shared<Impl>(link, policy, std::move(source));
   auto owner = std::shared_ptr<JoshuaWireCoordinator>(new JoshuaWireCoordinator(state));
-  (*cache)[link.get()] = {owner, state};
+  (*cache)[link.get()] = {owner, state, link};
   state->startup->deadline = Clock::now() + Ms(policy.operation_timeout_ms);
   state->running = true;
   state->worker = std::thread([state] { state->Run(); });
@@ -474,7 +580,8 @@ absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Ac
 JoshuaWireCoordinator::~JoshuaWireCoordinator() {
   Close().IgnoreError();
 }
-JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_t& command) {
+JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_t& command,
+                                                               Clock::time_point deadline) {
   const auto admitted = Clock::now();
   auto work = std::make_shared<Operation::State>();
   work->command = command.cmd;
@@ -492,7 +599,7 @@ JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_
   std::unique_lock lock(impl_->mutex);
   const auto budget =
       work->priority == 3 ? impl_->policy.polling_timeout_ms : impl_->policy.operation_timeout_ms;
-  work->deadline = admitted + Ms(budget);
+  work->deadline = std::min(deadline, admitted + Ms(budget));
   if (rejected.ok() && impl_->OnWorker())
     rejected = absl::FailedPreconditionError("Coordinator cannot wait on itself");
   if (rejected.ok() && impl_->closing)
@@ -526,11 +633,12 @@ JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_
     impl_->diagnostics.pending_bytes += work->reservation;
   }
   lock.unlock();
-  impl_->link->Interrupt();
+  impl_->Wake();
   return Operation(work);
 }
-absl::StatusOr<Bytes> JoshuaWireCoordinator::Exchange(const jw_command_t& command) {
-  auto result = Submit(command).Wait();
+absl::StatusOr<Bytes> JoshuaWireCoordinator::Exchange(const jw_command_t& command,
+                                                      Clock::time_point deadline) {
+  auto result = Submit(command, deadline).Wait();
   if (!result.status.ok()) return result.status;
   return std::move(result.payload);
 }
@@ -540,7 +648,7 @@ void JoshuaWireCoordinator::Operation::Cancel() const {
     if (state_->done) return;
   }
   state_->cancel = true;
-  if (auto owner = state_->owner.lock()) owner->link->Interrupt();
+  if (auto owner = state_->owner.lock()) owner->Wake();
 }
 bool JoshuaWireCoordinator::Operation::Ready() const {
   std::lock_guard lock(state_->mutex);
@@ -574,10 +682,354 @@ absl::Status JoshuaWireCoordinator::Close() {
     std::lock_guard lock(impl_->mutex);
     impl_->closing = true;
     impl_->diagnostics.ready = false;
+    impl_->RetireStreamsLocked();
     if (impl_->active) impl_->active->cancel = true;
   }
-  impl_->link->Interrupt();
+  impl_->Wake();
   if (impl_->worker.joinable()) impl_->worker.join();
+  {
+    std::lock_guard lock(impl_->mutex);
+    impl_->link.reset();
+  }
   return impl_->close_status;
 }
+namespace {
+absl::StatusOr<Bytes> ReplyData(const JoshuaWireCoordinator::Result& result) {
+  if (!result.status.ok()) return result.status;
+  jw_reply_t reply{};
+  if (jw_decode_reply_payload(result.payload.data(), result.payload.size(), &reply) != JW_RESULT_OK)
+    return absl::DataLossError("Malformed stream management reply");
+  if (reply.status != JW_STATUS_OK || reply.execution != JW_EXECUTION_COMPLETE) {
+    switch (reply.status) {
+      case JW_STATUS_UNSUPPORTED:
+        return absl::UnimplementedError("Sensor streaming unsupported");
+      case JW_STATUS_BUSY:
+        return absl::ResourceExhaustedError("Sensor subscription busy");
+      case JW_STATUS_INVALID_PAYLOAD:
+        return absl::InvalidArgumentError("Rejected sensor period/payload");
+      case JW_STATUS_NOT_READY:
+      case JW_STATUS_UNAVAILABLE:
+        return absl::UnavailableError("Sensor unavailable");
+      case JW_STATUS_OUTCOME_UNKNOWN:
+        return absl::UnknownError("Subscription outcome unknown; reconcile disabled");
+      default:
+        return absl::FailedPreconditionError("Sensor management did not complete");
+    }
+  }
+  return Bytes(reply.data, reply.data + reply.data_len);
+}
+absl::StatusOr<Bytes> QueryData(JoshuaWireCoordinator& owner,
+                                uint8_t command,
+                                uint8_t function,
+                                Clock::time_point deadline,
+                                const uint8_t* data = nullptr,
+                                size_t size = 0) {
+  return ReplyData(owner.Submit({0, 0, command, function, data, size}, deadline).Wait());
+}
+Bytes StreamRequest(uint8_t operation, const uint8_t* data = nullptr, size_t size = 0) {
+  Bytes payload(JW_PROFILE_HEADER_LEN + size);
+  jw_profile_request_t profile{
+      JW_PROFILE_SENSOR, JW_PROFILE_VERSION_MAJOR, JW_SENSOR_STREAM_MINOR, operation, data, size};
+  const int length = jw_encode_profile_request(payload.data(), payload.size(), &profile);
+  if (length < 0) return {};
+  return payload;
+}
+struct SensorDescription {
+  uint32_t boot;
+  jw_sensor_schema_t schema;
+};
+absl::StatusOr<SensorDescription> DescribeSensor(JoshuaWireCoordinator& owner,
+                                                 uint8_t function,
+                                                 Clock::time_point deadline,
+                                                 uint32_t response_budget_ms) {
+  ABSL_ASSIGN_OR_RETURN(auto first, QueryData(owner, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, deadline));
+  jw_identify_response_t identity{};
+  if (jw_decode_identify_payload(first.data(), first.size(), &identity) != JW_RESULT_OK ||
+      !(identity.supported_planes & JW_PLANE_MESSAGE) ||
+      !(identity.safety_flags & JW_SAFETY_BOARD_ESTOP) ||
+      identity.max_handler_us > uint64_t(response_budget_ms) * 1000)
+    return absl::FailedPreconditionError("Incompatible sensor MCU identity");
+  uint16_t cursor = 0;
+  uint32_t generation = 0;
+  size_t count = 0;
+  int previous_id = -1;
+  std::optional<jw_function_descriptor_t> selected;
+  do {
+    uint8_t query[6];
+    for (int i = 0; i < 4; ++i) query[i] = generation >> (i * 8);
+    query[4] = cursor;
+    query[5] = cursor >> 8;
+    ABSL_ASSIGN_OR_RETURN(
+        auto data,
+        QueryData(owner, JW_CMD_DISCOVER, JW_CHANNEL_NONE, deadline, query, sizeof(query)));
+    jw_discovery_page_t page{};
+    if (jw_decode_discovery_page(data.data(), data.size(), &page) != JW_RESULT_OK ||
+        page.generation != identity.discovery_generation || page.total != identity.function_count ||
+        (page.next_cursor != JW_CURSOR_END &&
+         (!page.count || page.next_cursor != cursor + page.count)))
+      return absl::DataLossError("Inconsistent sensor discovery");
+    for (uint8_t i = 0; i < page.count; ++i) {
+      if (page.functions[i].function_id <= previous_id)
+        return absl::DataLossError("Unsorted sensor catalog");
+      previous_id = page.functions[i].function_id;
+      if (page.functions[i].function_id == function) selected = page.functions[i];
+    }
+    count += page.count;
+    generation = page.generation;
+    cursor = page.next_cursor;
+    if (count > JW_MAX_FUNCTIONS) return absl::DataLossError("Unbounded sensor discovery");
+  } while (cursor != JW_CURSOR_END);
+  if (count != identity.function_count) return absl::DataLossError("Incomplete sensor catalog");
+  if (!selected || !jw_sensor_supports_stream(&*selected))
+    return absl::UnimplementedError("Function does not advertise sensor streaming 1.1");
+  ABSL_ASSIGN_OR_RETURN(auto metadata,
+                        QueryData(owner, JW_CMD_DESCRIBE_FUNCTION, function, deadline));
+  uint8_t expected[JW_FUNCTION_DESCRIPTOR_LEN];
+  jw_encode_function_descriptor(expected, sizeof(expected), &*selected);
+  jw_sensor_schema_t schema{};
+  if (metadata.size() < sizeof(expected) ||
+      !std::equal(expected, expected + sizeof(expected), metadata.begin()) ||
+      jw_decode_sensor_schema(metadata.data() + sizeof(expected),
+                              metadata.size() - sizeof(expected),
+                              &schema) != JW_RESULT_OK)
+    return absl::DataLossError("Unsupported or changed sensor schema");
+  if (schema.unit > JW_UNIT_METRE && schema.unit != JW_UNIT_NATIVE)
+    return absl::UnimplementedError("Unknown sensor unit");
+  ABSL_ASSIGN_OR_RETURN(auto last, QueryData(owner, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, deadline));
+  jw_identify_response_t current{};
+  if (jw_decode_identify_payload(last.data(), last.size(), &current) != JW_RESULT_OK ||
+      current.boot_id != identity.boot_id ||
+      current.discovery_generation != identity.discovery_generation)
+    return absl::UnavailableError("Sensor MCU changed during discovery");
+  return SensorDescription{identity.boot_id, schema};
+}
+}  // namespace
+
+absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator::Subscription>>
+JoshuaWireCoordinator::Subscribe(uint8_t function, uint32_t period_us) {
+  const auto deadline = Clock::now() + Ms(impl_->policy.operation_timeout_ms);
+  if (function == JW_CHANNEL_NONE || period_us == 0)
+    return absl::InvalidArgumentError("Invalid sensor function/period");
+  std::unique_lock management(impl_->subscription_mutex, std::defer_lock);
+  if (!management.try_lock_until(deadline))
+    return absl::DeadlineExceededError("Subscription management busy");
+  const uint64_t required =
+      (uint64_t(JW_STREAM_SAMPLE_FRAME_LEN) * 1000000 + period_us - 1) / period_us;
+  {
+    std::lock_guard lock(impl_->mutex);
+    if (impl_->closing || !impl_->diagnostics.ready)
+      return absl::UnavailableError("MCU subscription generation closed");
+    auto found = impl_->streams.find(function);
+    if (found != impl_->streams.end()) {
+      auto entry = found->second;
+      if (!entry->active || entry->retired)
+        return absl::FailedPreconditionError(
+            "Retired/uncertain subscription requires disabled reconnect");
+      if (entry->period != period_us)
+        return absl::InvalidArgumentError("Consumers must agree on subscription period");
+      ++entry->consumers;
+      return std::shared_ptr<Subscription>(new Subscription(shared_from_this(), entry));
+    }
+    if (impl_->streams.size() >= impl_->policy.max_streams)
+      return absl::ResourceExhaustedError("MCU stream capacity exhausted");
+    uint64_t reserved = 0;
+    for (const auto& [id, entry] : impl_->streams)
+      reserved +=
+          (uint64_t(JW_STREAM_SAMPLE_FRAME_LEN) * 1000000 + entry->period - 1) / entry->period;
+    if (reserved + required > impl_->policy.telemetry_bytes_per_second)
+      return absl::ResourceExhaustedError("Subscription exceeds configured telemetry reservation");
+  }
+  ABSL_ASSIGN_OR_RETURN(
+      auto sensor,
+      DescribeSensor(*this,
+                     function,
+                     deadline,
+                     std::min(impl_->policy.attempt_timeout_ms, impl_->policy.polling_timeout_ms)));
+  auto entry = std::make_shared<Subscription::State>();
+  entry->function = function;
+  entry->period = period_us;
+  entry->boot = sensor.boot;
+  entry->schema = sensor.schema;
+  {
+    std::lock_guard lock(impl_->mutex);
+    impl_->streams[function] = entry;
+  }
+  uint8_t period[JW_STREAM_PERIOD_LEN];
+  jw_encode_stream_period(period, sizeof(period), period_us);
+  const auto payload = StreamRequest(JW_SENSOR_SUBSCRIBE, period, sizeof(period));
+  const auto operation =
+      Submit({0, 0, JW_CMD_PROFILE, function, payload.data(), payload.size()}, deadline).Wait();
+  auto data = ReplyData(operation);
+  jw_stream_state_t state{};
+  const bool valid =
+      data.ok() && jw_decode_stream_state(data->data(), data->size(), &state) == JW_RESULT_OK &&
+      state.active && state.subscription_id == operation.message_id && state.period_us == period_us;
+  bool reboot = false;
+  {
+    std::lock_guard lock(impl_->mutex);
+    entry->session = operation.session_id;
+    entry->token = operation.message_id;
+    if (!valid || impl_->closing) {
+      // Known rejection or unsent failure has no subscription effect. A lost or
+      // malformed successful acknowledgment reserves the uncertain identity.
+      jw_reply_t reply{};
+      const bool rejected =
+          operation.status.ok() &&
+          jw_decode_reply_payload(operation.payload.data(), operation.payload.size(), &reply) ==
+              JW_RESULT_OK &&
+          reply.execution == JW_EXECUTION_REJECTED;
+      if (!operation.published || rejected) {
+        if (entry->retired) --impl_->diagnostics.retired_streams;
+        impl_->streams.erase(function);
+      } else {
+        if (!entry->retired) ++impl_->diagnostics.retired_streams;
+        entry->retired = true;
+      }
+      return data.ok() ? absl::DataLossError("Subscription acknowledgment/generation invalid")
+                       : data.status();
+    }
+    entry->session = operation.session_id;
+    entry->token = state.subscription_id;
+    entry->active = true;
+    entry->consumers = 1;
+    ++impl_->diagnostics.active_streams;
+    for (const auto& cached : impl_->notifications)
+      reboot = impl_->StoreSample(entry, cached) || reboot;
+  }
+  if (reboot) {
+    impl_->Fault(absl::UnavailableError("Sensor boot changed before subscription acknowledgment"));
+    return absl::UnavailableError("Sensor boot discontinuity");
+  }
+  return std::shared_ptr<Subscription>(new Subscription(shared_from_this(), entry));
+}
+
+JoshuaWireCoordinator::Subscription::~Subscription() {
+  Close().IgnoreError();
+}
+absl::StatusOr<JoshuaWireCoordinator::Observation> JoshuaWireCoordinator::Subscription::Latest()
+    const {
+  if (closed_) return absl::FailedPreconditionError("Subscription handle closed");
+  std::lock_guard lock(owner_->impl_->mutex);
+  if (owner_->impl_->closing || state_->retired || !state_->active)
+    return absl::UnavailableError("Sensor subscription generation unavailable");
+  if (!state_->latest) return absl::UnavailableError("Sensor has no acquisition yet");
+  auto result = *state_->latest;
+  result.receipt_age =
+      std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - result.received_at);
+  result.receipt_fresh = result.receipt_age <= std::chrono::microseconds(result.schema.max_age_us);
+  result.usable = result.receipt_fresh && result.sample.sample.metadata.validity == JW_SAMPLE_VALID;
+  return result;
+}
+absl::Status JoshuaWireCoordinator::Subscription::Close() {
+  if (closed_.exchange(true)) return absl::OkStatus();
+  auto impl = owner_->impl_;
+  {
+    std::lock_guard lock(impl->mutex);
+    if (state_->consumers) --state_->consumers;
+    if (state_->consumers || state_->retired || impl->closing) return absl::OkStatus();
+    state_->retired = true;
+    state_->active = false;
+    state_->latest.reset();
+    --impl->diagnostics.active_streams;
+    ++impl->diagnostics.retired_streams;
+  }
+  const auto deadline = Clock::now() + Ms(impl->policy.operation_timeout_ms);
+  std::unique_lock management(impl->subscription_mutex, std::defer_lock);
+  if (!management.try_lock_until(deadline))
+    return absl::DeadlineExceededError("Unsubscribe deferred; disabled reconnect required");
+  uint8_t token[JW_STREAM_TOKEN_LEN];
+  jw_encode_stream_token(token, sizeof(token), state_->token);
+  const auto payload = StreamRequest(JW_SENSOR_UNSUBSCRIBE, token, sizeof(token));
+  auto operation =
+      owner_
+          ->Submit({0, 0, JW_CMD_PROFILE, state_->function, payload.data(), payload.size()},
+                   deadline)
+          .Wait();
+  auto data = ReplyData(operation);
+  if (!data.ok()) return data.status();
+  jw_stream_state_t state{};
+  if (jw_decode_stream_state(data->data(), data->size(), &state) != JW_RESULT_OK || state.active ||
+      state.subscription_id != state_->token || state.period_us != state_->period)
+    return absl::DataLossError("Unsubscribe state mismatch; disabled reconnect required");
+  {
+    std::lock_guard lock(impl->mutex);
+    impl->streams.erase(state_->function);
+    --impl->diagnostics.retired_streams;
+  }
+  return absl::OkStatus();
+}
+absl::StatusOr<jw_stream_state_t> JoshuaWireCoordinator::QuerySubscription(uint8_t function) {
+  if (function == JW_CHANNEL_NONE)
+    return absl::InvalidArgumentError("Subscription query requires a sensor function");
+  auto payload = StreamRequest(JW_SENSOR_GET_SUBSCRIPTION);
+  auto result = Submit({0, 0, JW_CMD_PROFILE, function, payload.data(), payload.size()}).Wait();
+  ABSL_ASSIGN_OR_RETURN(auto data, ReplyData(result));
+  jw_stream_state_t state{};
+  if (jw_decode_stream_state(data.data(), data.size(), &state) != JW_RESULT_OK)
+    return absl::DataLossError("Malformed subscription state");
+  return state;
+}
+absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Reconnect(
+    Reopen reopen, Reconcile reconcile, std::function<uint32_t()> source) {
+  if (!reopen || !reconcile)
+    return absl::InvalidArgumentError(
+        "Reconnect requires endpoint selection and disabled identity reconciliation");
+  const auto prior = Snapshot().session_id;
+  const auto policy = impl_->policy;
+  Close().IgnoreError();
+  uint32_t closed_session;
+  {
+    std::lock_guard lock(impl_->mutex);
+    closed_session = impl_->last_attempt_session;
+  }
+  if (!source) source = JoshuaWireSession::AllocateSessionId;
+  auto fresh = [source = std::move(source), prior, closed_session]() mutable {
+    for (int i = 0; i < 16; ++i) {
+      const auto value = source();
+      if (value && value != prior && value != closed_session) return value;
+    }
+    return uint32_t(0);
+  };
+  ABSL_ASSIGN_OR_RETURN(auto link, reopen());
+  // Reconstruct the effective protobuf policy, avoiding a second defaults table.
+  JoshuaWireHostPolicy config;
+#define JW_SET_POLICY(field) config.set_##field(policy.field)
+  JW_SET_POLICY(operation_timeout_ms);
+  JW_SET_POLICY(attempt_timeout_ms);
+  JW_SET_POLICY(polling_timeout_ms);
+  JW_SET_POLICY(max_attempts);
+  JW_SET_POLICY(max_pending_operations);
+  JW_SET_POLICY(max_pending_bytes);
+  JW_SET_POLICY(max_priority_burst);
+  JW_SET_POLICY(scheduling_guard_ms);
+  JW_SET_POLICY(max_notifications);
+  JW_SET_POLICY(max_streams);
+  JW_SET_POLICY(telemetry_bytes_per_second);
+#undef JW_SET_POLICY
+  ABSL_ASSIGN_OR_RETURN(auto next, Acquire(std::move(link), config, std::move(fresh)));
+  {
+    std::lock_guard lock(next->impl_->mutex);
+    next->impl_->diagnostics.safety_interlock = true;
+  }
+  absl::Status status;
+  try {
+    status = reconcile(*next);
+  } catch (...) {
+    status = absl::InternalError("Reconnect identity reconciliation threw");
+  }
+  auto snapshot = next->Snapshot();
+  if (!status.ok() || !snapshot.ready || snapshot.faulted || snapshot.uncertain ||
+      snapshot.closed) {
+    next->Close().IgnoreError();
+    return status.ok() ? absl::FailedPreconditionError(
+                             "Reconnect reconciliation did not establish a clean disabled session")
+                       : status;
+  }
+  {
+    std::lock_guard lock(next->impl_->mutex);
+    next->impl_->diagnostics.safety_interlock = false;
+  }
+  return next;
+}
+
 }  // namespace robot::board

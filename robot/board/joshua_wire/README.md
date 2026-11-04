@@ -109,3 +109,40 @@ boot/schema/sequence/freshness validation and recovery belong to P3c.
 runtime board consumers are connected to this coordinator in P5; no preset is
 migrated by P3b. Memory-link and production serial/PTy fixtures exercise the same
 session/coordinator with no physical devices.
+
+## Shared typed subscriptions and reconnect (P3c)
+
+`Subscribe(function_id, period_us)` negotiates IDENTIFY, a consistent paged
+catalog and the exact sensor schema, bracketed by boot/catalog identity. It
+requires sensor 1.1 operation support, scalar-f32, known units/clock, and an
+explicit aggregate telemetry byte reservation. Compatible consumers share one
+firmware token and period; a conflicting period is rejected. Management mutex
+wait, discovery and creation share a finite complete budget.
+
+Each handle owns its lifetime. Closing one consumer preserves others. Last close
+retires its cache immediately, then sends a bounded unsubscribe. A lost create or
+cancel acknowledgment retains the uncertain identity; no replacement is created.
+`QuerySubscription` remains available and does not clear uncertainty. Failed
+teardown is reported and requires deliberate disabled reconnect. Mutating stream
+acknowledgments are validated inside the existing session before another ordinary
+mutation can be admitted.
+
+`Latest()` preserves schema/unit, session/token/function, device boot/clock,
+acquisition sequence/time, device omission count and original host receipt time.
+Sequence gaps and cache overwrites are observable. Repeated acquisitions do not
+renew receipt age; regressions, altered same-sequence values, wrong clocks and
+unknown schemas/units are rejected. Invalid measurements (including allowed NaN)
+remain observable with `usable=false`. A matching stream's boot change faults the
+whole coordinator and invalidates every handle.
+
+`receipt_age`/`receipt_fresh` describe host receipt age. Device acquisition time
+stays in its advertised clock; this API does not invent a mapping to host/ROS time
+or certify absolute acquisition age. Physical transport latency, synchronization
+and freshness claims require the selected fixture's qualification.
+
+`Reconnect` first retires and releases the old physical lease even when old
+handles remain referenced. The caller selects the intended endpoint and supplies
+identity/catalog reconciliation, which runs with mutations interlocked. It then
+returns a fresh disabled session; targets, enables and subscriptions are never
+replayed. Old handles remain unavailable. Production session IDs are unique
+within the process until exhaustion; custom test sources must provide fresh IDs.

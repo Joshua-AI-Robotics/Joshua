@@ -2,6 +2,7 @@
 // Only neutral command payloads cross the public API; only JW frames reach comm.
 #include "robot/board/joshua_wire/joshua_wire_session.h"
 
+#include <atomic>
 #include <random>
 #include <utility>
 
@@ -33,10 +34,21 @@ JoshuaWireSession::JoshuaWireSession(std::shared_ptr<robot::comm::MessageTranspo
     : transport_(std::move(transport)),
       cyclic_(std::move(cyclic)),
       cyclic_timeout_(cyclic_timeout),
-      source_(source ? std::move(source) : [] { return std::random_device{}(); }),
+      source_(source ? std::move(source) : AllocateSessionId),
       hook_(std::move(hook)),
       max_attempts_(max_attempts),
       message_id_limit_(message_id_limit) {}
+
+uint32_t JoshuaWireSession::AllocateSessionId() {
+  static const uint32_t seed = std::random_device{}();
+  static std::atomic<uint64_t> issued{0};
+  for (;;) {
+    const auto index = issued.fetch_add(1);
+    if (index > UINT32_MAX) return 0;
+    const auto value = static_cast<uint32_t>(uint64_t(seed) + index);
+    if (value) return value;
+  }
+}
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t cmd,
                                                                        uint8_t channel,
@@ -54,13 +66,14 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
     ready_ = false;
   const std::vector<uint8_t> request(bytes, bytes + len);
   jw_profile_request_t profile{};
-  const bool on_cyclic =
-      cyclic_ && cmd == JW_CMD_PROFILE &&
-      jw_decode_profile_request(payload, payload_len, &profile) == JW_RESULT_OK &&
-      profile.profile_id == JW_PROFILE_ACTUATOR && profile.major == JW_PROFILE_VERSION_MAJOR &&
-      profile.minor == JW_PROFILE_VERSION_MINOR &&
-      (profile.operation == JW_ACTUATOR_SET_TARGET ||
-       profile.operation == JW_ACTUATOR_GET_FEEDBACK);
+  const bool profile_valid =
+      cmd == JW_CMD_PROFILE &&
+      jw_decode_profile_request(payload, payload_len, &profile) == JW_RESULT_OK;
+  const bool on_cyclic = cyclic_ && profile_valid && profile.profile_id == JW_PROFILE_ACTUATOR &&
+                         profile.major == JW_PROFILE_VERSION_MAJOR &&
+                         profile.minor == JW_PROFILE_VERSION_MINOR &&
+                         (profile.operation == JW_ACTUATOR_SET_TARGET ||
+                          profile.operation == JW_ACTUATOR_GET_FEEDBACK);
   jw_frame_t sent{}, received{};
   jw_decode_frame(request.data(), request.size(), &sent);
   absl::Status failure = absl::UnavailableError("JoshuaWire response missing");
@@ -96,6 +109,26 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
       continue;
     }
     if (reply.status == JW_STATUS_OUTCOME_UNKNOWN) uncertain_ = true;
+    if (profile_valid && profile.profile_id == JW_PROFILE_SENSOR &&
+        profile.major == JW_PROFILE_VERSION_MAJOR && profile.minor == JW_SENSOR_STREAM_MINOR &&
+        reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE &&
+        (profile.operation == JW_SENSOR_SUBSCRIBE || profile.operation == JW_SENSOR_UNSUBSCRIBE)) {
+      jw_stream_state_t state{};
+      uint32_t expected = 0;
+      const bool create = profile.operation == JW_SENSOR_SUBSCRIBE;
+      const bool valid_request =
+          create
+              ? jw_decode_stream_period(profile.data, profile.data_len, &expected) == JW_RESULT_OK
+              : jw_decode_stream_token(profile.data, profile.data_len, &expected) == JW_RESULT_OK;
+      if (!valid_request ||
+          jw_decode_stream_state(reply.data, reply.data_len, &state) != JW_RESULT_OK ||
+          state.active != create ||
+          state.subscription_id != (create ? sent.message_id : expected) ||
+          (create && state.period_us != expected)) {
+        failure = absl::DataLossError("Uncorrelated subscription acknowledgment");
+        continue;
+      }
+    }
     return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
   }
   if (published) uncertain_ = true;
