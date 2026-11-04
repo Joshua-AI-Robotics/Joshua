@@ -140,7 +140,26 @@ message Board {
   repeated Channel channels = 4;  // Drive leg: what each slot drives.
   FirmwareSpec firmware = 5;
   BoardProtocol protocol = 6;
+  // Host coordinator budgets for FRAME_STREAM. Software defaults are not
+  // hardware timing qualification. All handles of an MCU share this policy.
+  JoshuaWireHostPolicy joshua_wire_host_policy = 7;
   oneof board_config {
     Am243Config am243_config = 10;
   }
+}
+
+message JoshuaWireHostPolicy {
+  optional uint32 operation_timeout_ms = 1;    // Default 200, queue + all attempts.
+  optional uint32 attempt_timeout_ms = 2;      // Default 50, bounded by operation.
+  optional uint32 polling_timeout_ms = 3;      // Default 40, including queue wait.
+  optional uint32 max_attempts = 4;            // Default 2; allowed 1..4.
+  optional uint32 max_pending_operations = 5;  // Default 16 ordinary operations.
+  optional uint32 max_pending_bytes = 6;       // Default 4096, request + reply.
+  optional uint32 max_priority_burst = 7;      // Default 8; fairness when slack fits.
+  optional uint32 scheduling_guard_ms = 8;     // Default 1.
+  optional uint32 max_notifications = 9;       // Default 32 latest raw envelopes.
+  optional uint32 max_streams = 10;            // Default 16 shared subscriptions.
+  // Explicit aggregate telemetry reservation, in complete-frame bytes/second.
+  // Zero (default) prevents subscriptions until a workload budget is selected.
+  uint32 telemetry_bytes_per_second = 11;
 }

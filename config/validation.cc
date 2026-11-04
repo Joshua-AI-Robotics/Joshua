@@ -10,6 +10,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "robot/board/joshua_wire/coordinator_policy.h"
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/perception/audio/audio_config.h"
@@ -334,6 +335,16 @@ absl::Status ValidateConfig(const config::Config& config) {
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
   for (const auto& board : robot.boards()) {
+    if (board.has_joshua_wire_host_policy()) {
+      if (board.comm().comm_type() != robot::comm::SERIAL ||
+          board.comm().transport_type() != robot::comm::FRAME_STREAM ||
+          (board.board_type() != robot::board::TEENSY41 &&
+           board.board_type() != robot::board::ESP32 && board.board_type() != robot::board::AM243))
+        return absl::InvalidArgumentError(
+            "JoshuaWire host policy requires a Joshua FRAME_STREAM board");
+      ABSL_RETURN_IF_ERROR(robot::board::ValidateCoordinatorPolicy(
+          robot::board::ResolveCoordinatorPolicy(board.joshua_wire_host_policy())));
+    }
     if (board.has_am243_config())
       return absl::InvalidArgumentError(
           "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");

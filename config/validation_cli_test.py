@@ -343,6 +343,15 @@ robot {
                             "//robot/board/factory:board_resolver.h",
                         },
                     )
+                if label.startswith("//robot/board/joshua_wire:"):
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/board/joshua_wire:coordinator_policy",
+                            "//robot/board/joshua_wire:coordinator_policy.h",
+                        },
+                        "validator depends on the MCU runtime coordinator",
+                    )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
                     # These helpers check protobuf fields without opening a bus.
                     # Keep the allowlist exact so transports remain excluded.

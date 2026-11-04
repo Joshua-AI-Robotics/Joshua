@@ -51,6 +51,7 @@ cc_library(
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
     ],
 )
 
@@ -135,6 +136,43 @@ cc_test(
         ":serial_validation",
         "//firmware/am243/joshua_dual_transport:software_backend",
         "//firmware/common:joshua_wire_endpoint",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "coordinator_policy",
+    hdrs = ["coordinator_policy.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/board/proto:board_cc_proto",
+        "@abseil-cpp//absl/status:status",
+    ],
+)
+
+cc_library(
+    name = "joshua_wire_coordinator",
+    srcs = ["joshua_wire_coordinator.cc"],
+    hdrs = ["joshua_wire_coordinator.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":coordinator_policy",
+        ":joshua_wire_session",
+        "//firmware/common:joshua_wire",
+        "//firmware/common:joshua_wire_profiles",
+        "//firmware/common:joshua_wire_sensor_stream",
+        "//robot/comm/interfaces:frame_stream_transport",
+    ],
+)
+
+cc_test(
+    name = "joshua_wire_coordinator_test",
+    srcs = ["joshua_wire_coordinator_test.cc"],
+    deps = [
+        ":joshua_wire_coordinator",
+        "//firmware/common:joshua_wire_sensor_stream",
+        "//firmware/common:joshua_wire_stream",
+        "//robot/comm/factory:comm_factory",
         "@googletest//:gtest_main",
     ],
 )

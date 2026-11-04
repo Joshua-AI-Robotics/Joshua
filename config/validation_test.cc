@@ -197,6 +197,13 @@ TEST(ValidationTest, RejectsInvalidSerialTimingWithoutHardware) {
   EXPECT_TRUE(ValidateConfig(config).ok());
 }
 
+TEST(ValidationTest, HostCoordinatorPolicyCannotBeIgnoredOnOtherTransports) {
+  auto config = MakeConfig();
+  auto* board = config.mutable_robot()->mutable_boards(0);
+  board->mutable_joshua_wire_host_policy()->set_operation_timeout_ms(200);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST(ValidationTest, SerialIoPolicyIsValidatedBeforeHardwareAccess) {
   auto config = MakeConfig();
   auto* policy = config.mutable_robot()

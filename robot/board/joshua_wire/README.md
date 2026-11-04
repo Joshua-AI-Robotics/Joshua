@@ -74,3 +74,38 @@ The manual `joshua_wire_smoke` CLI runs handshake, disabled configuration or
 explicitly authorized exercise modes through the production session. Preflight
 validates the selected JoshuaWire serial adapter without opening a device;
 `--dry_run` and PTY tests exercise the CLI without physical hardware.
+
+## Shared duplex coordinator (P3b)
+
+`JoshuaWireCoordinator::Acquire` shares one queue and existing `JoshuaWireSession`
+per `FrameStreamTransport` lease. One reset occurs on first acquisition; retained
+closed/faulted leases never reopen. The session remains the sole ID allocator,
+correlator, exact-retry and uncertainty owner. An exchange hook supplies duplex
+I/O with typed publication progress and one total budget across all attempts.
+Raw/vendor and paired cyclic paths keep the existing session behavior.
+
+Ordinary admission is bounded by operations and reserved request/reply bytes.
+ESTOP has a separate single slot and retires an ordinary reply wait before its
+higher-ID frame is dispatched. A partially transmitted frame is never interrupted
+to append a stop. A requested stop installs a host interlock: queries and recovery
+remain possible, while further mutations require deliberate disabled reset /
+reconnect. A stop acknowledgment is not physical stopping evidence.
+
+Priority is ESTOP, actuator target/disable, configuration, then polling. After the
+configured priority burst, lower-priority work can consume slack only when its
+complete remaining budget plus guard fits ahead of higher-priority deadlines.
+Infeasible load expires or is rejected; this scheduler does not promise arbitrary
+producer rates. Queued cancellation/expiry does not publish bytes or consume IDs.
+Cancellation after publication remains uncertain, and a retired ID is never
+retried. Late replies and samples cannot satisfy a different command.
+
+One protocol worker per connection routes frames during command waits and while
+idle. It does not invoke application callbacks. The current notification drain is
+explicitly a diagnostic raw-envelope cache, bounded and keyed by session, token
+and function. It is not a usable typed sensor API: subscription ownership,
+boot/schema/sequence/freshness validation and recovery belong to P3c.
+
+`Board.joshua_wire_host_policy` resolves effective software budgets. Existing
+runtime board consumers are connected to this coordinator in P5; no preset is
+migrated by P3b. Memory-link and production serial/PTy fixtures exercise the same
+session/coordinator with no physical devices.

@@ -22,6 +22,7 @@ cc_library(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/board/factory:board_resolver",
+        "//robot/board/joshua_wire:coordinator_policy",
         "//robot/comm/factory:comm_config_validation",
         "//robot/comm/serial:serial_config_validation",
         "//robot/perception/audio:audio_config",
