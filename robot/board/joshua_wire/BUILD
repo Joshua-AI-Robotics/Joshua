@@ -26,8 +26,12 @@ cc_library(
 cc_test(
     name = "mixed_binding_test",
     srcs = ["mixed_binding_test.cc"],
-    data = ["//config/config_preset:config_presets"],
+    data = [
+        "//config/config_preset:config_presets",
+        "//tools/serial:record_scalar",
+    ],
     deps = [
+        ":serial_validation",
         "//config:config_utils",
         "//config:validation",
         "//firmware/common:joshua_mixed_serial",

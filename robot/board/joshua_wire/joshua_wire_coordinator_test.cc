@@ -257,6 +257,16 @@ TEST_F(CoordinatorTest, LostHeartbeatFaultsConnectionWithoutTargetReplay) {
   EXPECT_TRUE(coordinator->Snapshot().closed);
   EXPECT_EQ(coordinator->Snapshot().heartbeat_failures, 1);
 }
+
+TEST_F(CoordinatorTest, MalformedWatchdogAckRemainsUnknownAndBlocksEnable) {
+  Open();
+  const uint8_t policy[] = {0x40, 0x42, 0x0f, 0, 0x20, 0xa1, 0x07, 0};
+  auto result = coordinator->Exchange(
+      {0, 0, JW_CMD_CONFIGURE_WATCHDOGS, JW_CHANNEL_NONE, policy, sizeof(policy)});
+  EXPECT_TRUE(absl::IsDataLoss(result.status()));  // Fixture returns OK with no echo.
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+  EXPECT_TRUE(absl::IsFailedPrecondition(Profile(JW_ACTUATOR_ENABLE).Wait().status));
+}
 TEST_F(CoordinatorTest, StopHasReservedCapacityAndRetiresPublishedOrdinaryWork) {
   policy.set_max_pending_operations(1);
   policy.set_max_pending_bytes(192);
