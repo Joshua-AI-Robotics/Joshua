@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | Agreed demo direction; implementation and physical qualification gates open. |
 | Created / last reviewed | 2026-11-03 |
-| Implementation review | Checkout `07374c6`; source review only. No hardware qualification established by this document. |
+| Implementation review | Checkout `9993548`; source review only. No hardware qualification established by this document. |
 | Primary outcome | Configure diverse supported hardware quickly, observe and control it dependably, and connect the same interfaces to a simulator. |
 | Delivery owner, parts, capacity, and dates | TBD at N0. |
 | Planning horizon | Target twelve weeks from an agreed kickoff; confirm conference and freeze dates at N0. |
@@ -222,20 +222,47 @@ or silently changing command ownership.
 
 ## 6. Implementation foundations and gaps
 
-These are source-level foundations. A factory path or passing software test does
-not establish a qualified physical configuration. Simulator integration work is
-required only for the backend selected at N0; the other backend is optional.
+The basic device paths exist in the [action factory](../robot/action/factory/action_factory.h),
+[board factory](../robot/board/factory/board_factory.cc), and
+[perception factory](../robot/perception/factory/perception_factory.cc). The main
+implementation gaps are shared runtime ownership, control lifecycle, observability,
+and simulator/application integration. A factory path or passing software test
+does not establish a qualified physical configuration.
 
-| Area | Existing foundation | Work needed for this demo |
-| --- | --- | --- |
-| Config-driven composition | [Architecture](../docs/ARCHITECTURE.md), protobuf config, and generated ROS 2 nodes. | Freeze rig presets, stable identities, readiness criteria, and supported-change validation. |
-| Actuation | [Action factory](../robot/action/factory/action_factory.h) selects STS3215 and NEMA17 stepper drivers; [board factory](../robot/board/factory/board_factory.cc) resolves supported board paths. | Qualify both physical branches, command/feedback ownership, units, limits, command arbitration, stop, and recovery. |
-| Sensing | [Perception factory](../robot/perception/factory/perception_factory.cc) constructs camera, STS3215 position, LDS01, and ALSA paths. | Verify the selected sensor streams end to end, including timestamps, invalid data, freshness, recording, and display. |
-| Operator view | [Control panel](../ui/README.md) provides a UI foundation. | Build and qualify the required live device/status views; a CLI plus simple panels is acceptable. |
-| MuJoCo integration | [Engine](../simulation/mujoco/engine.py) steps/reads/renders; [mirror mode](../simulation/mujoco/modes/mirror.py) writes incoming scalars to actuator controls. | Required only if MuJoCo is selected: implement and verify named measured-state mappings and sensor panels. Control inputs alone do not establish exact measured-state mirroring. |
-| Isaac integration | [Viewer](../simulation/isaac/viewer.py) loads a scene and steps physics. | Required only if Isaac Sim is selected: implement the hardware bridge, device panels, command-target selection, and application adapter. |
-| Timing and records | [Robot-time service](../docs/ROBOT_TIME.md) and [data collection](../ai/train/README.md) are foundations. | Preserve time domains, sample identity, config provenance, events, and replayable evidence; verify mixed-load behavior. |
-| Physical dependability | [Firmware records](../firmware/README.md) identify board-specific behavior and gaps. | Qualify the exact board/firmware/driver/transport combinations and declared fault responses. |
+The backlog below records source-review findings, with all items open. **P0**
+items establish the runtime contracts needed by downstream work. **P1** items
+complete the visible demo workflow. **P2** packages the measurements and release
+evidence; instrumentation should start with P0. Simulator integration is required
+only for the backend selected at N0; the other backend is optional.
+
+| Priority | Gap | Current evidence | Required change | Acceptance evidence |
+| --- | --- | --- | --- | --- |
+| P0 | I01 — Shared command/feedback bus runtime | [Actuation](../ros2/actuator_subscriber.cc) and [position publishing](../ros2/position_publisher.cc) use separate executables. [Validation](../config/validation.cc) requires one process per bus and one node type per node ID, blocking their composition on one servo bus. | Provide a bus-owning process that handles commands and feedback together. Extend node/config integration while retaining exclusive bus ownership and existing driver abstractions. | Software integration checks demonstrate one board/transport owner, concurrent command and feedback paths, named state with defined units, and rejection of conflicting ownership. Physical behavior is qualified under Q01. |
+| P0 | I02 — Explicit control lifecycle and fault policy | [Actuator startup](../ros2/actuator_subscriber.cc) sends `PRESET_ENABLE_TORQUE` during construction. The subscription path has no shared command-source arbitration or stale-command policy. [JoshuaWire serial](../firmware/README.md) has no communication-loss watchdog. | Start disabled; implement deliberate enable, exclusive command ownership, command freshness, stop/fault states, and explicit recovery. Define per-device link-loss behavior; implement device-side enforcement where a stop guarantee depends on it, or constrain the declared operating envelope. | Software checks cover disabled startup, rejected commands from inactive sources, expired input, fault latching, stop, and recovery without automatic re-enable. Link-loss limits are documented; physical response requires Q02. |
+| P0 | I03 — Device readiness and health | [Camera](../ros2/camera_publisher.cc), [position](../ros2/position_publisher.cc), and [lidar](../ros2/lidar_publisher.cc) publishers primarily log acquisition failures. UI node/topic discovery does not establish valid device data. | Publish consistent per-device readiness, last-valid-sample age, validity, error state, and recovery events. Define dependent application behavior for stale or invalid input independently of the display. | Controlled-clock and injected-failure checks cover startup without data, invalid samples, stalled streams, disconnect, and recovery. A discovered node cannot satisfy readiness without valid required data. |
+| P0 | I04 — Sample identity and timing preservation | [Position publishing](../ros2/position_publisher.cc) passes the position payload without packet timing; camera and lidar publishers stamp outgoing messages at publication. The [robot-time service](../docs/ROBOT_TIME.md) does not synchronize sources or migrate those paths automatically. | Preserve acquisition/receipt times where available, time-domain identity, sample identity, and restart/discontinuity markers through publishing, recording, and bridging. Represent unavailable source timing explicitly. | Known-timestamp samples retain their meaning through the selected data path. Replay checks cover delayed, missing, repeated, and restarted streams; latency reports identify endpoints and clock assumptions. |
+| P1 | I05 — Mixed-rig presets and supported changes | [Config validation](../config/README.md) and individual presets exist; the validator explicitly excludes hardware readiness. There is no complete preset package for this mixed rig and its two required changes. | Ship baseline/expanded rig presets, camera A/B settings, stable names, calibration references, and a readiness inspection command. Document the stop/change/configure/validate/restart sequence. | Config checks accept the intended variants and reject ownership/type conflicts. A documented rehearsal produces config/artifact diffs for both changes; readiness distinguishes missing devices from invalid config. Physical and timing evidence comes from Q01/Q03. |
+| P1 | I06 — Live device views | [MonitorPage](../ui/src/pages/MonitorPage.tsx) shows topology and logs; [TopicsList](../ui/src/components/TopicsList.tsx) shows endpoint metadata. [CalibrationPage](../ui/src/pages/CalibrationPage.tsx) is a placeholder. | Add camera, measured-versus-commanded joint, range, and health views with units, data origin, rates, and sample age. Supply the calibration procedure/tools needed for the selected rig; a CLI plus simple panels is acceptable. | Recorded or synthetic fixtures verify data display, stale/fault transitions, units, and source labels. Stepper command/estimate is visibly distinct from measured feedback. Qualify the live view under Q01. |
+| P1 | I07 — One complete simulator bridge | [MuJoCo mirror mode](../simulation/mujoco/modes/mirror.py) maps scalar topics into actuator controls. The [Isaac viewer](../simulation/isaac/viewer.py) loads a scene and steps physics. Neither supplies the complete required device view and application routing. | For the N0-selected backend only, implement named state mappings, sensor panels, freshness/source labels, a minimal rig model, and explicit execution-target routing. Derive mappings from canonical config/artifact references. | Every demo device is observable; fixtures verify names, units, state mappings, stale behavior, and restart. Live, replayed, and simulated sources are labeled, and commands reach only the selected target. Model motion alone does not count as measured-state evidence. |
+| P1 | I08 — Shared application and adapters | The target-bearing controller and paired hardware/simulation adapters specified in Section 4 are not implemented as a demo example. | Implement the small controller, observation/action contract, preprocessing, and explicit hardware/simulation adapters. Supply a minimal independent simulated plant and document its assumptions. | The same application source runs against both adapters with compatible units, update rate, and bounded actions. Simulation completes without live hardware observations; physical execution uses Q01/Q02-qualified hardware. |
+| P2 | I09 — Recording, metrics, and release evidence | [DataStore](../ai/train/data_store.py) records interleaved messages and counts; the subscriber uses receipt-time recording by default. It does not assemble the full demo provenance and qualification report. | Add session manifests for code/config/firmware/calibration/simulator identities, fault events, integration effort, and measurement endpoints. Provide repeatable latency, completeness, lifecycle, and soak reports plus inspection/replay instructions. | A sample session regenerates its report from preserved records. Missing data, failed attempts, interventions, and clock limitations remain visible. The release manifest resolves the artifacts used by N4–N6. |
+
+Physical qualification and user evidence are required workstreams alongside the
+implementation backlog. They cannot be closed by mocks, native firmware tests,
+or simulator motion.
+
+| Priority | Gap | Current evidence | Required change | Acceptance evidence |
+| --- | --- | --- | --- | --- |
+| Required for N1/N3 | Q01 — Qualified mixed hardware | Driver paths exist, but the exact demo kit is unselected. The current [Teensy record](../firmware/teensy/41/README.md) establishes protocol/backpressure behavior with motor power disconnected; physical GPIO timing and motor stopping remain unverified. The [ESP32 record](../firmware/esp32/README.md) does not establish physical motion qualification for the current revision. | Select and pin the exact devices, firmware, supplies, wiring, fixtures, calibration, rates, and load. Qualify both actuator branches and all required sensors together, including the two supported changes. | Authorized bench records establish actual motion, direction/limits, servo command/feedback concurrency, sensor data, units/frames, and mixed-rig operation. Open-loop stepper values retain command/estimate labels. |
+| Required for N1/N4 | Q02 — Physical fault response and endurance | Software stop/teardown paths and protocol coverage do not establish physical stop deadlines or communication-loss behavior. | Qualify the I02 policy on the exact rig: stop, sensor loss, actuator-link loss, power interruption, deliberate recovery, mixed-load soak, and repeated lifecycle operations. Freeze the workload, durations, bounds, and trial counts at N0. | Measured detection/recovery and physical response satisfy the frozen operating envelope. Preserve every trial, timeout, intervention, and failure. Unsupported stop guarantees remain excluded from claims. |
+| Required for N2/N5/N6 | Q03 — Reproducible fast integration and release | The plan defines the workflow, but no timed outside-user demonstration or complete release evidence is recorded here. | Rehearse camera replacement and actuator-branch addition/removal, time every stage, and have an engineer outside the implementation team reproduce them. Freeze and rehearse the release package. | Complete timing/assistance ledgers, source/config/artifact diffs, starting conditions, dependency identities, relevant Docker check results, and conference runbook. |
+
+Start with **I01 and I02: one servo bus owner that accepts bounded commands,
+publishes named measured feedback, starts disabled, and requires deliberate
+enable/stop/recovery**. Add the I03/I04 health and timing contracts to that path,
+then extend it to camera, lidar, and stepper. Build the selected simulator and
+shared application on those interfaces. Begin physical qualification as each
+branch becomes ready; retain separate software and physical evidence.
 
 ## 7. Checkpoint register
 
