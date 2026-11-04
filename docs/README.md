@@ -14,6 +14,7 @@
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
+| Serial reliability, mixed sensor streaming/control, and implementation review gates | [SERIAL_COMM_IMPROVEMENT_PLAN.md](SERIAL_COMM_IMPROVEMENT_PLAN.md) |
 | Shared JoshuaWire code, test layout and migration adapters | [../firmware/common/README.md](../firmware/common/README.md) |
 | JoshuaWire serial validation procedure | [JOSHUA_WIRE_VALIDATION.md](JOSHUA_WIRE_VALIDATION.md) |
 | Agent instructions RFC (AGENTS.md contract) | [AGENTS_RFC.md](AGENTS_RFC.md) |
