@@ -1,9 +1,9 @@
-# Public release MVP and conference checkpoints
+# Real-to-sim-to-real camera-head demo and checkpoints
 
 | Field | Value |
 | --- | --- |
 | Status | Agreed demo direction; implementation and hardware verification gates remain open. |
-| Created / last reviewed | 2026-11-01 |
+| Created / last reviewed | 2026-11-01 / 2026-11-03 |
 | Implementation baseline | Checkout `31efe9d`; source and documentation review only. |
 | Planning horizon | 12 weeks from an agreed kickoff; conference expected in approximately three months. Exact conference and freeze dates are TBD. |
 | Delivery owner / engineering capacity | TBD at checkpoint C0. |
@@ -52,23 +52,23 @@ elapsed time separately. Publish only component combinations actually verified.
 - Two qualified physical configurations, A and B, with the same joint count.
 - One complete real-to-sim-to-real loop, including a policy trained in simulation
   and evaluated on real hardware.
-- One pinned MuJoCo training environment and small tracking-policy recipe.
-  Select the external trainer and algorithm at C0; the working direction is
-  state-based reinforcement learning. No new learning algorithm is required.
+- One pinned simulation training environment and small tracking-policy recipe.
+  MuJoCo is the provisional baseline; compare it with NVIDIA Isaac Lab and select
+  the simulation stack, external trainer, and algorithm at C0. The working
+  direction is state-based reinforcement learning. No new learning algorithm is
+  required.
 - A supported hardware-change workflow that preserves recorder, trainer, and
   inference source code while changing configuration and calibration artifacts.
 - A reproducible example, documented extension points, and outside-user evidence.
 
-The SO-100 arm remains excluded. ACT/LeRobot imitation training is no longer a
-conference dependency. General-purpose model generation, raw-image policy
-transfer, arbitrary morphology transfer, live hot-plugging, and a broad model
-catalog are deferred. Adding a second joint is a later milestone.
+General-purpose model generation, raw-image policy transfer, arbitrary morphology
+transfer, live hot-plugging, and a broad model catalog are deferred. Adding a
+second joint is a later milestone.
 
 A second controller, distance sensing, and distractor/occlusion handling are
-conditional additions after the required loop works. AM243 physical actuation
-remains outside the critical path; the documented current backend has no physical
-STEP/DIR GPIO output. A servo bus adapter is sufficient for the primary rig;
-Teensy/ESP32 is not required merely to connect that adapter.
+conditional additions after the required loop works. The primary rig connects
+through a compatible servo bus adapter. Optional sensors can use a Teensy or
+ESP32 acquisition path.
 
 A CLI or thin operator UI is sufficient. Reconcile this learning-first sequence
 with the separate [AI integration plan](../docs/AI_INTEGRATION.md) at C0.
@@ -96,7 +96,7 @@ that the learned controller must outperform conventional control.
 
 | Configuration/change | Physical setup | Required workflow and evidence |
 | --- | --- | --- |
-| A — Original head | Lightweight camera A on a directly mounted bracket | Establish calibration, measured response, simulation, and real policy evaluation. |
+| A — Baseline head | Lightweight camera A on a directly mounted bracket | Establish calibration, measured response, simulation, and real policy evaluation. |
 | B — Modified head | Replace the camera/bracket with a prequalified heavier assembly using camera B | Update device settings, camera calibration, geometry/payload description, and measured actuator response. Validate or retrain in the updated simulation and evaluate on real hardware. |
 | Optional controller substitution | A second verified controller/interface with the same logical actuator and feedback contract | Qualify physical I/O, timing, units, stop/recovery, and policy compatibility separately. |
 | Deferred morphology change | Add tilt or change joint count | Requires a revised environment and observation/action contract; do not claim automatic policy reuse. |
@@ -105,7 +105,7 @@ At C0/C1 choose A/B parts with a measurable calibration or response difference
 within the servo's qualified load and motion range. Do not assume that adding
 mass will materially change a closed-loop servo's behavior. If it does not,
 report that result and choose a useful supported change before freezing the
-experiment. Never deliberately degrade the old policy to manufacture a contrast.
+experiment. Never deliberately degrade the A policy to manufacture a contrast.
 
 For this release, “easy hardware change” means:
 
@@ -146,9 +146,8 @@ flowchart LR
     MCU -->|New sensor integration| Host
 ```
 
-This is a conceptual connection diagram, not a wiring schematic. The primary
-servo position sensor is integrated; separate shafts, linear encoders, and home
-switches are not required for this proposed bounded rotary setup.
+This is a conceptual connection diagram, not a wiring schematic. The servo
+provides integrated position feedback.
 
 ### Required hardware
 
@@ -181,9 +180,9 @@ alone does not establish compatibility with Joshua's STS3215 driver. See
 | DYNAMIXEL XL330-M288-T alternate servo kit | 1 set | Optional actuator-substitution candidate; requires its own qualified mount, compatible TTL interface, 5 V supply, and new Joshua driver. Not a direct STS3215 spare. |
 | Spare camera/servo/adapter and cables | Selected kit | Choose after assembly freeze and failure rehearsal. |
 
-**VL53L5CX integration:** this replaces the earlier VL53L1X candidate. It gives
-a coarse depth grid: up to 8x8 zones at 15 Hz, or 4x4 at 60 Hz. Use a breakout
-with documented supply and I2C logic compatibility, rather than the bare sensor.
+**VL53L5CX integration:** the sensor provides a coarse depth grid: up to 8x8 zones
+at 15 Hz, or 4x4 at 60 Hz. Use a breakout with documented supply and I2C logic
+compatibility, rather than the bare sensor.
 See [ST mode specifications](https://www.st.com/resource/en/flyer/vl53l5cx_flyer.pdf)
 and the [datasheet](https://www.st.com/resource/en/datasheet/vl53l5cx.pdf).
 
@@ -245,10 +244,25 @@ not establish predictive model fidelity.
 
 ### Learn in simulation
 
-Use one parameterized one-axis MuJoCo environment with reset, action application,
-observation construction, reward, termination, and deterministic seeded evaluation.
-Define a tracking reward and smoothness penalties with weights recorded in the
-training recipe. Respect the physical action bounds and control period.
+MuJoCo is the provisional baseline because the task has one rotary joint and
+uses target bearing and measured joint state rather than raw images. Joshua's
+existing MuJoCo engine provides stepping, control, state access, and rendering.
+The main transfer work is validating actuator response, timing, and detector
+behavior against real measurements.
+
+At C0 compare this baseline with [NVIDIA Isaac Lab](https://developer.nvidia.com/isaac/lab),
+a robot-learning framework offering parallel training and simulation integration.
+Isaac Sim provides richer scene and sensor rendering when those capabilities are
+needed. Joshua's current Isaac integration is a scene viewer, not a training
+environment; both candidates require learning-workflow integration. Select one
+stack for this release and record the rationale. Validate the choice through the
+later real-transfer gates.
+
+Use one parameterized one-axis environment in the selected stack with reset,
+action application, observation construction, reward, termination, and
+deterministic seeded evaluation. Define a tracking reward and smoothness penalties
+with weights recorded in the training recipe. Respect the physical action bounds
+and control period.
 
 Train across target trajectories and calibrated uncertainty in actuator response,
 sensor noise, and observation/command delay. Derive plausible ranges from bench
@@ -274,7 +288,7 @@ parameters and documented randomization, holding evaluation conditions and
 training budget comparable. Report actual differences, including no improvement.
 Do not claim that calibration improved transfer without supporting measurements.
 
-After the A→B hardware change, check the old checkpoint's compatibility before
+After the A→B hardware change, check the A checkpoint's compatibility before
 any trial. If compatible, evaluate its performance; if incompatible, record the
 rejection. Recalibrate, regenerate the model, and reuse or retrain as appropriate.
 A newly trained B policy and an unchanged A policy are distinct claims.
@@ -282,8 +296,8 @@ A newly trained B policy and an unchanged A policy are distinct claims.
 ## 4. Implementation gaps
 
 Findings are from the baseline checkout. Code and native tests are foundations,
-not evidence of physical qualification or a complete learning workflow. Gap IDs
-below describe the revised camera-head scope; the former linear-axis G10 is retired.
+not evidence of physical qualification or a complete learning workflow. The gaps
+below cover the camera-head implementation and verification work.
 
 | Gap | Existing foundation and evidence | Work needed | Gate |
 | --- | --- | --- | --- |
@@ -361,7 +375,11 @@ C0. Work may overlap; downstream evidence must use validated upstream artifacts.
 - [ ] Freeze task distribution, target trajectories, trial length, tracking-error
   tolerance, target-loss allowance, smoothness limit, and intervention rules.
 - [ ] Freeze the shared contract, simulator template scope, and supported-change
-  boundaries. Choose one trainer/algorithm and benchmark compute needs.
+  boundaries.
+- [ ] Compare MuJoCo and Isaac Lab on the same camera-head task in a bounded
+  feasibility check: setup effort, calibration support, training throughput,
+  compute needs, and checkpoint/deployment integration. Select and pin one
+  simulation stack and trainer/algorithm; record versions, results, and rationale.
 - [ ] Define nominal-simulation and conventional-controller comparisons, held-out
   splits, model-fit thresholds, and A/B evaluation protocol before testing.
 - [ ] Reconcile the learning-first sequence with the existing AI roadmap.
@@ -394,8 +412,9 @@ physical angle/timing/stop traces, target detector results, and limitations.
   failures and interrupted recordings with explicit status.
 - [ ] Fit the effective actuator model and camera calibration; record uncertainty
   and compare prediction errors with the nominal model under identical commands.
-- [ ] Generate the one-axis MuJoCo model from canonical config/artifacts and a
-  fixed template. Rebuilding the same inputs produces the same model identity.
+- [ ] Generate the one-axis model for the C0-selected simulation stack from
+  canonical config/artifacts and a fixed template. Rebuilding the same inputs
+  produces the same model identity.
 - [ ] Meet frozen held-out model error/timing thresholds. Verify control units,
   delay, limits, reset, detector visibility, and observation/action parity.
 
@@ -465,7 +484,7 @@ revision, and usability gaps. A prepared booth machine does not prove onboarding
 - [ ] Check checkpoint compatibility; document reuse, rejection, or retraining
   explicitly. Record B training provenance if a new checkpoint is produced.
 - [ ] Repeat C4's **45/50 proposed acceptance protocol on B**, with frozen
-  conditions. Compare the prior policy only when it is compatible for that trial.
+  conditions. Compare the A policy only when it is compatible for that trial.
 - [ ] Preserve logical joint/observation/action contracts and reuse shared
   recording/training/deployment source. Report any component integration work.
 - [ ] Publish measured adaptation time with calibration, compute, and operator
@@ -568,6 +587,5 @@ does not establish hardware-free execution.
 
 | Review date | Gate / decision | Evidence | Next action / owner / due date |
 | --- | --- | --- | --- |
-| 2026-11-01 | Original guide and XY hardware plan created | Source review at `31efe9d`; no hardware run | Superseded by camera-head scope below; earlier gates were not verified. |
-| 2026-11-01 | Adopted one-axis head, real-to-sim-to-real learning, and required A→B hardware-change demonstration | User-agreed direction; source review of simulation, config, perception, and learning foundations | Complete revised C0; exact parts, capacity, thresholds, and dates TBD. |
+| 2026-11-01 | One-axis head, real-to-sim-to-real learning, and required A→B hardware-change demonstration | User-agreed direction; source review of simulation, config, perception, and learning foundations | Complete C0; exact parts, capacity, thresholds, and dates TBD. |
 | 2026-11-01 | Recorded VL53L5CX as optional ToF candidate and XL330-M288-T as optional alternate actuator | Manufacturer documentation and factory source review; neither integration is qualified | Select breakout and interface kits; keep core A/B scope and gates unchanged. |
