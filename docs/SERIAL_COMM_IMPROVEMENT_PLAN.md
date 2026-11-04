@@ -2,11 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Draft for design review; implementation is on hold. |
+| Status | Implementation authorized 2026-11-03; P1 protocol foundation implemented and software-tested. Production streaming and hardware qualification remain open. |
 | Planning baseline | Committed checkout `258e3e4` on `kangjin/serial-comm-improve`. |
 | Scope decision | Include continuous sensor streaming and actuator commands on the same MCU serial connection, plus the demo's Feetech and LDS01 paths. |
 | Created / last reviewed | 2026-11-03 |
-| Owners, exact hardware, rates, budgets, and dates | To be recorded at P0 before implementation starts. |
+| Owners, exact hardware, rates, budgets, and dates | Remaining decisions must be recorded before their dependent integration or qualification phase. P1 uses backend-supplied period bounds, with fixture values confined to tests. |
 | Related work | [JoshuaWire contract](JOSHUA_WIRE.md), [board/comm separation](BOARD_COMM_SEPARATION_PLAN.md), and [streaming issue #135](https://github.com/Joshua-AI-Robotics/Joshua/issues/135). |
 
 ## 1. Required outcome
@@ -33,8 +33,9 @@ Completion requires all of the following:
 - The mixed-device integration uses production host and shared firmware paths.
   Physical motion, output timing, and stopping have separate qualification evidence.
 
-The first supported sensor payload and physical sensor must be selected at P0.
-An IMU enum is insufficient: the current sensor profile implements scalar-f32
+The first supported payload is scalar-f32, selected for P1. The physical sensor
+must be selected before P4's production backend work. An IMU enum is insufficient:
+the current sensor profile implements scalar-f32
 samples, so a multiaxis IMU needs a versioned typed schema and backend. A software
 sample generator can validate transport behavior but cannot close sensor-hardware
 qualification.
@@ -132,6 +133,12 @@ in the normative contract before adding codecs or sending unsolicited traffic.
   and golden examples. Prefer an explicitly negotiated additive extension if the
   existing envelope invariants remain valid; otherwise require a new wire revision
   and reject mixed revisions explicitly. The decision must be resolved at P0.
+
+P1 selects the additive option: SENSOR v1.1 SUBSCRIBE/UNSUBSCRIBE/GET_SUBSCRIPTION
+and firmware-to-host STREAM_SAMPLE kind 0x11. The subscription token is the
+SUBSCRIBE request's message ID, scoped by session and function. The
+[normative layouts and lifecycle](JOSHUA_WIRE.md#opt-in-sensor-profile-11-streaming)
+define the implemented codec/helper contract.
 
 Subscription operations follow ordinary session rules. Lost create/cancel replies
 are uncertain mutations: retry identical bytes/IDs within the bounded budget,
@@ -258,14 +265,17 @@ the hardware lifecycle.
 
 ## 5. Delivery sequence and review gates
 
-No implementation starts until P0's design decisions and workload are agreed.
-Each later increment must include its own software acceptance evidence and stay
+The operator authorized implementation on 2026-11-03. Software protocol choices
+for the P1 increment are recorded below. Physical hardware, performance budgets,
+and later API/configuration decisions remain gates for their corresponding
+integration phases. Each increment must include its own software acceptance
+evidence and stay
 reviewable; passing an early phase does not imply the complete branch is ready.
 
 | Phase | Deliverable | Dependencies | Completion evidence |
 | --- | --- | --- | --- |
-| P0 — Design agreement | Freeze wire/version choice, schemas, public seams, ownership, queue/cancellation/recovery rules, hardware candidates, and numerical workload/budgets. | This plan and existing normative contracts. | Reviewed decision register; no unresolved wire/correlation, safety, or ownership choices. |
-| P1 — Protocol extension | Normative streaming contract, capability negotiation, codecs, golden frames, and compatibility fixtures. | P0. | Request/sample namespace collision, bounds, malformed data, unsupported capability, lost subscribe/unsubscribe reply, and old-host/firmware behavior tests. |
+| P0 — Increment design agreement | Freeze the decisions needed by each increment: wire/version/schema for P1, public seams and I/O policy for P2/P3, hardware/workload/watchdogs before production integration and qualification. | This plan and existing normative contracts. | Record resolved contracts and remaining dependent gates. P1 protocol choices are selected; later hardware, scheduling, and API/config decisions remain open. |
+| P1 — Protocol extension | Implemented: normative streaming contract, capability negotiation helper, codecs, portable subscription lifecycle, and compatibility fixtures. | P0 protocol choices. | Golden frames, request/sample namespace collision, malformed data, unsupported capability/version, exact retries after lost create/cancel replies, reset invalidation, and host query gating. Both Compose services passed all 50 targets on 2026-11-03. |
 | P2 — Serial I/O foundation | One nonblocking owner, bounded read/write/wait/cancel/close, port identity/lifetime, raw/vendor compatibility, and port diagnostics. | P0; retain existing request-only behavior. | PTY tests for silence, partial data, backpressure, disconnect, aliases, shutdown, and full-size lidar/vendor traffic. |
 | P3 — Host coordinator and streams | Shared scheduling/session owner, frame routing, subscriptions, bounded caches, unknown outcomes, priority/fairness, and reconnect. | P1, P2. | Multiple concurrent consumers; telemetry interleaved before/during/after replies; overload; stop retirement; late traffic; reference lifetimes; one reset across reconnect. |
 | P4 — Production mixed firmware | Selected MCU binding, one typed sensor backend, bounded acquisition/dispatch, TX arbitration, subscription state, and watchdog/fault policy. | P1 and frozen host/firmware contracts. | Production firmware service loop with simulated sensor/GPIO/clock faults; no blocking acquisition, control/stop starvation, or implicit enable. |
@@ -278,9 +288,11 @@ than claiming that a mutex or a new stream codec completes application integrati
 
 ## 6. Workload and acceptance matrix
 
-At P0 record exact values and reference conditions for every row below. A gate
-with unspecified bounds cannot pass. Rates and capacities must fit both the
-measured link and the selected firmware's dispatch/acquisition behavior.
+Record exact values and reference conditions before the dependent integration
+and qualification gates. A gate with unspecified bounds cannot pass. Rates and
+capacities must fit both the measured link and the selected firmware's
+dispatch/acquisition behavior. Protocol fixture values establish codec/state
+behavior only and are not physical performance defaults.
 
 | Parameter | Decision required before implementation |
 | --- | --- |
@@ -325,9 +337,11 @@ firmware flashing or physical actuation.
 | Receive ownership | One event-driven owner per physical serial link; no competing synchronous receive path in streaming mode. |
 | Live data overflow | Proposed: bounded latest-per-stream cache with explicit loss counters; bounded recording rings only when requested. |
 | Recovery | Proposed: deliberate reconnect/reconciliation; never implicit actuator enable or replay of uncertain actions. |
-| Wire/version and typed payload | Open at P0: exact extension, compatibility strategy, and first sensor schema. |
+| Wire/version and typed payload | Selected for P1: additive SENSOR v1.1 operations 1–3 and firmware-to-host STREAM_SAMPLE kind 0x11 within revision-4 framing. First payload is scalar-f32 with existing measurement metadata; token is the SUBSCRIBE message ID, scoped by session/function. See [normative contract](JOSHUA_WIRE.md#opt-in-sensor-profile-11-streaming). |
 | Hardware and numerical budgets | Open at P0: exact device kit, native USB versus UART, rates, capacities, and acceptance bounds. |
 | API/config migration | Open at P0: subscription capability, cancellation/result representation, policy schema, and existing-preset migration. |
 
-Treat the open P0 items as design work. Implementation begins only after their
-concrete contracts and tradeoffs have been reviewed with the operator.
+Treat remaining P0 items as design work before their dependent implementation.
+P1 supplies codecs and a portable subscription lifecycle, not production
+streaming. Queue/rate enforcement, host routing/scheduling, physical sensor
+selection, runtime integration, and measured qualification remain open.

@@ -78,6 +78,7 @@ int jw_encode_frame(uint8_t* buf,
 jw_result_t jw_decode_frame(const uint8_t* buf, size_t len, jw_frame_t* out);
 
 // Responses always copy all four correlation fields from the request.
+// STREAM_SAMPLE notifications are not replies, even when their IDs coincide.
 int jw_encode_response(uint8_t* buf,
                        size_t cap,
                        const jw_frame_t* request,
@@ -94,6 +95,7 @@ typedef enum {
   JW_MATCH_MESSAGE_MISMATCH,
   JW_MATCH_COMMAND_MISMATCH,
   JW_MATCH_CHANNEL_MISMATCH,
+  JW_MATCH_UNSOLICITED,
 } jw_match_result_t;
 
 // Returns the first failure in the order above, for caller-owned logging/fault

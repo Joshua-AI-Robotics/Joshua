@@ -42,6 +42,8 @@ typedef enum {
   JW_CMD_GET_STATUS = 0x0e,
   JW_CMD_GET_DEPENDENCIES = 0x0f,
   JW_CMD_RECOVER = 0x10,
+  // Opt-in sensor-profile 1.1 notification. Never a host request or reply.
+  JW_CMD_STREAM_SAMPLE = 0x11,
 } jw_cmd_t;
 
 typedef struct {
