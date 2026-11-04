@@ -36,3 +36,8 @@ cc_library(
         "@abseil-cpp//absl/types:span",
     ],
 )
+
+cc_library(
+    name = "serial_diagnostics",
+    hdrs = ["serial_diagnostics.h"],
+)

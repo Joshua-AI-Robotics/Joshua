@@ -120,15 +120,45 @@ serial_config {
 }
 ```
 
-The framed JoshuaWire exchange timeout includes waiting for the shared bus lock,
-writing and receiving a complete frame. Omitted means 100 ms; explicit values
-must be 1..INT_MAX milliseconds. Fixed-length vendor operations retain their
-existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
-and runs once after physical open, not per request or session reset. All users
-of one port must agree on baudrate and settle delay. Only JoshuaWire users must
-agree on exchange timeout; omitted timeout and explicit 100 ms are equivalent.
-CALLER_SIZED and BYTE_STREAM consumers can share that port without selecting a
-JoshuaWire timeout. Invalid/conflicting settings fail before another open.
+The framed JoshuaWire exchange timeout includes queue wait, writing, and receiving
+a complete frame. Omitted means 100 ms; explicit values must be 1..INT_MAX
+milliseconds. `post_open_settle_ms` is 0..INT_MAX milliseconds, defaults to zero,
+and runs once after physical open, before exposing the connection.
+
+All raw, vendor, and framed operations share one nonblocking serial owner.
+Optional `serial_config.io_policy` controls its software budgets and admission:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `read_timeout_ms` | 500 | Total raw read budget, including queue wait |
+| `read_idle_timeout_ms` | 100 | Maximum gap while an active raw/vendor read awaits bytes |
+| `write_timeout_ms` | 100 | Total send-only or flush budget |
+| `transaction_timeout_ms` | 100 | Total CALLER_SIZED write/read budget |
+| `max_pending_operations` | 16 | Active plus queued operations, allowed range 1..1024 |
+| `max_pending_bytes` | 1048576 | Reserved request plus response bytes, range 1..16777216 |
+| `max_transfer_bytes` | 65536 | Request plus response limit per operation, range 1..1048576 and no larger than pending bytes |
+
+All four timeouts must be 1..INT_MAX milliseconds. Progress renews only the idle
+budget, never the total deadline. JoshuaWire uses `exchange_timeout_ms` for its
+total deadline and no separate idle deadline. Framed requests reserve their
+maximum response budget at admission. Oversized/full-queue requests fail before
+publication. Raw/vendor partial responses return an error through the existing
+interfaces; internal operation results retain actual read/write progress.
+
+Consumers of a physical port must agree on baudrate, settle delay, and effective
+`io_policy`, including defaults. Only JoshuaWire users must also agree on
+`exchange_timeout_ms`; omitted timeout and explicit 100 ms are equivalent.
+CALLER_SIZED and BYTE_STREAM consumers do not select a JoshuaWire timeout.
+Preflight checks identical configured paths without opening hardware. At runtime,
+resolved device aliases share one owner; conflicts fail before another open.
+The last consumer releases the owner. A retained faulted connection is not
+silently reopened; release all consumers before creating a fresh generation.
+
+These defaults replace the former fixed raw/vendor timeouts. Configure them for
+the device cadence, USB/UART behavior, maximum response size, and scheduling
+margin. They are software limits, not measured hardware latency guarantees.
+For example, 2520 bytes require about 109 ms of 8N1 wire time at 230400 baud;
+raw reads must allow the full scan and gaps between its fragments.
 
 **ESP32 config migration:** the board-specific 2-second sleep has been removed.
 For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
@@ -232,7 +262,7 @@ or `message_adapter: JOSHUA_WIRE` for Joshua-owned MCU firmware. ESP32, Teensy
 and AM243 serial presets select the current revision-4 engine and firmware. Existing external serial MESSAGE configs must add this field;
 there is no implicit framing choice. `BYTE_STREAM` leaves it unspecified.
 `exchange_timeout_ms` applies only to `JOSHUA_WIRE`; fixed-length transactions
-retain their existing timing. See [communication](../robot/comm/README.md) for
+use `io_policy.transaction_timeout_ms` and `read_idle_timeout_ms`. See [communication](../robot/comm/README.md) for
 transaction and receive-ownership contracts.
 
 `config::ValidateConfig` in [validation.h](validation.h)

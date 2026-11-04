@@ -65,9 +65,9 @@ absolute paths, allowing offline validation; unresolved aliases cannot establish
 device equivalence until their targets exist.
 
 `post_open_settle_ms` defaults to zero and applies once per physical open.
-Consumers of a port must agree on baudrate and settle policy. JoshuaWire adapters
+Consumers of a port must agree on baudrate, settle policy, and effective `io_policy`. JoshuaWire adapters
 also agree on their exchange timeout; raw byte-stream and caller-sized consumers
-share the bus lock without selecting JoshuaWire timing. ESP32 examples explicitly
+share the I/O owner without selecting JoshuaWire timing. ESP32 examples explicitly
 request a 2000 ms settle interval. See [config migration](../../config/README.md#serial-timing).
 
 ### Dependencies and tests
@@ -101,17 +101,46 @@ Serial `MESSAGE` configurations must explicitly select `serial_config.message_ad
 | `JOSHUA_WIRE` | JoshuaWire sync byte and length prefix | `JoshuaWireBoard` |
 
 `JoshuaWireSerialTransport` implements `MessageTransport` directly; it does not
-expose fixed-length forwarding. `CALLER_SIZED` retains existing input flushing
-and read timing. Only `JOSHUA_WIRE` accepts `exchange_timeout_ms` (100 ms when
-omitted), covering bus-lock wait, write and read. Missing/unknown adapters and
+expose fixed-length forwarding. `CALLER_SIZED` retains input flushing and uses the configured
+vendor transaction/idle budgets. Only `JOSHUA_WIRE` accepts `exchange_timeout_ms` (100 ms when
+omitted), covering queue wait, write and read. Missing/unknown adapters and
 message settings on `BYTE_STREAM` are rejected before opening the port.
 
-`Serial` provides raw `Write`/`Read` and a protocol-neutral `ExchangeUntil`
-transaction. A caller-supplied boundary callback consumes bytes under one bus
-lock across write and read; separate `Write` and `Read` calls cannot provide
-that atomicity. Adapters explicitly choose whether to preserve or discard
-pending input before a transaction. The caller-sized vendor transaction
-also holds the same lock throughout its write and read.
+`Serial` provides synchronous raw `Write`/`Read` and protocol-neutral transactions
+by submitting owned operations to one Linux `SerialIoOwner` per physical port.
+The worker alone performs post-open descriptor I/O, input flush, and close.
+Nonblocking reads/writes use poll plus an eventfd wake path. Waiting callers hold
+no owner lock. One FIFO operation runs at a time; a transaction covers its entire
+write/read, while separate raw calls cannot provide that atomicity. Framing
+callbacks run only bounded comm parser work, must not reenter/close/destroy the
+owner, and finish before the synchronous call returns. Application callbacks
+must run elsewhere.
+
+Admission bounds active/queued operations and reserved I/O bytes. Total monotonic
+deadlines include queue wait; raw/vendor read idle deadlines are independent.
+Queued expiry and cancellation wake promptly even while another operation waits
+for input. Comm-internal operation handles support cancellation and retain
+partial bytes and a typed publication result: `kNotSent` or
+`kMayHaveReachedDevice`. A write means bytes accepted by the OS, not confirmed
+physical delivery or execution. Cancellation/timeout cannot recall buffered
+bytes. The existing capability interfaces still return statuses, so their error
+code alone is not a safe retry decision. Protocol correlation and reconciliation
+remain the session/coordinator's responsibility.
+
+Canonical path and character-device identity unify aliases. A process claim,
+advisory file lock, and Linux exclusive tty claim guard against competing owners;
+these do not evict preexisting or privileged external readers. The factory holds
+weak leases, and the last consumer closes/joins the worker. Close is terminal:
+old handles reject new work; a fault completes all waiters as unavailable. A fresh
+owner generation requires releasing the old owner; there is no automatic reopen
+or command replay. `CommFactory::SnapshotSerialConnections()` returns read-only
+port/generation, state, queue, byte/error, and latency counters without exposing a
+descriptor or concrete transport. Operation latency includes queue time.
+
+See [serial config policy](../../config/README.md#serial-timing) for defaults and
+bounds. PTY tests cover cancellation/publication, queue expiry, backpressure,
+disconnect, close/reopen, aliases, framing limits, and fragmented full lidar scans.
+They do not establish physical UART/USB/stop timing.
 
 Runtime serial timeout arguments are double seconds; the factory converts
 `exchange_timeout_ms` once at the config boundary.
@@ -124,11 +153,11 @@ parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`. JoshuaWire
 CRC, version and session correlation remain in the board/session layer.
 
-There must be one receive owner per port. A future shared continuous receiver
+There must be one receive owner per port. The P3 shared continuous receiver
 must dispatch both replies and unsolicited sensor samples; it must not compete
 with synchronous reads on the same port. Request/reply input flushing discards
-samples, so it is unsuitable for that receive mode. This change provides an
-explicit preserve-input policy but does not implement continuous reception or
+samples, so it is unsuitable for that receive mode. The P2 owner preserves an
+explicit input policy but does not implement continuous reception or
 allow independent readers to share incoming bytes safely.
 
 The validated interfaces configure timeout policy in adapters rather than adding

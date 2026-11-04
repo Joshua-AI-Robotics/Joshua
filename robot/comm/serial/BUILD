@@ -17,13 +17,12 @@ cc_library(
     hdrs = ["serial.h"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
+        ":serial_io_owner",
         "//robot/comm/interfaces:byte_stream",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
-        "@boost.asio",
-        "@glog",
     ],
 )
 
@@ -56,6 +55,7 @@ cc_library(
     hdrs = ["serial_config_validation.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":serial_io_options",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
     ],
@@ -71,7 +71,40 @@ cc_test(
         "//firmware/common:joshua_wire",
         "//robot/comm/interfaces:caller_sized_message_transport",
         "//utils:robot_time",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_io_options",
+    hdrs = ["serial_io_options.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "serial_io_owner",
+    srcs = ["serial_io_owner.cc"],
+    hdrs = ["serial_io_owner.h"],
+    implementation_deps = [
+        ":serial_config_validation",
+        ":serial_device_identity",
         "@boost.asio",
+    ],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":serial_io_options",
+        "//robot/comm/interfaces:serial_diagnostics",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "serial_io_owner_test",
+    srcs = ["serial_io_owner_test.cc"],
+    deps = [
+        ":serial",
+        ":serial_io_owner",
         "@googletest//:gtest_main",
     ],
 )

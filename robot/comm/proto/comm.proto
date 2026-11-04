@@ -42,16 +42,30 @@ message SerialConfig {
   uint64 id = 1;
   string port = 2;
   uint64 baudrate = 3;
-  // JOSHUA_WIRE exchange deadline, including bus-lock wait and write/read.
+  // JOSHUA_WIRE exchange deadline, including queue wait and write/read.
   // Omitted preserves 100 ms; explicit zero is invalid. Only accepted with
-  // JOSHUA_WIRE; CALLER_SIZED retains its existing timing policy.
+  // JOSHUA_WIRE; CALLER_SIZED uses io_policy transaction/idle budgets.
   optional uint32 exchange_timeout_ms = 4;
   // Wait once after physical open, before exposing any capability. Zero means
   // no delay. Set 2000 for USB bridges that reset the MCU on open (e.g. CP2102).
   uint32 post_open_settle_ms = 5;
   // Required for MESSAGE; leave unspecified for BYTE_STREAM. CALLER_SIZED
-  // supports vendor-protocol transactions, including their existing timing policy.
+  // supports vendor-protocol transactions with io_policy timing.
   SerialMessageAdapter message_adapter = 6;
+  // Shared physical-owner admission and raw/vendor I/O policy. All users of
+  // one port must agree on effective values, including defaults.
+  SerialIoPolicy io_policy = 7;
+}
+
+message SerialIoPolicy {
+  // Total budgets include queue wait and I/O; progress never renews them.
+  optional uint32 read_timeout_ms = 1;         // Default 500.
+  optional uint32 read_idle_timeout_ms = 2;    // Default 100, active read only.
+  optional uint32 write_timeout_ms = 3;        // Default 100.
+  optional uint32 transaction_timeout_ms = 4;  // CALLER_SIZED default 100.
+  optional uint32 max_pending_operations = 5;  // Default 16, includes active.
+  optional uint32 max_pending_bytes = 6;       // Default 1048576, reserved I/O bytes.
+  optional uint32 max_transfer_bytes = 7;      // Default 65536, request + response.
 }
 
 message UdpConfig {

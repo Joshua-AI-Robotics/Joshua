@@ -1,5 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "comm_config_validation",
@@ -8,6 +7,7 @@ cc_library(
     deps = [
         "//firmware/common:joshua_wire_ethercat",
         "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/serial:serial_config_validation",
         "@abseil-cpp//absl/status:status",
     ],
 )
@@ -27,14 +27,13 @@ cc_library(
         "//robot/comm/serial:serial_config_validation",
         "//robot/comm/serial:serial_device_identity",
         "//utils:status_macros",
-        "@boost.asio",
-        "@glog",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "//robot/comm/interfaces:byte_stream",
         "//robot/comm/interfaces:correlated_cyclic_transport",
         "//robot/comm/interfaces:message_transport",
+        "//robot/comm/interfaces:serial_diagnostics",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
