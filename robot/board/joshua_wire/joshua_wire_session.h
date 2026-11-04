@@ -55,6 +55,8 @@ class JoshuaWireSession {
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command);
   Snapshot Inspect();
   static bool IsReadOnly(const jw_command_t& command);
+  // Process-wide nonzero IDs, never reused before exhaustion. Not authentication.
+  static uint32_t AllocateSessionId();
 
  private:
   absl::Status ResetLocked();

@@ -6,9 +6,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <future>
+#include <limits>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -38,7 +41,7 @@ class MemoryLink : public Link {
   uint8_t blocked_command = 0;
   uint8_t blocked_operation = 255;
   unsigned drop = 0;
-  std::function<void(const jw_frame_t&)> on_write;
+  std::function<bool(const jw_frame_t&)> on_write;
   static Bytes Reply(const jw_frame_t& request, jw_execution_t execution = JW_EXECUTION_COMPLETE) {
     Bytes out(JW_MAX_FRAME_LEN);
     const uint8_t payload[] = {JW_STATUS_OK, static_cast<uint8_t>(execution)};
@@ -53,7 +56,7 @@ class MemoryLink : public Link {
     if (jw_decode_frame(bytes.data(), bytes.size(), &frame) != JW_RESULT_OK)
       return {absl::DataLossError("Invalid test frame"), 0};
     writes.emplace_back(bytes.begin(), bytes.end());
-    if (on_write) on_write(frame);
+    const bool handled = on_write && on_write(frame);
     jw_profile_request_t profile{};
     const bool blocked =
         frame.cmd == blocked_command ||
@@ -62,7 +65,7 @@ class MemoryLink : public Link {
          profile.operation == blocked_operation);
     if (drop)
       --drop;
-    else if (!blocked)
+    else if (!handled && !blocked)
       incoming.push_back({Reply(frame), Clock::now()});
     lock.unlock();
     changed.notify_all();
@@ -369,6 +372,356 @@ TEST_F(CoordinatorTest, CloseRetiresWaitersResetsDisabledAndIsIdempotent) {
   EXPECT_NE(frame.session_id, 41);
   EXPECT_FALSE(Coordinator::Acquire(link, policy).ok());
 }
+class SubscriptionTest : public CoordinatorTest {
+ protected:
+  jw_stream_state_t remote{};
+  jw_sensor_schema_t schema{
+      JW_SENSOR_INTERFACE_SCALAR_F32, JW_UNIT_CELSIUS, JW_CLOCK_BOOT_MONOTONIC_US, 1000000};
+  uint32_t boot = 9;
+  bool older = false, early = true, malformed_create = false;
+  std::atomic<bool> lose_create{false}, lose_cancel{false};
+  std::atomic<int> creates{0}, cancels{0}, actuator_mutations{0};
+  static Bytes EncodedSample(uint32_t session,
+                             uint32_t token,
+                             uint32_t sequence,
+                             uint32_t boot_id = 9,
+                             float value = 42,
+                             jw_sample_validity_t validity = JW_SAMPLE_VALID,
+                             jw_clock_t clock = JW_CLOCK_BOOT_MONOTONIC_US) {
+    jw_stream_sample_t sample{};
+    sample.session_id = session;
+    sample.subscription_id = token;
+    sample.function_id = 2;
+    sample.sample.value = value;
+    sample.sample.metadata = {validity, clock, boot_id, uint64_t(sequence) * 100, sequence};
+    Bytes frame(JW_STREAM_SAMPLE_FRAME_LEN);
+    EXPECT_EQ(jw_encode_stream_sample(frame.data(), frame.size(), &sample), frame.size());
+    return frame;
+  }
+  void SetPeer(const std::shared_ptr<MemoryLink>& peer) {
+    peer->on_write = [this, peer_raw = peer.get()](const jw_frame_t& request) {
+      Bytes data(JW_MAX_PAYLOAD_LEN);
+      int size = 0;
+      const jw_function_descriptor_t descriptor{2,
+                                                3,
+                                                JW_PROFILE_SENSOR,
+                                                1,
+                                                static_cast<uint8_t>(older ? 0 : 1),
+                                                older ? 1u : JW_SENSOR_STREAM_OPERATIONS,
+                                                0};
+      if (request.cmd == JW_CMD_RESET_SESSION) {
+        remote = {};
+        return false;
+      }
+      if (request.cmd == JW_CMD_IDENTIFY) {
+        jw_identify_response_t identity{};
+        identity.boot_id = boot;
+        identity.discovery_generation = 1;
+        identity.function_count = 1;
+        identity.max_frame_len = JW_MAX_FRAME_LEN;
+        identity.max_inflight = 1;
+        identity.max_page_entries = JW_DISCOVERY_PAGE_SIZE;
+        identity.max_handler_us = 1000;
+        identity.safety_flags = JW_SAFETY_BOARD_ESTOP;
+        identity.protocol_min = identity.protocol_max = JW_PROTO_VERSION;
+        identity.supported_planes = JW_PLANE_MESSAGE;
+        size = jw_encode_identify_payload(data.data(), data.size(), &identity);
+      } else if (request.cmd == JW_CMD_DISCOVER) {
+        jw_discovery_page_t page{};
+        page.generation = 1;
+        page.total = 1;
+        page.next_cursor = JW_CURSOR_END;
+        page.count = 1;
+        page.functions[0] = descriptor;
+        size = jw_encode_discovery_page(data.data(), data.size(), &page);
+      } else if (request.cmd == JW_CMD_DESCRIBE_FUNCTION) {
+        size = jw_encode_function_descriptor(data.data(), data.size(), &descriptor);
+        size += jw_encode_sensor_schema(data.data() + size, data.size() - size, &schema);
+      } else if (request.cmd == JW_CMD_PROFILE) {
+        jw_profile_request_t profile{};
+        if (jw_decode_profile_request(request.payload, request.payload_len, &profile) !=
+            JW_RESULT_OK)
+          return false;
+        if (profile.profile_id != JW_PROFILE_SENSOR) {
+          ++actuator_mutations;
+          return false;
+        }
+        if (profile.operation == JW_SENSOR_SUBSCRIBE) {
+          uint32_t period;
+          if (jw_decode_stream_period(profile.data, profile.data_len, &period) != JW_RESULT_OK)
+            return false;
+          if (!remote.active) {
+            remote = {1, request.message_id, period};
+            ++creates;
+          }
+          if (early)
+            peer_raw->incoming.push_back(
+                {EncodedSample(request.session_id, remote.subscription_id, 1, boot), Clock::now()});
+          if (lose_create) return true;
+        } else if (profile.operation == JW_SENSOR_UNSUBSCRIBE) {
+          if (remote.active) {
+            remote.active = 0;
+            ++cancels;
+          }
+          if (lose_cancel) return true;
+        } else if (profile.operation != JW_SENSOR_GET_SUBSCRIPTION)
+          return false;
+        auto state = remote;
+        if (malformed_create && profile.operation == JW_SENSOR_SUBSCRIBE) ++state.subscription_id;
+        size = jw_encode_stream_state(data.data(), data.size(), &state);
+      } else
+        return false;
+      if (size < 0) return false;
+      Bytes payload{JW_STATUS_OK, JW_EXECUTION_COMPLETE};
+      payload.insert(payload.end(), data.begin(), data.begin() + size);
+      Bytes frame(JW_MAX_FRAME_LEN);
+      frame.resize(
+          jw_encode_response(frame.data(), frame.size(), &request, payload.data(), payload.size()));
+      peer_raw->incoming.push_back({std::move(frame), Clock::now()});
+      return true;
+    };
+  }
+  void OpenSensor() {
+    policy.set_telemetry_bytes_per_second(10000);
+    SetPeer(link);
+    Open();
+  }
+  void Emit(uint32_t sequence,
+            uint32_t boot_id = 9,
+            float value = 42,
+            jw_sample_validity_t validity = JW_SAMPLE_VALID,
+            jw_clock_t clock = JW_CLOCK_BOOT_MONOTONIC_US) {
+    const auto state = coordinator->QuerySubscription(2);
+    ASSERT_TRUE(state.ok()) << state.status();
+    link->Inject(EncodedSample(coordinator->Snapshot().session_id,
+                               state->subscription_id,
+                               sequence,
+                               boot_id,
+                               value,
+                               validity,
+                               clock));
+  }
+  bool WaitNotifications(uint64_t count) {
+    const auto until = Clock::now() + 1s;
+    while (Clock::now() < until) {
+      if (coordinator->Snapshot().notifications >= count) return true;
+      std::this_thread::sleep_for(1ms);
+    }
+    return false;
+  }
+};
+TEST_F(SubscriptionTest, CompatibleConsumersShareOneSubscriptionAndEarlyAcquisition) {
+  OpenSensor();
+  auto first = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto second = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(creates, 1);
+  EXPECT_EQ(coordinator->Snapshot().active_streams, 1);
+  auto sample = (*second)->Latest();
+  ASSERT_TRUE(sample.ok()) << sample.status();
+  EXPECT_TRUE(sample->usable);
+  EXPECT_EQ(sample->schema.unit, JW_UNIT_CELSIUS);
+  EXPECT_EQ(sample->sample.sample.value, 42);
+  EXPECT_EQ(sample->sample.sample.metadata.boot_id, 9);
+  EXPECT_TRUE((*first)->Close().ok());
+  EXPECT_EQ(cancels, 0);
+  EXPECT_TRUE((*second)->Latest().ok());
+  EXPECT_FALSE((*first)->Latest().ok());
+  EXPECT_TRUE((*second)->Close().ok());
+  EXPECT_EQ(cancels, 1);
+  EXPECT_EQ(coordinator->Snapshot().active_streams, 0);
+  EXPECT_EQ(coordinator->Snapshot().retired_streams, 0);
+}
+TEST_F(SubscriptionTest, PeriodConflictAndInfeasibleReservationNeverCreateAnotherSubscription) {
+  OpenSensor();
+  auto first = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(first.ok()) << first.status();
+  EXPECT_TRUE(absl::IsInvalidArgument(coordinator->Subscribe(2, 11000).status()));
+  EXPECT_EQ(creates, 1);
+  (*first)->Close().IgnoreError();
+  EXPECT_TRUE(absl::IsResourceExhausted(coordinator->Subscribe(2, 1000).status()));
+  EXPECT_EQ(creates, 1);
+}
+TEST_F(SubscriptionTest, OlderFirmwareIsRejectedBeforeSubscribeMutation) {
+  older = true;
+  OpenSensor();
+  EXPECT_TRUE(absl::IsUnimplemented(coordinator->Subscribe(2, 10000).status()));
+  EXPECT_EQ(creates, 0);
+}
+TEST_F(SubscriptionTest, RepeatedAcquisitionDoesNotRenewReceiptFreshness) {
+  schema.max_age_us = 20000;
+  OpenSensor();
+  auto subscription = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(subscription.ok()) << subscription.status();
+  auto initial = (*subscription)->Latest();
+  ASSERT_TRUE(initial.ok()) << initial.status();
+  const auto count = coordinator->Snapshot().notifications;
+  std::this_thread::sleep_for(40ms);
+  Emit(1);
+  ASSERT_TRUE(WaitNotifications(count + 1));
+  auto repeated = (*subscription)->Latest();
+  ASSERT_TRUE(repeated.ok());
+  EXPECT_EQ(repeated->received_at, initial->received_at);
+  EXPECT_FALSE(repeated->usable);
+  EXPECT_FALSE(repeated->receipt_fresh);
+  EXPECT_EQ(repeated->sample.sample.metadata.sequence, 1);
+}
+TEST_F(SubscriptionTest, SequenceLossRegressionClockAndInvalidMeasurementsRemainObservable) {
+  OpenSensor();
+  auto subscription = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(subscription.ok());
+  auto count = coordinator->Snapshot().notifications;
+  Emit(5);
+  ASSERT_TRUE(WaitNotifications(++count));
+  auto latest = (*subscription)->Latest();
+  ASSERT_TRUE(latest.ok());
+  EXPECT_EQ(latest->sequence_gaps, 3);
+  Emit(3);
+  ASSERT_TRUE(WaitNotifications(++count));
+  EXPECT_EQ((*subscription)->Latest()->sample.sample.metadata.sequence, 5);
+  Emit(6, 9, 42, JW_SAMPLE_VALID, JW_CLOCK_SYNC_US);
+  ASSERT_TRUE(WaitNotifications(++count));
+  EXPECT_EQ((*subscription)->Latest()->sample.sample.metadata.sequence, 5);
+  Emit(7, 9, std::numeric_limits<float>::quiet_NaN(), JW_SAMPLE_INVALID);
+  ASSERT_TRUE(WaitNotifications(++count));
+  latest = (*subscription)->Latest();
+  ASSERT_TRUE(latest.ok());
+  EXPECT_FALSE(latest->usable);
+  EXPECT_EQ(latest->sample.sample.metadata.validity, JW_SAMPLE_INVALID);
+  EXPECT_TRUE(std::isnan(latest->sample.sample.value));
+  EXPECT_EQ(coordinator->Snapshot().invalid_samples, 2);
+}
+TEST_F(SubscriptionTest, LostCreateReplyReservesIdentityAndQueriesDoNotClearUncertainty) {
+  OpenSensor();
+  lose_create = true;
+  auto subscription = coordinator->Subscribe(2, 10000);
+  EXPECT_TRUE(absl::IsDeadlineExceeded(subscription.status()));
+  EXPECT_EQ(creates, 1);
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+  auto state = coordinator->QuerySubscription(2);
+  ASSERT_TRUE(state.ok());
+  EXPECT_TRUE(state->active);
+  EXPECT_TRUE(absl::IsFailedPrecondition(coordinator->Subscribe(2, 10000).status()));
+  EXPECT_EQ(creates, 1);
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+}
+TEST_F(SubscriptionTest, MalformedCreateAcknowledgmentCannotPermitFurtherMutations) {
+  malformed_create = true;
+  OpenSensor();
+  auto subscription = coordinator->Subscribe(2, 10000);
+  EXPECT_TRUE(absl::IsDataLoss(subscription.status()));
+  EXPECT_EQ(creates, 1);
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+  auto mutation = Profile(JW_ACTUATOR_ENABLE).Wait();
+  EXPECT_TRUE(absl::IsFailedPrecondition(mutation.status));
+  EXPECT_FALSE(mutation.published);
+}
+TEST_F(SubscriptionTest, UnknownUnitIsRejectedBeforeCreation) {
+  schema.unit = 0x9999;
+  OpenSensor();
+  EXPECT_TRUE(absl::IsUnimplemented(coordinator->Subscribe(2, 10000).status()));
+  EXPECT_EQ(creates, 0);
+}
+
+TEST_F(SubscriptionTest, LostCancelReplyRetiresLocalHandleAndNeverCreatesReplacement) {
+  OpenSensor();
+  auto subscription = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(subscription.ok());
+  lose_cancel = true;
+  EXPECT_TRUE(absl::IsDeadlineExceeded((*subscription)->Close()));
+  EXPECT_EQ(cancels, 1);
+  EXPECT_FALSE((*subscription)->Latest().ok());
+  auto state = coordinator->QuerySubscription(2);
+  ASSERT_TRUE(state.ok());
+  EXPECT_FALSE(state->active);
+  EXPECT_TRUE(absl::IsFailedPrecondition(coordinator->Subscribe(2, 10000).status()));
+  EXPECT_EQ(creates, 1);
+  EXPECT_TRUE(coordinator->Snapshot().uncertain);
+}
+TEST_F(SubscriptionTest, BootChangeInvalidatesEveryHandleWithoutTargetReplay) {
+  OpenSensor();
+  auto first = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(first.ok());
+  auto second = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(second.ok());
+  Emit(2, 10);
+  const auto until = Clock::now() + 2s;
+  while (!coordinator->Snapshot().faulted && Clock::now() < until) std::this_thread::sleep_for(1ms);
+  EXPECT_TRUE(coordinator->Snapshot().faulted);
+  EXPECT_FALSE((*first)->Latest().ok());
+  EXPECT_FALSE((*second)->Latest().ok());
+  EXPECT_EQ(coordinator->Snapshot().boot_discontinuities, 1);
+  EXPECT_EQ(actuator_mutations, 0);
+}
+TEST_F(SubscriptionTest, DeliberateReconnectInterlocksValidationAndNeverRevivesOldHandles) {
+  OpenSensor();
+  auto old = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(old.ok());
+  const auto old_sample = (*old)->Latest();
+  ASSERT_TRUE(old_sample.ok());
+  auto new_link = std::make_shared<MemoryLink>();
+  SetPeer(new_link);
+  auto id = std::make_shared<uint32_t>(100);
+  auto reconnected = coordinator->Reconnect(
+      [new_link]() -> absl::StatusOr<std::shared_ptr<Link>> { return new_link; },
+      [](Coordinator& next) {
+        EXPECT_TRUE(next.Snapshot().safety_interlock);
+        return next.Exchange({0, 0, JW_CMD_IDENTIFY, JW_CHANNEL_NONE, nullptr, 0}).status();
+      },
+      [id] { return ++*id; });
+  ASSERT_TRUE(reconnected.ok()) << reconnected.status();
+  EXPECT_FALSE((*old)->Latest().ok());
+  EXPECT_EQ(actuator_mutations, 0);
+  auto next = (*reconnected)->Subscribe(2, 10000);
+  ASSERT_TRUE(next.ok()) << next.status();
+  auto current = (*next)->Latest();
+  ASSERT_TRUE(current.ok());
+  EXPECT_NE(current->sample.session_id, old_sample->sample.session_id);
+  new_link->Inject(
+      EncodedSample(old_sample->sample.session_id, old_sample->sample.subscription_id, 100));
+  const auto until = Clock::now() + 1s;
+  while ((*reconnected)->Snapshot().stale_notifications == 0 && Clock::now() < until)
+    std::this_thread::sleep_for(1ms);
+  EXPECT_EQ((*reconnected)->Snapshot().stale_notifications, 1);
+  EXPECT_EQ((*next)->Latest()->sample.session_id, current->sample.session_id);
+  EXPECT_TRUE((*reconnected)->Close().ok());
+  EXPECT_FALSE((*next)->Latest().ok());
+}
+
+TEST_F(SubscriptionTest, FailedReconnectReconciliationClosesTheNewGeneration) {
+  OpenSensor();
+  auto old = coordinator->Subscribe(2, 10000);
+  ASSERT_TRUE(old.ok());
+  auto new_link = std::make_shared<MemoryLink>();
+  SetPeer(new_link);
+  auto result = coordinator->Reconnect(
+      [new_link]() -> absl::StatusOr<std::shared_ptr<Link>> { return new_link; },
+      [](Coordinator&) {
+        return absl::FailedPreconditionError("Device identity does not match configured endpoint");
+      });
+  EXPECT_TRUE(absl::IsFailedPrecondition(result.status()));
+  EXPECT_FALSE(new_link->status().ok());
+  EXPECT_FALSE((*old)->Latest().ok());
+  EXPECT_EQ(actuator_mutations, 0);
+}
+TEST(DefaultSessionIdentityTest, RetiredDefaultSessionIdsAreNotReusedByAnotherOwner) {
+  auto first_link = std::make_shared<MemoryLink>();
+  auto first = Coordinator::Acquire(first_link);
+  ASSERT_TRUE(first.ok()) << first.status();
+  const auto active = (*first)->Snapshot().session_id;
+  ASSERT_TRUE((*first)->Close().ok());
+  auto last = first_link->Written(1);
+  jw_frame_t reset{};
+  ASSERT_EQ(jw_decode_frame(last.data(), last.size(), &reset), JW_RESULT_OK);
+  auto second_link = std::make_shared<MemoryLink>();
+  auto second = Coordinator::Acquire(second_link);
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_NE((*second)->Snapshot().session_id, active);
+  EXPECT_NE((*second)->Snapshot().session_id, reset.session_id);
+  EXPECT_TRUE((*second)->Close().ok());
+}
+
 TEST(CoordinatorSerialTest, ProductionFrameOwnerRoutesInterleavedTelemetryWithoutInputFlush) {
   const int master = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
   ASSERT_GE(master, 0);

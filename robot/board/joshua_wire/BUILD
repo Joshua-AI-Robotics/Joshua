@@ -162,6 +162,7 @@ cc_library(
         "//firmware/common:joshua_wire_profiles",
         "//firmware/common:joshua_wire_sensor_stream",
         "//robot/comm/interfaces:frame_stream_transport",
+        "//utils:status_macros",
     ],
 )
 
