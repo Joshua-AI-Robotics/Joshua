@@ -52,6 +52,15 @@ class CameraPublisher : public rclcpp::Node {
         continue;
       }
 
+      const auto init_status = interface.value()->Init();
+      if (!init_status.ok()) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Failed to initialize camera '%s': %s",
+                     sensor_name.c_str(),
+                     std::string(init_status.message()).c_str());
+        continue;
+      }
+
       auto shared_interface =
           std::shared_ptr<robot::perception::PerceptionInterface>(std::move(interface.value()));
 
