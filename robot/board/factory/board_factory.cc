@@ -12,6 +12,7 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
+#include "robot/comm/serial/serial_device_identity.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -22,7 +23,7 @@ struct CachedBoard {
   robot::board::BoardType board_type;
   std::string config_key;
   std::shared_ptr<BoardInterface> board;
-  std::string joshua_serial_port;
+  std::string joshua_serial_identity;
 };
 
 static std::mutex g_board_mutex;
@@ -80,6 +81,17 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
   }
 
   std::lock_guard<std::mutex> lock(g_board_mutex);
+  const auto port = JoshuaSerialPort(config);
+  auto resolved_config = config;
+  auto key_config = config;
+  std::string serial_identity;
+  if (!port.empty()) {
+    ABSL_ASSIGN_OR_RETURN(const auto device, robot::comm::ResolveSerialDeviceIdentity(port));
+    serial_identity = device.key;
+    resolved_config.mutable_comm()->mutable_serial_config()->set_port(device.path);
+    key_config.mutable_comm()->mutable_serial_config()->set_port(device.key);
+  }
+  const auto config_key = key_config.SerializeAsString();
   auto it = g_boards.find(config.name());
   if (it != g_boards.end()) {
     if (it->second.board_type != config.board_type()) {
@@ -92,16 +104,15 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
                        robot::board::BoardType_Name(config.board_type()),
                        "; two boards may not share one name."));
     }
-    if (it->second.config_key != config.SerializeAsString())
+    if (it->second.config_key != config_key)
       return absl::InvalidArgumentError(
           "Board name is already cached with a different configuration.");
     return it->second.board;
   }
 
-  const auto port = JoshuaSerialPort(config);
-  if (!port.empty()) {
+  if (!serial_identity.empty()) {
     for (const auto& [name, cached] : g_boards) {
-      if (cached.joshua_serial_port == port)
+      if (cached.joshua_serial_identity == serial_identity)
         return absl::AlreadyExistsError(absl::StrCat(
             "JoshuaWire serial port '",
             port,
@@ -111,9 +122,8 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
     }
   }
   ABSL_ASSIGN_OR_RETURN(auto board, CreateBoard(config));
-  ABSL_RETURN_IF_ERROR(board->Init(config));
-  g_boards[config.name()] =
-      CachedBoard{config.board_type(), config.SerializeAsString(), board, port};
+  ABSL_RETURN_IF_ERROR(board->Init(resolved_config));
+  g_boards[config.name()] = CachedBoard{config.board_type(), config_key, board, serial_identity};
   return board;
 }
 

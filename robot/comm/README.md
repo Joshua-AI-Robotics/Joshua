@@ -55,6 +55,15 @@ interprets complete exchanges received through `MessageTransport`.
 
 ### Serial link timing
 
+Serial caching and JoshuaWire board ownership use a shared device identity.
+Existing symlinks are resolved before opening; character devices are matched by
+device number, so aliases share one serial handle, I/O lock and timing policy.
+One JoshuaWire board name owns that device for the board cache lifetime.
+Config preflight uses the same identity for ownership and serial-policy checks,
+reading filesystem metadata without opening devices. Absent devices use normalized
+absolute paths, allowing offline validation; unresolved aliases cannot establish
+device equivalence until their targets exist.
+
 `post_open_settle_ms` defaults to zero and applies once per physical open.
 Consumers of a port must agree on baudrate and settle policy. JoshuaWire adapters
 also agree on their exchange timeout; raw byte-stream and caller-sized consumers

@@ -12,6 +12,7 @@
 #include "robot/board/factory/board_resolver.h"
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
+#include "robot/comm/serial/serial_device_identity.h"
 #include "robot/perception/audio/audio_config.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/robot_time.h"
@@ -241,15 +242,17 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
     }
     // Match CommFactory: all users share physical settings, but only JW users
     // select an exchange deadline. Adapter selection is local to each consumer.
+    ABSL_ASSIGN_OR_RETURN(const auto device,
+                          robot::comm::ResolveSerialDeviceIdentity(serial.port()));
     const auto physical_policy = std::make_pair(serial.baudrate(), serial.post_open_settle_ms());
-    const auto [it, inserted] = physical_policies.emplace(serial.port(), physical_policy);
+    const auto [it, inserted] = physical_policies.emplace(device.key, physical_policy);
     if (!inserted && it->second != physical_policy)
       return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
     if (serial.message_adapter() == robot::comm::JOSHUA_WIRE) {
       const uint32_t timeout = serial.has_exchange_timeout_ms()
                                    ? serial.exchange_timeout_ms()
                                    : robot::comm::kDefaultSerialExchangeTimeoutMs;
-      const auto [timeout_it, timeout_inserted] = joshua_timeouts.emplace(serial.port(), timeout);
+      const auto [timeout_it, timeout_inserted] = joshua_timeouts.emplace(device.key, timeout);
       if (!timeout_inserted && timeout_it->second != timeout)
         return absl::InvalidArgumentError(
             "Serial port has conflicting JoshuaWire exchange timeouts");
@@ -268,7 +271,14 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
     const std::string port =
         serial ? "Serial port '" + connection.comm.serial_config().port()
                : "EtherCAT NIC '" + connection.comm.ethercat_config().interface_name();
-    const auto [it, inserted] = port_to_node_id.emplace(port, connection.node_id);
+    std::string identity = port;
+    if (serial) {
+      ABSL_ASSIGN_OR_RETURN(
+          const auto device,
+          robot::comm::ResolveSerialDeviceIdentity(connection.comm.serial_config().port()));
+      identity = device.key;
+    }
+    const auto [it, inserted] = port_to_node_id.emplace(identity, connection.node_id);
     if (!inserted && it->second != connection.node_id) {
       return absl::InvalidArgumentError(
           absl::StrCat(port,

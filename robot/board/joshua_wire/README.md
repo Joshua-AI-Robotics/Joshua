@@ -10,6 +10,9 @@ Declare one board name per JoshuaWire serial MCU and reference its channels
 from all consumers. BoardFactory rejects a second name for an already-owned
 JW serial port before starting another session or resetting existing outputs.
 This reservation follows the board cache lifetime, including explicit teardown.
+Ownership matches device identity across path aliases such as `/dev/serial/by-id`
+symlinks. A second name is rejected before any session reset; the same board name
+and settings through another alias reuse the existing instance.
 
 ESP32, Teensy and the AM243 serial binding use this engine directly with
 `message_adapter: JOSHUA_WIRE`. All Joshua-owned MCU images compile the current
