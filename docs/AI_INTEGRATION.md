@@ -238,7 +238,13 @@ current implementations and example presets are indexed in the
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
-The seven-tool adapter separates setup inspection from runtime observation.
+The nine-tool adapter separates setup inspection, model support metadata,
+historical hardware test records, and runtime observation.
+`list_supported_hardware` searches model aliases and identifiers and returns
+stable IDs, drivers, example presets, and intended support scope.
+`list_hardware_test_records` retrieves separate dated environments, measurements,
+limits, and evidence by hardware ID. Tests do not automatically broaden model
+support, and neither query attests current hardware readiness.
 Factory-owned metadata identifies build implementations and gaps without driver
 construction. Protobuf candidates remain authoritative for declared devices.
 The launcher owns runtime; MCP reads bounded private snapshots and never controls

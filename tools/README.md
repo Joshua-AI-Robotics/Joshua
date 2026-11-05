@@ -5,7 +5,8 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
-- [`mcp/`](mcp/README.md) — seven read-only stdio MCP tools for config-free factory discovery,
+- [`mcp/`](mcp/README.md) — nine read-only stdio MCP tools for config-free factory
+  discovery, curated hardware models, separate historical hardware test records,
   per-call protobuf validation and device inspection, and optional private
   runtime snapshots. The adapter never controls runtime or certifies hardware
   readiness; validation-only startup remains available.

@@ -1,4 +1,4 @@
-# Camera-only preset for USB 1bcf:2281 (Sunplus SPCA2281 / XWF-1080P).
+# Camera-only preset for Sunplus SPCA2281 / XWF-1080P.
 # Opens real camera hardware. Confirm its capture node is /dev/video0;
 # OpenCV's numeric device index may change when cameras are reconnected.
 general {

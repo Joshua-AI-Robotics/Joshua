@@ -1,8 +1,11 @@
 # Read-only inspection MCP tools
 
-`config_validation_server` exposes seven read-only tools over stdio when started
+`config_validation_server` exposes nine read-only tools over stdio when started
 with `--inspector`. `list_supported_components()` discovers factory-owned build
-metadata without a config. `validate_config(config_path)`,
+metadata without a config. `list_supported_hardware(kind=None, usb_id=None, query=None)`
+searches curated model support metadata. `list_hardware_test_records(hardware_id=None)`
+retrieves separate historical test runs. Neither requires a candidate config.
+`validate_config(config_path)`,
 `list_devices(config_path)` and `describe_device(config_path, device_id)` inspect
 candidate protobuf files beneath an operator-selected root. One session can
 inspect several candidates. For example:
@@ -61,7 +64,45 @@ are errors. The tests exercise the actual SDK stdio exchange in both ROS stacks.
 
 ## Catalog and device reports
 
-Catalog metadata comes from the same fixed C++ tables used to construct boards,
+`list_supported_hardware` reads the bundled
+[model catalog](../../docs/hardware_catalog.json), also rendered as
+the [supported hardware guide](../../docs/SUPPORTED_HARDWARE.md). It is independent
+of test history, the selected config root, factory enumeration, and runtime
+observations. Call with `{}` for all models,
+`{"kind":"camera","query":"XWF-1080P"}` for the
+Sunplus camera, or `{"query":"SPCA2281"}` for an alias search.
+`usb_id` is a case-insensitive, exact USB VID:PID match for records containing
+that identifier; the Sunplus record uses model and aliases instead.
+`query` is a case-insensitive substring of model, manufacturer, aliases, record
+ID, driver, or identifier values. `kind` is an exact match. Filters combine
+with AND. Omit unused filters; nulls and unknown arguments are rejected.
+No match is an OK report with an empty `hardware` list. Model results use the
+`hardware_catalog` scope and include a stable hardware ID, aliases, driver,
+example preset, and intended support scope. No measurements are embedded in
+model entries. Absence does not prove incompatibility with an existing driver.
+
+`list_hardware_test_records` reads separate
+[test records](../../docs/hardware_test_records.json), rendered as the
+[test history guide](../../docs/TESTED_HARDWARE.md). Call with `{}` for all runs
+or `{"hardware_id":"sunplus-spca2281-xwf-1080p"}` for the model's history.
+`hardware_id` is an exact match. Results use the `hardware_test_history` scope,
+with a `records` list containing run IDs, hardware references, dates,
+Joshua commits, environments, evidence paths, measurements, and limitations.
+Unknown IDs and models without tests return an empty list. Multiple runs can
+reference one model; model metadata is not copied into individual runs. A new
+test does not automatically add a model or change its intended support scope.
+Broken model references produce `DATA_LOSS` rather than an apparent test result.
+
+Both operations read metadata only and do not scan devices or establish current
+connectivity, readiness, or compatibility of every revision. Each bundled file
+and encoded report is bounded to 64 KiB; each file contains at most 128 entries.
+Oversized reports return `RESOURCE_EXHAUSTED`, malformed data returns `DATA_LOSS`,
+and missing data returns `UNAVAILABLE`. Model discovery remains available when
+test history is missing or malformed. Requests cannot select metadata paths.
+The software catalog below and existing validation/inspection report schemas
+retain their meanings.
+
+Factory implementation metadata comes from the same fixed C++ tables used to construct boards,
 transports, motors and sensors. Enumeration calls no creator or driver.
 `installed`, `test_only`, `demo_only` and `unimplemented` describe software
 selection, with transport configuration requirements attached to each entry.
