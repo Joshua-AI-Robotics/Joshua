@@ -44,3 +44,83 @@ Limitations:
 - 1080p capture was not tested. The model name and advertised modes are not verification evidence.
 - The preset uses camera index 0; resolve the connected device before running because indices can change.
 - USB VID:PID and model aliases identify a candidate model, not a unique physical unit or a guarantee for every hardware revision.
+
+### sunplus-spca2281-2026-11-04-humble-1080p-opt-300s
+
+- Hardware ID: `sunplus-spca2281-xwf-1080p`.
+- Tested: 2026-11-04 at Joshua `261887dfdcfd9645b846ecffe3a3f30cfb3f111b`.
+- Environment: os=Ubuntu 22.04 (Docker), ros_distribution=Humble, architecture=x86_64, build_mode=opt (-c opt), source_state=Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run., camera_driver_sha256=f3ede40449aee042d16d68a683a7efd6668e9e602d5da7216aa1805b98201fe2, preset=config/config_preset/example/sunplus_spca2281_1080p.pbtxt, preset_sha256=27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a, exposure=Original automatic exposure settings; no manual exposure adjustment during the qualification run..
+- Evidence: [manual test record](../docs/hardware_tests/sunplus_spca2281_1080p_2026-11-04.md).
+
+Recorded results:
+
+```json
+{
+  "capture_format": "MJPG",
+  "width": 1920,
+  "height": 1080,
+  "encoding": "rgb8",
+  "bytes_per_frame": 6220800,
+  "capture_buffers_requested": 2,
+  "requested_fps": 30,
+  "negotiated_fps": 30.0,
+  "warmup_seconds": 5,
+  "measurement_seconds": 300.0,
+  "received_frames": 9001,
+  "measured_fps": 30.003333,
+  "publisher_stamp_fps": 30.002796,
+  "ten_second_window_fps": [
+    30.1,
+    30.0,
+    30.0,
+    30.0,
+    29.9,
+    30.1,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0,
+    30.0
+  ],
+  "minimum_ten_second_window_fps": 29.9,
+  "maximum_ten_second_window_fps": 30.1,
+  "max_frame_gap_ms": 56.313,
+  "frame_gap_p99_ms": 46.064,
+  "invalid_frames": 0,
+  "nonincreasing_publisher_stamps": 0,
+  "subscriber_qos": "reliable",
+  "sustained_30fps_criteria": {
+    "minimum_mean_fps": 29.5,
+    "minimum_ten_second_window_fps": 29.0,
+    "maximum_frame_gap_ms": 100.0
+  },
+  "sustained_30fps_passed": true
+}
+```
+
+Limitations:
+
+- A five-minute run on one physical unit and one Ubuntu 22.04/Humble setup; not an endurance or cross-platform qualification.
+- This result requires the two-buffer capture change and an optimized build. With two buffers, the default development build measured 23.2 FPS in the short comparison.
+- The recorded Joshua commit is the source base; the driver change and new preset were uncommitted during measurement. Their exact SHA-256 hashes are retained in the environment.
+- Frame rate and gaps were measured at the ROS subscriber. Publisher timestamps do not establish camera-exposure timing, synchronization accuracy, or delivery of every sensor exposure.
+- The final automatic-exposure settings matched the original settings. Other lighting conditions and hardware revisions were not qualified.

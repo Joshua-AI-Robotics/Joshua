@@ -38,6 +38,7 @@ py_test(
         "//config/config_preset:config_presets",
         "//docs:SUPPORTED_HARDWARE.md",
         "//docs:TESTED_HARDWARE.md",
+        "//docs:hardware_tests/sunplus_spca2281_1080p_2026-11-04.md",
         "//docs:hardware_tests/sunplus_spca2281_2026-11-04.md",
         "//robot/perception/camera:cv_camera.cc",
     ],

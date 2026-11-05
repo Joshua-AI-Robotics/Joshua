@@ -179,6 +179,9 @@ class HardwareDiscoveryTest(unittest.IsolatedAsyncioTestCase):
         self,
     ):
         hardware, records = load_hardware(), load_test_records()
+        existing_runs = sum(
+            record["hardware_id"] == hardware[0]["id"] for record in records
+        )
         model = copy.deepcopy(hardware[0])
         model.update(
             id="fixture-motor", kind="motor", model="Fixture motor", aliases=[]
@@ -192,7 +195,7 @@ class HardwareDiscoveryTest(unittest.IsolatedAsyncioTestCase):
             backend = HardwareCatalog(catalog, tests)
             report = await backend.list_hardware_test_records(hardware[0]["id"])
             validate_hardware_report(report, TEST_OPERATION)
-            self.assertEqual(len(report["data"]["records"]), 2)
+            self.assertEqual(len(report["data"]["records"]), existing_runs + 1)
             self.assertNotIn("model", report["data"]["records"][0])
             report = await backend.list_hardware_test_records("fixture-motor")
             self.assertEqual(report["data"]["records"], [])

@@ -191,8 +191,10 @@ absl::Status CvCamera::OpenCameraLocked() {
     } else {
       LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
       if (cap_.open(camera_id_, cv::CAP_V4L2)) {
-        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 1)) {
-          LOG(ERROR) << "Could not set CAP_PROP_BUFFERSIZE to 1 for camera " << id_;
+        // Keep the next frame queued while the previous buffer is dequeued.
+        // A single buffer can starve continuous capture and drop frame rate.
+        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 2)) {
+          LOG(ERROR) << "Could not set camera capture buffer count to 2 for " << id_;
         }
       }
     }
