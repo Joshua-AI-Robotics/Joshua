@@ -23,8 +23,11 @@ absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
   if (opencv_config_.fourcc().size() < 4) {
-    LOG(ERROR) << "FourCC is not specified";
-    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
+    LOG(ERROR) << "Camera pixel format is missing or incomplete; specify a four-character format "
+                  "such as MJPG or YUYV in opencv_config.fourcc";
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "Camera pixel format must contain four characters (for example, MJPG or "
+                        "YUYV); set opencv_config.fourcc");
   }
 
   absl::Status status = OpenCameraLocked();
@@ -43,12 +46,12 @@ absl::Status CvCamera::Init() {
 
   // Some drivers return false even on success.
   if (!set_fourcc || !set_width || !set_height || !set_fps) {
-    LOG(ERROR) << "Setting camera resolution returned false. "
-               << "set_fourcc=" << std::boolalpha << set_fourcc << ", "
-               << "set_width=" << std::boolalpha << set_width << ", "
-               << "set_height=" << std::boolalpha << set_height << ", "
-               << "set_fps=" << std::boolalpha << set_fps;
-    return absl::Status(absl::StatusCode::kInternal, "Failed to set camera resolution.");
+    LOG(ERROR) << "Failed to apply camera capture settings. "
+               << "pixel_format_set=" << std::boolalpha << set_fourcc << ", "
+               << "width_set=" << std::boolalpha << set_width << ", "
+               << "height_set=" << std::boolalpha << set_height << ", "
+               << "frame_rate_set=" << std::boolalpha << set_fps;
+    return absl::Status(absl::StatusCode::kInternal, "Failed to apply camera capture settings.");
   }
 
   LOG(INFO) << "Camera initialized successfully.";

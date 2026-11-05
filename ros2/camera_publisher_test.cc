@@ -212,7 +212,7 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
 }
 
 TEST_F(CameraPublisherTest, InvalidConfigurationFailsStartupInsteadOfRetrying) {
-  state_->configuration_status = absl::InvalidArgumentError("Invalid camera FourCC");
+  state_->configuration_status = absl::InvalidArgumentError("Invalid camera pixel format");
   EXPECT_THROW(Start(), std::invalid_argument);
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->reads, 0);
