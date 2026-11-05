@@ -240,6 +240,27 @@ TEST_F(MixedDeviceTest, QueriesDoNotRefreshMovingTargetsAndDuplicatesRefreshNeit
   EXPECT_TRUE(StepDirDeviceRuntime()->estopped);
   EXPECT_EQ(StepDirDeviceRuntime()->state.reason, JW_REASON_DEVICE_FAULT);
 }
+class FractionalPositionTest : public MixedDeviceTest,
+                               public ::testing::WithParamInterface<float> {};
+TEST_P(FractionalPositionTest, ReachingRoundedGoalDoesNotExpireTargetWatchdog) {
+  Configure();
+  Policy();
+  ASSERT_EQ(Profile(JW_PROFILE_ACTUATOR, JW_ACTUATOR_ENABLE).status, JW_STATUS_OK);
+  Bytes bytes(JW_SET_TARGET_PAYLOAD_LEN);
+  jw_encode_set_target_payload(bytes.data(), bytes.size(), JW_MODE_POSITION, GetParam());
+  ASSERT_EQ(Profile(JW_PROFILE_ACTUATOR, JW_ACTUATOR_SET_TARGET, bytes).status, JW_STATUS_OK);
+  for (uint32_t now = 1000; now <= 40000; now += 1000) Tick(now);
+  ASSERT_EQ(g_channels[0].step_dir.position_steps, std::lround(GetParam()));
+  ASSERT_TRUE(g_channels[0].enabled);
+  // Expire the target watchdog while remaining inside the communication budget.
+  Tick(100001);
+  EXPECT_TRUE(g_channels[0].enabled);
+  EXPECT_FALSE(StepDirDeviceRuntime()->estopped);
+}
+INSTANTIATE_TEST_SUITE_P(
+    RoundedGoals,
+    FractionalPositionTest,
+    ::testing::Values(8.888889f, -8.888889f, 8.5f, -8.5f, 8.1f, -8.1f, 0.4f, -0.4f));
 TEST_F(MixedDeviceTest, CommunicationLossStopsSensingAndResetPreservesTheFaultLatch) {
   Subscribe();
   Tick(0);

@@ -48,6 +48,23 @@ class MemoryLink : public Link {
     out.resize(jw_encode_response(out.data(), out.size(), &request, payload, 2));
     return out;
   }
+  static Bytes DisabledStatusReply(const jw_frame_t& request) {
+    jw_device_status_t state{};
+    state.state = JW_STATE_DISABLED;
+    state.reason = JW_REASON_SESSION_RESET;
+    state.recovery = JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE;
+    state.verification = JW_SAFE_UNSUPPORTED;
+    state.action_status = JW_STATUS_INVALID;
+    state.action_execution = JW_EXECUTION_REJECTED;
+    uint8_t data[JW_MAX_PAYLOAD_LEN], payload[JW_MAX_PAYLOAD_LEN];
+    Bytes response(JW_MAX_FRAME_LEN);
+    const int size = jw_encode_device_status(data, sizeof(data), &state);
+    const int length = jw_encode_reply_payload(
+        payload, sizeof(payload), JW_STATUS_OK, JW_EXECUTION_COMPLETE, data, size);
+    response.resize(
+        jw_encode_response(response.data(), response.size(), &request, payload, length));
+    return response;
+  }
   WriteResult WriteFrame(absl::Span<const uint8_t> bytes, Clock::time_point deadline) override {
     std::unique_lock lock(mutex);
     if (!failure.ok()) return {failure, 0};
@@ -214,19 +231,7 @@ TEST_F(CoordinatorTest, HeartbeatUsesReservedAdmissionAndExistingSessionWhileQue
   std::atomic<unsigned> heartbeat_count{0};
   link->on_write = [&](const jw_frame_t& frame) {
     if (frame.cmd != JW_CMD_GET_STATUS) return false;
-    jw_device_status_t state{};
-    state.state = JW_STATE_DISABLED;
-    state.reason = JW_REASON_SESSION_RESET;
-    state.recovery = JW_RECOVERY_RECONFIGURE | JW_RECOVERY_EXPLICIT_ENABLE;
-    state.verification = JW_SAFE_UNSUPPORTED;
-    state.action_status = JW_STATUS_INVALID;
-    state.action_execution = JW_EXECUTION_REJECTED;
-    uint8_t data[JW_MAX_PAYLOAD_LEN], payload[JW_MAX_PAYLOAD_LEN], response[JW_MAX_FRAME_LEN];
-    const int size = jw_encode_device_status(data, sizeof(data), &state);
-    const int length = jw_encode_reply_payload(
-        payload, sizeof(payload), JW_STATUS_OK, JW_EXECUTION_COMPLETE, data, size);
-    const int count = jw_encode_response(response, sizeof(response), &frame, payload, length);
-    link->incoming.push_back({Bytes(response, response + count), Clock::now()});
+    link->incoming.push_back({MemoryLink::DisabledStatusReply(frame), Clock::now()});
     ++heartbeat_count;
     return true;
   };
@@ -242,6 +247,36 @@ TEST_F(CoordinatorTest, HeartbeatUsesReservedAdmissionAndExistingSessionWhileQue
   EXPECT_GT(heartbeat_count, 0);
   EXPECT_FALSE(coordinator->Snapshot().faulted);
   EXPECT_EQ(coordinator->Snapshot().pending_operations, 0);
+}
+
+TEST_F(CoordinatorTest, ReconnectPreservesHeartbeatPolicyAndSendsHeartbeatsWhileIdle) {
+  policy.set_heartbeat_period_ms(10);
+  auto new_link = std::make_shared<MemoryLink>();
+  for (const auto& peer : {link, new_link}) {
+    peer->on_write = [raw = peer.get()](const jw_frame_t& frame) {
+      if (frame.cmd != JW_CMD_GET_STATUS) return false;
+      raw->incoming.push_back({MemoryLink::DisabledStatusReply(frame), Clock::now()});
+      return true;
+    };
+  }
+  Open();
+  auto id = std::make_shared<uint32_t>(100);
+  auto reconnected = coordinator->Reconnect(
+      [new_link]() -> absl::StatusOr<std::shared_ptr<Link>> { return new_link; },
+      [](Coordinator&) { return absl::OkStatus(); },
+      [id] { return ++*id; });
+  ASSERT_TRUE(reconnected.ok()) << reconnected.status();
+  coordinator = *reconnected;
+  auto shared = Coordinator::Acquire(new_link, policy);
+  ASSERT_TRUE(shared.ok()) << shared.status();
+  EXPECT_EQ(*shared, coordinator);
+  const auto end = Clock::now() + 500ms;
+  while (coordinator->Snapshot().heartbeats == 0 && Clock::now() < end)
+    std::this_thread::sleep_for(1ms);
+  EXPECT_GT(coordinator->Snapshot().heartbeats, 0);
+  EXPECT_EQ(coordinator->Snapshot().heartbeat_failures, 0);
+  EXPECT_TRUE(coordinator->Snapshot().ready);
+  EXPECT_FALSE(coordinator->Snapshot().faulted);
 }
 
 TEST_F(CoordinatorTest, LostHeartbeatFaultsConnectionWithoutTargetReplay) {

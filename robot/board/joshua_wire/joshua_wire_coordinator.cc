@@ -1045,6 +1045,7 @@ absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Re
   JW_SET_POLICY(max_notifications);
   JW_SET_POLICY(max_streams);
   JW_SET_POLICY(telemetry_bytes_per_second);
+  JW_SET_POLICY(heartbeat_period_ms);
 #undef JW_SET_POLICY
   ABSL_ASSIGN_OR_RETURN(auto next, Acquire(std::move(link), config, std::move(fresh)));
   {
