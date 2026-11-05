@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Agreed demo direction; implementation and physical qualification gates open. |
-| Created / last reviewed | 2026-11-03 |
+| Created / last reviewed | 2026-11-03 / 2026-11-04 |
 | Implementation review | Checkout `9993548`; source review only. No hardware qualification established by this document. |
 | Primary outcome | Configure diverse supported hardware quickly, observe and control it dependably, and connect the same interfaces to a simulator. |
 | Delivery owner, parts, capacity, and dates | TBD at N0. |
@@ -17,14 +17,14 @@ its own gates; evidence closes only the conditions it actually demonstrates.
 ## 1. Product promise
 
 > Build your robot's nervous system quickly. Connect supported actuators and
-> sensors, see what they are doing, and keep applications working as hardware
-> changes.
+> sensors and other devices, see what they are doing, and keep applications
+> working as hardware changes.
 
 Joshua's contribution is the path from hardware configuration to useful, reliable
 sensing and actuation. Demonstrate that path with working devices, visible config
 changes, and measured engineering effort.
 
-The release should establish four outcomes:
+The demo should establish five outcomes:
 
 - **Fast integration:** a supported component becomes usable through configuration
   and documented calibration, with the required preparation and assistance timed.
@@ -34,6 +34,10 @@ The release should establish four outcomes:
   have defined behavior and repeatable evidence under mixed load.
 - **Simulation connectivity:** the same named hardware interfaces feed a simulator
   view, and one application can run through hardware or simulation adapters.
+- **Synchronized operation:** sensors, actuators, and other devices coordinate
+  data acquisition and command execution within ROS 2, supported by a repeatable
+  workflow for configuration, calibration, and operation. Qualify alignment and
+  delay against the timing bounds frozen at N0.
 
 Count different drivers, protocols, and data types separately from device count.
 Several identical servos demonstrate scale within one interface family. A second
@@ -104,6 +108,30 @@ outside this demo's required scope.
 Target a six-to-eight-minute presentation after rehearsal. Carry out long
 qualification and endurance runs beforehand and show their recorded results.
 
+### General audience: interact through an LLM
+
+Show a short prompt-driven walkthrough that connects plain-language questions
+to the physical rig and its live displays. Use a small, rehearsed read-only
+tool path with visible evidence for each answer:
+
+| Example prompt | Audience sees | Evidence |
+| --- | --- | --- |
+| "Which devices are configured, and what does each measure or control?" | The answer highlights the corresponding physical component and named graph entry. | The selected config and declared device/endpoint mappings. |
+| "Which readings are stale or missing?" | A prescribed sensor interruption appears in the answer and health display. | Last-valid-sample age, validity, and the recorded fault event; unavailable observations stay explicit. |
+| "How does this real joint appear in the simulator?" | The measured joint and its simulator representation are highlighted together. | The documented ROS 2 mapping, units, data origin, and sample timing. |
+
+The operator launches the rig and any bounded motion through the qualified
+control workflow. Keep this LLM path read-only; answers must distinguish declared
+configuration from current observations and report uncertainty when evidence is
+missing. Rehearse the prompt/tool/result sequence before N6. This is a planned
+integration deliverable under I10, not a claim that arbitrary prompt-driven
+hardware control is implemented.
+
+### Robotics practitioners: inspect the integration workflow
+
+Use configuration diffs, timing measurements, and interface details for the
+engineering audience:
+
 | Step | Audience sees | Evidence |
 | --- | --- | --- |
 | Inspect the setup | Physical components beside the config and named device graph | Exact supported parts and the config that selects them. |
@@ -123,6 +151,16 @@ recording for conditions unsuitable for the conference setting.
 The protobuf configuration remains the source of truth for device identities,
 boards, channels, transports, limits, and artifact references. Generated models,
 display mappings, and adapter metadata must reference that configuration snapshot.
+
+### Coordinated ROS 2 operation
+
+Define which sensor samples each command uses, their maximum age and inter-stream
+skew, the command cadence, and the behavior for missing or late inputs. Preserve
+acquisition and receipt times with their clock domains through ROS 2, recording,
+and simulator mappings. Measure the combined graph under the frozen mixed load;
+sharing topics or a clock API alone does not establish synchronized acquisition
+or execution. Reuse the same configure, calibrate, validate, and operate sequence
+when a supported device changes.
 
 ```mermaid
 flowchart LR
@@ -164,6 +202,26 @@ performance, and application-adapter support. Isaac Sim's ROS 2 ecosystem is a
 candidate integration route; Joshua's MuJoCo backend offers an existing stepping
 and control interface. Freeze versions and ship one qualified path.
 
+### Independent simulator connection and restart demonstration
+
+Launch Joshua's hardware runtime and the selected simulator as separate
+processes with separate start/stop commands. Joshua owns device connections,
+command execution, and hardware health monitoring. In live-mirror mode the
+simulator consumes published state and sensor data through ROS 2 topics.
+
+Publish a mapping manifest tied to the config snapshot: source device and topic,
+message type and fields, QoS, joint/frame names, units and conversions, timestamp
+domain, maximum age, and destination model or panel. Display measured servo state,
+commanded/estimated stepper state, camera frames, and ranges with their source labels.
+
+During a qualified bounded hardware run, stop and restart only the simulator.
+Record hardware command/feedback and sensor traces before, during, and after the
+restart. Hardware operation, bus ownership, and the recorder must continue within
+the N0 timing/freshness bounds, without restarting Joshua or resetting its board
+sessions. The restarted simulator reconnects through the manifest, discards stale
+samples, and resumes the current view without taking hardware command ownership.
+Include this procedure and its results in the I07/N3 evidence.
+
 ### Executable foundation for learning workflows
 
 Use a small conventional target-bearing controller as the application example.
@@ -197,6 +255,7 @@ device independently.
 | Supported change time | Stop-to-validated-resumption time, with wiring, config, calibration, restart, and assistance separated. Preserve failed attempts. |
 | Engineering effort | Source edits, config edits, generated/artifact changes, driver development, and operator assistance. |
 | Latency and jitter | Record measurement endpoints, p50/p95/p99 and maximum delay, and interval variation under the frozen workload. Distinguish command receipt from observed physical response. |
+| Coordinated operation | Freeze sample-age/skew bounds and command cadence; measure acquisition alignment and command timing under mixed load. Record late/missing-input handling and any unavailable source timestamps. |
 | Stream completeness | Expected/received samples, gaps, invalid values, and rejected data using explicit counters or sequence rules. Avoid inferring loss from display frame rate. |
 | Freshness and fault response | Prescribed interruption, detection deadline, visible stale/fault state, dependent application behavior, and deliberate recovery result. |
 | Endurance and lifecycle | Frozen soak duration and repeated start/run/stop/change cycles, including crashes, resource growth, timeouts, interventions, and denominator. |
@@ -243,9 +302,10 @@ only for the backend selected at N0; the other backend is optional.
 | P0 | I04 — Sample identity and timing preservation | [Position publishing](../ros2/position_publisher.cc) passes the position payload without packet timing; camera and lidar publishers stamp outgoing messages at publication. The [robot-time service](../docs/ROBOT_TIME.md) does not synchronize sources or migrate those paths automatically. | Preserve acquisition/receipt times where available, time-domain identity, sample identity, and restart/discontinuity markers through publishing, recording, and bridging. Represent unavailable source timing explicitly. | Known-timestamp samples retain their meaning through the selected data path. Replay checks cover delayed, missing, repeated, and restarted streams; latency reports identify endpoints and clock assumptions. |
 | P1 | I05 — Mixed-rig presets and supported changes | [Config validation](../config/README.md) and individual presets exist; the validator explicitly excludes hardware readiness. There is no complete preset package for this mixed rig and its two required changes. | Ship baseline/expanded rig presets, camera A/B settings, stable names, calibration references, and a readiness inspection command. Document the stop/change/configure/validate/restart sequence. | Config checks accept the intended variants and reject ownership/type conflicts. A documented rehearsal produces config/artifact diffs for both changes; readiness distinguishes missing devices from invalid config. Physical and timing evidence comes from Q01/Q03. |
 | P1 | I06 — Live device views | [MonitorPage](../ui/src/pages/MonitorPage.tsx) shows topology and logs; [TopicsList](../ui/src/components/TopicsList.tsx) shows endpoint metadata. [CalibrationPage](../ui/src/pages/CalibrationPage.tsx) is a placeholder. | Add camera, measured-versus-commanded joint, range, and health views with units, data origin, rates, and sample age. Supply the calibration procedure/tools needed for the selected rig; a CLI plus simple panels is acceptable. | Recorded or synthetic fixtures verify data display, stale/fault transitions, units, and source labels. Stepper command/estimate is visibly distinct from measured feedback. Qualify the live view under Q01. |
-| P1 | I07 — One complete simulator bridge | [MuJoCo mirror mode](../simulation/mujoco/modes/mirror.py) maps scalar topics into actuator controls. The [Isaac viewer](../simulation/isaac/viewer.py) loads a scene and steps physics. Neither supplies the complete required device view and application routing. | For the N0-selected backend only, implement named state mappings, sensor panels, freshness/source labels, a minimal rig model, and explicit execution-target routing. Derive mappings from canonical config/artifact references. | Every demo device is observable; fixtures verify names, units, state mappings, stale behavior, and restart. Live, replayed, and simulated sources are labeled, and commands reach only the selected target. Model motion alone does not count as measured-state evidence. |
+| P1 | I07 — One complete simulator bridge | [MuJoCo mirror mode](../simulation/mujoco/modes/mirror.py) maps scalar topics into actuator controls. The [Isaac viewer](../simulation/isaac/viewer.py) loads a scene and steps physics. Neither supplies the complete required device view and application routing. | For the N0-selected backend only, implement named state mappings, sensor panels, freshness/source labels, a minimal rig model, and explicit execution-target routing. Run Joshua and the simulator independently through a documented ROS 2 mapping manifest. | Every demo device is observable; fixtures verify names, units, state mappings, stale behavior, and restart. Restarting only the simulator preserves hardware operation and recording within frozen bounds. Live, replayed, and simulated sources are labeled, and commands reach only the selected target. Model motion alone does not count as measured-state evidence. |
 | P1 | I08 — Shared application and adapters | The target-bearing controller and paired hardware/simulation adapters specified in Section 4 are not implemented as a demo example. | Implement the small controller, observation/action contract, preprocessing, and explicit hardware/simulation adapters. Supply a minimal independent simulated plant and document its assumptions. | The same application source runs against both adapters with compatible units, update rate, and bounded actions. Simulation completes without live hardware observations; physical execution uses Q01/Q02-qualified hardware. |
-| P2 | I09 — Recording, metrics, and release evidence | [DataStore](../ai/train/data_store.py) records interleaved messages and counts; the subscriber uses receipt-time recording by default. It does not assemble the full demo provenance and qualification report. | Add session manifests for code/config/firmware/calibration/simulator identities, fault events, integration effort, and measurement endpoints. Provide repeatable latency, completeness, lifecycle, and soak reports plus inspection/replay instructions. | A sample session regenerates its report from preserved records. Missing data, failed attempts, interventions, and clock limitations remain visible. The release manifest resolves the artifacts used by N4–N6. |
+| P1 | I10 — Grounded LLM walkthrough | [AI integration](../docs/AI_INTEGRATION.md) describes inspection and orchestration goals; this plan records no qualified prompt-driven demo. | Connect a rehearsed read-only LLM path to the selected config, device-health observations, and simulator mapping evidence. Supply the Section 3 prompts and visible tool results. | Answers identify the right devices, distinguish configuration from observations, and expose stale/missing evidence. The walkthrough issues no hardware commands; preserve its prompt/tool/result trace for N6. |
+| P2 | I09 — Recording, metrics, and demo evidence | [DataStore](../ai/train/data_store.py) records interleaved messages and counts; the subscriber uses receipt-time recording by default. It does not assemble the full demo provenance and qualification report. | Add session manifests for code/config/firmware/calibration/simulator identities, fault events, integration effort, and measurement endpoints. Provide repeatable latency, completeness, lifecycle, and soak reports plus inspection/replay instructions. | A sample session regenerates its report from preserved records. Missing data, failed attempts, interventions, and clock limitations remain visible. The demo manifest resolves the artifacts used by N4–N6. |
 
 Physical qualification and user evidence are required workstreams alongside the
 implementation backlog. They cannot be closed by mocks, native firmware tests,
@@ -255,7 +315,7 @@ or simulator motion.
 | --- | --- | --- | --- | --- |
 | Required for N1/N3 | Q01 — Qualified mixed hardware | Driver paths exist, but the exact demo kit is unselected. The current [Teensy record](../firmware/teensy/41/README.md) establishes protocol/backpressure behavior with motor power disconnected; physical GPIO timing and motor stopping remain unverified. The [ESP32 record](../firmware/esp32/README.md) does not establish physical motion qualification for the current revision. | Select and pin the exact devices, firmware, supplies, wiring, fixtures, calibration, rates, and load. Qualify both actuator branches and all required sensors together, including the two supported changes. | Authorized bench records establish actual motion, direction/limits, servo command/feedback concurrency, sensor data, units/frames, and mixed-rig operation. Open-loop stepper values retain command/estimate labels. |
 | Required for N1/N4 | Q02 — Physical fault response and endurance | Software stop/teardown paths and protocol coverage do not establish physical stop deadlines or communication-loss behavior. | Qualify the I02 policy on the exact rig: stop, sensor loss, actuator-link loss, power interruption, deliberate recovery, mixed-load soak, and repeated lifecycle operations. Freeze the workload, durations, bounds, and trial counts at N0. | Measured detection/recovery and physical response satisfy the frozen operating envelope. Preserve every trial, timeout, intervention, and failure. Unsupported stop guarantees remain excluded from claims. |
-| Required for N2/N5/N6 | Q03 — Reproducible fast integration and release | The plan defines the workflow, but no timed outside-user demonstration or complete release evidence is recorded here. | Rehearse camera replacement and actuator-branch addition/removal, time every stage, and have an engineer outside the implementation team reproduce them. Freeze and rehearse the release package. | Complete timing/assistance ledgers, source/config/artifact diffs, starting conditions, dependency identities, relevant Docker check results, and conference runbook. |
+| Required for N2/N5/N6 | Q03 — Reproducible fast integration and demo handoff | The plan defines the workflow, but no timed outside-user demonstration or complete demo evidence is recorded here. | Rehearse camera replacement and actuator-branch addition/removal, time every stage, and have an engineer outside the implementation team reproduce them. Freeze and rehearse the conference demo package. | Complete timing/assistance ledgers, source/config/artifact diffs, starting conditions, dependency identities, relevant Docker check results, and conference runbook. |
 
 Start with **I01 and I02: one servo bus owner that accepts bounded commands,
 publishes named measured feedback, starts disabled, and requires deliberate
@@ -274,28 +334,34 @@ numeric bounds, and the supported hardware matrix at N0. All gates start open.
 | N0 — Contract, parts, and simulator | Week 1 | BOM and inventory; config/observation/action contracts; one simulator feasibility result; workload and frozen acceptance bounds; conference/freeze dates. | TBD / Open |
 | N1 — Qualified mixed hardware | Weeks 2–4 | Both actuator branches physically qualified; all selected sensor types observable together; one-owner bus operation; units, feedback labels, stop/recovery evidence. | TBD / Open |
 | N2 — Fast supported changes | Weeks 4–6 | Camera A→B and actuator-branch addition/removal reproduced from documentation; config/artifact diffs and complete timing ledger. | TBD / Open |
-| N3 — Simulator and application reuse | Weeks 5–7 | All demo devices visible in one selected simulator view; independent simulated application run; explicit mappings, data origin, and adapter/source identities. | TBD / Open |
-| N4 — Reliability | Weeks 7–9 | Frozen mixed-load, soak, repeated lifecycle, sensor-loss, and qualified actuator-fault protocols pass; complete metrics, failures, and recovery records. | TBD / Open |
+| N3 — Simulator and application reuse | Weeks 5–7 | All demo devices visible in one selected simulator view; documented ROS 2 mappings between independent Joshua/simulator processes; simulator restart preserves hardware operation; independent simulated application run. | TBD / Open |
+| N4 — Reliability | Weeks 7–9 | Frozen mixed-load, sample-age/skew, command cadence, soak, repeated lifecycle, sensor-loss, and qualified actuator-fault protocols pass; complete metrics, failures, and recovery records. | TBD / Open |
 | N5 — Outside-user reproduction | Weeks 9–10 | At least one engineer outside the implementation team reproduces setup and both supported changes; timing and assistance recorded. | TBD / Open |
-| N6 — Release and conference | Weeks 11–12 | Pinned artifacts, verified combinations, fresh-host guide, relevant Docker checks, offline rehearsal, spares, and labeled fallback recording. | TBD / Open |
+| N6 — Conference demo readiness | Weeks 11–12 | Pinned demo artifacts, verified combinations, operator runbook, grounded LLM walkthrough, relevant Docker checks, offline rehearsal, spares, and labeled fallback recording. | TBD / Open |
 
 Downstream gates use the frozen upstream artifacts. A changed driver, firmware,
 device, calibration, rate, or mapping reopens the affected qualification. N3 may
 use a minimal scene while N1/N2 progress, but final evidence must use the actual
 qualified hardware and configuration.
 
-## 8. Release package and scope control
+## 8. Conference demo package and later productization
 
-Ship the qualified hardware matrix, wiring/assembly guide, presets, calibration
-artifacts, firmware identities, selected simulator asset/mappings, shared example
-application and adapters, recording/inspection tools, and evidence manifest.
+For the conference, retain the qualified rig's parts/wiring reference, presets,
+calibration and firmware identities, selected simulator mappings, shared example,
+recording/inspection tools, and evidence manifest. Supply a short operator runbook
+so the team can reproduce and recover the demonstrated configuration.
 Include a support-status distinction between source implementation, software
 validation, and physical qualification for every advertised combination.
 
-The operator guide must cover first data, bounded command, supported change,
-stale/fault inspection, deliberate recovery, recording, simulation/replay modes,
-and troubleshooting. Distribute measured setup and change times with their
-starting conditions, including prepared hardware and cached dependencies.
+The runbook covers first data, bounded command, supported change, prompt-driven
+inspection, deliberate recovery, and independent simulator restart. Report measured
+setup/change times with their actual starting conditions and assistance.
+
+Revisit the full distributable product package when productization starts:
+fresh-host installation, broad hardware support documentation, automated onboarding
+and calibration, packaging/update policy, and ongoing support commitments.
+These are deferred beyond N6. Keep the N5 outside-engineer reproduction as a
+bounded demo usability check, rather than a general product-readiness claim.
 
 If milestones slip, remove optional device families and presentation polish
 first. Preserve two distinct actuator interfaces, three required sensor data

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Agreed demo direction; implementation and hardware verification gates remain open. |
-| Created / last reviewed | 2026-11-01 / 2026-11-03 |
+| Created / last reviewed | 2026-11-01 / 2026-11-04 |
 | Implementation baseline | Checkout `31efe9d`; source and documentation review only. |
 | Planning horizon | 12 weeks from an agreed kickoff; conference expected in approximately three months. Exact conference and freeze dates are TBD. |
 | Delivery owner / engineering capacity | TBD at checkpoint C0. |
@@ -275,6 +275,33 @@ MuJoCo supplies configurable actuator and camera models; Joshua still needs the
 workflow integration described here. See the upstream
 [modeling documentation](https://mujoco.readthedocs.io/en/latest/modeling.html).
 
+### Independent ROS 2 simulator connection
+
+Include a separate live-mirror demonstration alongside the learning workflow.
+Run Joshua and the selected simulator as independently launched processes,
+connected through ROS 2 topics. Joshua owns hardware communication, command
+execution, recording, and device health. The simulator consumes published measured
+state and sensor data; it does not acquire the physical buses or cameras.
+
+Document each mapping from the canonical config/artifact snapshot: topic, message
+type and fields, QoS, joint/frame identity, units/conversion, timestamp domain,
+maximum age, and destination model or sensor panel. Show measured angle and real
+camera data with their source labels. Keep the simulation-training environment's
+synthetic observations and predictive-model validation evidence separate from
+this live view.
+
+While the qualified hardware controller and recorder continue running, stop and
+restart only the simulator. Preserve command/feedback/image traces before, during,
+and after the restart. Hardware operation must remain within the frozen timing
+and freshness bounds, without restarting Joshua, resetting board sessions, or
+changing command ownership. On reconnect, discard stale simulator inputs and
+resume from current published state. Record any interruption as a failed restart
+trial and retain its diagnostics. Close this requirement with C2 evidence.
+
+This connection is an implementation and qualification task under G10. A labeled
+recording is a presentation fallback when live rehearsal cannot fit the conference
+schedule; an unverified restart requirement remains open.
+
 ### Sim → real: deploy and compare
 
 Export the trained checkpoint together with config, calibration, environment,
@@ -310,6 +337,7 @@ below cover the camera-head implementation and verification work.
 | G07 — Policy deployment | [Inference host](../ai/inference/host.py) and model plug-ins exist. | Add the selected tracking-policy adapter, named synchronized inputs, action conversions, compatibility checks, and offline parity validation. | C3, C4 |
 | G08 — Optional controller portability | Board/transport abstractions exist; they do not prove interchangeable physical behavior. | Qualify a second interface/controller without component-specific edits to shared recording/training/inference code. | C6 optional extension |
 | G09 — Outside-user and release evidence | Docker workflows, [documentation](../CONTRIBUTING.md), and monitoring UI exist. | Reproduce fresh-host setup and supported changes, time all assistance, distribute artifacts, and rehearse offline. | C5, C7 |
+| G10 — Independent ROS 2 simulator connection | The existing viewer/mirror paths do not establish the independent launch, complete mapping, or restart-continuity evidence required here. | Launch Joshua and the selected simulator separately, publish state/sensor mappings, and verify simulator restart while hardware control and recording continue. | C2, C7 |
 | G11 — Real-to-sim identification | [MuJoCo engine](../simulation/mujoco/engine.py) can step/read/render a model; [mirror mode](../simulation/mujoco/modes/mirror.py) sends incoming scalars to controls. | Fit an effective servo response and validate predictions on held-out real traces; establish camera calibration and uncertainty. Mirroring alone does not close this gap. | C2 |
 | G12 — Canonical head model | [Simulation config](../simulation/proto/simulation.proto) references model files. [PhysicalLayout](../config/proto/physical_layout.proto) describes link geometry/limits but does not establish a config-to-twin pipeline. | Add a fixed head template and schema/artifact references for camera, geometry, response parameters, and provenance; generate reproducibly without manual duplicate edits. | C2 |
 | G13 — Hardware-change lifecycle | Config-driven construction exists; hot reload and policy compatibility across changes are not established. | Implement stop/change/reconfigure/calibrate/validate/resume, invalidation rules, A/B evidence, and explicit reuse-versus-retrain decisions. Restart is allowed. | C6 |
@@ -417,9 +445,13 @@ physical angle/timing/stop traces, target detector results, and limitations.
   produces the same model identity.
 - [ ] Meet frozen held-out model error/timing thresholds. Verify control units,
   delay, limits, reset, detector visibility, and observation/action parity.
+- [ ] Run the independent ROS 2 live-mirror demonstration with documented state
+  and sensor mappings. Restart only the simulator and verify hardware control,
+  communication ownership, and recording continue within the frozen bounds.
 
 **Evidence:** real dataset, fit/calibration artifacts, generated model, prediction
-plots, error report, and repeatable build command. Mirroring/playback is supporting
+plots, error report, repeatable build command, ROS 2 mapping manifest, and
+simulator-restart continuity traces. Mirroring/playback is supporting
 visualization, not model-validation evidence.
 
 ### C3 — First simulation-trained real execution
@@ -525,6 +557,7 @@ fresh-host installation are not assumed to fit within this presentation.
 | Connect and inspect | Physical head, selected A config, camera image, measured angle | Supported custom hardware becomes observable through Joshua. |
 | Measure reality | Short bounded response capture and existing validation plot | Real measurements inform the model; identify which artifacts are newly captured. |
 | Explain learning | Calibrated simulation, training record, held-out evaluation | The deployed checkpoint was trained in simulation. |
+| Restart the simulator | Independently launched simulator reconnects to Joshua's published state and camera data while the head and recorder continue | Documented ROS 2 mappings and before/during/after continuity traces; show a labeled recording if required by rehearsal timing. |
 | Run A | Visitor target tracking plus benchmark results | Real execution through the shared interface; visitor interaction is separate from controlled trials. |
 | Change hardware | Stopped A→B swap, config/calibration differences, model update | Supported changes reuse the workflow with explicit validation. |
 | Run B | Compatible reused policy or identified B checkpoint, measured results | Policy reuse or adaptation is demonstrated with the correct provenance. |
