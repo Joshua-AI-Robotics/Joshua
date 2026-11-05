@@ -178,6 +178,20 @@ even when it has several subscriptions.
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
 
+## Camera publishing
+
+`CAMERA_PUBLISHER` keeps configured image topics registered when a camera is
+temporarily unavailable at startup. It retries initialization with a one-second
+steady-clock backoff and reads frames only after initialization succeeds.
+A capture failure closes the failed session and uses the same initialization
+path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
+Initialization failures reported as invalid arguments fail startup; the OpenCV
+driver checks its required FourCC before opening the device.
+
+`//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
+delivery, and reinitialization after read failures using fake camera sources and
+a virtual retry clock. It opens no physical devices.
+
 ## Audio publishing
 
 `AUDIO_PUBLISHER` owns ALSA microphones configured through `alsa_audio_config`.

@@ -22,15 +22,16 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
+  if (opencv_config_.fourcc().size() < 4) {
+    LOG(ERROR) << "FourCC is not specified";
+    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
+  }
+
   absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
     return status;
   }
 
-  if (opencv_config_.fourcc().size() < 4) {
-    LOG(ERROR) << "FourCC is not specified";
-    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
-  }
   bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
                              cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
                                                      opencv_config_.fourcc()[1],
