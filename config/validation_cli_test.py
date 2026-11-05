@@ -350,15 +350,29 @@ robot {
                         },
                     )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
-                    # This header-only helper validates protobuf settings; any
-                    # transitive transport implementation must still be rejected.
+                    # These helpers check protobuf fields without opening a bus.
+                    # Keep the allowlist exact so transports remain excluded.
                     self.assertIn(
                         label,
                         {
+                            "//robot/comm/factory:comm_config_validation",
+                            "//robot/comm/factory:comm_config_validation.h",
                             "//robot/comm/serial:serial_config_validation",
                             "//robot/comm/serial:serial_config_validation.h",
+                            "//robot/comm/serial:serial_device_identity",
+                            "//robot/comm/serial:serial_device_identity.cc",
+                            "//robot/comm/serial:serial_device_identity.h",
                         },
                         "validator depends on hardware communication implementation",
+                    )
+                if label.startswith("//robot/perception/") and "/proto:" not in label:
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/perception/audio:audio_config",
+                            "//robot/perception/audio:audio_config.h",
+                        },
+                        "validator depends on perception implementation",
                     )
                 if label.startswith("//robot/action/") and "/proto:" not in label:
                     self.fail("validator depends on action implementation")

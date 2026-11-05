@@ -73,6 +73,28 @@ TEST_F(JoshuaWireBoardTest, DiscoversDescribesAndReconcilesBeforeConfiguringWith
   EXPECT_TRUE(board.Teardown().ok());
   EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
 }
+TEST_F(JoshuaWireBoardTest, TeardownAllowsReinitializationWithoutRecovery) {
+  FakeJoshuaWireBoard board;
+  const auto config = MakeBoardConfig();
+  ASSERT_TRUE(board.Init(config).ok());
+  auto retained = board.OpenChannel(0);
+  ASSERT_TRUE(retained.ok());
+  ASSERT_TRUE((*retained)->Enable().ok());
+
+  ASSERT_TRUE(board.Teardown().ok());
+  EXPECT_FALSE(transport_->channel.estopped);
+  EXPECT_FALSE(transport_->channel.enabled);
+  EXPECT_FALSE(transport_->channel.configured);
+  ASSERT_TRUE(board.Init(config).ok());
+  EXPECT_TRUE(transport_->channel.configured);
+  EXPECT_FALSE(transport_->channel.enabled);
+  EXPECT_EQ((*retained)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+  auto current = board.OpenChannel(0);
+  ASSERT_TRUE(current.ok());
+  EXPECT_TRUE((*current)->Enable().ok());
+  EXPECT_TRUE(transport_->channel.enabled);
+}
+
 TEST_F(JoshuaWireBoardTest, VendorAndProductAreInformational) {
   transport_->channel.runtime.identity.vendor_id = 0xabcdef;
   transport_->channel.runtime.identity.product_id = 0x987654;

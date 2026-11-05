@@ -1,5 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
+# Shared revision-4 core, profiles, runtimes and transport adapters.
 cc_library(
     name = "joshua_wire_commands",
     srcs = ["joshua_wire_commands.c"],
@@ -136,11 +137,101 @@ cc_library(
         "stepdir_channel.h",
     ],
     includes = ["."],
-    visibility = ["//robot/board:__subpackages__"],
+    visibility = [
+        "//firmware:__subpackages__",
+        "//robot/board:__subpackages__",
+    ],
     deps = [
+        ":joshua_actuator_handler",
         ":joshua_device_runtime",
         ":joshua_wire_endpoint",
         ":joshua_wire_resources",
         "//firmware/testing:arduino",
+    ],
+)
+
+cc_library(
+    name = "frame_transport",
+    hdrs = ["frame_transport.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "serial_frame_assembler",
+    srcs = ["serial_frame_assembler.c"],
+    hdrs = ["serial_frame_assembler.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":frame_transport",
+        ":joshua_wire_stream",
+    ],
+)
+
+cc_test(
+    name = "serial_frame_assembler_test",
+    srcs = ["serial_frame_assembler_test.cc"],
+    deps = [
+        ":serial_frame_assembler",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_frame_transport",
+    srcs = ["serial_frame_transport.c"],
+    hdrs = ["serial_frame_transport.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [":serial_frame_assembler"],
+)
+
+cc_test(
+    name = "serial_frame_transport_test",
+    srcs = ["serial_frame_transport_test.cc"],
+    deps = [
+        ":serial_frame_transport",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "joshua_ethercat_profile",
+    srcs = ["joshua_ethercat_profile.c"],
+    hdrs = ["joshua_ethercat_profile.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire_ethercat",
+        ":joshua_wire_firmware_session",
+        ":joshua_wire_profiles",
+    ],
+)
+
+cc_library(
+    name = "joshua_actuator_handler",
+    srcs = ["joshua_actuator_handler.c"],
+    hdrs = ["joshua_actuator_handler.h"],
+    # Exercise the portable handler as C, including in native C++ test builds.
+    copts = [
+        "-x",
+        "c",
+        "-std=c11",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_device_runtime",
+        ":joshua_wire_profiles",
+        ":joshua_wire_resources",
+    ],
+)
+
+cc_test(
+    name = "joshua_actuator_handler_test",
+    srcs = ["joshua_actuator_handler_test.cc"],
+    deps = [
+        ":joshua_actuator_handler",
+        ":joshua_wire_endpoint",
+        "@googletest//:gtest_main",
     ],
 )

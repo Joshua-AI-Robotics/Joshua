@@ -1,5 +1,11 @@
 #include "config/validation.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstdlib>
+#include <filesystem>
+
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "ros2/utils/packet_parser.h"
@@ -82,6 +88,54 @@ TEST(ValidationTest, BoardSensorsSharePortOnlyWithinOneNode) {
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_TRUE(ValidateConfig(config).ok());
   robot.mutable_perceptions()->mutable_single_perceptions(1)->mutable_node()->set_id(2);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(ValidationTest, SerialAliasesShareOwnershipAndTimingPolicy) {
+  const int master = posix_openpt(O_RDWR | O_NOCTTY);
+  ASSERT_GE(master, 0);
+  struct Cleanup {
+    int master;
+    std::filesystem::path directory;
+    ~Cleanup() {
+      close(master);
+      if (!directory.empty()) std::filesystem::remove_all(directory);
+    }
+  } cleanup{master, {}};
+  ASSERT_EQ(grantpt(master), 0);
+  ASSERT_EQ(unlockpt(master), 0);
+  char directory[] = "/tmp/joshua-config-alias-XXXXXX";
+  ASSERT_NE(mkdtemp(directory), nullptr);
+  cleanup.directory = directory;
+  const auto alias = cleanup.directory / "serial";
+  const std::string port = ptsname(master);
+  std::filesystem::create_symlink(port, alias);
+
+  auto config = MakeConfig();
+  auto* robot = config.mutable_robot();
+  robot->mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_port(port);
+  auto* second_board = robot->add_boards();
+  *second_board = robot->boards(0);
+  second_board->set_name("aliased_bus");
+  second_board->mutable_comm()->mutable_serial_config()->set_port(alias.string());
+  auto* second_sensor = robot->mutable_perceptions()->add_single_perceptions();
+  *second_sensor = robot->perceptions().single_perceptions(0);
+  second_sensor->set_sensor_name("second_joint");
+  second_sensor->mutable_sts3215_encoder_config()->set_board_name("aliased_bus");
+  second_sensor->mutable_node()->set_id(2);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_sensor->mutable_node()->set_id(1);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  second_board->mutable_comm()->mutable_serial_config()->set_baudrate(9600);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_board->mutable_comm()->mutable_serial_config()->set_baudrate(1000000);
+  second_board->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(1);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_board->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(0);
+  for (auto& board : *robot->mutable_boards()) {
+    board.mutable_comm()->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  }
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  second_board->mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(101);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 TEST(ValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferentNodes) {
@@ -181,6 +235,129 @@ TEST(ValidationTest, RejectsIncompleteSensorDefinitions) {
   sensor->clear_sts3215_encoder_config();
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+
+TEST(ValidationTest, RejectsInvalidSerialTimingWithoutHardware) {
+  auto config = MakeConfig();
+  config.mutable_robot()
+      ->mutable_boards(0)
+      ->mutable_comm()
+      ->mutable_serial_config()
+      ->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  auto* serial = config.mutable_robot()->mutable_boards(0)->mutable_comm()->mutable_serial_config();
+  serial->set_exchange_timeout_ms(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_exchange_timeout_ms(250);
+  serial->set_post_open_settle_ms(2000);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
+  auto config = MakeConfig();
+  config.mutable_robot()
+      ->mutable_boards(0)
+      ->mutable_comm()
+      ->mutable_serial_config()
+      ->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  auto* robot = config.mutable_robot();
+  auto second_board = robot->boards(0);
+  second_board.set_name("second");
+  second_board.mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(100);
+  *robot->add_boards() = second_board;
+  auto sensor = robot->perceptions().single_perceptions(0);
+  sensor.set_sensor_name("second_joint");
+  sensor.mutable_sts3215_encoder_config()->set_board_name("second");
+  *robot->mutable_perceptions()->add_single_perceptions() = sensor;
+  EXPECT_TRUE(ValidateConfig(config).ok());  // Explicit 100 equals the JoshuaWire default.
+  robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(2000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+config::Config MakeMixedSerialConfig() {
+  auto config = MakeConfig();
+  auto* robot = config.mutable_robot();
+  robot->clear_perceptions();
+  robot->mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_baudrate(115200);
+  auto jw_board = robot->boards(0);
+  jw_board.set_name("jw");
+  jw_board.set_board_type(robot::board::ESP32);
+  jw_board.set_protocol(robot::board::JOSHUA_WIRE);
+  auto* serial = jw_board.mutable_comm()->mutable_serial_config();
+  serial->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  serial->set_exchange_timeout_ms(500);
+  jw_board.clear_channels();
+  auto* channel = jw_board.add_channels();
+  channel->set_index(0);
+  channel->set_drive(robot::board::STEP_DIR);
+  auto* step = channel->mutable_step_dir();
+  step->set_max_pulse_rate_hz(1000);
+  step->set_step_pin(2);
+  step->set_dir_pin(3);
+  step->set_enable_pin(4);
+  *robot->add_boards() = jw_board;
+  for (const auto& board : robot->boards()) {
+    auto* action = robot->mutable_actions()->add_single_actions();
+    action->mutable_node()->set_id(1);
+    action->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+    action->mutable_actuator()->set_actuator_name(board.name());
+    action->mutable_actuator()->set_board_name(board.name());
+    action->mutable_actuator()->set_channel(board.channels(0).index());
+    action->mutable_actuator()->set_motor_type(board.board_type() == robot::board::ESP32
+                                                   ? robot::action::MOTOR_STEPPER_NEMA17
+                                                   : robot::action::MOTOR_STS3215);
+  }
+  return config;
+}
+
+TEST(ValidationTest, SharedSerialPortAllowsCallerSizedAndJoshuaWireAdapters) {
+  for (bool jw_first : {false, true}) {
+    for (uint32_t timeout : {0, 100, 500}) {
+      SCOPED_TRACE(::testing::Message() << "jw_first=" << jw_first << " timeout=" << timeout);
+      auto config = MakeMixedSerialConfig();
+      auto* serial =
+          config.mutable_robot()->mutable_boards(1)->mutable_comm()->mutable_serial_config();
+      if (timeout == 0)
+        serial->clear_exchange_timeout_ms();
+      else
+        serial->set_exchange_timeout_ms(timeout);
+      if (jw_first)
+        config.mutable_robot()->mutable_actions()->mutable_single_actions()->SwapElements(0, 1);
+      const auto status = ValidateConfig(config);
+      EXPECT_TRUE(status.ok()) << status;
+    }
+  }
+}
+
+TEST(ValidationTest, MixedSerialPortStillRequiresMatchingBaudrateAndSettleDelay) {
+  auto config = MakeMixedSerialConfig();
+  auto* serial = config.mutable_robot()->mutable_boards(1)->mutable_comm()->mutable_serial_config();
+  serial->set_baudrate(9600);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_baudrate(115200);
+  serial->set_post_open_settle_ms(2000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  serial->set_post_open_settle_ms(0);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, MixedSerialPortRequiresMatchingTimeoutsAmongJoshuaWireUsers) {
+  auto config = MakeMixedSerialConfig();
+  auto* robot = config.mutable_robot();
+  auto third_board = robot->boards(1);
+  third_board.set_name("third");
+  third_board.mutable_comm()->mutable_serial_config()->clear_exchange_timeout_ms();
+  *robot->add_boards() = third_board;
+  auto third_action = robot->actions().single_actions(1);
+  third_action.mutable_actuator()->set_actuator_name("third");
+  third_action.mutable_actuator()->set_board_name("third");
+  *robot->mutable_actions()->add_single_actions() = third_action;
+  // A vendor consumer between JW consumers must not reset the recorded JW timeout.
+  robot->mutable_actions()->mutable_single_actions()->SwapElements(0, 1);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  robot->mutable_boards(2)->mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(500);
+  const auto status = ValidateConfig(config);
+  EXPECT_TRUE(status.ok()) << status;
+}
+
 TEST(ValidationTest, RejectsDriverAndMeasurementMismatchBeforeResourceResolution) {
   auto config = MakeConfig();
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
@@ -210,6 +387,101 @@ TEST(ValidationTest, RejectsLegacyTextConfig) {
   // Removed fields are unknown names and must fail during text parsing.
   EXPECT_FALSE(google::protobuf::TextFormat::ParseFromString(
       "perceptions { single_perceptions { perception_type: ENCODER } }", &robot));
+}
+
+config::Config MakeEthercatConfig() {
+  auto config = MakeConfig();
+  auto* b = config.mutable_robot()->mutable_boards(0);
+  b->set_board_type(robot::board::AM243);
+  b->set_protocol(robot::board::JOSHUA_WIRE);
+  auto* c = b->mutable_comm();
+  c->set_comm_type(robot::comm::ETHERCAT);
+  c->set_transport_type(robot::comm::MESSAGE_AND_CYCLIC);
+  auto* ec = c->mutable_ethercat_config();
+  ec->set_interface_name("never-open-this-nic");
+  ec->set_slave_index(1);
+  ec->set_process_data_mode(robot::comm::ETHERCAT_PROCESS_DATA_MODE_SPLIT_LRD_LWR);
+  auto* t = ec->mutable_timing();
+  t->set_period_us(20000);
+  t->set_process_timeout_us(1000);
+  t->set_state_timeout_us(1000);
+  t->set_operation_timeout_us(1000000);
+  t->set_mailbox_step_budget_us(1000);
+  t->set_scheduling_guard_us(1000);
+  t->set_response_timeout_us(1000000);
+  return config;
+}
+
+TEST(ValidationTest, EthercatRequiresExplicitEndpointProtocolAndFittingBudgets) {
+  auto config = MakeEthercatConfig();
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  auto* b = config.mutable_robot()->mutable_boards(0);
+  b->mutable_comm()->mutable_ethercat_config()->mutable_timing()->clear_mailbox_step_budget_us();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  *b = MakeEthercatConfig().robot().boards(0);
+  b->mutable_comm()->mutable_ethercat_config()->mutable_timing()->set_period_us(3000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  *b = MakeEthercatConfig().robot().boards(0);
+  b->mutable_comm()->mutable_ethercat_config()->set_slave_index(65536);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  *b = MakeEthercatConfig().robot().boards(0);
+  b->clear_protocol();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  *b = MakeEthercatConfig().robot().boards(0);
+  b->mutable_am243_config()->set_slave_index(1);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ValidationTest, EthercatRejectsDuplicateSlavesAndMixedNicPolicies) {
+  auto config = MakeEthercatConfig();
+  auto duplicate = config.robot().boards(0);
+  duplicate.set_name("other");
+  auto* b = config.mutable_robot()->add_boards();
+  *b = duplicate;
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  b->mutable_comm()->mutable_ethercat_config()->set_slave_index(2);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  b->mutable_comm()->mutable_ethercat_config()->mutable_timing()->set_response_timeout_us(500000);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  b->mutable_comm()->set_transport_type(robot::comm::CYCLIC);
+  b->clear_protocol();
+  b->mutable_comm()->mutable_ethercat_config()->clear_slave_index();
+  b->mutable_comm()->mutable_ethercat_config()->clear_timing();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ValidationTest, RetiredTiDemoConfigsAreRejectedWithoutHardware) {
+  auto config = MakeEthercatConfig();
+  auto* board = config.mutable_robot()->mutable_boards(0);
+  board->clear_protocol();
+  board->mutable_comm()->set_transport_type(robot::comm::CYCLIC);
+  board->mutable_comm()->mutable_ethercat_config()->clear_timing();
+  board->mutable_comm()->mutable_ethercat_config()->clear_slave_index();
+  auto status = ValidateConfig(config);
+  EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(status.message().find("retired"), std::string::npos);
+  config = MakeEthercatConfig();
+  auto* actuator =
+      config.mutable_robot()->mutable_actions()->add_single_actions()->mutable_actuator();
+  actuator->set_motor_type(robot::action::MOTOR_TI_DEMO);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  actuator->set_motor_type(robot::action::MOTOR_STEPPER_NEMA17);
+  actuator->mutable_am243_ethercat_config();
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ValidationTest, EthercatNicCannotBeSplitAcrossNodeProcesses) {
+  auto config = MakeEthercatConfig();
+  auto sensor = config.robot().perceptions().single_perceptions(0);
+  sensor.mutable_node()->set_id(2);
+  *config.mutable_robot()->mutable_perceptions()->add_single_perceptions() = sensor;
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  config.mutable_robot()
+      ->mutable_perceptions()
+      ->mutable_single_perceptions(1)
+      ->mutable_node()
+      ->set_id(1);
+  EXPECT_TRUE(ValidateConfig(config).ok());
 }
 
 TEST(ValidationTest, PositionEndpointOnlyNeedsSupportedTypeAndRate) {

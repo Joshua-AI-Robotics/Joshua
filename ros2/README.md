@@ -131,15 +131,13 @@ units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
 STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
-use presets to enable/disable torque. TI demo supports native position/velocity/
-effort using its existing firmware scaling, but rejects SI commands. Drivers
-validate the entire payload before writes. Channel failures are returned; a
+use presets to enable/disable torque. The legacy TI demo motor driver is retired;
+AM243 examples use the stepper driver over JoshuaWire. Drivers validate the entire payload before writes. Channel failures are returned; a
 multi-field command is not a transactional hardware operation.
 
 Scalar topics retain native values: `/position` maps to position, `/speed` and
 `/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
-maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
-unsupported by runtime motor drivers. The standalone Pybricks tool defines
+maps to enable/disable presets. `/dc` remains unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
 Normalized positions map through configured operational limits once, then become

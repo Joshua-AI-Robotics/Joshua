@@ -29,11 +29,11 @@ class JoshuaWireSession {
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
   absl::Status Open();
-  // Transport calls have a bounded I/O deadline. Close waits for that exchange,
-  // sends ESTOP if the session is usable, then rejects retained channel calls.
+  // Reset with a fresh session to disable outputs, preserving existing ESTOPs.
+  // Retained calls are rejected after any close attempt, including failures.
   absl::Status Close();
   // The command payload is borrowed for the call; the returned payload is owned.
-  // RESET_SESSION is reserved for Open/rotation, not callable as a normal command.
+  // RESET_SESSION is managed by the lifecycle, not callable as a normal command.
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command);
 
  private:
@@ -53,7 +53,13 @@ class JoshuaWireSession {
   uint32_t next_message_id_ = 1;
   bool ready_ = false;
   bool uncertain_ = false;
-  std::map<uint8_t, std::pair<uint32_t, uint32_t>> pending_;
+  struct PendingAction {
+    uint32_t session_id;
+    uint32_t message_id;
+    // A completed successful board-wide stop/recovery supersedes function work.
+    bool cancels_functions;
+  };
+  std::map<uint8_t, PendingAction> pending_;
 };
 
 }  // namespace robot::board
