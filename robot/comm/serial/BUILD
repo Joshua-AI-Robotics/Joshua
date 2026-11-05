@@ -1,6 +1,17 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
+    name = "serial_device_identity",
+    srcs = ["serial_device_identity.cc"],
+    hdrs = ["serial_device_identity.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_library(
     name = "serial",
     srcs = ["serial.cc"],
     hdrs = ["serial.h"],

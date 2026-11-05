@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -51,6 +52,8 @@ class FirmwareBindingTest : public ::testing::TestWithParam<BoardType> {
   int master = -1;
   std::thread device;
   Board config;
+  std::filesystem::path alias_directory;
+  std::string alias_port;
   bool drop_target_reply = false;
   void SetUp() override {
     master = posix_openpt(O_RDWR | O_NOCTTY);
@@ -59,6 +62,11 @@ class FirmwareBindingTest : public ::testing::TestWithParam<BoardType> {
     ASSERT_EQ(unlockpt(master), 0);
     config = MakeStepDirBoardConfig(GetParam());
     config.mutable_comm()->mutable_serial_config()->set_port(ptsname(master));
+    char directory[] = "/tmp/joshua-wire-alias-XXXXXX";
+    ASSERT_NE(mkdtemp(directory), nullptr);
+    alias_directory = directory;
+    alias_port = (alias_directory / "serial").string();
+    std::filesystem::create_symlink(config.comm().serial_config().port(), alias_port);
     config.mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(50);
     now_us = 1000;
     pins.fill(0);
@@ -98,6 +106,7 @@ class FirmwareBindingTest : public ::testing::TestWithParam<BoardType> {
     stop = true;
     if (device.joinable()) device.join();
     if (master >= 0) close(master);
+    if (!alias_directory.empty()) std::filesystem::remove_all(alias_directory);
   }
 };
 
@@ -132,6 +141,108 @@ TEST_P(FirmwareBindingTest, FactoryDiscoversCurrentFirmwareAndDrivesConfiguredBa
     EXPECT_FALSE(g_channels[0].enabled);
     EXPECT_EQ(pins[4], 1);  // Active-low enable deasserted synchronously.
     EXPECT_EQ(pins[2], 0);
+  }
+}
+
+TEST_P(FirmwareBindingTest, SerialAliasIsRejectedBeforeResettingTheExistingSession) {
+  auto first = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto retained = (*first)->OpenChannel(0);
+  ASSERT_TRUE(retained.ok());
+  ASSERT_TRUE((*retained)->Enable().ok());
+  uint32_t epoch;
+  {
+    std::lock_guard lock(firmware_mutex);
+    epoch = g_functions[0].state.epoch;
+  }
+  auto alias = config;
+  alias.set_name("same_port_second_board");
+  auto second = BoardFactory::GetOrCreate(alias);
+  EXPECT_EQ(second.status().code(), absl::StatusCode::kAlreadyExists);
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_TRUE(g_channels[0].enabled);
+    EXPECT_TRUE(g_channels[0].configured);
+    EXPECT_EQ(g_functions[0].state.epoch, epoch);
+  }
+  ASSERT_TRUE((*retained)->SetTarget(TargetMode::kPosition, 10).ok());
+  auto shared = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(shared.ok());
+  EXPECT_EQ(shared->get(), first->get());
+  ASSERT_TRUE((*first)->Teardown().ok());
+  EXPECT_EQ(BoardFactory::GetOrCreate(alias).status().code(), absl::StatusCode::kAlreadyExists);
+  BoardFactory::ResetForTesting();
+  auto reopened = BoardFactory::GetOrCreate(alias);
+  ASSERT_TRUE(reopened.ok()) << reopened.status();
+}
+
+TEST_P(FirmwareBindingTest, SymlinkCannotResetAnAlreadyOwnedSerialSession) {
+  auto first = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(first.ok()) << first.status();
+  auto channel = (*first)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  ASSERT_TRUE((*channel)->Enable().ok());
+  uint32_t epoch;
+  {
+    std::lock_guard lock(firmware_mutex);
+    epoch = g_functions[0].state.epoch;
+  }
+
+  auto alias = config;
+  alias.mutable_comm()->mutable_serial_config()->set_port(alias_port);
+  // The same board declaration through an alias must reuse its active session.
+  auto shared = BoardFactory::GetOrCreate(alias);
+  EXPECT_TRUE(shared.ok()) << shared.status();
+  if (shared.ok()) EXPECT_EQ(shared->get(), first->get());
+  alias.set_name("second_board_using_symlink");
+  EXPECT_EQ(BoardFactory::GetOrCreate(alias).status().code(), absl::StatusCode::kAlreadyExists);
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_TRUE(g_channels[0].enabled);
+    EXPECT_TRUE(g_channels[0].configured);
+    EXPECT_EQ(g_functions[0].state.epoch, epoch);
+  }
+  EXPECT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 10).ok());
+}
+
+TEST_P(FirmwareBindingTest, FailedInitializationDoesNotReserveSerialEndpoint) {
+  auto invalid = config;
+  invalid.mutable_channels(0)->set_index(200);  // Not exposed by the actual firmware.
+  EXPECT_FALSE(BoardFactory::GetOrCreate(invalid).ok());
+  auto retry = config;
+  retry.set_name("retry_after_failed_initialization");
+  auto board = BoardFactory::GetOrCreate(retry);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto channel = (*board)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  EXPECT_TRUE((*channel)->Enable().ok());
+}
+
+TEST_P(FirmwareBindingTest, NormalShutdownAndReopenKeepOutputsDisabledWithoutEstop) {
+  for (int restart = 0; restart < 2; ++restart) {
+    auto board = BoardFactory::GetOrCreate(config);
+    ASSERT_TRUE(board.ok()) << board.status();
+    auto channel = (*board)->OpenChannel(0);
+    ASSERT_TRUE(channel.ok());
+    {
+      std::lock_guard lock(firmware_mutex);
+      EXPECT_TRUE(g_channels[0].configured);
+      EXPECT_FALSE(g_channels[0].enabled);
+    }
+    ASSERT_TRUE((*channel)->Enable().ok());
+    ASSERT_TRUE((*channel)->SetTarget(TargetMode::kVelocity, 100).ok());
+    ASSERT_TRUE((*board)->Teardown().ok());
+    {
+      std::lock_guard lock(firmware_mutex);
+      EXPECT_FALSE(g_channels[0].configured);
+      EXPECT_FALSE(g_channels[0].enabled);
+      EXPECT_EQ(g_functions[0].state.recovery & JW_RECOVERY_CLEAR_ESTOP, 0);
+      EXPECT_EQ(pins[4], 1);
+      EXPECT_EQ(pins[2], 0);
+    }
+    EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+    BoardFactory::ResetForTesting();
+    robot::comm::CommFactory::ResetSerialTransportCacheForTesting();
   }
 }
 

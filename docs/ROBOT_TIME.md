@@ -290,7 +290,8 @@ operator:
 The SO100 run covered normal trajectory execution; its clock-failure test was
 skipped at the operator's request. Fault injection was performed on the ESP32
 only. The host PHC was readable but unsynchronized with system UTC, so these
-checks do not validate synchronized acquisition or timing.
+checks do not validate synchronized acquisition or timing. These hardware checks
+preceded the subsequent merge of `develop` and were not repeated afterward.
 
 Setup required explicit board recovery from a latched stop. One startup also
 reported an uncorrelated serial response; a subsequent trace had valid CRCs and
@@ -299,10 +300,10 @@ disabled torque and sent that child SIGINT explicitly, releasing the port.
 Runtime exception boundaries and process ownership are tracked separately in
 [#133](https://github.com/Joshua-AI-Robotics/Joshua/pull/133).
 
-The Ubuntu 22 Compose test task passed all 40 targets using the local
-`joshua-audio:u22` image. The launcher and config validator built successfully;
-the PR's changed C++/Python files passed pre-push lint. Ubuntu 24 was not run
-locally.
+After merging `develop` at `316a47f`, the Ubuntu 22 Compose test task passed all
+53 targets using the local `joshua-audio:u22` image. The launcher and Xbox
+publisher built successfully, including all managed publisher binaries. The
+PR's changed C++/Python files passed pre-push lint. Ubuntu 24 was not run locally.
 
 ## Integration checklist
 

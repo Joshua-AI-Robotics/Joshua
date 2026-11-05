@@ -77,6 +77,18 @@ TEST(Sts3215DriverTest, InitSeedsChannelWithConfiguredDefaultSpeed) {
   EXPECT_FLOAT_EQ(channel->last_value_, 3000.0f);
 }
 
+TEST(Sts3215DriverTest, InitAcceptsDisabledChannelWithoutEnablingTorque) {
+  auto channel = std::make_shared<RecordingChannel>();
+  channel->set_target_status_ = absl::FailedPreconditionError("channel is disabled");
+  Sts3215Driver driver(channel, MakeServoActuator());
+
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->disable_calls_, 0);
+  EXPECT_EQ(driver.SetSpeed(2000.0f).code(), absl::StatusCode::kFailedPrecondition);
+}
+
 TEST(Sts3215DriverTest, SetCommandsValidateInputs) {
   auto channel = std::make_shared<RecordingChannel>();
   Sts3215Driver driver(channel, MakeServoActuator());
@@ -97,8 +109,8 @@ TEST(Sts3215DriverTest, SetPositionPassesRawTicksThrough) {
   ASSERT_TRUE(driver.SetPosition(2070.0f).ok());
 
   EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
-  // Unlike TiDemoDriver, STS3215 presets already express limits in native
-  // ticks, so the driver does no unit conversion.
+  // STS3215 presets express limits in native ticks, so the driver does no
+  // unit conversion.
   EXPECT_FLOAT_EQ(channel->last_value_, 2070.0f);
 }
 

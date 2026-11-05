@@ -27,6 +27,9 @@ typedef struct {
   int estopped;
 } jw_device_runtime_t;
 void jw_runtime_reset(void* context);
+// Latch a board-local fault without inventing a host action token or changing
+// session/replay ownership. Recovery follows RECOVER/configure/explicit enable.
+void jw_runtime_fault(jw_device_runtime_t* runtime);
 int jw_runtime_command(void* context,
                        const jw_command_t* command,
                        uint8_t* response,

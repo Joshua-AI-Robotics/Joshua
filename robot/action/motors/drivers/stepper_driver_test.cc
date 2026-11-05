@@ -19,7 +19,7 @@ class RecordingChannel : public robot::board::BoardChannel {
   }
   absl::Status Disable() override {
     disable_calls_++;
-    return absl::OkStatus();
+    return disable_status_;
   }
   absl::Status SetTarget(robot::board::TargetMode mode, float value) override {
     last_mode_ = mode;
@@ -37,6 +37,7 @@ class RecordingChannel : public robot::board::BoardChannel {
   robot::board::TargetMode last_mode_ = robot::board::TargetMode::kPosition;
   float last_value_ = 0.0f;
   absl::Status set_target_status_ = absl::OkStatus();
+  absl::Status disable_status_ = absl::OkStatus();
 };
 
 robot::action::Actuator MakeStepperActuator() {
@@ -171,6 +172,39 @@ TEST(StepperDriverTest, TeardownSetsIdleThenDisables) {
 
   ASSERT_TRUE(driver.Teardown().ok());
 
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, TeardownStillDisablesWhenIdleCommandFails) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->set_target_status_ = absl::UnavailableError("Idle command failed");
+
+  EXPECT_EQ(driver.Teardown(), channel->set_target_status_);
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, TeardownReportsDisableFailure) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->disable_status_ = absl::DeadlineExceededError("Disable reply missing");
+
+  EXPECT_EQ(driver.Teardown(), channel->disable_status_);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, TeardownPrioritizesDisableFailureWhenBothCommandsFail) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->set_target_status_ = absl::UnavailableError("Idle command failed");
+  channel->disable_status_ = absl::DeadlineExceededError("Disable reply missing");
+
+  EXPECT_EQ(driver.Teardown(), channel->disable_status_);
   EXPECT_EQ(channel->set_target_calls_, 1);
   EXPECT_EQ(channel->disable_calls_, 1);
 }

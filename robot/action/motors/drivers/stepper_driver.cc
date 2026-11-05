@@ -30,7 +30,7 @@ absl::Status StepperDriver::Init() {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         "Stepper driver requires a board channel");
   }
-  // Auto-enables (matches TiDemoDriver, unlike Sts3215Driver): a TB6600's
+  // Auto-enables (unlike Sts3215Driver): a TB6600's
   // ENA pin is a binary holding-torque gate with no real safety case for
   // withholding it on an open-loop stepper the way STS3215's torque-enable
   // register has for a precision servo. Found via real hardware testing —
@@ -62,8 +62,8 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
         case robot::action::PresetCommand::PRESET_DISABLE_TORQUE:
           return SetTorque(0.0f);
         default:
-          LOG(WARNING) << "Unknown preset command: " << action_packet.preset();
-          return absl::OkStatus();
+          return absl::InvalidArgumentError("Unknown actuator preset: " +
+                                            std::to_string(action_packet.preset()));
       }
 
     case robot::action::ActionPacket::kJoint: {
@@ -75,8 +75,9 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
       // preserve combined command fields and firmware honors requested speed.
       // Define position/velocity semantics explicitly; effort requires separate
       // hardware capability support and must not be treated as a torque-enable gate.
-      if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort()))
+      if (command.units() == JointCommand::SI && (command.has_velocity() || command.has_effort())) {
         return absl::UnimplementedError("Stepper driver has no SI velocity/effort contract");
+      }
       if (command.position_encoding() == JointCommand::POSITION_SI) {
         if (command.has_position()) {
           command.set_position(command.position() * (180.0 / 3.14159265358979323846));
@@ -118,8 +119,6 @@ absl::Status StepperDriver::SetAction(const robot::action::ActionPacket& action_
     }
     case robot::action::ActionPacket::ACTION_TYPE_NOT_SET:
     default:
-      LOG(WARNING) << "No action type set in stepper ActionPacket [ID: "
-                   << action_packet.action_id() << "]";
       return absl::InvalidArgumentError("ActionPacket requires joint or preset");
   }
 }
@@ -162,11 +161,10 @@ absl::Status StepperDriver::SetIdlePosition() {
 }
 
 absl::Status StepperDriver::Teardown() {
-  auto idle_status = SetIdlePosition();
-  if (!idle_status.ok()) {
-    return idle_status;
-  }
-  return SetTorque(0.0f);
+  const auto idle_status = SetIdlePosition();
+  const auto disable_status = SetTorque(0.0f);
+  if (!disable_status.ok()) return disable_status;
+  return idle_status;
 }
 
 }  // namespace robot::action

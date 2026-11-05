@@ -49,6 +49,7 @@ ros2_cpp_binary(
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
         ":robot_timer",
+        "//ros2:logging",
         "//utils:xbox_controller",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -59,6 +60,7 @@ ros2_cpp_binary(
     name = "camera_subscriber",
     srcs = ["camera_subscriber.cc"],
     deps = [
+        "//ros2:logging",
         "@local_deps//:opencv",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:rclcpp",
@@ -69,6 +71,7 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
+        "//ros2:logging",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -88,8 +91,8 @@ cc_library(
     name = "qos_setting",
     hdrs = ["qos_setting.h"],
     deps = [
+        "//ros2:logging",
         "//ros2/proto:node_cc_proto",
-        "@glog",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -119,6 +122,7 @@ cc_library(
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
         "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status",
