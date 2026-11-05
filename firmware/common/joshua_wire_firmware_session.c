@@ -23,6 +23,9 @@ int jw_firmware_session_process(jw_firmware_session_t* session,
   }
   jw_frame_t frame;
   if (jw_decode_frame(request, request_len, &frame) != JW_RESULT_OK) return 0;
+  // Notifications are firmware-to-host only. Do not let one consume request IDs
+  // or replace the last-request replay cache, even if its IDs are well formed.
+  if (frame.cmd == JW_CMD_STREAM_SAMPLE) return 0;
   const int is_reset = frame.cmd == JW_CMD_RESET_SESSION;
   if (is_reset && (frame.channel != JW_CHANNEL_NONE || frame.payload_len != 0)) return 0;
 

@@ -95,6 +95,10 @@ class ActionFactory {
                               boards, owner, actuator.board_name(), actuator.channel()));
     ABSL_RETURN_IF_ERROR(
         robot::board::ValidateMotorChannel(actuator.motor_type(), resolved.channel->drive()));
+    if (resolved.board->comm().transport_type() == robot::comm::FRAME_STREAM &&
+        actuator.motor_type() == MOTOR_STEPPER_NEMA17 &&
+        !actuator.stepper_config().require_explicit_enable())
+      return absl::InvalidArgumentError("FRAME_STREAM steppers require explicit enable policy");
 
     ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
     ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));

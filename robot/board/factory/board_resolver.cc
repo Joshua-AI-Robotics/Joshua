@@ -5,6 +5,23 @@
 
 namespace robot::board {
 
+absl::StatusOr<const Board*> ResolveBoardConfig(
+    const google::protobuf::RepeatedPtrField<Board>& boards,
+    absl::string_view owner,
+    absl::string_view board_name) {
+  if (board_name.empty())
+    return absl::InvalidArgumentError(absl::StrCat(owner, " has no board_name."));
+  const Board* found = nullptr;
+  for (const auto& b : boards) {
+    if (b.name() != board_name) continue;
+    if (found) return absl::InvalidArgumentError("Duplicate board name");
+    found = &b;
+  }
+  if (!found)
+    return absl::NotFoundError(absl::StrCat(owner, " references missing board '", board_name, "'"));
+  return found;
+}
+
 absl::StatusOr<ResolvedChannelConfig> ResolveChannelConfig(
     const google::protobuf::RepeatedPtrField<robot::board::Board>& boards,
     absl::string_view owner,

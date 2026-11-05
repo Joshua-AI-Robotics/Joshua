@@ -83,6 +83,46 @@ cc_library(
 )
 
 cc_library(
+    name = "joshua_wire_sensor_stream",
+    srcs = ["joshua_wire_sensor_stream.c"],
+    hdrs = ["joshua_wire_sensor_stream.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_wire",
+        ":joshua_wire_profiles",
+    ],
+)
+
+cc_library(
+    name = "joshua_stream_subscription",
+    srcs = ["joshua_stream_subscription.c"],
+    hdrs = ["joshua_stream_subscription.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [":joshua_wire_sensor_stream"],
+)
+
+cc_test(
+    name = "joshua_wire_sensor_stream_test",
+    srcs = ["joshua_wire_sensor_stream_test.cc"],
+    deps = [
+        ":joshua_wire_sensor_stream",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "joshua_stream_subscription_test",
+    srcs = ["joshua_stream_subscription_test.cc"],
+    deps = [
+        ":joshua_stream_subscription",
+        ":joshua_wire_endpoint",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "joshua_wire_resources",
     srcs = ["joshua_wire_resources.c"],
     hdrs = ["joshua_wire_resources.h"],
@@ -232,6 +272,66 @@ cc_test(
     deps = [
         ":joshua_actuator_handler",
         ":joshua_wire_endpoint",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "joshua_scalar_sensor",
+    srcs = ["joshua_scalar_sensor.c"],
+    hdrs = ["joshua_scalar_sensor.h"],
+    copts = [
+        "-x",
+        "c",
+        "-std=c11",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_device_runtime",
+        ":joshua_stream_subscription",
+        ":joshua_wire_resources",
+    ],
+)
+
+cc_library(
+    name = "joshua_watchdogs",
+    srcs = ["joshua_watchdogs.c"],
+    hdrs = ["joshua_watchdogs.h"],
+    visibility = ["//visibility:public"],
+    deps = [":joshua_wire_commands"],
+)
+
+cc_library(
+    name = "joshua_mixed_serial",
+    srcs = ["joshua_mixed_serial.c"],
+    hdrs = ["joshua_mixed_serial.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":frame_transport",
+        ":joshua_wire",
+    ],
+)
+
+cc_library(
+    name = "mixed_test_firmware",
+    testonly = True,
+    srcs = ["joshua_mixed_device.cpp"],
+    hdrs = ["joshua_mixed_device.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_scalar_sensor",
+        ":joshua_watchdogs",
+        ":stepdir_test_firmware",
+    ],
+)
+
+cc_test(
+    name = "joshua_mixed_device_test",
+    srcs = ["joshua_mixed_device_test.cc"],
+    deps = [
+        ":joshua_mixed_serial",
+        ":mixed_test_firmware",
+        ":serial_frame_transport",
         "@googletest//:gtest_main",
     ],
 )

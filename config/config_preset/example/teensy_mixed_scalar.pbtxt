@@ -1,0 +1,63 @@
+# Candidate bench configuration. Declares REAL hardware; do not launch until
+# wiring/port/power are confirmed. No physical timing qualification is claimed.
+# Image: teensy41-mixed-scalar, A0/pin14 ADC input (native 10-bit counts).
+# Set this stable symlink to the intended USB device before a deliberate run.
+general { operation_mode: MODE_TEST name: "teensy_mixed_scalar" id: 41 }
+robot {
+  boards {
+    name: "mixed_mcu"
+    board_type: TEENSY41
+    protocol: JOSHUA_WIRE
+    comm {
+      comm_type: SERIAL transport_type: FRAME_STREAM
+      serial_config {
+        port: "/dev/serial/by-id/JOSHUA_TEENSY41_REFERENCE"
+        baudrate: 115200 message_adapter: JOSHUA_WIRE
+      }
+    }
+    firmware {
+      min_proto_version: 4
+      communication_watchdog_us: 1000000
+      target_watchdog_us: 500000
+    }
+    joshua_wire_host_policy {
+      operation_timeout_ms: 200 attempt_timeout_ms: 50 polling_timeout_ms: 40
+      heartbeat_period_ms: 100 telemetry_bytes_per_second: 10000
+      max_pending_operations: 16 max_pending_bytes: 4096 max_streams: 1
+    }
+    channels {
+      index: 0 drive: STEP_DIR
+      step_dir {
+        step_pin: 2 dir_pin: 3 enable_pin: 4 enable_active_low: true
+        max_pulse_rate_hz: 4000 step_pulse_width_us: 20
+      }
+    }
+  }
+  actions {
+    single_actions {
+      node {
+        id: 1 node_type: MCU_BUS qos_setting { depth: 1 }
+        subscriptions { ros2_data_type: FLOAT32 topic: "mixed_stepper/position" }
+        subscriptions { ros2_data_type: BOOL topic: "mixed_stepper/torque" }
+      }
+      action_type: ACTUATOR
+      actuator {
+        actuator_name: "mixed_stepper" id: 0 motor_type: MOTOR_STEPPER_NEMA17
+        board_name: "mixed_mcu" channel: 0
+        physical_lower_limit: 0 physical_upper_limit: 360
+        operational_lower_limit: 0 operational_upper_limit: 360
+        stepper_config { steps_per_degree: 8.888889 gear_ratio: 1 idle_position: 0 require_explicit_enable: true }
+      }
+    }
+  }
+  perceptions {
+    single_perceptions {
+      node {
+        id: 1 node_type: MCU_BUS qos_setting { depth: 1 }
+        publishers { ros2_data_type: UINT8_MULTI_ARRAY topic: "analog_a0/observation" publish_rate_hz: 50 }
+      }
+      sensor_name: "analog_a0" id: 128 sensor_type: SCALAR
+      joshua_wire_scalar_config { board_name: "mixed_mcu" function_id: 128 period_us: 10000 }
+    }
+  }
+}

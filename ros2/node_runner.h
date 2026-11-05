@@ -23,7 +23,7 @@ inline void sigterm_handler(int) noexcept {
 // Constructs NodeT(node_name, node_id, config) and spins it.
 // logger_name is used for usage/error logging.
 template <typename NodeT>
-int RunNode(int argc, char* argv[], const char* logger_name) {
+int RunNode(int argc, char* argv[], const char* logger_name, size_t executor_threads = 0) {
   rclcpp::init(argc, argv);
 
   // Ensure external termination results in teardown
@@ -71,7 +71,15 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
   }
   LOG(INFO) << "Robot clock initialized: " << clock_source;
 
-  rclcpp::spin(std::make_shared<NodeT>(node_name, node_id, config));
+  auto node = std::make_shared<NodeT>(node_name, node_id, config);
+  if (executor_threads) {
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), executor_threads);
+    executor.add_node(node);
+    executor.spin();
+  } else {
+    rclcpp::spin(node);
+  }
+  node.reset();
   rclcpp::shutdown();
   return 0;
 }

@@ -57,3 +57,15 @@ class FakeArduinoSerial {
   int write_capacity = 64;
 };
 inline FakeArduinoSerial Serial;
+
+#ifdef JOSHUA_MIXED_ADC_REFERENCE
+constexpr uint8_t A0 = 14;
+constexpr int INPUT_DISABLE = 3;
+inline volatile uint32_t ADC1_GC = 0, ADC1_GS = 0, ADC1_CFG = 0, ADC1_HC0 = 31, ADC1_HS = 0,
+                         ADC1_R0 = 0;
+#define ADC_GC_CAL (1u << 7)
+#define ADC_GS_CALF (1u << 1)
+#define ADC_GC_ADCO (1u << 6)
+#define ADC_HS_COCO0 1u
+#define ADC_CFG_MODE(n) (((n)&3u) << 2)
+#endif

@@ -28,6 +28,7 @@ PERCEPTION_DATA_TYPE_FIELDS = (
     "sensor",
     "point_cloud",
     "audio",
+    "scalar",
 )
 
 
@@ -209,10 +210,19 @@ def require_perception_audio(
     return packet.audio
 
 
+def require_perception_scalar(
+    packet: perception_packet_pb2.PerceptionPacket,
+) -> perception_packet_pb2.ScalarData:
+    if not packet.HasField("scalar"):
+        raise PacketParseError("PerceptionPacket has no scalar field")
+    return packet.scalar
+
+
 _PERCEPTION_REQUIRE_FIELD_BY_NAME = {
     "image": require_perception_image,
     "position": require_perception_position,
     "sensor": require_perception_sensor,
     "point_cloud": require_perception_point_cloud,
     "audio": require_perception_audio,
+    "scalar": require_perception_scalar,
 }

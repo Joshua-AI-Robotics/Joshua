@@ -6,12 +6,11 @@ cc_library(
     hdrs = ["serial.h"],
     visibility = ["//robot/comm:__subpackages__"],
     deps = [
+        ":serial_io_owner",
         "//robot/comm/interfaces:byte_stream",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
-        "@boost.asio",
-        "@glog",
     ],
 )
 
@@ -44,6 +43,8 @@ cc_library(
     hdrs = ["serial_config_validation.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":serial_frame_options",
+        ":serial_io_options",
         "//robot/comm/proto:comm_cc_proto",
         "@abseil-cpp//absl/status:status",
     ],
@@ -58,7 +59,72 @@ cc_test(
         ":serial",
         "//firmware/common:joshua_wire",
         "//robot/comm/interfaces:caller_sized_message_transport",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_io_options",
+    hdrs = ["serial_io_options.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "serial_io_owner",
+    srcs = ["serial_io_owner.cc"],
+    hdrs = ["serial_io_owner.h"],
+    implementation_deps = [
+        ":serial_config_validation",
         "@boost.asio",
+    ],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":serial_io_options",
+        "//robot/comm/interfaces:serial_diagnostics",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "serial_io_owner_test",
+    srcs = ["serial_io_owner_test.cc"],
+    deps = [
+        ":serial",
+        ":serial_io_owner",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "serial_frame_options",
+    hdrs = ["serial_frame_options.h"],
+    visibility = ["//visibility:public"],
+    deps = ["@abseil-cpp//absl/status:status"],
+)
+
+cc_library(
+    name = "joshua_wire_frame_stream",
+    srcs = ["joshua_wire_frame_stream.cc"],
+    hdrs = ["joshua_wire_frame_stream.h"],
+    implementation_deps = [
+        "//firmware/common:joshua_wire",
+        "//firmware/common:joshua_wire_stream",
+    ],
+    visibility = ["//robot/comm:__subpackages__"],
+    deps = [
+        ":serial_frame_options",
+        ":serial_io_owner",
+        "//robot/comm/interfaces:frame_stream_transport",
+    ],
+)
+
+cc_test(
+    name = "joshua_wire_frame_stream_test",
+    srcs = ["joshua_wire_frame_stream_test.cc"],
+    deps = [
+        ":joshua_wire_frame_stream",
+        "//firmware/common:joshua_wire_sensor_stream",
         "@googletest//:gtest_main",
     ],
 )
