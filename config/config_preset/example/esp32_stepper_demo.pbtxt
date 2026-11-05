@@ -16,6 +16,8 @@
 # range [0, 360] (this preset's stepper_config converts to native steps
 # before it reaches the wire). Move speed is fixed by max_pulse_rate_hz
 # below (boot-time only, not adjustable per command).
+# Torque starts enabled. Bool on /esp32_stepper_1/torque explicitly controls
+# holding torque: false disables, true enables.
 
 general {
   operation_mode: MODE_TEST
@@ -78,6 +80,10 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "esp32_stepper_1/position"
+        }
+        subscriptions {
+          ros2_data_type: BOOL
+          topic: "esp32_stepper_1/torque"
         }
       }
       action_type: ACTUATOR

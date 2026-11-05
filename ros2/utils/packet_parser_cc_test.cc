@@ -1,7 +1,11 @@
+#include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -15,11 +19,30 @@
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include "std_msgs/msg/int8.hpp"
 #include "std_msgs/msg/u_int64.hpp"
+#include "utils/robot_time.h"
 
 namespace {
+class CommandClock final : public joshua::RobotClock {
+ public:
+  double Now() const override {
+    if (fail) throw std::runtime_error("test command clock unavailable");
+    return now;
+  }
+  std::atomic<bool> fail{false};
+  std::atomic<double> now{123.125};
+};
+
 class PacketParserCppTest : public testing::Test {
  protected:
+  inline static CommandClock* clock_ = nullptr;
+  static void SetUpTestSuite() {
+    auto clock = std::make_unique<CommandClock>();
+    clock_ = clock.get();
+    ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
+  }
   void SetUp() override {
+    clock_->fail = false;
+    clock_->now = 123.125;
     ASSERT_EQ(setenv("ROS_LOG_DIR", std::getenv("TEST_TMPDIR"), 1), 0);
     rclcpp::init(0, nullptr);
     node = std::make_shared<rclcpp::Node>("packet_parser_test");
@@ -31,6 +54,7 @@ class PacketParserCppTest : public testing::Test {
     config.set_topic("elbow/position");
   }
   void TearDown() override {
+    clock_->fail = false;
     executor->remove_node(node);
     executor.reset();
     node.reset();
@@ -68,9 +92,12 @@ class PacketParserCppTest : public testing::Test {
 TEST_F(PacketParserCppTest, Float64UsesNativeUnitsAndRejectsNonFiniteOrOverflow) {
   std_msgs::msg::Float64 message;
   message.data = 12.5;
+  const double before = RobotTime();
   auto result = Send(ros2::data_type::FLOAT64, message);
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_FLOAT_EQ(result->joint().position(), 12.5f);
+  EXPECT_GE(result->timestamp(), before);
+  EXPECT_LE(result->timestamp(), RobotTime());
   for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
                          std::numeric_limits<double>::infinity(),
                          std::numeric_limits<double>::max(),
@@ -112,7 +139,7 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   message.velocity = {4, -0.25};
   message.effort = {6, -1.125};
   message.header.frame_id = "robot_base";
-  message.header.stamp.sec = 123;
+  message.header.stamp.sec = 1750118523;
   message.header.stamp.nanosec = 456;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok()) << result.status();
@@ -124,7 +151,10 @@ TEST_F(PacketParserCppTest, JointStatePreservesAllFieldsAndSelectsByName) {
   EXPECT_DOUBLE_EQ(command.velocity(), -0.25);
   EXPECT_DOUBLE_EQ(command.effort(), -1.125);
   EXPECT_EQ(command.frame_id(), "robot_base");
-  EXPECT_EQ(result->timestamp_ns(), 123000000456LL);
+  EXPECT_DOUBLE_EQ(result->timestamp(), 123.000000456);
+  robot::action::ActionPacket decoded;
+  ASSERT_TRUE(decoded.ParseFromString(result->SerializeAsString()));
+  EXPECT_DOUBLE_EQ(decoded.timestamp(), result->timestamp());
   EXPECT_EQ(result->joint().position_encoding(), robot::action::JointCommand::POSITION_SI);
   EXPECT_TRUE(ros2_utils::ResolvePositionEncoding(*result, 0, 4095).ok());
   EXPECT_DOUBLE_EQ(result->joint().position(), message.position[1]);
@@ -144,13 +174,13 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
     EXPECT_EQ(result->joint().has_position(), field == 0);
     EXPECT_EQ(result->joint().has_velocity(), field == 1);
     EXPECT_EQ(result->joint().has_effort(), field == 2);
-    EXPECT_EQ(result->timestamp_ns(), 0);
+    EXPECT_DOUBLE_EQ(result->timestamp(), -joshua::kRobotStartTime);
   }
   message.header.stamp.sec = -1;
   message.header.stamp.nanosec = 500000000;
   auto result = Send(ros2::data_type::JOINT_STATE, message);
   ASSERT_TRUE(result.ok());
-  EXPECT_EQ(result->timestamp_ns(), -500000000);
+  EXPECT_DOUBLE_EQ(result->timestamp(), -joshua::kRobotStartTime - 0.5);
   // Preserve double precision/range until the receiving driver validates it.
   message.effort = {std::numeric_limits<double>::max()};
   result = Send(ros2::data_type::JOINT_STATE, message);
@@ -201,6 +231,81 @@ TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
   EXPECT_FALSE(Send(ros2::data_type::BOOL, message).ok());
 }
+TEST_F(PacketParserCppTest, TorqueDisableSurvivesClockFailureForBoolScalarAndArray) {
+  clock_->fail = true;
+  config.set_topic("elbow/torque");
+  for (auto motor_type : {robot::action::MOTOR_STS3215, robot::action::MOTOR_STEPPER_NEMA17}) {
+    action.mutable_actuator()->set_motor_type(motor_type);
+    std_msgs::msg::Bool boolean;
+    std_msgs::msg::Float64 scalar;
+    std_msgs::msg::Float64MultiArray array;
+    array.data = {0};
+    for (const auto& result : {Send(ros2::data_type::BOOL, boolean),
+                               Send(ros2::data_type::FLOAT64, scalar),
+                               Send(ros2::data_type::FLOAT64_MULTI_ARRAY, array)}) {
+      ASSERT_TRUE(result.ok()) << result.status();
+      EXPECT_EQ(result->preset(), robot::action::PRESET_DISABLE_TORQUE);
+      EXPECT_FALSE(result->has_joint());
+      EXPECT_TRUE(std::isnan(result->timestamp()));
+      robot::action::ActionPacket decoded;
+      ASSERT_TRUE(decoded.ParseFromString(result->SerializeAsString()));
+      EXPECT_TRUE(std::isnan(decoded.timestamp()));
+    }
+  }
+}
+TEST_F(PacketParserCppTest, ClockFailureRejectsMotionAndEnableThenAllowsRecovery) {
+  clock_->fail = true;
+  std_msgs::msg::Float64 message;
+  message.data = 1;
+  for (const auto& topic : {"elbow/position", "elbow/speed", "elbow/torque"}) {
+    config.set_topic(topic);
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kUnavailable);
+  }
+  std_msgs::msg::Bool boolean;
+  boolean.data = true;
+  EXPECT_EQ(Send(ros2::data_type::BOOL, boolean).status().code(), absl::StatusCode::kUnavailable);
+  // TI torque is continuous effort, not a disable gate, even for zero.
+  action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
+  message.data = 0;
+  EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+            absl::StatusCode::kUnavailable);
+  clock_->fail = false;
+  config.set_topic("elbow/position");
+  auto recovered = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(recovered.ok()) << recovered.status();
+  EXPECT_DOUBLE_EQ(recovered->timestamp(), 123.125);
+}
+TEST_F(PacketParserCppTest, NonFiniteClockStillAllowsOnlyTorqueDisable) {
+  config.set_topic("elbow/torque");
+  std_msgs::msg::Float64 message;
+  for (double invalid :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+    clock_->now = invalid;
+    message.data = 0;
+    auto disabled = Send(ros2::data_type::FLOAT64, message);
+    ASSERT_TRUE(disabled.ok()) << disabled.status();
+    EXPECT_EQ(disabled->preset(), robot::action::PRESET_DISABLE_TORQUE);
+    EXPECT_TRUE(std::isnan(disabled->timestamp()));
+    message.data = 1;
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kUnavailable);
+    message.data = -1;
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kInvalidArgument);
+  }
+}
+TEST_F(PacketParserCppTest, JointStateKeepsSourceTimestampDuringHostClockFailure) {
+  clock_->fail = true;
+  sensor_msgs::msg::JointState message;
+  message.name = {"elbow"};
+  message.position = {1};
+  message.header.stamp.sec = 1750118523;
+  message.header.stamp.nanosec = 125000000;
+  auto result = Send(ros2::data_type::JOINT_STATE, message);
+  ASSERT_TRUE(result.ok()) << result.status();
+  EXPECT_DOUBLE_EQ(result->timestamp(), 123.125);
+}
 TEST_F(PacketParserCppTest, IntegerFeedbackDoesNotTruncateOrWrap) {
   robot::perception::SinglePerception sensor;
   ros2::node::Publisher config;
@@ -213,17 +318,55 @@ TEST_F(PacketParserCppTest, IntegerFeedbackDoesNotTruncateOrWrap) {
       config.topic(), 10, [&](std_msgs::msg::Int8::ConstSharedPtr message) {
         value = message->data;
       });
-  EXPECT_FALSE((*publisher)(128).ok());
-  EXPECT_FALSE((*publisher)(-129).ok());
-  EXPECT_FALSE((*publisher)(1.5).ok());
-  EXPECT_FALSE((*publisher)(std::numeric_limits<float>::quiet_NaN()).ok());
+  EXPECT_FALSE((*publisher)(128, 123).ok());
+  EXPECT_FALSE((*publisher)(-129, 123).ok());
+  EXPECT_FALSE((*publisher)(1.5, 123).ok());
+  EXPECT_FALSE((*publisher)(std::numeric_limits<float>::quiet_NaN(), 123).ok());
   // Repeat the valid sample until ROS discovery completes.
   SpinUntil([&] {
-    EXPECT_TRUE((*publisher)(42).ok());
+    EXPECT_TRUE((*publisher)(42, 123).ok());
     return value.has_value();
   });
   ASSERT_TRUE(value.has_value());
   EXPECT_EQ(*value, 42);
+}
+
+TEST_F(PacketParserCppTest, JointFeedbackPreservesAcquisitionStampThroughPublisher) {
+  robot::perception::SinglePerception sensor;
+  sensor.set_sensor_name("elbow");
+  sensor.mutable_sts3215_encoder_config();
+  ros2::node::Publisher config;
+  config.set_topic("joint_feedback");
+  config.set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  auto publish = ros2_utils::CreatePositionMessagePublisher(*node, config, sensor);
+  ASSERT_TRUE(publish.ok()) << publish.status();
+  std::optional<sensor_msgs::msg::JointState> received;
+  auto receiver = node->create_subscription<sensor_msgs::msg::JointState>(
+      config.topic(), 10, [&](sensor_msgs::msg::JointState::ConstSharedPtr message) {
+        received = *message;
+      });
+  struct Sample {
+    double timestamp;
+    int32_t sec;
+    uint32_t nanosec;
+  };
+  for (const auto& sample :
+       std::vector<Sample>{{123.000000456, 1750118523, 456},
+                           {0.0, 1750118400, 0},
+                           {-0.5, 1750118399, 500000000},
+                           {1700000000.125 - joshua::kRobotStartTime, 1700000000, 125000000}}) {
+    received.reset();
+    SpinUntil([&] {
+      EXPECT_TRUE((*publish)(2048, sample.timestamp).ok());
+      return received && received->header.stamp.sec == sample.sec &&
+             received->header.stamp.nanosec == sample.nanosec;
+    });
+    ASSERT_TRUE(received);
+    EXPECT_EQ(received->name, std::vector<std::string>{"elbow"});
+    EXPECT_NEAR(received->position.at(0), 3.141592653589793, 1e-6);
+  }
+  EXPECT_FALSE((*publish)(2048, std::numeric_limits<double>::infinity()).ok());
+  EXPECT_FALSE((*publish)(2048, std::numeric_limits<double>::max()).ok());
 }
 TEST_F(PacketParserCppTest, NativeTorqueGateBecomesPresetAndEffortStaysEffort) {
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);

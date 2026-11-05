@@ -62,34 +62,61 @@ class FakeClockIo final : public internal::ClockIo {
 
 class ConstantClock final : public RobotClock {
  public:
-  explicit ConstantClock(double value) : value_(value) {}
+  explicit ConstantClock(double value, std::atomic<int>* reads = nullptr)
+      : value_(value), reads_(reads) {}
   double Now() const override {
+    if (reads_) ++*reads_;
     return value_;
   }
 
  private:
   double value_;
+  std::atomic<int>* reads_;
 };
 
-TEST(RobotClockTest, UnknownOffsetFallsBackWithoutOpeningHardware) {
+TEST(RobotClockTest, DefaultPtpReadsHardwareWithoutUtcOffset) {
   auto io = std::make_shared<FakeClockIo>();
   auto clock = internal::MakeRobotClockWithIo({}, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
-  EXPECT_EQ((*clock)->SourceName(), "UTC");
-  EXPECT_EQ((*clock)->Now(), 1700000000.25 - kRobotStartTime);
-  EXPECT_EQ(io->opens, 0);
+  EXPECT_EQ((*clock)->SourceName(), "PTP");
+  EXPECT_EQ((*clock)->Now(), 1700000037.25 - kRobotStartTime);
+  EXPECT_EQ(io->opened_path, "/dev/ptp0");
+  EXPECT_EQ(io->opens, 1);
+  EXPECT_EQ(io->utc_reads, 0);
 }
 
-TEST(RobotClockTest, PtpConvertsToUtcAndOwnsDescriptor) {
+TEST(RobotClockTest, UtcUsesJune2025EpochBeforeCombiningFractionalSeconds) {
+  auto io = std::make_shared<FakeClockIo>();
+  io->utc_time = {1750118400, 0};
+  config::RobotClockConfig config;
+  config.set_source(config::RobotClockConfig::UTC);
+  auto clock = internal::MakeRobotClockWithIo(config, io);
+  ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_DOUBLE_EQ((*clock)->Now(), 0.0);
+  io->utc_time.tv_nsec = 1;
+  EXPECT_DOUBLE_EQ((*clock)->Now(), 0.000000001);
+  io->utc_time = {1750118399, 750000000};
+  EXPECT_DOUBLE_EQ((*clock)->Now(), -0.25);
+}
+
+TEST(RobotClockTest, PtpSubtractsFixedBaselineBeforeCombiningFractionalSeconds) {
+  auto io = std::make_shared<FakeClockIo>();
+  io->ptp_time = {1750118400, 1};
+  config::RobotClockConfig config;
+  auto clock = internal::MakeRobotClockWithIo(config, io);
+  ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_DOUBLE_EQ((*clock)->Now(), 0.000000001);
+}
+
+TEST(RobotClockTest, PtpPreservesSourceTimeAndOwnsDescriptor) {
   auto io = std::make_shared<FakeClockIo>();
   config::RobotClockConfig config;
   config.set_ptp_device("/test/ptp");
-  config.set_ptp_utc_offset_seconds(37);  // Test fixture, not a platform default.
   {
     auto clock = internal::MakeRobotClockWithIo(config, io);
     ASSERT_TRUE(clock.ok()) << clock.status();
     EXPECT_EQ((*clock)->SourceName(), "PTP");
-    EXPECT_EQ((*clock)->Now(), 1700000000.25 - kRobotStartTime);
+    EXPECT_EQ((*clock)->Now(), 1700000037.25 - kRobotStartTime);
     EXPECT_EQ(io->opened_path, "/test/ptp");
     EXPECT_EQ(io->last_id, internal::PtpClockId(7));
     EXPECT_EQ(io->utc_reads, 0);
@@ -98,21 +125,22 @@ TEST(RobotClockTest, PtpConvertsToUtcAndOwnsDescriptor) {
   EXPECT_EQ(io->closes, 1);
 }
 
-TEST(RobotClockTest, ExplicitZeroOffsetAndDefaultPtpPath) {
+TEST(RobotClockTest, RequiredPtpNeedsOnlyReadableDevice) {
   auto io = std::make_shared<FakeClockIo>();
   config::RobotClockConfig config;
-  config.set_ptp_utc_offset_seconds(0);
+  config.set_require_ptp(true);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
+  EXPECT_EQ((*clock)->SourceName(), "PTP");
   EXPECT_EQ((*clock)->Now(), 1700000037.25 - kRobotStartTime);
   EXPECT_EQ(io->opened_path, "/dev/ptp0");
+  EXPECT_EQ(io->utc_reads, 0);
 }
 
 TEST(RobotClockTest, PtpOpenFailureFallsBackUnlessRequired) {
   auto io = std::make_shared<FakeClockIo>();
   io->open_status = absl::PermissionDeniedError("test permission denied");
   config::RobotClockConfig config;
-  config.set_ptp_utc_offset_seconds(37);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
   EXPECT_EQ((*clock)->SourceName(), "UTC");
@@ -128,7 +156,6 @@ TEST(RobotClockTest, PtpProbeFailureClosesDescriptorBeforeFallback) {
   auto io = std::make_shared<FakeClockIo>();
   io->ptp_status = absl::UnavailableError("test PHC unavailable");
   config::RobotClockConfig config;
-  config.set_ptp_utc_offset_seconds(37);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
   EXPECT_EQ((*clock)->SourceName(), "UTC");
@@ -141,7 +168,6 @@ TEST(RobotClockTest, PtpProbeFailureClosesDescriptorBeforeFallback) {
 TEST(RobotClockTest, RuntimeFailureDoesNotSwitchSources) {
   auto io = std::make_shared<FakeClockIo>();
   config::RobotClockConfig config;
-  config.set_ptp_utc_offset_seconds(37);
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
   io->ptp_status = absl::UnavailableError("test PHC disconnected");
@@ -172,7 +198,7 @@ TEST(RobotClockTest, MonotonicRequiresExplicitSelection) {
   auto clock = internal::MakeRobotClockWithIo(config, io);
   ASSERT_TRUE(clock.ok()) << clock.status();
   EXPECT_EQ((*clock)->SourceName(), "MONOTONIC (local only)");
-  EXPECT_EQ((*clock)->Now(), 123.5 - kRobotStartTime);
+  EXPECT_EQ((*clock)->Now(), 123.5);
   EXPECT_EQ(io->last_id, CLOCK_MONOTONIC);
   EXPECT_EQ(io->opens, 0);
 }
@@ -208,8 +234,6 @@ TEST(RobotClockTest, RejectsInvalidConfigurationWithoutIo) {
   auto io = std::make_shared<FakeClockIo>();
   config::RobotClockConfig config;
   config.set_require_ptp(true);
-  EXPECT_FALSE(internal::MakeRobotClockWithIo(config, io).ok());
-  config.set_ptp_utc_offset_seconds(37);
   EXPECT_TRUE(ValidateRobotClockConfig(config).ok());
   config.set_source(config::RobotClockConfig::UTC);
   EXPECT_FALSE(internal::MakeRobotClockWithIo(config, io).ok());
@@ -260,7 +284,7 @@ TEST_F(GlobalRobotClockTest, LazyInitializationIsConcurrentAndPreventsReplacemen
         std::vector<std::thread> threads;
         for (int i = 0; i < 16; ++i) {
           threads.emplace_back([&] {
-            if (!std::isfinite(RobotTime()) || RobotTime() <= 0) ++errors;
+            if (!std::isfinite(RobotTime())) ++errors;
           });
         }
         for (auto& thread : threads) thread.join();
@@ -299,11 +323,13 @@ TEST_F(GlobalRobotClockTest, SetterAndLazyReaderRaceWithoutReplacingWinner) {
   ASSERT_EXIT(
       {
         std::atomic<bool> start{false};
+        std::atomic<int> explicit_reads{0};
         bool installed = false;
         double observed = 0;
         std::thread setter([&] {
           while (!start.load()) std::this_thread::yield();
-          installed = SetGlobalRobotClock(std::make_unique<ConstantClock>(42)).ok();
+          installed =
+              SetGlobalRobotClock(std::make_unique<ConstantClock>(42, &explicit_reads)).ok();
         });
         std::thread reader([&] {
           while (!start.load()) std::this_thread::yield();
@@ -313,7 +339,11 @@ TEST_F(GlobalRobotClockTest, SetterAndLazyReaderRaceWithoutReplacingWinner) {
         setter.join();
         reader.join();
         if (installed && (observed != 42 || RobotTime() != 42)) _exit(1);
-        if (!installed && (observed < 1000 || RobotTime() < 1000)) _exit(2);
+        // A readable PHC may return zero or negative RobotTime. Detect which
+        // clock was read directly instead of assuming the default clock's epoch.
+        if (!installed &&
+            (!std::isfinite(observed) || !std::isfinite(RobotTime()) || explicit_reads != 0))
+          _exit(2);
         _exit(0);
       },
       testing::ExitedWithCode(0),

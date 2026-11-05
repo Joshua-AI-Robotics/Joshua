@@ -226,7 +226,7 @@ robot {
     sts3215_encoder_config { board_name: "missing" channel: 1 }
   }}
 }
-"""
+""",
             )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(
@@ -252,7 +252,7 @@ robot {
     }}
   }}
 }
-"""
+""",
             )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual((process.returncode, report["result"]), (0, "valid"))
@@ -283,7 +283,7 @@ robot {
     }
   }
 }
-"""
+""",
             )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(

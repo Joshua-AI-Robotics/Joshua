@@ -1,4 +1,3 @@
-#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -9,6 +8,7 @@
 #include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/utils/packet_parser.h"
+#include "ros2/utils/robot_timer.h"
 
 class PositionPublisher : public rclcpp::Node {
  public:
@@ -26,9 +26,8 @@ class PositionPublisher : public rclcpp::Node {
       for (const auto& pub : sensor.node().publishers()) {
         auto publisher = ros2_utils::CreatePositionMessagePublisher(*this, pub, sensor);
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
-        timers_.push_back(create_wall_timer(
-            std::chrono::duration<double>(1.0 / pub.publish_rate_hz()),
-            [interface, publish = *publisher]() {
+        timers_.push_back(ros2_utils::CreateRobotTimer(
+            *this, 1.0 / pub.publish_rate_hz(), [interface, publish = *publisher]() {
               try {
                 auto packet = interface->GetData();
                 if (!packet.ok()) {
@@ -40,7 +39,7 @@ class PositionPublisher : public rclcpp::Node {
                   JOSHUA_LOG(ERROR) << "Invalid position: " << position.status().ToString();
                   return;
                 }
-                const auto status = publish(*position);
+                const auto status = publish(*position, packet->timestamp());
                 if (!status.ok()) {
                   JOSHUA_LOG(ERROR) << "Cannot publish position: " << status.ToString();
                 }
@@ -53,9 +52,8 @@ class PositionPublisher : public rclcpp::Node {
   }
 
  private:
-  // TODO(hmoon): Integrate acquisition scheduling and message timestamps with
-  // the planned system-wide clock (including PTP synchronization), retaining
-  // config-driven rates and sharing each sensor reading across its publishers.
+  // TODO(hmoon): Share sensor readings across publishers while retaining each
+  // publisher's config-driven rate. Each reading already retains RobotTime.
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
 int main(int argc, char* argv[]) {

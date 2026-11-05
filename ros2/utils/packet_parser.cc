@@ -11,7 +11,9 @@
 
 #include "absl/strings/str_join.h"
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/byte.hpp"
@@ -36,6 +38,7 @@
 #include "std_msgs/msg/u_int64_multi_array.hpp"
 #include "std_msgs/msg/u_int8.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
+#include "utils/robot_time.h"
 #include "utils/status_macros.h"
 
 namespace ros2_utils {
@@ -143,13 +146,13 @@ absl::StatusOr<float> NativeCommand(T value) {
 template <typename Message>
 absl::Status EncodePosition(float value,
                             const std::string& name,
-                            rclcpp::Node& node,
+                            double timestamp,
                             Message& message) {
   if constexpr (std::is_same_v<Message, sensor_msgs::msg::JointState>) {
     ABSL_ASSIGN_OR_RETURN(auto radians, CheckedNumber<double>(value / kStsTicksPerRadian));
     message.name = {name};
     message.position = {radians};
-    message.header.stamp = node.now();
+    ABSL_ASSIGN_OR_RETURN(message.header.stamp, ToRosTimestamp(timestamp));
     // Do not fabricate velocity or effort measurements.
   } else if constexpr (IsVector<decltype(message.data)>::value) {
     ABSL_ASSIGN_OR_RETURN(auto converted,
@@ -181,12 +184,9 @@ absl::StatusOr<ActionPacket> DecodeJointState(const sensor_msgs::msg::JointState
         return absl::InvalidArgumentError("JointState values must be finite");
     }
   }
-  if (message.header.stamp.nanosec >= 1000000000u)
-    return absl::InvalidArgumentError("JointState stamp.nanosec must be less than 1e9");
-
   ActionPacket packet;
-  packet.set_timestamp_ns(static_cast<int64_t>(message.header.stamp.sec) * 1000000000LL +
-                          message.header.stamp.nanosec);
+  ABSL_ASSIGN_OR_RETURN(auto timestamp, FromRosTimestamp(message.header.stamp));
+  packet.set_timestamp(timestamp);
   auto* command = packet.mutable_joint();
   command->set_units(JointCommand::SI);
   command->set_position_encoding(JointCommand::POSITION_SI);
@@ -289,9 +289,9 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     using Message = typename decltype(tag)::Type;
     auto publisher = node.create_publisher<Message>(config.topic(),
                                                     CreateQosSetting(sensor.node().qos_setting()));
-    result = [publisher, &node, name = sensor.sensor_name()](float value) {
+    result = [publisher, name = sensor.sensor_name()](float value, double timestamp) {
       Message message;
-      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, node, message));
+      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, timestamp, message));
       publisher->publish(message);
       return absl::OkStatus();
     };
@@ -327,6 +327,25 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
             }
             packet->set_preset(gate > 0 ? robot::action::PRESET_ENABLE_TORQUE
                                         : robot::action::PRESET_DISABLE_TORQUE);
+          }
+          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
+            if (packet.ok()) {
+              const auto timestamp = joshua::TryRobotTime();
+              if (timestamp.ok()) {
+                packet->set_timestamp(*timestamp);
+              } else if (packet->has_preset() &&
+                         packet->preset() == robot::action::PRESET_DISABLE_TORQUE) {
+                // Disabling torque must not depend on timestamp metadata. Zero
+                // is a valid RobotTime, so mark the unavailable timestamp as NaN.
+                packet->set_timestamp(std::numeric_limits<double>::quiet_NaN());
+                JOSHUA_LOG(WARNING)
+                    << "Clock unavailable on '" << config.topic()
+                    << "'; disabling torque without a timestamp: " << timestamp.status();
+              } else {
+                callback(timestamp.status());
+                return;
+              }
+            }
           }
           callback(std::move(packet));
         });

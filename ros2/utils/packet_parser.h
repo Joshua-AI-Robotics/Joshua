@@ -24,12 +24,15 @@ absl::Status ValidatePositionMessageType(ros2::data_type::Ros2DataType type,
                                          const robot::perception::SinglePerception& sensor);
 absl::Status ValidateActionMessageType(const ros2::node::Subscription& subscription,
                                        const robot::action::Actuator& actuator);
-using PositionMessagePublisher = std::function<absl::Status(float)>;
+// The caller supplies the original acquisition time, including zero.
+using PositionMessagePublisher = std::function<absl::Status(float, double)>;
 using ActionMessageCallback = std::function<void(absl::StatusOr<robot::action::ActionPacket>)>;
 absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     rclcpp::Node& node,
     const ros2::node::Publisher& publisher,
     const robot::perception::SinglePerception& sensor);
+// Headerless commands report clock failures through the callback. Torque-disable
+// gates still reach the actuator with a NaN timestamp when the clock is unreadable.
 absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSubscription(
     rclcpp::Node& node,
     const ros2::node::Subscription& subscription,
