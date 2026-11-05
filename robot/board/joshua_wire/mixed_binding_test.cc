@@ -345,6 +345,51 @@ TEST_F(MixedBindingTest, RebootAndMissingHeartbeatRequireDeliberateNewGeneration
   ASSERT_TRUE(Await([&] { return !(*fresh)->Latest().ok(); }));
 }
 
+TEST_F(MixedBindingTest, StandaloneSubscriberHonorsExplicitEnableAndDisablesOnTeardown) {
+  const std::string name = "joshua_standalone_" + std::to_string(getpid()) + "_" +
+                           std::to_string(Clock::now().time_since_epoch().count());
+  auto local = config;
+  local.mutable_robot()->clear_perceptions();
+  auto* action = local.mutable_robot()->mutable_actions()->mutable_single_actions(0);
+  action->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+  action->mutable_actuator()->set_actuator_name(name);
+  for (auto& sub : *action->mutable_node()->mutable_subscriptions())
+    sub.set_topic(name + sub.topic().substr(sub.topic().find_last_of('/')));
+  ASSERT_TRUE(action->actuator().stepper_config().require_explicit_enable());
+  ASSERT_TRUE(config::ValidateConfig(local).ok());
+
+  // Retain the board so a final lease release cannot hide skipped node teardown.
+  auto board = robot::board::BoardFactory::GetOrCreate(local.robot().boards(0));
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto runtime = std::make_shared<ActionSubscriber>(name, 1, local);
+  EXPECT_FALSE(Enabled());
+  auto client = std::make_shared<rclcpp::Node>(name + "_client");
+  auto enable = client->create_publisher<std_msgs::msg::Bool>(name + "/torque", 1);
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(runtime);
+  executor.add_node(client);
+  ASSERT_TRUE(Await(
+      [&] {
+        executor.spin_some();
+        return enable->get_subscription_count() == 1;
+      },
+      5000ms));
+  std_msgs::msg::Bool enabled;
+  enabled.data = true;
+  enable->publish(enabled);
+  EXPECT_TRUE(Await([&] {
+    executor.spin_some();
+    return Enabled();
+  }));
+  executor.remove_node(runtime);
+  executor.remove_node(client);
+  runtime.reset();
+  EXPECT_FALSE(Enabled());
+  std::lock_guard lock(firmware_mutex);
+  EXPECT_TRUE(g_channels[0].configured);
+  EXPECT_EQ(pins[4], 1);
+}
+
 TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicitEnableAndStop) {
   // Concurrent stacks must never send commands to each other or real runtimes.
   const std::string name = "joshua_test_" + std::to_string(getpid()) + "_" +

@@ -65,6 +65,11 @@ It reads sensors and publishes their values using the configured message type.
 host sensor publishers. The standalone position/actuator nodes require separate
 bus owners. Mixed JoshuaWire scalar/actuator setups use `MCU_BUS` instead.
 
+Standalone actuator subscribers honor `stepper_config.require_explicit_enable`:
+when true, startup leaves outputs disabled until an explicit torque-enable
+command. Omitting the flag or setting it to false retains the existing startup
+enable behavior. Standalone node teardown still disables outputs in either case.
+
 Mixed MCU bus
 -------------
 

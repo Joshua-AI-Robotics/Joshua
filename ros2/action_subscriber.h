@@ -48,7 +48,10 @@ class ActionSubscriber : public rclcpp::Node {
       auto shared_interface =
           std::shared_ptr<robot::action::ActionInterface>(std::move(interface.value()));
 
-      if (auto_enable) {
+      const bool require_explicit_enable =
+          action_proto.motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
+          action_proto.stepper_config().require_explicit_enable();
+      if (auto_enable && !require_explicit_enable) {
         robot::action::ActionPacket enable_packet;
         enable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
         const auto enabled = shared_interface->SetAction(enable_packet);
