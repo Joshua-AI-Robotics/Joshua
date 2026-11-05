@@ -216,6 +216,9 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
+Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
+such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
+the camera must support the selected format.
 
 One serial bus must belong to one node process. Position sensors use
 `POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and

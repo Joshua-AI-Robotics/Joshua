@@ -158,7 +158,31 @@ TEST(ValidationTest, SensorsWithoutCommDoNotRequireSerialSettings) {
   sensor->set_sensor_type(robot::perception::IMAGE);
   sensor->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
   sensor->mutable_opencv_config()->set_id(0);
+  sensor->mutable_opencv_config()->set_fourcc("MJPG");
   EXPECT_TRUE(ValidateConfig(config).ok());
+}
+TEST(ValidationTest, RejectsInvalidCameraPixelFormatBeforeOpeningHardware) {
+  config::Config config;
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->add_single_perceptions();
+  sensor->set_sensor_name("camera");
+  sensor->set_sensor_type(robot::perception::IMAGE);
+  sensor->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
+  auto* camera = sensor->mutable_opencv_config();
+  // An omitted field must fail the same preflight check as an explicit empty value.
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  for (const auto* format : {"", "M", "MJ", "MJP", "MJPG-extra"}) {
+    SCOPED_TRACE(format);
+    camera->set_fourcc(format);
+    const auto status = ValidateConfig(config);
+    EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_NE(status.message().find("opencv_config.fourcc"), std::string::npos);
+  }
+  // Validation checks format syntax, not which formats a connected camera supports.
+  for (const auto* format : {"MJPG", "YUYV", "ABCD"}) {
+    SCOPED_TRACE(format);
+    camera->set_fourcc(format);
+    EXPECT_TRUE(ValidateConfig(config).ok());
+  }
 }
 TEST(ValidationTest, ValidatesSerialSettingsOnResolvedBoards) {
   auto config = MakeConfig();
@@ -311,7 +335,7 @@ TEST(ValidationTest, RejectsDriverAndMeasurementMismatchBeforeResourceResolution
   sensor->set_sensor_type(robot::perception::IMAGE);
   // InvalidArgument comes from the type mismatch, before board lookup (NotFound).
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
-  sensor->mutable_opencv_config();
+  sensor->mutable_opencv_config()->set_fourcc("MJPG");
   EXPECT_TRUE(ValidateConfig(config).ok());
   sensor->set_sensor_type(robot::perception::POSITION);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);

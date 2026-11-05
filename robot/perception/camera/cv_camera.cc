@@ -3,6 +3,8 @@
 #include <chrono>
 #include <opencv2/videoio.hpp>
 
+#include "robot/perception/camera/camera_config.h"
+
 namespace robot::perception {
 
 CvCamera::CvCamera(const robot::perception::SinglePerception& camera_config) {
@@ -22,12 +24,10 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
-  if (opencv_config_.fourcc().size() < 4) {
-    LOG(ERROR) << "Camera pixel format is missing or incomplete; specify a four-character format "
-                  "such as MJPG or YUYV in opencv_config.fourcc";
-    return absl::Status(absl::StatusCode::kInvalidArgument,
-                        "Camera pixel format must contain four characters (for example, MJPG or "
-                        "YUYV); set opencv_config.fourcc");
+  const auto config_status = ValidateCameraConfig(opencv_config_);
+  if (!config_status.ok()) {
+    LOG(ERROR) << config_status.message();
+    return config_status;
   }
 
   absl::Status status = OpenCameraLocked();

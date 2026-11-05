@@ -185,8 +185,9 @@ temporarily unavailable at startup. It retries initialization with a one-second
 steady-clock backoff and reads frames only after initialization succeeds.
 A capture failure closes the failed session and uses the same initialization
 path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
-Initialization failures reported as invalid arguments fail startup; the OpenCV
-driver checks its required FourCC before opening the device.
+Initialization failures reported as invalid arguments fail startup. The shared
+config validator and OpenCV driver both check the required four-character pixel
+format before opening a device.
 
 The OpenCV backend uses two capture buffers so the next frame can remain queued
 while the previous one is read. The
