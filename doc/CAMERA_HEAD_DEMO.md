@@ -1,4 +1,4 @@
-# Real-to-sim-to-real camera-head demo and checkpoints
+# Camera-head demo: shared setup and R2S2R training
 
 | Field | Value |
 | --- | --- |
@@ -7,14 +7,19 @@
 | Implementation baseline | Checkout `31efe9d`; source and documentation review only. |
 | Planning horizon | 12 weeks from an agreed kickoff; conference expected in approximately three months. Exact conference and freeze dates are TBD. |
 | Delivery owner / engineering capacity | TBD at checkpoint C0. |
-| Primary demo | One-axis camera head: real measurements → calibrated simulation → learning → real execution → supported hardware change. |
+| Scope | Shared camera-head setup and comparison protocol; R2S2R-specific learning and transfer work. |
 
-This guide defines the release outcome, implementation gaps, and evidence needed
-to close them. It does not establish hardware readiness or authorize a hardware
-run. Update it as implementation and verification land.
+This plan owns the camera-head task, A/B hardware, calibration, and controller
+comparison protocol. Section 3 onward specifies the R2S2R learning variant.
+The [Decisions API plan](OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) adds its adapter
+and D gates to the same head; it can use the C0/C1 head preparation without
+waiting for R2S2R model fitting, training, or transfer gates.
 
-Implementation gates remain open; supporting evidence must be assessed against
-the camera-head demo scope.
+Both variants inherit the nervous-system plan's
+[runtime contract](ROBOT_NERVOUS_SYSTEM_DEMO.md#4-shared-interfaces-and-simulator-behavior),
+[measurement rules](ROBOT_NERVOUS_SYSTEM_DEMO.md#5-reliability-and-integration-evidence),
+and [evidence record](ROBOT_NERVOUS_SYSTEM_DEMO.md#evidence-record).
+All implementation and physical qualification gates remain open.
 
 ## 1. Audience and product promise
 
@@ -27,26 +32,18 @@ workflow.
 > Connect supported components, measure the real device, learn in a calibrated
 > simulation, and deploy back through the same interface.
 
-The product distinction is the work and time required to connect and change
-supported hardware. LeRobot already offers recording, training, evaluation, and
-custom hardware interfaces; another robot executing a policy is insufficient to
-establish Joshua's advantage. See its
+Measure the work and time required to connect and change supported hardware.
+Related workflows already cover recording, training, evaluation, and custom
+hardware interfaces; see LeRobot's
 [learning workflow](https://huggingface.co/docs/lerobot/il_robots) and
 [custom hardware interface](https://huggingface.co/docs/lerobot/main/en/integrate_hardware).
-
-| User situation | Intended Joshua experience |
-| --- | --- |
-| Compose supported components | Configure, calibrate, record, train, and deploy using the shared workflow. |
-| Change a supported camera or payload | Update configuration and calibration, rebuild the simulation, check compatibility, and reuse or retrain the policy. |
-| Introduce an unsupported component | Implement a documented adapter, then reuse the workflow. Report this engineering effort separately. |
-| Change joint count or task | Revisit observation/action contracts and training; policy reuse is not assumed. |
-
-Measure source edits, configuration edits, calibration work, assistance, and
-elapsed time separately. Publish only component combinations actually verified.
+Use this head's configuration/artifact diffs and timed workflow as integration
+evidence. Report unsupported-device adapter work separately from using a supported
+component; joint-count or task changes reopen the observation/action contract.
 
 ## 2. Release scope and demo setup
 
-### Required release outcome
+### R2S2R release outcome
 
 - One simple, verified camera head with one rotary joint and measured feedback.
 - Two qualified physical configurations, A and B, with the same joint count.
@@ -81,16 +78,45 @@ keep a recognizable target centered as it moves left/right at camera height.
 Use a simple colored target or marker for the first detector. Define the permitted
 motion area, lighting, target speed, and camera height at C0.
 
-The tracking policy receives camera-derived target bearing and validity,
-measured joint angle, and estimated joint velocity. It outputs a bounded angular
-action. Select absolute targets or angular increments at C0 and use the same
-meaning in simulation and hardware. The visual detector is a separate component;
-this demonstrates learned control using camera observations, not an end-to-end
-learned visual detector. Keep RGB frames for inspection and outcome review.
+For state-based variants, a local detector produces target bearing and validity;
+controllers combine these with measured joint angle and estimated velocity.
+Choose absolute targets or angular increments at C0 and preserve their meaning
+through the hardware/simulation adapters. The image-based API variant is defined
+below. Keep RGB frames for inspection and outcome review across all variants.
 
-A conventional visual controller is a comparison baseline. The claim is an easier
-integration and adaptation workflow, not that this task inherently needs RL or
-that the learned controller must outperform conventional control.
+### Controller variants and comparison
+
+This is the single comparison protocol for the head demos. Select one backend
+through the shared control contract; keep the rig and application interfaces stable.
+
+| Variant | Input and decision path | Preparation and evidence |
+| --- | --- | --- |
+| Conventional controller | Local detector-derived bearing/validity and measured joint state feed a fixed controller. | Reference tracking behavior and local latency; no policy training. |
+| R2S2R | The same state-based observation contract feeds a simulation-trained checkpoint. | Compare nominal-simulation and calibrated/randomized-simulation policies with equal training budgets. Preserve model, training, and real-transfer provenance. |
+| [Decisions API](OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) | Recent image, target description, and measured state produce a fixed choice, mapped locally to bounded pan movement. | Pin prompt/model/preprocessing and record API delay, usage/cost, accepted/rejected answers, and physical results; no task-specific training run. |
+
+Freeze the target trajectories and speed range, lighting, angular envelope, trial
+duration, tracking-error tolerance, target-loss allowance, smoothness limit, and
+intervention rules before evaluation. Use identical conditions across compared
+variants. If API latency requires a slower target range, use that range for every
+variant in that comparison and identify it in the results.
+
+The image-based API path performs target interpretation; the state-based paths
+use a separate detector. Record this input/preprocessing difference. An additional
+Decisions condition can use the same detector-derived state to compare backends
+with identical observations.
+
+Report tracking error, time centered, target loss, motion smoothness, recovery,
+and the full trial denominator. Timeouts, missing detections, and human interventions
+follow frozen failure rules. Evaluate outcomes independently of training reward.
+Use the shared measurement rules for sample completeness and observation-to-command
+versus command-to-measured-response delay. API runs additionally report request
+latency percentiles/maxima, timeouts, request/token counts, and actual cost.
+
+The R2S2R C4/C6 target is 45/50 held-out successful trials on each A/B configuration;
+it remains proposed until qualified. API acceptance bounds are frozen at D0.
+Neither approach is required to outperform the conventional controller. The
+integration claim is supported by measured setup/change effort and artifacts.
 
 ### Physical configurations and hardware changes
 
@@ -277,30 +303,11 @@ workflow integration described here. See the upstream
 
 ### Independent ROS 2 simulator connection
 
-Include a separate live-mirror demonstration alongside the learning workflow.
-Run Joshua and the selected simulator as independently launched processes,
-connected through ROS 2 topics. Joshua owns hardware communication, command
-execution, recording, and device health. The simulator consumes published measured
-state and sensor data; it does not acquire the physical buses or cameras.
-
-Document each mapping from the canonical config/artifact snapshot: topic, message
-type and fields, QoS, joint/frame identity, units/conversion, timestamp domain,
-maximum age, and destination model or sensor panel. Show measured angle and real
-camera data with their source labels. Keep the simulation-training environment's
-synthetic observations and predictive-model validation evidence separate from
-this live view.
-
-While the qualified hardware controller and recorder continue running, stop and
-restart only the simulator. Preserve command/feedback/image traces before, during,
-and after the restart. Hardware operation must remain within the frozen timing
-and freshness bounds, without restarting Joshua, resetting board sessions, or
-changing command ownership. On reconnect, discard stale simulator inputs and
-resume from current published state. Record any interruption as a failed restart
-trial and retain its diagnostics. Close this requirement with C2 evidence.
-
-This connection is an implementation and qualification task under G10. A labeled
-recording is a presentation fallback when live rehearsal cannot fit the conference
-schedule; an unverified restart requirement remains open.
+Apply the shared [independent-process mapping and restart procedure](ROBOT_NERVOUS_SYSTEM_DEMO.md#independent-simulator-connection-and-restart-demonstration)
+to the head's measured angle and real camera stream. G10/C2 retain the mapping
+manifest and before/during/after continuity traces. This live-mirror evidence is
+separate from predictive-model validation and synthetic training observations.
+A labeled recording may support presentation timing; an unverified gate stays open.
 
 ### Sim → real: deploy and compare
 
@@ -309,11 +316,8 @@ normalization, and dependency identities. Run offline observation/action checks,
 then deliberate bounded hardware evaluation through Joshua. No online physical
 exploration is required for this training plan.
 
-Use a fixed conventional tracking controller as a reference. Also compare a
-policy trained with nominal simulation parameters against one using measured
-parameters and documented randomization, holding evaluation conditions and
-training budget comparable. Report actual differences, including no improvement.
-Do not claim that calibration improved transfer without supporting measurements.
+Evaluate the checkpoint using the shared
+[controller comparison protocol](#controller-variants-and-comparison).
 
 After the A→B hardware change, check the A checkpoint's compatibility before
 any trial. If compatible, evaluate its performance; if incompatible, record the
@@ -330,48 +334,36 @@ below cover the camera-head implementation and verification work.
 | --- | --- | --- | --- |
 | G01 — Qualified actuator and measured state | [STS3215 driver](../robot/action/motors/drivers/sts3215_driver.cc) and [perception factory](../robot/perception/factory/perception_factory.cc) provide servo and encoder paths. | Qualify exact servo/adapter, angle conversion, calibration, limits, timing, and physical behavior for A/B. | C1 |
 | G02 — Camera and target observations | OpenCV is a concrete perception driver; arbitrary distance sensors are not supported by the factory. | Add target detection, calibrated bearing, validity, timing, velocity estimation, and A/B camera calibration. Optional range sensing needs its own adapter. | C1, C2 |
-| G03 — Runtime bus ownership and run control | [Configuration documentation](../config/README.md) requires one process owner per serial bus; actuator subscribers and position publishers have separate roles. | Support command and measured feedback together through the intended bus owner. Add exclusive control, fresh-input checks, bounded runs, stop, fault, and deliberate recovery. | C1, C4 |
-| G04 — Configuration and calibration | Protobuf presets and validation exist; [calibration UI](../ui/src/pages/CalibrationPage.tsx) is a placeholder. | Ship A/B presets, calibration tools, readiness checks, and versioned artifacts. Distinguish integrity checking from hardware readiness. | C0, C1, C6 |
-| G05 — Measurement data | [DataStore](../ai/train/data_store.py) records episodes; its [output](../ai/train/README.md) is an interleaved message stream. | Align command, angle, image, bearing, and validity with explicit clock/age rules; preserve fitting/evaluation splits, failures, and replay. | C2 |
+| G03 — Runtime bus ownership and run control | Shared I01/I02 work in the [platform backlog](ROBOT_NERVOUS_SYSTEM_DEMO.md#6-implementation-foundations-and-gaps). | Apply and physically qualify that control contract on the head. | C1, C4 |
+| G04 — Configuration and calibration | Shared I05/I06 tooling and readiness work in the platform backlog. | Supply the head-specific A/B presets and calibration artifacts from Section 5. | C0, C1, C6 |
+| G05 — Measurement data | Shared I04/I09 timing and recording work in the platform backlog. | Produce the aligned head dataset and fitting/training/evaluation splits from Section 5. | C2 |
 | G06 — Simulation learning | [AI documentation](../ai/README.md) says BC/RL training is unimplemented. | Integrate one pinned external trainer, task environment, reward, randomization, seed handling, checkpoint export, and smoke run. | C3 |
 | G07 — Policy deployment | [Inference host](../ai/inference/host.py) and model plug-ins exist. | Add the selected tracking-policy adapter, named synchronized inputs, action conversions, compatibility checks, and offline parity validation. | C3, C4 |
 | G08 — Optional controller portability | Board/transport abstractions exist; they do not prove interchangeable physical behavior. | Qualify a second interface/controller without component-specific edits to shared recording/training/inference code. | C6 optional extension |
 | G09 — Outside-user and release evidence | Docker workflows, [documentation](../CONTRIBUTING.md), and monitoring UI exist. | Reproduce fresh-host setup and supported changes, time all assistance, distribute artifacts, and rehearse offline. | C5, C7 |
-| G10 — Independent ROS 2 simulator connection | The existing viewer/mirror paths do not establish the independent launch, complete mapping, or restart-continuity evidence required here. | Launch Joshua and the selected simulator separately, publish state/sensor mappings, and verify simulator restart while hardware control and recording continue. | C2, C7 |
+| G10 — Independent ROS 2 simulator connection | Shared I07 work and restart procedure in the platform plan. | Publish the head mapping manifest and retain the head's restart-continuity result. | C2, C7 |
 | G11 — Real-to-sim identification | [MuJoCo engine](../simulation/mujoco/engine.py) can step/read/render a model; [mirror mode](../simulation/mujoco/modes/mirror.py) sends incoming scalars to controls. | Fit an effective servo response and validate predictions on held-out real traces; establish camera calibration and uncertainty. Mirroring alone does not close this gap. | C2 |
 | G12 — Canonical head model | [Simulation config](../simulation/proto/simulation.proto) references model files. [PhysicalLayout](../config/proto/physical_layout.proto) describes link geometry/limits but does not establish a config-to-twin pipeline. | Add a fixed head template and schema/artifact references for camera, geometry, response parameters, and provenance; generate reproducibly without manual duplicate edits. | C2 |
 | G13 — Hardware-change lifecycle | Config-driven construction exists; hot reload and policy compatibility across changes are not established. | Implement stop/change/reconfigure/calibrate/validate/resume, invalidation rules, A/B evidence, and explicit reuse-versus-retrain decisions. Restart is allowed. | C6 |
 | G14 — Optional named components | Current actuator/board factories provide Feetech/STS3215 support, not DYNAMIXEL; the perception factory has no VL53L5CX implementation. | Add and qualify VL53L5CX multizone acquisition/telemetry and, separately, XL330 Protocol 2.0 actuation/feedback. Extend the simulated observation or actuator model when each enters the learning path. | C1–C4 requalification; C6 optional extension |
 
-## 5. Shared contract and evidence
+## 5. Camera-head artifacts and compatibility
 
-Use protobuf configuration as the source of truth. Extend its schema where
-necessary. Store measured calibration in versioned artifacts referenced by the
-config; generated simulator files and checkpoint metadata must point back to the
-same snapshot. Avoid independent hardware constants in the trainer or adapter.
+Extend the shared runtime contract with these head-specific artifacts. Store them
+under versioned identities referenced by the protobuf config; generators, trainers,
+and adapters consume that snapshot.
 
-Freeze these items before main identification or training:
+| Artifact | Required content |
+| --- | --- |
+| Head calibration | Joint/camera identity; radians and radians/second; native conversion, zero/direction/limits; intrinsics, distortion, mount geometry/payload, and frame conventions. |
+| Observation/action contract | Bearing and validity, measured angle, velocity-estimator definition, image identity, preprocessing, timing/alignment bounds, absolute-versus-incremental action semantics, control rate, and target-loss behavior. |
+| Dataset | Session/trial boundaries, interventions, interrupted capture, alignment/rejection rules, and separate fitting/training/evaluation splits. Prevent future samples leaking into earlier control inputs. |
+| Predictive model | Camera projection, effective actuator response/delay/limits, uncertainty and units, template/generator revision, and held-out validation results. |
+| Trained checkpoint | Observation/action schema, normalization/statistics, trainer/simulator versions, config/calibration/model hashes, seed, and supported parameter envelope. Matching array sizes do not establish compatibility. |
 
-- **Identity and units:** stable joint/camera names, radians and radians/second,
-  zero, direction, limits, native-unit conversion, camera identity, and frames.
-- **Actions:** target semantics, bounds, control rate, delay model, and mapping
-  from requested commands to applied commands. Keep measured feedback separate.
-- **Observations:** bearing, target validity, angle, velocity-estimator definition,
-  image/calibration identity, acquisition/receipt times, clocks, maximum age/skew,
-  and explicit behavior when the target leaves view.
-- **Data:** session/trial boundaries, operator intervention, interrupted capture,
-  alignment rules, rejected samples, and fitting/training/evaluation splits.
-  Prevent future observations from leaking into an earlier control sample.
-- **Model:** head geometry, camera projection, actuator response, uncertainty,
-  parameter units, template/generator revision, and held-out validation results.
-- **Checkpoint:** observation/action schema, preprocessing/statistics, trainer and
-  simulator versions, config/calibration hashes, seeds, and supported parameter
-  envelope. A matching array size does not establish compatibility.
-- **Lifecycle:** disabled, commissioning, recording, policy execution, stopped,
-  and faulted states; exclusive command source and deliberate recovery.
-- **Changes:** camera changes invalidate related calibration; payload/mount
-  changes reopen model validation; timing/action changes reopen compatibility
-  and transfer evaluation. Joint-count changes require a new contract.
+Camera changes invalidate associated calibration; payload/mount changes reopen
+model validation; timing/action/preprocessing changes reopen compatibility and
+transfer evaluation. Joint-count changes require a new contract.
 
 Numeric tolerances and operational limits remain TBD until C0/C1 measurement.
 An unspecified acceptance bound cannot pass a gate. JoshuaWire integrations, if
@@ -396,156 +388,110 @@ C0. Work may overlap; downstream evidence must use validated upstream artifacts.
 
 ### C0 — Scope, parts, and contract
 
-- [ ] Assign hardware/runtime, simulation/learning, and onboarding owners; record
-  capacity, kickoff, conference date, and release freeze.
-- [ ] Inventory and select exact A/B parts, wiring, host, compute, prices, lead
-  times, and bench access. Record the mechanical change and expected effect.
-- [ ] Freeze task distribution, target trajectories, trial length, tracking-error
-  tolerance, target-loss allowance, smoothness limit, and intervention rules.
-- [ ] Freeze the shared contract, simulator template scope, and supported-change
-  boundaries.
-- [ ] Compare MuJoCo and Isaac Lab on the same camera-head task in a bounded
-  feasibility check: setup effort, calibration support, training throughput,
-  compute needs, and checkpoint/deployment integration. Select and pin one
-  simulation stack and trainer/algorithm; record versions, results, and rationale.
-- [ ] Define nominal-simulation and conventional-controller comparisons, held-out
-  splits, model-fit thresholds, and A/B evaluation protocol before testing.
-- [ ] Reconcile the learning-first sequence with the existing AI roadmap.
+- [ ] Assign owners, capacity, kickoff/freeze dates, and the exact A/B BOM from
+  Section 2, including wiring, host/compute, prices, lead times, and bench access.
+- [ ] Freeze the comparison protocol and head artifacts from Sections 2 and 5,
+  including held-out splits, model-fit thresholds, and the intended A/B difference.
+- [ ] Complete the Section 3 simulator feasibility check, pin one stack and
+  trainer/algorithm, and reconcile the learning sequence with the AI roadmap.
 
-**Evidence:** design decision, BOM, wiring reference, evaluation protocol,
-contract, owners, and dates. The direction is agreed; exact parts and bounds are
-not yet qualified.
+**Evidence:** scope decision, BOM, contract, evaluation protocol, owners, and dates.
 
 ### C1 — Observable controlled head
 
-- [ ] Command and read the same servo concurrently through one bus owner.
-  Verify angle direction, zero, units, limits, and restart reference independently.
-- [ ] Qualify A/B mounting, load, camera capture, detector, and repeatable camera
-  calibration. Record whether the hardware change is measurably different.
-- [ ] Measure command/feedback/image timing under recording load, with explicit
-  target-invalid and stale-input behavior. Record velocity-estimation behavior.
-- [ ] Verify operator enable, exclusive command source, stop, power disconnect,
-  limits, host/adapter disconnect, control-process failure, and deliberate recovery.
-- [ ] Deliver integrity validation separately from hardware readiness checks;
-  identify missing devices and incompatible configurations clearly.
+- [ ] Apply the shared runtime contract to this head: one bus owner for concurrent
+  servo command/feedback, independently checked direction/zero/units/limits,
+  operator enable, stop, disconnect/process-failure behavior, and deliberate recovery.
+- [ ] Qualify A/B mounting/load, camera capture/calibration, detector, and velocity
+  estimation. Measure command/feedback/image timing under recording load; verify
+  target-invalid/stale-input behavior and a measurable A/B hardware difference.
+- [ ] Separate config-integrity results from device readiness and physical results.
 
-**Evidence:** configurations, wiring, firmware/adapter identities, calibrations,
-physical angle/timing/stop traces, target detector results, and limitations.
+**Evidence:** head configs/calibrations, device identities, and physical angle,
+measurement, stop/recovery, and detector traces.
 
 ### C2 — Predictive calibrated simulation
 
-- [ ] Record and replay synchronized commands, measured angles, camera frames,
-  bearings, validity, and timestamps; report missing or rejected samples.
-- [ ] Split real sessions for response fitting and held-out validation. Preserve
-  failures and interrupted recordings with explicit status.
-- [ ] Fit the effective actuator model and camera calibration; record uncertainty
-  and compare prediction errors with the nominal model under identical commands.
-- [ ] Generate the one-axis model for the C0-selected simulation stack from
-  canonical config/artifacts and a fixed template. Rebuilding the same inputs
-  produces the same model identity.
-- [ ] Meet frozen held-out model error/timing thresholds. Verify control units,
-  delay, limits, reset, detector visibility, and observation/action parity.
-- [ ] Run the independent ROS 2 live-mirror demonstration with documented state
-  and sensor mappings. Restart only the simulator and verify hardware control,
-  communication ownership, and recording continue within the frozen bounds.
+- [ ] Produce aligned, replayable command/angle/image/bearing/validity recordings
+  with separate fitting and held-out sessions; retain missing/rejected samples.
+- [ ] Meet Section 3's predictive error/timing criteria using calibrated response
+  and camera models. Record uncertainty and nominal-model prediction errors.
+- [ ] Generate the model reproducibly from canonical artifacts and a fixed template;
+  validate units, delays, limits, reset, visibility, and observation/action parity.
+- [ ] Apply the shared simulator mapping/restart procedure to the head and retain
+  continuity traces. Mirroring evidence does not close predictive validation.
 
-**Evidence:** real dataset, fit/calibration artifacts, generated model, prediction
-plots, error report, repeatable build command, ROS 2 mapping manifest, and
-simulator-restart continuity traces. Mirroring/playback is supporting
-visualization, not model-validation evidence.
+**Evidence:** dataset, fit/model identities, repeatable build command, prediction
+report, ROS 2 mapping manifest, and restart-continuity result.
 
 ### C3 — First simulation-trained real execution
 
-- [ ] Complete a smoke run and one reproducible training run in the pinned
-  environment, using C2 model parameters and documented randomization.
-- [ ] Save data/model identities, reward/settings, seed, dependencies, statistics,
-  checkpoint, logs, training budget, and measured compute/time.
-- [ ] Validate adapter preprocessing, actions, units, and compatibility offline.
-  Reject invalid dimensions, nonfinite actions, and incompatible artifacts.
-- [ ] Execute a bounded real trial on A using the simulation-trained checkpoint
-  and meet the task criterion on a held-out trajectory.
-- [ ] Preserve all attempts and interventions. Distinguish simulation training,
-  real evaluation, conventional control, and any later real-data fine-tuning.
+- [ ] Complete a smoke run and one reproducible training run using C2 artifacts.
+  Preserve the Section 5 checkpoint contract, recipe/reward, seeds, randomization,
+  logs, training budget, and measured compute/time.
+- [ ] Pass offline adapter/preprocessing/action/compatibility checks, rejecting
+  invalid dimensions, nonfinite actions, and incompatible artifacts.
+- [ ] Meet the task criterion in a bounded held-out real trial on A. Preserve all
+  attempts/interventions and identify later real-data fine-tuning separately.
 
-**Evidence:** training recipe and checkpoint provenance, offline checks, and a
-recorded physical trial. One success closes only the first-execution gate.
+**Evidence:** training/checkpoint provenance, offline checks, and a physical trial.
+One success closes the first-execution gate only.
 
 ### C4 — Repeatable transfer and recovery on A
 
-- [ ] Meet the proposed target of **45 successful trials out of 50 held-out
-  trials** on A. Freeze any revision before evaluation. Trial success requires
-  the C0 tracking, target-loss, and smoothness criteria over the prescribed duration.
-- [ ] Preserve the denominator: timeouts, dropped tracking, and in-trial human
-  interventions follow the frozen failure rules. Do not silently exclude frames
-  with missing detections or choose only favorable trajectories.
-- [ ] Review task outcomes independently of the training reward using recorded
-  image/angle evidence. Compare conventional control, nominal-sim policy, and
-  calibrated/randomized-sim policy with comparable test conditions.
-- [ ] Verify stale input, invalid output, disconnect, stop, and restart behavior.
-  Measure reset/recovery time and complete repeated rehearsal sessions.
+- [ ] Meet the proposed A acceptance target in the comparison protocol, with
+  frozen revisions/conditions and the complete failure/intervention denominator.
+- [ ] Publish all required results and metrics under that protocol.
+- [ ] Verify stale input, invalid output, disconnect, stop, restart, and repeated
+  rehearsal/reset behavior; record every failed attempt.
 
-**Evidence:** full trial ledger, errors, target-loss rate, motion smoothness,
-latency, recovery, comparison results, and artifact revisions. The 45/50 target
-is proposed, not a current result or a broad generalization claim.
+**Evidence:** full trial ledger, metrics, comparison results, recovery traces, and
+artifact revisions. The acceptance target is proposed, not a recorded result.
 
 ### C5 — Outside-user integration
 
-- [ ] Publish setup, calibration, identification, simulation generation, training,
-  deployment, evaluation, supported-change, and troubleshooting instructions.
-- [ ] Have three engineers outside the implementation team attempt the workflow;
-  record assistance, failures, incomplete attempts, and host starting state.
-- [ ] Measure time to first valid measurement session, validated model, training
-  launch, and deployed policy. Include downloads/install time and report hardware
-  preparation, firmware work, and preinstalled environments separately.
-- [ ] Validate the proposed first-session target of **60 minutes from software
-  setup start** with an assembled/wired supported rig and supported host.
-  Calibration, training, and complete adaptation times are separate measurements.
-- [ ] Users perform a supported A→B change without source edits to the recorder,
-  model generator, trainer, or inference adapter. Capture config/artifact diffs
-  and the complete change-to-resumption time, including retraining when needed.
+- [ ] Publish instructions for the Section 3 workflow, supported A/B changes,
+  and troubleshooting. Three engineers outside the implementation team attempt
+  the workflow; retain starting state, assistance, failures, and incomplete steps.
+- [ ] Measure first valid measurement session, validated model, training launch,
+  and deployed policy times. Include downloads/install time and separate hardware
+  preparation, firmware work, and preinstalled environments.
+- [ ] Evaluate the proposed **60-minute first-session target from software setup
+  start**, using an assembled/wired supported rig and host. Report calibration,
+  training, and complete adaptation times separately.
+- [ ] Users perform the C6 change without shared recorder/generator/trainer/adapter
+  source edits; preserve artifact diffs and the full change-to-resumption time.
 
-**Evidence:** per-user timing/assistance ledger, artifacts and diffs, guide
-revision, and usability gaps. A prepared booth machine does not prove onboarding.
+**Evidence:** per-user timing/assistance ledger, guide revision, diffs, and usability
+results. A prepared booth machine does not establish this gate.
 
 ### C6 — Supported A→B hardware change (required)
 
-- [ ] Perform the documented stop/replace/configure/calibrate/validate/resume
-  sequence on the physical rig. Capture each stage and any restart time.
-- [ ] Show exact config/calibration/model differences. Regenerate B's simulation
-  without manual simulator-file edits and pass held-out prediction checks.
-- [ ] Check checkpoint compatibility; document reuse, rejection, or retraining
-  explicitly. Record B training provenance if a new checkpoint is produced.
-- [ ] Repeat C4's **45/50 proposed acceptance protocol on B**, with frozen
-  conditions. Compare the A policy only when it is compatible for that trial.
-- [ ] Preserve logical joint/observation/action contracts and reuse shared
-  recording/training/deployment source. Report any component integration work.
-- [ ] Publish measured adaptation time with calibration, compute, and operator
-  time separated. Do not advertise an unmeasured “instant adaptation” time.
+- [ ] Perform the Section 2 stopped change sequence and capture config/calibration/
+  model diffs. Regenerate and validate B's simulation without manual model-file edits.
+- [ ] Record the Section 5 compatibility decision: checkpoint reuse, rejection,
+  or retraining with new provenance. Preserve the logical interface and shared source.
+- [ ] Repeat the comparison protocol's proposed trained-policy acceptance target on
+  B. Evaluate the A checkpoint only if compatible, and keep that result distinct
+  from a newly trained B policy.
+- [ ] Publish complete adaptation time, separating calibration, compute, operator
+  effort, component integration, and restart time.
 
-**Evidence:** A/B hardware photos, config and artifact diffs, model-validation
-reports, compatibility decisions, training records, real trial ledger, and timing.
-This gate is mandatory for the easy-hardware-change claim.
-
-**Optional extension:** qualify a second controller's physical I/O, feedback,
-timing, stop/recovery, and workflow reuse. Repeat transfer evaluation before
-claiming checkpoint portability. The camera/payload swap alone does not prove
-Teensy/ESP32 or arbitrary controller interchangeability.
+**Evidence:** A/B identities/photos, artifact diffs, model-validation and training
+records, compatibility decisions, trial ledger, and timing. Optional controller
+portability requires its own physical I/O/timing/stop and transfer qualification.
 
 ### C7 — Release and conference readiness
 
-- [ ] Freeze firmware, dependencies, configs, calibration, real measurements,
-  model/template, training recipe, checkpoints, and guide revisions for A/B.
-- [ ] Verify applicable Docker test services and fresh installation for the
-  implementation changes. Confirm all distributed example artifacts work.
-- [ ] Prepare offline operation, cached dependencies/assets, known lighting,
-  spares, recovery instructions, and a clearly labeled recorded fallback.
-- [ ] Rehearse the physical swap and full presentation with transportable gear.
-  Verify provenance and timing of every prerecorded or precomputed stage.
-- [ ] Publish verified combinations, evidence, limitations, and release scope.
-  Include optional controller/range-sensor claims only after qualification.
+- [ ] Pin the A/B artifact set from Section 5 and its firmware/dependencies/guides;
+  verify applicable Docker tests, fresh installation, and distributed examples.
+- [ ] Rehearse the Section 7 presentation and physical swap with transportable gear,
+  cached assets, known lighting, spares, recovery instructions, and labeled fallback.
+- [ ] Publish only qualified combinations and link every result to the evidence
+  record; identify all precomputed or prerecorded stages.
 
-**Evidence:** release manifest, installation/test results, complete demo video,
-runbook, and final register decision.
+**Evidence:** pinned manifest, installation/test results, runbook, demo video, and
+final gate decisions.
 
 ## 7. Conference presentation
 
@@ -587,36 +533,15 @@ invalidate downstream evidence. Record the change and reopen affected gates.
 
 ## 9. Weekly checkpoint and evidence updates
 
-Use **Open**, **In progress**, **Blocked**, **Verified**, or **Deferred** in the
-register. Check an item only when its condition and evidence are recorded.
-A merged PR does not prove physical performance or outside-user usability.
+Use the shared [evidence record](ROBOT_NERVOUS_SYSTEM_DEMO.md#evidence-record)
+and gate states. Add the A/B identity; dataset split; model/template and generated
+model revisions; trainer/environment/randomization/seed/checkpoint identities;
+held-out comparator; and calibration/training/total elapsed time.
 
-At each review update owners, dates, dependencies, blockers, the next measurable
-outcome, and any scope decision. Preserve failed results.
-
-```text
-Date / gate / owner:
-Status and acceptance items completed:
-Code commit / PR:
-Firmware / servo / adapter / camera / host / A-or-B identity:
-Config / calibration / real-data / model-template / generated-model revisions:
-Trainer / environment / randomization / seed / checkpoint revisions:
-Evidence type: source review | software test | replay | simulation | hardware | user study
-Procedure, starting conditions, held-out split, and comparator:
-Expected result / measured result / tolerance / complete trial denominator:
-Operator time / calibration time / training time / total elapsed time:
-Source edits / configuration edits / artifact changes / assistance:
-Failures, interventions, and unresolved limitations:
-Evidence location:
-Decision / affected downstream gates / next owner and due date:
-```
-
-Verification follows [AGENTS.md](../AGENTS.md) and
-[CONTRIBUTING.md](../CONTRIBUTING.md). Use documented Docker services for
-CI-representative implementation checks. Hardware runs and firmware flashing
-require the applicable current operator authorization and setup confirmation.
-Inspect simulation presets for real devices before launching; a simulation label
-does not establish hardware-free execution.
+At each review update owners, dates, dependencies, blockers, and the next measurable
+outcome. Preserve failed results and reopen gates affected by changed artifacts.
+Follow [AGENTS.md](../AGENTS.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) for
+execution authorization and implementation checks.
 
 | Review date | Gate / decision | Evidence | Next action / owner / due date |
 | --- | --- | --- | --- |

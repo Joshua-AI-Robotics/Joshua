@@ -9,15 +9,22 @@
 | Delivery owner, parts, capacity, and dates | TBD at N0. |
 | Planning horizon | Target twelve weeks from an agreed kickoff; confirm conference and freeze dates at N0. |
 
-This plan defines a hardware-integration demonstration and its acceptance evidence.
-The separate [real-to-sim-to-real plan](REAL_TO_SIM_TO_REAL_DEMO.md) covers calibrated
-modeling, policy training, and physical transfer in greater depth. Each plan has
-its own gates; evidence closes only the conditions it actually demonstrates.
+This plan owns the mixed-hardware demonstration and the shared runtime,
+timing, simulator-connection, and evidence requirements used by the demo plans.
+
+- [Camera-head plan](CAMERA_HEAD_DEMO.md): shared head task, A/B hardware,
+  controller comparison protocol, and R2S2R training/transfer work.
+- [Decisions API plan](OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md): API adapter behavior
+  and its acceptance gates.
+
+The shared contracts apply to the devices used in each demonstration. A first
+camera-head trial needs its qualified head subset; it does not require the full
+mixed-rig hardware matrix. N, C, and D gates track their respective scopes.
 
 ## 1. Product promise
 
-> Build your robot's nervous system quickly. Connect supported actuators and
-> sensors and other devices, see what they are doing, and keep applications
+> Build your robot's nervous system quickly. Connect supported actuators,
+> sensors, and other devices, see what they are doing, and keep applications
 > working as hardware changes.
 
 Joshua's contribution is the path from hardware configuration to useful, reliable
@@ -152,6 +159,19 @@ The protobuf configuration remains the source of truth for device identities,
 boards, channels, transports, limits, and artifact references. Generated models,
 display mappings, and adapter metadata must reference that configuration snapshot.
 
+### Control and observation contract
+
+Use stable device identities, named fields, defined units/frames, and calibrated
+direction, zero, and limits. Preserve measured feedback separately from commanded
+or estimated state. Record validity, acquisition/receipt timing, and sample identity.
+Keep calibration and generated mappings versioned and tied to the config snapshot.
+
+Start disabled. Select one command source and one execution target deliberately;
+switch sources while stopped. Bound commands and input age, expose stale/fault
+states, and require deliberate recovery without automatic re-enable. Qualify the
+selected rig's physical stop and link-loss behavior under Q02. Every controller
+and adapter inherits this contract.
+
 ### Coordinated ROS 2 operation
 
 Define which sensor samples each command uses, their maximum age and inter-stream
@@ -222,25 +242,15 @@ sessions. The restarted simulator reconnects through the manifest, discards stal
 samples, and resumes the current view without taking hardware command ownership.
 Include this procedure and its results in the I07/N3 evidence.
 
-### Executable foundation for learning workflows
+### Reusable application interfaces
 
-Use a small conventional target-bearing controller as the application example.
-Give it a fixed observation contract containing target bearing/validity, measured
-or simulated joint angle, and timing information. Produce a bounded angular
-command through an explicit adapter.
-
-Run the same application source with the physical servo and with a minimal
-simulated plant. In simulation, generate the selected observations independently
-of live hardware and mark any simplified detector/servo assumptions. Record
-preprocessing, units, action semantics, update rate, and adapter differences.
-The stepper branch can use a separate prescribed motion sequence; it need not
-share the servo controller's semantics.
-
-This demonstrates reusable interfaces and executable simulator connectivity.
-Predictive model validation, environment/reward design, policy training,
-checkpoint compatibility, and physical transfer evaluation remain additional
-work for a real-to-sim-to-real claim. Use the
-[learning-workflow plan](REAL_TO_SIM_TO_REAL_DEMO.md) for those acceptance conditions.
+Run one small application source through explicit hardware and simulation adapters
+with compatible observation/action contracts. The simulated application must run
+without live hardware observations; document simplified plant or detector assumptions.
+The [camera-head task](CAMERA_HEAD_DEMO.md#task-a-curious-camera-head)
+supplies a concrete example. The stepper can use a separate prescribed sequence.
+Keep this interface-reuse evidence separate from the head plan's predictive-model
+and learned-transfer evidence.
 
 ## 5. Reliability and integration evidence
 
@@ -303,7 +313,7 @@ only for the backend selected at N0; the other backend is optional.
 | P1 | I05 — Mixed-rig presets and supported changes | [Config validation](../config/README.md) and individual presets exist; the validator explicitly excludes hardware readiness. There is no complete preset package for this mixed rig and its two required changes. | Ship baseline/expanded rig presets, camera A/B settings, stable names, calibration references, and a readiness inspection command. Document the stop/change/configure/validate/restart sequence. | Config checks accept the intended variants and reject ownership/type conflicts. A documented rehearsal produces config/artifact diffs for both changes; readiness distinguishes missing devices from invalid config. Physical and timing evidence comes from Q01/Q03. |
 | P1 | I06 — Live device views | [MonitorPage](../ui/src/pages/MonitorPage.tsx) shows topology and logs; [TopicsList](../ui/src/components/TopicsList.tsx) shows endpoint metadata. [CalibrationPage](../ui/src/pages/CalibrationPage.tsx) is a placeholder. | Add camera, measured-versus-commanded joint, range, and health views with units, data origin, rates, and sample age. Supply the calibration procedure/tools needed for the selected rig; a CLI plus simple panels is acceptable. | Recorded or synthetic fixtures verify data display, stale/fault transitions, units, and source labels. Stepper command/estimate is visibly distinct from measured feedback. Qualify the live view under Q01. |
 | P1 | I07 — One complete simulator bridge | [MuJoCo mirror mode](../simulation/mujoco/modes/mirror.py) maps scalar topics into actuator controls. The [Isaac viewer](../simulation/isaac/viewer.py) loads a scene and steps physics. Neither supplies the complete required device view and application routing. | For the N0-selected backend only, implement named state mappings, sensor panels, freshness/source labels, a minimal rig model, and explicit execution-target routing. Run Joshua and the simulator independently through a documented ROS 2 mapping manifest. | Every demo device is observable; fixtures verify names, units, state mappings, stale behavior, and restart. Restarting only the simulator preserves hardware operation and recording within frozen bounds. Live, replayed, and simulated sources are labeled, and commands reach only the selected target. Model motion alone does not count as measured-state evidence. |
-| P1 | I08 — Shared application and adapters | The target-bearing controller and paired hardware/simulation adapters specified in Section 4 are not implemented as a demo example. | Implement the small controller, observation/action contract, preprocessing, and explicit hardware/simulation adapters. Supply a minimal independent simulated plant and document its assumptions. | The same application source runs against both adapters with compatible units, update rate, and bounded actions. Simulation completes without live hardware observations; physical execution uses Q01/Q02-qualified hardware. |
+| P1 | I08 — Shared application and adapters | The reusable application contract in Section 4 still needs a concrete demo example and paired hardware/simulation adapters. | Implement the small application, observation/action contract, preprocessing, and explicit hardware/simulation adapters, using the camera-head plan for its task definition. Supply a minimal independent simulated plant and document its assumptions. | The same application source runs against both adapters with compatible units, update rate, and bounded actions. Simulation completes without live hardware observations; physical execution uses Q01/Q02-qualified hardware. |
 | P1 | I10 — Grounded LLM walkthrough | [AI integration](../docs/AI_INTEGRATION.md) describes inspection and orchestration goals; this plan records no qualified prompt-driven demo. | Connect a rehearsed read-only LLM path to the selected config, device-health observations, and simulator mapping evidence. Supply the Section 3 prompts and visible tool results. | Answers identify the right devices, distinguish configuration from observations, and expose stale/missing evidence. The walkthrough issues no hardware commands; preserve its prompt/tool/result trace for N6. |
 | P2 | I09 — Recording, metrics, and demo evidence | [DataStore](../ai/train/data_store.py) records interleaved messages and counts; the subscriber uses receipt-time recording by default. It does not assemble the full demo provenance and qualification report. | Add session manifests for code/config/firmware/calibration/simulator identities, fault events, integration effort, and measurement endpoints. Provide repeatable latency, completeness, lifecycle, and soak reports plus inspection/replay instructions. | A sample session regenerates its report from preserved records. Missing data, failed attempts, interventions, and clock limitations remain visible. The demo manifest resolves the artifacts used by N4–N6. |
 
@@ -375,10 +385,16 @@ Follow [AGENTS.md](../AGENTS.md) for physical runs and firmware operations, and
 This plan does not authorize hardware execution or firmware flashing. Inspect
 every preset's devices and operation mode before any authorized run.
 
-At each review record:
+### Evidence record
+
+Use **Open**, **In progress**, **Blocked**, **Verified**, or **Deferred** for every
+gate. Close a condition only with evidence of the relevant kind. Preserve failed
+attempts and record changes that reopen dependent gates. This record format is
+shared by all three plans; each variant adds its own artifact fields.
 
 ```text
 Date / gate / owner / status:
+Evidence type: source review | software test | replay | simulation | hardware | user study
 Code / config / firmware / simulator / application / adapter identities:
 Physical hardware, wiring, calibration, host, and workload:
 Procedure, starting conditions, acceptance bounds, and trial denominator:
