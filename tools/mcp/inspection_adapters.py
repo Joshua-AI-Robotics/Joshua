@@ -1,6 +1,7 @@
 """C++ helper adapter; subprocess lifecycle is shared with validation-only mode."""
 
 import json
+import math
 
 from tools.mcp.config_validation_server import (
     STATUS_CODES,
@@ -38,7 +39,12 @@ SETUP_SCHEMA = {
         "scope": {"type": "string", "const": "setup_inspection"},
         "operation": {
             "type": "string",
-            "enum": ["list_supported_components", "list_devices", "describe_device"],
+            "enum": [
+                "list_supported_components",
+                "list_devices",
+                "describe_device",
+                "describe_robot_capabilities",
+            ],
         },
         "config_path": {"type": ["string", "null"]},
         "stage": {
@@ -155,6 +161,8 @@ def validate_setup_report(report, operation, path, exit_code=None):
                 raise ValueError("wrong inventory")
             for device in data["devices"]:
                 _validate_device(device)
+        elif operation == "describe_robot_capabilities":
+            _validate_capabilities(data)
         else:
             if set(data) != {"device"}:
                 raise ValueError("wrong description")
@@ -184,6 +192,138 @@ def _validate_device(device):
         or device["compatibility"] != "not_verified_by_inspection"
     ):
         raise ValueError("wrong device description")
+
+
+def _validate_capabilities(data):
+    if set(data) != {
+        "config_name",
+        "build_version",
+        "hardware_readiness",
+        "operations",
+        "gaps",
+        "prerequisites",
+        "evidence",
+    }:
+        raise ValueError("wrong capability fields")
+    if (
+        type(data["config_name"]) is not str
+        or type(data["build_version"]) is not str
+        or data["hardware_readiness"] != "unknown"
+    ):
+        raise ValueError("wrong capability identity")
+    for key in ("prerequisites", "evidence"):
+        if (
+            type(data[key]) is not list
+            or not data[key]
+            or any(type(v) is not str for v in data[key])
+        ):
+            raise ValueError("wrong capability evidence")
+    if type(data["gaps"]) is not list:
+        raise ValueError("wrong capability gaps")
+    for gap in data["gaps"]:
+        if (
+            type(gap) is not dict
+            or set(gap) != {"target", "reason"}
+            or any(type(v) is not str for v in gap.values())
+        ):
+            raise ValueError("wrong capability gap")
+    if type(data["operations"]) is not list or len(data["operations"]) != 2:
+        raise ValueError("wrong capability operations")
+    for op, name in zip(
+        data["operations"], ("joint_position_target", "joint_position_observation")
+    ):
+        if (
+            type(op) is not dict
+            or set(op)
+            != {
+                "name",
+                "parameters",
+                "driver_contract",
+                "verification",
+                "mcp_execution",
+                "targets",
+            }
+            or op["name"] != name
+            or op["mcp_execution"] != "unavailable"
+            or type(op["parameters"]) is not str
+            or type(op["driver_contract"]) is not str
+            or type(op["verification"]) is not str
+            or not op["verification"]
+            or type(op["targets"]) is not list
+        ):
+            raise ValueError("wrong capability operation")
+        for target in op["targets"]:
+            keys = {
+                "device_id",
+                "board_name",
+                "channel",
+                "units",
+                "reference",
+                "configured_ros",
+            }
+            keys |= (
+                {
+                    "operational_lower_limit",
+                    "operational_upper_limit",
+                    "physical_lower_limit",
+                    "physical_upper_limit",
+                    "idle_position",
+                    "feedback_sensor_ids",
+                    "ros_exposure",
+                }
+                if name == "joint_position_target"
+                else {"mcp_feedback"}
+            )
+            if (
+                type(target) is not dict
+                or set(target) != keys
+                or any(
+                    type(target[k]) is not str
+                    for k in ("device_id", "board_name", "reference")
+                )
+                or not target["device_id"].startswith(
+                    "actuator:" if name == "joint_position_target" else "sensor:"
+                )
+                or type(target["channel"]) is not int
+                or target["channel"] < 0
+                or target["units"] != "native_ticks"
+                or type(target["configured_ros"]) is not list
+            ):
+                raise ValueError("wrong capability target")
+            if name == "joint_position_target":
+                if target["ros_exposure"] not in {"configured", "not_evidenced"} or (
+                    target["ros_exposure"] == "configured"
+                ) != bool(target["configured_ros"]):
+                    raise ValueError("wrong capability exposure")
+                for key in (
+                    "operational_lower_limit",
+                    "operational_upper_limit",
+                    "physical_lower_limit",
+                    "physical_upper_limit",
+                    "idle_position",
+                ):
+                    if type(target[key]) not in (int, float) or not math.isfinite(
+                        target[key]
+                    ):
+                        raise ValueError("wrong capability limits")
+                if type(target["feedback_sensor_ids"]) is not list or any(
+                    type(v) is not str or not v.startswith("sensor:")
+                    for v in target["feedback_sensor_ids"]
+                ):
+                    raise ValueError("wrong capability feedback association")
+            elif target["mcp_feedback"] not in {
+                "requires_operator_preflight_selection_and_live_publisher_verification",
+                "not_configured_for_get_feedback",
+            }:
+                raise ValueError("wrong capability feedback availability")
+            for endpoint in target["configured_ros"]:
+                if (
+                    type(endpoint) is not dict
+                    or set(endpoint) != {"topic", "message_type", "command", "units"}
+                    or any(type(v) is not str for v in endpoint.values())
+                    or endpoint["units"] not in {"native_ticks", "radians"}
+                ):
+                    raise ValueError("wrong capability ROS endpoint")
 
 
 class CppSetupInspector(SetupInspector):
@@ -248,6 +388,9 @@ class CppSetupInspector(SetupInspector):
 
     async def describe_device(self, config_path, device_id):
         return await self._inspect("describe_device", config_path, device_id)
+
+    async def describe_robot_capabilities(self, config_path):
+        return await self._inspect("describe_robot_capabilities", config_path)
 
     async def aclose(self):
         await self.service.close()

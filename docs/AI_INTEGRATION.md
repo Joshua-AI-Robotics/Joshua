@@ -238,7 +238,11 @@ current implementations and example presets are indexed in the
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
-The seven-tool adapter separates setup inspection from runtime observation.
+The eight-tool adapter separates setup inspection from runtime observation.
+`describe_robot_capabilities` groups the selected robot's evidenced position
+contracts, units, limits, prerequisites and verification gaps. The
+[Codex walkthrough](MCP_CLIENT_WALKTHROUGH.md) demonstrates capability and
+validation questions with the SO-100 configuration without opening hardware.
 Factory-owned metadata identifies build implementations and gaps without driver
 construction. Protobuf candidates remain authoritative for declared devices.
 The launcher owns runtime; MCP reads bounded private snapshots and never controls

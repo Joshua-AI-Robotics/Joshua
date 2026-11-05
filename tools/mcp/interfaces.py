@@ -16,6 +16,9 @@ class SetupInspector(ABC):
     @abstractmethod
     async def describe_device(self, config_path, device_id): ...
 
+    @abstractmethod
+    async def describe_robot_capabilities(self, config_path): ...
+
     async def aclose(self):
         pass
 

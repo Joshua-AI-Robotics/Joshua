@@ -26,6 +26,7 @@ _NAMES = (
     "validate_config",
     "list_devices",
     "describe_device",
+    "describe_robot_capabilities",
     "get_runtime_status",
     "get_recent_logs",
     "get_feedback",
@@ -38,6 +39,10 @@ _DESCRIPTIONS = (
     "Check a relative candidate config for protobuf parser and integrity errors.",
     "Inspect configured devices without creating them or opening hardware.",
     "Describe one configured device and its declared references, topics and limits.",
+    (
+        "Describe configured robot position contracts, exposure and verification gaps "
+        "without runtime initialization."
+    ),
     (
         "Read passive runtime process facts; process presence does "
         "not establish readiness or physical state."
@@ -55,7 +60,12 @@ _DESCRIPTIONS = (
 
 def _schema(name):
     props, required = {}, []
-    if name in {"validate_config", "list_devices", "describe_device"}:
+    if name in {
+        "validate_config",
+        "list_devices",
+        "describe_device",
+        "describe_robot_capabilities",
+    }:
         props["config_path"] = {"type": "string"}
         required.append("config_path")
     if name == "describe_device":
@@ -113,6 +123,7 @@ def make_server(inspector, observer=None, validation_only=False):
                             "list_supported_components",
                             "list_devices",
                             "describe_device",
+                            "describe_robot_capabilities",
                         }
                         else OBSERVATION_SCHEMA
                     )
@@ -152,7 +163,12 @@ def make_server(inspector, observer=None, validation_only=False):
                 except UnicodeEncodeError:
                     valid = False
         if name not in allowed or not valid:
-            if name in {"list_supported_components", "list_devices", "describe_device"}:
+            if name in {
+                "list_supported_components",
+                "list_devices",
+                "describe_device",
+                "describe_robot_capabilities",
+            }:
                 report = setup_error(
                     name,
                     None,
@@ -176,6 +192,7 @@ def make_server(inspector, observer=None, validation_only=False):
             "validate_config",
             "list_devices",
             "describe_device",
+            "describe_robot_capabilities",
         }:
             report = await getattr(inspector, name)(**arguments)
         elif observer is None:

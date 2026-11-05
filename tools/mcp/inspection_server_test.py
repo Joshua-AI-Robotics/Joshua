@@ -1,4 +1,4 @@
-"""Seven-tool inspection contract, including config-free discovery."""
+"""Eight-tool inspection contract, including config-free discovery."""
 
 import asyncio
 import copy
@@ -14,7 +14,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from tools.mcp.config_validation_server import ValidationService
-from tools.mcp.inspection_adapters import CppSetupInspector
+from tools.mcp.inspection_adapters import CppSetupInspector, validate_setup_report
 from tools.mcp.snapshot_observer import SnapshotObserver
 
 RUNFILES = Path(os.environ["TEST_SRCDIR"]) / os.environ["TEST_WORKSPACE"]
@@ -44,11 +44,9 @@ def oversized_candidate():
 
 
 class InspectionContractTest(unittest.TestCase):
-    def test_seven_async_methods_have_small_backend_interfaces(self):
+    def test_eight_async_methods_have_small_backend_interfaces(self):
         spec = importlib.util.find_spec("tools.mcp.interfaces")
-        self.assertIsNotNone(
-            spec, "Seven-tool SetupInspector/RuntimeObserver API is missing"
-        )
+        self.assertIsNotNone(spec, "SetupInspector/RuntimeObserver API is missing")
         import inspect
 
         from tools.mcp.interfaces import RuntimeObserver, SetupInspector
@@ -61,6 +59,7 @@ class InspectionContractTest(unittest.TestCase):
                     "validate_config",
                     "list_devices",
                     "describe_device",
+                    "describe_robot_capabilities",
                 ),
             ),
             (
@@ -80,6 +79,147 @@ class InspectionContractTest(unittest.TestCase):
 
 
 class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_robot_capabilities_actual_preset_sdk(self):
+        with tempfile.TemporaryDirectory() as directory:
+            preset = RUNFILES / "config/config_preset/so100/teleoperate.pbtxt"
+            Path(directory, "robot.pbtxt").write_text(preset.read_text())
+            params = StdioServerParameters(
+                command=str(SERVER),
+                args=[
+                    "--validator",
+                    str(VALIDATOR),
+                    "--inspector",
+                    str(INSPECTOR),
+                    "--config-root",
+                    directory,
+                ],
+                env={"LD_LIBRARY_PATH": os.environ.get("LD_LIBRARY_PATH", "")},
+            )
+            async with stdio_client(params) as (reader, writer):
+                async with ClientSession(reader, writer) as client:
+                    await client.initialize()
+                    result = await client.call_tool(
+                        "describe_robot_capabilities", {"config_path": "robot.pbtxt"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    data = result.structuredContent["data"]
+                    for field, value in (
+                        ("units", "radians"),
+                        ("ros_exposure", "available"),
+                        ("idle_position", float("nan")),
+                    ):
+                        bad = copy.deepcopy(result.structuredContent)
+                        bad["data"]["operations"][0]["targets"][0][field] = value
+                        with self.assertRaises(ValueError):
+                            validate_setup_report(
+                                bad, "describe_robot_capabilities", "robot.pbtxt"
+                            )
+                    self.assertEqual(data["config_name"], "so100")
+                    self.assertEqual(len(data["operations"][0]["targets"]), 6)
+                    self.assertEqual(data["hardware_readiness"], "unknown")
+                    tools = (await client.list_tools()).tools
+                    capability = next(
+                        t for t in tools if t.name == "describe_robot_capabilities"
+                    )
+                    self.assertTrue(capability.annotations.readOnlyHint)
+                    self.assertFalse(capability.annotations.destructiveHint)
+                    self.assertEqual(len(tools), 8)
+                    target = data["operations"][0]["targets"][1]
+                    self.assertEqual(target["operational_lower_limit"], 858)
+                    self.assertEqual(target["idle_position"], 847)
+                    self.assertEqual(target["feedback_sensor_ids"], [])
+                    self.assertEqual(
+                        target["configured_ros"],
+                        [
+                            {
+                                "topic": "sts3215_servo_2/position",
+                                "message_type": "FLOAT32",
+                                "command": "position",
+                                "units": "native_ticks",
+                            }
+                        ],
+                    )
+                    self.assertEqual(
+                        data["operations"][1]["targets"][0]["mcp_feedback"],
+                        "not_configured_for_get_feedback",
+                    )
+                    Path(directory, "malformed.pbtxt").write_text("robot {")
+                    Path(directory, "invalid.pbtxt").write_text(
+                        preset.read_text().replace(
+                            'board_name: "arm_bus"', 'board_name: "missing_bus"'
+                        )
+                    )
+                    Path(directory, "link.pbtxt").symlink_to("robot.pbtxt")
+                    Path(directory, "large.pbtxt").write_text(oversized_candidate())
+                    for path, code, stage in (
+                        ("malformed.pbtxt", "INVALID_ARGUMENT", "load"),
+                        ("invalid.pbtxt", "NOT_FOUND", "integrity"),
+                        ("../robot.pbtxt", "INVALID_ARGUMENT", "adapter"),
+                        ("link.pbtxt", "INVALID_ARGUMENT", "input"),
+                        ("large.pbtxt", "RESOURCE_EXHAUSTED", "inspection"),
+                    ):
+                        with self.subTest(path=path):
+                            rejected = await client.call_tool(
+                                "describe_robot_capabilities", {"config_path": path}
+                            )
+                            self.assertTrue(rejected.isError, rejected)
+                            report = rejected.structuredContent
+                            self.assertEqual(report["scope"], "setup_inspection")
+                            self.assertEqual(report["status_code"], code)
+                            self.assertEqual(report["stage"], stage)
+                            self.assertEqual(report["data"], {})
+                            self.assertLessEqual(
+                                len(rejected.content[0].text.encode()), 65536
+                            )
+                    for field, value in (
+                        ("idle_position: 2070", "idle_position: nan"),
+                        ("physical_upper_limit: 4095", "physical_upper_limit: inf"),
+                    ):
+                        Path(directory, "nonfinite.pbtxt").write_text(
+                            preset.read_text().replace(field, value, 1)
+                        )
+                        described = await client.call_tool(
+                            "describe_robot_capabilities",
+                            {"config_path": "nonfinite.pbtxt"},
+                        )
+                        self.assertFalse(described.isError, described)
+                        self.assertEqual(
+                            len(
+                                described.structuredContent["data"]["operations"][0][
+                                    "targets"
+                                ]
+                            ),
+                            5,
+                        )
+                        self.assertTrue(
+                            any(
+                                "nonfinite" in gap["reason"]
+                                for gap in described.structuredContent["data"]["gaps"]
+                            )
+                        )
+                    Path(directory, "unsupported.pbtxt").write_text(
+                        preset.read_text().replace(
+                            "MOTOR_STS3215", "MOTOR_STEPPER_NEMA17", 1
+                        )
+                    )
+                    unsupported = await client.call_tool(
+                        "describe_robot_capabilities",
+                        {"config_path": "unsupported.pbtxt"},
+                    )
+                    self.assertFalse(unsupported.isError, unsupported)
+                    self.assertEqual(
+                        len(
+                            unsupported.structuredContent["data"]["operations"][0][
+                                "targets"
+                            ]
+                        ),
+                        5,
+                    )
+                    recovered = await client.call_tool(
+                        "describe_robot_capabilities", {"config_path": "robot.pbtxt"}
+                    )
+                    self.assertFalse(recovered.isError, recovered)
+
     async def test_oversized_helper_report_is_one_bounded_error(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "large.pbtxt").write_text(oversized_candidate())
@@ -231,6 +371,7 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                             "validate_config",
                             "list_devices",
                             "describe_device",
+                            "describe_robot_capabilities",
                             "get_runtime_status",
                             "get_recent_logs",
                             "get_feedback",
