@@ -59,6 +59,7 @@ cc_library(
         "//config/proto:config_cc_proto",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@glog",
         "@protobuf",
     ],
 )

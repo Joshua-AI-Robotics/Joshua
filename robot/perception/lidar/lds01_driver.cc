@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <utility>
 
 #include "utils/status_macros.h"
@@ -16,11 +17,25 @@ Lds01Driver::Lds01Driver(std::shared_ptr<robot::comm::ByteStream> stream,
   id_ = lidar_config.sensor_name();
 }
 
+Lds01Driver::~Lds01Driver() {
+  try {
+    const auto status = Teardown();
+    if (!status.ok()) LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << status;
+  } catch (const std::exception& error) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << error.what();
+  } catch (...) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed with an unknown exception";
+  }
+}
+
 absl::Status Lds01Driver::Init() {
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
   ABSL_RETURN_IF_ERROR(stream_->Open());
 
   // Send start motor command (required for LDS-01)
   std::vector<uint8_t> start_cmd = {'b'};
+  // A failed write may still have reached the motor; cleanup must try to stop it.
+  motor_stop_pending_ = true;
   ABSL_RETURN_IF_ERROR(stream_->Write(start_cmd));
 
   stop_receiving_.store(false);
@@ -28,11 +43,14 @@ absl::Status Lds01Driver::Init() {
 }
 
 absl::Status Lds01Driver::Teardown() {
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
   stop_receiving_.store(true);
+  if (!motor_stop_pending_) return absl::OkStatus();
 
   // Send stop motor command
   std::vector<uint8_t> stop_cmd = {'e'};
   ABSL_RETURN_IF_ERROR(stream_->Write(stop_cmd));
+  motor_stop_pending_ = false;
 
   return absl::OkStatus();
 }

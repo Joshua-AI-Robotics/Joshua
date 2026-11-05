@@ -219,7 +219,7 @@ NodeGenerator::~NodeGenerator() {
   if (has_nodes()) {
     auto res = Shutdown();
     if (!res.ok()) {
-      LOG(ERROR) << "Failed to shutdown nodes";
+      LOG(ERROR) << "Failed to shutdown nodes: " << res;
     }
   }
   instance_ = nullptr;
@@ -250,9 +250,9 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     const uint32_t node_id = single_action.node().id();
     auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_action.node().node_type());
     if (!inserted && it->second != single_action.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+      return absl::InvalidArgumentError("Node ID " + std::to_string(node_id) +
+                                        " already exists for node type " +
+                                        NodeTypeToString(it->second));
     }
   }
 
@@ -262,9 +262,9 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_perception.node().node_type());
     if (!inserted && it->second != single_perception.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+      return absl::InvalidArgumentError("Node ID " + std::to_string(node_id) +
+                                        " already exists for node type " +
+                                        NodeTypeToString(it->second));
     }
   }
 
@@ -273,9 +273,9 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     const uint32_t node_id = single_model.node().id();
     auto [it, inserted] = identified_nodes_.try_emplace(node_id, single_model.node().node_type());
     if (!inserted && it->second != single_model.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+      return absl::InvalidArgumentError("Node ID " + std::to_string(node_id) +
+                                        " already exists for node type " +
+                                        NodeTypeToString(it->second));
     }
   }
 
@@ -285,9 +285,9 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_data_store.node().node_type());
     if (!inserted && it->second != single_data_store.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+      return absl::InvalidArgumentError("Node ID " + std::to_string(node_id) +
+                                        " already exists for node type " +
+                                        NodeTypeToString(it->second));
     }
   }
 
@@ -297,9 +297,9 @@ absl::Status NodeGenerator::IdentifyNodeTypes() {
     auto [it, inserted] =
         identified_nodes_.try_emplace(node_id, single_trajectory.node().node_type());
     if (!inserted && it->second != single_trajectory.node().node_type()) {
-      LOG(ERROR) << "Node ID " << node_id << " already exists for node type "
-                 << NodeTypeToString(it->second);
-      return absl::Status(absl::StatusCode::kInvalidArgument, "Node ID conflict");
+      return absl::InvalidArgumentError("Node ID " + std::to_string(node_id) +
+                                        " already exists for node type " +
+                                        NodeTypeToString(it->second));
     }
   }
 
@@ -627,8 +627,9 @@ absl::Status NodeGenerator::Shutdown(const int max_wait_ms) {
   WaitForNodesToExit(1000);  // Give kernel a moment to clean up
 
   if (!launched_nodes_.empty()) {
-    LOG(ERROR) << "Failed to kill " << launched_nodes_.size() << " nodes (Zombies?)";
-    launched_nodes_.clear();  // Clear map anyway since we can't do anything else
+    const auto remaining = launched_nodes_.size();
+    launched_nodes_.clear();
+    return absl::InternalError("Failed to terminate " + std::to_string(remaining) + " nodes");
   } else {
     LOG(INFO) << "All processes terminated (SIGKILL).";
   }
@@ -665,7 +666,8 @@ void NodeGenerator::CleanupAndExit(int exit_code) {
   PublishObservation("shutdown_requested");
   auto res = Shutdown();
   if (!res.ok()) {
-    LOG(ERROR) << "Failed to shutdown nodes";
+    LOG(ERROR) << "Failed to shutdown nodes: " << res;
+    exit_code = 1;
   }
   PublishObservation("monitor_finished");
   exit(exit_code);
@@ -687,8 +689,8 @@ absl::Status NodeGenerator::GetTopicsForNode(const uint32_t node_id,
                                              std::vector<std::string>& publish_topics,
                                              std::vector<std::string>& subscribe_topics) {
   if (identified_nodes_.count(node_id) == 0) {
-    LOG(WARNING) << "Node " << node_id << " not found in the config.";
-    return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");
+    return absl::InvalidArgumentError("Node " + std::to_string(node_id) +
+                                      " not found in the config");
   }
 
   for (const auto& single_perception : config_.robot().perceptions().single_perceptions()) {

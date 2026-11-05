@@ -1,5 +1,6 @@
 #include <cmath>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -8,6 +9,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
@@ -36,6 +38,7 @@ class LidarPublisher : public rclcpp::Node {
  public:
   LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.sensor_type() != robot::perception::SensorType::RANGE_SCAN ||
           static_cast<int>(single_perception.node().id()) != node_id) {
@@ -48,10 +51,8 @@ class LidarPublisher : public rclcpp::Node {
       auto interface = robot::perception::PerceptionFactory::CreatePerception(
           single_perception, config.robot().boards());
       if (!interface.ok()) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Failed to create perception interface for lidar '%s': %s",
-                     sensor_name.c_str(),
-                     std::string(interface.status().message()).c_str());
+        JOSHUA_LOG(ERROR) << "Failed to create perception interface for lidar '" << sensor_name
+                          << "': " << interface.status();
         continue;
       }
 
@@ -60,11 +61,9 @@ class LidarPublisher : public rclcpp::Node {
 
       for (const auto& publisher : single_perception.node().publishers()) {
         if (!ValidateLidarPublisher(publisher.ros2_data_type())) {
-          RCLCPP_ERROR(this->get_logger(),
-                       "Invalid publisher config for lidar topic '%s' "
-                       "(ros2_data_type=%d). Require POINTCLOUD2.",
-                       publisher.topic().c_str(),
-                       static_cast<int>(publisher.ros2_data_type()));
+          JOSHUA_LOG(ERROR) << "Invalid publisher config for lidar topic '" << publisher.topic()
+                            << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
+                            << "). Require POINTCLOUD2.";
           continue;
         }
 
@@ -80,28 +79,41 @@ class LidarPublisher : public rclcpp::Node {
                   .frame_id = sensor_name.empty() ? "lidar_frame" : sensor_name});
       }
 
-      RCLCPP_INFO(this->get_logger(),
-                  "Found lidar '%s' in configuration for node_id %d. Publishing on %zu topics",
-                  sensor_name.c_str(),
-                  node_id,
-                  single_perception.node().publishers().size());
+      JOSHUA_LOG(INFO) << "Found lidar '" << sensor_name << "' in configuration for node_id "
+                       << node_id << ". Publishing on "
+                       << single_perception.node().publishers().size() << " topics";
     }
 
     if (lidars_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "No lidars found in configuration for node_id %d!", node_id);
+      JOSHUA_LOG(ERROR) << "No lidars found in configuration for node_id " << node_id << "!";
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(),
-                "Lidar publisher node started with %zu lidars for node_id %d!",
-                lidars_.size(),
-                node_id);
+    JOSHUA_LOG(INFO) << "Lidar publisher node started with " << lidars_.size()
+                     << " lidars for node_id " << node_id << "!";
+  }
+
+  ~LidarPublisher() override {
+    std::set<robot::perception::PerceptionInterface*> stopped;
+    for (const auto& lidar : lidars_) {
+      if (!stopped.insert(lidar.interface.get()).second) continue;
+      try {
+        const auto status = lidar.interface->Teardown();
+        if (!status.ok())
+          JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << status;
+      } catch (const std::exception& error) {
+        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << error.what();
+      } catch (...) {
+        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic
+                          << "' teardown failed with an unknown exception";
+      }
+    }
   }
 
  private:
   void publish_lidar_data() {
     if (lidars_.empty()) {
-      RCLCPP_WARN(this->get_logger(), "No lidars initialized, skipping publish cycle.");
+      JOSHUA_LOG(WARNING) << "No lidars initialized, skipping publish cycle.";
       return;
     }
 
@@ -110,24 +122,22 @@ class LidarPublisher : public rclcpp::Node {
         auto packet = lidar.interface->GetData();
 
         if (!packet.ok()) {
-          RCLCPP_WARN(
-              this->get_logger(), "Failed to get data from lidar '%s'!", lidar.topic.c_str());
+          JOSHUA_LOG(WARNING) << "Failed to get data from lidar '" << lidar.topic
+                              << "': " << packet.status();
           continue;
         }
 
         const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
         if (!cloud_status.ok()) {
-          RCLCPP_WARN(this->get_logger(),
-                      "LiDAR '%s' packet has no point cloud: %s",
-                      lidar.topic.c_str(),
-                      cloud_status.message().data());
+          JOSHUA_LOG(WARNING) << "LiDAR '" << lidar.topic
+                              << "' packet has no point cloud: " << cloud_status.ToString();
           continue;
         }
 
         const auto& cloud = packet.value().point_cloud();
         const int num_points = cloud.x_size();
         if (num_points == 0) {
-          RCLCPP_WARN(this->get_logger(), "Empty point cloud from '%s'!", lidar.topic.c_str());
+          JOSHUA_LOG(WARNING) << "Empty point cloud from '" << lidar.topic << "'!";
           continue;
         }
 
@@ -175,7 +185,7 @@ class LidarPublisher : public rclcpp::Node {
         lidar.publisher->publish(cloud_msg);
       }
     } catch (const std::exception& e) {
-      RCLCPP_ERROR(this->get_logger(), "Error publishing lidar data: %s", e.what());
+      JOSHUA_LOG(ERROR) << "Error publishing lidar data: " << e.what();
     }
   }
 

@@ -1,12 +1,14 @@
 #include <csignal>
 
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include "utils/xbox_controller/xbox_controller.h"
 
 class XboxControllerPublisher : public rclcpp::Node {
  public:
   XboxControllerPublisher() : Node("xbox_controller_publisher") {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     publisher_ =
         this->create_publisher<std_msgs::msg::Float32MultiArray>("xbox_controller_data", 10);
     timer_ = this->create_wall_timer(std::chrono::milliseconds(16),  // 60Hz update rate
@@ -14,25 +16,24 @@ class XboxControllerPublisher : public rclcpp::Node {
 
     // Initialize Xbox controller
     if (!xbox_controller_.Init()) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to initialize Xbox controller!");
+      JOSHUA_LOG(ERROR) << "Failed to initialize Xbox controller!";
     } else {
-      RCLCPP_INFO(this->get_logger(), "Xbox controller publisher node started!");
-      RCLCPP_INFO(this->get_logger(), "Publishing normalized Float32MultiArray with 19 elements:");
-      RCLCPP_INFO(
-          this->get_logger(),
-          "  [0-3]: Joysticks [-1,1] (left_stick_x, left_stick_y, right_stick_x, right_stick_y)");
-      RCLCPP_INFO(this->get_logger(), "  [4-5]: D-pad [-1,1] (dpad_x, dpad_y)");
-      RCLCPP_INFO(this->get_logger(), "  [6-7]: Triggers [0,1] (left_trigger, right_trigger)");
-      RCLCPP_INFO(this->get_logger(),
-                  "  [8-18]: Buttons [0,1] (a, b, x, y, left_bumper, right_bumper, start, back, "
-                  "left_stick_click, right_stick_click, guide)");
+      JOSHUA_LOG(INFO) << "Xbox controller publisher node started!";
+      JOSHUA_LOG(INFO) << "Publishing normalized Float32MultiArray with 19 elements:";
+      JOSHUA_LOG(INFO)
+          << "  [0-3]: Joysticks [-1,1] (left_stick_x, left_stick_y, right_stick_x, right_stick_y)";
+      JOSHUA_LOG(INFO) << "  [4-5]: D-pad [-1,1] (dpad_x, dpad_y)";
+      JOSHUA_LOG(INFO) << "  [6-7]: Triggers [0,1] (left_trigger, right_trigger)";
+      JOSHUA_LOG(INFO)
+          << "  [8-18]: Buttons [0,1] (a, b, x, y, left_bumper, right_bumper, start, back, "
+             "left_stick_click, right_stick_click, guide)";
     }
   }
 
   ~XboxControllerPublisher() {
     // Ensure proper cleanup when the node is destroyed
     xbox_controller_.Cleanup();
-    RCLCPP_INFO(this->get_logger(), "Xbox controller publisher node shutting down.");
+    JOSHUA_LOG(INFO) << "Xbox controller publisher node shutting down.";
   }
 
  private:
@@ -94,14 +95,13 @@ class XboxControllerPublisher : public rclcpp::Node {
 };
 
 int main(int argc, char* argv[]) {
-  rclcpp::init(argc, argv);
+  ros2_utils::InitializeRosLogging(argc, argv);
 
   auto node = std::make_shared<XboxControllerPublisher>();
 
   // Set up signal handler for teardown
   std::signal(SIGINT, [](int) {
-    RCLCPP_INFO(rclcpp::get_logger("xbox_controller_publisher"),
-                "Received interrupt signal, shutting down...");
+    JOSHUA_LOG(INFO) << "Received interrupt signal, shutting down...";
     rclcpp::shutdown();
   });
 

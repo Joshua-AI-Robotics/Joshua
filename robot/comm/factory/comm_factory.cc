@@ -1,6 +1,7 @@
 #include "robot/comm/factory/comm_factory.h"
 
 #include <boost/asio.hpp>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <optional>

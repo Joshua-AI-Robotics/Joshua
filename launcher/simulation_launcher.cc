@@ -150,19 +150,22 @@ int RunSimulation(const std::string& config_path, const config::Config& config) 
     LOG(INFO) << "Config has robot perceptions -- launching encoder publishers "
               << "for mirror mode via NodeGenerator";
     ng = std::make_unique<node_generator::NodeGenerator>(config_path);
-    if (!ng->Initialize().ok()) {
-      LOG(ERROR) << "Failed to initialize NodeGenerator for perception nodes";
+    if (const auto status = ng->Initialize(); !status.ok()) {
+      LOG(ERROR) << "Failed to initialize NodeGenerator for perception nodes: " << status;
       return 1;
     }
-    if (!ng->LaunchAllNodes().ok()) {
-      LOG(WARNING) << "NodeGenerator launched no perception nodes";
+    if (const auto status = ng->LaunchAllNodes(); !status.ok()) {
+      LOG(WARNING) << "Failed to launch perception nodes: " << status;
     }
   }
 
   pid_t sim_pid = ForkExecSimulation(*sim_bin, config_path);
   if (sim_pid <= 0) {
     LOG(ERROR) << "Failed to fork simulation process";
-    if (ng) ng->Shutdown();
+    if (ng) {
+      const auto status = ng->Shutdown();
+      if (!status.ok()) LOG(ERROR) << "Failed to shutdown perception nodes: " << status;
+    }
     return 1;
   }
   LOG(INFO) << "Simulation launched with PID: " << sim_pid;
@@ -190,7 +193,11 @@ int RunSimulation(const std::string& config_path, const config::Config& config) 
 
   if (ng) {
     LOG(INFO) << "Shutting down perception nodes ...";
-    ng->Shutdown();
+    const auto shutdown_status = ng->Shutdown();
+    if (!shutdown_status.ok()) {
+      LOG(ERROR) << "Failed to shutdown perception nodes: " << shutdown_status;
+      exit_code = 1;
+    }
   }
 
   return exit_code;
