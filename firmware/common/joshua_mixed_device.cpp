@@ -1,5 +1,6 @@
 #include "joshua_mixed_device.h"
 
+#include <math.h>
 #include <string.h>
 
 namespace {
@@ -15,8 +16,9 @@ void Service(void* context, uint64_t now) {
     const auto& channel = g_channels[i];
     if (!channel.enabled) continue;
     enabled |= 1u << i;
+    // Match the integer goal used by StepDirService for fractional targets.
     if ((channel.target_mode == JW_MODE_POSITION &&
-         channel.step_dir.position_steps != channel.target_value) ||
+         channel.step_dir.position_steps != static_cast<int32_t>(lround(channel.target_value))) ||
         (channel.target_mode == JW_MODE_VELOCITY && channel.target_value != 0))
       moving |= 1u << i;
   }
