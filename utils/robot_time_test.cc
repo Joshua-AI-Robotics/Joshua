@@ -62,13 +62,16 @@ class FakeClockIo final : public internal::ClockIo {
 
 class ConstantClock final : public RobotClock {
  public:
-  explicit ConstantClock(double value) : value_(value) {}
+  explicit ConstantClock(double value, std::atomic<int>* reads = nullptr)
+      : value_(value), reads_(reads) {}
   double Now() const override {
+    if (reads_) ++*reads_;
     return value_;
   }
 
  private:
   double value_;
+  std::atomic<int>* reads_;
 };
 
 TEST(RobotClockTest, DefaultPtpReadsHardwareWithoutUtcOffset) {
@@ -320,11 +323,13 @@ TEST_F(GlobalRobotClockTest, SetterAndLazyReaderRaceWithoutReplacingWinner) {
   ASSERT_EXIT(
       {
         std::atomic<bool> start{false};
+        std::atomic<int> explicit_reads{0};
         bool installed = false;
         double observed = 0;
         std::thread setter([&] {
           while (!start.load()) std::this_thread::yield();
-          installed = SetGlobalRobotClock(std::make_unique<ConstantClock>(42)).ok();
+          installed =
+              SetGlobalRobotClock(std::make_unique<ConstantClock>(42, &explicit_reads)).ok();
         });
         std::thread reader([&] {
           while (!start.load()) std::this_thread::yield();
@@ -334,7 +339,11 @@ TEST_F(GlobalRobotClockTest, SetterAndLazyReaderRaceWithoutReplacingWinner) {
         setter.join();
         reader.join();
         if (installed && (observed != 42 || RobotTime() != 42)) _exit(1);
-        if (!installed && (observed < 1000 || RobotTime() < 1000)) _exit(2);
+        // A readable PHC may return zero or negative RobotTime. Detect which
+        // clock was read directly instead of assuming the default clock's epoch.
+        if (!installed &&
+            (!std::isfinite(observed) || !std::isfinite(RobotTime()) || explicit_reads != 0))
+          _exit(2);
         _exit(0);
       },
       testing::ExitedWithCode(0),

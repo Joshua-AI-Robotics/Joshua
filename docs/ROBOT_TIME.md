@@ -172,6 +172,16 @@ Once selected, the clock source stays fixed. Runtime read errors throw
 fabricated timestamp. Consumers call `RobotTime()` directly and leave clock failures
 to their exception boundary. `TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
+The actuator subscription boundary uses `TryRobotTime()` for headerless commands
+and reports clock failures as an `Unavailable` status instead of letting a clock
+exception escape the ROS callback. STS3215 and stepper `/torque` disable commands
+(Bool false or numeric scalar/array zero) still reach the actuator: if the clock
+is unreadable or nonfinite, their packet timestamp is explicitly NaN and a
+warning is logged. This marks unavailable metadata without inventing a time or
+switching sources. Motion and torque-enable commands requiring a host timestamp
+are rejected until clock reads recover. JointState keeps its supplied source
+timestamp without reading the host clock.
+
 UTC/PTP can jump when the host adjusts time. RobotTime-based deadlines use
 `RobotTime() + timeout_seconds`, so clock adjustments change their remaining wait.
 Serial exchange timeouts use `std::chrono::steady_clock` to bound elapsed bus-lock
@@ -256,6 +266,43 @@ A paused clock pauses callbacks. A backward jump waits for the existing deadline
 a forward jump can make a callback due immediately at the next executor wakeup.
 Clock exceptions propagate. Cancelling the returned ROS timer stops the wakeups.
 Audio recreates its timer when the negotiated capture interval changes.
+
+## Hardware validation
+
+On 2026-11-04, the operator confirmed normal SO100 motion using
+[`trajectory_example.pbtxt`](../config/config_preset/so100/trajectory_example.pbtxt),
+and ESP32 stepper motion plus Bool torque enable/disable using
+[`esp32_stepper_demo.pbtxt`](../config/config_preset/example/esp32_stepper_demo.pbtxt).
+
+The ESP32 clock-failure test used `/dev/ttyUSB0` with revision-4 JoshuaWire and
+required `/dev/ptp0` as the timestamp source. A process-local shared library
+injected `EIO` only into the actuator subscriber's PHC reads after startup;
+system UTC and monotonic clocks were unaffected. The same actuator process
+remained alive throughout these checks, with physical torque confirmed by the
+operator:
+
+| Clock condition and Bool command | Observed result |
+|---|---|
+| PHC read failure, `/torque` false | Shaft released; a missing-timestamp warning was logged. |
+| Failure still active, `/torque` true | Command returned `Unavailable`; shaft remained released. |
+| Failure removed, `/torque` true | Holding torque returned without restarting the node. |
+
+The SO100 run covered normal trajectory execution; its clock-failure test was
+skipped at the operator's request. Fault injection was performed on the ESP32
+only. The host PHC was readable but unsynchronized with system UTC, so these
+checks do not validate synchronized acquisition or timing.
+
+Setup required explicit board recovery from a latched stop. One startup also
+reported an uncorrelated serial response; a subsequent trace had valid CRCs and
+correlation fields. Launcher Ctrl+C left an actuator child running, so cleanup
+disabled torque and sent that child SIGINT explicitly, releasing the port.
+Runtime exception boundaries and process ownership are tracked separately in
+[#133](https://github.com/Joshua-AI-Robotics/Joshua/pull/133).
+
+The Ubuntu 22 Compose test task passed all 40 targets using the local
+`joshua-audio:u22` image. The launcher and config validator built successfully;
+the PR's changed C++/Python files passed pre-push lint. Ubuntu 24 was not run
+locally.
 
 ## Integration checklist
 

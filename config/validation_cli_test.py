@@ -344,8 +344,14 @@ robot {
                         },
                     )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
-                    self.fail(
-                        "validator depends on hardware communication implementation"
+                    # This header validates config without opening a serial bus.
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/comm/serial:serial_config_validation",
+                            "//robot/comm/serial:serial_config_validation.h",
+                        },
+                        "validator depends on hardware communication implementation",
                     )
                 if label.startswith("//robot/action/") and "/proto:" not in label:
                     self.fail("validator depends on action implementation")

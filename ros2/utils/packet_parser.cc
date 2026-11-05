@@ -315,12 +315,12 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
     result = node.create_subscription<Message>(
         config.topic(),
         CreateQosSetting(action.node().qos_setting()),
-        [actuator_name = action.actuator().actuator_name(), torque_gate, config, callback](
-            typename Message::ConstSharedPtr message) {
+        [actuator_name = action.actuator().actuator_name(),
+         torque_gate,
+         config,
+         callback,
+         logger = node.get_logger()](typename Message::ConstSharedPtr message) {
           auto packet = DecodeCommand(*message, config, actuator_name);
-          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
-            if (packet.ok()) packet->set_timestamp(RobotTime());
-          }
           if (packet.ok() && packet->has_joint() && torque_gate) {
             const double gate = packet->joint().effort();
             if (gate < 0) {
@@ -329,6 +329,26 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
             }
             packet->set_preset(gate > 0 ? robot::action::PRESET_ENABLE_TORQUE
                                         : robot::action::PRESET_DISABLE_TORQUE);
+          }
+          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
+            if (packet.ok()) {
+              const auto timestamp = joshua::TryRobotTime();
+              if (timestamp.ok()) {
+                packet->set_timestamp(*timestamp);
+              } else if (packet->has_preset() &&
+                         packet->preset() == robot::action::PRESET_DISABLE_TORQUE) {
+                // Disabling torque must not depend on timestamp metadata. Zero
+                // is a valid RobotTime, so mark the unavailable timestamp as NaN.
+                packet->set_timestamp(std::numeric_limits<double>::quiet_NaN());
+                RCLCPP_WARN(logger,
+                            "Clock unavailable on '%s'; disabling torque without a timestamp: %s",
+                            config.topic().c_str(),
+                            timestamp.status().ToString().c_str());
+              } else {
+                callback(timestamp.status());
+                return;
+              }
+            }
           }
           callback(std::move(packet));
         });

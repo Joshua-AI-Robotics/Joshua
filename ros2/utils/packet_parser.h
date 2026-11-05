@@ -31,6 +31,8 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     rclcpp::Node& node,
     const ros2::node::Publisher& publisher,
     const robot::perception::SinglePerception& sensor);
+// Headerless commands report clock failures through the callback. Torque-disable
+// gates still reach the actuator with a NaN timestamp when the clock is unreadable.
 absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSubscription(
     rclcpp::Node& node,
     const ros2::node::Subscription& subscription,
