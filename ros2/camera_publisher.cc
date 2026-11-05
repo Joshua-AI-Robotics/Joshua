@@ -74,9 +74,9 @@ class CameraPublisher : public rclcpp::Node {
             .interface = shared_interface,
             .publisher = this->create_publisher<sensor_msgs::msg::Image>(publisher.topic(), qos),
             .timer = ros2_utils::CreateRobotTimer(
-                *this,
-                1.0 / publisher.publish_rate_hz(),
-                [this, camera_index]() { publish_camera_data(camera_index); })});
+                *this, 1.0 / publisher.publish_rate_hz(), [this, camera_index]() {
+                  publish_camera_data(camera_index);
+                })});
       }
 
       RCLCPP_INFO(this->get_logger(),

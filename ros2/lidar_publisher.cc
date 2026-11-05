@@ -109,8 +109,7 @@ class LidarPublisher : public rclcpp::Node {
       auto packet = lidar.interface->GetData();
 
       if (!packet.ok()) {
-        RCLCPP_WARN(
-            this->get_logger(), "Failed to get data from lidar '%s'!", lidar.topic.c_str());
+        RCLCPP_WARN(this->get_logger(), "Failed to get data from lidar '%s'!", lidar.topic.c_str());
         return;
       }
 

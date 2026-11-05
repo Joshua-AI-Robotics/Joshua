@@ -10,9 +10,15 @@ TEST(RobotTimeConversionTest, ConvertsDoubleSecondsAndNormalizesNegativeTimes) {
   constexpr double kUpperExclusive =
       static_cast<double>(std::numeric_limits<int32_t>::max()) + 1.0 - joshua::kRobotStartTime;
   const double max_safe = std::nextafter(kUpperExclusive, 0.0);
-  for (double seconds :
-       {0.0, 0.000000001, -0.5, -0.000000001, -1.000000001, 123.000000456,
-        1700000000.125 - joshua::kRobotStartTime, kMinRobot, max_safe}) {
+  for (double seconds : {0.0,
+                         0.000000001,
+                         -0.5,
+                         -0.000000001,
+                         -1.000000001,
+                         123.000000456,
+                         1700000000.125 - joshua::kRobotStartTime,
+                         kMinRobot,
+                         max_safe}) {
     auto stamp = ToRosTimestamp(seconds);
     ASSERT_TRUE(stamp.ok()) << stamp.status();
     EXPECT_LT(stamp->nanosec, 1000000000u);
