@@ -44,6 +44,12 @@ Its metadata shares implementing factory tables and never invokes their
 creators. Device reports show declared configuration with compatibility and
 hardware readiness unverified. The inventory and report are bounded; see the
 [adapter guide](../tools/mcp/README.md) for identities and limits.
+The MCP adapter separately offers `list_supported_hardware` for
+[curated models](../docs/SUPPORTED_HARDWARE.md), including aliases, drivers,
+example presets, and intended support scope. `list_hardware_test_records`
+retrieves [historical runs](../docs/TESTED_HARDWARE.md) by stable hardware ID.
+Tests retain environments, measurements, and limitations separately from model
+metadata. Neither query establishes readiness or changes config validation.
 
 ## Layout
 
@@ -210,6 +216,9 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
+Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
+such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
+the camera must support the selected format.
 
 One serial bus must belong to one node process. Position sensors use
 `POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and

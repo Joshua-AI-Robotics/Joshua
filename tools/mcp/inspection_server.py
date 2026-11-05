@@ -14,6 +14,12 @@ from tools.mcp.config_validation_server import (
     safe_reference,
     validate_adapter_report,
 )
+from tools.mcp.hardware_catalog import REPORT_SCHEMAS as HARDWARE_SCHEMAS
+from tools.mcp.hardware_catalog import (
+    HardwareCatalog,
+    hardware_error,
+    validate_hardware_report,
+)
 from tools.mcp.inspection_adapters import (
     SETUP_SCHEMA,
     setup_error,
@@ -23,6 +29,8 @@ from tools.mcp.snapshot_observer import OBSERVATION_SCHEMA
 
 _NAMES = (
     "list_supported_components",
+    "list_supported_hardware",
+    "list_hardware_test_records",
     "validate_config",
     "list_devices",
     "describe_device",
@@ -34,6 +42,16 @@ _DESCRIPTIONS = (
     (
         "Discover installed-build factory implementations and gaps "
         "without any config; physical support/readiness are unknown."
+    ),
+    (
+        "Find curated supported hardware models by kind, USB VID:PID, or model/alias. "
+        "Returns stable hardware IDs, drivers, presets and intended support scope. "
+        "Test evidence is separate; does not scan devices or establish readiness."
+    ),
+    (
+        "List historical test records, optionally for one stable hardware_id. "
+        "Returns dates, software commits, environments, measurements and limitations; "
+        "tests do not automatically broaden model support or establish readiness."
     ),
     "Check a relative candidate config for protobuf parser and integrity errors.",
     "Inspect configured devices without creating them or opening hardware.",
@@ -55,6 +73,16 @@ _DESCRIPTIONS = (
 
 def _schema(name):
     props, required = {}, []
+    if name == "list_supported_hardware":
+        props = {
+            "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+            "usb_id": {"type": "string", "pattern": "^[0-9a-fA-F]{4}:[0-9a-fA-F]{4}$"},
+            "query": {"type": "string", "minLength": 1, "maxLength": 256},
+        }
+    if name == "list_hardware_test_records":
+        props = {
+            "hardware_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+        }
     if name in {"validate_config", "list_devices", "describe_device"}:
         props["config_path"] = {"type": "string"}
         required.append("config_path")
@@ -90,7 +118,10 @@ def _schema(name):
     }
 
 
-def make_server(inspector, observer=None, validation_only=False):
+def make_server(inspector, observer=None, validation_only=False, hardware_catalog=None):
+    hardware_catalog = (
+        hardware_catalog if hardware_catalog is not None else HardwareCatalog()
+    )
     app = Server(
         "joshua-config-validation" if validation_only else "joshua-inspection",
         version="0.1.0",
@@ -104,17 +135,21 @@ def make_server(inspector, observer=None, validation_only=False):
                 description=description,
                 inputSchema=_schema(name),
                 outputSchema=(
-                    REPORT_SCHEMA
-                    if name == "validate_config"
+                    HARDWARE_SCHEMAS[name]
+                    if name in HARDWARE_SCHEMAS
                     else (
-                        SETUP_SCHEMA
-                        if name
-                        in {
-                            "list_supported_components",
-                            "list_devices",
-                            "describe_device",
-                        }
-                        else OBSERVATION_SCHEMA
+                        REPORT_SCHEMA
+                        if name == "validate_config"
+                        else (
+                            SETUP_SCHEMA
+                            if name
+                            in {
+                                "list_supported_components",
+                                "list_devices",
+                                "describe_device",
+                            }
+                            else OBSERVATION_SCHEMA
+                        )
                     )
                 ),
                 annotations=types.ToolAnnotations(
@@ -136,6 +171,8 @@ def make_server(inspector, observer=None, validation_only=False):
             arguments
         ) <= set(schema["properties"])
         if valid:
+            if name in HARDWARE_SCHEMAS:
+                valid = all(type(value) is str for value in arguments.values())
             for key in ("config_path", "device_id", "sensor_id"):
                 if key not in arguments:
                     continue
@@ -152,7 +189,15 @@ def make_server(inspector, observer=None, validation_only=False):
                 except UnicodeEncodeError:
                     valid = False
         if name not in allowed or not valid:
-            if name in {"list_supported_components", "list_devices", "describe_device"}:
+            if name in HARDWARE_SCHEMAS:
+                report = hardware_error(
+                    name, "INVALID_ARGUMENT", "Unexpected hardware filters."
+                )
+            elif name in {
+                "list_supported_components",
+                "list_devices",
+                "describe_device",
+            }:
                 report = setup_error(
                     name,
                     None,
@@ -171,6 +216,8 @@ def make_server(inspector, observer=None, validation_only=False):
                     "INVALID_ARGUMENT",
                     "Require one safe relative config_path string.",
                 )
+        elif name in HARDWARE_SCHEMAS:
+            report = await getattr(hardware_catalog, name)(**arguments)
         elif name in {
             "list_supported_components",
             "validate_config",
@@ -187,7 +234,9 @@ def make_server(inspector, observer=None, validation_only=False):
         else:
             report = await getattr(observer, name)(**arguments)
         # Validate even alternate backend results before exposing structured output.
-        if report.get("scope") == "config_integrity":
+        if name in HARDWARE_SCHEMAS:
+            validate_hardware_report(report, name)
+        elif report.get("scope") == "config_integrity":
             if report["stage"] == "adapter":
                 validate_adapter_report(report, report["config_path"])
             else:
@@ -216,6 +265,8 @@ def make_server(inspector, observer=None, validation_only=False):
                 report = adapter_error(
                     report["config_path"], "RESOURCE_EXHAUSTED", message
                 )
+            elif name in HARDWARE_SCHEMAS:
+                report = hardware_error(name, "RESOURCE_EXHAUSTED", message)
             elif report["scope"] == "setup_inspection":
                 report = setup_error(
                     name, report["config_path"], "RESOURCE_EXHAUSTED", message

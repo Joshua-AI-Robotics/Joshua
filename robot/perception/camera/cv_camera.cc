@@ -3,6 +3,8 @@
 #include <chrono>
 #include <opencv2/videoio.hpp>
 
+#include "robot/perception/camera/camera_config.h"
+
 namespace robot::perception {
 
 CvCamera::CvCamera(const robot::perception::SinglePerception& camera_config) {
@@ -22,15 +24,17 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
+  const auto config_status = ValidateCameraConfig(opencv_config_);
+  if (!config_status.ok()) {
+    LOG(ERROR) << config_status.message();
+    return config_status;
+  }
+
   absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
     return status;
   }
 
-  if (opencv_config_.fourcc().size() < 4) {
-    LOG(ERROR) << "FourCC is not specified";
-    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
-  }
   bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
                              cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
                                                      opencv_config_.fourcc()[1],
@@ -42,12 +46,12 @@ absl::Status CvCamera::Init() {
 
   // Some drivers return false even on success.
   if (!set_fourcc || !set_width || !set_height || !set_fps) {
-    LOG(ERROR) << "Setting camera resolution returned false. "
-               << "set_fourcc=" << std::boolalpha << set_fourcc << ", "
-               << "set_width=" << std::boolalpha << set_width << ", "
-               << "set_height=" << std::boolalpha << set_height << ", "
-               << "set_fps=" << std::boolalpha << set_fps;
-    return absl::Status(absl::StatusCode::kInternal, "Failed to set camera resolution.");
+    LOG(ERROR) << "Failed to apply camera capture settings. "
+               << "pixel_format_set=" << std::boolalpha << set_fourcc << ", "
+               << "width_set=" << std::boolalpha << set_width << ", "
+               << "height_set=" << std::boolalpha << set_height << ", "
+               << "frame_rate_set=" << std::boolalpha << set_fps;
+    return absl::Status(absl::StatusCode::kInternal, "Failed to apply camera capture settings.");
   }
 
   LOG(INFO) << "Camera initialized successfully.";
@@ -187,8 +191,10 @@ absl::Status CvCamera::OpenCameraLocked() {
     } else {
       LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
       if (cap_.open(camera_id_, cv::CAP_V4L2)) {
-        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 1)) {
-          LOG(ERROR) << "Could not set CAP_PROP_BUFFERSIZE to 1 for camera " << id_;
+        // Keep the next frame queued while the previous buffer is dequeued.
+        // A single buffer can starve continuous capture and drop frame rate.
+        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 2)) {
+          LOG(ERROR) << "Could not set camera capture buffer count to 2 for " << id_;
         }
       }
     }

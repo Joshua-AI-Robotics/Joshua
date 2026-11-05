@@ -27,6 +27,11 @@ code.
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
+See [implemented components](../docs/SUPPORTED_COMPONENTS.md) for software paths
+and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
+driver references, example presets, and intended support scope. Separate
+[test records](../docs/TESTED_HARDWARE.md) retain measurements and environments
+linked to those models by stable hardware ID.
 All perceptions select a concrete driver through `SinglePerception.sensor_config`;
 the legacy camera/encoder/lidar config wrappers have been removed.
 

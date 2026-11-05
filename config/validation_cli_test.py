@@ -50,6 +50,38 @@ class ValidationCliTest(unittest.TestCase):
             self.assertEqual(process.returncode, 1)
             self.assertEqual((report["stage"], report["result"]), ("load", "invalid"))
 
+    def test_camera_pixel_format_is_checked_before_launch(self):
+        config = """robot { perceptions { single_perceptions {
+          sensor_name: "camera" sensor_type: IMAGE
+          node { id: 1 node_type: CAMERA_PUBLISHER }
+          opencv_config { id: 0 width: 640 height: 480 fps: 30 FORMAT }
+        } } }"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "camera.pbtxt"
+            for pixel_format in (None, "", "MJP", "MJPG-extra", "MJPG", "YUYV"):
+                with self.subTest(pixel_format=pixel_format):
+                    field = "" if pixel_format is None else f'fourcc: "{pixel_format}"'
+                    path.write_text(config.replace("FORMAT", field))
+                    process, report = self.run_validator(
+                        "--config", str(path), input_path=path
+                    )
+                    expected = (
+                        (0, "integrity", "valid", "OK")
+                        if pixel_format in ("MJPG", "YUYV")
+                        else (1, "integrity", "invalid", "INVALID_ARGUMENT")
+                    )
+                    self.assertEqual(
+                        (
+                            process.returncode,
+                            report["stage"],
+                            report["result"],
+                            report["status_code"],
+                        ),
+                        expected,
+                    )
+                    if process.returncode:
+                        self.assertIn("opencv_config.fourcc", report["message"])
+
     def test_parser_detail_is_bounded_and_has_public_location(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "bad.pbtxt"
@@ -362,6 +394,8 @@ robot {
                         {
                             "//robot/perception/audio:audio_config",
                             "//robot/perception/audio:audio_config.h",
+                            "//robot/perception/camera:camera_config",
+                            "//robot/perception/camera:camera_config.h",
                         },
                         "validator depends on perception implementation",
                     )

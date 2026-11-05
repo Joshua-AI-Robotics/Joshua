@@ -13,6 +13,7 @@
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/perception/audio/audio_config.h"
+#include "robot/perception/camera/camera_config.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/robot_time.h"
 #include "utils/status_macros.h"
@@ -80,7 +81,7 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": opencv_config requires IMAGE sensor_type."));
       }
-      return absl::OkStatus();
+      return robot::perception::ValidateCameraConfig(sensor.opencv_config());
     case SinglePerception::kLds01Config:
       if (sensor.sensor_type() != SensorType::RANGE_SCAN) {
         return absl::InvalidArgumentError(
