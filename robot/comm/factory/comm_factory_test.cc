@@ -7,6 +7,7 @@
 #include <chrono>
 #include <climits>
 #include <cstdlib>
+#include <filesystem>
 #include <future>
 #include <limits>
 #include <memory>
@@ -139,15 +140,23 @@ class CommFactorySerialCacheTest : public ::testing::Test {
     comm_.set_transport_type(BYTE_STREAM);
     comm_.mutable_serial_config()->set_port(port);
     comm_.mutable_serial_config()->set_baudrate(115200);
+    char directory[] = "/tmp/joshua-serial-cache-XXXXXX";
+    ASSERT_NE(mkdtemp(directory), nullptr);
+    alias_directory_ = directory;
+    alias_port_ = (alias_directory_ / "serial").string();
+    std::filesystem::create_symlink(port, alias_port_);
   }
 
   void TearDown() override {
     CommFactory::ResetSerialTransportCacheForTesting();
     if (master_fd_ >= 0) close(master_fd_);
+    if (!alias_directory_.empty()) std::filesystem::remove_all(alias_directory_);
   }
 
   int master_fd_ = -1;
   robot::comm::Comm comm_;
+  std::filesystem::path alias_directory_;
+  std::string alias_port_;
 };
 
 TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneByteStream) {
@@ -162,6 +171,23 @@ TEST_F(CommFactorySerialCacheTest, SamePortAndBaudRateShareOneByteStream) {
   EXPECT_EQ(*first_stream, *second_stream);
 }
 
+TEST_F(CommFactorySerialCacheTest, SymlinkAndDevicePathShareOneByteStream) {
+  auto alias = comm_;
+  alias.mutable_serial_config()->set_port(alias_port_);
+  // Open through the symlink first to exercise either lookup direction.
+  auto first = CommFactory::CreateComm(alias);
+  auto second = CommFactory::CreateComm(comm_);
+  ASSERT_TRUE(first.ok()) << first.status();
+  ASSERT_TRUE(second.ok()) << second.status();
+  EXPECT_EQ(*GetCommTransport<ByteStream>(*first), *GetCommTransport<ByteStream>(*second));
+
+  alias.mutable_serial_config()->set_baudrate(9600);
+  EXPECT_EQ(CommFactory::CreateComm(alias).status().code(), absl::StatusCode::kInvalidArgument);
+  alias.mutable_serial_config()->set_baudrate(115200);
+  alias.mutable_serial_config()->set_post_open_settle_ms(1);
+  EXPECT_EQ(CommFactory::CreateComm(alias).status().code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
   comm_.set_transport_type(MESSAGE);
   comm_.mutable_serial_config()->set_message_adapter(JOSHUA_WIRE);
@@ -170,6 +196,7 @@ TEST_F(CommFactorySerialCacheTest, MessageAdaptersShareOneSerialBusLock) {
   ASSERT_TRUE(first.ok()) << first.status();
   auto first_message = GetCommTransport<MessageTransport>(*first);
   ASSERT_TRUE(first_message.ok());
+  comm_.mutable_serial_config()->set_port(alias_port_);
   auto second = CommFactory::CreateComm(comm_);
   ASSERT_TRUE(second.ok()) << second.status();
   auto second_message = GetCommTransport<MessageTransport>(*second);

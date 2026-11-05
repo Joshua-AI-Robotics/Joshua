@@ -221,6 +221,10 @@ subscribers share `sts3215_servo_<joint>/position` topics, carrying native
 position values as `Float32` commands directly between the two nodes.
 Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
+For locally present serial devices, ownership and timing checks resolve path
+aliases using filesystem metadata, consistently with the runtime factories.
+Absent devices use normalized paths so offline validation remains available;
+aliases with missing targets cannot establish that two paths name one device.
 
 Serial `MESSAGE` communication requires an explicit
 `serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers,

@@ -6,6 +6,14 @@ message IDs and response matching; communication adapters own device I/O and
 timeouts. Native integration tests run the production command handler and
 firmware endpoint, with no physical device.
 
+Declare one board name per JoshuaWire serial MCU and reference its channels
+from all consumers. BoardFactory rejects a second name for an already-owned
+JW serial port before starting another session or resetting existing outputs.
+This reservation follows the board cache lifetime, including explicit teardown.
+Ownership matches device identity across path aliases such as `/dev/serial/by-id`
+symlinks. A second name is rejected before any session reset; the same board name
+and settings through another alias reuse the existing instance.
+
 ESP32, Teensy and the AM243 serial binding use this engine directly with
 `message_adapter: JOSHUA_WIRE`. All Joshua-owned MCU images compile the current
 shared endpoint; the old protocol codec, host board, frame wrapper and test
@@ -32,7 +40,9 @@ Only actuator v1.0 target/feedback operations use a paired cyclic capability.
 
 Lost or malformed replies get one exact-byte retry. An unresolved outcome gates
 mutations until explicit reset/reconciliation; status queries and stop remain
-available. ID exhaustion stops the board and requires reinitialization without
+available. Confirmed completion of a board-wide stop or recovery retires canceled
+pending function tokens; it does not resolve a lost command's historical outcome.
+ID exhaustion stops the board and requires reinitialization without
 replaying settings or enabling outputs. Feedback validates acquisition validity,
 boot/clock, sequence continuity and local cached-sample age.
 

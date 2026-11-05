@@ -33,6 +33,10 @@ watchdog fault, state-loss stop or accepted ESTOP retires that write without
 executing it. Repeated stops also advance the epoch while already faulted, so
 an earlier RECOVER cannot clear a newer stop. A newly admitted recovery remains
 available afterward. The state-loss callback latches a fault even when disabled.
+SOES's initial safe-output callback during stack initialization does not create
+a new latch: the profile already starts disabled. Existing latches are preserved,
+and every subsequent state-loss callback still retires admitted work and requires
+recovery.
 
 Management objects use subindex zero and exact sizes. Every object fits the
 512-byte mailbox, so writes must arrive in one transfer; segmented writes are

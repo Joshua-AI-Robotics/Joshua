@@ -25,6 +25,7 @@ cc_library(
         "//robot/comm/serial:caller_sized_serial_transport",
         "//robot/comm/serial:joshua_wire_serial_transport",
         "//robot/comm/serial:serial_config_validation",
+        "//robot/comm/serial:serial_device_identity",
         "//utils:status_macros",
         "@boost.asio",
         "@glog",

@@ -1,5 +1,11 @@
 #include "config/validation.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cstdlib>
+#include <filesystem>
+
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "ros2/utils/packet_parser.h"
@@ -82,6 +88,54 @@ TEST(ValidationTest, BoardSensorsSharePortOnlyWithinOneNode) {
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_TRUE(ValidateConfig(config).ok());
   robot.mutable_perceptions()->mutable_single_perceptions(1)->mutable_node()->set_id(2);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+TEST(ValidationTest, SerialAliasesShareOwnershipAndTimingPolicy) {
+  const int master = posix_openpt(O_RDWR | O_NOCTTY);
+  ASSERT_GE(master, 0);
+  struct Cleanup {
+    int master;
+    std::filesystem::path directory;
+    ~Cleanup() {
+      close(master);
+      if (!directory.empty()) std::filesystem::remove_all(directory);
+    }
+  } cleanup{master, {}};
+  ASSERT_EQ(grantpt(master), 0);
+  ASSERT_EQ(unlockpt(master), 0);
+  char directory[] = "/tmp/joshua-config-alias-XXXXXX";
+  ASSERT_NE(mkdtemp(directory), nullptr);
+  cleanup.directory = directory;
+  const auto alias = cleanup.directory / "serial";
+  const std::string port = ptsname(master);
+  std::filesystem::create_symlink(port, alias);
+
+  auto config = MakeConfig();
+  auto* robot = config.mutable_robot();
+  robot->mutable_boards(0)->mutable_comm()->mutable_serial_config()->set_port(port);
+  auto* second_board = robot->add_boards();
+  *second_board = robot->boards(0);
+  second_board->set_name("aliased_bus");
+  second_board->mutable_comm()->mutable_serial_config()->set_port(alias.string());
+  auto* second_sensor = robot->mutable_perceptions()->add_single_perceptions();
+  *second_sensor = robot->perceptions().single_perceptions(0);
+  second_sensor->set_sensor_name("second_joint");
+  second_sensor->mutable_sts3215_encoder_config()->set_board_name("aliased_bus");
+  second_sensor->mutable_node()->set_id(2);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_sensor->mutable_node()->set_id(1);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  second_board->mutable_comm()->mutable_serial_config()->set_baudrate(9600);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_board->mutable_comm()->mutable_serial_config()->set_baudrate(1000000);
+  second_board->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(1);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  second_board->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(0);
+  for (auto& board : *robot->mutable_boards()) {
+    board.mutable_comm()->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  }
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  second_board->mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(101);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
 TEST(ValidationTest, DirectAndBoardSensorsCannotOpenSamePortInDifferentNodes) {

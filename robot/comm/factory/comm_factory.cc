@@ -14,6 +14,7 @@
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
+#include "robot/comm/serial/serial_device_identity.h"
 #include "utils/status_macros.h"
 
 namespace robot::comm {
@@ -35,7 +36,7 @@ struct PortResources {
 };
 
 static std::mutex g_serial_mutex;
-static std::map<std::string, std::unique_ptr<PortResources>> g_port_resources;  // keyed by port
+static std::map<std::string, std::unique_ptr<PortResources>> g_port_resources;  // keyed by device
 
 // Process-lifetime synchronization/cache storage avoids cross-translation-unit
 // static destruction races with BoardFactory's retained board instances.
@@ -153,6 +154,7 @@ absl::StatusOr<CommTransport> CreatePairedEthercat(const EthercatConfig& config)
 
 absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialConfig& config) {
   ABSL_RETURN_IF_ERROR(CommFactory::ValidateSerialConfig(config));
+  ABSL_ASSIGN_OR_RETURN(const auto device, ResolveSerialDeviceIdentity(config.port()));
 
   const std::string& port = config.port();
   const auto timeout = [](const SerialConfig& c) {
@@ -160,7 +162,7 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   };
 
   std::lock_guard<std::mutex> lock(g_serial_mutex);
-  auto& port_res_ptr = g_port_resources[port];
+  auto& port_res_ptr = g_port_resources[device.key];
   if (!port_res_ptr) {
     port_res_ptr = std::make_unique<PortResources>();
   }
@@ -186,7 +188,7 @@ absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialCo
   try {
     port_res_ptr->serial =
         std::make_shared<Serial>(port_res_ptr->io_context,
-                                 port,
+                                 device.path,
                                  static_cast<int>(config.baudrate()),
                                  std::chrono::milliseconds(config.post_open_settle_ms()));
   } catch (const std::exception& e) {
