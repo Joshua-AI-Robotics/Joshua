@@ -216,13 +216,45 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
       ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
     }
   }
+  std::set<std::pair<uint32_t, std::string>> control_names;
+  std::set<std::pair<std::string, uint32_t>> controlled_channels;
   for (const auto& action : robot.actions().single_actions()) {
     if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
         action.node().node_type() != ros2::node::MCU_BUS &&
         action.node().node_type() != ros2::node::DEVICE_BUS)
       continue;
     const auto& actuator = action.actuator();
+    const std::string key = actuator.actuator_name().empty()
+                                ? "actuator_" + std::to_string(actuator.id())
+                                : actuator.actuator_name();
+    if (!control_names.emplace(action.node().id(), key).second ||
+        !controlled_channels.emplace(actuator.board_name(), actuator.channel()).second)
+      return absl::InvalidArgumentError(
+          "Actuator channels and control service names require one owner");
+    const auto& policy = actuator.control_policy();
+    if ((policy.has_command_timeout_ms() &&
+         (!policy.command_timeout_ms() || policy.command_timeout_ms() > INT32_MAX)) ||
+        (policy.has_max_input_age_ms() &&
+         (!policy.max_input_age_ms() || policy.max_input_age_ms() > INT32_MAX)))
+      return absl::InvalidArgumentError("Control timeouts must be 1..INT_MAX milliseconds");
+    std::set<std::string> sources;
+    std::map<std::string, std::string> topic_sources;
     for (const auto& sub : action.node().subscriptions()) {
+      const std::string source = sub.source_id().empty() ? "default" : sub.source_id();
+      if (source.size() > 64 ||
+          source.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos ||
+          source[0] < 'a' || source[0] > 'z')
+        return absl::InvalidArgumentError(
+            "Command source must be a lowercase ROS identifier (1..64)");
+      sources.insert(source);
+      auto topic = sub.topic();
+      if (!topic.empty() && topic.front() != '/') topic = "/" + topic;
+      auto [owner, inserted] = topic_sources.emplace(topic, source);
+      if (!inserted && owner->second != source)
+        return absl::InvalidArgumentError("A command topic cannot represent multiple sources");
+      if (policy.has_max_input_age_ms() && sub.ros2_data_type() != ros2::data_type::JOINT_STATE &&
+          sub.ros2_data_type() != ros2::data_type::BOOL)
+        return absl::InvalidArgumentError("Input age requires stamped JointState motion commands");
       ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
       ABSL_RETURN_IF_ERROR(check_topic(sub.topic(), sub.ros2_data_type()));
       std::string field = "position";
@@ -236,6 +268,10 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
            !std::isfinite(actuator.operational_upper_limit() - actuator.operational_lower_limit())))
         return absl::InvalidArgumentError("Invalid actuator operational limits");
     }
+    const std::string selected =
+        policy.initial_source().empty() ? "default" : policy.initial_source();
+    if (!sources.empty() && !sources.count(selected))
+      return absl::InvalidArgumentError("Initial command source has no configured subscription");
   }
   return absl::OkStatus();
 }

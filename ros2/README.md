@@ -115,10 +115,11 @@ It reads sensors and publishes their values using the configured message type.
 host sensor publishers. Use `DEVICE_BUS` for commands and board-backed feedback
 on one bus. Mixed JoshuaWire scalar/actuator setups also support `MCU_BUS`.
 
-Standalone actuator subscribers honor `stepper_config.require_explicit_enable`:
-when true, startup leaves outputs disabled until an explicit torque-enable
-command. Omitting the flag or setting it to false retains the existing startup
-enable behavior. Standalone node teardown still disables outputs in either case.
+All ROS actuator runtimes start disabled, including STS3215 and legacy stepper
+presets. Driver construction is forced to remain disabled. Enable deliberately
+through the configured torque topic or `~/<actuator>/enable` Trigger service.
+This changes prior standalone startup behavior; existing command-only producers
+must add an explicit operator enable step.
 
 Mixed MCU bus
 -------------
@@ -365,3 +366,32 @@ before releasing boards. Steppers require `require_explicit_enable: true` so the
 driver initialization cannot enable early. Camera/lidar acquisition remains in
 its existing standalone nodes. This feature does not qualify physical motion,
 link-loss stopping or a particular rig.
+
+## Shared control lifecycle
+
+Each actuator has one transport-independent `ControlGate` shared by its topics.
+`Subscription.source_id` (default `default`) identifies a configured producer.
+`Actuator.control_policy.initial_source` selects the initial producer; other
+producers cannot enable or move the actuator. This is topic-based arbitration,
+not publisher authentication. Use separate JointState command topics for multiple
+sources; the existing numeric topics keep their actuator-name contract.
+
+`command_timeout_ms` defaults to 1000 ms. Accepted motion renews the steady-clock
+lease; repeated enables, telemetry, rejected inputs and board heartbeats do not.
+Expiry attempts a disable and latches a stop, checked every 10 ms and at command
+admission. Host scheduling/driver delay applies. Link loss still requires the
+selected device's watchdog and physical qualification.
+
+An optional positive `max_input_age_ms` requires motion as JointState with
+nonzero, increasing stamps in the receiver's ROS clock. Future, old, repeated and
+pre-selection/pre-recovery stamps are rejected. Numeric motion has no acquisition
+time and cannot be used with that bound; absent the bound, only local command
+inactivity is enforced. Producers must independently gate their input freshness.
+
+`~/<actuator>/stop`, `/recover`, `/enable` and `/select_<source_id>` are Trigger
+services. Selection requires disabled state. Stop/driver failure/lease expiry
+requires explicit recovery, then enable; recovery never replays motion. These
+services clear only host state and cannot clear a firmware latch. JoshuaWire
+fault/ESTOP still needs deliberate device recovery and a fresh runtime. Composed
+`~/estop` also interlocks all host gates and invokes available board stop support.
+No host acknowledgment is physical stop evidence.

@@ -177,6 +177,7 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:logging",
@@ -204,6 +205,7 @@ cc_library(
         ":node_runner",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/board/factory:board_factory",
         "//robot/perception/factory:perception_factory",

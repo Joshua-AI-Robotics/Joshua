@@ -402,6 +402,17 @@ driver initialization cannot enable early. Camera/lidar acquisition remains in
 its existing standalone nodes. This feature does not qualify physical motion,
 link-loss stopping or a particular rig.
 
+## Control policy
+
+All ROS actuator nodes now start disabled. Optional `actuator.control_policy`
+sets `initial_source` (default `default`), positive `command_timeout_ms` (default
+1000) and positive `max_input_age_ms` (unset means no source-age claim). Assign
+`source_id` on actuator subscriptions when selecting multiple producers. Source
+IDs are lowercase ROS identifiers, up to 64 characters. Input-age enforcement
+requires JointState motion with synchronized ROS timestamps; Bool enable gates
+remain explicit operator actions. See the shared lifecycle in
+[ROS runtime documentation](../ros2/README.md#shared-control-lifecycle).
+
 ## C++ ROS logging
 
 `general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
