@@ -3,6 +3,7 @@
 #include "robot/board/factory/board_factory.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/action_subscriber.h"
+#include "ros2/observation_publisher.h"
 #include "ros2/utils/qos_setting.h"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
@@ -19,47 +20,8 @@ class DeviceBus : public ActionSubscriber {
       if (s.node().id() != static_cast<uint32_t>(id)) continue;
       names.insert(s.has_sts3215_encoder_config() ? s.sts3215_encoder_config().board_name()
                                                   : s.joshua_wire_scalar_config().board_name());
-      auto made =
-          robot::perception::PerceptionFactory::CreatePerception(s, config.robot().boards());
-      if (!made.ok()) throw std::runtime_error(made.status().ToString());
-      auto source = std::shared_ptr<robot::perception::PerceptionInterface>(std::move(*made));
-      const auto initialized = source->Init();
-      if (!initialized.ok()) throw std::runtime_error(initialized.ToString());
-      sources_.push_back(source);
-      if (s.sensor_type() == robot::perception::POSITION) {
-        for (const auto& p : s.node().publishers()) {
-          auto publish = ros2_utils::CreatePositionMessagePublisher(*this, p, s);
-          if (!publish.ok()) throw std::runtime_error(publish.status().ToString());
-          timers_.push_back(
-              create_wall_timer(std::chrono::nanoseconds(1000000000ull / p.publish_rate_hz()),
-                                [source, publish = *publish] {
-                                  auto packet = source->GetData();
-                                  if (!packet.ok()) return;
-                                  auto value = ros2_utils::RequirePerceptionPosition(*packet);
-                                  if (value.ok()) publish(*value).IgnoreError();
-                                }));
-        }
-        continue;
-      }
-      for (const auto& p : s.node().publishers()) {
-        auto publisher = create_publisher<std_msgs::msg::UInt8MultiArray>(
-            p.topic(), ros2_utils::CreateQosSetting(s.node().qos_setting()));
-        auto health = create_publisher<std_msgs::msg::String>(p.topic() + "/health", 1);
-        timers_.push_back(create_wall_timer(
-            std::chrono::nanoseconds(1000000000ull / p.publish_rate_hz()),
-            [source, publisher, health] {
-              auto packet = source->GetData();
-              std_msgs::msg::String state;
-              state.data = packet.ok() ? (packet->scalar().usable() ? "usable" : "invalid_or_stale")
-                                       : packet.status().ToString();
-              health->publish(state);
-              if (!packet.ok()) return;
-              const auto bytes = packet->SerializeAsString();
-              std_msgs::msg::UInt8MultiArray message;
-              message.data.assign(bytes.begin(), bytes.end());
-              publisher->publish(message);
-            }));
-      }
+      observations_.push_back(
+          std::make_unique<ros2_utils::ObservationPublisher>(*this, s, config.robot().boards()));
     }
     for (const auto& b : config.robot().boards()) {
       if (!names.count(b.name())) continue;
@@ -91,16 +53,14 @@ class DeviceBus : public ActionSubscriber {
         stop_group_);
   }
   ~DeviceBus() override {
-    timers_.clear();
     ShutdownActions().IgnoreError();
-    for (auto& s : sources_) s->Teardown().IgnoreError();
+    observations_.clear();
     for (auto& b : boards_) b->Teardown().IgnoreError();
   }
 
  private:
-  std::vector<std::shared_ptr<robot::perception::PerceptionInterface>> sources_;
+  std::vector<std::unique_ptr<ros2_utils::ObservationPublisher>> observations_;
   std::vector<std::shared_ptr<robot::board::BoardInterface>> boards_;
-  std::vector<rclcpp::TimerBase::SharedPtr> timers_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_;
   rclcpp::CallbackGroup::SharedPtr stop_group_;
 };

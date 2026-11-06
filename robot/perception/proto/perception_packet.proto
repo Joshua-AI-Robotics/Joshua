@@ -74,6 +74,24 @@ message ScalarData {
   bool usable = 18;
 }
 
+// Readiness is based on actual valid data, never node/topic discovery.
+message ObservationStatus {
+  enum State {
+    STARTING = 0;
+    READY = 1;
+    INVALID = 2;
+    STALE = 3;
+    ERROR = 4;
+    STOPPED = 5;
+  }
+  State state = 1;
+  optional uint64 last_valid_age_ns = 2;  // Absent until a valid sample exists.
+  uint64 valid_samples = 3;
+  uint64 invalid_samples = 4;
+  uint64 errors = 5;
+  string detail = 6;
+}
+
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
   string perception_id = 1;
@@ -88,5 +106,6 @@ message PerceptionPacket {
     PointCloudData point_cloud = 7;
     AudioData audio = 8;
     ScalarData scalar = 9;
+    ObservationStatus observation_status = 10;
   }
 }

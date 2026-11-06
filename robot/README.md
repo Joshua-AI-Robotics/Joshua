@@ -108,3 +108,10 @@ POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invali
 limits are rejected, never clamped. Native and SI positions are left for drivers.
 Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
+
+The reusable observation layer in `perception/interfaces/observation_source.h`
+owns acquisition separately from ROS consumers, validates samples, and maintains
+latest-only data plus readiness/freshness/error state. It never sends actuator
+commands. Shared actuator gates in `action/interfaces/control_gate.h` implement
+explicit enable, source selection, local command leases, and latched recovery
+above motor drivers and transports.

@@ -301,3 +301,28 @@ services clear only host state and cannot clear a firmware latch. JoshuaWire
 fault/ESTOP still needs deliberate device recovery and a fresh runtime. Composed
 `~/estop` also interlocks all host gates and invokes available board stop support.
 No host acknowledgment is physical stop evidence.
+
+## Observation readiness
+
+Position, camera, lidar and board scalar publishers share `ObservationSource`:
+one acquisition worker and one bounded latest sample per configured sensor,
+with all of its output topics reading that sample. Reads never run on the ROS
+executor. Readiness requires validated data; invalid samples, acquisition errors
+and stalled sources remain observable. Repeated scalar acquisitions do not
+refresh the last-valid time.
+
+Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
+with `observation_status`) and a short `/health` String. Status includes starting,
+ready, invalid, stale, error or stopped state, optional last-valid receipt age,
+and valid/invalid/error counters. Scalar `/health` retains its existing summary.
+The status timer runs every 50 ms independently of acquisition. Configure
+`sensor.observation_policy.stale_after_ms` (positive, default 1000 ms). Native
+payload publication pauses when unusable; invalid/stale scalar packets remain
+inspectable with `usable=false`. No stale sample becomes a new measurement.
+
+Sensor construction errors are reported through status until deliberate restart;
+no board session or subscription is automatically restored. Acquisition workers
+are joined on shutdown after requesting backend teardown. Driver calls must be
+bounded or support teardown cancellation; a permanently blocked backend can still
+hold shutdown. This does not impose a physical acquisition/stop-time guarantee.
+Audio retains its separate streaming contract.
