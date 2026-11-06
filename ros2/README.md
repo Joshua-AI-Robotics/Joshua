@@ -170,7 +170,7 @@ contains the complete node, with no separate position-publisher header.
 |---|---|
 | FLOAT32, FLOAT64, signed/unsigned 8/16/32/64-bit integers, BYTE, CHAR | `data` contains one native-unit value. |
 | Corresponding numeric MULTI_ARRAY types | Exactly one contiguous value in `data`; no joint-index inference. |
-| JOINT_STATE | Publisher emits one named joint's position in radians and a ROS timestamp. Subscriber selects `actuator_name` from `name` regardless of array order. |
+| JOINT_STATE | Publisher emits one named joint's position in radians with host receipt Unix time. Subscriber selects `actuator_name` from `name` regardless of array order. |
 | BOOL | Subscription only: torque-enable gate for STS3215 or stepper drivers. |
 | Other types (Image, Pose, String, etc.) | Rejected: no defined position/command conversion. |
 
@@ -205,11 +205,11 @@ The decoder emits `ActionPacket.joint`, retaining optional double-valued
 position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
 m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
 preserves the selected joint name, `header.frame_id`, and the source timestamp in
-`ActionPacket.timestamp` as double seconds. The ROS nanosecond component must
-be below 1e9; zero and negative source times are retained within double
-precision. Metadata does not schedule execution, enforce
-freshness, identify a clock domain, or trigger coordinate transforms. Those
-policies belong to future clock/PTP and coordinate-handling work.
+`ActionPacket.timestamp` as double RobotTime seconds. Nanoseconds must be below
+1e9; zero and negative source times are retained within double precision.
+Metadata alone does not schedule execution or trigger coordinate transforms.
+Source-age enforcement is opt-in through the control policy described below;
+its ROS clock relationship must be established separately.
 
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
 velocity, and effort distinguish omission from zero. `position_encoding` selects
@@ -268,7 +268,7 @@ even when it has several subscriptions.
 | STS3215/stepper torque is enable/disable | Never map JointState physical effort to these gates. Reject effort; Bool remains restricted to enable gates. |
 | Inference still produces FLOAT32; trajectory supports FLOAT32 and JOINT_STATE | JointState waypoints require SI values and preserve optional fields. Driver capabilities still apply; changing the wire type does not add velocity/effort control. |
 | Dataset message types/shapes can change | Update dataset/model expectations and keep topic types stable during recording. |
-| Multiple command sources can target a device | Coordinate command ownership externally; message-type support does not add arbitration. |
+| Multiple command sources can target a device | Configured source IDs share the actuator control gate; independent publishers on one source topic still require external coordination. |
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
@@ -408,7 +408,8 @@ refresh the last-valid time.
 Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
 with `observation_status`) and a short `/health` String. Status includes starting,
 ready, invalid, stale, error or stopped state, optional last-valid receipt age,
-and valid/invalid/error counters. Scalar `/health` retains its existing summary.
+and valid/invalid/error/recovery counters. Last error/recovery timestamps and the
+last error text remain available after recovery, including brief faults. Scalar `/health` retains its existing summary.
 The status timer runs every 50 ms independently of acquisition. Configure
 `sensor.observation_policy.stale_after_ms` (positive, default 1000 ms). Native
 payload publication pauses when unusable; invalid/stale scalar packets remain
@@ -420,3 +421,40 @@ are joined on shutdown after requesting backend teardown. Driver calls must be
 bounded or support teardown cancellation; a permanently blocked backend can still
 hold shutdown. This does not impose a physical acquisition/stop-time guarantee.
 Audio retains its separate streaming contract.
+
+## Sample identity, clocks and recording
+
+The shared observation runtime assigns every distinct sample a `sample_metadata`
+record: source-instance identity, generation-local sequence, discontinuity,
+host receipt in Unix and steady nanoseconds, Linux boot clock identity, native
+units/frame, and measurement validity. Cached publication preserves identity and
+receipt timestamps. Startup, acquisition errors and device/session/subscription
+changes mark the next distinct sample as a discontinuity. Wall-clock adjustments
+do not affect monotonic freshness calculations. Host clock IDs distinguish clock
+domains; they do not establish synchronization between machines.
+
+Scalar metadata also retains acquisition ticks, their scale, device boot/clock
+identity and source sequence. The original scalar timestamps and loss counters
+remain intact. Camera exposure time, lidar scan acquisition time and servo
+measurement time are unavailable through the current drivers, so acquisition
+fields stay absent. Host receipt means completed acquisition/read, not physical
+response. Source-native position is STS3215 ticks; native JointState output
+converts that position to radians. Unsupported velocity remains absent.
+
+Image, cloud and packet-aware JointState headers preserve the driver's RobotTime
+acquisition/read estimate, translated to the ROS epoch. The packet's double-second
+`timestamp` retains that estimate; `sample_metadata` carries host receipt Unix
+and steady nanoseconds separately. No physical acquisition or device clock
+mapping is inferred. Configure `observation_policy.frame_id` when a calibrated
+frame is available. Preserve the configuration defining conversions and frames.
+
+Each native topic has a `/metadata` UInt8MultiArray containing a serialized
+PerceptionPacket with the matching sample metadata. `/status` also references
+the last sample. Record those topics alongside native data. Numeric std_msgs
+have no sample ID or header, so a companion topic cannot guarantee atomic pairing.
+For exact replay/recording, select `observation_packet: true` and
+`ros2_data_type: UINT8_MULTI_ARRAY` on a position, camera or lidar publisher.
+That output carries payload and metadata in one serialized PerceptionPacket;
+scalar outputs already use this contract. Multiple outputs still share one
+acquisition. Decode with the generated perception proto; retain unknown/absent
+source timing explicitly. The scalar recorder includes the metadata in JSONL.

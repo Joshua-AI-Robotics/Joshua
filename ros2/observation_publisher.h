@@ -7,13 +7,17 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/observation_source.h"
+#include "ros2/logging.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
+#include "ros2/utils/robot_timer.h"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/u_int8_multi_array.hpp"
+#include "utils/status_macros.h"
 
 namespace ros2_utils {
 class ObservationPublisher {
@@ -35,12 +39,19 @@ class ObservationPublisher {
           return robot::perception::PerceptionFactory::CreateInitializedPerception(sensor, boards);
         },
         std::chrono::nanoseconds(1000000000ull / rate),
-        std::chrono::milliseconds(policy.has_stale_after_ms() ? policy.stale_after_ms() : 1000));
+        std::chrono::milliseconds(policy.has_stale_after_ms() ? policy.stale_after_ms() : 1000),
+        robot::perception::ObservationDescription{
+            sensor.has_sts3215_encoder_config()
+                ? "sts3215_tick"
+                : (sensor.has_opencv_config() ? "pixel" : (sensor.has_lds01_config() ? "m" : "")),
+            policy.frame_id().empty() && sensor.has_opencv_config() ? "camera_frame"
+                                                                    : policy.frame_id()});
     for (const auto& config : sensor.node().publishers()) {
       auto publish = publishers.at(publisher_index++);
-      timers_.push_back(node.create_wall_timer(
-          std::chrono::nanoseconds(1000000000ull / config.publish_rate_hz()),
-          [source = source_, publish, logger = node.get_logger()] {
+      auto metadata =
+          node.create_publisher<std_msgs::msg::UInt8MultiArray>(config.topic() + "/metadata", 1);
+      timers_.push_back(CreateRobotTimer(
+          node, 1.0 / config.publish_rate_hz(), [source = source_, publish, metadata] {
             const auto sample = source->Get();
             if (!sample.packet) return;
             const bool usable =
@@ -49,7 +60,9 @@ class ObservationPublisher {
             if (!sample.packet->has_scalar()) {
               const auto status = publish(*sample.packet);
               if (!status.ok())
-                RCLCPP_WARN(logger, "Observation publication: %s", status.ToString().c_str());
+                JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
+              else
+                PublishMetadata(metadata, *sample.packet);
               return;
             }
             auto packet = *sample.packet;
@@ -65,7 +78,9 @@ class ObservationPublisher {
             }
             const auto status = publish(packet);
             if (!status.ok())
-              RCLCPP_WARN(logger, "Observation publication: %s", status.ToString().c_str());
+              JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
+            else
+              PublishMetadata(metadata, packet);
           }));
       auto status =
           node.create_publisher<std_msgs::msg::UInt8MultiArray>(config.topic() + "/status", 1);
@@ -81,6 +96,8 @@ class ObservationPublisher {
             robot::perception::PerceptionPacket packet;
             packet.set_perception_id(name);
             *packet.mutable_observation_status() = snapshot.health;
+            if (snapshot.packet)
+              *packet.mutable_sample_metadata() = snapshot.packet->sample_metadata();
             std_msgs::msg::UInt8MultiArray message;
             const auto bytes = packet.SerializeAsString();
             message.data.assign(bytes.begin(), bytes.end());
@@ -102,18 +119,39 @@ class ObservationPublisher {
   }
 
  private:
+  static void PublishMetadata(
+      const rclcpp::Publisher<std_msgs::msg::UInt8MultiArray>::SharedPtr& pub,
+      const robot::perception::PerceptionPacket& source) {
+    robot::perception::PerceptionPacket packet;
+    packet.set_perception_id(source.perception_id());
+    packet.set_sequence_id(source.sequence_id());
+    *packet.mutable_sample_metadata() = source.sample_metadata();
+    const auto bytes = packet.SerializeAsString();
+    std_msgs::msg::UInt8MultiArray msg;
+    msg.data.assign(bytes.begin(), bytes.end());
+    pub->publish(msg);
+  }
   using Publish = std::function<absl::Status(const robot::perception::PerceptionPacket&)>;
   static Publish MakePublisher(rclcpp::Node& node,
                                const ros2::node::Publisher& config,
                                const robot::perception::SinglePerception& sensor) {
     const auto qos = CreateQosSetting(sensor.node().qos_setting());
-    if (sensor.sensor_type() == robot::perception::POSITION) {
-      auto made = CreatePositionMessagePublisher(node, config, sensor);
-      if (!made.ok()) throw std::runtime_error(made.status().ToString());
-      return [publish = *made](const auto& packet) {
-        auto value = RequirePerceptionPosition(packet);
-        return value.ok() ? publish(*value) : value.status();
+    if (config.observation_packet()) {
+      if (config.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY)
+        throw std::invalid_argument("Observation packets require UINT8_MULTI_ARRAY");
+      auto publisher = node.create_publisher<std_msgs::msg::UInt8MultiArray>(config.topic(), qos);
+      return [publisher](const auto& packet) {
+        std_msgs::msg::UInt8MultiArray msg;
+        const auto bytes = packet.SerializeAsString();
+        msg.data.assign(bytes.begin(), bytes.end());
+        publisher->publish(msg);
+        return absl::OkStatus();
       };
+    }
+    if (sensor.sensor_type() == robot::perception::POSITION) {
+      auto made = CreatePositionPacketPublisher(node, config, sensor);
+      if (!made.ok()) throw std::runtime_error(made.status().ToString());
+      return *made;
     }
     if (sensor.sensor_type() == robot::perception::SCALAR &&
         config.ros2_data_type() == ros2::data_type::UINT8_MULTI_ARRAY) {
@@ -129,11 +167,11 @@ class ObservationPublisher {
     if (sensor.sensor_type() == robot::perception::IMAGE &&
         config.ros2_data_type() == ros2::data_type::IMAGE) {
       auto publisher = node.create_publisher<sensor_msgs::msg::Image>(config.topic(), qos);
-      return [publisher, &node, name = sensor.sensor_name()](const auto& packet) {
+      return [publisher, name = sensor.sensor_name()](const auto& packet) {
         const auto& image = packet.image();
         sensor_msgs::msg::Image msg;
-        msg.header.stamp = node.now();
-        msg.header.frame_id = "camera_frame";
+        ABSL_ASSIGN_OR_RETURN(msg.header.stamp, ToRosTimestamp(packet.timestamp()));
+        msg.header.frame_id = packet.sample_metadata().frame_id();
         msg.width = image.width();
         msg.height = image.height();
         msg.encoding = "rgb8";
@@ -147,11 +185,13 @@ class ObservationPublisher {
     if (sensor.sensor_type() == robot::perception::RANGE_SCAN &&
         config.ros2_data_type() == ros2::data_type::POINTCLOUD2) {
       auto publisher = node.create_publisher<sensor_msgs::msg::PointCloud2>(config.topic(), qos);
-      return [publisher, &node, name = sensor.sensor_name()](const auto& packet) {
+      return [publisher, name = sensor.sensor_name()](const auto& packet) {
         const auto& cloud = packet.point_cloud();
         sensor_msgs::msg::PointCloud2 msg;
-        msg.header.stamp = node.now();
-        msg.header.frame_id = cloud.frame_id().empty() ? name : cloud.frame_id();
+        ABSL_ASSIGN_OR_RETURN(msg.header.stamp, ToRosTimestamp(packet.timestamp()));
+        msg.header.frame_id = packet.sample_metadata().frame_id().empty()
+                                  ? name
+                                  : packet.sample_metadata().frame_id();
         msg.height = 1;
         msg.width = cloud.x_size();
         msg.is_dense = cloud.is_dense();
@@ -191,6 +231,7 @@ class ObservationPublisher {
 class ObservationNode : public rclcpp::Node {
  public:
   ObservationNode(const std::string& name, int id, const config::Config& config) : Node(name) {
+    SetLogNodeName(get_logger().get_name());
     for (const auto& sensor : config.robot().perceptions().single_perceptions())
       if (sensor.node().id() == static_cast<uint32_t>(id))
         sources_.push_back(
