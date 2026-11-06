@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Agreed demo direction; implementation and hardware verification gates remain open. |
-| Created / last reviewed | 2026-11-01 / 2026-11-04 |
+| Created / last reviewed | 2026-11-01 / 2026-11-05 |
 | Implementation baseline | Checkout `31efe9d`; source and documentation review only. |
 | Planning horizon | 12 weeks from an agreed kickoff; conference expected in approximately three months. Exact conference and freeze dates are TBD. |
 | Delivery owner / engineering capacity | TBD at checkpoint C0. |
@@ -62,10 +62,11 @@ General-purpose model generation, raw-image policy transfer, arbitrary morpholog
 transfer, live hot-plugging, and a broad model catalog are deferred. Adding a
 second joint is a later milestone.
 
-A second controller, distance sensing, and distractor/occlusion handling are
-conditional additions after the required loop works. The primary rig connects
-through a compatible servo bus adapter. Optional sensors can use a Teensy or
-ESP32 acquisition path.
+STS3215 is the actuator for this demo, including both A/B camera configurations.
+XL330 integration is deferred to later work and is not a demo dependency.
+Distance sensing and distractor/occlusion handling remain conditional additions
+after the required loop works. The primary rig connects through a compatible
+servo bus adapter. Optional sensors can use a Teensy or ESP32 acquisition path.
 
 A CLI or thin operator UI is sufficient. Reconcile this learning-first sequence
 with the separate [AI integration plan](../docs/AI_INTEGRATION.md) at C0.
@@ -177,13 +178,81 @@ provides integrated position feedback.
 
 ### Required hardware
 
+#### Baseline using existing Joshua hardware paths
+
+Use **one Feetech STS3215 servo, one compatible USB servo bus adapter, and one
+lightweight USB camera** for the first head. Prefer a spare servo, adapter, and
+matched supply from an existing SO-100 kit. Mount the servo independently on the
+head base; the complete arm and leader arm are unnecessary. This selects existing
+motor, feedback, transport, and camera implementations. Shared runtime integration
+and physical qualification remain required under G03/C1; existing drivers alone
+do not establish a working head.
+
+| Part | First-trial quantity | Selection and Joshua path |
+| --- | --- | --- |
+| Feetech STS3215 positional bus servo | 1 | Baseline motor: `MOTOR_STS3215` through `FEETECH_BUS` and `SERVO_BUS_UART`. Reuse the exact model/voltage variant from the available SO-100 kit where possible. Integrated position feedback uses `POSITION` with `sts3215_encoder_config`; no separate encoder is needed. |
+| USB half-duplex TTL servo bus adapter | 1 | Prefer the existing SO-100 adapter. A named alternative candidate is Waveshare **Bus Servo Adapter (A), SKU 25514**, in USB mode; qualify it with the exact servo before substitution. This is a vendor servo bus, not a JoshuaWire MCU connection. |
+| USB camera A | 1 | Prefer an available lightweight UVC camera that produces three-channel images through Linux V4L2/OpenCV. Use `IMAGE` with `opencv_config`. Start qualification at 640×480 and 30 fps, matching the camera example's requested settings; measure actual rate, buffering, and latency. Freeze the exact camera model and capture format at C0/C1. |
+| Servo supply, harness, and power disconnect | 1 set | Match the exact servo's rated voltage and the adapter's connector/polarity/current limits. Size for the selected servo's documented current demand and qualify under load. Record the supply rating and wiring; do not infer voltage from the STS3215 name. |
+| Base, supplied horn, and lightweight camera bracket | 1 set | One horizontal pan axis with direct horn mounting, secure fasteners, repeatable zero marks, cable slack, and strain relief. Record camera/bracket mass, center-of-mass offset, and clearance over the full permitted range. |
+| Ubuntu host, display, and data cables | 1 set | Existing Ubuntu 22.04/Humble or 24.04/Jazzy Docker environment, with USB camera and servo adapter visible inside the container. Use the CPU Compose override if needed; the API variant performs remote inference and needs no local training GPU. |
+| Target and calibration/measurement aids | 1 set | A distinctive target, steady lighting, camera calibration board, independent angular reference, and a scale for payload measurements. |
+
+The baseline follows the checked-in [SO-100 bus/motor configuration](../config/config_preset/so100/teleoperate.pbtxt),
+[encoder configuration](../config/config_preset/so100/encoder_publish.pbtxt), and
+[camera example](../config/config_preset/example/publish_camera.pbtxt). Reuse their
+configuration structure, not their arm-specific limits, speeds, idle positions,
+device paths, or node graph. The teleoperation preset reads a separate leader bus;
+the head needs commands and feedback from the **same** servo through one owner.
+Implementation references are the [Feetech board](../robot/board/feetech_bus/feetech_bus_board.cc),
+[STS3215 motor driver](../robot/action/motors/drivers/sts3215_driver.cc),
+[position sensor](../robot/perception/position/sts3215_position_sensor.cc), and
+[OpenCV camera](../robot/perception/camera/cv_camera.cc).
+
+For the alternative adapter, the manufacturer's [product description](https://docs.waveshare.com/Bus_Servo_Adapter_A)
+and [USB wiring instructions](https://docs.waveshare.com/Bus_Servo_Adapter_A/Product-Wiring-Example)
+describe its bus connection and USB-mode jumper setting. Follow the exact board
+revision's instructions. Its USB connection carries communication; servo power
+requires a separate matched input, as documented in the [serial setup guide](https://docs.waveshare.com/ST3215_Servo/Serial-Debugging-Tool-Use).
+Manufacturer ST3215 examples do not certify every STS3215 variant against Joshua.
+
+#### Wiring and configuration handoff
+
+Connect camera USB to the host, adapter USB to a separate host port, and the
+servo's data/power/ground harness to the adapter's servo connector. Feed the
+matched external supply through the accessible actuator disconnect to the
+adapter's power input. Verify pin order and polarity from the actual hardware
+manuals; an ordinary USB-UART lead is insufficient unless it provides the required
+half-duplex bus interface. Keep the camera/host powered when cutting actuator
+power so the operator can still inspect observations and logs.
+
+The head preset and calibration artifacts must resolve these fields before C1:
+
+| Mapping | Required values |
+| --- | --- |
+| Servo board/transport | Logical board `head_bus`; `SERIAL` / `MESSAGE` with `CALLER_SIZED`; actual stable serial path and configured servo baud. The SO-100 reference uses 1000000 baud; verify the device matches. Leave JoshuaWire protocol/firmware selection unset for `FEETECH_BUS`. |
+| Servo channel and logical joint | One `SERVO_BUS_UART` channel with the verified `servo_bus.servo_id`; actuator `head_pan` and its position sensor reference the same `board_name` and channel. Channel index and servo ID are distinct configuration fields. |
+| Motion calibration | Measured zero, positive direction, native-tick-to-angle mapping, head-frame offset, operational limits, idle target, and native move speed. The driver uses 4096 ticks per revolution for SI position conversion; the mechanical head zero/sign must still be calibrated. Do not treat full register travel as permitted head travel. |
+| Feedback | Named measured joint position with declared units/reference, freshness, and sample timing. Velocity is estimated from qualified position samples when needed; do not label a command or default feedback field as measured velocity. |
+| Camera | Actual `opencv_config.id`, width, height, fps, and supported `fourcc`; pin intrinsics/distortion, mounting pose, image-to-pan sign, and observed timing. The driver currently selects a numeric camera index, so record physical USB identity and recheck its index after reconnect/reboot. |
+| Runtime | One process owns servo commands and feedback under the shared runtime contract; the camera has its own acquisition node. Apply explicit enable, source selection, command expiry, stop/recovery, and local input-freshness policy. Record the implementation revision used. |
+
+Before the API controls the head, qualify low-speed local movements, measured
+position, cable clearance, stop and loss-of-link behavior with this exact assembly.
+An STS3215 torque-disable request is not a verified communication-loss watchdog;
+freeze the permitted operating envelope and measured stop behavior at C1.
+Record any vendor-tool servo ID/mode setup separately; no firmware flash is needed
+for the baseline vendor-bus path, and this plan authorizes no hardware operation.
+
+#### Full A/B kit and optional extensions
+
 This is a planning BOM, not a confirmed inventory. At C0 record exact model and
 revision, manufacturer documentation, availability, price, owner, and lead time.
 Prefer existing parts and a simple printed bracket. No total budget is established.
 
 | Item | Quantity | Purpose and qualification |
 | --- | --- | --- |
-| Feedback serial bus servo | 1 | STS3215-compatible candidate; verify exact model/protocol, measured angle, load, travel, and supply against Joshua's driver. |
+| Feedback serial bus servo | 1 | Baseline STS3215 selected above; verify exact model/protocol, measured angle, load, travel, and supply against Joshua's driver. |
 | Compatible servo bus adapter | 1 | Host connection and bus electrical interface; verify simultaneous command/feedback through one runtime bus owner. |
 | Rated servo supply, wiring, and accessible disconnect | 1 set | Match selected servo/adapter; qualify electrical setup and physical stop/recovery. |
 | Lightweight USB cameras A and B | 2 | Two qualified device configurations; verify OpenCV capture, latency, calibration, and reliable identification after reconnection. |
@@ -203,7 +272,6 @@ alone does not establish compatibility with Joshua's STS3215 driver. See
 | USB joystick/gamepad | 1 | Manual commissioning, recording, and comparison; demonstrations are not required for the chosen RL recipe. |
 | ST VL53L5CX breakout and sensor mount | 1 | Preferred candidate for optional multizone ranging; exact breakout TBD. Requires new acquisition, host integration, and calibration. |
 | Teensy or ESP32, harness, and compatible sensor power/interface | 1 set | Optional sensor acquisition or separately qualified controller milestone. |
-| DYNAMIXEL XL330-M288-T alternate servo kit | 1 set | Optional actuator-substitution candidate; requires its own qualified mount, compatible TTL interface, 5 V supply, and new Joshua driver. Not a direct STS3215 spare. |
 | Spare camera/servo/adapter and cables | Selected kit | Choose after assembly freeze and failure rehearsal. |
 
 **VL53L5CX integration:** the sensor provides a coarse depth grid: up to 8x8 zones
@@ -221,21 +289,13 @@ uses depth, add corresponding simulated observations, uncertainty, and timing;
 then reopen training and transfer gates. Do not substitute perfect simulated
 point distances for qualified multizone behavior. Ranging remains optional.
 
-**XL330 alternate versus spare:** the XL330-M288-T uses DYNAMIXEL Protocol 2.0
-over half-duplex TTL and provides position, velocity, and current feedback.
-Its supply range is 3.7–6.0 V, with 5 V recommended; do not reuse a higher-voltage
-servo supply. See the [ROBOTIS manual](https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/).
-A U2D2 is a candidate interface, but needs separate actuator power; see
-[U2D2 power requirements](https://emanual.robotis.com/docs/en/parts/interface/u2d2/).
+#### Deferred actuator extension: XL330
 
-Joshua's current Feetech/STS3215 implementation does not implement DYNAMIXEL.
-Add protocol/register handling, motor and feedback bindings, config validation,
-and one-owner command/feedback operation before claiming support. Qualify the
-XL330-specific horn/bracket, payload, cable drag, limits, and motion profile;
-refit its response model and check checkpoint compatibility. This makes a useful
-optional actuator-change demonstration after A/B works. For rapid failure
-recovery, carry the same model as the qualified primary servo. Promoting XL330
-to the primary actuator would move this integration into C1's critical path.
+Keep the STS3215 motor, Feetech bus adapter, and matched supply for this demo.
+DYNAMIXEL XL330-M288-T support is future work requiring a separate bus/motor and
+feedback implementation, compatible power/interface kit, and physical
+qualification. It is outside the current BOM, implementation milestones, and
+acceptance gates. Carry an STS3215 spare matching the qualified primary servo.
 
 ## 3. Real-to-sim-to-real workflow
 
@@ -345,7 +405,7 @@ below cover the camera-head implementation and verification work.
 | G11 — Real-to-sim identification | [MuJoCo engine](../simulation/mujoco/engine.py) can step/read/render a model; [mirror mode](../simulation/mujoco/modes/mirror.py) sends incoming scalars to controls. | Fit an effective servo response and validate predictions on held-out real traces; establish camera calibration and uncertainty. Mirroring alone does not close this gap. | C2 |
 | G12 — Canonical head model | [Simulation config](../simulation/proto/simulation.proto) references model files. [PhysicalLayout](../config/proto/physical_layout.proto) describes link geometry/limits but does not establish a config-to-twin pipeline. | Add a fixed head template and schema/artifact references for camera, geometry, response parameters, and provenance; generate reproducibly without manual duplicate edits. | C2 |
 | G13 — Hardware-change lifecycle | Config-driven construction exists; hot reload and policy compatibility across changes are not established. | Implement stop/change/reconfigure/calibrate/validate/resume, invalidation rules, A/B evidence, and explicit reuse-versus-retrain decisions. Restart is allowed. | C6 |
-| G14 — Optional named components | Current actuator/board factories provide Feetech/STS3215 support, not DYNAMIXEL; the perception factory has no VL53L5CX implementation. | Add and qualify VL53L5CX multizone acquisition/telemetry and, separately, XL330 Protocol 2.0 actuation/feedback. Extend the simulated observation or actuator model when each enters the learning path. | C1–C4 requalification; C6 optional extension |
+| G14 — Optional multizone ranging | The perception factory has no VL53L5CX implementation. | Add and qualify acquisition/telemetry and extend simulated observations if depth enters the learning path. | C1–C4 requalification; C6 optional extension |
 
 ## 5. Camera-head artifacts and compatibility
 
@@ -547,3 +607,4 @@ execution authorization and implementation checks.
 | --- | --- | --- | --- |
 | 2026-11-01 | One-axis head, real-to-sim-to-real learning, and required A→B hardware-change demonstration | User-agreed direction; source review of simulation, config, perception, and learning foundations | Complete C0; exact parts, capacity, thresholds, and dates TBD. |
 | 2026-11-01 | Recorded VL53L5CX as optional ToF candidate and XL330-M288-T as optional alternate actuator | Manufacturer documentation and factory source review; neither integration is qualified | Select breakout and interface kits; keep core A/B scope and gates unchanged. |
+| 2026-11-05 | Use STS3215 for the demo; defer XL330 integration to later work | Operator-selected scope; existing Feetech/STS3215 implementation | Qualify the STS3215 head and camera A/B configurations; XL330 is outside demo gates. |

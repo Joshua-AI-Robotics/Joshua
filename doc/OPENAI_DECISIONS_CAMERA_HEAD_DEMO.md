@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Additional demo plan; adapter, measurements, and hardware qualification remain open. |
-| Created / last reviewed | 2026-11-04 |
+| Created / last reviewed | 2026-11-04 / 2026-11-05 |
 | Task and rig | The same one-axis target-tracking camera head and A/B hardware from the [real-to-sim-to-real plan](CAMERA_HEAD_DEMO.md). |
 | Decision backend | OpenAI Decisions API in place of the simulation-trained policy for this variant. |
 | Scope | API-specific adapter, failure handling, walkthrough, and D gates. |
@@ -20,6 +20,36 @@ Use the C0/C1 hardware, calibration, and local-motion qualification. The local
 detector is needed only for a detector-state comparison condition. API-specific
 work is tracked by D0–D4; R2S2R model fitting/training remains in the C gates.
 Clear pending API work when switching sources, stopping, or restarting a run.
+
+### Hardware for the first API trial
+
+Use the shared plan's [baseline hardware and configuration handoff](CAMERA_HEAD_DEMO.md#baseline-using-existing-joshua-hardware-paths):
+**one STS3215 servo + the existing SO-100-compatible USB servo bus adapter + one
+USB camera A + matched external servo power + a fixed base/camera bracket + the
+Ubuntu Docker host**. Reuse available parts first. The shared hardware table owns
+part selection, wiring, power constraints, and configuration details for both demos.
+
+Joshua already implements the STS3215 motor and integrated position-feedback
+drivers through `FEETECH_BUS`, and USB camera capture through OpenCV. The head
+still needs its composed command/feedback runtime, control lifecycle, preset,
+calibration, and physical qualification. Pin the runtime revision supplying those
+contracts before D2; this hardware choice does not close the shared runtime gates.
+
+The initial D2 trial uses configuration A only. It needs network/API access and
+recording space, but no training compute, simulation-trained policy, second motor,
+Teensy/ESP32, lidar, VL53L5CX, or DYNAMIXEL integration. Camera B and its bracket
+enter D3 when demonstrating the A→B hardware change; they remain required for the
+full R2S2R A/B release. Optional devices stay outside the first API trial.
+
+Use STS3215 throughout this demo, including the camera A→B change. XL330
+integration is deferred to later work and is not required for D0–D4.
+
+Before D2, retain a hardware record with exact servo/adapter/camera/supply models
+and revisions, servo ID/baud and USB mappings, wiring/polarity, payload measurements,
+calibrated direction/zero/limits/speed, actual image and feedback rates/ages, and
+local stop/link-loss results. Reference the authoritative protobuf config and
+calibration snapshot. Freeze the bounded pan step, freshness limits, and API
+cadence at D0 against these measurements rather than copying SO-100 motion values.
 
 ## 2. Observation → decision → bounded movement
 
@@ -111,10 +141,10 @@ whether a segment used live Decisions, recorded answers, or another controller.
 
 | Gate | Work and required evidence | Status |
 | --- | --- | --- |
-| D0 — Freeze the API contract | Select API access/model/SDK, target/preprocessing, choices, bounded step/deadband, request cadence/deadline/retry budget, response freshness/motion/confidence bounds, and request/spend budget. Reference the qualified head calibration, local hold/stop behavior, and shared trial protocol. Keep credentials outside source-controlled configuration. | Open |
+| D0 — Freeze the API contract | Select API access/model/SDK, target/preprocessing, choices, bounded step/deadband, request cadence/deadline/retry budget, response freshness/motion/confidence bounds, and request/spend budget. Freeze the baseline hardware record and reference the qualified head calibration, local hold/stop behavior, and shared trial protocol. Keep credentials outside source-controlled configuration. | Open |
 | D1 — Adapter and replay | Add config/schema, an asynchronous API adapter, local mapping/gates, source selection, and recording/display integration. Hardware-free fixtures cover malformed/refused/low-confidence answers, stale and duplicate IDs, delayed/out-of-order completion, source changes, rate limits, and outages. | Open |
 | D2 — Bounded physical qualification | On the existing qualified head, verify direction/limits, tracking, target loss, operator stop, API failure/deadline behavior, and rejection of late responses. Record all attempts and measured timing. | Open |
-| D3 — Comparison and supported change | Apply the shared camera-head comparison protocol and record API-specific provenance/usage. Repeat the shared A→B change when claiming easy hardware changes. | Open |
+| D3 — Comparison and supported change | Apply the shared camera-head comparison protocol and record API-specific provenance/usage. Repeat the shared camera A→B change with the STS3215 actuator when claiming easy hardware changes. XL330 integration is outside these gates. | Open |
 | D4 — Conference readiness | Pin config/calibration/prompt/model/SDK artifacts, rehearse live and offline fallback, and publish the runbook and D0–D3 evidence. | Open |
 
 Record prompt/preprocessing revisions, model/SDK identity, request correlation,
