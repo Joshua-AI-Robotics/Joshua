@@ -40,6 +40,7 @@ cc_binary(
         "//ros2:audio_publisher",
         "//ros2:camera_publisher",
         "//ros2:data_subscriber",
+        "//ros2:device_bus",
         "//ros2:inference",
         "//ros2:lidar_publisher",
         "//ros2:mcu_bus",
