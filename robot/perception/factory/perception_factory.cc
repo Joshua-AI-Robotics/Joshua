@@ -148,4 +148,14 @@ PerceptionFactory::CreatePerception(
   return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
 }
 
+absl::StatusOr<std::unique_ptr<PerceptionInterface>> PerceptionFactory::CreateInitializedPerception(
+    const SinglePerception& sensor,
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+  ABSL_ASSIGN_OR_RETURN(auto source, CreatePerception(sensor, boards));
+  // The legacy LDS01 factory already initializes the device. Other constructors
+  // are lazy; applying camera properties requires the explicit Init call.
+  if (!sensor.has_lds01_config()) ABSL_RETURN_IF_ERROR(source->Init());
+  return source;
+}
+
 }  // namespace robot::perception

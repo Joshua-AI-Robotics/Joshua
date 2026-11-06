@@ -104,6 +104,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
@@ -128,6 +129,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//ros2:logging",
@@ -147,6 +149,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
@@ -203,6 +206,7 @@ cc_library(
     deps = [
         ":logging",
         ":node_runner",
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
         "//robot/action/interfaces:control_gate",
@@ -319,6 +323,7 @@ ros2_cpp_binary(
     name = "audio_publisher",
     srcs = ["audio_publisher.cc"],
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/audio:audio_capture",
         "//robot/perception/factory:perception_factory",
@@ -346,5 +351,20 @@ cc_test(
         "@googletest//:gtest_main",
         "@protobuf",
         "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+cc_library(
+    name = "observation_publisher",
+    hdrs = ["observation_publisher.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/interfaces:observation_source",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
