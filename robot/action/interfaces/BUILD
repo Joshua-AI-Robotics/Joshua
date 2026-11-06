@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "action_interface",
@@ -20,5 +20,24 @@ cc_library(
         "//utils:robot_time",
         "@abseil-cpp//absl/status:statusor",
         "@glog",
+    ],
+)
+
+cc_library(
+    name = "control_gate",
+    hdrs = ["control_gate.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":action_interface",
+        "//robot/action/proto:action_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "control_gate_test",
+    srcs = ["control_gate_test.cc"],
+    deps = [
+        ":control_gate",
+        "@googletest//:gtest_main",
     ],
 )

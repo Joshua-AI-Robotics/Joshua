@@ -1,145 +1,137 @@
 #pragma once
-#include <glog/logging.h>
 
 #include <list>
 #include <memory>
 #include <set>
 #include <stdexcept>
-#include <thread>
 #include <vector>
 
 #include "config/proto/config.pb.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
-#include "robot/action/proto/action_packet.pb.h"
+#include "robot/action/interfaces/control_gate.h"
 #include "ros2/node_runner.h"
-#include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
+#include "std_srvs/srv/trigger.hpp"
 
 class ActionSubscriber : public rclcpp::Node {
- private:
-  struct Actuator {
-    std::string topic;
-    std::shared_ptr<robot::action::ActionInterface> interface;
-    std::pair<float, float> limits;
+  struct ActuatorSubscription {
+    std::shared_ptr<robot::action::ControlGate> gate;
     rclcpp::SubscriptionBase::SharedPtr subscription;
-    robot::action::ActionPacket reusable_packet;
   };
 
  public:
-  ActionSubscriber(const std::string& node_name,
-                   const int node_id,
+  ActionSubscriber(const std::string& name,
+                   int id,
                    const config::Config& config,
-                   bool auto_enable = true)
-      : Node(node_name), manage_lifecycle_(auto_enable) {
-    for (const auto& single_action : config.robot().actions().single_actions()) {
-      if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
-          static_cast<int>(single_action.node().id()) != node_id) {
+                   bool standalone = true)
+      : Node(name), standalone_(standalone) {
+    control_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    for (const auto& action : config.robot().actions().single_actions()) {
+      if (action.action_type() != robot::action::ACTUATOR ||
+          action.node().id() != static_cast<uint32_t>(id))
         continue;
-      }
-
-      const auto& action_proto = single_action.actuator();
-
-      auto interface =
-          robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
-      if (!interface.ok()) throw std::runtime_error(interface.status().ToString());
-
-      // Use a shared pointer to ensure that multiple subscriptions can share the same interface.
-      auto shared_interface =
-          std::shared_ptr<robot::action::ActionInterface>(std::move(interface.value()));
-
-      const bool require_explicit_enable =
-          action_proto.motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
-          action_proto.stepper_config().require_explicit_enable();
-      interfaces_.push_back(shared_interface);
-      if (!auto_enable || require_explicit_enable) {
-        robot::action::ActionPacket disable;
-        disable.set_preset(robot::action::PRESET_DISABLE_TORQUE);
-        const auto status = shared_interface->SetAction(disable);
-        if (!status.ok()) throw std::runtime_error(status.ToString());
-      }
-      if (auto_enable && !require_explicit_enable) {
-        robot::action::ActionPacket enable_packet;
-        enable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
-        const auto enabled = shared_interface->SetAction(enable_packet);
-        if (!enabled.ok()) throw std::runtime_error(enabled.ToString());
-      }
-
-      for (const auto& subscription : single_action.node().subscriptions()) {
-        const std::string& topic = subscription.topic();
-        Actuator& actuator =
-            actuators_.emplace_back(Actuator{.topic = topic,
-                                             .interface = shared_interface,
-                                             .limits = {action_proto.operational_lower_limit(),
-                                                        action_proto.operational_upper_limit()}});
-
+      // Driver construction must not enable before the host gate exists.
+      auto prepared = action;
+      if (prepared.actuator().motor_type() == robot::action::MOTOR_STEPPER_NEMA17)
+        prepared.mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(true);
+      auto made = robot::action::ActionFactory::CreateAction(prepared, config.robot().boards());
+      if (!made.ok()) throw std::runtime_error(made.status().ToString());
+      auto interface = std::shared_ptr<robot::action::ActionInterface>(std::move(*made));
+      std::set<std::string> sources;
+      for (const auto& sub : action.node().subscriptions())
+        sources.insert(sub.source_id().empty() ? "default" : sub.source_id());
+      if (sources.empty()) sources.insert("default");
+      auto gate = std::make_shared<robot::action::ControlGate>(
+          interface, action.actuator().control_policy(), sources);
+      const auto initialized = gate->Initialize();
+      if (!initialized.ok()) throw std::runtime_error(initialized.ToString());
+      gates_.push_back(gate);
+      const auto& a = action.actuator();
+      for (const auto& sub : action.node().subscriptions()) {
         auto result = ros2_utils::CreateActionMessageSubscription(
             *this,
-            subscription,
-            single_action,
-            [this, &actuator](absl::StatusOr<robot::action::ActionPacket> parsed) {
-              if (!parsed.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Invalid command on '%s': %s",
-                             actuator.topic.c_str(),
-                             parsed.status().ToString().c_str());
-                return;
+            sub,
+            action,
+            [this,
+             gate,
+             source = sub.source_id().empty() ? "default" : sub.source_id(),
+             lower = a.operational_lower_limit(),
+             upper =
+                 a.operational_upper_limit()](absl::StatusOr<robot::action::ActionPacket> packet) {
+              absl::Status status = packet.status();
+              if (packet.ok()) {
+                status = ros2_utils::ResolvePositionEncoding(*packet, lower, upper);
+                if (status.ok())
+                  status = gate->Execute(source,
+                                         *packet,
+                                         now().nanoseconds(),
+                                         robot::action::ControlGate::Clock::now());
               }
-              actuator.reusable_packet = *parsed;
-              const auto [lower, upper] = actuator.limits;
-              const auto encoding_status =
-                  ros2_utils::ResolvePositionEncoding(actuator.reusable_packet, lower, upper);
-              if (!encoding_status.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Invalid position on '%s': %s",
-                             actuator.topic.c_str(),
-                             encoding_status.ToString().c_str());
-                return;
-              }
-              const auto status = actuator.interface->SetAction(actuator.reusable_packet);
-              if (!status.ok()) {
-                RCLCPP_ERROR(get_logger(),
-                             "Actuator '%s' rejected command: %s",
-                             actuator.topic.c_str(),
-                             status.ToString().c_str());
-              }
+              if (!status.ok())
+                RCLCPP_WARN(get_logger(), "Command rejected: %s", status.ToString().c_str());
             });
         if (!result.ok()) throw std::invalid_argument(result.status().ToString());
-        actuator.subscription = *result;
+        subscriptions_.push_back({gate, *result});
       }
+      const std::string key =
+          a.actuator_name().empty() ? "actuator_" + std::to_string(a.id()) : a.actuator_name();
+      const std::string prefix = "~/" + key + "/";
+      AddService(prefix + "enable", [this, gate] {
+        return gate->Enable(robot::action::ControlGate::Clock::now(), now().nanoseconds());
+      });
+      AddService(prefix + "stop", [gate] { return gate->Stop(); });
+      AddService(prefix + "recover", [this, gate] { return gate->Recover(now().nanoseconds()); });
+      for (const auto& source : sources)
+        AddService(prefix + "select_" + source, [this, gate, source] {
+          return gate->SelectSource(source, now().nanoseconds());
+        });
     }
-
-    if (actuators_.empty()) {
-      RCLCPP_ERROR(
-          this->get_logger(), "No actuators found in configuration for node_id %d!", node_id);
-      return;
-    }
-
-    RCLCPP_INFO(this->get_logger(),
-                "Actuator subscriber node started with %zu subscriptions for node_id %d!",
-                actuators_.size(),
-                node_id);
+    // Local command lease is independent of board heartbeats and display consumers.
+    watchdog_ = create_wall_timer(
+        std::chrono::milliseconds(10),
+        [this] {
+          for (auto& gate : gates_)
+            gate->Poll(robot::action::ControlGate::Clock::now()).IgnoreError();
+        },
+        control_group_);
   }
-
-  ~ActionSubscriber() {
-    if (!manage_lifecycle_) return;  // Mixed bus owner performs disabled board reset.
-    ShutdownActions().IgnoreError();
+  ~ActionSubscriber() override {
+    watchdog_.reset();
+    if (standalone_) ShutdownActions().IgnoreError();
   }
 
  protected:
-  // Called before a composed owner releases its board; includes actions without topics.
+  absl::Status StopActions() {
+    absl::Status result;
+    for (auto& gate : gates_) result.Update(gate->Stop());
+    return result;
+  }
   absl::Status ShutdownActions() {
     absl::Status result;
-    for (auto& interface : interfaces_) {
-      robot::action::ActionPacket packet;
-      packet.set_preset(robot::action::PRESET_TEARDOWN);
-      result.Update(interface->SetAction(packet));
-    }
+    for (auto& gate : gates_) result.Update(gate->Shutdown());
     return result;
   }
 
  private:
-  std::vector<std::shared_ptr<robot::action::ActionInterface>> interfaces_;
-  bool manage_lifecycle_;
-  std::list<Actuator> actuators_;
+  void AddService(const std::string& name, std::function<absl::Status()> action) {
+    services_.push_back(create_service<std_srvs::srv::Trigger>(
+        name,
+        [action](std::shared_ptr<std_srvs::srv::Trigger::Request>,
+                 std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+          auto status = action();
+          response->success = status.ok();
+          response->message = status.ok() ? "Host control transition complete; device recovery and "
+                                            "physical verification are separate"
+                                          : status.ToString();
+        },
+        rmw_qos_profile_services_default,
+        control_group_));
+  }
+  bool standalone_;
+  std::vector<std::shared_ptr<robot::action::ControlGate>> gates_;
+  std::list<ActuatorSubscription> subscriptions_;
+  std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;
+  rclcpp::CallbackGroup::SharedPtr control_group_;
+  rclcpp::TimerBase::SharedPtr watchdog_;
 };
