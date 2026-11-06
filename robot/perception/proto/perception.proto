@@ -52,7 +52,13 @@ message AlsaAudioConfig {
   optional uint32 capture_buffer_duration_ms = 5;
 }
 
+message ObservationPolicy {
+  string frame_id = 2;  // Optional calibrated source frame; no transform is inferred.
+  optional uint32 stale_after_ms = 1;  // Unset: 1000; 1..INT_MAX.
+}
+
 message SinglePerception {
+  ObservationPolicy observation_policy = 10;
   ros2.node.Node node = 1;
   string sensor_name = 2;
   uint64 id = 3;

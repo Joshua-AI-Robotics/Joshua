@@ -31,6 +31,8 @@ absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSt
       auto resolved,
       robot::board::ResolveChannelConfig(boards, owner, config.board_name(), config.channel()));
 
+  if (resolved.channel->drive() != robot::board::SERVO_BUS_UART)
+    return absl::InvalidArgumentError("STS3215 position units require a servo-bus channel");
   ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
   ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(config.channel()));
   return std::make_unique<Sts3215PositionSensor>(channel, sensor);
@@ -146,6 +148,16 @@ PerceptionFactory::CreatePerception(
     return implementation.create(single_perception, boards);
   }
   return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+}
+
+absl::StatusOr<std::unique_ptr<PerceptionInterface>> PerceptionFactory::CreateInitializedPerception(
+    const SinglePerception& sensor,
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+  ABSL_ASSIGN_OR_RETURN(auto source, CreatePerception(sensor, boards));
+  // The legacy LDS01 factory already initializes the device. Other constructors
+  // are lazy; applying camera properties requires the explicit Init call.
+  if (!sensor.has_lds01_config()) ABSL_RETURN_IF_ERROR(source->Init());
+  return source;
 }
 
 }  // namespace robot::perception

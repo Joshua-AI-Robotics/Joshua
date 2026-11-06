@@ -30,6 +30,13 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
     rclcpp::Node& node,
     const ros2::node::Publisher& publisher,
     const robot::perception::SinglePerception& sensor);
+using PositionPacketPublisher =
+    std::function<absl::Status(const robot::perception::PerceptionPacket&)>;
+// Packet-aware native publication preserves receipt time and source frame.
+absl::StatusOr<PositionPacketPublisher> CreatePositionPacketPublisher(
+    rclcpp::Node& node,
+    const ros2::node::Publisher& publisher,
+    const robot::perception::SinglePerception& sensor);
 absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSubscription(
     rclcpp::Node& node,
     const ros2::node::Subscription& subscription,

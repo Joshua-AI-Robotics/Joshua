@@ -174,6 +174,54 @@ TEST(ValidationTest, RejectsConflictingNodeTypesForOneProcess) {
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+TEST(ValidationTest, ValidatesControlPolicyAndCommandSourceIdentity) {
+  auto config = MakeConfig();
+  config.mutable_robot()->clear_perceptions();
+  auto* a = config.mutable_robot()->mutable_actions()->add_single_actions();
+  a->set_action_type(robot::action::ACTUATOR);
+  a->mutable_actuator()->set_board_name("bus");
+  a->mutable_actuator()->set_channel(1);
+  a->mutable_actuator()->set_actuator_name("joint");
+  a->mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);
+  a->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+  auto* sub = a->mutable_node()->add_subscriptions();
+  sub->set_topic("/joint/position");
+  sub->set_ros2_data_type(ros2::data_type::FLOAT32);
+  auto* policy = a->mutable_actuator()->mutable_control_policy();
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  policy->set_command_timeout_ms(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  policy->set_command_timeout_ms(100);
+  policy->set_max_input_age_ms(10);
+  EXPECT_FALSE(ValidateConfig(config).ok());  // Numeric input has no acquisition stamp.
+  sub->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  ASSERT_TRUE(ValidateConfig(config).ok()) << ValidateConfig(config);
+  sub->set_source_id("policy");
+  EXPECT_FALSE(ValidateConfig(config).ok());  // Default owner no longer exists.
+  policy->set_initial_source("policy");
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  sub->set_source_id("../invalid");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, ObservationPacketModeIsExplicitAndUnitsMatchTheChannel) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto* p = sensor->mutable_node()->add_publishers();
+  p->set_topic("/raw");
+  p->set_publish_rate_hz(20);
+  p->set_observation_packet(true);
+  p->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  p->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(100);
+  config.mutable_robot()->mutable_boards(0)->mutable_channels(0)->set_drive(robot::board::STEP_DIR);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+
 TEST(ValidationTest, DirectSensorsDoNotRequireBoards) {
   config::Config config;
   auto& robot = *config.mutable_robot();

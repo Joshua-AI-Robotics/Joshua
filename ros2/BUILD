@@ -87,6 +87,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_packet_cc_proto",
@@ -108,6 +109,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//ros2:node_runner",
@@ -125,6 +127,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
@@ -152,6 +155,7 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:node_runner",
@@ -171,12 +175,15 @@ cc_library(
     name = "mcu_bus_node",
     hdrs = [
         "action_subscriber.h",
+        "device_bus.h",
         "mcu_bus.h",
     ],
     deps = [
         ":node_runner",
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/board/factory:board_factory",
         "//robot/perception/factory:perception_factory",
@@ -262,11 +269,46 @@ ros2_cpp_binary(
     name = "audio_publisher",
     srcs = ["audio_publisher.cc"],
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/audio:audio_capture",
         "//robot/perception/factory:perception_factory",
         "//ros2:node_runner",
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "device_bus",
+    srcs = ["device_bus.cc"],
+    deps = [":mcu_bus_node"],
+)
+
+cc_test(
+    name = "device_bus_test",
+    srcs = ["device_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/testing:fake_caller_sized_message_transport",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+cc_library(
+    name = "observation_publisher",
+    hdrs = ["observation_publisher.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/interfaces:observation_source",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
