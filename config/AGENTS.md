@@ -365,31 +365,10 @@ not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
 
-For USB cameras, prefer `opencv_config.device_path` with a stable V4L2 link from
-`/dev/v4l/by-id/`. For example, in your local preset:
-
-```text
-opencv_config {
-  device_path: "/dev/v4l/by-id/<camera-usb-id>-video-index0"
-  width: 640 height: 480 fps: 30 fourcc: "MJPG"
-}
-```
-
-Replace the placeholder with the link for your camera's capture interface. A
-nonempty `device_path` takes precedence over numeric `id`, including when the
-driver reopens after a disconnect. If that path is unavailable, capture fails;
-it never falls back to another camera. An omitted or empty path preserves
-numeric-index behavior. Cameras with identical USB identities need
-`/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
-in private runtime presets rather than committed examples.
-Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
-such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
-the camera must support the selected format.
-
-One serial bus must belong to one node process. Position sensors use
-`POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
-does not read or publish sensors. Reading sensors from an actuator's bus in a
-separate process is not supported by the current bus ownership model.
+One serial bus must belong to one node process. Use `DEVICE_BUS` to compose
+commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`
+and `ACTUATOR_SUBSCRIBER` remain available for independent buses; they cannot
+share a port across processes.
 The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
 the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
 subscribers share `sts3215_servo_<joint>/position` topics, carrying native
@@ -469,6 +448,21 @@ effective policy, including defaults. Polling fairness requires enough deadline
 slack; admission and deadlines report overload instead of promising an infeasible
 workload. Physical control/stop latency and telemetry capacity still require P6
 qualification. Runtime board/perception integration follows in P5.
+
+## Shared board runtime
+
+`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+observations in one process. Assign every consumer of a bus the same node ID
+and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+no transport implementation is selected by the node. Position publishers retain
+the existing numeric/JointState contracts. `MCU_BUS` remains supported for existing
+JoshuaWire scalar/stepper configurations.
+
+The composed owner explicitly disables actuators at startup and tears them down
+before releasing boards. Steppers require `require_explicit_enable: true` so their
+driver initialization cannot enable early. Camera/lidar acquisition remains in
+its existing standalone nodes. This feature does not qualify physical motion,
+link-loss stopping or a particular rig.
 
 ## C++ ROS logging
 

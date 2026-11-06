@@ -202,37 +202,12 @@ ros2_cpp_binary(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-_MCU_BUS_DEPS = [
-    "//config/proto:config_cc_proto",
-    "//robot/board/factory:board_factory",
-    "//robot/perception/factory:perception_factory",
-    "//ros2:logging",
-    "//ros2:node_runner",
-    "//ros2/utils:actuator_commands",
-    "//ros2/utils:qos_setting",
-    "@abseil-cpp//absl/status:status",
-    "@ros2_deps//:cpp_std_msgs",
-    "@ros2_deps//:cpp_std_srvs",
-    "@ros2_deps//:rclcpp",
-]
-
-ros2_cpp_binary(
-    name = "mcu_bus",
-    srcs = ["mcu_bus.cc"],
-    data = ["//config/config_preset:config_presets"],
-    set_up_ament = True,
-    deps = _MCU_BUS_DEPS,
-)
-
-# Tests include the implementation with main excluded; production nodes stay
-# single-source executables and are never linked as reusable node libraries.
-ros2_cpp_library(
-    name = "actuator_subscriber_test_source",
-    testonly = True,
-    textual_hdrs = ["actuator_subscriber.cc"],
-    visibility = [
-        "//robot/board/joshua_wire:__pkg__",
-        "//ros2:__pkg__",
+cc_library(
+    name = "mcu_bus_node",
+    hdrs = [
+        "action_subscriber.h",
+        "device_bus.h",
+        "mcu_bus.h",
     ],
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
@@ -366,5 +341,24 @@ ros2_cpp_binary(
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "device_bus",
+    srcs = ["device_bus.cc"],
+    deps = [":mcu_bus_node"],
+)
+
+cc_test(
+    name = "device_bus_test",
+    srcs = ["device_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/testing:fake_caller_sized_message_transport",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
     ],
 )

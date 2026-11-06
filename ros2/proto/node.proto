@@ -17,7 +17,8 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
-  MCU_BUS = 9;  // One process owns mixed MCU actuator + scalar subscriptions.
+  DEVICE_BUS = 10;  // Board-backed commands and observations share one process.
+  MCU_BUS = 9;      // One process owns mixed MCU actuator + scalar subscriptions.
 }
 
 enum QosReliabilityPolicy {
