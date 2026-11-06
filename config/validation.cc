@@ -49,6 +49,17 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   using robot::perception::SensorType;
   using robot::perception::SinglePerception;
   const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+  if (sensor.observation_policy().has_stale_after_ms() &&
+      (!sensor.observation_policy().stale_after_ms() ||
+       sensor.observation_policy().stale_after_ms() > INT32_MAX))
+    return absl::InvalidArgumentError("Observation stale_after_ms must be 1..INT_MAX");
+  for (const auto& p : sensor.node().publishers())
+    if ((sensor.node().node_type() == ros2::node::CAMERA_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::LIDAR_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::POSITION_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::DEVICE_BUS) &&
+        (!p.publish_rate_hz() || p.publish_rate_hz() > 1000))
+      return absl::InvalidArgumentError("Observation publisher rate must be 1..1000 Hz");
   if (sensor.sensor_name().empty()) {
     return absl::InvalidArgumentError("Sensor has no sensor_name.");
   }

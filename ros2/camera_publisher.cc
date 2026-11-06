@@ -1,72 +1,5 @@
-#include <functional>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include "config/proto/config.pb.h"
-#include "rclcpp/rclcpp.hpp"
-#include "robot/perception/factory/perception_factory.h"
-#include "robot/perception/interfaces/perception_interface.h"
-#include "robot/perception/proto/perception.pb.h"
-#include "ros2/logging.h"
 #include "ros2/node_runner.h"
-#include "ros2/proto/ros2_data_type.pb.h"
-#include "ros2/utils/packet_parser.h"
-#include "ros2/utils/qos_setting.h"
-#include "ros2/utils/robot_time_conversion.h"
-#include "ros2/utils/robot_timer.h"
-#include "sensor_msgs/msg/image.hpp"
-#include "utils/robot_time.h"
-
-namespace {
-constexpr double kCameraRetryBackoffSeconds = 1.0;
-
-bool ValidateCameraPublisher(const ros2::data_type::Ros2DataType ros2_data_type) {
-  return ros2_data_type == ros2::data_type::IMAGE;
-}
-}  // namespace
-
-class CameraPublisher : public rclcpp::Node {
- public:
-  // Retry times are seconds in the configured robot clock's domain.
-  using Now = std::function<double()>;
-  using Factory =
-      std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
-          const robot::perception::SinglePerception&)>;
-
-  CameraPublisher(const std::string& node_name, int node_id, const config::Config& config);
-  // Inject the source and retry clock for hardware-free lifecycle tests.
-  CameraPublisher(const std::string& node_name,
-                  int node_id,
-                  const config::Config& config,
-                  Factory factory,
-                  Now now);
-
- private:
-  // Initialization and recovery belong to the physical source, shared by all
-  // its publishers. An unavailable source remains registered for later retries.
-  struct Source {
-    std::string name;
-    std::unique_ptr<robot::perception::PerceptionInterface> interface;
-    bool initialized = false;
-    double retry_after = 0.0;
-  };
-  struct Camera {
-    std::string topic;
-    std::shared_ptr<Source> source;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher;
-    rclcpp::TimerBase::SharedPtr timer;
-  };
-
-  bool InitializeCamera(Source& source);
-  void ResetCamera(Source& source);
-  void PublishCameraData(size_t camera_index);
-
-  Now now_;
-  std::vector<Camera> cameras_;
-};
+#include "ros2/observation_publisher.h"
 
 CameraPublisher::CameraPublisher(const std::string& node_name,
                                  int node_id,
@@ -227,6 +160,6 @@ void CameraPublisher::PublishCameraData(size_t camera_index) {
 
 #ifndef JOSHUA_CAMERA_PUBLISHER_TEST
 JOSHUA_MAIN(argc, argv) {
-  return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
+  return ros2_utils::RunNode<ros2_utils::ObservationNode>(argc, argv, "camera_publisher");
 }
 #endif

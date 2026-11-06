@@ -29,6 +29,7 @@ PERCEPTION_DATA_TYPE_FIELDS = (
     "point_cloud",
     "audio",
     "scalar",
+    "observation_status",
 )
 
 
@@ -218,6 +219,14 @@ def require_perception_scalar(
     return packet.scalar
 
 
+def require_perception_observation_status(
+    packet: perception_packet_pb2.PerceptionPacket,
+) -> perception_packet_pb2.ObservationStatus:
+    if not packet.HasField("observation_status"):
+        raise PacketParseError("PerceptionPacket has no observation_status field")
+    return packet.observation_status
+
+
 _PERCEPTION_REQUIRE_FIELD_BY_NAME = {
     "image": require_perception_image,
     "position": require_perception_position,
@@ -225,4 +234,5 @@ _PERCEPTION_REQUIRE_FIELD_BY_NAME = {
     "point_cloud": require_perception_point_cloud,
     "audio": require_perception_audio,
     "scalar": require_perception_scalar,
+    "observation_status": require_perception_observation_status,
 }

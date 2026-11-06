@@ -25,6 +25,7 @@ class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
   absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& bytes,
                                                       size_t size) override {
     ++reads;
+    if (fail_reads) return absl::UnavailableError("Disconnected servo");
     std::vector<uint8_t> params;
     if (size == 8)
       params = bytes[5] == 3 ? std::vector<uint8_t>{15, 3} : std::vector<uint8_t>{0, 8};
@@ -35,7 +36,8 @@ class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
     reply.push_back(static_cast<uint8_t>(~sum));
     return reply;
   }
-  int reads = 0;
+  std::atomic<int> reads{0};
+  std::atomic<bool> fail_reads{false};
 };
 
 class DeviceBusTest : public testing::Test {
@@ -161,6 +163,13 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   EXPECT_FALSE(Wrote(40, 1));
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   bool measured = false;
+  int readiness = -1;
+  auto status = client->create_subscription<std_msgs::msg::UInt8MultiArray>(
+      prefix + "/measured/status", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
+        robot::perception::PerceptionPacket p;
+        if (p.ParseFromArray(msg->data.data(), msg->data.size()) && p.has_observation_status())
+          readiness = p.observation_status().state();
+      });
   auto feedback = client->create_subscription<sensor_msgs::msg::JointState>(
       prefix + "/measured", 1, [&](sensor_msgs::msg::JointState::ConstSharedPtr msg) {
         measured = msg->name == std::vector<std::string>{"joint"} && msg->position.size() == 1 &&
@@ -171,8 +180,8 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   executor.add_node(runtime);
   executor.add_node(client);
   ASSERT_TRUE(Await([&] {
-    return measured && enable->get_subscription_count() == 1 &&
-           command->get_subscription_count() == 1;
+    return measured && readiness == robot::perception::ObservationStatus::READY &&
+           enable->get_subscription_count() == 1 && command->get_subscription_count() == 1;
   }));
   std_msgs::msg::Bool on;
   on.data = true;
@@ -183,6 +192,10 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   command->publish(target);
   ASSERT_TRUE(Await([&] { return Wrote(42, 2); }));
   EXPECT_EQ(opens, 1);
+  wire->fail_reads = true;
+  ASSERT_TRUE(Await([&] { return readiness == robot::perception::ObservationStatus::ERROR; }));
+  wire->fail_reads = false;
+  ASSERT_TRUE(Await([&] { return readiness == robot::perception::ObservationStatus::READY; }));
   wire->written_.clear();
   executor.remove_node(runtime);
   runtime.reset();
