@@ -85,10 +85,12 @@ launcher and ROS 2 nodes never invoke these.
 
 - Anything the runtime depends on.
 - Environment setup and build orchestration — those are
-  [scripts/](../scripts/AGENTS.md).
-- Firmware flashing. Board-specific procedures belong in
-  [firmware/AGENTS.md](../firmware/AGENTS.md); runtime code never flashes a board.
+  [scripts/](../scripts/README.md).
+- Firmware flashing. Planned to land here as `tools/flash/`, per
+  [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md), but it does not exist
+  yet and runtime code must never flash a board.
 
-## Directory navigation
-
-- [mcp/](mcp/AGENTS.md)
+The scalar recorder preserves shared `sample_metadata` alongside the original
+scalar fields. Its JSONL records distinguish device acquisition ticks from host
+receipt clocks. Receipt timestamps and clock IDs do not establish device/host or
+cross-host synchronization; record the reviewed configuration and calibration.

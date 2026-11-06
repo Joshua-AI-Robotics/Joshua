@@ -31,6 +31,8 @@ absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSt
       auto resolved,
       robot::board::ResolveChannelConfig(boards, owner, config.board_name(), config.channel()));
 
+  if (resolved.channel->drive() != robot::board::SERVO_BUS_UART)
+    return absl::InvalidArgumentError("STS3215 position units require a servo-bus channel");
   ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
   ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(config.channel()));
   return std::make_unique<Sts3215PositionSensor>(channel, sensor);

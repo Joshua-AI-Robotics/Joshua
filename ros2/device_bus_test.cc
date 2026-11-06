@@ -156,6 +156,13 @@ class DeviceBusTest : public testing::Test {
 };
 
 TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  sensor->mutable_observation_policy()->set_frame_id("base");
+  auto* packet_output = sensor->mutable_node()->add_publishers();
+  packet_output->set_topic(prefix + "/packet");
+  packet_output->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  packet_output->set_observation_packet(true);
+  packet_output->set_publish_rate_hz(50);
   ASSERT_TRUE(config::ValidateConfig(config).ok()) << config::ValidateConfig(config);
   auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
   EXPECT_EQ(opens, 1);
@@ -164,6 +171,19 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   bool measured = false;
   int readiness = -1;
+  std::set<int64_t> native_stamps, packet_stamps;
+  bool atomic_metadata = false;
+  auto packet_sub = client->create_subscription<std_msgs::msg::UInt8MultiArray>(
+      prefix + "/packet", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
+        robot::perception::PerceptionPacket p;
+        if (!p.ParseFromArray(msg->data.data(), msg->data.size())) return;
+        const auto& m = p.sample_metadata();
+        atomic_metadata = p.has_position() && m.measurement_valid() && !m.has_acquisition_ticks() &&
+                          m.native_unit() == "sts3215_tick" && m.frame_id() == "base" &&
+                          m.sequence() > 0 && !m.source_instance_id().empty();
+        const auto stamp = ros2_utils::ToRosTimestamp(p.timestamp());
+        if (stamp.ok()) packet_stamps.insert(rclcpp::Time(*stamp).nanoseconds());
+      });
   auto status = client->create_subscription<std_msgs::msg::UInt8MultiArray>(
       prefix + "/measured/status", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
         robot::perception::PerceptionPacket p;
@@ -172,7 +192,9 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
       });
   auto feedback = client->create_subscription<sensor_msgs::msg::JointState>(
       prefix + "/measured", 1, [&](sensor_msgs::msg::JointState::ConstSharedPtr msg) {
-        measured = msg->name == std::vector<std::string>{"joint"} && msg->position.size() == 1 &&
+        native_stamps.insert(rclcpp::Time(msg->header.stamp).nanoseconds());
+        measured = msg->header.frame_id == "base" &&
+                   msg->name == std::vector<std::string>{"joint"} && msg->position.size() == 1 &&
                    std::abs(msg->position[0] - M_PI) < 0.001;
       });
   auto enable = client->create_publisher<std_msgs::msg::Bool>(prefix + "/torque", 1);
@@ -180,7 +202,10 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   executor.add_node(runtime);
   executor.add_node(client);
   ASSERT_TRUE(Await([&] {
-    return measured && readiness == robot::perception::ObservationStatus::READY &&
+    bool matched = false;
+    for (auto stamp : native_stamps) matched |= packet_stamps.count(stamp) != 0;
+    return measured && atomic_metadata && matched &&
+           readiness == robot::perception::ObservationStatus::READY &&
            enable->get_subscription_count() == 1 && command->get_subscription_count() == 1;
   }));
   std_msgs::msg::Bool on;

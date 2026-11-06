@@ -54,6 +54,9 @@ message QosSetting {
 }
 
 message Publisher {
+  // Emit a complete PerceptionPacket in UINT8_MULTI_ARRAY, retaining identity,
+  // timing, validity and payload atomically. False keeps the existing native type.
+  bool observation_packet = 4;
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;

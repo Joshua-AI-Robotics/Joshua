@@ -17,6 +17,7 @@ struct ChannelFeedback {
   float position = 0.0f;  // Channel's native unit (steps, ticks).
   float velocity = 0.0f;
   uint32_t fault_flags = 0;
+  bool velocity_valid = false;  // An absent velocity must not become a fabricated zero.
 };
 
 // One motor slot on one board. How the command reaches the controller
