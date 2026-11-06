@@ -236,6 +236,7 @@ class JoshuaWireChannel : public BoardChannel {
     ChannelFeedback result;
     result.position = value.position;
     result.velocity = value.velocity;
+    result.velocity_valid = true;
     result.fault_flags = value.fault_flags;
     return result;
   }

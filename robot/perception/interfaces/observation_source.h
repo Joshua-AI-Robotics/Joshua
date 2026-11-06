@@ -1,8 +1,12 @@
 #pragma once
 
+#include <unistd.h>
+
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -12,6 +16,26 @@
 #include "robot/perception/interfaces/perception_interface.h"
 
 namespace robot::perception {
+
+inline std::string ObservationHostClockId() {
+  static const std::string id = [] {
+    std::ifstream file("/proc/sys/kernel/random/boot_id");
+    std::string boot;
+    std::getline(file, boot);
+    return boot.empty() ? "unavailable" : "linux-monotonic:" + boot;
+  }();
+  return id;
+}
+inline std::string NewObservationInstance() {
+  static std::atomic<uint64_t> sequence{0};
+  return ObservationHostClockId() + "/" + std::to_string(getpid()) + "/" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "/" +
+         std::to_string(++sequence);
+}
+struct ObservationDescription {
+  std::string native_unit;
+  std::string frame_id;
+};
 
 // Shared validation at the acquisition boundary, before readiness is granted.
 inline absl::Status ValidateObservation(const PerceptionPacket& p) {
@@ -44,25 +68,42 @@ class ObservationState {
     ObservationStatus health;
     std::shared_ptr<const PerceptionPacket> packet;
   };
-  ObservationState(std::chrono::milliseconds stale_after, Clock::time_point start = Clock::now())
-      : stale_after_(stale_after), started_(start) {}
-  void Record(absl::StatusOr<PerceptionPacket> result, Clock::time_point now) {
+  ObservationState(std::chrono::milliseconds stale_after,
+                   Clock::time_point start = Clock::now(),
+                   ObservationDescription description = {})
+      : stale_after_(stale_after), description_(std::move(description)), started_(start) {
+    health_.set_source_instance_id(instance_id_);
+    health_.set_host_clock_id(ObservationHostClockId());
+  }
+  void Record(absl::StatusOr<PerceptionPacket> result,
+              Clock::time_point now,
+              int64_t unix_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count()) {
     std::lock_guard lock(mutex_);
     if (health_.state() == ObservationStatus::STOPPED) return;
     auto status = result.status();
     if (result.ok()) status = ValidateObservation(*result);
     if (!status.ok()) {
+      pending_discontinuity_ = true;
       health_.set_state(ObservationStatus::ERROR);
       health_.set_errors(health_.errors() + 1);
       health_.set_detail(status.ToString().substr(0, 512));
+      health_.set_last_error(health_.detail());
+      health_.set_last_error_steady_ns(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
       return;
     }
     bool distinct = true;
+    bool source_changed = false;
     if (result->has_scalar()) {
       const auto& s = result->scalar();
       const auto identity = std::make_tuple(
           s.boot_id(), s.session_id(), s.subscription_id(), s.acquisition_sequence());
       distinct = !have_scalar_ || identity != scalar_identity_;
+      source_changed = !have_scalar_ || std::get<0>(identity) != std::get<0>(scalar_identity_) ||
+                       std::get<1>(identity) != std::get<1>(scalar_identity_) ||
+                       std::get<2>(identity) != std::get<2>(scalar_identity_);
       have_scalar_ = true;
       scalar_identity_ = identity;
     }
@@ -71,11 +112,53 @@ class ObservationState {
                                   std::isfinite(result->scalar().value()));
     if (distinct) {
       if (usable) {
+        if (health_.state() == ObservationStatus::ERROR ||
+            health_.state() == ObservationStatus::INVALID ||
+            (have_valid_ && now - last_valid_ >= stale_after_)) {
+          health_.set_recoveries(health_.recoveries() + 1);
+          health_.set_last_recovery_steady_ns(
+              std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
+        }
         last_valid_ = now;
         have_valid_ = true;
         health_.set_valid_samples(health_.valid_samples() + 1);
       } else
         health_.set_invalid_samples(health_.invalid_samples() + 1);
+    }
+    if (distinct || !packet_) {
+      auto* metadata = result->mutable_sample_metadata();
+      metadata->Clear();
+      metadata->set_source_instance_id(instance_id_);
+      metadata->set_sequence(++sample_sequence_);
+      metadata->set_discontinuity(pending_discontinuity_ || source_changed);
+      metadata->set_host_receipt_unix_ns(unix_ns);
+      metadata->set_host_receipt_steady_ns(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
+      metadata->set_host_clock_id(ObservationHostClockId());
+      metadata->set_native_unit(description_.native_unit);
+      metadata->set_frame_id(description_.frame_id);
+      metadata->set_measurement_valid(usable);
+      if (result->has_scalar()) {
+        const auto& scalar = result->scalar();
+        if (scalar.boot_id() && scalar.clock()) {
+          metadata->set_acquisition_ticks(scalar.acquisition_us());
+          metadata->set_acquisition_tick_ns(1000);
+          metadata->set_acquisition_clock_id("jw-device:" + std::to_string(scalar.boot_id()) + ":" +
+                                             std::to_string(scalar.clock()));
+        }
+        metadata->set_source_sequence(scalar.acquisition_sequence());
+        metadata->set_native_unit("jw-unit:" + std::to_string(scalar.unit()));
+      }
+      if (result->has_point_cloud() && metadata->frame_id().empty())
+        metadata->set_frame_id(result->point_cloud().frame_id());
+      pending_discontinuity_ = false;
+      result->set_sequence_id(sample_sequence_);
+      result->set_timestamp_ns(unix_ns >= 0 ? unix_ns : 0);
+    } else {
+      // Cached publications retain original identity and receipt times.
+      *result->mutable_sample_metadata() = packet_->sample_metadata();
+      result->set_sequence_id(packet_->sequence_id());
+      result->set_timestamp_ns(packet_->timestamp_ns());
     }
     health_.set_state(usable ? ObservationStatus::READY : ObservationStatus::INVALID);
     health_.clear_detail();
@@ -101,7 +184,11 @@ class ObservationState {
   }
 
  private:
+  const std::string instance_id_ = NewObservationInstance();
   const std::chrono::milliseconds stale_after_;
+  const ObservationDescription description_;
+  uint64_t sample_sequence_ = 0;
+  bool pending_discontinuity_ = true;
   Clock::time_point started_, last_valid_{};
   bool have_valid_ = false, have_scalar_ = false;
   std::tuple<uint32_t, uint32_t, uint32_t, uint32_t> scalar_identity_{};
@@ -117,8 +204,10 @@ class ObservationSource {
   using Factory = std::function<absl::StatusOr<std::unique_ptr<PerceptionInterface>>()>;
   ObservationSource(Factory factory,
                     std::chrono::nanoseconds period,
-                    std::chrono::milliseconds stale_after)
-      : state_(stale_after), worker_([this, factory, period] { Run(factory, period); }) {}
+                    std::chrono::milliseconds stale_after,
+                    ObservationDescription description = {})
+      : state_(stale_after, ObservationState::Clock::now(), std::move(description)),
+        worker_([this, factory, period] { Run(factory, period); }) {}
   ~ObservationSource() {
     Stop();
   }

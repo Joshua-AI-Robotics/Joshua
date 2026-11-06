@@ -53,6 +53,7 @@ message AlsaAudioConfig {
 }
 
 message ObservationPolicy {
+  string frame_id = 2;  // Optional calibrated source frame; no transform is inferred.
   optional uint32 stale_after_ms = 1;  // Unset: 1000; 1..INT_MAX.
 }
 

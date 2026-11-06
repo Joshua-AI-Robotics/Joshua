@@ -204,6 +204,24 @@ TEST(ValidationTest, ValidatesControlPolicyAndCommandSourceIdentity) {
   EXPECT_FALSE(ValidateConfig(config).ok());
 }
 
+TEST(ValidationTest, ObservationPacketModeIsExplicitAndUnitsMatchTheChannel) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto* p = sensor->mutable_node()->add_publishers();
+  p->set_topic("/raw");
+  p->set_publish_rate_hz(20);
+  p->set_observation_packet(true);
+  p->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  p->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(100);
+  config.mutable_robot()->mutable_boards(0)->mutable_channels(0)->set_drive(robot::board::STEP_DIR);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+
 TEST(ValidationTest, DirectSensorsDoNotRequireBoards) {
   config::Config config;
   auto& robot = *config.mutable_robot();

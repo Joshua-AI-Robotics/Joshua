@@ -52,13 +52,22 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
       (!sensor.observation_policy().stale_after_ms() ||
        sensor.observation_policy().stale_after_ms() > INT32_MAX))
     return absl::InvalidArgumentError("Observation stale_after_ms must be 1..INT_MAX");
-  for (const auto& p : sensor.node().publishers())
+  for (const auto& p : sensor.node().publishers()) {
+    if (p.observation_packet() && (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY ||
+                                   sensor.sensor_type() == SensorType::AUDIO))
+      return absl::InvalidArgumentError(
+          "Observation packets require UINT8_MULTI_ARRAY and a supported source");
+    if (!p.observation_packet() &&
+        ((sensor.has_opencv_config() && p.ros2_data_type() != ros2::data_type::IMAGE) ||
+         (sensor.has_lds01_config() && p.ros2_data_type() != ros2::data_type::POINTCLOUD2)))
+      return absl::InvalidArgumentError("Observation output type does not match the source");
     if ((sensor.node().node_type() == ros2::node::CAMERA_PUBLISHER ||
          sensor.node().node_type() == ros2::node::LIDAR_PUBLISHER ||
          sensor.node().node_type() == ros2::node::POSITION_PUBLISHER ||
          sensor.node().node_type() == ros2::node::DEVICE_BUS) &&
         (!p.publish_rate_hz() || p.publish_rate_hz() > 1000))
       return absl::InvalidArgumentError("Observation publisher rate must be 1..1000 Hz");
+  }
   if (sensor.sensor_name().empty()) {
     return absl::InvalidArgumentError("Sensor has no sensor_name.");
   }
@@ -127,7 +136,9 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   }
 }
 
-absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
+absl::Status ValidateSensorConfigs(
+    const robot::perception::Perception& perceptions,
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
   std::set<std::string> audio_devices;
   for (const auto& sensor : perceptions.single_perceptions()) {
     if (sensor.node().node_type() == ros2::node::MCU_BUS && !sensor.has_joshua_wire_scalar_config())
@@ -143,6 +154,14 @@ absl::Status ValidateSensorConfigs(const robot::perception::Perception& percepti
         !sensor.has_joshua_wire_scalar_config() && !sensor.has_sts3215_encoder_config())
       return absl::InvalidArgumentError("DEVICE_BUS requires board-backed position/scalar sensors");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
+    if (sensor.has_sts3215_encoder_config()) {
+      const auto& c = sensor.sts3215_encoder_config();
+      ABSL_ASSIGN_OR_RETURN(auto resolved,
+                            robot::board::ResolveChannelConfig(
+                                boards, sensor.sensor_name(), c.board_name(), c.channel()));
+      if (resolved.channel->drive() != robot::board::SERVO_BUS_UART)
+        return absl::InvalidArgumentError("STS3215 position units require a servo-bus channel");
+    }
   }
   return absl::OkStatus();
 }
@@ -220,7 +239,8 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
         sensor.sensor_type() != robot::perception::POSITION)
       continue;
     for (const auto& pub : sensor.node().publishers()) {
-      ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
+      if (!pub.observation_packet())
+        ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
       if (pub.publish_rate_hz() == 0)
         return absl::InvalidArgumentError("Position publisher requires a positive rate");
       ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
@@ -459,7 +479,7 @@ absl::Status ValidateConfig(const config::Config& config) {
           "Legacy TI-demo motor/actuator config is retired; configure a supported motor");
   }
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
-  ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
+  ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions(), robot.boards()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));
   ABSL_ASSIGN_OR_RETURN(auto connections, ResolveConnections(robot.boards(), devices));

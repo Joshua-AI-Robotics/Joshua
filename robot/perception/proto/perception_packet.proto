@@ -90,12 +90,38 @@ message ObservationStatus {
   uint64 invalid_samples = 4;
   uint64 errors = 5;
   string detail = 6;
+  uint64 recoveries = 7;
+  optional uint64 last_error_steady_ns = 8;
+  string last_error = 9;
+  optional uint64 last_recovery_steady_ns = 10;
+  string source_instance_id = 11;
+  string host_clock_id = 12;
+}
+
+// Runtime sample identity and clock facts. Host receipt is acquisition/read
+// completion, not camera exposure, scan start, shaft measurement or device age.
+message SampleMetadata {
+  string source_instance_id = 1;  // New on each acquisition-owner generation.
+  uint64 sequence = 2;            // Distinct samples within that generation.
+  bool discontinuity = 3;
+  optional uint64 acquisition_ticks = 4;  // Absent when source timing is unavailable.
+  uint64 acquisition_tick_ns = 5;
+  string acquisition_clock_id = 6;
+  int64 host_receipt_unix_ns = 7;
+  uint64 host_receipt_steady_ns = 8;
+  string host_clock_id = 9;  // Identifies this Linux boot; not synchronization.
+  optional uint64 source_sequence = 10;
+  string native_unit = 11;
+  string frame_id = 12;
+  bool measurement_valid = 13;  // Freshness remains separate in observation_status.
 }
 
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
+  SampleMetadata sample_metadata = 11;
   string perception_id = 1;
-  // TODO(hmoon): Sync the timestamp unit and source across the system.
+  // In the shared observation runtime: host receipt Unix ns.
+  // Use sample_metadata for clock identity and acquisition availability.
   uint64 timestamp_ns = 2;
   uint64 sequence_id = 3;  // Monotonically increasing sequence number for the perception packet.
 

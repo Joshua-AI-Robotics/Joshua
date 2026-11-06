@@ -408,3 +408,17 @@ IDs are lowercase ROS identifiers, up to 64 characters. Input-age enforcement
 requires JointState motion with synchronized ROS timestamps; Bool enable gates
 remain explicit operator actions. See the shared lifecycle in
 [ROS runtime documentation](../ros2/README.md#shared-control-lifecycle).
+
+## Observation metadata and packet output
+
+`observation_policy { stale_after_ms: 1000 frame_id: "base" }` configures receipt
+freshness and an optional calibrated frame. Source-native units are fixed by the
+selected driver; an STS3215 encoder requires a servo-bus channel.
+
+Native outputs retain their message types and add `/metadata` and `/status`
+packet companions. For atomic payload/identity/timing recording, a publisher may
+select `observation_packet: true` with `UINT8_MULTI_ARRAY`; otherwise position
+arrays retain their existing numeric meaning. Camera and lidar native outputs
+require IMAGE and POINTCLOUD2 respectively. See [sample clocks and recording](../ros2/README.md#sample-identity-clocks-and-recording)
+for timestamp meaning, unavailable acquisition time, generation markers and
+native-unit conversions.
