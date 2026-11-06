@@ -51,6 +51,13 @@ class ActionSubscriber : public rclcpp::Node {
       const bool require_explicit_enable =
           action_proto.motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
           action_proto.stepper_config().require_explicit_enable();
+      interfaces_.push_back(shared_interface);
+      if (!auto_enable || require_explicit_enable) {
+        robot::action::ActionPacket disable;
+        disable.set_preset(robot::action::PRESET_DISABLE_TORQUE);
+        const auto status = shared_interface->SetAction(disable);
+        if (!status.ok()) throw std::runtime_error(status.ToString());
+      }
       if (auto_enable && !require_explicit_enable) {
         robot::action::ActionPacket enable_packet;
         enable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
@@ -116,27 +123,23 @@ class ActionSubscriber : public rclcpp::Node {
 
   ~ActionSubscriber() {
     if (!manage_lifecycle_) return;  // Mixed bus owner performs disabled board reset.
-    std::vector<std::thread> threads;
+    ShutdownActions().IgnoreError();
+  }
 
-    std::set<robot::action::ActionInterface*> torn_down;
-    for (auto& actuator : actuators_) {
-      if (!torn_down.insert(actuator.interface.get()).second) continue;
-      threads.emplace_back([&actuator]() {
-        robot::action::ActionPacket teardown_packet;
-        teardown_packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
-        auto status = actuator.interface->SetAction(teardown_packet);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failed to teardown actuator '" << actuator.topic << "'";
-        }
-      });
+ protected:
+  // Called before a composed owner releases its board; includes actions without topics.
+  absl::Status ShutdownActions() {
+    absl::Status result;
+    for (auto& interface : interfaces_) {
+      robot::action::ActionPacket packet;
+      packet.set_preset(robot::action::PRESET_TEARDOWN);
+      result.Update(interface->SetAction(packet));
     }
-
-    for (auto& thread : threads) {
-      thread.join();
-    }
+    return result;
   }
 
  private:
+  std::vector<std::shared_ptr<robot::action::ActionInterface>> interfaces_;
   bool manage_lifecycle_;
   std::list<Actuator> actuators_;
 };

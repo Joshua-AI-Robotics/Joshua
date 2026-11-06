@@ -62,8 +62,8 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. The standalone position/actuator nodes require separate
-bus owners. Mixed JoshuaWire scalar/actuator setups use `MCU_BUS` instead.
+host sensor publishers. Use `DEVICE_BUS` for commands and board-backed feedback
+on one bus. Mixed JoshuaWire scalar/actuator setups also support `MCU_BUS`.
 
 Standalone actuator subscribers honor `stepper_config.require_explicit_enable`:
 when true, startup leaves outputs disabled until an explicit torque-enable
@@ -256,3 +256,18 @@ ALSA aliases for the same physical device cannot be detected statically.
 `//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
 virtual time to cover large and tiny chunks, short reads, delayed polls, changed
 buffer sizes after recovery, and bounded work for always-ready sources.
+
+## Shared board runtime
+
+`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+observations in one process. Assign every consumer of a bus the same node ID
+and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+no transport implementation is selected by the node. Position publishers retain
+the existing numeric/JointState contracts. `MCU_BUS` remains supported for existing
+JoshuaWire scalar/stepper configurations.
+
+The composed owner explicitly disables actuators at startup and tears them down
+before releasing boards. Steppers require `require_explicit_enable: true` so their
+driver initialization cannot enable early. Camera/lidar acquisition remains in
+its existing standalone nodes. This feature does not qualify physical motion,
+link-loss stopping or a particular rig.

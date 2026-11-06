@@ -171,6 +171,7 @@ cc_library(
     name = "mcu_bus_node",
     hdrs = [
         "action_subscriber.h",
+        "device_bus.h",
         "mcu_bus.h",
     ],
     deps = [
@@ -268,5 +269,24 @@ ros2_cpp_binary(
         "//ros2:node_runner",
         "//ros2/utils:qos_setting",
         "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "device_bus",
+    srcs = ["device_bus.cc"],
+    deps = [":mcu_bus_node"],
+)
+
+cc_test(
+    name = "device_bus_test",
+    srcs = ["device_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/testing:fake_caller_sized_message_transport",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
     ],
 )

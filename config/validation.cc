@@ -58,8 +58,9 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
     case SinglePerception::kJoshuaWireScalarConfig: {
       const auto& c = sensor.joshua_wire_scalar_config();
       if (sensor.sensor_type() != SensorType::SCALAR ||
-          sensor.node().node_type() != ros2::node::MCU_BUS || c.function_id() >= 255 ||
-          !c.period_us() || sensor.node().publishers().empty() ||
+          (sensor.node().node_type() != ros2::node::MCU_BUS &&
+           sensor.node().node_type() != ros2::node::DEVICE_BUS) ||
+          c.function_id() >= 255 || !c.period_us() || sensor.node().publishers().empty() ||
           !sensor.node().subscriptions().empty())
         return absl::InvalidArgumentError(
             "Scalar streaming requires MCU_BUS, function/period and publishers");
@@ -127,6 +128,9 @@ absl::Status ValidateSensorConfigs(const robot::perception::Perception& percepti
     if (sensor.has_alsa_audio_config() &&
         !audio_devices.insert(sensor.alsa_audio_config().device()).second)
       return absl::InvalidArgumentError("Audio device must have a single capture owner");
+    if (sensor.node().node_type() == ros2::node::DEVICE_BUS &&
+        !sensor.has_joshua_wire_scalar_config() && !sensor.has_sts3215_encoder_config())
+      return absl::InvalidArgumentError("DEVICE_BUS requires board-backed position/scalar sensors");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
   }
   return absl::OkStatus();
@@ -200,7 +204,10 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
     return absl::OkStatus();
   };
   for (const auto& sensor : robot.perceptions().single_perceptions()) {
-    if (sensor.node().node_type() != ros2::node::POSITION_PUBLISHER) continue;
+    if ((sensor.node().node_type() != ros2::node::POSITION_PUBLISHER &&
+         sensor.node().node_type() != ros2::node::DEVICE_BUS) ||
+        sensor.sensor_type() != robot::perception::POSITION)
+      continue;
     for (const auto& pub : sensor.node().publishers()) {
       ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
       if (pub.publish_rate_hz() == 0)
@@ -210,7 +217,8 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
   }
   for (const auto& action : robot.actions().single_actions()) {
     if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
-        action.node().node_type() != ros2::node::MCU_BUS)
+        action.node().node_type() != ros2::node::MCU_BUS &&
+        action.node().node_type() != ros2::node::DEVICE_BUS)
       continue;
     const auto& actuator = action.actuator();
     for (const auto& sub : action.node().subscriptions()) {
@@ -385,6 +393,14 @@ absl::Status ValidateConfig(const config::Config& config) {
           "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
   }
   for (const auto& action : robot.actions().single_actions()) {
+    if (action.node().node_type() == ros2::node::DEVICE_BUS &&
+        (!action.has_actuator() || action.action_type() != robot::action::ACTUATOR ||
+         (action.actuator().motor_type() != robot::action::MOTOR_STS3215 &&
+          action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17) ||
+         (action.actuator().motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
+          !action.actuator().stepper_config().require_explicit_enable())))
+      return absl::InvalidArgumentError(
+          "DEVICE_BUS requires a supported actuator with disabled startup");
     if (action.node().node_type() == ros2::node::MCU_BUS &&
         (!action.has_actuator() ||
          action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17 ||

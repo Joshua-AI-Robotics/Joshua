@@ -63,3 +63,7 @@ acquisition freshness or physical readiness. Simulation observation is
 unsupported. The [MCP guide](../tools/mcp/README.md#optional-runtime-observations)
 documents directory permissions, clock domain, fields and limitations. MCP is
 an optional reader; NodeGenerator remains the runtime owner.
+
+`DEVICE_BUS` similarly launches `ros2/device_bus` for shared board-backed actuator
+and position/scalar consumers. The launcher includes this binary in its runfiles
+and release package. Conflicting process ownership remains a preflight error.
