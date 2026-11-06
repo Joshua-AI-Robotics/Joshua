@@ -60,6 +60,7 @@ message Publisher {
 }
 
 message Subscription {
+  string source_id = 3;  // Actuator command owner; unset means "default".
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
 }

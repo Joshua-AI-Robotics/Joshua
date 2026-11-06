@@ -21,6 +21,6 @@ class ActionSubscriber : public rclcpp::Node {
 
 #ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
-  return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber");
+  return ros2_utils::RunNode<ActionSubscriber>(argc, argv, "actuator_subscriber", 2);
 }
 #endif

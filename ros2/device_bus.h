@@ -72,16 +72,20 @@ class DeviceBus : public ActionSubscriber {
         "~/estop",
         [this](std::shared_ptr<std_srvs::srv::Trigger::Request>,
                std::shared_ptr<std_srvs::srv::Trigger::Response> reply) {
-          reply->success = true;
+          const auto disabled = StopActions();
+          reply->success = disabled.ok();
+          if (!disabled.ok()) reply->message = disabled.ToString();
           for (auto& b : boards_) {
             const auto status = b->EmergencyStop();
-            if (!status.ok()) {
+            if (!status.ok() && !absl::IsUnimplemented(status)) {
               reply->success = false;
               reply->message += status.ToString() + "; ";
             }
           }
           if (reply->success)
-            reply->message = "Protocol stop acknowledged; physical verification unsupported";
+            reply->message =
+                "Host stop interlocked; available board stop acknowledged; physical verification "
+                "unsupported";
         },
         rmw_qos_profile_services_default,
         stop_group_);
