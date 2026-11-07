@@ -40,6 +40,21 @@ TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 
 ## Development Helpers
 
+`setup_robotcad.sh` installs pinned FreeCAD and RobotCAD into the ignored
+`output/robotcad/` directory using the Joshua Ubuntu 24 Docker image.
+`run_robotcad.sh` creates/opens the CAD demo, checks its exports, or converts and
+opens the demo in MuJoCo. See the
+[CAD tooling guide](../tools/cad/README.md) for prerequisites and output formats.
+
+```bash
+./scripts/setup_robotcad.sh
+./scripts/run_robotcad.sh --create-demo
+./scripts/run_robotcad.sh
+./scripts/run_robotcad.sh --verify-exports
+./scripts/run_robotcad.sh --convert-mujoco
+./scripts/run_robotcad.sh --mujoco
+```
+
 The container entrypoint ([docker/entrypoint.sh](../docker/entrypoint.sh), baked into the images) sources the ROS2 environment for every container command, creates mock serial ports when `ENABLE_MOCK_SERIAL_PORTS=true`, then starts the requested command or shell.
 
 `create_mock_serial_ports.sh` creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`. Use it from inside the relevant Docker service when testing without physical serial devices.

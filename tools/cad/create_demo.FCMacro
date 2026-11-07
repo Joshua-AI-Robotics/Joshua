@@ -1,0 +1,265 @@
+"""Build a local, hardware-free RobotCAD example and export both branches.
+
+Execute with FreeCAD's bundled Python/GUI, not the host Python interpreter.
+Geometry is in mm; RobotCAD exports SI URDF and Collada meshes.
+The masses below are illustrative inputs, not measured printed-part masses.
+"""
+
+import json
+import math
+import os
+import subprocess
+import traceback
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+ROOT = Path(os.environ.get("JOSHUA_CAD_ROOT", "/workspace/output/robotcad"))
+PROJECT = Path(os.environ.get("JOSHUA_CAD_PROJECT", str(ROOT / "project")))
+
+
+def build():
+    """Create the example without replacing a saved CAD document."""
+    import FreeCAD as App
+    import FreeCADGui as Gui
+    import MeshPart
+    import Part
+    from freecad.cross.joint_proxy import make_joint
+    from freecad.cross.link_proxy import make_link
+    from freecad.cross.robot_proxy import make_robot
+    from freecad.cross.ui.command_calculate_mass_and_inertia import (
+        _CalculateMassAndInertiaCommand,
+    )
+
+    if (PROJECT / "robotcad_demo.FCStd").exists():
+        raise FileExistsError(
+            "Demo already exists; choose a new JOSHUA_CAD_PROJECT directory."
+        )
+    PROJECT.mkdir(parents=True, exist_ok=True)
+    print_dir = PROJECT / "print"
+    print_dir.mkdir(exist_ok=True)
+    package_name = "robotcad_demo_description"
+    package = PROJECT / package_name
+    (package / "urdf").mkdir(parents=True, exist_ok=True)
+    doc = App.newDocument("RobotCADDemo")
+    sources = doc.addObject("App::DocumentObjectGroup", "CAD_Sources")
+
+    def box(name, dims, position):
+        obj = doc.addObject("Part::Box", name)
+        obj.Length, obj.Width, obj.Height = dims
+        obj.Placement.Base = App.Vector(*position)
+        sources.addObject(obj)
+        return obj
+
+    def cylinder(name, radius, height, position):
+        obj = doc.addObject("Part::Cylinder", name)
+        obj.Radius, obj.Height = radius, height
+        obj.Placement.Base = App.Vector(*position)
+        sources.addObject(obj)
+        return obj
+
+    def fuse(name, objects):
+        obj = doc.addObject("Part::MultiFuse", name)
+        obj.Shapes = objects
+        obj.Refine = True
+        sources.addObject(obj)
+        return obj
+
+    def cut(name, base, tool):
+        obj = doc.addObject("Part::Cut", name)
+        obj.Base, obj.Tool = base, tool
+        obj.Refine = True
+        sources.addObject(obj)
+        return obj
+
+    plate = box("Base_Plate", (60, 50, 6), (-30, -25, 0))
+    boss = cylinder("Base_Boss", 8, 16, (0, 0, 6))
+    base = cut(
+        "Base_Solid",
+        fuse("Base_Union", [plate, boss]),
+        cylinder("Base_Pivot_Hole", 2.2, 24, (0, 0, -1)),
+    )
+
+    beam = box("Arm_Beam", (100, 16, 6), (0, -8, 0))
+    hub = cylinder("Arm_Hub", 10, 6, (0, 0, 0))
+    tip = cylinder("Arm_Tip", 8, 6, (100, 0, 0))
+    arm_union = fuse("Arm_Union", [beam, hub, tip])
+    arm_holes = fuse(
+        "Arm_Holes",
+        [
+            cylinder("Arm_Pivot_Hole", 2.2, 8, (0, 0, -1)),
+            cylinder("Arm_Tip_Hole", 3, 8, (100, 0, -1)),
+        ],
+    )
+    arm = cut("Arm_Solid", arm_union, arm_holes)
+    # Bake offsets into the proxy shapes. This avoids the upstream primitive
+    # exporter losing the placement of a Part::Box referenced through a link.
+    base_collision = doc.addObject("Part::Feature", "Base_Collision")
+    base_collision.Shape = Part.makeBox(60, 50, 22, App.Vector(-30, -25, 0))
+    sources.addObject(base_collision)
+    arm_collision = doc.addObject("Part::Feature", "Arm_Collision")
+    arm_collision.Shape = Part.makeBox(118, 20, 6, App.Vector(-10, -10, 0))
+    sources.addObject(arm_collision)
+    doc.recompute()
+
+    robot = make_robot("robotcad_demo", doc)
+    robot.ViewObject.JointAxisLength = 20
+    robot.OutputPath = str(package)
+    robot.addProperty("App::PropertyString", "MassAssumption", "Example")
+    robot.MassAssumption = (
+        "Illustrative uniform bodies: base 0.080 kg, arm 0.020 kg. "
+        "Replace with measured assembled-link values."
+    )
+    links = []
+    for name, solid, collision, mass, color in [
+        ("base_link", base, base_collision, 0.080, (0.20, 0.42, 0.65)),
+        ("arm_link", arm, arm_collision, 0.020, (0.95, 0.56, 0.18)),
+    ]:
+        link = make_link(name, doc)
+        robot.addObject(link)
+        link.Real = [solid]
+        link.Visual = [solid]
+        link.Collision = [collision]
+        link.CalculateInertiaBasedOnMass = True
+        link.Mass = f"{mass} kg"
+        solid.ViewObject.ShapeColor = color
+        links.append(link)
+
+    joint = make_joint("shoulder_joint", doc, robot=robot)
+    joint.Type = "revolute"
+    joint.Parent = "base_link"
+    joint.Child = "arm_link"
+    joint.Origin = App.Placement(App.Vector(0, 0, 24), App.Rotation())
+    joint.LowerLimit, joint.UpperLimit = -90, 90
+    joint.Velocity, joint.Effort = 90, 0.2
+    doc.recompute()
+
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(robot)
+    _CalculateMassAndInertiaCommand().Activated()
+    doc.recompute()
+    for link in links:
+        assert link.Mass.Value > 0
+        assert min(link.Ixx, link.Iyy, link.Izz) > 0, link.Label
+
+    # Use RobotCAD's own per-link mesh/URDF and joint exporters. This avoids
+    # generated Gazebo/controller scaffolding, which Joshua does not need.
+    xml = ET.Element("robot", {"name": "robotcad_demo"})
+    xml.append(
+        ET.Comment(
+            "Generated using RobotCAD link/joint exporters. "
+            "Example masses; see manifest.json."
+        )
+    )
+    for link in links:
+        xml.append(link.Proxy.export_urdf(PROJECT, package_name))
+    xml.append(joint.Proxy.export_urdf())
+    ET.indent(xml, space="  ")
+    urdf_path = package / "urdf" / "robotcad_demo.urdf"
+    ET.ElementTree(xml).write(urdf_path, encoding="utf-8", xml_declaration=True)
+
+    (package / "package.xml").write_text("""<?xml version="1.0"?>
+<package format="3">
+  <name>robotcad_demo_description</name><version>0.0.1</version>
+  <description>RobotCAD export demo with example mass properties.</description>
+  <maintainer email="local@example.invalid">Local operator</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
+""")
+    (package / "CMakeLists.txt").write_text("""cmake_minimum_required(VERSION 3.8)
+project(robotcad_demo_description)
+find_package(ament_cmake REQUIRED)
+install(DIRECTORY urdf meshes DESTINATION share/${PROJECT_NAME})
+ament_package()
+""")
+
+    part_reports = {}
+    for name, solid in [("base", base), ("arm", arm)]:
+        assert solid.Shape.isValid() and len(solid.Shape.Solids) == 1, name
+        mesh = MeshPart.meshFromShape(
+            Shape=solid.Shape,
+            LinearDeflection=0.05,
+            AngularDeflection=0.15,
+            Relative=False,
+        )
+        mesh.write(str(print_dir / f"{name}.stl"))
+        bb = mesh.BoundBox
+        part_reports[name] = {
+            "dimensions_mm": [bb.XLength, bb.YLength, bb.ZLength],
+            "facets": mesh.CountFacets,
+            "solid": mesh.isSolid(),
+            "volume_mm3": solid.Shape.Volume,
+        }
+
+    for obj in sources.Group:
+        obj.Visibility = False
+    robot.ViewObject.ShowReal = False
+    robot.ViewObject.ShowVisual = True
+    robot.ViewObject.ShowCollision = False
+    doc.recompute()
+    Gui.Selection.clearSelection()
+    Gui.activateWorkbench("CrossWorkbench")
+    Gui.updateGui()
+    Gui.activeDocument().activeView().viewAxonometric()
+    Gui.activeDocument().activeView().fitAll()
+    doc.recompute()
+    doc.saveAs(str(PROJECT / "robotcad_demo.FCStd"))
+    Gui.activeDocument().activeView().saveImage(
+        str(PROJECT / "preview.png"), 1280, 900, "White"
+    )
+
+    manifest = {
+        "freecad_version": App.Version()[:3],
+        "robotcad_commit": subprocess.check_output(
+            ["git", "-C", str(ROOT / "addon"), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
+        "cad_units": "mm",
+        "urdf_units": "m, kg, rad, kg*m^2",
+        "purpose": (
+            "CAD/export example only; not a qualified mechanical or motor design"
+        ),
+        "mass_assumption": robot.MassAssumption,
+        "parts": part_reports,
+        "links": {
+            link.Label: {
+                "mass_kg": link.Mass.Value,
+                "com_mm": list(link.CenterOfMass.Base),
+                "inertia_kg_m2": [
+                    link.Ixx,
+                    link.Ixy,
+                    link.Ixz,
+                    link.Iyy,
+                    link.Iyz,
+                    link.Izz,
+                ],
+            }
+            for link in links
+        },
+        "joint": {
+            "name": "shoulder_joint",
+            "origin_m": [0, 0, 0.024],
+            "axis": [0, 0, 1],
+            "limits_rad": [-math.pi / 2, math.pi / 2],
+            "effort_Nm": 0.2,
+            "velocity_rad_s": math.pi / 2,
+        },
+    }
+    (PROJECT / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    (ROOT / "build-result.json").write_text(
+        json.dumps({"status": "ok", "project": str(PROJECT)}, indent=2)
+    )
+    App.closeDocument(doc.Name)
+
+
+try:
+    (ROOT / "build-error.txt").unlink(missing_ok=True)
+    (ROOT / "build-result.json").unlink(missing_ok=True)
+    build()
+except Exception:
+    (ROOT / "build-error.txt").write_text(traceback.format_exc())
+finally:
+    import FreeCADGui as Gui
+
+    Gui.getMainWindow().close()
