@@ -90,7 +90,8 @@ TensorBoard events, source snapshots, and checkpoints every 100 updates.
 
 Commands start at zero, change to 0.02–0.03 m/s after 1,200 policy steps
 (50 updates), then to 0.03–0.05 m/s after 6,000 steps (250 updates). The standing
-fraction falls from 100% to 20%, then 10%. Resampling applies changes gradually
+fraction falls from 100% to 20%, then 10%. After 24,000 steps (1,000 updates),
+the moving cases use exactly 0.05 m/s. Resampling applies changes gradually
 at the next command/reset; stages use the persisted global policy-step counter,
 not the number of parallel environments. Lateral and turning commands remain
 zero in this first forward-walking task. Resets vary joint angles by ±0.01 rad,
@@ -99,6 +100,8 @@ roll/pitch by ±0.02 rad, and yaw by ±0.05 rad.
 Planar velocity tracking uses a 0.03 m/s tolerance: standing at a 0.05 m/s command
 does not receive a near-perfect tracking reward. Vertical velocity has a separate
 penalty so foot lift does not remove correct horizontal tracking credit.
+An additional unbounded squared planar-error cost prevents a policy from earning
+credit by slowly rocking forward and rapidly snapping backward with no net progress.
 Other terms encourage upright support, a 12 mm swing-foot clearance gated by
 actual body progress, and home posture; they penalize stance
 slip, fewer than two supporting feet, height deviations, torque, mechanical
@@ -161,6 +164,9 @@ alive; `preview.png` is captured at one second. The mesh-free contact primitives
 are made visible in the CPU render model without changing GPU physics.
 Reports and MP4/PNG files stay beside the checkpoint in ignored `evaluations/`.
 Use held-out seeds (for example `--seed-base 20000`) when comparing final policies.
+`--sample-actions` is available for diagnosing dependence on exploration noise;
+those reports are labelled `sampled_diagnostic` and cannot pass the deterministic
+qualification gate, even if their individual case metrics meet its thresholds.
 
 Passing this nominal-model test establishes a simulation baseline only. Actuator
 calibration, domain randomization, normalized ONNX/CPU replay, and Joshua

@@ -66,6 +66,11 @@ def main():
     parser.add_argument("--video", action="store_true")
     parser.add_argument("--video-seconds", type=float, default=10)
     parser.add_argument("--require-pass", action="store_true")
+    parser.add_argument(
+        "--sample-actions",
+        action="store_true",
+        help="Diagnostic only; cannot qualify the deterministic policy",
+    )
     args = parser.parse_args()
     if (
         args.episodes < 1
@@ -139,7 +144,10 @@ def main():
             )
         with torch.inference_mode():
             for step in range(round(args.seconds / env.step_dt)):
-                raw_actions = policy(TensorDict(obs, batch_size=[n]))
+                raw_actions = policy(
+                    TensorDict(obs, batch_size=[n]),
+                    stochastic_output=args.sample_actions,
+                )
                 actions = raw_actions.clamp(-1, 1)
                 if not torch.isfinite(raw_actions).all():
                     raise RuntimeError("Non-finite evaluation action")
@@ -219,7 +227,11 @@ def main():
             "survived": int(alive.sum()),
             "successful": int(passed.sum()),
             "pass_fraction": float(passed.float().mean()),
-            "gate_passed": bool(passed.float().mean() >= 0.9),
+            "policy_mode": (
+                "sampled_diagnostic" if args.sample_actions else "deterministic"
+            ),
+            "gate_passed": bool(passed.float().mean() >= 0.9)
+            and not args.sample_actions,
             "criteria": {
                 "velocity_rmse_max_m_s": 0.02,
                 "minimum_forward_m": required,

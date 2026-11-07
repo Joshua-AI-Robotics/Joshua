@@ -15,6 +15,7 @@ STAGES = (
     (0, (0.0, 0.0), 1.0),
     (50 * 24, (0.02, 0.03), 0.2),
     (250 * 24, (0.03, 0.05), 0.1),
+    (1000 * 24, (0.05, 0.05), 0.1),
 )
 
 
@@ -92,6 +93,13 @@ def track_planar_velocity(env):
 def vertical_velocity(env):
     """Penalize vertical velocity without suppressing horizontal tracking credit."""
     return env.scene["robot"].data.root_link_lin_vel_b[:, 2].square()
+
+
+def velocity_error_cost(env):
+    """Penalize fast reverse/sideways motion that bounded tracking can ignore."""
+    command = env.command_manager.get_command("twist")[:, :2]
+    actual = env.scene["robot"].data.root_link_lin_vel_b[:, :2]
+    return (command - actual).square().sum(-1) / 0.05**2
 
 
 def command_curriculum(env, env_ids):
@@ -202,6 +210,7 @@ def make_walk_cfg(directory=None, num_envs=512, evaluation=False, speed=0.05):
         ("gait_contact", gait_contact, 2.0),
         ("vertical_velocity", vertical_velocity, -2.0),
         ("swing_lift", swing_lift_cost, -0.5),
+        ("velocity_error", velocity_error_cost, -2.0),
     ):
         cfg.rewards[name] = RewardTermCfg(func=func, weight=weight)
     cfg.observations["actor"].terms["gait_clock"] = ObservationTermCfg(func=gait_clock)

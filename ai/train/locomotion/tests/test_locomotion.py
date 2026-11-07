@@ -70,6 +70,7 @@ def test_curriculum_restores_absolute_stage():
         (6000, (0.03, 0.05), 0.1),
         (0, (0, 0), 1),
         (1200, (0.02, 0.03), 0.2),
+        (24000, (0.05, 0.05), 0.1),
     ):
         env.common_step_counter = step
         walk.command_curriculum(env, None)
@@ -171,3 +172,17 @@ def test_swing_lift_guidance_leaves_stance_control_free():
     actions[0, 1] = 2.0
     assert walk.swing_lift_cost(env).item() == pytest.approx(9)
     assert walk.walk_rl_cfg().clip_actions is None
+
+
+def test_velocity_cost_rejects_forward_backward_rocking():
+    """A zero-progress cycle cannot hide its fast backward half in reward saturation."""
+    env = fake_env()
+    velocity = env.scene["robot"].data.root_link_lin_vel_b
+    velocity[:] = 0
+    stationary = walk.velocity_error_cost(env).item()
+    velocity[:, 0] = 0.05
+    forward = walk.velocity_error_cost(env).item()
+    velocity[:, 0] = -0.15
+    backward = walk.velocity_error_cost(env).item()
+    assert forward == pytest.approx(0)
+    assert 0.75 * forward + 0.25 * backward > stationary
