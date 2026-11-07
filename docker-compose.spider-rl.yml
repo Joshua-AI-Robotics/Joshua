@@ -1,0 +1,48 @@
+# Standalone, simulation-only tooling. No ROS services or robot device mounts.
+x-spider-rl: &spider-rl
+  image: ${JOSHUA_RL_IMAGE:-joshua:u24-jazzy}
+  user: "${JOSHUA_RL_UID:-1000}:${JOSHUA_RL_GID:-1000}"
+  working_dir: /workspace/output/spider_rl
+  entrypoint: ["/bin/bash", "/workspace/ai/train/locomotion/container.sh"]
+  volumes:
+    - .:/workspace:ro
+    - ./output:/workspace/output:rw
+  environment: &spider-env
+    HOME: /workspace/output/spider_rl/home
+    PYTHONPATH: /workspace/ai/train/locomotion
+    PYTHONNOUSERSITE: "1"
+    PYTHONDONTWRITEBYTECODE: "1"
+    XDG_CACHE_HOME: /workspace/output/spider_rl/cache
+    JOSHUA_SPIDER_ASSET: /workspace/output/spider_rl/asset
+    JOSHUA_SPIDER_RL_OUTPUT: /workspace/output/spider_rl
+    WANDB_MODE: disabled
+    MUJOCO_GL: egl
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  setup:
+    <<: *spider-rl
+    command: [setup]
+  prepare:
+    <<: *spider-rl
+    network_mode: none
+    command: [prepare]
+  check:
+    <<: *spider-rl
+    network_mode: none
+    command: [check]
+  cpu-smoke:
+    <<: *spider-rl
+    network_mode: none
+    command: [smoke, --device, cpu, --num-envs, "4"]
+  smoke:
+    <<: *spider-rl
+    network_mode: none
+    gpus: all
+    shm_size: 1gb
+    environment:
+      <<: *spider-env
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+    command: [smoke]

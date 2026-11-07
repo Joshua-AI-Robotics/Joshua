@@ -21,4 +21,5 @@
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](../simulation/README.md) |
 | FreeCAD/RobotCAD setup and STL/URDF export | [../tools/cad/README.md](../tools/cad/README.md) |
 | Data collection (DataStore) | [ai/train/README.md](../ai/train/README.md) |
+| Spider mjlab/PPO training foundation | [ai/train/locomotion/README.md](../ai/train/locomotion/README.md) |
 | React web UI | [ui/README.md](../ui/README.md) |
