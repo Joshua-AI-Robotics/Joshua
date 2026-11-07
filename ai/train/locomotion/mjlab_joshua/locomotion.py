@@ -68,6 +68,20 @@ def gait_contact(env):
     return (contact == ~swing_mask(env)).float().mean(-1)
 
 
+def swing_lift_cost(env):
+    """Guide swing lift within the existing action envelope; leave stance/yaw free."""
+    offsets = torch.tensor([0, 0.5, 0.75, 0.25], device=env.device)
+    phase = (gait_phase(env)[:, None] - offsets) % 1.0
+    swing = swing_mask(env)
+    lift = (phase.clamp(max=0.25) * (math.pi / 0.25)).sin() * swing
+    target = torch.stack((-lift, -0.5 * lift), dim=-1)
+    # Preserve reward differences outside the physical action bounds.
+    # BoundedPositionAction still clips accepted controls and feedback to ±1.
+    actions = env.action_manager.action.reshape(-1, 4, 3)
+    error = (actions[:, :, 1:] - target).square().sum(-1)
+    return (error * swing).sum(-1)
+
+
 def track_planar_velocity(env):
     """Separate tight horizontal tracking from vertical bobbing during foot lift."""
     command = env.command_manager.get_command("twist")[:, :2]
@@ -187,6 +201,7 @@ def make_walk_cfg(directory=None, num_envs=512, evaluation=False, speed=0.05):
         ("height", height_error, -0.5),
         ("gait_contact", gait_contact, 2.0),
         ("vertical_velocity", vertical_velocity, -2.0),
+        ("swing_lift", swing_lift_cost, -0.5),
     ):
         cfg.rewards[name] = RewardTermCfg(func=func, weight=weight)
     cfg.observations["actor"].terms["gait_clock"] = ObservationTermCfg(func=gait_clock)
@@ -217,4 +232,5 @@ def walk_rl_cfg():
     cfg.max_iterations = 2000
     cfg.save_interval = 100
     cfg.actor.distribution_cfg["init_std"] = 0.5
+    cfg.clip_actions = None
     return cfg

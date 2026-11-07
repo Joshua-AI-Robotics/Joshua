@@ -122,6 +122,7 @@ def main():
         n, device = args.episodes, env.device
         alive = torch.ones(n, dtype=torch.bool, device=device)
         error_sum, slip_sum, count = [torch.zeros(n, device=device) for _ in range(3)]
+        saturation_sum = torch.zeros(n, device=device)
         max_effort, max_speed, peak_clearance = [
             torch.zeros(n, device=device) for _ in range(3)
         ]
@@ -138,8 +139,9 @@ def main():
             )
         with torch.inference_mode():
             for step in range(round(args.seconds / env.step_dt)):
-                actions = policy(TensorDict(obs, batch_size=[n])).clamp(-1, 1)
-                if not torch.isfinite(actions).all():
+                raw_actions = policy(TensorDict(obs, batch_size=[n]))
+                actions = raw_actions.clamp(-1, 1)
+                if not torch.isfinite(raw_actions).all():
                     raise RuntimeError("Non-finite evaluation action")
                 obs, _, done, timeout, _ = env.step(actions)
                 failed = alive & (done | timeout)
@@ -156,6 +158,7 @@ def main():
                 error_sum += err * valid
                 slip_sum += slip * valid
                 count += valid
+                saturation_sum += (raw_actions.abs() >= 1).float().mean(-1) * valid
                 forward = torch.where(
                     alive, robot.data.root_link_pos_w[:, 0] - start, forward
                 )
@@ -190,6 +193,9 @@ def main():
                 "velocity_rmse_m_s": float(rmse[i]),
                 "forward_m": float(forward[i]),
                 "mean_stance_slip_m_s": float(slip[i]),
+                "action_saturation_fraction": float(
+                    saturation_sum[i] / count[i].clamp(min=1)
+                ),
                 "peak_joint_effort_Nm": float(max_effort[i]),
                 "peak_joint_velocity_rad_s": float(max_speed[i]),
                 "peak_foot_clearance_m": float(peak_clearance[i]),

@@ -110,11 +110,19 @@ The actor receives `sin(2π phase), cos(2π phase)` after its original 45 values
 Phase is the episode policy-step count times 0.02 s, divided by a 0.8-second
 period, modulo one; while commanded to stand it is zero (`[0,1]`). A contact
 reward guides a FL → RR → FR → RL crawl with 75% stance duty, one scheduled
-swing leg at a time. The policy learns the joint trajectories. The clock is
+swing leg at a time. A swing-lift cost guides its hip/knee control toward a
+sine-shaped lift (maximum −0.2/−0.1 rad offsets), leaving stance and yaw control
+free. The policy learns the resulting joint motion and forward placement. The clock is
 available to a future runtime from policy ticks, without contact ground truth
 or a new physical sensor. A future replay/adapter must preserve this clock and
 reset semantics. Earlier 45-input walking experiment checkpoints are rejected
 by the new versioned contract rather than silently loaded.
+
+PPO sends raw predictions to the reward/action manager. The lift cost sees
+out-of-range predictions so saturation cannot hide their error; the bounded
+action term still clips physical targets to ±0.2 rad and feeds back clipped
+normalized actions. Evaluation records action-saturation fraction as well as
+motion metrics.
 
 Resume a local checkpoint with an additional bounded update count:
 

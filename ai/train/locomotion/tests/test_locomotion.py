@@ -155,3 +155,19 @@ def test_planar_tracking_separates_vertical_motion():
     assert walk.vertical_velocity(env).item() > 0
     env.scene["robot"].data.root_link_lin_vel_b[:] = 0
     assert walk.track_planar_velocity(env).item() < 0.1
+
+
+def test_swing_lift_guidance_leaves_stance_control_free():
+    """Give a dense lift signal without prescribing stance/yaw placement."""
+    env = fake_env()
+    env.episode_length_buf[:] = 5
+    actions = torch.zeros((1, 12))
+    env.action_manager = SimpleNamespace(action=actions)
+    assert walk.swing_lift_cost(env).item() == pytest.approx(1.25)
+    actions[0, 1:3] = torch.tensor([-1.0, -0.5])
+    assert walk.swing_lift_cost(env).item() == pytest.approx(0)
+    actions[0, 3:6] = 0.8
+    assert walk.swing_lift_cost(env).item() == pytest.approx(0)
+    actions[0, 1] = 2.0
+    assert walk.swing_lift_cost(env).item() == pytest.approx(9)
+    assert walk.walk_rl_cfg().clip_actions is None
