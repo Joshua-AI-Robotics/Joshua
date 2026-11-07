@@ -7,6 +7,10 @@ This directory contains the tools for collecting data and managing datasets for 
 > has been removed. Isaac Sim is still available as a pure simulation backend
 > -- see [simulation/README.md](../../simulation/README.md).
 
+The new [spider locomotion foundation](locomotion/README.md) is a separate,
+Docker-isolated mjlab standing/PPO smoke workflow. It does not restore the old
+Isaac trainer or provide a Joshua policy adapter.
+
 DataStore (Data Collection)
 ---------------------------
 

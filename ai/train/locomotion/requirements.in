@@ -1,0 +1,9 @@
+# Isolated Python 3.12 / Linux x86_64 environment, independent of Joshua/CAD.
+mjlab==1.3.0
+mujoco==3.8.1
+mujoco-warp==3.8.1
+torch==2.9.1
+warp-lang==1.12.0
+# mjlab terrain imports require scipy even for flat terrain.
+scipy>=1.15,<2
+pytest==9.0.2

@@ -1,5 +1,6 @@
 [flake8]
-# CAD utilities use Black and isort. Optional plugins present in development
-# images must not impose conflicting quote/import styles on this tool package.
+# Isolated CAD/training tools use Black and isort. Optional plugins present in
+# development images must not impose conflicting quote/import styles here.
 per-file-ignores =
     tools/cad/*.py: D,I,Q,W503
+    ai/train/locomotion/*.py: D,I,Q,W503
