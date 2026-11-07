@@ -22,10 +22,14 @@ case "${1:-}" in
     exec "$env_python" -m pytest -q -p no:cacheprovider \
       --rootdir "$root/tests" --confcutdir "$root/tests" "$root/tests"
     ;;
-  smoke|train|evaluate)
+  gait-motion)
+    shift
+    exec "$env_python" -m mjlab_joshua.gait "$@"
+    ;;
+  smoke|train|evaluate|preview|live)
     module=$1
     shift
     exec "$env_python" -u -m "mjlab_joshua.$module" "$@"
     ;;
-  *) echo "Expected setup, prepare, check, smoke, train, or evaluate" >&2; exit 2 ;;
+  *) echo "Expected setup, prepare, check, gait-motion, smoke, train, evaluate, preview, or live" >&2; exit 2 ;;
 esac

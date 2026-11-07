@@ -17,9 +17,10 @@ from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.utils.lab_api.math import quat_from_euler_xyz
 from tensordict import TensorDict
 
+from .gait import leg_phase
 from .locomotion import (
-    TASK_ID,
     feet_state,
+    gait_version_from_contract,
     make_walk_cfg,
     walk_rl_cfg,
     walking_contract,
@@ -55,6 +56,17 @@ def successful(survived, rmse, forward_m, required_m, tolerance=0.02):
     return survived & (rmse <= tolerance) & (forward_m >= required_m)
 
 
+def gait_successful(walking, air, clearance, support, samples):
+    """Every leg must step; an average over legs can hide a permanently dragged foot."""
+    return (
+        walking
+        & (air >= 0.5).all(-1)
+        & (clearance >= 0.005).all(-1)
+        & (support >= 0.8)
+        & (samples > 0).all(-1)
+    )
+
+
 def qualifies(successes, episodes, seconds, speed, sampled=False):
     """A short smoke or easier command cannot qualify the full walking protocol."""
     return (
@@ -77,6 +89,10 @@ def main():
     parser.add_argument("--video", action="store_true")
     parser.add_argument("--video-seconds", type=float, default=10)
     parser.add_argument("--require-pass", action="store_true")
+    parser.add_argument("--require-gait-pass", action="store_true")
+    parser.add_argument(
+        "--zero-residual", action="store_true", help="Evaluate the v5 gait prior alone"
+    )
     parser.add_argument(
         "--sample-actions",
         action="store_true",
@@ -93,13 +109,22 @@ def main():
             "episodes/speed must be positive, duration >2 s, and video duration >0"
         )
     asset = Path(os.environ["JOSHUA_SPIDER_ASSET"])
-    contract = walking_contract(verify_asset(asset))
     saved = json.loads((args.checkpoint.parent / "policy_contract.json").read_text())
+    gait_version = gait_version_from_contract(saved)
+    if args.zero_residual and (gait_version != 5 or args.sample_actions):
+        parser.error("zero-residual ablation requires v5 and deterministic actions")
+    contract = walking_contract(verify_asset(asset), gait_version)
     if saved != contract:
         raise ValueError(
             "Evaluation checkpoint contract differs from the current asset"
         )
-    cfg = make_walk_cfg(asset, args.episodes, evaluation=True, speed=args.speed)
+    cfg = make_walk_cfg(
+        asset,
+        args.episodes,
+        evaluation=True,
+        speed=args.speed,
+        gait_version=gait_version,
+    )
     cfg.seed = args.seed_base
     cfg.episode_length_s = args.seconds + 1
     cfg.events = {
@@ -127,7 +152,7 @@ def main():
         model.site_rgba[:, 3] = 0
     writer = None
     try:
-        agent = walk_rl_cfg()
+        agent = walk_rl_cfg(gait_version)
         runner = MjlabOnPolicyRunner(
             RslRlVecEnvWrapper(env, clip_actions=1.0), asdict(agent), None, "cuda:0"
         )
@@ -139,6 +164,8 @@ def main():
         alive = torch.ones(n, dtype=torch.bool, device=device)
         error_sum, slip_sum, count = [torch.zeros(n, device=device) for _ in range(3)]
         saturation_sum = torch.zeros(n, device=device)
+        target_saturation_sum = torch.zeros(n, device=device)
+        action_term = env.action_manager.get_term("joint_pos")
         velocity_sum = torch.zeros((n, 2), device=device)
         heading_drift = torch.zeros(n, device=device)
         previous_heading = robot.data.heading_w.clone()
@@ -148,6 +175,12 @@ def main():
         start = robot.data.root_link_pos_w[:, 0].clone()
         forward = torch.zeros(n, device=device)
         first_failure = torch.full((n,), -1, dtype=torch.long, device=device)
+        swing_total, swing_air, mid_total, mid_height = [
+            torch.zeros((n, 4), device=device) for _ in range(4)
+        ]
+        support_total, grounded_total = [
+            torch.zeros(n, device=device) for _ in range(2)
+        ]
         failures = {
             name: torch.zeros(n, dtype=torch.bool, device=device)
             for name in cfg.terminations
@@ -162,6 +195,8 @@ def main():
                     TensorDict(obs, batch_size=[n]),
                     stochastic_output=args.sample_actions,
                 )
+                if args.zero_residual:
+                    raw_actions.zero_()
                 actions = raw_actions.clamp(-1, 1)
                 if not torch.isfinite(raw_actions).all():
                     raise RuntimeError("Non-finite evaluation action")
@@ -176,6 +211,15 @@ def main():
                 target = torch.tensor([args.speed, 0], device=device)
                 err = (velocity - target).square().sum(-1)
                 contact, clearance, foot_speed = feet_state(env)
+                phase = leg_phase(env)
+                swing = (phase < 0.25) & valid[:, None]
+                mid = (phase >= 0.075) & (phase < 0.175) & valid[:, None]
+                swing_total += swing
+                swing_air += swing & ~contact
+                mid_total += mid
+                mid_height += clearance * mid
+                support_total += (contact.sum(-1) >= 3) & valid
+                grounded_total += contact.all(-1) & valid
                 slip = (foot_speed * contact).sum(-1) / contact.sum(-1).clamp(min=1)
                 error_sum += err * valid
                 slip_sum += slip * valid
@@ -188,6 +232,10 @@ def main():
                 heading_drift += heading_delta * alive
                 previous_heading = heading.clone()
                 saturation_sum += (raw_actions.abs() >= 1).float().mean(-1) * valid
+                if hasattr(action_term, "target_saturated"):
+                    target_saturation_sum += (
+                        action_term.target_saturated.float().mean(-1) * valid
+                    )
                 forward = torch.where(
                     alive, robot.data.root_link_pos_w[:, 0] - start, forward
                 )
@@ -214,6 +262,12 @@ def main():
         slip = slip_sum / count.clamp(min=1)
         required = args.speed * (args.seconds - 2) * 0.6
         passed = successful(alive, rmse, forward, required)
+        air_fraction = swing_air / swing_total.clamp(min=1)
+        mid_clearance = mid_height / mid_total.clamp(min=1)
+        support_fraction = support_total / count.clamp(min=1)
+        gait_passed = gait_successful(
+            passed, air_fraction, mid_clearance, support_fraction, mid_total
+        )
         rows = [
             {
                 "seed": args.seed_base + i,
@@ -229,9 +283,21 @@ def main():
                 "action_saturation_fraction": float(
                     saturation_sum[i] / count[i].clamp(min=1)
                 ),
+                "target_saturation_fraction": (
+                    float(target_saturation_sum[i] / count[i].clamp(min=1))
+                    if hasattr(action_term, "target_saturated")
+                    else None
+                ),
                 "peak_joint_effort_Nm": float(max_effort[i]),
                 "peak_joint_velocity_rad_s": float(max_speed[i]),
                 "peak_foot_clearance_m": float(peak_clearance[i]),
+                "swing_air_fraction_by_leg": air_fraction[i].tolist(),
+                "mid_swing_clearance_m_by_leg": mid_clearance[i].tolist(),
+                "three_foot_support_fraction": float(support_fraction[i]),
+                "all_feet_grounded_fraction": float(
+                    grounded_total[i] / count[i].clamp(min=1)
+                ),
+                "gait_success": bool(gait_passed[i]),
                 "first_failure_step": int(first_failure[i]),
                 "failure_reasons": [
                     key for key, values in failures.items() if values[i]
@@ -240,7 +306,7 @@ def main():
             for i in range(n)
         ]
         report = {
-            "task_id": TASK_ID,
+            "task_id": contract["task_id"],
             "checkpoint": str(args.checkpoint),
             "checkpoint_sha256": hashlib.sha256(
                 args.checkpoint.read_bytes()
@@ -253,7 +319,9 @@ def main():
             "successful": int(passed.sum()),
             "pass_fraction": float(passed.float().mean()),
             "policy_mode": (
-                "sampled_diagnostic" if args.sample_actions else "deterministic"
+                "generator_only"
+                if args.zero_residual
+                else "sampled_diagnostic" if args.sample_actions else "deterministic"
             ),
             "gate_passed": qualifies(
                 int(passed.sum()), n, args.seconds, args.speed, args.sample_actions
@@ -263,6 +331,17 @@ def main():
                 "minimum_forward_m": required,
                 "no_reset_or_failure": True,
                 "warmup_excluded_s": 2,
+            },
+            "gait_successful": int(gait_passed.sum()),
+            "gait_gate_passed": qualifies(
+                int(gait_passed.sum()), n, args.seconds, args.speed, args.sample_actions
+            ),
+            "gait_criteria": {
+                "leg_order": ["fl", "fr", "rl", "rr"],
+                "swing_air_fraction_min_each_leg": 0.5,
+                "mid_swing_clearance_min_m_each_leg": 0.005,
+                "three_foot_support_fraction_min": 0.8,
+                "requires_existing_walking_gate": True,
             },
             "survivor_velocity_rmse_mean_m_s": (
                 float(rmse[alive].mean()) if alive.any() else None
@@ -275,6 +354,8 @@ def main():
             flush=True,
         )
         if args.require_pass and not report["gate_passed"]:
+            raise SystemExit(1)
+        if args.require_gait_pass and not report["gait_gate_passed"]:
             raise SystemExit(1)
     finally:
         if writer:

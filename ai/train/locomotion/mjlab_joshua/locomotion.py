@@ -1,6 +1,7 @@
 """Low-speed flat-ground walking task, extending the standing foundation."""
 
 import math
+import os
 
 import torch
 from mjlab.managers import CurriculumTermCfg, ObservationTermCfg, RewardTermCfg
@@ -19,9 +20,9 @@ STAGES = (
 )
 
 
-def walking_contract(base):
+def walking_contract(base, gait_version=1):
     """Version the added clock inputs without changing the standing interface."""
-    return {
+    contract = {
         **base,
         "schema_version": 2,
         "task_id": TASK_ID,
@@ -39,19 +40,93 @@ def walking_contract(base):
             "duty_factor": 0.75,
         },
     }
+    if gait_version in (2, 3, 4, 5):
+        from .gait import settings
+
+        recipe = settings(gait_version)
+
+        contract.update(
+            schema_version=3,
+            task_id=f"Joshua-Spider-Crawl-v{gait_version}",
+            gait_objective={
+                "revision": gait_version,
+                "swing_clearance_m": recipe["clearance"],
+                "trajectory": (
+                    "Hermite forward swing, sinusoidal-squared lift, planted stance"
+                ),
+                "guide": "CAD IK reward only; unchanged bounded PPO joint actions",
+            },
+        )
+        contract["gait_clock"]["period_s"] = recipe["period"]
+        contract["action_scale_rad"] = recipe["action_scale"]
+        contract["target_formula"] = (
+            f"home + {recipe['action_scale']} * clip(action,-1,1), then joint limits"
+        )
+        if gait_version == 4:
+            contract["gait_objective"][
+                "guide"
+            ] = "CAD IK measured-joint reward; bounded PPO position targets"
+        if gait_version == 5:
+            from .hybrid import PARAMETERS
+
+            contract.update(
+                schema_version=4,
+                action_kind="bounded joint-position residual around a CAD gait",
+                action_scale_rad=PARAMETERS["residual_scale_rad"],
+                target_limit_rad=recipe["action_scale"],
+                previous_action=(
+                    "accepted normalized residual after target clipping; "
+                    "zero after reset"
+                ),
+                hybrid_controller={
+                    **PARAMETERS,
+                    "velocity_lead_s": base["position_kv"] / base["position_kp"],
+                    "nominal_clearance_m": recipe["clearance"],
+                },
+                target_formula=(
+                    "nominal=q_ref(phase+advance)+tracking_gain*(q_ref-q)"
+                    "+velocity_lead*q_ref_dot; base=clip(nominal,+/-target_limit); "
+                    "target=clip(base+residual_scale*clip(action,-1,1),+/-target_limit)"
+                ),
+            )
+            contract["gait_objective"]["guide"] = "CAD gait plus PPO residual control"
+            contract["gait_objective"]["swing_clearance_m"] = PARAMETERS[
+                "measured_clearance_m"
+            ]
+    elif gait_version != 1:
+        raise ValueError("Unknown gait objective version")
+    return contract
 
 
-def gait_phase(env):
+def gait_version_from_contract(contract):
+    """Keep old checkpoint evaluation reproducible after adding a new objective."""
+    versions = {
+        f"Joshua-Spider-Crawl-v{version}": version for version in (1, 2, 3, 4, 5)
+    }
+    if contract["task_id"] not in versions:
+        raise ValueError("Unknown walking checkpoint task")
+    return versions[contract["task_id"]]
+
+
+def gait_phase(env, period_s=None):
     """Use a reproducible policy-clock phase; no simulation-only actor state."""
-    period_steps = round(GAIT_PERIOD / env.step_dt)
+    if period_s is None:
+        period_s = GAIT_PERIOD
+        if hasattr(env, "cfg"):
+            period_s = (
+                env.cfg.observations["actor"]
+                .terms["gait_clock"]
+                .params.get("period_s", GAIT_PERIOD)
+            )
+    period_steps = round(period_s / env.step_dt)
     phase = (env.episode_length_buf % period_steps).float() / period_steps
     command = env.command_manager.get_command("twist")
     return phase * (torch.linalg.vector_norm(command[:, :2], dim=-1) > 0.01)
 
 
-def gait_clock(env):
+def gait_clock(env, period_s=None):
     """Append sine/cosine clock values to hardware-observable proprioception."""
-    angle = gait_phase(env) * math.tau
+    angle = gait_phase(env, period_s) * math.tau
     return torch.stack((angle.sin(), angle.cos()), dim=-1)
 
 
@@ -185,7 +260,9 @@ def height_error(env):
     return ((height - 0.079) / 0.025).square()
 
 
-def make_walk_cfg(directory=None, num_envs=512, evaluation=False, speed=0.05):
+def make_walk_cfg(
+    directory=None, num_envs=512, evaluation=False, speed=0.05, gait_version=1
+):
     """Build training curriculum or a fixed-command evaluation task."""
     cfg = make_env_cfg(directory, num_envs)
     cfg.scene.sensors += (
@@ -245,15 +322,25 @@ def make_walk_cfg(directory=None, num_envs=512, evaluation=False, speed=0.05):
         cfg.commands["twist"].ranges.lin_vel_x = (speed, speed)
         cfg.commands["twist"].rel_standing_envs = 0.0
         cfg.commands["twist"].resampling_time_range = (1000, 1000)
+    if gait_version in (2, 3, 4, 5):
+        from .gait import configure
+
+        cfg = configure(
+            cfg, directory or os.environ["JOSHUA_SPIDER_ASSET"], gait_version
+        )
+    elif gait_version != 1:
+        raise ValueError("Unknown gait objective version")
     return cfg
 
 
-def walk_rl_cfg():
+def walk_rl_cfg(gait_version=1):
     """Use the same policy architecture/contract with a bounded training schedule."""
     cfg = make_rl_cfg()
     cfg.experiment_name = "spider_walk"
     cfg.max_iterations = 2000
     cfg.save_interval = 100
-    cfg.actor.distribution_cfg["init_std"] = 0.5
+    cfg.actor.distribution_cfg["init_std"] = 0.25 if gait_version in (3, 4) else 0.5
+    if gait_version == 5:
+        cfg.actor.distribution_cfg["init_std"] = 0.3
     cfg.clip_actions = None
     return cfg

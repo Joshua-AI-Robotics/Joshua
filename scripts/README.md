@@ -41,10 +41,16 @@ TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 ## Development Helpers
 
 `run_spider_rl.sh` provides `setup`, `prepare`, `check`, `cpu-smoke`, and GPU
-`smoke` commands plus `train` and `evaluate` for the isolated
+`smoke` commands plus `train`, `evaluate`, CAD-mesh `preview`, and interactive
+MuJoCo `view` for the isolated
 [spider RL workflow](../ai/train/locomotion/README.md).
 It consumes generated CAD outputs and keeps environments/checkpoints under
 ignored `output/spider_rl/`. The runtime services have no robot devices or networking.
+Use `train --live` and `watch --run /workspace/output/spider_rl/walk/<run>`
+to inspect a grid of actual training robots while PPO runs.
+`watch-video --run <run> --video <output.mp4>` captures that grid offscreen
+when no desktop monitor is active; its labels distinguish training samples
+from a deterministic policy rollout.
 
 `setup_robotcad.sh` installs pinned FreeCAD and RobotCAD into the ignored
 `output/robotcad/` directory using the Joshua Ubuntu 24 Docker image.

@@ -143,6 +143,14 @@ and alignment; and positive, physically admissible inertia tensors. It writes
 `export-validation.json` under the generated project directory. A macro failure
 writes `build-error.txt` or `open-error.txt` under the ignored output directory.
 
+For the spider, `--check-cad` can also sample a supplied simultaneous-joint motion:
+set `JOSHUA_CAD_MOTION_FILE` to a JSON file under the mounted CAD output directory,
+using its container path. The JSON contains `poses`, each with `name` and a
+`joints` mapping from all twelve URDF joint names to radians. Values outside the
+CAD joint limits are rejected. Results go to `motion-clearance-validation.json`;
+the ordinary clearance report and assembly images are preserved. This checks
+the supplied solid poses, not every intermediate configuration or real cables.
+
 ## Responsibilities
 
 - Preserve the CAD/export recipe and its software versions in source control.
