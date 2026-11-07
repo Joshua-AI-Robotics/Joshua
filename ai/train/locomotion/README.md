@@ -41,12 +41,22 @@ Run the wrapper from any directory; it selects the repository root and your UID.
 
 `check` runs CPU physics and interface tests. `cpu-smoke` explicitly uses four
 CPU environments to test the manager/PPO path. `smoke` requires NVIDIA Container
-Toolkit configured for Docker and defaults to 64 GPU environments. Verify the
-container runtime using the [host setup guide](../../../docs/GETTING_STARTED.md)
-and `docker compose run --rm joshua-u24 nvidia-smi`. The error
-`could not select device driver ... capabilities: [[gpu]]` indicates missing
-Docker GPU support even when host `nvidia-smi` works. The CPU smoke does not
-establish GPU compatibility or throughput. No automatic CPU fallback occurs.
+Toolkit configured for Docker and defaults to 64 GPU environments. It selects
+the `nvidia` runtime explicitly and exposes GPUs using `NVIDIA_VISIBLE_DEVICES`.
+Verify it with:
+
+```bash
+docker run --rm --network none --runtime nvidia \
+  -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+  --entrypoint nvidia-smi joshua:u24-jazzy
+```
+
+See the [host setup guide](../../../docs/GETTING_STARTED.md) for installation.
+After installing the toolkit and reloading Docker, explicit runtime selection
+can work while `--gpus all` still reports `could not select device driver ...
+capabilities: [[gpu]]`. The explicit-runtime path avoids restarting Docker just
+to refresh GPU device discovery. The CPU smoke does not establish GPU
+compatibility or throughput. No automatic CPU fallback occurs.
 
 Each smoke holds a zero target for three seconds, checks action saturation and
 reset feedback, then runs five PPO iterations with 24 policy steps per update.

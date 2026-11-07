@@ -39,7 +39,7 @@ services:
   smoke:
     <<: *spider-rl
     network_mode: none
-    gpus: all
+    runtime: nvidia
     shm_size: 1gb
     environment:
       <<: *spider-env
