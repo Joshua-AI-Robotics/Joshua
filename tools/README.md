@@ -5,6 +5,9 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [`cad/`](cad/README.md) — FreeCAD/RobotCAD demo macros, pinned dependencies,
+  and STL/URDF export checks. Downloads and generated assets stay under `output/`.
+
 - [`mcp/`](mcp/README.md) — seven read-only stdio MCP tools for config-free factory discovery,
   per-call protobuf validation and device inspection, and optional private
   runtime snapshots. The adapter never controls runtime or certifies hardware

@@ -1,0 +1,14 @@
+<mujoco model="robotcad_demo_scene">
+  <include file="robot.xml"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <statistic center="0.04 0 0.02" extent="0.22"/>
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.7 0.7 0.7"/>
+    <global azimuth="130" elevation="-25"/>
+  </visual>
+  <worldbody>
+    <light pos="0 0 1" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0.3 0.3 0.01" rgba="0.85 0.87 0.9 1"/>
+    <camera name="front" pos="0.28 -0.32 0.26" xyaxes="0.8 0.6 0 -0.3 0.4 0.8660254"/>
+  </worldbody>
+</mujoco>

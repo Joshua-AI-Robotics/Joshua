@@ -1,0 +1,38 @@
+"""Open the saved example in RobotCAD without changing its joint positions."""
+
+import os
+import traceback
+from pathlib import Path
+
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtCore
+
+ROOT = Path(os.environ.get("JOSHUA_CAD_ROOT", "/workspace/output/robotcad"))
+PROJECT = Path(os.environ.get("JOSHUA_CAD_PROJECT", str(ROOT / "project")))
+
+
+def show_project():
+    """Open the saved model after the GUI event loop starts."""
+    try:
+        path = PROJECT / os.environ.get("JOSHUA_CAD_DOCUMENT", "robotcad_demo.FCStd")
+        if not path.is_file():
+            raise FileNotFoundError(
+                "Create the demo with scripts/run_robotcad.sh --create-demo first."
+            )
+        App.openDocument(str(path))
+        Gui.activateWorkbench("CrossWorkbench")
+        view = Gui.activeDocument().activeView()
+        view.setCameraType("Orthographic")
+        view.setCameraOrientation(
+            (0.4247082003, 0.1759198966, 0.3398511430, 0.8204732386)
+        )
+        view.fitAll()
+        Gui.updateGui()
+    except Exception:
+        details = traceback.format_exc()
+        (ROOT / "open-error.txt").write_text(details)
+        App.Console.PrintError(details)
+
+
+QtCore.QTimer.singleShot(1000, show_project)

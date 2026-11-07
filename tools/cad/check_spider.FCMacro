@@ -1,0 +1,104 @@
+"""Check the saved prototype's solid clearances and render its assembly views."""
+
+import itertools
+import json
+import math
+import os
+import re
+import sys
+import traceback
+from pathlib import Path
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+sys.path.insert(0, "/workspace/tools/cad")
+from spider_cad import transform  # noqa: E402
+
+project = Path(os.environ["JOSHUA_CAD_PROJECT"])
+try:
+    (project / "clearance-validation.json").unlink(missing_ok=True)
+    (project / "clearance-error.txt").unlink(missing_ok=True)
+    doc = App.openDocument(str(project / "spider_sts3215.FCStd"))
+    robot = doc.getObject("spider_sts3215")
+    Gui.activateWorkbench("CrossWorkbench")
+    links = robot.Proxy.get_links()
+    joints = [j for j in robot.Proxy.get_joints() if j.Type == "revolute"]
+    report = {
+        "status": "ok",
+        "tested_poses": [],
+        "interferences": [],
+        "intentional_fits": [],
+        "intentional_fit": "0.1 mm radial TPU toe interference is excluded",
+        "scope": (
+            "Neutral plus one-joint-at-a-time limit samples. Not a continuous "
+            "or simultaneous-joint sweep; screws/cables and measured hardware "
+            "are not modeled."
+        ),
+    }
+
+    def check_pose(label, same_link=False):
+        objects = []
+        for link in links:
+            for obj in link.Real:
+                objects.append(
+                    (obj.Name, link.Label, transform(obj.Shape, link.Placement))
+                )
+        found = []
+        for a, b in itertools.combinations(objects, 2):
+            if not same_link and a[1] == b[1]:
+                continue
+            if not a[2].BoundBox.intersect(b[2].BoundBox):
+                continue
+            volume = a[2].common(b[2]).Volume
+            names = [re.sub(r"\d+$", "", obj[0]) for obj in (a, b)]
+            if (
+                names[0][:2] == names[1][:2]
+                and {n[3:] for n in names} == {"tibia_print", "foot_cap"}
+                and volume <= 20
+            ):
+                if label == "neutral":
+                    report["intentional_fits"].append(
+                        {"a": a[0], "b": b[0], "overlap_mm3": volume}
+                    )
+                continue
+            if volume > 0.1:
+                found.append(
+                    {"pose": label, "a": a[0], "b": b[0], "volume_mm3": volume}
+                )
+        report["tested_poses"].append(label)
+        report["interferences"].extend(found)
+
+    robot.Proxy.set_joint_values({j: 0 for j in joints})
+    doc.recompute()
+    check_pose("neutral", same_link=True)
+    for joint in joints:
+        for angle in (joint.LowerLimit, joint.UpperLimit):
+            robot.Proxy.set_joint_values(
+                {j: math.radians(angle) if j == joint else 0 for j in joints}
+            )
+            doc.recompute()
+            check_pose(f"{joint.Label}={angle}deg")
+    robot.Proxy.set_joint_values({j: 0 for j in joints})
+    doc.recompute()
+    if report["interferences"]:
+        report["status"] = "review_needed"
+    (project / "clearance-validation.json").write_text(json.dumps(report, indent=2))
+    Gui.Selection.clearSelection()
+    view = Gui.activeDocument().activeView()
+    view.setCameraType("Orthographic")
+    for name, quaternion in [
+        ("assembly_iso.png", (0.4247082003, 0.1759198966, 0.3398511430, 0.8204732386)),
+        ("assembly_top.png", (0, 0, 0, 1)),
+    ]:
+        view.setCameraOrientation(quaternion)
+        view.fitAll()
+        Gui.updateGui()
+        view.saveImage(str(project / name), 1400, 1000, "White")
+    App.closeDocument(doc.Name)
+except Exception:
+    (project / "clearance-error.txt").write_text(traceback.format_exc())
+finally:
+    for name in list(App.listDocuments()):
+        App.closeDocument(name)
+    Gui.getMainWindow().close()

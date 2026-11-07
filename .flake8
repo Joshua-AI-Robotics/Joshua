@@ -1,0 +1,5 @@
+[flake8]
+# CAD utilities use Black and isort. Optional plugins present in development
+# images must not impose conflicting quote/import styles on this tool package.
+per-file-ignores =
+    tools/cad/*.py: D,I,Q,W503
