@@ -157,11 +157,16 @@ after a two-second warm-up and ≥60% of the requested forward distance over tha
 remaining horizon (0.84 m for the default test). Surviving while stationary
 cannot pass. At least 90% of cases must pass all criteria for `gate_passed: true`.
 Use `--require-pass` to return a failing exit status when that gate is missed.
+The qualification flag also requires at least 100 cases, at least 30 seconds,
+exactly the 0.05 m/s target, and deterministic inference. Shorter/easier tests
+still report case metrics but cannot pass the full gate.
 
 Evaluation saves `evaluation.json` with per-case first failure, progress, speed
 error, heading drift, mean body velocity, stance slip, peak clearance, joint speed,
 effort, and checkpoint hash.
 Failed cases retain the metrics up to failure and never count as successful.
+Stance slip uses foot-site XY speed during contact; with spherical toes this
+proxy includes rolling motion. Peak effort and speed are sampled at policy rate.
 The video shows up to ten seconds of the first seeded case while it remains
 alive; `preview.png` is captured at one second. The mesh-free contact primitives
 are made visible in the CPU render model without changing GPU physics.

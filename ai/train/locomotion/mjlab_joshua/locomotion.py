@@ -106,7 +106,7 @@ def yaw_rate_cost(env):
     """Reject circling while tracking forward velocity in the rotating body frame."""
     command = env.command_manager.get_command("twist")[:, 2]
     actual = env.scene["robot"].data.root_link_ang_vel_b[:, 2]
-    return ((actual - command) / 0.25).square()
+    return ((actual - command) / 0.1).square()
 
 
 def action_bounds_cost(env):

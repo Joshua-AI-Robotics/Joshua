@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 from mjlab_joshua import locomotion as walk
-from mjlab_joshua.evaluate import reset_cases, successful
+from mjlab_joshua.evaluate import qualifies, reset_cases, successful
 
 
 def fake_env(contact=True, height=0, speed=0, command=0.05):
@@ -194,9 +194,19 @@ def test_yaw_and_raw_bounds_costs_reject_circling_and_saturation():
     env = fake_env()
     assert walk.yaw_rate_cost(env).item() == 0
     env.scene["robot"].data.root_link_ang_vel_b[:, 2] = 0.5
-    assert walk.yaw_rate_cost(env).item() == pytest.approx(4)
+    assert walk.yaw_rate_cost(env).item() == pytest.approx(25)
     actions = torch.zeros((1, 12))
     env.action_manager = SimpleNamespace(action=actions)
     assert walk.action_bounds_cost(env).item() == 0
     actions[0, 0] = 2
     assert walk.action_bounds_cost(env).item() == pytest.approx(1)
+
+
+def test_full_gate_rejects_short_small_or_sampled_evaluations():
+    """Keep the 90/100 boundary exact and separate smokes from qualification."""
+    assert qualifies(90, 100, 30, 0.05)
+    assert not qualifies(89, 100, 30, 0.05)
+    assert not qualifies(16, 16, 30, 0.05)
+    assert not qualifies(100, 100, 8, 0.05)
+    assert not qualifies(100, 100, 30, 0.03)
+    assert not qualifies(100, 100, 30, 0.05, sampled=True)

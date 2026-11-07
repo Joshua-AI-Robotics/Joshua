@@ -55,6 +55,17 @@ def successful(survived, rmse, forward_m, required_m, tolerance=0.02):
     return survived & (rmse <= tolerance) & (forward_m >= required_m)
 
 
+def qualifies(successes, episodes, seconds, speed, sampled=False):
+    """A short smoke or easier command cannot qualify the full walking protocol."""
+    return (
+        episodes >= 100
+        and seconds >= 30
+        and abs(speed - 0.05) < 1e-9
+        and successes * 10 >= episodes * 9
+        and not sampled
+    )
+
+
 def main():
     """Evaluate one fixed command per episode, retaining every case's first failure."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -244,8 +255,9 @@ def main():
             "policy_mode": (
                 "sampled_diagnostic" if args.sample_actions else "deterministic"
             ),
-            "gate_passed": bool(passed.float().mean() >= 0.9)
-            and not args.sample_actions,
+            "gate_passed": qualifies(
+                int(passed.sum()), n, args.seconds, args.speed, args.sample_actions
+            ),
             "criteria": {
                 "velocity_rmse_max_m_s": 0.02,
                 "minimum_forward_m": required,
