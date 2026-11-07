@@ -76,7 +76,7 @@ interface: 47 actor inputs and 50 critic inputs. The standing task stays at
 ```bash
 ./scripts/run_spider_rl.sh train --num-envs 512 --iterations 10 --benchmark
 ./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 10 --benchmark
-./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 2000
+./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 501 --seed 42
 ```
 
 Each command prints `RUN_DIR`. Benchmark outputs go under `output/spider_rl/benchmarks/`;
@@ -87,6 +87,13 @@ It includes first-update overhead and is a short-run benchmark, not a sustained
 training guarantee. Reported Torch peak allocation excludes Warp/driver allocations.
 Each run also saves the policy contract, full environment YAML, PPO configuration,
 TensorBoard events, source snapshots, and checkpoints every 100 updates.
+
+The 2026-11-07 local baseline used the final reward recipe from scratch, seed 42,
+and selected `model_500.pt` (501 updates). It passed 100/100 validation cases and
+100/100 fresh held-out cases under the full protocol below, with mean speed
+RMSE about 0.0102 m/s and mean forward travel about 1.35 m. This is a nominal
+simulation result; rerun evaluation after any model, dependency, or reward change.
+The default training budget remains 2,000 updates when `--iterations` is omitted.
 
 Commands start at zero, change to 0.02–0.03 m/s after 1,200 policy steps
 (50 updates), then to 0.03–0.05 m/s after 6,000 steps (250 updates). The standing
@@ -133,7 +140,7 @@ Resume a local checkpoint with an additional bounded update count:
 
 ```bash
 ./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 500 \
-  --resume /workspace/output/spider_rl/walk/<run>/model_1999.pt
+  --resume /workspace/output/spider_rl/walk/<run>/model_500.pt
 ```
 
 Paths passed to these commands are **container paths**, rooted at `/workspace`.
@@ -145,7 +152,7 @@ Evaluate a chosen checkpoint independently of its training reward:
 
 ```bash
 ./scripts/run_spider_rl.sh evaluate \
-  --checkpoint /workspace/output/spider_rl/walk/<run>/model_1999.pt \
+  --checkpoint /workspace/output/spider_rl/walk/<run>/model_500.pt \
   --episodes 100 --seconds 30 --speed 0.05 --seed-base 10000 --video
 ```
 
