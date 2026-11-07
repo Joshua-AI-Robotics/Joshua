@@ -102,6 +102,8 @@ does not receive a near-perfect tracking reward. Vertical velocity has a separat
 penalty so foot lift does not remove correct horizontal tracking credit.
 An additional unbounded squared planar-error cost prevents a policy from earning
 credit by slowly rocking forward and rapidly snapping backward with no net progress.
+An unbounded yaw-rate cost rejects circling while matching body-frame speed;
+a raw-output bounds cost keeps predictions near the usable action interval.
 Other terms encourage upright support, a 12 mm swing-foot clearance gated by
 actual body progress, and home posture; they penalize stance
 slip, fewer than two supporting feet, height deviations, torque, mechanical
@@ -157,7 +159,8 @@ cannot pass. At least 90% of cases must pass all criteria for `gate_passed: true
 Use `--require-pass` to return a failing exit status when that gate is missed.
 
 Evaluation saves `evaluation.json` with per-case first failure, progress, speed
-error, stance slip, peak clearance, joint speed, effort, and checkpoint hash.
+error, heading drift, mean body velocity, stance slip, peak clearance, joint speed,
+effort, and checkpoint hash.
 Failed cases retain the metrics up to failure and never count as successful.
 The video shows up to ten seconds of the first seeded case while it remains
 alive; `preview.png` is captured at one second. The mesh-free contact primitives

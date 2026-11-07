@@ -128,6 +128,9 @@ def main():
         alive = torch.ones(n, dtype=torch.bool, device=device)
         error_sum, slip_sum, count = [torch.zeros(n, device=device) for _ in range(3)]
         saturation_sum = torch.zeros(n, device=device)
+        velocity_sum = torch.zeros((n, 2), device=device)
+        heading_drift = torch.zeros(n, device=device)
+        previous_heading = robot.data.heading_w.clone()
         max_effort, max_speed, peak_clearance = [
             torch.zeros(n, device=device) for _ in range(3)
         ]
@@ -166,6 +169,13 @@ def main():
                 error_sum += err * valid
                 slip_sum += slip * valid
                 count += valid
+                velocity_sum += velocity * valid[:, None]
+                heading = robot.data.heading_w
+                heading_delta = (heading - previous_heading + np.pi) % (
+                    2 * np.pi
+                ) - np.pi
+                heading_drift += heading_delta * alive
+                previous_heading = heading.clone()
                 saturation_sum += (raw_actions.abs() >= 1).float().mean(-1) * valid
                 forward = torch.where(
                     alive, robot.data.root_link_pos_w[:, 0] - start, forward
@@ -201,6 +211,10 @@ def main():
                 "velocity_rmse_m_s": float(rmse[i]),
                 "forward_m": float(forward[i]),
                 "mean_stance_slip_m_s": float(slip[i]),
+                "mean_body_velocity_xy_m_s": (
+                    velocity_sum[i] / count[i].clamp(min=1)
+                ).tolist(),
+                "heading_drift_rad": float(heading_drift[i]),
                 "action_saturation_fraction": float(
                     saturation_sum[i] / count[i].clamp(min=1)
                 ),

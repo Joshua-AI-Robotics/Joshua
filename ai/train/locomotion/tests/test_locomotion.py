@@ -24,6 +24,7 @@ def fake_env(contact=True, height=0, speed=0, command=0.05):
             site_pos_w=positions,
             site_lin_vel_w=velocity,
             root_link_lin_vel_b=torch.tensor([[0.05, 0, 0]]),
+            root_link_ang_vel_b=torch.zeros((1, 3)),
         ),
     )
     scene = SimpleScene(
@@ -186,3 +187,16 @@ def test_velocity_cost_rejects_forward_backward_rocking():
     backward = walk.velocity_error_cost(env).item()
     assert forward == pytest.approx(0)
     assert 0.75 * forward + 0.25 * backward > stationary
+
+
+def test_yaw_and_raw_bounds_costs_reject_circling_and_saturation():
+    """Correct body speed alone cannot justify rotation or out-of-range predictions."""
+    env = fake_env()
+    assert walk.yaw_rate_cost(env).item() == 0
+    env.scene["robot"].data.root_link_ang_vel_b[:, 2] = 0.5
+    assert walk.yaw_rate_cost(env).item() == pytest.approx(4)
+    actions = torch.zeros((1, 12))
+    env.action_manager = SimpleNamespace(action=actions)
+    assert walk.action_bounds_cost(env).item() == 0
+    actions[0, 0] = 2
+    assert walk.action_bounds_cost(env).item() == pytest.approx(1)

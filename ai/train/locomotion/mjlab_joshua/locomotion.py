@@ -102,6 +102,18 @@ def velocity_error_cost(env):
     return (command - actual).square().sum(-1) / 0.05**2
 
 
+def yaw_rate_cost(env):
+    """Reject circling while tracking forward velocity in the rotating body frame."""
+    command = env.command_manager.get_command("twist")[:, 2]
+    actual = env.scene["robot"].data.root_link_ang_vel_b[:, 2]
+    return ((actual - command) / 0.25).square()
+
+
+def action_bounds_cost(env):
+    """Keep raw predictions near the usable interval, including free yaw controls."""
+    return (env.action_manager.action.abs() - 1).clamp(min=0).square().sum(-1)
+
+
 def command_curriculum(env, env_ids):
     """Set absolute command ranges from the persisted policy-step counter."""
     del env_ids
@@ -211,6 +223,8 @@ def make_walk_cfg(directory=None, num_envs=512, evaluation=False, speed=0.05):
         ("vertical_velocity", vertical_velocity, -2.0),
         ("swing_lift", swing_lift_cost, -0.5),
         ("velocity_error", velocity_error_cost, -2.0),
+        ("yaw_rate", yaw_rate_cost, -1.0),
+        ("action_bounds", action_bounds_cost, -0.2),
     ):
         cfg.rewards[name] = RewardTermCfg(func=func, weight=weight)
     cfg.observations["actor"].terms["gait_clock"] = ObservationTermCfg(func=gait_clock)
