@@ -55,6 +55,11 @@ opens the demo in MuJoCo. See the
 ./scripts/run_robotcad.sh --mujoco
 ```
 
+The [four-leg STS3215 prototype](../tools/cad/SPIDER_STS3215.md) uses the same
+entrypoint with `--robot spider`. `--create`, `--verify-exports`, `--check-cad`,
+`--convert-mujoco`, and `--package` generate and check its outputs; the default
+opens its saved CAD file and `--mujoco` opens its simulation.
+
 The container entrypoint ([docker/entrypoint.sh](../docker/entrypoint.sh), baked into the images) sources the ROS2 environment for every container command, creates mock serial ports when `ENABLE_MOCK_SERIAL_PORTS=true`, then starts the requested command or shell.
 
 `create_mock_serial_ports.sh` creates PTY pairs with `socat` that emulate `/dev/ttyACM0`, `/dev/ttyACM1`, and `/dev/ttyUSB0`. Use it from inside the relevant Docker service when testing without physical serial devices.

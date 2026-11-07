@@ -1,0 +1,25 @@
+"""Run the spider recipe in FreeCAD's GUI Python interpreter."""
+
+import os
+import sys
+import traceback
+from pathlib import Path
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+sys.path.insert(0, "/workspace/tools/cad")
+project = Path(os.environ["JOSHUA_CAD_PROJECT"])
+project.mkdir(parents=True, exist_ok=True)
+try:
+    from spider_cad import build
+
+    (project / "build-result.json").unlink(missing_ok=True)
+    (project / "build-error.txt").unlink(missing_ok=True)
+    build(project)
+except Exception:
+    (project / "build-error.txt").write_text(traceback.format_exc())
+finally:
+    for name in list(App.listDocuments()):
+        App.closeDocument(name)
+    Gui.getMainWindow().close()

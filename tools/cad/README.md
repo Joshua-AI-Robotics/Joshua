@@ -6,6 +6,11 @@ use RobotCAD's link/joint exporters to produce printable STL parts and a ROS 2
 description package containing URDF and Collada meshes. Nothing here is on the
 Joshua runtime path; simulator assets are consumed by [simulation/](../../simulation/README.md).
 
+For a four-leg, twelve-motor printable robot, see the
+[STS3215 spider prototype guide](SPIDER_STS3215.md). Its source recipe targets
+12 V STS3215-family motors and a 180 × 180 mm print bed, with CAD, STL,
+URDF/meshes, and floating-base MuJoCo outputs under `output/robotcad/spider_sts3215/`.
+
 ## Quick start
 
 Use an x86_64 Ubuntu desktop with Docker, `curl`, `git`, `sha256sum`, and `xauth`.
@@ -115,6 +120,11 @@ The generated `scene.xml` can also be selected through Joshua's
   mesh shapes to avoid the upstream linked-primitive placement issue.
 - `open_demo.FCMacro` — open the saved document in the RobotCAD workbench.
 - `verify_exports.py` — independent checks specific to this demo.
+- `spider_sts3215.json`, `spider_cad.py`, and `create_spider.FCMacro` — the
+  four-leg design parameters, manufacturing geometry, and RobotCAD assembly.
+- `verify_spider.py`, `check_spider.FCMacro`, `convert_spider.py`, and
+  `package_spider.py` — independent export checks, sampled solid clearances,
+  floating-base/fixture MuJoCo scenes, and an output archive with BOM and guide.
 - `convert_mujoco.py` and `mujoco_scene.xml` — demo mesh conversion, generated
   MJCF, and a scene template; generated assets remain under `output/`.
 - [setup_robotcad.sh](../../scripts/setup_robotcad.sh) and

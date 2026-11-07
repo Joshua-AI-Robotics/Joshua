@@ -8,10 +8,20 @@ CAD_ROOT=$CAD_REPO/output/robotcad
 CAD_CONTAINER_ROOT=/workspace/output/robotcad
 CAD_IMAGE=${JOSHUA_CAD_IMAGE:-joshua:u24-jazzy}
 CAD_MODE=open
+CAD_ROBOT=demo
 CAD_DOCKER_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --create-demo|--verify-exports|--convert-mujoco|--mujoco)
+        --robot)
+            if [[ $# -lt 2 || ( $2 != demo && $2 != spider ) ]]; then
+                echo '--robot requires demo or spider.' >&2
+                exit 2
+            fi
+            CAD_ROBOT=$2
+            shift
+            ;;
+        --create) set -- --create-demo "${@:2}"; continue ;;
+        --create-demo|--verify-exports|--convert-mujoco|--mujoco|--check-cad|--package)
             if [[ $CAD_MODE != open ]]; then
                 echo 'Select only one operation.' >&2
                 exit 2
@@ -20,7 +30,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --detach) CAD_DOCKER_ARGS+=(-d) ;;
         --help)
-            echo 'Usage: scripts/run_robotcad.sh [--detach] [--create-demo | --verify-exports | --convert-mujoco | --mujoco]'
+            echo 'Usage: scripts/run_robotcad.sh [--robot demo|spider] [--detach] [--create | --verify-exports | --convert-mujoco | --mujoco | --check-cad | --package]'
             echo 'Default: open the saved demo; --create-demo refuses to overwrite it.'
             exit 0
             ;;
@@ -28,6 +38,20 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+if [[ ( $CAD_MODE == --check-cad || $CAD_MODE == --package ) && $CAD_ROBOT != spider ]]; then
+    echo '--check-cad and --package currently require --robot spider.' >&2
+    exit 2
+fi
+CAD_PROJECT=$CAD_CONTAINER_ROOT/project
+CAD_PROJECT_HOST=$CAD_ROOT/project
+CAD_DOCUMENT=robotcad_demo.FCStd
+CAD_BUILD_RESULT=$CAD_ROOT/build-result.json
+if [[ $CAD_ROBOT == spider ]]; then
+    CAD_PROJECT=$CAD_CONTAINER_ROOT/spider_sts3215
+    CAD_PROJECT_HOST=$CAD_ROOT/spider_sts3215
+    CAD_DOCUMENT=spider_sts3215.FCStd
+    CAD_BUILD_RESULT=$CAD_PROJECT_HOST/build-result.json
+fi
 if [[ $CAD_MODE != open && $CAD_MODE != --mujoco && ${#CAD_DOCKER_ARGS[@]} != 0 ]]; then
     echo '--detach is only available for the editor or MuJoCo viewer.' >&2
     exit 2
@@ -36,8 +60,8 @@ if [[ ! -x "$CAD_ROOT/squashfs-root/usr/bin/freecad" ]]; then
     echo 'Run scripts/setup_robotcad.sh first.' >&2
     exit 1
 fi
-if [[ $CAD_MODE == --create-demo && -e "$CAD_ROOT/project/robotcad_demo.FCStd" ]]; then
-    echo 'Demo already exists under output/robotcad/project; preserve it before recreating.' >&2
+if [[ $CAD_MODE == --create-demo && -e "$CAD_PROJECT_HOST/$CAD_DOCUMENT" ]]; then
+    echo "CAD already exists under $CAD_PROJECT_HOST; preserve it before recreating." >&2
     exit 1
 fi
 CAD_COMMON_ARGS=(
@@ -47,13 +71,23 @@ CAD_COMMON_ARGS=(
     --mount "type=bind,src=$CAD_TOOLS,dst=/workspace/tools/cad,readonly"
     --workdir "$CAD_CONTAINER_ROOT" -e "HOME=$CAD_CONTAINER_ROOT/home"
     -e "JOSHUA_CAD_ROOT=$CAD_CONTAINER_ROOT"
+    -e "JOSHUA_CAD_PROJECT=$CAD_PROJECT" -e "JOSHUA_CAD_DOCUMENT=$CAD_DOCUMENT"
 )
-if [[ $CAD_MODE == --verify-exports || $CAD_MODE == --convert-mujoco ]]; then
+if [[ $CAD_MODE == --verify-exports || $CAD_MODE == --convert-mujoco || $CAD_MODE == --package ]]; then
     CAD_PYTHON_SCRIPT=/workspace/tools/cad/verify_exports.py
     if [[ $CAD_MODE == --convert-mujoco ]]; then
         CAD_PYTHON_SCRIPT=/workspace/tools/cad/convert_mujoco.py
     fi
+    if [[ $CAD_ROBOT == spider ]]; then
+        CAD_PYTHON_SCRIPT=/workspace/tools/cad/verify_spider.py
+        if [[ $CAD_MODE == --convert-mujoco ]]; then
+            CAD_PYTHON_SCRIPT=/workspace/tools/cad/convert_spider.py
+        elif [[ $CAD_MODE == --package ]]; then
+            CAD_PYTHON_SCRIPT=/workspace/tools/cad/package_spider.py
+        fi
+    fi
     exec docker run "${CAD_COMMON_ARGS[@]}" \
+        -e MUJOCO_GL=egl -e LIBGL_ALWAYS_SOFTWARE=1 \
         -e "PYTHONPATH=$CAD_CONTAINER_ROOT/home/.local/share/FreeCAD/AdditionalPythonPackages/py311" \
         "$CAD_IMAGE" -c 'exec ./squashfs-root/AppRun python "$1"' bash "$CAD_PYTHON_SCRIPT"
 fi
@@ -79,13 +113,22 @@ CAD_CONTAINER_NAME=joshua-freecad-robotcad
 CAD_LAUNCH_ARGS=("$CAD_MACRO")
 if [[ $CAD_MODE == --create-demo ]]; then
     CAD_LAUNCH_ARGS=(/workspace/tools/cad/create_demo.FCMacro)
+    if [[ $CAD_ROBOT == spider ]]; then
+        CAD_LAUNCH_ARGS=(/workspace/tools/cad/create_spider.FCMacro)
+    fi
+elif [[ $CAD_MODE == --check-cad ]]; then
+    CAD_LAUNCH_ARGS=(/workspace/tools/cad/check_spider.FCMacro)
+    CAD_CONTAINER_NAME=joshua-robotcad-clearance
 elif [[ $CAD_MODE == --mujoco ]]; then
-    if [[ ! -f "$CAD_ROOT/project/mujoco/scene.xml" ]]; then
-        echo 'Run scripts/run_robotcad.sh --convert-mujoco first.' >&2
+    if [[ ! -f "$CAD_PROJECT_HOST/mujoco/scene.xml" ]]; then
+        echo "Run scripts/run_robotcad.sh --robot $CAD_ROBOT --convert-mujoco first." >&2
         exit 1
     fi
     CAD_CONTAINER_NAME=joshua-robotcad-mujoco
-    CAD_LAUNCH_ARGS=(python -m mujoco.viewer "--mjcf=$CAD_CONTAINER_ROOT/project/mujoco/scene.xml")
+    CAD_LAUNCH_ARGS=(python -m mujoco.viewer "--mjcf=$CAD_PROJECT/mujoco/scene.xml")
+fi
+if [[ $CAD_ROBOT == spider ]]; then
+    CAD_CONTAINER_NAME=$CAD_CONTAINER_NAME-spider
 fi
 docker run --name "$CAD_CONTAINER_NAME" \
     "${CAD_DOCKER_ARGS[@]}" "${CAD_COMMON_ARGS[@]}" \
@@ -95,7 +138,13 @@ docker run --name "$CAD_CONTAINER_NAME" \
     -e "PYTHONPATH=$CAD_CONTAINER_ROOT/home/.local/share/FreeCAD/AdditionalPythonPackages/py311" \
     -e LIBGL_ALWAYS_SOFTWARE=1 -e QTWEBENGINE_DISABLE_SANDBOX=1 \
     "$CAD_IMAGE" -c 'exec ./squashfs-root/AppRun "$@"' bash "${CAD_LAUNCH_ARGS[@]}"
-if [[ $CAD_MODE == --create-demo && ! -f "$CAD_ROOT/build-result.json" ]]; then
-    echo 'Demo generation failed; see output/robotcad/build-error.txt.' >&2
+if [[ $CAD_MODE == --create-demo && ! -f "$CAD_BUILD_RESULT" ]]; then
+    echo "Generation failed; inspect $CAD_PROJECT_HOST and output/robotcad for build-error.txt." >&2
     exit 1
+fi
+if [[ $CAD_MODE == --check-cad ]]; then
+    if [[ ! -f "$CAD_PROJECT_HOST/clearance-validation.json" ]] || ! grep -q '"status": "ok"' "$CAD_PROJECT_HOST/clearance-validation.json"; then
+        echo "Clearance check needs review; inspect $CAD_PROJECT_HOST/clearance-validation.json and clearance-error.txt." >&2
+        exit 1
+    fi
 fi

@@ -15,7 +15,7 @@ PROJECT = Path(os.environ.get("JOSHUA_CAD_PROJECT", str(ROOT / "project")))
 def show_project():
     """Open the saved model after the GUI event loop starts."""
     try:
-        path = PROJECT / "robotcad_demo.FCStd"
+        path = PROJECT / os.environ.get("JOSHUA_CAD_DOCUMENT", "robotcad_demo.FCStd")
         if not path.is_file():
             raise FileNotFoundError(
                 "Create the demo with scripts/run_robotcad.sh --create-demo first."
