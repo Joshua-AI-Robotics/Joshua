@@ -41,7 +41,8 @@ TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
 ## Development Helpers
 
 `run_spider_rl.sh` provides `setup`, `prepare`, `check`, `cpu-smoke`, and GPU
-`smoke` commands for the isolated [spider RL foundation](../ai/train/locomotion/README.md).
+`smoke` commands plus `train` and `evaluate` for the isolated
+[spider RL workflow](../ai/train/locomotion/README.md).
 It consumes generated CAD outputs and keeps environments/checkpoints under
 ignored `output/spider_rl/`. The runtime services have no robot devices or networking.
 

@@ -1,11 +1,12 @@
-# Spider locomotion training foundation
+# Spider locomotion training
 
 This isolated Python 3.12 environment brings the [twelve-motor STS3215 spider](../../../tools/cad/SPIDER_STS3215.md)
 into mjlab for batched MuJoCo physics and PPO. The first task holds a standing
-pose at zero commanded velocity. It follows MicroDuck's progression from a
+pose at zero commanded velocity; a second task trains low-speed forward walking.
+It follows MicroDuck's progression from a
 verified robot model to batched RL, policy export, CPU replay, and hardware
-qualification. Walking training and Joshua inference integration are later
-steps; the [Joshua simulation backend](../../../simulation/README.md) currently
+qualification. Joshua inference integration is a later step;
+the [Joshua simulation backend](../../../simulation/README.md) currently
 provides viewing/playback rather than this trainer.
 
 This Compose project has no robot-device mounts or ROS launcher. Only setup
@@ -65,6 +66,127 @@ It saves checkpoints, normalization state, TensorBoard events, a contract, and
 Five iterations check the pipeline; they do not produce a walking controller.
 Logging stays local and no W&B credentials are required.
 
+## Train and evaluate walking
+
+The walking task reuses the generated asset and twelve actions. Its versioned
+`Joshua-Spider-Crawl-v1` contract adds a two-value gait clock to the standing
+interface: 47 actor inputs and 50 critic inputs. The standing task stays at
+45/48. Benchmark both batch sizes before starting a bounded run:
+
+```bash
+./scripts/run_spider_rl.sh train --num-envs 512 --iterations 10 --benchmark
+./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 10 --benchmark
+./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 501 --seed 42
+```
+
+Each command prints `RUN_DIR`. Benchmark outputs go under `output/spider_rl/benchmarks/`;
+training outputs go under `output/spider_rl/walk/`. `training.json` records batch
+size, updates, policy-transition throughput, versions, seed, and final checkpoint.
+This throughput counts policy transitions (each contains 20 physics substeps).
+It includes first-update overhead and is a short-run benchmark, not a sustained
+training guarantee. Reported Torch peak allocation excludes Warp/driver allocations.
+Each run also saves the policy contract, full environment YAML, PPO configuration,
+TensorBoard events, source snapshots, and checkpoints every 100 updates.
+
+The 2026-11-07 local baseline used the final reward recipe from scratch, seed 42,
+and selected `model_500.pt` (501 updates). It passed 100/100 validation cases and
+100/100 fresh held-out cases under the full protocol below, with mean speed
+RMSE about 0.0102 m/s and mean forward travel about 1.35 m. This is a nominal
+simulation result; rerun evaluation after any model, dependency, or reward change.
+The default training budget remains 2,000 updates when `--iterations` is omitted.
+
+Commands start at zero, change to 0.02–0.03 m/s after 1,200 policy steps
+(50 updates), then to 0.03–0.05 m/s after 6,000 steps (250 updates). The standing
+fraction falls from 100% to 20%, then 10%. After 24,000 steps (1,000 updates),
+the moving cases use exactly 0.05 m/s. Resampling applies changes gradually
+at the next command/reset; stages use the persisted global policy-step counter,
+not the number of parallel environments. Lateral and turning commands remain
+zero in this first forward-walking task. Resets vary joint angles by ±0.01 rad,
+roll/pitch by ±0.02 rad, and yaw by ±0.05 rad.
+
+Planar velocity tracking uses a 0.03 m/s tolerance: standing at a 0.05 m/s command
+does not receive a near-perfect tracking reward. Vertical velocity has a separate
+penalty so foot lift does not remove correct horizontal tracking credit.
+An additional unbounded squared planar-error cost prevents a policy from earning
+credit by slowly rocking forward and rapidly snapping backward with no net progress.
+An unbounded yaw-rate cost rejects circling while matching body-frame speed;
+a raw-output bounds cost keeps predictions near the usable action interval.
+Other terms encourage upright support, a 12 mm swing-foot clearance gated by
+actual body progress, and home posture; they penalize stance
+slip, fewer than two supporting feet, height deviations, torque, mechanical
+power, joint overspeed, and abrupt actions. The 2 rad/s overspeed term is a soft
+training penalty. It does not turn the provisional servo into an identified
+motor model or enforce a hard physical speed cap.
+
+The actor receives `sin(2π phase), cos(2π phase)` after its original 45 values.
+Phase is the episode policy-step count times 0.02 s, divided by a 0.8-second
+period, modulo one; while commanded to stand it is zero (`[0,1]`). A contact
+reward guides a FL → RR → FR → RL crawl with 75% stance duty, one scheduled
+swing leg at a time. A swing-lift cost guides its hip/knee control toward a
+sine-shaped lift (maximum −0.2/−0.1 rad offsets), leaving stance and yaw control
+free. The policy learns the resulting joint motion and forward placement. The clock is
+available to a future runtime from policy ticks, without contact ground truth
+or a new physical sensor. A future replay/adapter must preserve this clock and
+reset semantics. Earlier 45-input walking experiment checkpoints are rejected
+by the new versioned contract rather than silently loaded.
+
+PPO sends raw predictions to the reward/action manager. The lift cost sees
+out-of-range predictions so saturation cannot hide their error; the bounded
+action term still clips physical targets to ±0.2 rad and feeds back clipped
+normalized actions. Evaluation records action-saturation fraction as well as
+motion metrics.
+
+Resume a local checkpoint with an additional bounded update count:
+
+```bash
+./scripts/run_spider_rl.sh train --num-envs 1024 --iterations 500 \
+  --resume /workspace/output/spider_rl/walk/<run>/model_500.pt
+```
+
+Paths passed to these commands are **container paths**, rooted at `/workspace`.
+Resume checks the contract and restores model/normalization, optimizer, iteration,
+and curriculum counter. Physics episodes are reset; RNG state and partial
+rollouts are not restored, so continuation is not bit-for-bit identical.
+
+Evaluate a chosen checkpoint independently of its training reward:
+
+```bash
+./scripts/run_spider_rl.sh evaluate \
+  --checkpoint /workspace/output/spider_rl/walk/<run>/model_500.pt \
+  --episodes 100 --seconds 30 --speed 0.05 --seed-base 10000 --video
+```
+
+Each of the 100 cases receives a separately seeded initial pose (seeds
+10,000–10,099), a fixed 0.05 m/s forward command, and a 30-second horizon. A
+case fails permanently on its first termination/reset, even if its reset robot
+later stands. Walking success additionally requires planar velocity RMSE ≤0.02 m/s
+after a two-second warm-up and ≥60% of the requested forward distance over that
+remaining horizon (0.84 m for the default test). Surviving while stationary
+cannot pass. At least 90% of cases must pass all criteria for `gate_passed: true`.
+Use `--require-pass` to return a failing exit status when that gate is missed.
+The qualification flag also requires at least 100 cases, at least 30 seconds,
+exactly the 0.05 m/s target, and deterministic inference. Shorter/easier tests
+still report case metrics but cannot pass the full gate.
+
+Evaluation saves `evaluation.json` with per-case first failure, progress, speed
+error, heading drift, mean body velocity, stance slip, peak clearance, joint speed,
+effort, and checkpoint hash.
+Failed cases retain the metrics up to failure and never count as successful.
+Stance slip uses foot-site XY speed during contact; with spherical toes this
+proxy includes rolling motion. Peak effort and speed are sampled at policy rate.
+The video shows up to ten seconds of the first seeded case while it remains
+alive; `preview.png` is captured at one second. The mesh-free contact primitives
+are made visible in the CPU render model without changing GPU physics.
+Reports and MP4/PNG files stay beside the checkpoint in ignored `evaluations/`.
+Use held-out seeds (for example `--seed-base 20000`) when comparing final policies.
+`--sample-actions` is available for diagnosing dependence on exploration noise;
+those reports are labelled `sampled_diagnostic` and cannot pass the deterministic
+qualification gate, even if their individual case metrics meet its thresholds.
+
+Passing this nominal-model test establishes a simulation baseline only. Actuator
+calibration, domain randomization, normalized ONNX/CPU replay, and Joshua
+integration remain subsequent review stages.
+
 ## Model and policy interface
 
 Preparation reads the CAD-generated `design.json`, `manifest.json`, and floating
@@ -77,7 +199,7 @@ These contact proxies are approximate, not a mechanical clearance certificate.
 Robot contacts use a 5 ms solref time constant (with priority over the floor)
 to keep impact penetration within the 2 mm foot/shin clearance in this model.
 
-The generated `policy_contract.json` records asset/source hashes, joint order,
+The generated standing `policy_contract.json` records asset/source hashes, joint order,
 units, limits, gains, and timing. Robot dimensions and drive assumptions come
 from CAD; training settings live in the task. This is an offline trainer, not a
 second Joshua robot preset. A later Joshua adapter will translate the policy
@@ -95,7 +217,9 @@ contract into the protobuf-configured runtime.
 | Frames | body x forward, y left, z up; MJCF quaternion wxyz |
 | Normalization | separate actor/critic running statistics in the saved PPO checkpoint |
 
-The actor receives no base linear velocity or contact ground truth. Hardware will
+The actor receives no base linear velocity or contact ground truth. Walking run
+contracts extend the table above with their explicit gait-clock definition.
+Hardware will
 need a body IMU and a documented attitude estimator for projected gravity,
 timestamped joint state, and matching order/units. There is no observation noise,
 delay, push, or mass randomization in this first task. The CAD drive's 0.65 Nm
@@ -116,6 +240,8 @@ walking run without reviewing foot lift, slip, energy, and contact behavior.
 - `mjlab_joshua/contract.py` — versioned observation/action ordering and units.
 - `mjlab_joshua/task.py` — bounded action term, standing task, and PPO settings.
 - `mjlab_joshua/smoke.py` — held-target and five-update PPO gates with local evidence.
+- `mjlab_joshua/locomotion.py`, `train.py`, and `evaluate.py` — walking rewards,
+  speed curriculum, benchmark/resume entrypoints, seeded metrics, and video.
 - `tests/` — CAD/training frame/inertia parity, standing/contact physics,
   contract provenance, and posture penalty checks.
 - `requirements.in`, `requirements.lock` — isolated direct dependencies and
@@ -141,8 +267,8 @@ from the repository's Bazel/Compose CI suites.
 | Stage | Review scope and exit evidence |
 | --- | --- |
 | CAD parent | Reproducible printable parts, URDF, mesh scale/frames, MuJoCo preview |
-| This foundation | Isolated stack, primitive model, policy contract, standing and PPO smoke |
-| Locomotion | Low-speed commands/curriculum, gait rewards, seeded evaluations and videos; benchmark 512–1024 envs before scaling |
+| Foundation (#147) | Isolated stack, primitive model, policy contract, standing and PPO smoke |
+| Locomotion | Low-speed forward commands/curriculum, gait rewards, seeded evaluations and videos; benchmark 512–1024 envs before scaling |
 | Robustness and export | Measured actuator fit, controlled domain randomization, ONNX with normalization, CPU MuJoCo replay parity |
 | Joshua integration | Config-selected inference adapter, 50 Hz contract and joint commands, simulation evaluation before hardware |
 
@@ -160,7 +286,7 @@ merges, retarget/rebase its child onto `develop` before merging the child.
 ## Non-Goals
 
 - Editing printable CAD, firmware, or physical motor control.
-- A trained walking policy, ONNX export, or a Joshua ROS policy adapter in this stage.
+- ONNX export or a Joshua ROS policy adapter in this stage.
 - Reusing MicroDuck's XL330 actuator model for STS3215 motors.
 
 ## References
