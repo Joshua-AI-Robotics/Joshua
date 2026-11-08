@@ -9,6 +9,7 @@ cc_library(
         "//config:config_utils",
         "//config:validation",
         "//config/proto:config_cc_proto",
+        "//node_generator:runtime_observation",
         "//ros2/proto:node_cc_proto",
         "//utils:joshua_runtime",
         "//utils:scope_exit",
@@ -35,5 +36,6 @@ cc_test(
         "//utils:joshua_runtime",
         "//utils:scope_exit",
         "@googletest//:gtest_main",
+        "@protobuf",
     ],
 )

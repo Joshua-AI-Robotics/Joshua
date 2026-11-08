@@ -2,8 +2,8 @@
 
 #include <unistd.h>
 
-#include <stdexcept>
 #include <memory>
+#include <stdexcept>
 
 #include "gtest/gtest.h"
 #include "utils/robot_time.h"
@@ -46,42 +46,52 @@ TEST(JoshuaRuntimeTest, WorkerFailureRequestsOwnerShutdown) {
 }
 
 TEST(JoshuaRuntimeTest, CleanupCanAttemptStopCommandsAfterCancellation) {
-  EXPECT_EQ(RunGuarded("owner", [] {
-    RequestShutdown();
-    EXPECT_TRUE(CancellationRequested());
-    EXPECT_TRUE(RunCleanup("device stop", [] {
-      EXPECT_FALSE(CancellationRequested());
-      auto worker = StartWorker("stop worker", [] { EXPECT_FALSE(CancellationRequested()); });
-      worker.join();
-    }));
-    EXPECT_TRUE(CancellationRequested());
-    return 0;
-  }), 0);
+  EXPECT_EQ(RunGuarded("owner",
+                       [] {
+                         RequestShutdown();
+                         EXPECT_TRUE(CancellationRequested());
+                         EXPECT_TRUE(RunCleanup("device stop", [] {
+                           EXPECT_FALSE(CancellationRequested());
+                           auto worker = StartWorker("stop worker",
+                                                     [] { EXPECT_FALSE(CancellationRequested()); });
+                           worker.join();
+                         }));
+                         EXPECT_TRUE(CancellationRequested());
+                         return 0;
+                       }),
+            0);
 }
 
 TEST(JoshuaRuntimeTest, CleanupFailureCannotTurnFailureIntoSuccess) {
-  EXPECT_EQ(RunGuarded("owner", [] {
-    RunCleanup("close", [] { throw std::runtime_error("close failed"); });
-    return 0;
-  }), 1);
+  EXPECT_EQ(RunGuarded("owner",
+                       [] {
+                         RunCleanup("close", [] { throw std::runtime_error("close failed"); });
+                         return 0;
+                       }),
+            1);
   EXPECT_EQ(RunGuarded("exit code", [] { return 7; }), 7);
 }
 
 class InvalidClock final : public RobotClock {
  public:
-  double Now() const override { throw std::runtime_error("device lost"); }
+  double Now() const override {
+    throw std::runtime_error("device lost");
+  }
 };
 
 TEST(JoshuaRuntimeTest, ClockExceptionsHaveACommonType) {
-  ASSERT_EXIT({
-    if (!SetGlobalRobotClock(std::make_unique<InvalidClock>()).ok()) _exit(2);
-    try {
-      RobotTime();
-    } catch (const RobotTimeError&) {
-      _exit(0);
-    }
-    _exit(3);
-  }, testing::ExitedWithCode(0), "");
+  ASSERT_EXIT(
+      {
+        if (!SetGlobalRobotClock(std::make_unique<InvalidClock>()).ok()) _exit(2);
+        try {
+          RobotTime();
+        } catch (const RobotTimeError&) {
+          _exit(0);
+        }
+        _exit(3);
+      },
+      testing::ExitedWithCode(0),
+      "");
 }
 
 }  // namespace

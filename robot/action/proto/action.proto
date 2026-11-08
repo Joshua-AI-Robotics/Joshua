@@ -12,7 +12,7 @@ enum ActionType {
 
 // DEPRECATED: board/transport-flavored actuator types are replaced by
 // MotorType + Actuator.board_name (docs/BOARD_LAYER_RFC.md §6.3). Kept
-// functional during the board layer migration; removed in Phase 4 (§10).
+// for parsing migration errors; rejected by the runtime factory.
 enum ActuatorType {
   ACTUATOR_INVALID = 0;
   STS3215_SERVO = 1;
@@ -27,12 +27,7 @@ enum MotorType {
   MOTOR_INVALID = 0;
   MOTOR_STS3215 = 1;
   MOTOR_STEPPER_NEMA17 = 2;
-  // Placeholder motor for the AM243 TI demo firmware: nothing physical
-  // moves, the host just ships a seed into the demo's PDO slot (PDO_JOINT).
-  // Deliberately narrow — do not bind real joints to it.
-  // TODO: When AM243_PDO_MAPPING_ACTUATOR_V1 lands, add real motor values
-  // (or a firmware-owned-joint value with proper unit config) and retire
-  // this one.
+  // Retired TI-demo value. Kept for explicit migration errors, never executed.
   MOTOR_TI_DEMO = 3;
 }
 
@@ -40,7 +35,7 @@ message Actuator {
   string actuator_name = 1;
   uint64 id = 2;
   // DEPRECATED: use motor_type + board_name + channel instead. Kept
-  // functional during the board layer migration (docs/BOARD_LAYER_RFC.md §10).
+  // for parsing migration errors; rejected by the runtime factory.
   ActuatorType actuator_type = 3;
   // DEPRECATED: comm now lives on the referenced robot.board.Board.
   robot.comm.Comm comm = 4;
@@ -81,6 +76,8 @@ enum Am243PdoMapping {
   AM243_PDO_MAPPING_ACTUATOR_V1 = 2;
 }
 
+// Retired TI-demo config; validation and ActionFactory reject its presence.
+// Field numbers/names remain allocated so old configs cannot be reinterpreted.
 message Am243EthercatConfig {
   uint32 slave_index = 1;
   uint32 output_offset_bytes = 2;

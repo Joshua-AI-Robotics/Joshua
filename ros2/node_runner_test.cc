@@ -99,11 +99,11 @@ TEST_F(NodeRunnerClockTest, InstallsConfiguredClockBeforeConstructionAndCallback
 }
 
 TEST_F(NodeRunnerClockTest, ClockFailurePreventsNodeConstruction) {
-  ASSERT_EXIT(_exit(RunWithClockConfig<MustNotConstructNode>(
-                  "source: PTP require_ptp: true "
-                  "ptp_device: '/nonexistent-joshua-test/ptp'")),
-              testing::ExitedWithCode(1),
-              "Failed to create robot clock");
+  ASSERT_EXIT(
+      _exit(RunWithClockConfig<MustNotConstructNode>("source: PTP require_ptp: true "
+                                                     "ptp_device: '/nonexistent-joshua-test/ptp'")),
+      testing::ExitedWithCode(1),
+      "Failed to create robot clock");
 }
 
 TEST_F(NodeRunnerClockTest, EarlyLazyInitializationPreventsNodeConstruction) {
@@ -120,20 +120,25 @@ class FailingCallbackNode : public rclcpp::Node {
  public:
   FailingCallbackNode(const std::string&, int, const config::Config&)
       : rclcpp::Node("failing_callback") {
-    timer_ = create_wall_timer(std::chrono::milliseconds(1), [] {
-      throw std::runtime_error("fixture callback failure");
-    });
+    timer_ = create_wall_timer(std::chrono::milliseconds(1),
+                               [] { throw std::runtime_error("fixture callback failure"); });
   }
-  ~FailingCallbackNode() override { destroyed = true; }
+  ~FailingCallbackNode() override {
+    destroyed = true;
+  }
   inline static bool destroyed = false;
+
  private:
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
 TEST_F(NodeRunnerClockTest, CallbackFailureDestroysNodeAndShutsDownRos) {
-  ASSERT_EXIT({
-    const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC");
-    _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
-  }, testing::ExitedWithCode(0), "fixture callback failure");
+  ASSERT_EXIT(
+      {
+        const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC");
+        _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
+      },
+      testing::ExitedWithCode(0),
+      "fixture callback failure");
 }
 }  // namespace

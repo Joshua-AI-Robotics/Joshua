@@ -279,7 +279,7 @@ void CloseExcept(const std::array<int, 3>& keep, unsigned int limit) {
                                const std::array<int, 3>& keep,
                                unsigned int fd_limit) {
   CloseExcept(keep, fd_limit);
-  struct sigaction action{};
+  struct sigaction action {};
   sigemptyset(&action.sa_mask);
   action.sa_handler = ParentDied;
   if (setpgid(0, 0) < 0 || sigaction(SIGUSR2, &action, nullptr) < 0 ||
@@ -424,11 +424,13 @@ absl::Status NodeManager::CheckOwner() const {
   return absl::OkStatus();
 }
 
-void NodeManager::HandleSignal(int signal) noexcept { stop_signal = signal; }
+void NodeManager::HandleSignal(int signal) noexcept {
+  stop_signal = signal;
+}
 
 void NodeManager::InstallSignalHandlers() {
   stop_signal = 0;
-  struct sigaction action{};
+  struct sigaction action {};
   action.sa_handler = HandleSignal;
   sigemptyset(&action.sa_mask);
   if (sigaction(SIGINT, &action, &old_interrupt_) < 0)
@@ -465,11 +467,41 @@ absl::Status NodeManager::Initialize() {
   return absl::OkStatus();
 }
 
+absl::Status NodeManager::ConfigureObservation(const std::string& directory,
+                                               const std::string& sensor) {
+  ABSL_RETURN_IF_ERROR(CheckOwner());
+  if (!initialized_ || graph_started_ || !nodes_.empty() || observation_started_)
+    return absl::FailedPreconditionError(
+        "Configure observation after initialization and before launch");
+  ABSL_ASSIGN_OR_RETURN(
+      observation_,
+      node_generator::RuntimeObservation::Prepare(config_, config_path_, directory, sensor));
+  return absl::OkStatus();
+}
+
+void NodeManager::PublishObservation(const std::string& phase) noexcept {
+  if (!observation_) return;
+  try {
+    const auto now = SteadyClock::now();
+    if (phase == "monitoring" && now - last_observation_ < std::chrono::seconds(1)) return;
+    last_observation_ = now;
+    std::vector<node_generator::ProcessFact> processes;
+    for (const auto& node : nodes_) {
+      const auto& status = node.status;
+      if (status.pid > 0 && !status.exited && !status.reaped)
+        processes.push_back({status.pid, status.node_id, status.name, status.node_type});
+    }
+    observation_->Tick(processes, identified_nodes_.size(), phase);
+  } catch (...) { /* Passive publication never owns runtime lifecycle. */
+  }
+}
+
 absl::Status NodeManager::IdentifyNodeTypes() {
   auto register_node = [&](const ros2::node::Node& node) -> absl::Status {
     const auto [existing, inserted] = identified_nodes_.try_emplace(node.id(), node.node_type());
     if (!inserted && existing->second != node.node_type())
-      return absl::InvalidArgumentError("Conflicting types for node ID " + std::to_string(node.id()));
+      return absl::InvalidArgumentError("Conflicting types for node ID " +
+                                        std::to_string(node.id()));
     return absl::OkStatus();
   };
   for (const auto& action : config_.robot().actions().single_actions())
@@ -528,7 +560,8 @@ absl::StatusOr<NodeManager::LaunchSpec> NodeManager::BuildSimulationLaunchSpec()
 
 absl::Status NodeManager::LaunchAllNodes() {
   ABSL_RETURN_IF_ERROR(CheckOwner());
-  if (!initialized_) return absl::FailedPreconditionError("Initialize the node graph before launch");
+  if (!initialized_)
+    return absl::FailedPreconditionError("Initialize the node graph before launch");
   if (graph_started_) return absl::FailedPreconditionError("Node graph already started");
   std::vector<LaunchSpec> specs;
   for (const auto& [id, type] : identified_nodes_) {
@@ -566,12 +599,15 @@ absl::Status NodeManager::LaunchSimulation() {
 }
 
 NodeManager::NodeRecord* NodeManager::FindNode(const std::string& name) {
-  for (auto& node : nodes_) if (node.status.name == name) return &node;
+  for (auto& node : nodes_)
+    if (node.status.name == name) return &node;
   return nullptr;
 }
 
 absl::Status NodeManager::StartProcess(const LaunchSpec& spec) {
   ABSL_RETURN_IF_ERROR(CheckOwner());
+  if (observation_started_)
+    return absl::FailedPreconditionError("Cannot fork after passive observation starts ROS");
   if (ShutdownRequested()) return absl::CancelledError("Process startup interrupted");
   if (spec.name.empty() || spec.executable.empty())
     return absl::InvalidArgumentError("Empty process spec");
@@ -621,14 +657,21 @@ absl::Status NodeManager::SpawnProcess(NodeRecord& node) {
   argv.push_back(nullptr);
   std::array<int, 3> keep{event_write, error_write, ready_write};
   std::sort(keep.begin(), keep.end());
-  struct rlimit limit{};
+  struct rlimit limit {};
   if (getrlimit(RLIMIT_NOFILE, &limit) != 0) return absl::ErrnoToStatus(errno, "Descriptor limit");
   const pid_t owner = getpid();
   const pid_t guardian = fork();
   if (guardian < 0) return absl::ErrnoToStatus(errno, "Cannot fork node guardian");
   if (guardian == 0) {
-    GuardProcess(owner, node.spec, argv.data(), envp.data(), event_write, error_write,
-                 ready_write, keep, static_cast<unsigned int>(limit.rlim_cur));
+    GuardProcess(owner,
+                 node.spec,
+                 argv.data(),
+                 envp.data(),
+                 event_write,
+                 error_write,
+                 ready_write,
+                 keep,
+                 static_cast<unsigned int>(limit.rlim_cur));
   }
   node.status.guardian_pid = guardian;
   node.status.process_group = guardian;
@@ -671,24 +714,36 @@ absl::Status NodeManager::PollProcess(NodeRecord& node) {
     const ssize_t count = read(node.event_fd, &event, sizeof(event));
     if (count < 0 && (errno == EAGAIN || errno == EINTR)) break;
     if (count == 0) break;
-    if (count != sizeof(event)) return FailProcess(node, absl::DataLossError("Incomplete process event"));
+    if (count != sizeof(event))
+      return FailProcess(node, absl::DataLossError("Incomplete process event"));
     if (event.kind == 1) {
       node.status.pid = event.value;
-      std::fprintf(stderr, "Joshua: %s pid=%d guardian=%d group=%d\n", node.spec.name.c_str(),
-                   node.status.pid, node.status.guardian_pid, node.status.process_group);
+      std::fprintf(stderr,
+                   "Joshua: %s pid=%d guardian=%d group=%d\n",
+                   node.spec.name.c_str(),
+                   node.status.pid,
+                   node.status.guardian_pid,
+                   node.status.process_group);
     }
     if (event.kind == 2) {
+      if (observation_)
+        observation_->RecordExit(
+            {node.status.pid, node.status.node_id, node.status.name, node.status.node_type},
+            event.value);
       node.status.exited = true;
       node.status.exit_code = WIFEXITED(event.value) ? WEXITSTATUS(event.value) : -1;
       node.status.termination_signal = WIFSIGNALED(event.value) ? WTERMSIG(event.value) : 0;
       if (node.status.error.empty())
         node.status.state = node.status.exit_code == 0 ? State::kExited : State::kFailed;
-      node.status.expected_exit = node.status.error.empty() &&
+      node.status.expected_exit =
+          node.status.error.empty() &&
           (node.stopping || (node.spec.allow_completion && node.status.exit_code == 0));
       if (!node.status.expected_exit)
-        return FailProcess(node, absl::UnavailableError("Required node exited unexpectedly: " + node.spec.name +
-            " exit=" + std::to_string(node.status.exit_code) +
-            " signal=" + std::to_string(node.status.termination_signal)));
+        return FailProcess(
+            node,
+            absl::UnavailableError("Required node exited unexpectedly: " + node.spec.name +
+                                   " exit=" + std::to_string(node.status.exit_code) +
+                                   " signal=" + std::to_string(node.status.termination_signal)));
     }
   }
   if (!node.status.ready && node.ready_fd >= 0) {
@@ -700,9 +755,13 @@ absl::Status NodeManager::PollProcess(NodeRecord& node) {
         node.status.state = State::kReady;
       CloseFd(node.ready_fd);
     } else if (count == 0 && node.spec.require_ready && !node.stopping) {
-      return FailProcess(node, absl::UnavailableError("Node closed readiness pipe before initialization: " + node.spec.name));
+      return FailProcess(
+          node,
+          absl::UnavailableError("Node closed readiness pipe before initialization: " +
+                                 node.spec.name));
     } else if (count > 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
-      return FailProcess(node, absl::DataLossError("Invalid node readiness notification: " + node.spec.name));
+      return FailProcess(
+          node, absl::DataLossError("Invalid node readiness notification: " + node.spec.name));
     }
     if (count == 0) CloseFd(node.ready_fd);
   }
@@ -712,13 +771,15 @@ absl::Status NodeManager::PollProcess(NodeRecord& node) {
   if (waitid(P_PID, node.status.guardian_pid, &info, WEXITED | WNOHANG | WNOWAIT) < 0)
     return FailProcess(node, absl::ErrnoToStatus(errno, "Cannot observe node guardian"));
   if (info.si_pid && !node.stopping)
-    return FailProcess(node, absl::UnavailableError("Node guardian exited unexpectedly: " + node.spec.name));
+    return FailProcess(
+        node, absl::UnavailableError("Node guardian exited unexpectedly: " + node.spec.name));
   return absl::OkStatus();
 }
 
 absl::Status NodeManager::SignalProcess(NodeRecord& node, int signal) {
   node.stopping = true;
-  if (node.status.guardian_pid <= 0 || node.status.reaped || node.group_killed) return absl::OkStatus();
+  if (node.status.guardian_pid <= 0 || node.status.reaped || node.group_killed)
+    return absl::OkStatus();
   if (signal == SIGKILL && !node.status.exited) node.status.forced_shutdown = true;
   if (!node.status.exited && node.status.error.empty()) node.status.state = State::kStopping;
   if (kill(-node.status.process_group, signal) < 0 && errno != ESRCH)
@@ -736,6 +797,16 @@ absl::Status NodeManager::ReapProcess(NodeRecord& node) {
     const pid_t result = waitpid(-node.status.process_group, &status, WNOHANG);
     if (result > 0) {
       if (result == node.status.guardian_pid) node.guardian_reaped = true;
+      if (result == node.status.pid && !node.status.exited) {
+        if (observation_)
+          observation_->RecordExit(
+              {result, node.status.node_id, node.status.name, node.status.node_type}, status);
+        node.status.exited = true;
+        node.status.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        node.status.termination_signal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
+        node.status.expected_exit = node.stopping && node.status.error.empty();
+        node.status.state = node.status.expected_exit ? State::kExited : State::kFailed;
+      }
       continue;
     }
     if (result < 0 && errno == EINTR) continue;
@@ -786,7 +857,8 @@ absl::Status NodeManager::AwaitReady(std::chrono::milliseconds timeout) {
     if (SteadyClock::now() >= deadline) {
       for (auto& node : nodes_) {
         if (!StartupComplete(node))
-          StartupFailed(node, absl::DeadlineExceededError("Readiness timed out: " + node.status.name));
+          StartupFailed(node,
+                        absl::DeadlineExceededError("Readiness timed out: " + node.status.name));
       }
       return absl::DeadlineExceededError("Node readiness timed out");
     }
@@ -822,8 +894,14 @@ absl::Status NodeManager::MonitorNodes(const std::string& completion_node) {
   ABSL_RETURN_IF_ERROR(CheckOwner());
   if (!completion_node.empty() && !FindNode(completion_node))
     return absl::NotFoundError("Unknown completion node: " + completion_node);
+  // All application and guardian forks precede the observer's ROS/DDS threads.
+  if (observation_ && !observation_started_) {
+    observation_started_ = true;
+    observation_->Start();
+  }
   while (!ShutdownRequested()) {
     const auto status = PollNodes();
+    PublishObservation("monitoring");
     if (!status.ok()) {
       Shutdown().IgnoreError();
       return status;
@@ -846,7 +924,9 @@ absl::Status NodeManager::Shutdown(int max_wait_ms) {
 absl::Status NodeManager::Shutdown(const ShutdownPolicy& policy) {
   ABSL_RETURN_IF_ERROR(CheckOwner());
   if (policy.interrupt_grace.count() < 0 || policy.terminate_grace.count() < 0 ||
-      policy.kill_grace.count() < 0) return absl::InvalidArgumentError("Negative shutdown grace period");
+      policy.kill_grace.count() < 0)
+    return absl::InvalidArgumentError("Negative shutdown grace period");
+  PublishObservation("shutdown_requested");
   absl::Status result;
   auto remember = [&](const absl::Status& status) {
     if (result.ok() && !status.ok()) result = status;
@@ -877,6 +957,7 @@ absl::Status NodeManager::Shutdown(const ShutdownPolicy& policy) {
   signal(SIGKILL);
   if (!wait(policy.kill_grace, true) && result.ok())
     result = absl::DeadlineExceededError("Node process groups have not all been reaped");
+  PublishObservation("monitor_finished");
   return result;
 }
 
@@ -887,9 +968,9 @@ std::vector<NodeManager::NodeStatus> NodeManager::GetNodeStatus() const {
   return result;
 }
 
-absl::Status NodeManager::GetTopicsForNode(
-    uint32_t node_id, std::vector<std::string>& publish_topics,
-    std::vector<std::string>& subscribe_topics) {
+absl::Status NodeManager::GetTopicsForNode(uint32_t node_id,
+                                           std::vector<std::string>& publish_topics,
+                                           std::vector<std::string>& subscribe_topics) {
   if (identified_nodes_.count(node_id) == 0) {
     LOG(WARNING) << "Node " << node_id << " not found in the config.";
     return absl::Status(absl::StatusCode::kInvalidArgument, "Node not found in the config.");

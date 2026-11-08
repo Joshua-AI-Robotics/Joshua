@@ -152,7 +152,7 @@ into a `double`:
 It never subtracts a process-specific startup time or changes the hardware clock.
 The explicit `MONOTONIC` option remains boot-relative and does not subtract a UTC
 date. Changing the platform epoch later would change the time contract for every
-consumer. All clock reads use
+consumer. Timestamp reads use
 `RobotTime()` returning `double`, and custom clocks continue implementing the
 original `virtual double Now() const` interface. Combining the parts preserves
 fractional seconds within double precision. The more recent epoch reduces the
@@ -176,12 +176,24 @@ and the launcher use the shared `JOSHUA_MAIN`/`RunNode` boundary and
 [ROS runtime documentation](../ros2/README.md#process-runtime-and-failure-handling).
 `TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
-UTC/PTP can jump when the host adjusts time. Deadline values use
-`RobotTime() + timeout_seconds`. Serial exchange timeouts follow RobotTime only:
-pausing the clock pauses the timeout, and clock adjustments change the remaining wait.
-Runtime shutdown can cancel an ordinary wait independently of clock advancement.
-Cleanup scopes can still attempt stop commands using RobotTime; the launcher
-owns bounded OS-level escalation if cleanup cannot finish.
+The actuator subscription boundary uses `TryRobotTime()` for headerless commands
+and reports clock failures as an `Unavailable` status instead of letting a clock
+exception escape the ROS callback. STS3215 and stepper `/torque` disable commands
+(Bool false or numeric scalar/array zero) still reach the actuator: if the clock
+is unreadable or nonfinite, their packet timestamp is explicitly NaN and a
+warning is logged. This marks unavailable metadata without inventing a time or
+switching sources. Motion and torque-enable commands requiring a host timestamp
+are rejected until clock reads recover. JointState keeps its supplied source
+timestamp without reading the host clock.
+
+UTC/PTP can jump when the host adjusts time. RobotTime-based deadlines use
+`RobotTime() + timeout_seconds`, so clock adjustments change their remaining wait.
+Serial exchange timeouts use `std::chrono::steady_clock` to bound elapsed bus-lock
+wait, write, and read time independently of RobotTime adjustments, pauses, or
+read failures. These deadlines apply per attempt; a retry has its own timeout.
+Runtime shutdown can cancel ordinary serial waits. Cleanup scopes can still
+attempt stop commands; the launcher owns bounded OS-level escalation if cleanup
+cannot finish.
 
 ## Acquisition timestamps and ROS conversion
 
@@ -262,6 +274,49 @@ a forward jump can make a callback due immediately at the next executor wakeup.
 Clock exceptions propagate. Cancelling the returned ROS timer stops the wakeups.
 Audio recreates its timer when the negotiated capture interval changes.
 
+## Hardware validation
+
+On 2026-11-04, the operator confirmed normal SO100 motion using
+[`trajectory_example.pbtxt`](../config/config_preset/so100/trajectory_example.pbtxt),
+and ESP32 stepper motion plus Bool torque enable/disable using
+[`esp32_stepper_demo.pbtxt`](../config/config_preset/example/esp32_stepper_demo.pbtxt).
+
+The ESP32 clock-failure test used `/dev/ttyUSB0` with revision-4 JoshuaWire and
+required `/dev/ptp0` as the timestamp source. A process-local shared library
+injected `EIO` only into the actuator subscriber's PHC reads after startup;
+system UTC and monotonic clocks were unaffected. The same actuator process
+remained alive throughout these checks, with physical torque confirmed by the
+operator:
+
+| Clock condition and Bool command | Observed result |
+|---|---|
+| PHC read failure, `/torque` false | Shaft released; a missing-timestamp warning was logged. |
+| Failure still active, `/torque` true | Command returned `Unavailable`; shaft remained released. |
+| Failure removed, `/torque` true | Holding torque returned without restarting the node. |
+
+The SO100 run covered normal trajectory execution; its clock-failure test was
+skipped at the operator's request. Fault injection was performed on the ESP32
+only. The host PHC was readable but unsynchronized with system UTC, so these
+checks do not validate synchronized acquisition or timing. These hardware checks
+preceded the subsequent merge of `develop` and were not repeated afterward.
+
+Setup required explicit board recovery from a latched stop. One startup also
+reported an uncorrelated serial response; a subsequent trace had valid CRCs and
+correlation fields. Launcher Ctrl+C left an actuator child running, so cleanup
+disabled torque and sent that child SIGINT explicitly, releasing the port.
+Runtime exception boundaries and process ownership are tracked separately in
+[#133](https://github.com/Joshua-AI-Robotics/Joshua/pull/133).
+
+After merging `develop` at `316a47f`, the Ubuntu 22 Compose test task passed all
+53 targets using the local `joshua-audio:u22` image. The launcher and Xbox
+publisher built successfully, including all managed publisher binaries. The
+PR's changed C++/Python files passed pre-push lint.
+
+After adding the direct `rosidl_runtime_c` dependency on `rcutils` for Jazzy's
+public type-hash headers, the Ubuntu 24 Compose test task passed all 53 targets
+using a freshly built native `joshua:u24-jazzy` image. The standalone
+`robot_time_conversion_test` also passed on Ubuntu 22 with that dependency.
+
 ## Integration checklist
 
 - [x] Shared C++ accessor, install-once ownership and concurrent reads.
@@ -282,7 +337,8 @@ Audio recreates its timer when the negotiated capture interval changes.
 - [ ] Monitor synchronization health across configured clock sources.
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
-Serial deadlines, cached feedback expiry, publisher schedules and audio retry/stall
-detection use RobotTime seconds. OS waits and executor wakeups use platform timers;
+Cached feedback expiry, publisher schedules and audio retry/stall detection use
+RobotTime seconds. Serial exchange deadlines use `std::chrono::steady_clock`.
+OS waits and executor wakeups use platform timers;
 logging retains its existing clock semantics. Utility entrypoints that only display
 incoming stamps do not create new acquisition timestamps and need no clock installation.

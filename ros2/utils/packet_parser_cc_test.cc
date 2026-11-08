@@ -1,7 +1,11 @@
+#include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -18,9 +22,27 @@
 #include "utils/robot_time.h"
 
 namespace {
+class CommandClock final : public joshua::RobotClock {
+ public:
+  double Now() const override {
+    if (fail) throw std::runtime_error("test command clock unavailable");
+    return now;
+  }
+  std::atomic<bool> fail{false};
+  std::atomic<double> now{123.125};
+};
+
 class PacketParserCppTest : public testing::Test {
  protected:
+  inline static CommandClock* clock_ = nullptr;
+  static void SetUpTestSuite() {
+    auto clock = std::make_unique<CommandClock>();
+    clock_ = clock.get();
+    ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
+  }
   void SetUp() override {
+    clock_->fail = false;
+    clock_->now = 123.125;
     ASSERT_EQ(setenv("ROS_LOG_DIR", std::getenv("TEST_TMPDIR"), 1), 0);
     rclcpp::init(0, nullptr);
     node = std::make_shared<rclcpp::Node>("packet_parser_test");
@@ -32,6 +54,7 @@ class PacketParserCppTest : public testing::Test {
     config.set_topic("elbow/position");
   }
   void TearDown() override {
+    clock_->fail = false;
     executor->remove_node(node);
     executor.reset();
     node.reset();
@@ -208,6 +231,81 @@ TEST_F(PacketParserCppTest, BoolIsAnEnableGateNotAPositionOrContinuousTorque) {
   action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
   EXPECT_FALSE(Send(ros2::data_type::BOOL, message).ok());
 }
+TEST_F(PacketParserCppTest, TorqueDisableSurvivesClockFailureForBoolScalarAndArray) {
+  clock_->fail = true;
+  config.set_topic("elbow/torque");
+  for (auto motor_type : {robot::action::MOTOR_STS3215, robot::action::MOTOR_STEPPER_NEMA17}) {
+    action.mutable_actuator()->set_motor_type(motor_type);
+    std_msgs::msg::Bool boolean;
+    std_msgs::msg::Float64 scalar;
+    std_msgs::msg::Float64MultiArray array;
+    array.data = {0};
+    for (const auto& result : {Send(ros2::data_type::BOOL, boolean),
+                               Send(ros2::data_type::FLOAT64, scalar),
+                               Send(ros2::data_type::FLOAT64_MULTI_ARRAY, array)}) {
+      ASSERT_TRUE(result.ok()) << result.status();
+      EXPECT_EQ(result->preset(), robot::action::PRESET_DISABLE_TORQUE);
+      EXPECT_FALSE(result->has_joint());
+      EXPECT_TRUE(std::isnan(result->timestamp()));
+      robot::action::ActionPacket decoded;
+      ASSERT_TRUE(decoded.ParseFromString(result->SerializeAsString()));
+      EXPECT_TRUE(std::isnan(decoded.timestamp()));
+    }
+  }
+}
+TEST_F(PacketParserCppTest, ClockFailureRejectsMotionAndEnableThenAllowsRecovery) {
+  clock_->fail = true;
+  std_msgs::msg::Float64 message;
+  message.data = 1;
+  for (const auto& topic : {"elbow/position", "elbow/speed", "elbow/torque"}) {
+    config.set_topic(topic);
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kUnavailable);
+  }
+  std_msgs::msg::Bool boolean;
+  boolean.data = true;
+  EXPECT_EQ(Send(ros2::data_type::BOOL, boolean).status().code(), absl::StatusCode::kUnavailable);
+  // TI torque is continuous effort, not a disable gate, even for zero.
+  action.mutable_actuator()->set_motor_type(robot::action::MOTOR_TI_DEMO);
+  message.data = 0;
+  EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+            absl::StatusCode::kUnavailable);
+  clock_->fail = false;
+  config.set_topic("elbow/position");
+  auto recovered = Send(ros2::data_type::FLOAT64, message);
+  ASSERT_TRUE(recovered.ok()) << recovered.status();
+  EXPECT_DOUBLE_EQ(recovered->timestamp(), 123.125);
+}
+TEST_F(PacketParserCppTest, NonFiniteClockStillAllowsOnlyTorqueDisable) {
+  config.set_topic("elbow/torque");
+  std_msgs::msg::Float64 message;
+  for (double invalid :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+    clock_->now = invalid;
+    message.data = 0;
+    auto disabled = Send(ros2::data_type::FLOAT64, message);
+    ASSERT_TRUE(disabled.ok()) << disabled.status();
+    EXPECT_EQ(disabled->preset(), robot::action::PRESET_DISABLE_TORQUE);
+    EXPECT_TRUE(std::isnan(disabled->timestamp()));
+    message.data = 1;
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kUnavailable);
+    message.data = -1;
+    EXPECT_EQ(Send(ros2::data_type::FLOAT64, message).status().code(),
+              absl::StatusCode::kInvalidArgument);
+  }
+}
+TEST_F(PacketParserCppTest, JointStateKeepsSourceTimestampDuringHostClockFailure) {
+  clock_->fail = true;
+  sensor_msgs::msg::JointState message;
+  message.name = {"elbow"};
+  message.position = {1};
+  message.header.stamp.sec = 1750118523;
+  message.header.stamp.nanosec = 125000000;
+  auto result = Send(ros2::data_type::JOINT_STATE, message);
+  ASSERT_TRUE(result.ok()) << result.status();
+  EXPECT_DOUBLE_EQ(result->timestamp(), 123.125);
+}
 TEST_F(PacketParserCppTest, IntegerFeedbackDoesNotTruncateOrWrap) {
   robot::perception::SinglePerception sensor;
   ros2::node::Publisher config;
@@ -252,11 +350,11 @@ TEST_F(PacketParserCppTest, JointFeedbackPreservesAcquisitionStampThroughPublish
     int32_t sec;
     uint32_t nanosec;
   };
-  for (const auto& sample : std::vector<Sample>{
-           {123.000000456, 1750118523, 456},
-           {0.0, 1750118400, 0},
-           {-0.5, 1750118399, 500000000},
-           {1700000000.125 - joshua::kRobotStartTime, 1700000000, 125000000}}) {
+  for (const auto& sample :
+       std::vector<Sample>{{123.000000456, 1750118523, 456},
+                           {0.0, 1750118400, 0},
+                           {-0.5, 1750118399, 500000000},
+                           {1700000000.125 - joshua::kRobotStartTime, 1700000000, 125000000}}) {
     received.reset();
     SpinUntil([&] {
       EXPECT_TRUE((*publish)(2048, sample.timestamp).ok());

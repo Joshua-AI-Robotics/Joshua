@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "config/config_utils.h"
 #include "config/validation.h"
+#include "glog/logging.h"
 #include "google/protobuf/struct.pb.h"
 #include "google/protobuf/util/json_util.h"
 
@@ -320,6 +321,7 @@ Report Evaluate(const std::vector<std::string>& args) {
   }
   auto parsed = config_util::LoadConfig(*pinned_path, kConfigLimit);
   if (!parsed.ok()) {
+    LOG(ERROR) << "Failed to load config: " << parsed.status();
     if (parsed.status().code() == absl::StatusCode::kResourceExhausted ||
         parsed.status().code() == absl::StatusCode::kInternal) {
       return {path,
@@ -357,6 +359,20 @@ int WriteReport(const Report& report, std::ostream& output) {
   return output.good() ? (oversized ? 3 : report.exit_code) : 3;
 }
 }  // namespace
+
+absl::StatusOr<Config> LoadConfigForInspection(const std::string& path,
+                                               int root_fd,
+                                               std::string* stage) {
+  *stage = "input";
+  if (!SafeRelativeReference(path))
+    return absl::InvalidArgumentError(
+        "Configuration reference must be a safe relative POSIX path.");
+  UniqueFd pin, content;
+  auto pinned = OpenPinnedPath(path, root_fd, &pin, &content);
+  if (!pinned.ok()) return pinned.status();
+  *stage = "load";
+  return config_util::LoadConfig(*pinned, kConfigLimit);
+}
 
 int RunConfigValidationCli(const std::vector<std::string>& args, std::ostream& output) {
   if (args.size() == 1 && args[0] == "--help") {

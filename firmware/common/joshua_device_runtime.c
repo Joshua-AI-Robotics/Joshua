@@ -32,6 +32,13 @@ void jw_runtime_reset(void* context) {
   for (uint16_t i = 0; i < runtime->identity.function_count; ++i)
     transition(&runtime->functions[i].state, runtime->estopped, JW_REASON_SESSION_RESET);
 }
+void jw_runtime_fault(jw_device_runtime_t* runtime) {
+  if (runtime->safety) runtime->safety(runtime->context, 1);
+  runtime->estopped = 1;
+  transition(&runtime->state, 1, JW_REASON_DEVICE_FAULT);
+  for (uint16_t i = 0; i < runtime->identity.function_count; ++i)
+    transition(&runtime->functions[i].state, 1, JW_REASON_DEVICE_FAULT);
+}
 int jw_runtime_command(void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
   jw_device_runtime_t* r = (jw_device_runtime_t*)context;
   uint8_t data[JW_MAX_PAYLOAD_LEN];
@@ -39,6 +46,12 @@ int jw_runtime_command(void* context, const jw_command_t* command, uint8_t* out,
   jw_runtime_function_t* function = NULL;
   for (uint16_t i = 0; i < r->identity.function_count; ++i)
     if (r->functions[i].descriptor.function_id == command->channel) function = &r->functions[i];
+  const int function_command =
+      command->cmd == JW_CMD_PROFILE || command->cmd == JW_CMD_DESCRIBE_FUNCTION;
+  if ((function_command && command->channel == JW_CHANNEL_NONE) ||
+      (!function_command && command->cmd != JW_CMD_GET_STATUS &&
+       command->channel != JW_CHANNEL_NONE))
+    return reply(out, cap, JW_STATUS_INVALID_CHANNEL, NULL, 0);
   size_t expected = 0;
   switch (command->cmd) {
     case JW_CMD_DISCOVER:

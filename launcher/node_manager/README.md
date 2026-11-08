@@ -82,7 +82,8 @@ supply explicit grace periods. `Shutdown()` is idempotent and closes the job's
 control channels after reaping while retaining its status record.
 
 OS process grace periods use host elapsed time so shutdown remains available
-when RobotTime fails or pauses. Driver transaction deadlines still use RobotTime.
+when RobotTime fails or pauses. Serial transaction deadlines use steady elapsed
+time, independently of RobotTime.
 OS tasks that cannot be reaped within the kill window are reported as a shutdown
 failure.
 
@@ -98,3 +99,22 @@ retain their own defensive construction checks.
 stalled processes, and descendants; it is not launched by normal robot presets.
 The Bazel targets are `//launcher/node_manager:node_manager` and
 `//launcher/node_manager:node_manager_test`. Run tests only when validation is requested.
+
+## Optional passive observation
+
+The launcher accepts `--observation_dir` and optional `--observe_sensor` flags.
+NodeManager validates the selection and acquires an exclusive lease on an
+existing private directory before launching children. It starts a private ROS
+context after all forks, without installing global ROS signal handlers.
+Process monitoring runs before bounded observation work; initialization,
+callbacks, graph queries and snapshot publication failures stay contained.
+
+Snapshots describe the launcher's loaded config, process facts, retained exits,
+bounded partial `/rosout` logs and one explicitly selected POSITION/JOINT_STATE
+stream. Log names do not prove runtime association. Feedback requires the sole
+expected publisher endpoint and actual message publisher GID, and cached data
+is invalidated when the endpoint set changes. Receipt freshness does not prove
+acquisition freshness or physical readiness. Simulation observation is
+unsupported. The [MCP guide](../../tools/mcp/README.md#optional-runtime-observations)
+documents directory permissions, clock domain, fields and limitations. MCP is
+an optional reader; NodeManager remains the runtime owner.

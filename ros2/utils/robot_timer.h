@@ -38,12 +38,12 @@ inline std::function<void()> MakeRobotTimerCallback(double period, std::function
 // Period is in RobotTime seconds. The ROS timer only wakes the executor to
 // check the deadline; a paused/backward clock waits for that deadline.
 inline rclcpp::TimerBase::SharedPtr CreateRobotTimer(rclcpp::Node& node,
-                                                   double period,
-                                                   std::function<void()> callback) {
+                                                     double period,
+                                                     std::function<void()> callback) {
   auto tick = internal::MakeRobotTimerCallback(period, std::move(callback));
   constexpr double kMaxWakeupPeriod = 0.001;
   return node.create_wall_timer(std::chrono::duration<double>(std::min(period, kMaxWakeupPeriod)),
-                               std::move(tick));
+                                std::move(tick));
 }
 
 }  // namespace ros2_utils

@@ -216,7 +216,8 @@ class ValidationCliTest(unittest.TestCase):
     def test_integrity_references_and_declared_nonexistent_device(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "config.pbtxt"
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   perceptions { single_perceptions {
     node { id: 1 node_type: POSITION_PUBLISHER }
@@ -225,7 +226,8 @@ robot {
     sts3215_encoder_config { board_name: "missing" channel: 1 }
   }}
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(
                 (
@@ -236,7 +238,8 @@ robot {
                 ),
                 (1, "integrity", "invalid", "NOT_FOUND"),
             )
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   perceptions { single_perceptions {
     node { id: 1 node_type: LIDAR_PUBLISHER }
@@ -249,14 +252,16 @@ robot {
     }}
   }}
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual((process.returncode, report["result"]), (0, "valid"))
 
     def test_bus_conflict(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "conflict.pbtxt"
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   boards {
     name: "bus"
@@ -278,7 +283,8 @@ robot {
     }
   }
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(
                 (process.returncode, report["stage"], report["status_code"]),
@@ -329,7 +335,12 @@ robot {
             with self.subTest(label=label):
                 self.assertFalse(
                     label.startswith(
-                        ("//launcher:", "//launcher/", "//firmware:")
+                        (
+                            "//launcher:",
+                            "//launcher/",
+                            "//node_generator:",
+                            "//firmware:",
+                        )
                     )
                 )
                 if label.startswith("//simulation:"):
@@ -344,8 +355,29 @@ robot {
                         },
                     )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
-                    self.fail(
-                        "validator depends on hardware communication implementation"
+                    # These helpers check protobuf fields without opening a bus.
+                    # Keep the allowlist exact so transports remain excluded.
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/comm/factory:comm_config_validation",
+                            "//robot/comm/factory:comm_config_validation.h",
+                            "//robot/comm/serial:serial_config_validation",
+                            "//robot/comm/serial:serial_config_validation.h",
+                            "//robot/comm/serial:serial_device_identity",
+                            "//robot/comm/serial:serial_device_identity.cc",
+                            "//robot/comm/serial:serial_device_identity.h",
+                        },
+                        "validator depends on hardware communication implementation",
+                    )
+                if label.startswith("//robot/perception/") and "/proto:" not in label:
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/perception/audio:audio_config",
+                            "//robot/perception/audio:audio_config.h",
+                        },
+                        "validator depends on perception implementation",
                     )
                 if label.startswith("//robot/action/") and "/proto:" not in label:
                     self.fail("validator depends on action implementation")

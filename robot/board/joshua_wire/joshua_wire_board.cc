@@ -1,5 +1,4 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
-#include "utils/scope_exit.h"
 
 #include <algorithm>
 #include <mutex>
@@ -14,6 +13,7 @@
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {

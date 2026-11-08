@@ -20,7 +20,7 @@ JOSHUA_MAIN(argc, argv) {
 process clock, constructs the node, registers its executor, and notifies the
 launcher of readiness. A finite executor wait also observes worker failures.
 `rclcpp` handles shutdown signals through its handler thread; the shutdown
-callback requests cancellation of ordinary RobotTime-based serial waits.
+callback requests cancellation of ordinary serial waits.
 
 On exit the runner cancels ordinary work, releases executor/node resources,
 tears down the board cache, releases communication resources and their workers,
@@ -38,8 +38,8 @@ through status returns. A cleanup failure preserves a nonzero process result.
 Diagnostics do not depend on RobotTime.
 
 Cleanup scopes allow best-effort stop commands after ordinary waits have been
-cancelled. These commands still use RobotTime deadlines; a frozen clock or hung
-device can require the launcher's bounded SIGTERM/SIGKILL escalation. Teardown
+cancelled. Serial commands use steady elapsed deadlines; a hung device can
+require the launcher's bounded SIGTERM/SIGKILL escalation. Teardown
 is an attempt, not an acknowledgement that a device physically stopped.
 
 Standalone Xbox publishing accepts an optional preset path before ROS options;
@@ -184,15 +184,13 @@ units explicitly, preserving joint name, frame, timestamp, and supplied fields.
 
 STS3215 and stepper support native position/velocity combinations and SI
 position-only commands (radians converted to ticks/degrees). They reject effort;
-use presets to enable/disable torque. TI demo supports native position/velocity/
-effort using its existing firmware scaling, but rejects SI commands. Drivers
-validate the entire payload before writes. Channel failures are returned; a
+use presets to enable/disable torque. The legacy TI demo motor driver is retired;
+AM243 examples use the stepper driver over JoshuaWire. Drivers validate the entire payload before writes. Channel failures are returned; a
 multi-field command is not a transactional hardware operation.
 
 Scalar topics retain native values: `/position` maps to position, `/speed` and
 `/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
-maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
-unsupported by runtime motor drivers. The standalone Pybricks tool defines
+maps to enable/disable presets. `/dc` remains unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
 Normalized positions map through configured operational limits once, then become
@@ -237,6 +235,36 @@ even when it has several subscriptions.
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
+
+## C++ node logging
+
+C++ nodes and utilities use `JOSHUA_LOG(INFO) << message` (also DEBUG, WARNING,
+ERROR and FATAL). The wrapper preserves the call site's file, line and function,
+and uses the actual ROS logger name, including node remapping. Configure via:
+
+```protobuf
+general { ros2_log_mode: ROS2_LOG_BOTH }
+```
+
+BOTH is the protobuf default: glog writes to stderr and ROS writes to `/rosout`
+and its configured file logger. ROS console output is disabled process-wide in
+this mode, including ROS library console diagnostics, to avoid duplicate output.
+`ROS2_LOG_ROS` uses normal ROS destinations; `ROS2_LOG_GLOG` uses glog for Joshua
+messages. ROS output flags such as disabling rosout remain honored.
+
+ROS severity settings filter the ROS destination; glog minloglevel filters glog,
+and DEBUG additionally requires glog verbosity >= 1 for that destination. FATAL
+always terminates the process after logging, regardless of backend. Startup and
+post-shutdown messages fall back to glog because ROS routing is unavailable.
+
+The mode covers Joshua C++ node logs, not Python loggers or direct driver/library
+LOG calls. The latter remain glog. A returned status carries no source location;
+returned errors are logged at the node boundary with topic context. Drivers preserve
+the failure details in their status rather than also logging the same error.
+Destructor cleanup failures are logged locally when no caller can receive a status.
+Standalone C++ utilities have no config input and use BOTH. The logging context
+is process-wide, matching Joshua's one-node-per-process launcher; component
+composition would require per-node contexts.
 
 ## Audio publishing
 

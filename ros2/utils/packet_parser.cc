@@ -11,6 +11,7 @@
 
 #include "absl/strings/str_join.h"
 #include "rclcpp/rclcpp.hpp"
+#include "ros2/logging.h"
 #include "ros2/utils/qos_setting.h"
 #include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -318,9 +319,6 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
         [actuator_name = action.actuator().actuator_name(), torque_gate, config, callback](
             typename Message::ConstSharedPtr message) {
           auto packet = DecodeCommand(*message, config, actuator_name);
-          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
-            if (packet.ok()) packet->set_timestamp(RobotTime());
-          }
           if (packet.ok() && packet->has_joint() && torque_gate) {
             const double gate = packet->joint().effort();
             if (gate < 0) {
@@ -329,6 +327,25 @@ absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSub
             }
             packet->set_preset(gate > 0 ? robot::action::PRESET_ENABLE_TORQUE
                                         : robot::action::PRESET_DISABLE_TORQUE);
+          }
+          if constexpr (!std::is_same_v<Message, sensor_msgs::msg::JointState>) {
+            if (packet.ok()) {
+              const auto timestamp = joshua::TryRobotTime();
+              if (timestamp.ok()) {
+                packet->set_timestamp(*timestamp);
+              } else if (packet->has_preset() &&
+                         packet->preset() == robot::action::PRESET_DISABLE_TORQUE) {
+                // Disabling torque must not depend on timestamp metadata. Zero
+                // is a valid RobotTime, so mark the unavailable timestamp as NaN.
+                packet->set_timestamp(std::numeric_limits<double>::quiet_NaN());
+                JOSHUA_LOG(WARNING)
+                    << "Clock unavailable on '" << config.topic()
+                    << "'; disabling torque without a timestamp: " << timestamp.status();
+              } else {
+                callback(timestamp.status());
+                return;
+              }
+            }
           }
           callback(std::move(packet));
         });

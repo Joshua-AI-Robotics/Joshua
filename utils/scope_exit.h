@@ -9,7 +9,9 @@ template <typename Callback>
 class ScopeExit {
  public:
   explicit ScopeExit(Callback callback) : callback_(std::move(callback)) {}
-  ~ScopeExit() noexcept { callback_(); }
+  ~ScopeExit() noexcept {
+    callback_();
+  }
   ScopeExit(const ScopeExit&) = delete;
   ScopeExit& operator=(const ScopeExit&) = delete;
 

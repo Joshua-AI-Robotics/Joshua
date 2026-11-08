@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +14,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "config/proto/config.pb.h"
+#include "node_generator/runtime_observation.h"
 #include "ros2/proto/node.pb.h"
 
 namespace launcher {
@@ -70,6 +72,7 @@ class NodeManager {
   NodeManager& operator=(const NodeManager&) = delete;
 
   absl::Status Initialize();
+  absl::Status ConfigureObservation(const std::string& directory, const std::string& sensor);
   absl::Status LaunchAllNodes();
   absl::Status LaunchSimulation();
   absl::Status StartProcess(const LaunchSpec& spec);
@@ -84,8 +87,12 @@ class NodeManager {
   bool IsRunning(const std::string& name) const;
   bool ShutdownRequested() const noexcept;
   std::vector<NodeStatus> GetNodeStatus() const;
-  const ::config::Config& config() const { return config_; }
-  const std::string& config_path() const { return config_path_; }
+  const ::config::Config& config() const {
+    return config_;
+  }
+  const std::string& config_path() const {
+    return config_path_;
+  }
 
  private:
   // Handles belong to NodeManager, not to independent per-child owner objects.
@@ -106,12 +113,13 @@ class NodeManager {
   void RestoreSignalHandlers() noexcept;
   static void HandleSignal(int signal) noexcept;
   absl::Status IdentifyNodeTypes();
-  absl::StatusOr<LaunchSpec> BuildNodeLaunchSpec(
-      ros2::node::NodeType type, uint32_t id, const std::string& name) const;
+  absl::StatusOr<LaunchSpec> BuildNodeLaunchSpec(ros2::node::NodeType type,
+                                                 uint32_t id,
+                                                 const std::string& name) const;
   absl::StatusOr<LaunchSpec> BuildSimulationLaunchSpec() const;
   absl::Status GetTopicsForNode(uint32_t id,
-                               std::vector<std::string>& publishers,
-                               std::vector<std::string>& subscribers);
+                                std::vector<std::string>& publishers,
+                                std::vector<std::string>& subscribers);
   NodeRecord* FindNode(const std::string& name);
   absl::Status SpawnProcess(NodeRecord& node);
   absl::Status PollProcess(NodeRecord& node);
@@ -121,15 +129,19 @@ class NodeManager {
   void StartupFailed(NodeRecord& node, const absl::Status& error);
   bool StartupComplete(const NodeRecord& node) const;
   void CloseChannels(NodeRecord& node) noexcept;
+  void PublishObservation(const std::string& phase) noexcept;
 
   pid_t owner_pid_ = -1;
-  struct sigaction old_interrupt_{};
-  struct sigaction old_terminate_{};
+  struct sigaction old_interrupt_ {};
+  struct sigaction old_terminate_ {};
   bool signal_handlers_installed_ = false;
   std::string config_path_;
   ::config::Config config_;
   std::map<uint32_t, ros2::node::NodeType> identified_nodes_;
   std::vector<NodeRecord> nodes_;
+  std::unique_ptr<node_generator::RuntimeObservation> observation_;
+  bool observation_started_ = false;
+  std::chrono::steady_clock::time_point last_observation_{};
   bool initialized_ = false;
   bool graph_started_ = false;
 };

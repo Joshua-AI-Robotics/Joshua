@@ -36,7 +36,14 @@ only a relative reference below an inherited directory descriptor and rejects
 symlinks in every component. This command does not initialize nodes or
 drivers and does not open any device named by the config. It retains the current
 validator behavior, including acceptance of an empty config. For MCP use, see
-[the one-tool stdio adapter](../tools/mcp/README.md).
+[the read-only stdio adapter](../tools/mcp/README.md).
+
+`//config:joshua_inspect_config` supplies config-free `list_supported_components`
+and confined `list_devices`/`describe_device` operations through the MCP adapter.
+Its metadata shares implementing factory tables and never invokes their
+creators. Device reports show declared configuration with compatibility and
+hardware readiness unverified. The inventory and report are bounded; see the
+[adapter guide](../tools/mcp/README.md) for identities and limits.
 
 ## Layout
 
@@ -79,6 +86,109 @@ validator behavior, including acceptance of an empty config. For MCP use, see
    the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
    against that list rather than against a copy of it here.
 
+## JoshuaWire serial protocol selection
+
+JoshuaWire (JW) `0.2.0` is the sole Joshua protocol. Omitted `protocol`
+selects JW for AM243, Teensy 4.1 and ESP32 serial boards. Prefer explicit fields
+inside the `Board` entry:
+
+```text
+protocol: JOSHUA_WIRE
+firmware { min_proto_version: 4 }
+```
+
+The semantic release version is `0.2.0`; `min_proto_version` checks the on-wire
+revision, which is `4`. JW1 support is removed. Rename explicit
+`JOSHUA_WIRE_V2` configs to `JOSHUA_WIRE` and update old minimums to `4`.
+JW initializes with a fresh session reset, then
+IDENTIFY, paged discovery/dependencies, profile metadata and status reconciliation,
+then ACTUATOR.CONFIGURE; initialization leaves channels disabled.
+Feetech does not accept this selection. The AM243 TI-demo host path is retired.
+See [firmware build instructions](../firmware/README.md#joshuawire-serial).
+
+### Serial timing
+
+Serial timing belongs in `comm.serial_config`, independently of board identity:
+
+```text
+serial_config {
+  port: "/dev/ttyUSB0"
+  baudrate: 115200
+  message_adapter: JOSHUA_WIRE
+  exchange_timeout_ms: 100
+  post_open_settle_ms: 2000
+}
+```
+
+The framed JoshuaWire exchange timeout includes waiting for the shared bus lock,
+writing and receiving a complete frame. Omitted means 100 ms; explicit values
+must be 1..INT_MAX milliseconds. Fixed-length vendor operations retain their
+existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
+and runs once after physical open, not per request or session reset. All users
+of one port must agree on baudrate and settle delay. Only JoshuaWire users must
+agree on exchange timeout; omitted timeout and explicit 100 ms are equivalent.
+CALLER_SIZED and BYTE_STREAM consumers can share that port without selecting a
+JoshuaWire timeout. Invalid/conflicting settings fail before another open.
+
+**ESP32 config migration:** the board-specific 2-second sleep has been removed.
+For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
+as in the checked-in ESP32 example. Native USB or other links may need a
+different value; board type no longer guesses it. The manual JW probe's
+`--settle_ms` remains an additional diagnostic wait, not a runtime setting.
+
+## JoshuaWire over EtherCAT
+
+Select `protocol: JOSHUA_WIRE` and `transport_type: MESSAGE_AND_CYCLIC`.
+The paired endpoint supplies CoE management plus correlated PDO target/feedback;
+`CYCLIC` alone is rejected; the legacy TI-demo host path is retired. Endpoint facts belong in
+`comm.ethercat_config`; do not add `am243_config` to a JW board.
+
+The complete [AM243 JW EtherCAT example](config_preset/example/am243_jw_ethercat_demo.pbtxt)
+configures one software-only STEP_DIR channel and a Float32 position-command
+subscriber on `am243_jw_joint_1/position`. Replace `ethercat0` with the intended
+NIC and confirm `slave_index` before running: this preset opens a real bus.
+It requires the separate `jw` or `jw-soes` EtherCAT firmware; the default
+UART/TI echo image is incompatible. The current AM243 channel does not drive
+STEP/DIR GPIOs. Its timing values are illustrative and require qualification
+on the intended hardware.
+
+All seven timing fields are required, positive and at most `INT_MAX` microseconds.
+The cycle must exceed `process timeout + max(state timeout, mailbox-step budget)
++ scheduling guard`. Operation/response timeouts must exceed one cycle. Runtime
+mailbox transfers span multiple cycles; these checks establish budget consistency,
+not hard-real-time feasibility. `response_timeout_us` bounds each adapter exchange,
+including its queue wait. It is not a firmware watchdog setting.
+
+For the software-only bring-up example, build the separate
+[AM243 EtherCAT artifact](../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
+with deliberately explicit watchdog intervals, e.g. command progress 2000000 µs
+and target freshness 1000000 µs as used by the native integration test. These are
+not motor-safety recommendations. Watchdog intervals are not advertised in the
+current descriptor; confirm the flashed artifact's settings and account for
+management latency before enabling. The host does not replay old targets to
+feed watchdogs: fresh SET_TARGET calls are required while enabled.
+
+An optional `pdo_region` contains all four `output_offset_bytes`,
+`input_offset_bytes`, `output_size_bytes`, `input_size_bytes` values. It is an
+exact assertion against discovery, not permission to reinterpret another slave's
+bytes. JW requires 112-byte input/output regions. Without it, discovery supplies
+offsets. Legacy `am243_config`, `am243_ethercat_config` and `MOTOR_TI_DEMO`
+are rejected with migration errors. Their protobuf names/numbers remain allocated
+for diagnostics; they are not executable compatibility paths. The old TI-demo
+preset was removed, not silently converted to a different firmware protocol.
+
+Every discovered slave must pass the JW descriptor/mapping check before the bus
+enters OP, including unused slaves (which remain on stop images). Duplicate board
+claims on a slave and mixed timing/protocol policies on a NIC are rejected.
+Consumers of one NIC must run in one node process. The factory caches one master;
+board teardown releases only its endpoint, and the last lease closes the bus.
+
+The example timing budgets are illustrative, not a qualified production policy.
+Account for the [master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue)
+and qualify deadlines on the intended host and slave hardware.
+Initialization does not flash firmware. The preset is covered by parsing and
+semantic validation tests, which do not open hardware.
+
 ## Sensor configuration
 
 Each `single_perceptions` entry declares `sensor_name`, `sensor_type`, and one
@@ -111,6 +221,10 @@ subscribers share `sts3215_servo_<joint>/position` topics, carrying native
 position values as `Float32` commands directly between the two nodes.
 Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
+For locally present serial devices, ownership and timing checks resolve path
+aliases using filesystem metadata, consistently with the runtime factories.
+Absent devices use normalized paths so offline validation remains available;
+aliases with missing targets cannot establish that two paths name one device.
 
 Serial `MESSAGE` communication requires an explicit
 `serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers,
@@ -154,3 +268,9 @@ node defines the interpretation: actuator scalar position topics use native unit
 while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
+
+## C++ ROS logging
+
+`general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
+`ROS2_LOG_GLOG`. It controls C++ node `JOSHUA_LOG` calls; Python and direct driver
+logging are unchanged. See [logging behavior](../ros2/README.md#c-node-logging).

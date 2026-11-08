@@ -12,8 +12,8 @@
 #include <stdexcept>
 #include <utility>
 
-#include "glog/logging.h"
 #include "config/proto/config.pb.h"
+#include "glog/logging.h"
 #include "utils/robot_time.h"
 
 namespace joshua {
@@ -44,7 +44,8 @@ bool internal::SetCleanupActive(bool active) noexcept {
 
 void JoshuaInit(const config::Config& config) {
   auto clock = MakeRobotClock(config.general().robot_clock());
-  if (!clock.ok()) throw std::runtime_error("Failed to create robot clock: " + clock.status().ToString());
+  if (!clock.ok())
+    throw std::runtime_error("Failed to create robot clock: " + clock.status().ToString());
   const std::string source((*clock)->SourceName());
   const auto status = SetGlobalRobotClock(std::move(*clock));
   ThrowIfError(status);
@@ -92,14 +93,16 @@ int RunGuarded(const char* name, const std::function<int()>& application) {
   if (in_process_guard) return application();
   in_process_guard = true;
   struct Reset {
-    ~Reset() { in_process_guard = false; }
+    ~Reset() {
+      in_process_guard = false;
+    }
   } reset;
   State().stop.store(false, std::memory_order_relaxed);
   State().failed.store(false, std::memory_order_relaxed);
   int result = 1;
   try {
     std::call_once(State().logging, [name] {
-      google::InitGoogleLogging(name);
+      if (!google::IsGoogleLoggingInitialized()) google::InitGoogleLogging(name);
       FLAGS_logtostderr = 1;
     });
     result = application();

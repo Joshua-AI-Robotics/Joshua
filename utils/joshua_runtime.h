@@ -32,7 +32,9 @@ bool SetCleanupActive(bool active) noexcept;
 class CleanupScope {
  public:
   explicit CleanupScope(bool active = true) noexcept : previous_(SetCleanupActive(active)) {}
-  ~CleanupScope() { SetCleanupActive(previous_); }
+  ~CleanupScope() {
+    SetCleanupActive(previous_);
+  }
 
  private:
   bool previous_;
@@ -60,11 +62,10 @@ absl::Status NotifyReady();
 
 using joshua::JoshuaInit;
 
-#define JOSHUA_MAIN(argc_name, argv_name)                                     \
-  static int JoshuaMainBody(int argc_name, char** argv_name);                 \
-  int main(int argc_name, char** argv_name) {                                 \
-    return ::joshua::RunGuarded(argv_name[0], [&] {                            \
-      return JoshuaMainBody(argc_name, argv_name);                            \
-    });                                                                     \
-  }                                                                         \
+#define JOSHUA_MAIN(argc_name, argv_name)                                              \
+  static int JoshuaMainBody(int argc_name, char** argv_name);                          \
+  int main(int argc_name, char** argv_name) {                                          \
+    return ::joshua::RunGuarded(argv_name[0],                                          \
+                                [&] { return JoshuaMainBody(argc_name, argv_name); }); \
+  }                                                                                    \
   static int JoshuaMainBody(int argc_name, char** argv_name)

@@ -4,12 +4,14 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "config/config_utils.h"
 #include "config/validation.h"
 #include "rclcpp/rclcpp.hpp"
 #include "robot/board/factory/board_factory.h"
 #include "robot/comm/factory/comm_factory.h"
+#include "ros2/logging.h"
 #include "utils/joshua_runtime.h"
 #include "utils/robot_time.h"
 #include "utils/scope_exit.h"
@@ -38,11 +40,12 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
       if (ros_initialized) joshua::RunCleanup("ROS shutdown", [] { rclcpp::shutdown(); });
     });
 
-    rclcpp::init(argc, argv);
-    ros_initialized = true;
-    rclcpp::on_shutdown([] { joshua::RequestShutdown(); });
-    if (argc < 4) throw std::invalid_argument("Usage: <binary> <node_name> <node_id> <config_path>");
+    InitializeLogging(argv[0]);
+    SetLogNodeName(logger_name);
+    if (argc < 4)
+      throw std::invalid_argument("Usage: <binary> <node_name> <node_id> <config_path>");
     const std::string node_name = argv[1];
+    SetLogNodeName(node_name);
     size_t parsed = 0;
     const int node_id = std::stoi(argv[2], &parsed);
     if (parsed != std::string(argv[2]).size() || node_id < 0)
@@ -52,6 +55,9 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
     joshua::ThrowIfError(config_or.status());
     const config::Config& config = *config_or;
     joshua::ThrowIfError(config::ValidateConfig(config));
+    InitializeRosLogging(argc, argv, config.general().ros2_log_mode());
+    ros_initialized = true;
+    rclcpp::on_shutdown([] { joshua::RequestShutdown(); });
     JoshuaInit(config);
     node = std::make_shared<NodeT>(node_name, node_id, config);
     executor = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();

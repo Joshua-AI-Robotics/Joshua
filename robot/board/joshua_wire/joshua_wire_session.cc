@@ -5,10 +5,11 @@
 #include <random>
 #include <utility>
 
+#include "absl/cleanup/cleanup.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
-#include "utils/status_macros.h"
 #include "utils/scope_exit.h"
+#include "utils/status_macros.h"
 
 namespace robot::board {
 namespace {
@@ -143,15 +144,12 @@ absl::Status JoshuaWireSession::RotateLocked() {
 absl::Status JoshuaWireSession::Close() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (session_id_ == 0) return absl::OkStatus();
-  ready_ = false;
-  const uint8_t domain[2] = {};
-  joshua::ScopeExit clear_session([&] {
+  absl::Cleanup invalidate_session = [this] {
+    ready_ = false;
     session_id_ = 0;
     pending_.clear();
-  });
-  auto response = ExchangeLocked(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, 2);
-  if (!response.ok()) return response.status();
-  return CheckOk(*response);
+  };
+  return ResetLocked();
 }
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_command_t& command) {
@@ -193,16 +191,28 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));
   jw_reply_t reply{};
   jw_decode_reply_payload(payload.data(), payload.size(), &reply);
+  const bool board_safety = (command.cmd == JW_CMD_ESTOP || command.cmd == JW_CMD_RECOVER) &&
+                            command.channel == JW_CHANNEL_NONE && command.payload_len == 2 &&
+                            command.payload[0] == 0 && command.payload[1] == 0;
+  // Board-wide safety actions replace the firmware's function action tokens.
+  // Their confirmed completion retires canceled work, not its historical outcome.
+  // Preserve uncertain_: a stop does not prove whether a lost mutation executed.
+  if (board_safety && reply.status == JW_STATUS_OK && reply.execution == JW_EXECUTION_COMPLETE)
+    pending_.clear();
   if (reply.execution == JW_EXECUTION_ACCEPTED)
-    pending_[command.channel] = {session_id_, next_message_id_ - 1};
+    pending_[command.channel] = {session_id_, next_message_id_ - 1, board_safety};
   if (command.cmd == JW_CMD_GET_STATUS && reply.status == JW_STATUS_OK) {
     jw_device_status_t state{};
     if (jw_decode_device_status(reply.data, reply.data_len, &state) == JW_RESULT_OK &&
         state.action_execution == JW_EXECUTION_COMPLETE) {
       auto pending = pending_.find(command.channel);
-      if (pending != pending_.end() && pending->second.first == state.action_session_id &&
-          pending->second.second == state.action_message_id)
-        pending_.erase(pending);
+      if (pending != pending_.end() && pending->second.session_id == state.action_session_id &&
+          pending->second.message_id == state.action_message_id) {
+        if (pending->second.cancels_functions && state.action_status == JW_STATUS_OK)
+          pending_.clear();
+        else
+          pending_.erase(pending);
+      }
     }
   }
 

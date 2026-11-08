@@ -29,6 +29,14 @@ maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remai
 unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
 
+Headerless commands acquire their receipt timestamp at the subscription boundary.
+Clock failures are returned through the callback as `Unavailable`. STS3215 and
+stepper torque-disable gates (Bool false or numeric scalar/array zero) are still
+delivered with an explicitly NaN timestamp and a warning when the clock fails.
+The timestamp is metadata and is not needed to disable torque. Torque-enable and
+motion commands needing a host timestamp are rejected until the clock recovers;
+JointState retains its source timestamp without reading the host clock.
+
 Normalized positions map through configured operational limits once, then become
 POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
 limits are rejected, never clamped. Native and SI positions are left for drivers.

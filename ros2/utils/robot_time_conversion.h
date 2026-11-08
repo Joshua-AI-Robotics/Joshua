@@ -40,8 +40,7 @@ inline absl::StatusOr<double> FromRosTimestamp(const builtin_interfaces::msg::Ti
   const double seconds = static_cast<double>(timestamp.sec) - joshua::kRobotStartTime;
   // Avoid cancellation for negative times with a small fractional magnitude.
   if (seconds < 0 && timestamp.nanosec != 0)
-    return (seconds + 1.0) -
-           (1'000'000'000 - timestamp.nanosec) / 1'000'000'000.0;
+    return (seconds + 1.0) - (1'000'000'000 - timestamp.nanosec) / 1'000'000'000.0;
   return seconds + timestamp.nanosec / 1'000'000'000.0;
 }
 

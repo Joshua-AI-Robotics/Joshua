@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/proto/perception_packet.pb.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
@@ -35,6 +36,7 @@ class CameraPublisher : public rclcpp::Node {
  public:
   CameraPublisher(const std::string& node_name, const int node_id, const config::Config& config)
       : Node(node_name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
     for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
       if (single_perception.sensor_type() != robot::perception::SensorType::IMAGE ||
           static_cast<int>(single_perception.node().id()) != node_id) {
@@ -47,10 +49,8 @@ class CameraPublisher : public rclcpp::Node {
       auto interface = robot::perception::PerceptionFactory::CreatePerception(
           single_perception, config.robot().boards());
       if (!interface.ok()) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Failed to create perception interface for camera '%s': %s",
-                     sensor_name.c_str(),
-                     std::string(interface.status().message()).c_str());
+        JOSHUA_LOG(ERROR) << "Failed to create perception interface for camera '" << sensor_name
+                          << "': " << interface.status();
         continue;
       }
 
@@ -59,11 +59,9 @@ class CameraPublisher : public rclcpp::Node {
 
       for (const auto& publisher : single_perception.node().publishers()) {
         if (!ValidateCameraPublisher(publisher.ros2_data_type())) {
-          RCLCPP_ERROR(this->get_logger(),
-                       "Invalid publisher config for camera topic '%s' "
-                       "(ros2_data_type=%d). Require IMAGE.",
-                       publisher.topic().c_str(),
-                       static_cast<int>(publisher.ros2_data_type()));
+          JOSHUA_LOG(ERROR) << "Invalid publisher config for camera topic '" << publisher.topic()
+                            << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
+                            << "). Require IMAGE.";
           continue;
         }
 
@@ -74,27 +72,23 @@ class CameraPublisher : public rclcpp::Node {
             .interface = shared_interface,
             .publisher = this->create_publisher<sensor_msgs::msg::Image>(publisher.topic(), qos),
             .timer = ros2_utils::CreateRobotTimer(
-                *this,
-                1.0 / publisher.publish_rate_hz(),
-                [this, camera_index]() { publish_camera_data(camera_index); })});
+                *this, 1.0 / publisher.publish_rate_hz(), [this, camera_index]() {
+                  publish_camera_data(camera_index);
+                })});
       }
 
-      RCLCPP_INFO(this->get_logger(),
-                  "Found camera '%s' in configuration for node_id %d. Publishing on %zu topics",
-                  sensor_name.c_str(),
-                  node_id,
-                  single_perception.node().publishers().size());
+      JOSHUA_LOG(INFO) << "Found camera '" << sensor_name << "' in configuration for node_id "
+                       << node_id << ". Publishing on "
+                       << single_perception.node().publishers().size() << " topics";
     }
 
     if (cameras_.empty()) {
-      RCLCPP_ERROR(this->get_logger(), "No camera found in configuration for node_id %d!", node_id);
+      JOSHUA_LOG(ERROR) << "No camera found in configuration for node_id " << node_id << "!";
       return;
     }
 
-    RCLCPP_INFO(this->get_logger(),
-                "Camera publisher node started with %zu cameras for node_id %d!",
-                cameras_.size(),
-                node_id);
+    JOSHUA_LOG(INFO) << "Camera publisher node started with " << cameras_.size()
+                     << " cameras for node_id " << node_id << "!";
   }
 
  private:
@@ -103,36 +97,30 @@ class CameraPublisher : public rclcpp::Node {
     auto packet = camera.interface->GetData();
 
     if (!packet.ok()) {
-      RCLCPP_WARN(
-          this->get_logger(), "Failed to get data from camera '%s'!", camera.topic.c_str());
+      JOSHUA_LOG(WARNING) << "Failed to get data from camera '" << camera.topic
+                          << "': " << packet.status();
       return;
     }
 
     const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
     if (!image_status.ok()) {
-      RCLCPP_WARN(this->get_logger(),
-                  "Failed to get image data from camera '%s': %s",
-                  camera.topic.c_str(),
-                  image_status.message().data());
+      JOSHUA_LOG(WARNING) << "Failed to get image data from camera '" << camera.topic
+                          << "': " << image_status;
       return;
     }
 
     const auto& image_data = packet.value().image();
 
     if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
-      RCLCPP_ERROR(this->get_logger(),
-                   "Invalid image dimensions: %dx%d, channels=%d",
-                   image_data.width(),
-                   image_data.height(),
-                   image_data.channels());
+      JOSHUA_LOG(ERROR) << "Invalid image dimensions: " << image_data.width() << "x"
+                        << image_data.height() << ", channels=" << image_data.channels();
       return;
     }
 
     auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
     const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
     if (!stamp.ok()) {
-      RCLCPP_ERROR(
-          get_logger(), "Invalid camera timestamp: %s", stamp.status().ToString().c_str());
+      JOSHUA_LOG(ERROR) << "Invalid camera timestamp: " << stamp.status();
       return;
     }
     image_msg->header.stamp = *stamp;

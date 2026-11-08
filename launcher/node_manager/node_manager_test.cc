@@ -9,8 +9,11 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 
+#include "google/protobuf/struct.pb.h"
+#include "google/protobuf/util/json_util.h"
 #include "gtest/gtest.h"
 #include "utils/joshua_runtime.h"
 #include "utils/scope_exit.h"
@@ -28,7 +31,8 @@ class NodeManagerTest : public testing::Test {
     ASSERT_NE(runfiles, nullptr);
     ASSERT_NE(workspace, nullptr);
     fixture_ = (std::filesystem::path(runfiles) / workspace /
-                "launcher/node_manager/node_manager_test_child").string();
+                "launcher/node_manager/node_manager_test_child")
+                   .string();
   }
   NodeManager::LaunchSpec Spec(const std::string& mode) {
     NodeManager::LaunchSpec spec;
@@ -38,7 +42,8 @@ class NodeManagerTest : public testing::Test {
     return spec;
   }
   NodeManager::ShutdownPolicy FastShutdown() {
-    return {std::chrono::milliseconds(100), std::chrono::milliseconds(300),
+    return {std::chrono::milliseconds(100),
+            std::chrono::milliseconds(300),
             std::chrono::milliseconds(1000)};
   }
   std::string fixture_;
@@ -81,13 +86,12 @@ TEST_F(NodeManagerTest, TracksReadinessAndReapsOnlyItsOwnChildren) {
 
 TEST_F(NodeManagerTest, OneManagerOwnsTheLauncherProcess) {
   NodeManager manager;
-  EXPECT_THROW({
-    NodeManager duplicate;
-  }, std::logic_error);
+  EXPECT_THROW({ NodeManager duplicate; }, std::logic_error);
 }
 
 TEST_F(NodeManagerTest, OwnsAndRestoresSignalHandlers) {
-  struct sigaction before{}, after{};
+  struct sigaction before {
+  }, after{};
   ASSERT_EQ(sigaction(SIGINT, nullptr, &before), 0);
   {
     NodeManager manager;
@@ -109,6 +113,41 @@ TEST_F(NodeManagerTest, CompletionOfOneJobStopsTheOtherOwnedJobs) {
   EXPECT_TRUE(manager.MonitorNodes("complete").ok());
   EXPECT_FALSE(manager.HasLiveNodes());
   for (const auto& state : manager.GetNodeStatus()) EXPECT_TRUE(state.reaped);
+}
+
+TEST_F(NodeManagerTest, PassiveObservationRetainsApplicationExitAndPreventsLaterForks) {
+  char pattern[] = "/tmp/joshua-manager-observation-XXXXXX";
+  const auto* directory = mkdtemp(pattern);
+  ASSERT_NE(directory, nullptr);
+  const std::filesystem::path root(directory);
+  joshua::ScopeExit remove_directory([&] { std::filesystem::remove_all(root); });
+  const auto config_path = root / "config.pbtxt";
+  { std::ofstream file(config_path); }
+  NodeManager manager(config_path.string());
+  ASSERT_TRUE(manager.Initialize().ok());
+  ASSERT_TRUE(manager.ConfigureObservation(directory, "").ok());
+  auto complete = Spec("complete");
+  complete.node_id = 42;
+  complete.node_type = "fixture";
+  complete.allow_completion = true;
+  ASSERT_TRUE(manager.StartProcess(complete).ok());
+  ASSERT_TRUE(manager.AwaitReady(std::chrono::seconds(5)).ok());
+  ASSERT_TRUE(manager.MonitorNodes("complete").ok());
+  EXPECT_FALSE(manager.StartProcess(Spec("ready")).ok());
+  EXPECT_EQ(manager.GetNodeStatus().size(), 1);
+  std::ifstream file(root / "snapshot.json");
+  ASSERT_TRUE(file.is_open());
+  const std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  google::protobuf::Struct snapshot;
+  ASSERT_TRUE(google::protobuf::util::JsonStringToMessage(json, &snapshot).ok());
+  EXPECT_EQ(snapshot.fields().at("phase").string_value(), "monitor_finished");
+  EXPECT_EQ(snapshot.fields().at("processes").list_value().values_size(), 0);
+  const auto& exits = snapshot.fields().at("exits").list_value();
+  ASSERT_EQ(exits.values_size(), 1);
+  const auto& exit = exits.values(0).struct_value().fields();
+  EXPECT_EQ(exit.at("pid").number_value(), manager.GetNodeStatus()[0].pid);
+  EXPECT_EQ(exit.at("node_id").number_value(), 42);
+  EXPECT_EQ(exit.at("exit_code").number_value(), 0);
 }
 
 TEST_F(NodeManagerTest, FailedExecAndInitializationRemainObservable) {
@@ -218,7 +257,8 @@ TEST_F(NodeManagerTest, ParentDeathKillsTheOwnedGroup) {
     close(channel[0]);
     NodeManager manager;
     if (!manager.StartProcess(Spec("stubborn")).ok() ||
-        !manager.AwaitReady(std::chrono::seconds(5)).ok()) _exit(2);
+        !manager.AwaitReady(std::chrono::seconds(5)).ok())
+      _exit(2);
     const pid_t group = manager.GetNodeStatus()[0].process_group;
     if (write(channel[1], &group, sizeof(group)) != sizeof(group)) _exit(3);
     for (;;) pause();
@@ -238,7 +278,8 @@ TEST_F(NodeManagerTest, ParentDeathKillsTheOwnedGroup) {
       const auto deadline = Clock::now() + std::chrono::seconds(1);
       int status;
       while (Clock::now() < deadline) {
-        while (waitpid(-group, &status, WNOHANG) > 0) {}
+        while (waitpid(-group, &status, WNOHANG) > 0) {
+        }
         if (kill(-group, 0) < 0 && errno == ESRCH) break;
         poll(nullptr, 0, 10);
       }
@@ -255,7 +296,8 @@ TEST_F(NodeManagerTest, ParentDeathKillsTheOwnedGroup) {
   owner_reaped = true;
   const auto deadline = Clock::now() + std::chrono::seconds(5);
   while (Clock::now() < deadline) {
-    while (waitpid(-group, &status, WNOHANG) > 0) {}
+    while (waitpid(-group, &status, WNOHANG) > 0) {
+    }
     if (kill(-group, 0) < 0 && errno == ESRCH) {
       group_reaped = true;
       break;
