@@ -16,8 +16,12 @@ sys.path.insert(0, "/workspace/tools/cad")
 from spider_cad import transform  # noqa: E402
 
 project = Path(os.environ["JOSHUA_CAD_PROJECT"])
+motion_file = os.environ.get("JOSHUA_CAD_MOTION_FILE")
+report_name = (
+    "motion-clearance-validation.json" if motion_file else "clearance-validation.json"
+)
 try:
-    (project / "clearance-validation.json").unlink(missing_ok=True)
+    (project / report_name).unlink(missing_ok=True)
     (project / "clearance-error.txt").unlink(missing_ok=True)
     doc = App.openDocument(str(project / "spider_sts3215.FCStd"))
     robot = doc.getObject("spider_sts3215")
@@ -72,25 +76,56 @@ try:
     robot.Proxy.set_joint_values({j: 0 for j in joints})
     doc.recompute()
     check_pose("neutral", same_link=True)
-    for joint in joints:
-        for angle in (joint.LowerLimit, joint.UpperLimit):
-            robot.Proxy.set_joint_values(
-                {j: math.radians(angle) if j == joint else 0 for j in joints}
-            )
+    if motion_file:
+        motion = json.loads(Path(motion_file).read_text())
+        report["motion_file"] = motion_file
+        report["scope"] = (
+            "Supplied simultaneous-joint pose samples. Not a continuous or complete "
+            "action-envelope sweep; screws, cables and measured hardware are excluded."
+        )
+        for pose in motion["poses"]:
+            values = pose["joints"]
+            if set(values) != {joint.Label for joint in joints}:
+                raise ValueError("Motion pose must name all twelve CAD joints")
+            for joint in joints:
+                angle = values[joint.Label]
+                if not math.isfinite(angle) or not (
+                    math.radians(joint.LowerLimit)
+                    <= angle
+                    <= math.radians(joint.UpperLimit)
+                ):
+                    raise ValueError(f"Motion exceeds CAD joint limit: {joint.Label}")
+            robot.Proxy.set_joint_values({j: values[j.Label] for j in joints})
             doc.recompute()
-            check_pose(f"{joint.Label}={angle}deg")
+            check_pose(pose["name"])
+    else:
+        for joint in joints:
+            for angle in (joint.LowerLimit, joint.UpperLimit):
+                robot.Proxy.set_joint_values(
+                    {j: math.radians(angle) if j == joint else 0 for j in joints}
+                )
+                doc.recompute()
+                check_pose(f"{joint.Label}={angle}deg")
     robot.Proxy.set_joint_values({j: 0 for j in joints})
     doc.recompute()
     if report["interferences"]:
         report["status"] = "review_needed"
-    (project / "clearance-validation.json").write_text(json.dumps(report, indent=2))
+    (project / report_name).write_text(json.dumps(report, indent=2))
     Gui.Selection.clearSelection()
     view = Gui.activeDocument().activeView()
     view.setCameraType("Orthographic")
-    for name, quaternion in [
-        ("assembly_iso.png", (0.4247082003, 0.1759198966, 0.3398511430, 0.8204732386)),
-        ("assembly_top.png", (0, 0, 0, 1)),
-    ]:
+    views = (
+        []
+        if motion_file
+        else [
+            (
+                "assembly_iso.png",
+                (0.4247082003, 0.1759198966, 0.3398511430, 0.8204732386),
+            ),
+            ("assembly_top.png", (0, 0, 0, 1)),
+        ]
+    )
+    for name, quaternion in views:
         view.setCameraOrientation(quaternion)
         view.fitAll()
         Gui.updateGui()

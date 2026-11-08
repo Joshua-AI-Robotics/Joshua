@@ -72,6 +72,7 @@ CAD_COMMON_ARGS=(
     --workdir "$CAD_CONTAINER_ROOT" -e "HOME=$CAD_CONTAINER_ROOT/home"
     -e "JOSHUA_CAD_ROOT=$CAD_CONTAINER_ROOT"
     -e "JOSHUA_CAD_PROJECT=$CAD_PROJECT" -e "JOSHUA_CAD_DOCUMENT=$CAD_DOCUMENT"
+    -e "JOSHUA_CAD_MOTION_FILE=${JOSHUA_CAD_MOTION_FILE:-}"
 )
 if [[ $CAD_MODE == --verify-exports || $CAD_MODE == --convert-mujoco || $CAD_MODE == --package ]]; then
     CAD_PYTHON_SCRIPT=/workspace/tools/cad/verify_exports.py
@@ -143,8 +144,12 @@ if [[ $CAD_MODE == --create-demo && ! -f "$CAD_BUILD_RESULT" ]]; then
     exit 1
 fi
 if [[ $CAD_MODE == --check-cad ]]; then
-    if [[ ! -f "$CAD_PROJECT_HOST/clearance-validation.json" ]] || ! grep -q '"status": "ok"' "$CAD_PROJECT_HOST/clearance-validation.json"; then
-        echo "Clearance check needs review; inspect $CAD_PROJECT_HOST/clearance-validation.json and clearance-error.txt." >&2
+    CAD_CLEARANCE_REPORT=$CAD_PROJECT_HOST/clearance-validation.json
+    if [[ -n ${JOSHUA_CAD_MOTION_FILE:-} ]]; then
+        CAD_CLEARANCE_REPORT=$CAD_PROJECT_HOST/motion-clearance-validation.json
+    fi
+    if [[ ! -f "$CAD_CLEARANCE_REPORT" ]] || ! grep -q '"status": "ok"' "$CAD_CLEARANCE_REPORT"; then
+        echo "Clearance check needs review; inspect $CAD_CLEARANCE_REPORT and clearance-error.txt." >&2
         exit 1
     fi
 fi

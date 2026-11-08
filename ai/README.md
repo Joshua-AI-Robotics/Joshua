@@ -188,6 +188,7 @@ lock; model locks hold only model-specific closures.
 Recording demos uses `ai/train/data_store.py` and is independent of the
 inference plug-in system. See [`train/README.md`](train/README.md).
 
-The [spider locomotion foundation](train/locomotion/README.md) provides an isolated
-mjlab standing task and PPO smoke. Walking training, BC, and Joshua locomotion
-policy integration are not implemented. The former Isaac RL pipeline has been removed.
+The [spider locomotion trainer](train/locomotion/README.md) provides isolated
+mjlab standing/PPO checks, low-speed forward-walking training, and seeded
+evaluation with videos. BC and Joshua locomotion policy integration are not
+implemented. The former Isaac RL pipeline has been removed.
