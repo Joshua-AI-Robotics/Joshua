@@ -303,7 +303,12 @@ Runtime exception boundaries and process ownership are tracked separately in
 After merging `develop` at `316a47f`, the Ubuntu 22 Compose test task passed all
 53 targets using the local `joshua-audio:u22` image. The launcher and Xbox
 publisher built successfully, including all managed publisher binaries. The
-PR's changed C++/Python files passed pre-push lint. Ubuntu 24 was not run locally.
+PR's changed C++/Python files passed pre-push lint.
+
+After adding the direct `rosidl_runtime_c` dependency on `rcutils` for Jazzy's
+public type-hash headers, the Ubuntu 24 Compose test task passed all 53 targets
+using a freshly built native `joshua:u24-jazzy` image. The standalone
+`robot_time_conversion_test` also passed on Ubuntu 22 with that dependency.
 
 ## Integration checklist
 
