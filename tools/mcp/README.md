@@ -278,9 +278,9 @@ and the helper nonce/counter `sample_id`; ROS Image has no native sequence, so
 `sample_sequence` is null. Publication time is labeled `publication_time`, and
 `acquisition_freshness` stays `unknown`.
 
-Capture settings are applied on successful first open and reopen. Omitted
-FourCC uses the backend default; explicit FourCC must be four printable ASCII
-bytes. Reported image dimensions are actual frame dimensions, not requested
+Capture settings are applied on successful first open and reopen. FourCC is
+required, must contain four printable ASCII bytes, and is applied before the
+resolution and frame rate. Two capture buffers preserve continuous acquisition. Reported image dimensions are actual frame dimensions, not requested
 settings. Finite capture retries/backoff do **not** bound synchronous OpenCV
 open/read/release calls: a stalled camera process may require operator recovery.
 The observer remains bounded and a silent, still-present publisher becomes stale;

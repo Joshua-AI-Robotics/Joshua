@@ -1,4 +1,4 @@
-ROS 2 Type Resolver Utilities  
+ROS 2 Type Resolver Utilities
 ==============================
 
 Process runtime and failure handling
@@ -88,8 +88,8 @@ Fast paths
 
 Extend the resolver
 -------------------
-1) Add new types to `ROS2_TYPE_MAPPING` if missing.  
-2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).  
+1) Add new types to `ROS2_TYPE_MAPPING` if missing.
+2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).
 3) Extend `build_entry_for_message` to add a specialized path (decode/transform) before falling back to the generic dict conversion.
 
 Usage with DataStore

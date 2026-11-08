@@ -78,7 +78,8 @@ TEST(CvCameraTest, EmptyCaptureResetsAndNextReadReconfigures) {
   EXPECT_EQ(f->settings.at(cv::CAP_PROP_FPS), 30);
 }
 TEST(CvCameraTest, InvalidRuntimeOptionsNeverOpenDevice) {
-  for (const auto& fourcc : {std::string(), std::string("bad"), std::string("12345"), std::string("a\nbc")}) {
+  for (const auto& fourcc :
+       {std::string(), std::string("bad"), std::string("12345"), std::string("a\nbc")}) {
     auto c = Config();
     c.mutable_opencv_config()->set_fourcc(fourcc);
     auto fake = std::make_unique<FakeCapture>();

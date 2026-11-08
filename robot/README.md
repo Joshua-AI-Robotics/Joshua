@@ -120,9 +120,9 @@ Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
 
-OpenCV cameras validate runtime capture settings and apply optional FourCC before
+OpenCV cameras validate runtime capture settings and apply the required FourCC before
 width/height/FPS on every successful open, including reopening after a returning
-empty/failed capture. Empty FourCC uses the backend default. Frame dimensions
+empty/failed capture. FourCC must contain four printable ASCII bytes. Frame dimensions
 come from the captured frame. Finite attempts/backoff do not bound synchronous
 OpenCV backend calls. The [MCP image reader](../tools/mcp/README.md#optional-configured-camera-image)
 observes ROS publication without owning or recovering the device.

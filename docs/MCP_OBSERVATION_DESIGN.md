@@ -4,7 +4,7 @@
 [ImageSource](../tools/mcp/image_source.py) composes a persistent passive
 [C++ ROS image helper](../ros2/image_observer_backend.cc). The opt-in
 `get_camera_image(camera_id)` returns standard MCP JPEG content for fresh
-samples and metadata only for stale samples. The original seven tool contracts,
+samples and metadata only for stale samples. The existing nine tool contracts,
 validation-only startup and snapshot schema stay compatible. See the
 [camera setup and limits](../tools/mcp/README.md#optional-configured-camera-image).
 
@@ -201,7 +201,7 @@ Those examples prove the fake's behavior, not arbitrary subclasses' enforcement.
 
 Every adapter increment must independently verify real payload validation and
 ownership, deadlines/concurrency/cleanup, source association, restart and
-clock/freshness behavior. Preserve all seven MCP tools, validation-only mode and
+clock/freshness behavior. Preserve all nine MCP tools, validation-only mode and
 response schemas. Real media needs malformed/oversized and decodability checks;
 ROS adapters need domain isolation, publisher replacement and hidden endpoint
 evidence tested through actual SDK exchanges on both supported ROS stacks.

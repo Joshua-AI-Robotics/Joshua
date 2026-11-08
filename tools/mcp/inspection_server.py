@@ -223,7 +223,13 @@ async def _camera_result(source, arguments):
     return response
 
 
-def make_server(inspector, observer=None, validation_only=False, hardware_catalog=None, image_source=None):
+def make_server(
+    inspector,
+    observer=None,
+    validation_only=False,
+    hardware_catalog=None,
+    image_source=None,
+):
     hardware_catalog = (
         hardware_catalog if hardware_catalog is not None else HardwareCatalog()
     )
