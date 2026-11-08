@@ -172,10 +172,22 @@ TEST_F(PerceptionFactoryTest, CreatesCameraWithConfiguredNameWithoutOpeningHardw
   sensor.set_sensor_name("front_camera");
   sensor.set_sensor_type(IMAGE);
   sensor.mutable_opencv_config()->set_id(7);
+  sensor.mutable_opencv_config()->set_fourcc("MJPG");
   config::Robot robot;
   auto result = PerceptionFactory::CreatePerception(sensor, robot.boards());
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_EQ((*result)->GetId(), "front_camera");
+}
+
+TEST_F(PerceptionFactoryTest, RejectsInvalidCameraFormatBeforeInitializationCanOpenHardware) {
+  SinglePerception sensor;
+  sensor.set_sensor_name("front_camera");
+  sensor.set_sensor_type(IMAGE);
+  sensor.mutable_opencv_config()->set_id(7);
+  config::Robot robot;
+  auto result = PerceptionFactory::CreateInitializedPerception(sensor, robot.boards());
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(result.status().message().find("opencv_config.fourcc"), absl::string_view::npos);
 }
 
 TEST_F(PerceptionFactoryTest, CreatesLidarThroughByteStreamAndPreservesPacketName) {
