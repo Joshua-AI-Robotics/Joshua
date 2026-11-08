@@ -1,5 +1,7 @@
 #pragma once
 // Mixed MCU sources and commands deliberately share this process and factory.
+#include <map>
+
 #include "robot/board/factory/board_factory.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/action_subscriber.h"
@@ -27,22 +29,28 @@ class DeviceBus : public ActionSubscriber {
       if (!names.count(b.name())) continue;
       auto board = robot::board::BoardFactory::GetOrCreate(b);
       if (!board.ok()) throw std::runtime_error(board.status().ToString());
-      boards_.push_back(*board);
+      boards_.emplace(b.name(), *board);
     }
     stop_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     stop_ = create_service<std_srvs::srv::Trigger>(
         "~/estop",
         [this](std::shared_ptr<std_srvs::srv::Trigger::Request>,
                std::shared_ptr<std_srvs::srv::Trigger::Response> reply) {
-          const auto disabled = StopActions();
-          reply->success = disabled.ok();
-          if (!disabled.ok()) reply->message = disabled.ToString();
-          for (auto& b : boards_) {
+          RequestStopActions();
+          reply->success = true;
+          std::set<std::string> stopped_boards;
+          for (auto& [name, b] : boards_) {
             const auto status = b->EmergencyStop();
+            if (status.ok()) stopped_boards.insert(name);
             if (!status.ok() && !absl::IsUnimplemented(status)) {
               reply->success = false;
               reply->message += status.ToString() + "; ";
             }
+          }
+          const auto disabled = StopActions(stopped_boards);
+          if (!disabled.ok()) {
+            reply->success = false;
+            reply->message += disabled.ToString() + "; ";
           }
           if (reply->success)
             reply->message =
@@ -55,12 +63,12 @@ class DeviceBus : public ActionSubscriber {
   ~DeviceBus() override {
     ShutdownActions().IgnoreError();
     observations_.clear();
-    for (auto& b : boards_) b->Teardown().IgnoreError();
+    for (auto& [name, b] : boards_) b->Teardown().IgnoreError();
   }
 
  private:
   std::vector<std::unique_ptr<ros2_utils::ObservationPublisher>> observations_;
-  std::vector<std::shared_ptr<robot::board::BoardInterface>> boards_;
+  std::map<std::string, std::shared_ptr<robot::board::BoardInterface>> boards_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_;
   rclcpp::CallbackGroup::SharedPtr stop_group_;
 };

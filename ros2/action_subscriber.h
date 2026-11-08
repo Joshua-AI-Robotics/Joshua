@@ -17,6 +17,10 @@
 #include "std_srvs/srv/trigger.hpp"
 
 class ActionSubscriber : public rclcpp::Node {
+  struct ControlledActuator {
+    std::shared_ptr<robot::action::ControlGate> gate;
+    std::string board_name;
+  };
   struct ActuatorSubscription {
     std::shared_ptr<robot::action::ControlGate> gate;
     rclcpp::SubscriptionBase::SharedPtr subscription;
@@ -29,7 +33,9 @@ class ActionSubscriber : public rclcpp::Node {
                    bool standalone = true)
       : Node(name), standalone_(standalone) {
     ros2_utils::SetLogNodeName(get_logger().get_name());
-    control_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    // Keep all ordinary control work in the subscriptions' mutually exclusive
+    // group. Waiting on a busy gate must not occupy the spare ESTOP thread.
+    control_group_ = get_node_base_interface()->get_default_callback_group();
     for (const auto& action : config.robot().actions().single_actions()) {
       if (action.action_type() != robot::action::ACTUATOR ||
           action.node().id() != static_cast<uint32_t>(id))
@@ -49,7 +55,7 @@ class ActionSubscriber : public rclcpp::Node {
           interface, action.actuator().control_policy(), sources);
       const auto initialized = gate->Initialize();
       if (!initialized.ok()) throw std::runtime_error(initialized.ToString());
-      gates_.push_back(gate);
+      gates_.push_back({gate, action.actuator().board_name()});
       const auto& a = action.actuator();
       for (const auto& sub : action.node().subscriptions()) {
         auto result = ros2_utils::CreateActionMessageSubscription(
@@ -93,8 +99,8 @@ class ActionSubscriber : public rclcpp::Node {
     watchdog_ = create_wall_timer(
         std::chrono::milliseconds(10),
         [this] {
-          for (auto& gate : gates_)
-            gate->Poll(robot::action::ControlGate::Clock::now()).IgnoreError();
+          for (auto& actuator : gates_)
+            actuator.gate->Poll(robot::action::ControlGate::Clock::now()).IgnoreError();
         },
         control_group_);
   }
@@ -104,14 +110,18 @@ class ActionSubscriber : public rclcpp::Node {
   }
 
  protected:
-  absl::Status StopActions() {
+  void RequestStopActions() {
+    for (auto& actuator : gates_) actuator.gate->RequestStop();
+  }
+  absl::Status StopActions(const std::set<std::string>& stopped_boards = {}) {
     absl::Status result;
-    for (auto& gate : gates_) result.Update(gate->Stop());
+    for (auto& actuator : gates_)
+      result.Update(actuator.gate->Stop(stopped_boards.count(actuator.board_name) != 0));
     return result;
   }
   absl::Status ShutdownActions() {
     absl::Status result;
-    for (auto& gate : gates_) result.Update(gate->Shutdown());
+    for (auto& actuator : gates_) result.Update(actuator.gate->Shutdown());
     return result;
   }
 
@@ -131,7 +141,7 @@ class ActionSubscriber : public rclcpp::Node {
         control_group_));
   }
   bool standalone_;
-  std::vector<std::shared_ptr<robot::action::ControlGate>> gates_;
+  std::vector<ControlledActuator> gates_;
   std::list<ActuatorSubscription> subscriptions_;
   std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;
   rclcpp::CallbackGroup::SharedPtr control_group_;

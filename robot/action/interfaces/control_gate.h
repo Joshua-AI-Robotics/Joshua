@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -60,7 +61,8 @@ class ControlGate {
     if (packet.has_preset() && packet.preset() == PRESET_DISABLE_TORQUE)
       return DisableLocked(state_ == State::kEnabled ? State::kDisabled : state_);
     if (source != source_) return absl::PermissionDeniedError("Inactive command source");
-    if (state_ == State::kStopped || state_ == State::kFault)
+    if (stop_epoch_.load() != recovered_stop_epoch_ || state_ == State::kStopped ||
+        state_ == State::kFault)
       return absl::FailedPreconditionError("Explicit disabled recovery is required");
     if (state_ == State::kEnabled && now >= deadline_) {
       DisableLocked(State::kStopped).IgnoreError();
@@ -101,23 +103,42 @@ class ControlGate {
     if (state_ == State::kEnabled && now >= deadline_) return DisableLocked(State::kStopped);
     return absl::OkStatus();
   }
-  absl::Status Stop() {
+  // Admission only: no command lock or driver I/O. A bus owner can interlock
+  // every actuator before dispatching its independent board emergency stop.
+  uint64_t RequestStop() {
+    return stop_epoch_.fetch_add(1) + 1;
+  }
+  absl::Status Stop(bool output_already_disabled = false) {
+    const auto epoch = RequestStop();
     std::lock_guard lock(mutex_);
     if (state_ == State::kClosed) return absl::UnavailableError("Actuator is closed");
-    return DisableLocked(State::kStopped);
+    absl::Status status;
+    if (output_already_disabled)
+      state_ = State::kStopped;
+    else
+      status = DisableLocked(State::kStopped);
+    completed_stop_epoch_ = std::max(completed_stop_epoch_, epoch);
+    return status;
   }
   absl::Status Recover(int64_t ros_now_ns) {
     std::lock_guard lock(mutex_);
     if (state_ == State::kEnabled || state_ == State::kClosed)
       return absl::FailedPreconditionError("Disable/stop before recovery");
+    const auto epoch = stop_epoch_.load();
+    if (epoch != completed_stop_epoch_)
+      return absl::FailedPreconditionError("Wait for the pending stop before recovery");
     source_epoch_ns_ = ros_now_ns;
     last_stamp_ = -std::numeric_limits<double>::infinity();
-    return DisableLocked(State::kDisabled);
+    auto status = DisableLocked(State::kDisabled);
+    if (status.ok()) recovered_stop_epoch_ = epoch;
+    return status;
   }
   absl::Status SelectSource(const std::string& source, int64_t ros_now_ns) {
     std::lock_guard lock(mutex_);
     if (state_ != State::kDisabled)
       return absl::FailedPreconditionError("Select source only while disabled");
+    if (stop_epoch_.load() != recovered_stop_epoch_)
+      return absl::FailedPreconditionError("Explicit disabled recovery is required");
     if (!sources_.count(source)) return absl::InvalidArgumentError("Unknown source");
     source_ = source;
     source_epoch_ns_ = ros_now_ns;
@@ -133,6 +154,9 @@ class ControlGate {
   }
   State state() const {
     std::lock_guard lock(mutex_);
+    if (state_ != State::kClosed && state_ != State::kFault &&
+        stop_epoch_.load() != recovered_stop_epoch_)
+      return State::kStopped;
     return state_;
   }
 
@@ -162,6 +186,8 @@ class ControlGate {
   double last_stamp_ = -std::numeric_limits<double>::infinity();
   Clock::time_point deadline_{};
   mutable std::mutex mutex_;
+  std::atomic<uint64_t> stop_epoch_{0};
+  uint64_t recovered_stop_epoch_ = 0, completed_stop_epoch_ = 0;
   State state_ = State::kDisabled;
 };
 }  // namespace robot::action
