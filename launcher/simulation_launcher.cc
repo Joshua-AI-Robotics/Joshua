@@ -76,31 +76,30 @@ std::optional<std::filesystem::path> ResolveSimulationBinary() {
 pid_t ForkExecSimulation(const std::filesystem::path& sim_bin, const std::string& config_path) {
   std::string exec_path = sim_bin.string();
 
-  std::filesystem::path runfiles_dir =
-      sim_bin.parent_path() / (sim_bin.filename().string() + ".runfiles");
+  // Use the tree refreshed with the launcher, rather than a stale standalone one.
+  auto runfiles_dir = GetRunfilesRoot();
+  if (!runfiles_dir) {
+    const std::filesystem::path own_runfiles(exec_path + ".runfiles");
+    if (std::filesystem::is_directory(own_runfiles)) {
+      runfiles_dir = own_runfiles;
+    }
+  }
 
   std::vector<std::pair<std::string, std::string>> env_set;
   std::vector<std::string> env_unset;
   std::string work_dir;
 
-  if (std::filesystem::exists(runfiles_dir)) {
-    env_set.push_back({"RUNFILES_DIR", runfiles_dir.string()});
-    env_set.push_back({"TEST_SRCDIR", runfiles_dir.string()});
+  if (runfiles_dir) {
+    env_set.push_back({"RUNFILES_DIR", runfiles_dir->string()});
+    env_set.push_back({"TEST_SRCDIR", runfiles_dir->string()});
     env_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
 
-    std::filesystem::path wd = runfiles_dir / "_main";
+    std::filesystem::path wd = *runfiles_dir / "_main";
     if (std::filesystem::is_directory(wd)) {
       work_dir = wd.string();
     }
-  } else if (auto parent_rf = GetRunfilesRoot()) {
-    env_set.push_back({"RUNFILES_DIR", parent_rf->string()});
-    env_set.push_back({"TEST_SRCDIR", parent_rf->string()});
-    env_unset = {"RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
-
-    std::filesystem::path wd = *parent_rf / "_main";
-    if (std::filesystem::is_directory(wd)) {
-      work_dir = wd.string();
-    }
+  } else {
+    env_unset = {"RUNFILES_DIR", "TEST_SRCDIR", "RUNFILES_MANIFEST_FILE", "JAVA_RUNFILES"};
   }
 
   std::string abs_config = config_path;

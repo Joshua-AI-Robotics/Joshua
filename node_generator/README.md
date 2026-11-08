@@ -16,6 +16,11 @@ The Node Generator follows a clear, sequential process to bring the robotic syst
 
 5.  **Monitor Running Nodes**: After launching, the Node Generator continuously monitors the status of all child processes. If a node terminates unexpectedly, it logs the event. It also handles graceful shutdown, sending `SIGINT` (and subsequently `SIGTERM`/`SIGKILL` if needed) to all child process groups when the main program exits.
 
+Managed nodes use the launcher's runfiles tree, which Bazel refreshes when
+building the launcher. A child's standalone `.runfiles` tree may be stale and
+is only used when launcher runfiles are unavailable. Simulation follows the
+same rule.
+
 ## Usage
 
 The Node Generator is executed from the command line, pointing to a specific configuration file.

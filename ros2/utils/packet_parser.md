@@ -3,6 +3,11 @@
 `packet_parser.cc` bridges compiled ROS message types and internal packets.
 `packet_parser.py` supplies matching field access for Python consumers.
 
+Both packets carry `double timestamp = 2` in seconds. C++ drivers use RobotTime
+directly, and ROS adapters convert between that value and `header.stamp`.
+This replaces integer `timestamp_ns` with a different protobuf wire type;
+regenerate protobuf code and update communicating endpoints together.
+
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
 velocity, and effort distinguish omission from zero. `position_encoding` selects
 `POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
@@ -23,6 +28,14 @@ Scalar topics retain native values: `/position` maps to position, `/speed` and
 maps to enable/disable presets; on TI demo it maps to native effort. `/dc` remains
 unsupported by runtime motor drivers. The standalone Pybricks tool defines
 native effort as duty percent and requires it to be sent alone.
+
+Headerless commands acquire their receipt timestamp at the subscription boundary.
+Clock failures are returned through the callback as `Unavailable`. STS3215 and
+stepper torque-disable gates (Bool false or numeric scalar/array zero) are still
+delivered with an explicitly NaN timestamp and a warning when the clock fails.
+The timestamp is metadata and is not needed to disable torque. Torque-enable and
+motion commands needing a host timestamp are rejected until the clock recovers;
+JointState retains its source timestamp without reading the host clock.
 
 Normalized positions map through configured operational limits once, then become
 POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid

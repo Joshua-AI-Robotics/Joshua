@@ -232,9 +232,10 @@ const std::vector<CommImplementation>& CommFactory::Implementations() {
              return CommTransport{std::static_pointer_cast<MessageTransport>(
                  std::make_shared<JoshuaWireSerialTransport>(
                      *serial,
-                     std::chrono::milliseconds(comm.serial_config().has_exchange_timeout_ms()
-                                                   ? comm.serial_config().exchange_timeout_ms()
-                                                   : kDefaultSerialExchangeTimeoutMs)))};
+                     static_cast<double>(comm.serial_config().has_exchange_timeout_ms()
+                                             ? comm.serial_config().exchange_timeout_ms()
+                                             : kDefaultSerialExchangeTimeoutMs) /
+                         1000.0))};
            default:
              return absl::InvalidArgumentError("Comm has an invalid serial message_adapter.");
          }

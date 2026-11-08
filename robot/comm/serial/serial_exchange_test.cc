@@ -7,9 +7,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -19,6 +22,7 @@
 #include "robot/comm/serial/caller_sized_serial_transport.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
+#include "utils/robot_time.h"
 
 namespace robot::comm {
 namespace {
@@ -26,21 +30,46 @@ using Bytes = std::vector<uint8_t>;
 
 static_assert(!std::is_base_of_v<CallerSizedMessageTransport, JoshuaWireSerialTransport>);
 
+class ExchangeClock final : public joshua::RobotClock {
+ public:
+  double Now() const override {
+    if (fail) throw std::runtime_error("test clock unavailable");
+    if (frozen) return 42.0;
+    return 42.0 + std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count() +
+           offset.load();
+  }
+  std::atomic<bool> fail{false};
+  std::atomic<bool> frozen{false};
+  std::atomic<double> offset{0.0};
+
+ private:
+  const std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
+};
+
 class SerialExchangeTest : public ::testing::Test {
  protected:
+  inline static ExchangeClock* clock_ = nullptr;
+  static void SetUpTestSuite() {
+    auto clock = std::make_unique<ExchangeClock>();
+    clock_ = clock.get();
+    ASSERT_TRUE(joshua::SetGlobalRobotClock(std::move(clock)).ok());
+  }
   int master = -1;
   std::shared_ptr<boost::asio::io_context> io = std::make_shared<boost::asio::io_context>();
   std::shared_ptr<Serial> link;
   std::unique_ptr<JoshuaWireSerialTransport> serial;
   Bytes request;
   void SetUp() override {
+    clock_->fail = false;
+    clock_->frozen = false;
+    clock_->offset = 0.0;
     // An allocated PTY only: no real /dev/ttyACM*, ttyUSB* or NIC is opened.
     master = posix_openpt(O_RDWR | O_NOCTTY);
     ASSERT_GE(master, 0);
     ASSERT_EQ(grantpt(master), 0);
     ASSERT_EQ(unlockpt(master), 0);
     link = std::make_shared<Serial>(io, ptsname(master), 115200);
-    serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(100));
+    serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.1);
     request.resize(JW_MAX_FRAME_LEN);
     const int len = jw_encode_frame(request.data(), request.size(), 100, 5, 1, 0xff, nullptr, 0);
     request.resize(len);
@@ -158,14 +187,14 @@ TEST_F(SerialExchangeTest, FramesBelowWireRevisionTwoMinimumAreRejected) {
 }
 
 TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
-  serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(25));
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.0255);
   const auto start = std::chrono::steady_clock::now();
   EXPECT_EQ(serial->Exchange(request).status().code(), absl::StatusCode::kDeadlineExceeded);
   const auto elapsed = std::chrono::steady_clock::now() - start;
-  EXPECT_GE(elapsed, std::chrono::milliseconds(25));
+  EXPECT_GE(elapsed, std::chrono::microseconds(25500));
   EXPECT_LT(elapsed, std::chrono::seconds(1));
   ASSERT_TRUE(ReadRequest());
-  serial = std::make_unique<JoshuaWireSerialTransport>(link, std::chrono::milliseconds(500));
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.5);
   auto response = Reply(1);
   auto device = std::async(std::launch::async, [&] {
     if (!ReadRequest()) return false;
@@ -178,14 +207,70 @@ TEST_F(SerialExchangeTest, ConfiguredDeadlineReplacesTheDefault) {
   EXPECT_EQ(*actual, response);
 }
 
-TEST_F(SerialExchangeTest, BusLockWaitIsBoundedAndExpiredRequestIsNotSent) {
-  JoshuaWireSerialTransport slow(link, std::chrono::milliseconds(300));
-  JoshuaWireSerialTransport fast(link, std::chrono::milliseconds(25));
+TEST_F(SerialExchangeTest, RobotTimeAdvanceDoesNotExpirePendingExchange) {
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 1.0);
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  ASSERT_TRUE(ReadRequest());
+  clock_->offset = 2.0;
+  EXPECT_EQ(exchange.wait_for(std::chrono::milliseconds(50)), std::future_status::timeout);
+  const auto response = Reply(1);
+  EXPECT_EQ(write(master, response.data(), response.size()), static_cast<ssize_t>(response.size()));
+  auto actual = exchange.get();
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
+}
+
+TEST_F(SerialExchangeTest, RobotTimeBackwardStepDoesNotExtendExchangeTimeout) {
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.05);
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  ASSERT_TRUE(ReadRequest());
+  clock_->offset = -2.0;
+  const auto state = exchange.wait_for(std::chrono::milliseconds(500));
+  clock_->offset = 0.0;
+  EXPECT_EQ(state, std::future_status::ready);
+  EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
+}
+
+TEST_F(SerialExchangeTest, FrozenRobotTimeDoesNotExtendExchangeTimeout) {
+  clock_->frozen = true;
+  serial = std::make_unique<JoshuaWireSerialTransport>(link, 0.025);
+  auto exchange = std::async(std::launch::async, [&] { return serial->Exchange(request); });
+  EXPECT_TRUE(ReadRequest());
+  const auto state = exchange.wait_for(std::chrono::milliseconds(500));
+  // Resume before joining so a RobotTime-based timeout regression also finishes.
+  clock_->offset = 2.0;
+  clock_->frozen = false;
+  EXPECT_EQ(state, std::future_status::ready);
+  EXPECT_EQ(exchange.get().status().code(), absl::StatusCode::kDeadlineExceeded);
+}
+
+TEST_F(SerialExchangeTest, RobotClockFailureDoesNotPreventExchange) {
+  clock_->fail = true;
+  const auto response = Reply(1);
+  auto device = std::async(std::launch::async, [&] {
+    if (!ReadRequest()) return false;
+    return write(master, response.data(), response.size()) == static_cast<ssize_t>(response.size());
+  });
+  auto actual = serial->Exchange(request);
+  EXPECT_TRUE(device.get());
+  ASSERT_TRUE(actual.ok()) << actual.status();
+  EXPECT_EQ(*actual, response);
+}
+
+TEST_F(SerialExchangeTest, BusLockWaitIsBoundedWithFrozenRobotTimeAndExpiredRequestIsNotSent) {
+  clock_->frozen = true;
+  JoshuaWireSerialTransport slow(link, 0.5);
+  JoshuaWireSerialTransport fast(link, 0.025);
   auto first = std::async(std::launch::async, [&] { return slow.Exchange(request); });
   ASSERT_TRUE(ReadRequest());  // The first transaction now owns the physical bus.
-  auto second = fast.Exchange(request);
-  EXPECT_EQ(second.status().code(), absl::StatusCode::kDeadlineExceeded);
-  EXPECT_NE(second.status().message().find("not sent"), std::string::npos);
+  auto second = std::async(std::launch::async, [&] { return fast.Exchange(request); });
+  const auto state = second.wait_for(std::chrono::milliseconds(200));
+  clock_->offset = 2.0;
+  clock_->frozen = false;
+  EXPECT_EQ(state, std::future_status::ready);
+  auto result = second.get();
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kDeadlineExceeded);
+  EXPECT_NE(result.status().message().find("not sent"), std::string::npos);
   pollfd descriptor{master, POLLIN, 0};
   EXPECT_EQ(poll(&descriptor, 1, 10), 0);
   EXPECT_EQ(first.get().status().code(), absl::StatusCode::kDeadlineExceeded);
@@ -199,20 +284,24 @@ TEST_F(SerialExchangeTest, RawMechanismDoesNotKnowJoshuaWireFraming) {
     return write(master, response, sizeof(response)) == sizeof(response);
   });
   Bytes response;
-  auto status = link->ExchangeUntil(request,
-                                    std::chrono::milliseconds(100),
-                                    Serial::InputFlushPolicy::kDiscard,
-                                    [&](uint8_t byte) -> absl::StatusOr<bool> {
-                                      response.push_back(byte);
-                                      return response.size() == 2;
-                                    });
+  auto status = link->ExchangeUntil(
+      request, 0.1, Serial::InputFlushPolicy::kDiscard, [&](uint8_t byte) -> absl::StatusOr<bool> {
+        response.push_back(byte);
+        return response.size() == 2;
+      });
   EXPECT_TRUE(device.get());
   EXPECT_TRUE(status.ok()) << status;
   EXPECT_EQ(response, (Bytes{0x10, 0x20}));
 }
 
 TEST_F(SerialExchangeTest, InvalidDeadlineDoesNotWrite) {
-  for (auto timeout : {std::chrono::milliseconds(0), std::chrono::milliseconds(-1)}) {
+  for (double timeout : {0.0,
+                         -0.1,
+                         std::numeric_limits<double>::quiet_NaN(),
+                         std::numeric_limits<double>::infinity(),
+                         -std::numeric_limits<double>::infinity(),
+                         3'000'000.0,
+                         std::numeric_limits<double>::max()}) {
     JoshuaWireSerialTransport invalid(link, timeout);
     EXPECT_EQ(invalid.Exchange(request).status().code(), absl::StatusCode::kInvalidArgument);
   }
@@ -252,20 +341,18 @@ TEST_F(SerialExchangeTest, RawTransactionCanPreservePendingInput) {
   ASSERT_TRUE(prefix.ok()) << prefix.status();
   EXPECT_EQ(*prefix, (Bytes{0x10}));
   Bytes response;
-  auto status = link->ExchangeUntil(request,
-                                    std::chrono::milliseconds(100),
-                                    Serial::InputFlushPolicy::kPreserve,
-                                    [&](uint8_t byte) -> absl::StatusOr<bool> {
-                                      response.push_back(byte);
-                                      return response.size() == 2;
-                                    });
+  auto status = link->ExchangeUntil(
+      request, 0.1, Serial::InputFlushPolicy::kPreserve, [&](uint8_t byte) -> absl::StatusOr<bool> {
+        response.push_back(byte);
+        return response.size() == 2;
+      });
   EXPECT_TRUE(status.ok()) << status;
   EXPECT_EQ(response, (Bytes{0x20, 0x30}));
   EXPECT_TRUE(ReadRequest());
 }
 
 TEST_F(SerialExchangeTest, RawWriteCannotInterleaveWithTransactionRead) {
-  JoshuaWireSerialTransport transaction(link, std::chrono::milliseconds(500));
+  JoshuaWireSerialTransport transaction(link, 0.5);
   auto exchange = std::async(std::launch::async, [&] { return transaction.Exchange(request); });
   ASSERT_TRUE(ReadRequest());  // The transaction has written and is waiting for a reply.
   auto writer = std::async(std::launch::async, [&] { return link->Write(request); });
