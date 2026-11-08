@@ -1,0 +1,75 @@
+{
+  "name": "spider_sts3215",
+  "revision": "prototype_v1",
+  "units": "mm",
+  "printer_bed_mm": [180, 180],
+  "servo": {
+    "model": "STS3215 12 V / ST-3215-C018 family",
+    "case_mm": [45.22, 24.72, 35.0],
+    "shaft_from_front_mm": 10.11,
+    "shaft_diameter_mm": 5.9,
+    "shaft_height_mm": 3.4,
+    "mass_kg": 0.055,
+    "horn_diameter_mm": 19.95,
+    "horn_pcd_mm": 14.0,
+    "horn_screw_clearance_mm": 3.3,
+    "horn_mass_kg": 0.003,
+    "printed_horn_plane_mm": 6.0,
+    "case_clearance_each_side_mm": 0.35,
+    "rated_torque_reference_Nm": 0.980665,
+    "simulation_effort_limit_Nm": 0.65,
+    "simulation_velocity_limit_rad_s": 2.0,
+    "sources": [
+      "https://docs.waveshare.com/ST3215_Servo",
+      "https://docs.waveshare.com/ST3215_Servo/Resources-And-Documents",
+      "https://files.waveshare.com/upload/0/08/ST3215-2D.zip",
+      "https://www.feetech.cn/Data/feetechrc/upload/file/20200611/6372749961523760249976542.pdf"
+    ],
+    "qualification": "Vendor-family envelope and horn drawing, not a measured customer's motor. Cable port, shaft datum, horn stack, clamps and screws require physical fit checks. The 7.4 V datasheet is used only for the family horn drawing, not electrical limits."
+  },
+  "body": {
+    "plate_mm": [170.0, 160.0, 4.0],
+    "hip_axis_xy_mm": [52.0, 47.0],
+    "hip_axis_z_mm": 43.0,
+    "electronics_deck_mm": [68.0, 60.0, 3.0],
+    "electronics_deck_z_mm": 56.0,
+    "standoff_xy_mm": [[20.0, 0.0], [-20.0, 0.0], [0.0, 20.0], [0.0, -20.0]],
+    "payload_envelope_mm": [55.0, 30.0, 18.0],
+    "payload_mass_kg": 0.15
+  },
+  "leg": {
+    "coxa_mm": 40.0,
+    "pitch_axis_rise_mm": 10.0,
+    "femur_mm": 100.0,
+    "tibia_mm": 110.0,
+    "hip_neutral_deg": 20.0,
+    "knee_neutral_deg": 55.0,
+    "yaw_limits_deg": [-30.0, 30.0],
+    "hip_limits_deg": [-25.0, 25.0],
+    "knee_limits_deg": [-30.0, 30.0],
+    "foot_radius_mm": 10.0,
+    "foot_spigot_radius_mm": 4.0,
+    "foot_spigot_length_mm": 6.0,
+    "foot_interference_radial_mm": 0.1
+  },
+  "print": {
+    "structure_material": "PETG prototype; requalify material and print settings for loads",
+    "density_kg_mm3": 0.00000127,
+    "effective_solid_fraction": 0.65,
+    "foot_material": "TPU",
+    "foot_density_kg_mm3": 0.0000012,
+    "layer_height_mm": 0.2,
+    "walls": 6,
+    "infill_percent": 40,
+    "mass_note": "Effective solid fraction is a lumped mass estimate, not the slicer's infill percentage. Motor inertia is a uniform-envelope estimate. Fasteners, inserts and cables are excluded; the payload is a 150 g placeholder. Weigh finished assemblies."
+  },
+  "simulation": {
+    "timestep_s": 0.001,
+    "position_kp": 3.0,
+    "position_kv": 0.08,
+    "joint_damping": 0.01,
+    "ground_friction": [0.9, 0.005, 0.0001],
+    "initial_floor_gap_m": 0.002,
+    "qualification": "Inspection, articulation and settling examples only. No walking controller or hardware qualification."
+  }
+}
