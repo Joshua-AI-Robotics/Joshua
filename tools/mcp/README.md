@@ -290,6 +290,8 @@ The synthetic ROS fixture → production helper → typed adapter → actual SDK
 stdio test decodes JPEG pixels and checks source/freshness, replacement,
 disconnect/recovery, silent-publisher staleness, padding and domain/topic/runtime
 changes. Child-process tests cover framing, cancellation, close, timeout and
-cleanup failure. Physical webcam unplug/recovery and a chosen AI client's
-image display/analysis remain separate acceptance evidence requiring current
-operator readiness confirmation.
+cleanup failure. A [physical C920 integration test](../../docs/hardware_tests/logitech_c920_mcp_2026-11-08.md)
+verified real 640x480 MCP JPEG capture and recovery after restarting Joshua in the
+same MCP session. Physical USB unplug/replug and a chosen AI client's deliberate
+scene-change test remain separate acceptance checks requiring current operator
+readiness confirmation.

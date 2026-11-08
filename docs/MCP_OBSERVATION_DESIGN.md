@@ -243,5 +243,7 @@ processes to test framing, timeout, cancellation, late spawn and poisoned cleanu
 A test-only encoder callback changes the manifest after real JPEG encoding and
 verifies the production post-encode binding check rejects the old image and
 reaps its helper. The production executable has no test codec controls.
-These software checks do not establish a chosen AI client's physical camera
-acceptance or unplug/recovery behavior.
+A separate [physical C920 test record](hardware_tests/logitech_c920_mcp_2026-11-08.md)
+establishes real camera-to-MCP JPEG capture and publisher restart recovery on its
+pinned candidate. A separately configured AI client's deliberate scene-change
+acceptance and physical USB unplug/replug remain untested by that record.
