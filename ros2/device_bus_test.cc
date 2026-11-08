@@ -27,6 +27,14 @@ class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
     ++reads;
     if (fail_reads) return absl::UnavailableError("Disconnected servo");
     std::vector<uint8_t> params;
+    if (bytes[4] == 3) {
+      // The real servo acknowledges register writes at status return level 1.
+      auto status = Write(bytes);
+      if (!status.ok()) return status;
+      if (fail_write_replies) return absl::DeadlineExceededError("Lost servo write reply");
+    } else if (size == 7) {
+      params = {1};
+    }
     if (size == 8)
       params = bytes[5] == 3 ? std::vector<uint8_t>{15, 3} : std::vector<uint8_t>{0, 8};
     std::vector<uint8_t> reply{255, 255, bytes[2], static_cast<uint8_t>(params.size() + 2), 0};
@@ -38,6 +46,7 @@ class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
   }
   std::atomic<int> reads{0};
   std::atomic<bool> fail_reads{false};
+  std::atomic<bool> fail_write_replies{false};
 };
 
 class DeviceBusTest : public testing::Test {
@@ -259,6 +268,41 @@ TEST_F(DeviceBusTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery)
   ASSERT_TRUE(call(recover));
   EXPECT_TRUE(call(enable));
   EXPECT_TRUE(Wrote(40, 1));
+  executor.remove_node(runtime);
+  runtime.reset();
+  executor.remove_node(client);
+}
+
+TEST_F(DeviceBusTest, HostRecoveryCannotClearUncertainServoWrite) {
+  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+  auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
+  auto enable =
+      client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/enable");
+  auto recover =
+      client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/recover");
+  executor.add_node(runtime);
+  executor.add_node(client);
+  ASSERT_TRUE(Await([&] { return enable->service_is_ready() && recover->service_is_ready(); }));
+  wire->written_.clear();
+  wire->fail_write_replies = true;
+  auto enabled = enable->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+  ASSERT_TRUE(Await([&] { return enabled.wait_for(0s) == std::future_status::ready; }));
+  EXPECT_FALSE(enabled.get()->success);
+  EXPECT_TRUE(Wrote(40, 1));  // The timed-out enable could have executed.
+  EXPECT_TRUE(Wrote(40, 0));  // Fault cleanup still attempts best-effort disable.
+
+  wire->fail_write_replies = false;
+  wire->written_.clear();
+  auto recovered = recover->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+  ASSERT_TRUE(Await([&] { return recovered.wait_for(0s) == std::future_status::ready; }));
+  auto response = recovered.get();
+  EXPECT_FALSE(response->success);
+  EXPECT_NE(response->message.find("unconfirmed"), std::string::npos);
+  EXPECT_TRUE(Wrote(40, 0));
+  enabled = enable->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+  ASSERT_TRUE(Await([&] { return enabled.wait_for(0s) == std::future_status::ready; }));
+  EXPECT_FALSE(enabled.get()->success);
+  EXPECT_FALSE(Wrote(40, 1));
   executor.remove_node(runtime);
   runtime.reset();
   executor.remove_node(client);

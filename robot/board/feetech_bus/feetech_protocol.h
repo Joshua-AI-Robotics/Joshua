@@ -20,6 +20,9 @@ inline constexpr uint8_t kRegMovingTime = 0x2C;
 inline constexpr uint8_t kRegMovingSpeed = 0x2E;
 inline constexpr uint8_t kRegPresentPosition = 0x38;
 inline constexpr uint8_t kRegModelNumber = 0x03;
+// 0: replies to reads/PING only; 1: replies to writes as well. Discover this
+// persistent servo setting without changing it during board identification.
+inline constexpr uint8_t kRegStatusReturnLevel = 0x08;
 
 // Bytes on the wire for a status/response packet with zero parameter bytes:
 // 0xFF 0xFF id length error checksum.
