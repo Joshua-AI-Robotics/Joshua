@@ -1,5 +1,7 @@
 #include "robot/action/interfaces/control_gate.h"
 
+#include <future>
+
 #include "gtest/gtest.h"
 
 namespace robot::action {
@@ -148,6 +150,60 @@ TEST(ControlGateTest, DriverFailureStopsAndRequiresExplicitRecoveryWithoutReplay
   ASSERT_TRUE(gate.Shutdown().ok());
   EXPECT_FALSE(gate.Recover(0).ok());
   EXPECT_FALSE(gate.Enable(t).ok());
+}
+
+class BlockingAction : public FakeAction {
+ public:
+  absl::Status SetAction(const ActionPacket& packet) override {
+    if (packet.has_joint()) {
+      entered.set_value();
+      released.wait();
+    }
+    return FakeAction::SetAction(packet);
+  }
+  std::promise<void> entered, release;
+  std::shared_future<void> released = release.get_future().share();
+};
+
+TEST(ControlGateTest, StopAdmissionBypassesBlockedIoAndRejectsQueuedMotionUntilRecovery) {
+  auto action = std::make_shared<BlockingAction>();
+  ControlGate gate(action, {}, {"default"});
+  auto t = ControlGate::Clock::now();
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Enable(t).ok());
+  auto target =
+      std::async(std::launch::async, [&] { return gate.Execute("default", Target(), 0, t); });
+  action->entered.get_future().wait();
+  auto interlocked = std::async(std::launch::async, [&] { gate.RequestStop(); });
+  EXPECT_EQ(interlocked.wait_for(100ms), std::future_status::ready);
+  action->release.set_value();
+  interlocked.get();
+  EXPECT_TRUE(target.get().ok());
+  EXPECT_EQ(gate.state(), ControlGate::State::kStopped);
+  EXPECT_FALSE(gate.Execute("default", Target(), 0, t).ok());
+  EXPECT_FALSE(gate.Enable(t).ok());
+  EXPECT_EQ(action->targets, 1);
+  EXPECT_FALSE(gate.Recover(0).ok());
+  const int disables = action->disables;
+  ASSERT_TRUE(gate.Stop(true).ok());  // Independent board stop already disabled outputs.
+  EXPECT_EQ(action->disables, disables);
+  EXPECT_FALSE(gate.Enable(t).ok());
+  ASSERT_TRUE(gate.Recover(0).ok());
+  EXPECT_FALSE(action->enabled);
+  ASSERT_TRUE(gate.Enable(t).ok());
+}
+
+TEST(ControlGateTest, ANewStopCannotBeClearedByEarlierRecovery) {
+  auto action = std::make_shared<FakeAction>();
+  ControlGate gate(action, {}, {"default"});
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Stop(true).ok());
+  gate.RequestStop();
+  EXPECT_FALSE(gate.Recover(0).ok());
+  EXPECT_FALSE(gate.SelectSource("default", 0).ok());
+  ASSERT_TRUE(gate.Stop(true).ok());
+  ASSERT_TRUE(gate.Recover(0).ok());
+  EXPECT_EQ(gate.state(), ControlGate::State::kDisabled);
 }
 }  // namespace
 }  // namespace robot::action

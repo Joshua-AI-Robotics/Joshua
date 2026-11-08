@@ -228,6 +228,42 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   executor.remove_node(client);
 }
 
+TEST_F(DeviceBusTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery) {
+  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+  auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
+  auto enable =
+      client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/enable");
+  auto recover =
+      client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/recover");
+  auto stop = client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/estop");
+  executor.add_node(runtime);
+  executor.add_node(client);
+  ASSERT_TRUE(Await([&] {
+    return enable->service_is_ready() && recover->service_is_ready() && stop->service_is_ready();
+  }));
+  auto call = [&](const auto& service) {
+    auto result = service->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+    if (!Await([&] { return result.wait_for(0s) == std::future_status::ready; })) {
+      ADD_FAILURE() << "Control service did not complete";
+      return false;
+    }
+    return result.get()->success;
+  };
+  ASSERT_TRUE(call(enable));
+  EXPECT_TRUE(Wrote(40, 1));
+  wire->written_.clear();
+  EXPECT_TRUE(call(stop));
+  EXPECT_TRUE(Wrote(40, 0));
+  EXPECT_FALSE(call(enable));
+  EXPECT_FALSE(Wrote(40, 1));
+  ASSERT_TRUE(call(recover));
+  EXPECT_TRUE(call(enable));
+  EXPECT_TRUE(Wrote(40, 1));
+  executor.remove_node(runtime);
+  runtime.reset();
+  executor.remove_node(client);
+}
+
 TEST_F(DeviceBusTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   config.mutable_robot()
       ->mutable_perceptions()

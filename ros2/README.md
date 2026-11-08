@@ -137,6 +137,10 @@ threads, so a blocked ordinary callback cannot hold the stop behind it. When a
 node owns multiple boards, it starts every stop concurrently before waiting for
 acknowledgments; a stalled board cannot delay stop dispatch to the others. Stop
 acknowledgment is protocol evidence; physical stop verification is unsupported.
+Ordinary subscriptions, control services and the lease watchdog share one callback
+group. ESTOP interlocks every host gate without waiting for command I/O, dispatches
+board stops, then completes the host stop. Acknowledged board stops replace redundant
+channel disables; boards without that capability still receive channel disables.
 After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
 steps. No subscription, enable or target is automatically restored.
 
