@@ -69,11 +69,11 @@ class FeetechBusBoardTest : public ::testing::Test {
     robot::comm::CommFactory::SetCommTransportFactoryForTesting(nullptr);
   }
 
-  // Every channel's Init() does a PING + read-model-number IDENTIFY, so
-  // tests that expect Init to succeed must queue both acks first.
-  void QueueIdentifyAcks(uint8_t servo_id) {
+  // Identification also discovers each servo's write-reply policy.
+  void QueueIdentifyAcks(uint8_t servo_id, uint8_t return_level = 1) {
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {}));
     transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {0x0F, 0x03}));
+    transport_->QueueResponse(MakeStatusResponse(servo_id, /*error=*/0, {return_level}));
   }
 
   std::shared_ptr<FakeCallerSizedMessageTransport> transport_;
@@ -86,7 +86,7 @@ TEST_F(FeetechBusBoardTest, InitIdentifiesEveryConfiguredServo) {
   auto status = board.Init(MakeArmBusBoard());
 
   EXPECT_TRUE(status.ok()) << status;
-  EXPECT_EQ(transport_->exchange_calls_, 2);
+  EXPECT_EQ(transport_->exchange_calls_, 3);
 }
 
 TEST_F(FeetechBusBoardTest, InitFailsWhenServoDoesNotRespond) {
@@ -142,6 +142,7 @@ TEST_F(FeetechBusBoardTest, OpenChannelEnableWritesTorqueEnableRegister) {
 
   auto channel = board.OpenChannel(1);
   ASSERT_TRUE(channel.ok()) << channel.status();
+  transport_->QueueResponse(MakeStatusResponse(5, 0, {}));
   ASSERT_TRUE((*channel)->Enable().ok());
 
   EXPECT_EQ(transport_->last_written_,
@@ -156,6 +157,7 @@ TEST_F(FeetechBusBoardTest, SetTargetPositionBundlesStagedSpeedAndConfiguredMove
   ASSERT_TRUE(channel.ok());
 
   ASSERT_TRUE((*channel)->SetTarget(TargetMode::kVelocity, 3000.0f).ok());
+  transport_->QueueResponse(MakeStatusResponse(5, 0, {}));
   ASSERT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 2070.0f).ok());
 
   // position=2070 (0x0816), move_time_ms=40 (0x0028), speed=3000 (0x0BB8).
@@ -178,6 +180,85 @@ TEST_F(FeetechBusBoardTest, SetTargetTorqueIsUnimplemented) {
 
   EXPECT_EQ((*channel)->SetTarget(TargetMode::kTorque, 1.0f).code(),
             absl::StatusCode::kUnimplemented);
+}
+
+TEST_F(FeetechBusBoardTest, WritesConsumeAndValidateAcknowledgmentsWithoutRetrying) {
+  auto corrupt = MakeStatusResponse(5, 0, {});
+  corrupt.back() ^= 1;
+  for (const auto& reply : {MakeStatusResponse(6, 0, {}),
+                            MakeStatusResponse(5, 0x20, {}),
+                            MakeStatusResponse(5, 0, {1}),
+                            corrupt}) {
+    QueueIdentifyAcks(5);
+    FeetechBusBoard board;
+    ASSERT_TRUE(board.Init(MakeArmBusBoard()).ok());
+    auto channel = board.OpenChannel(1);
+    ASSERT_TRUE(channel.ok());
+    transport_->QueueResponse(reply);
+    const auto exchanges = transport_->exchange_calls_;
+    EXPECT_FALSE((*channel)->Disable().ok());
+    EXPECT_EQ(transport_->exchange_calls_, exchanges + 1);
+    EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+    EXPECT_EQ((*channel)->ReadFeedback().status().code(), absl::StatusCode::kFailedPrecondition);
+    // Even a subsequent valid reply must not revive this generation.
+    transport_->QueueResponse(MakeStatusResponse(5, 0, {}));
+    EXPECT_EQ((*channel)->Disable().code(), absl::StatusCode::kFailedPrecondition);
+    EXPECT_EQ(transport_->exchange_calls_, exchanges + 1);
+    transport_->queued_responses_.clear();
+  }
+  EXPECT_EQ(transport_->write_calls_, 4);  // Only unconfirmed best-effort disables.
+}
+
+TEST_F(FeetechBusBoardTest, LostWriteReplyLatchesFaultAndReportsBestEffortDisableAsUnconfirmed) {
+  QueueIdentifyAcks(5);
+  FeetechBusBoard board;
+  ASSERT_TRUE(board.Init(MakeArmBusBoard()).ok());
+  auto channel = board.OpenChannel(1);
+  ASSERT_TRUE(channel.ok());
+  transport_->exchange_status_ = absl::DeadlineExceededError("Lost write acknowledgment");
+  EXPECT_EQ((*channel)->SetTarget(TargetMode::kPosition, 2070).code(),
+            absl::StatusCode::kDeadlineExceeded);
+  transport_->exchange_status_ = absl::OkStatus();
+  auto disabled = (*channel)->Disable();
+  EXPECT_EQ(disabled.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_NE(disabled.message().find("unconfirmed"), std::string::npos);
+  EXPECT_EQ(transport_->last_written_, feetech::BuildWritePacket(5, 40, {0}));
+  EXPECT_EQ((*channel)->SetTarget(TargetMode::kVelocity, 100).code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+  transport_->write_status_ = absl::UnavailableError("Disconnected");
+  disabled = (*channel)->Disable();
+  EXPECT_EQ(disabled.code(), absl::StatusCode::kUnavailable);
+  EXPECT_NE(disabled.message().find("unconfirmed"), std::string::npos);
+  EXPECT_EQ(transport_->exchange_calls_, 4);  // Three discovery reads and one write.
+  EXPECT_EQ(transport_->write_calls_, 2);
+}
+
+TEST_F(FeetechBusBoardTest, ReturnLevelZeroKeepsWritesSendOnly) {
+  QueueIdentifyAcks(5, 0);
+  FeetechBusBoard board;
+  ASSERT_TRUE(board.Init(MakeArmBusBoard()).ok());
+  auto channel = board.OpenChannel(1);
+  ASSERT_TRUE(channel.ok());
+  EXPECT_TRUE((*channel)->Enable().ok());
+  EXPECT_TRUE((*channel)->Disable().ok());
+  EXPECT_TRUE((*channel)->SetTarget(TargetMode::kPosition, 2070).ok());
+  EXPECT_EQ(transport_->exchange_calls_, 3);
+  EXPECT_EQ(transport_->write_calls_, 3);
+  transport_->write_status_ = absl::UnavailableError("Disconnected");
+  EXPECT_EQ((*channel)->Disable().code(), absl::StatusCode::kUnavailable);
+  transport_->write_status_ = absl::OkStatus();
+  EXPECT_EQ((*channel)->Enable().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ((*channel)->Disable().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport_->exchange_calls_, 3);
+  EXPECT_EQ(transport_->write_calls_, 5);
+}
+
+TEST_F(FeetechBusBoardTest, InvalidReturnLevelFailsBeforeAnyWrites) {
+  QueueIdentifyAcks(5, 2);
+  FeetechBusBoard board;
+  EXPECT_EQ(board.Init(MakeArmBusBoard()).code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport_->write_calls_, 0);
 }
 
 TEST_F(FeetechBusBoardTest, ReadFeedbackDecodesPresentPosition) {
