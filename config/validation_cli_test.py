@@ -389,6 +389,8 @@ robot {
                         {
                             "//robot/perception/audio:audio_config",
                             "//robot/perception/audio:audio_config.h",
+                            "//robot/perception/camera:camera_config",
+                            "//robot/perception/camera:camera_config.h",
                         },
                         "validator depends on perception implementation",
                     )

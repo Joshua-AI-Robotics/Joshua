@@ -13,6 +13,7 @@
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/audio/alsa_audio.h"
 #include "robot/perception/audio/audio_config.h"
+#include "robot/perception/camera/camera_config.h"
 #include "robot/perception/camera/cv_camera.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
@@ -86,6 +87,7 @@ const std::vector<SensorImplementation>& PerceptionFactory::Implementations() {
        "installed",
        [](const SinglePerception& sensor,
           const auto&) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         ABSL_RETURN_IF_ERROR(ValidateCameraConfig(sensor.opencv_config()));
          return std::make_unique<CvCamera>(sensor);
        },
        "camera driver requires IMAGE."},

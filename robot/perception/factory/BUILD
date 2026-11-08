@@ -12,6 +12,7 @@ cc_library(
         "//robot/comm/factory:comm_factory",
         "//robot/perception/audio:alsa_audio",
         "//robot/perception/audio:audio_config",
+        "//robot/perception/camera:camera_config",
         "//robot/perception/camera:cv_camera",
         "//robot/perception/interfaces:perception_interface",
         "//robot/perception/lidar:lds01_driver",

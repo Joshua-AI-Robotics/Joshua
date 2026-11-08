@@ -302,6 +302,10 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
+Camera initialization applies the configured capture settings. Set an explicit
+four-character pixel format, such as `fourcc: "MJPG"` or `fourcc: "YUYV"`;
+missing or malformed formats fail validation before a camera is opened. The
+checked-in camera presets select MJPG.
 
 One serial bus must belong to one node process. Use `DEVICE_BUS` to compose
 commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`

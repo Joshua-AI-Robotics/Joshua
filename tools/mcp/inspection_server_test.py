@@ -27,7 +27,7 @@ FIXTURE = RUNFILES / "node_generator/observation_fixture"
 def candidate(name="camera", node_id=2):
     return (
         f'general {{name: "{name}"}} robot {{perceptions {{single_perceptions {{'
-        f'sensor_name: "{name}" sensor_type: IMAGE opencv_config {{}} '
+        f'sensor_name: "{name}" sensor_type: IMAGE opencv_config {{fourcc: "MJPG"}} '
         f"node {{id: {node_id} node_type: CAMERA_PUBLISHER}} }} }} }}"
     )
 
@@ -38,7 +38,7 @@ def oversized_candidate():
         name = str(i) + "x" * 390
         entries.append(
             f'single_perceptions {{sensor_name: "{name}" sensor_type: IMAGE '
-            "opencv_config {} node {id: 2 node_type: CAMERA_PUBLISHER}}"
+            'opencv_config {fourcc: "MJPG"} node {id: 2 node_type: CAMERA_PUBLISHER}}'
         )
     return "robot {perceptions {" + " ".join(entries) + "}}"
 
@@ -321,7 +321,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                 name = "duplicate" if i in (0, 130) else f"camera_{i}"
                 entries.append(
                     f'single_perceptions {{sensor_name: "{name}" sensor_type: IMAGE '
-                    "opencv_config {} node {id: 2 node_type: CAMERA_PUBLISHER}}"
+                    'opencv_config {fourcc: "MJPG"} '
+                    "node {id: 2 node_type: CAMERA_PUBLISHER}}"
                 )
             Path(directory, "large.pbtxt").write_text(
                 "robot {perceptions {" + " ".join(entries) + "}}"
