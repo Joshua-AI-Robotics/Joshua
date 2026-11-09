@@ -1,5 +1,3 @@
-#include "ros2/camera_publisher.h"
-
 #include <chrono>
 #include <cstdlib>
 #include <functional>
@@ -9,6 +7,10 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+
+// Exercise the private node implementation without a public header or executable main.
+#define JOSHUA_CAMERA_PUBLISHER_TEST
+#include "ros2/camera_publisher.cc"
 
 namespace {
 using namespace std::chrono_literals;

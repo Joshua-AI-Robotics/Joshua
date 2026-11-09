@@ -1,7 +1,7 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_library", "ros2_cpp_test", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -79,50 +79,45 @@ py_library(
     ] + requirement("numpy"),
 )
 
-cc_library(
-    name = "camera_publisher_node",
-    srcs = ["camera_publisher.cc"],
-    hdrs = ["camera_publisher.h"],
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//robot/perception/factory:perception_factory",
-        "//robot/perception/interfaces:perception_interface",
-        "//robot/perception/proto:perception_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
+_CAMERA_PUBLISHER_DEPS = [
+    "//config/proto:config_cc_proto",
+    "//robot/perception/factory:perception_factory",
+    "//robot/perception/interfaces:perception_interface",
+    "//robot/perception/proto:perception_cc_proto",
+    "//robot/perception/proto:perception_packet_cc_proto",
+    "//ros2:node_runner",
+    "//ros2/proto:node_cc_proto",
+    "//ros2/utils:packet_parser",
+    "//ros2/utils:qos_setting",
+    "@abseil-cpp//absl/status:status",
+    "@abseil-cpp//absl/status:statusor",
+    "@ros2_deps//:cpp_sensor_msgs",
+    "@ros2_deps//:cpp_std_msgs",
+    "@ros2_deps//:rclcpp",
+]
 
 ros2_cpp_binary(
     name = "camera_publisher",
-    srcs = ["camera_publisher_main.cc"],
+    srcs = ["camera_publisher.cc"],
     set_up_ament = True,
-    deps = [
-        ":camera_publisher_node",
-        ":node_runner",
-    ],
+    deps = _CAMERA_PUBLISHER_DEPS,
 )
 
-cc_test(
+# Let the test include the private implementation without compiling it separately.
+ros2_cpp_library(
+    name = "camera_publisher_test_source",
+    testonly = True,
+    textual_hdrs = ["camera_publisher.cc"],
+    visibility = ["//visibility:private"],
+    deps = _CAMERA_PUBLISHER_DEPS,
+)
+
+ros2_cpp_test(
     name = "camera_publisher_test",
     srcs = ["camera_publisher_test.cc"],
     deps = [
-        ":camera_publisher_node",
-        "//config/proto:config_cc_proto",
-        "//robot/perception/interfaces:perception_interface",
-        "//robot/perception/proto:perception_packet_cc_proto",
-        "@abseil-cpp//absl/status:status",
-        "@abseil-cpp//absl/status:statusor",
+        ":camera_publisher_test_source",
         "@googletest//:gtest_main",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "@ros2_deps//:rclcpp",
     ],
 )
 
