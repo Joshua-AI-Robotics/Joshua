@@ -4,6 +4,10 @@ Hardware-facing code: everything between a `.pbtxt` config and a physical
 motor, sensor, or bus. ROS 2 nodes live in [ros2/](../ros2/README.md) and
 consume these interfaces; nothing here depends on ROS 2 message types.
 
+When choosing boards and physical links, follow
+[Hardware topology and latency budgets](../docs/ARCHITECTURE.md#hardware-topology-and-latency-budgets)
+for guidance on shared versus separate actuator and sensor-acquisition hardware.
+
 > This is the code that moves physical motors and opens real buses. Before
 > running anything from here, see the hardware-safety section of
 > [AGENTS.md](../AGENTS.md).

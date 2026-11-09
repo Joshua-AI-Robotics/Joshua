@@ -129,6 +129,35 @@ facts; do not subtract timestamps from different machines as if synchronized.
 For a complete capture, also use ROS bag on observation, health, commands and
 `/rosout` topics. A successful recorder exit is receipt evidence, not qualification.
 
+## Hardware topology comparison (TODO)
+
+TODO: compare a shared actuator/sensor board and link with separate actuator and
+sensor-acquisition boards, each on its own physical link, following
+[Hardware topology and latency budgets](ARCHITECTURE.md#hardware-topology-and-latency-budgets).
+This comparison is outstanding; existing mixed-operation checks do not establish
+which topology meets a particular workload's timing requirements. Use the bench
+setup and authorization procedure above for physical execution.
+
+- Keep actuator commands, independent sensor payloads/rates, firmware behavior,
+  host load and measurement methods comparable; record unavoidable differences.
+  Keep encoder/current feedback required by the local motor-control loop on the
+  actuator controller in both arrangements.
+- Record board and firmware identities, physical links, USB hub/controller sharing,
+  configured budgets, and the required timing/bandwidth margin before testing.
+  Define command-application and stop limits and acceptable sensor loss/age before
+  collecting results.
+- Compare nominal load, sensor saturation/bursts, slow consumers, and host/USB
+  contention. Record achieved acquisition/delivery rates, loss/coalescing counts,
+  queue occupancy, rejected operations and deadline misses for each topology.
+- Measure host command submission to controller application, stop request to
+  output disable, and stop request to physical motor stopping. Record protocol
+  acknowledgment latency separately. Use a common measurement clock or document
+  clock alignment and uncertainty; do not subtract unsynchronized timestamps.
+- Report p50/p95/p99, observed maxima, run duration and sample counts alongside
+  every deadline miss. Compare results with the declared limits and margin;
+  separate links and an observed maximum alone do not prove a hard real-time
+  bound. Retain raw evidence and unresolved limits for both arrangements.
+
 ## Deliberate recovery
 
 After stop/watchdog/fault, secure the mechanism and remove motor power. Stop the
