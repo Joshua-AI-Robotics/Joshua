@@ -390,7 +390,11 @@ TEST_F(MixedBindingTest, StandaloneSubscriberHonorsExplicitEnableAndDisablesOnTe
   EXPECT_EQ(pins[4], 1);
 }
 
-TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicitEnableAndStop) {
+class MixedRecorderQosTest
+    : public MixedBindingTest,
+      public ::testing::WithParamInterface<ros2::node::QosReliabilityPolicy> {};
+
+TEST_P(MixedRecorderQosTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicitEnableAndStop) {
   // Concurrent stacks must never send commands to each other or real runtimes.
   const std::string name = "joshua_test_" + std::to_string(getpid()) + "_" +
                            std::to_string(Clock::now().time_since_epoch().count());
@@ -402,14 +406,19 @@ TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicit
     for (auto& sub : *a.mutable_node()->mutable_subscriptions())
       sub.set_topic(actuator + sub.topic().substr(sub.topic().find_last_of('/')));
   }
-  for (auto& s : *local.mutable_robot()->mutable_perceptions()->mutable_single_perceptions())
+  for (auto& s : *local.mutable_robot()->mutable_perceptions()->mutable_single_perceptions()) {
+    s.mutable_node()->mutable_qos_setting()->set_reliability_policy(GetParam());
     for (auto& pub : *s.mutable_node()->mutable_publishers()) pub.set_topic(prefix + pub.topic());
+  }
+  ASSERT_TRUE(config::ValidateConfig(local).ok());
   auto runtime = std::make_shared<McuBus>(name, 1, local);
   EXPECT_FALSE(Enabled());
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   std::atomic<bool> observed{false};
   auto sub = client->create_subscription<std_msgs::msg::UInt8MultiArray>(
-      prefix + "analog_a0/observation", 1, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
+      prefix + "analog_a0/observation",
+      rclcpp::QoS(1).best_effort(),
+      [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr msg) {
         robot::perception::PerceptionPacket p;
         if (p.ParseFromArray(msg->data.data(), msg->data.size()) && p.scalar().usable() &&
             p.scalar().boot_id() == 1234)
@@ -424,7 +433,8 @@ TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicit
   EXPECT_TRUE(
       Await([&] { return observed.load() && enable->get_subscription_count() > 0; }, 5000ms));
   const std::string recorder = std::filesystem::absolute("tools/serial/record_scalar").string();
-  const std::string capture = std::string(getenv("TEST_TMPDIR")) + "/scalar.jsonl";
+  const std::string capture =
+      std::string(getenv("TEST_TMPDIR")) + "/scalar_" + std::to_string(GetParam()) + ".jsonl";
   std::vector<std::string> args = {recorder,
                                    "--topic",
                                    prefix + "analog_a0/observation",
@@ -471,4 +481,13 @@ TEST_F(MixedBindingTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExplicit
   executor.remove_node(client);
   runtime.reset();
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    PublisherReliability,
+    MixedRecorderQosTest,
+    ::testing::Values(ros2::node::QOS_RELIABILITY_POLICY_RELIABLE,
+                      ros2::node::QOS_RELIABILITY_POLICY_BEST_EFFORT),
+    [](const ::testing::TestParamInfo<ros2::node::QosReliabilityPolicy>& info) {
+      return info.param == ros2::node::QOS_RELIABILITY_POLICY_RELIABLE ? "Reliable" : "BestEffort";
+    });
 }  // namespace

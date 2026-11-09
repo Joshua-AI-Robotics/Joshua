@@ -11,6 +11,7 @@ from ros2.utils.ros_python_paths import setup_import_paths
 
 setup_import_paths()
 import rclpy  # noqa: E402
+from rclpy.qos import QoSProfile, ReliabilityPolicy  # noqa: E402
 from std_msgs.msg import String, UInt8MultiArray  # noqa: E402
 
 
@@ -88,7 +89,13 @@ def main():
                     }
                 )
 
-            node.create_subscription(UInt8MultiArray, args.topic, receive, 10)
+            # Receive from either reliable or best-effort observation publishers.
+            observation_qos = QoSProfile(
+                depth=10, reliability=ReliabilityPolicy.BEST_EFFORT
+            )
+            node.create_subscription(
+                UInt8MultiArray, args.topic, receive, observation_qos
+            )
             node.create_subscription(String, args.topic + "/health", health, 10)
             end = time.monotonic() + args.seconds
             while rclpy.ok() and not exhausted and time.monotonic() < end:
