@@ -3,8 +3,6 @@
 #include <chrono>
 #include <opencv2/videoio.hpp>
 
-#include "robot/perception/camera/camera_config.h"
-
 namespace robot::perception {
 
 CvCamera::CvCamera(const robot::perception::SinglePerception& camera_config) {
@@ -24,10 +22,10 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
-  const auto config_status = ValidateCameraConfig(opencv_config_);
-  if (!config_status.ok()) {
-    LOG(ERROR) << config_status.message();
-    return config_status;
+  // Protect direct driver callers before indexing the four-character format.
+  // Full preset validation belongs to config::ValidateConfig.
+  if (opencv_config_.fourcc().size() != 4) {
+    return absl::InvalidArgumentError("OpenCV FourCC requires exactly four characters");
   }
 
   absl::Status status = OpenCameraLocked();
