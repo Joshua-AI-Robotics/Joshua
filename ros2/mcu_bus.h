@@ -1,5 +1,8 @@
 #pragma once
 // Mixed MCU sources and commands deliberately share this process and factory.
+#include <future>
+
+#include "absl/status/status.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/action_subscriber.h"
@@ -57,8 +60,15 @@ class McuBus : public ActionSubscriber {
         [this](std::shared_ptr<std_srvs::srv::Trigger::Request>,
                std::shared_ptr<std_srvs::srv::Trigger::Response> reply) {
           reply->success = true;
-          for (auto& b : boards_) {
-            const auto status = b->EmergencyStop();
+          // Start every stop before waiting: a lost reply on one port must not
+          // delay stop dispatch on another independent board.
+          std::vector<std::future<absl::Status>> stops;
+          stops.reserve(boards_.size());
+          for (const auto& board : boards_)
+            stops.push_back(
+                std::async(std::launch::async, [board] { return board->EmergencyStop(); }));
+          for (auto& stop : stops) {
+            const auto status = stop.get();
             if (!status.ok()) {
               reply->success = false;
               reply->message += status.ToString() + "; ";
@@ -77,6 +87,7 @@ class McuBus : public ActionSubscriber {
   }
 
  private:
+  friend class McuBusTest;
   std::vector<std::shared_ptr<robot::perception::PerceptionInterface>> sources_;
   std::vector<std::shared_ptr<robot::board::BoardInterface>> boards_;
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;

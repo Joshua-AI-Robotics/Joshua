@@ -204,8 +204,23 @@ cc_library(
         "//robot/perception/factory:perception_factory",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "@abseil-cpp//absl/status:status",
         "@glog",
         "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "mcu_bus_test",
+    srcs = ["mcu_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//config/proto:config_cc_proto",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
     ],

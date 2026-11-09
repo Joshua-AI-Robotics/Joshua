@@ -82,7 +82,9 @@ hardware and must be reviewed before a deliberate run.
 Startup configures outputs but leaves them disabled. A BOOL `/<actuator>/torque`
 command explicitly enables/disables them; position topics retain native driver
 units. `~/estop` is a Trigger service in a separate callback group with two executor
-threads, so a blocked ordinary callback cannot hold the stop behind it. Stop
+threads, so a blocked ordinary callback cannot hold the stop behind it. When a
+node owns multiple boards, it starts every stop concurrently before waiting for
+acknowledgments; a stalled board cannot delay stop dispatch to the others. Stop
 acknowledgment is protocol evidence; physical stop verification is unsupported.
 After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
 steps. No subscription, enable or target is automatically restored.
