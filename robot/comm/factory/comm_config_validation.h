@@ -7,6 +7,7 @@
 #include "absl/status/status.h"
 #include "firmware/common/joshua_wire_ethercat.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "robot/comm/serial/serial_config_validation.h"
 
 namespace robot::comm {
 
@@ -18,7 +19,9 @@ inline absl::Status ValidateSerialConfig(const SerialConfig& config) {
       config.post_open_settle_ms() > INT_MAX)
     return absl::InvalidArgumentError(
         "Serial exchange_timeout_ms must be 1..INT_MAX; post_open_settle_ms must be 0..INT_MAX");
-  return absl::OkStatus();
+  auto policy = ValidateSerialOptions(SerialOptions(config));
+  if (!policy.ok()) return policy;
+  return ValidateSerialFrameOptions(SerialFramePolicyOptions(config));
 }
 
 inline absl::Status ValidatePairedEthercatConfig(const EthercatConfig& config) {

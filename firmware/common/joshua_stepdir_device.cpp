@@ -13,9 +13,12 @@ uint8_t schema[JW_ACTUATOR_SCHEMA_LEN];
 bool (*valid_pin)(uint8_t);
 uint32_t previous_micros;
 uint64_t timestamp_us;
+jw_resource_claim_t* resources;
+size_t resource_capacity;
+StepDirDeviceExtension extension;
 constexpr uint32_t kMaxFeedbackAgeUs = 100000;
 
-void Safety(void*, int) {
+void Safety(void*, int reason) {
   for (uint8_t i = 0; i < g_num_channels; ++i) {
     StepDirDisable(&g_channels[i]);
     g_channels[i].configured = false;
@@ -23,7 +26,8 @@ void Safety(void*, int) {
     g_channels[i].target_value = 0;
     g_channels[i].feedback.metadata.validity = JW_SAMPLE_INVALID;
   }
-  jw_resource_table_init(g_stepdir_resources, 3u * g_num_channels);
+  jw_resource_table_init(resources, resource_capacity);
+  if (extension.safety) extension.safety(extension.context, reason);
 }
 
 jw_actuator_state_t State(void* context) {
@@ -43,8 +47,7 @@ jw_actuator_result_t Configure(void* context, const jw_configure_step_dir_t* con
                                         {id, JW_RESOURCE_PIN, config->dir_pin, 0, 0},
                                         {id, JW_RESOURCE_PIN, config->enable_pin, 0, 0}};
   jw_resource_conflict_t conflict{};
-  const auto status =
-      jw_resource_replace(g_stepdir_resources, 3u * g_num_channels, id, claims, 3, &conflict);
+  const auto status = jw_resource_replace(resources, resource_capacity, id, claims, 3, &conflict);
   auto result = jw_actuator_sync_result(status);
   if (status != JW_STATUS_OK) {
     result.conflict = conflict;
@@ -86,6 +89,9 @@ const jw_actuator_backend_ops_t kBackendOps = {
 void StepDirDeviceInit(uint32_t boot_id, const char* name, bool (*valid_output_pin)(uint8_t)) {
   memset(&runtime, 0, sizeof(runtime));
   valid_pin = valid_output_pin;
+  resources = g_stepdir_resources;
+  resource_capacity = 3u * g_num_channels;
+  extension = {};
   previous_micros = micros();
   timestamp_us = previous_micros;
   auto& identity = runtime.identity;
@@ -138,6 +144,7 @@ void StepDirDeviceService() {
   const uint32_t now = micros();
   timestamp_us += uint32_t(now - previous_micros);
   previous_micros = now;
+  if (extension.service) extension.service(extension.context, timestamp_us);
   for (uint8_t i = 0; i < g_num_channels; ++i) {
     auto& channel = g_channels[i];
     StepDirService(&channel);
@@ -152,11 +159,49 @@ void StepDirDeviceService() {
   }
 }
 
+namespace {
+int DeviceCommand(void*, const jw_command_t* command, uint8_t* response, size_t capacity) {
+  int result =
+      extension.command ? extension.command(extension.context, command, response, capacity) : -2;
+  if (result == -2) result = jw_runtime_command(&runtime, command, response, capacity);
+  if (result > 0 && extension.observed)
+    extension.observed(extension.context, command, response, result);
+  return result;
+}
+}  // namespace
 int StepDirDeviceProcess(const uint8_t* request, size_t size, uint8_t* response, size_t capacity) {
   return jw_endpoint_process(
-      &endpoint, request, size, response, capacity, jw_runtime_command, jw_runtime_reset, &runtime);
+      &endpoint, request, size, response, capacity, DeviceCommand, jw_runtime_reset, &runtime);
 }
 
 void StepDirDeviceFault() {
   jw_runtime_fault(&runtime);
+}
+
+int StepDirDeviceExtend(jw_runtime_function_t* functions,
+                        size_t capacity,
+                        jw_resource_claim_t* table,
+                        size_t slots,
+                        StepDirDeviceExtension hooks) {
+  if (!functions || !table || capacity <= g_num_channels || slots < 3u * g_num_channels + 2)
+    return 0;
+  for (uint8_t i = 0; i < g_num_channels; ++i) {
+    if (g_channels[i].configured || g_channels[i].enabled) return 0;
+  }
+  for (uint8_t i = 0; i < g_num_channels; ++i) {
+    functions[i] = runtime.functions[i];
+    g_channels[i].actuator.function = &functions[i];
+  }
+  resources = table;
+  resource_capacity = slots;
+  jw_resource_table_init(resources, resource_capacity);
+  runtime.functions = functions;
+  extension = hooks;
+  return 1;
+}
+jw_device_runtime_t* StepDirDeviceRuntime() {
+  return &runtime;
+}
+uint64_t StepDirDeviceNowUs() {
+  return timestamp_us + uint32_t(micros() - previous_micros);
 }

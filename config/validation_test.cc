@@ -48,6 +48,46 @@ TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
   EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
 }
 
+TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
+  auto c = MakeConfig();
+  auto* b = c.mutable_robot()->mutable_boards(0);
+  b->set_board_type(robot::board::TEENSY41);
+  b->mutable_comm()->set_transport_type(robot::comm::FRAME_STREAM);
+  b->mutable_comm()->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  b->mutable_firmware()->set_communication_watchdog_us(1000000);
+  b->mutable_firmware()->set_target_watchdog_us(500000);
+  b->mutable_joshua_wire_host_policy()->set_heartbeat_period_ms(100);
+  b->mutable_joshua_wire_host_policy()->set_telemetry_bytes_per_second(10000);
+  auto* s = c.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  s->set_sensor_type(robot::perception::SCALAR);
+  s->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  auto* scalar = s->mutable_joshua_wire_scalar_config();
+  scalar->set_board_name("bus");
+  scalar->set_function_id(128);
+  scalar->set_period_us(10000);
+  auto* p = s->mutable_node()->add_publishers();
+  p->set_topic("/scalar");
+  p->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  p->set_publish_rate_hz(50);
+  auto* a = c.mutable_robot()->mutable_actions()->add_single_actions();
+  a->mutable_node()->set_id(1);
+  a->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  a->set_action_type(robot::action::ACTUATOR);
+  a->mutable_actuator()->set_board_name("bus");
+  a->mutable_actuator()->set_channel(1);
+  a->mutable_actuator()->set_motor_type(robot::action::MOTOR_STEPPER_NEMA17);
+  a->mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(true);
+  ASSERT_TRUE(ValidateConfig(c).ok()) << ValidateConfig(c);
+  a->mutable_node()->set_id(2);
+  EXPECT_FALSE(ValidateConfig(c).ok());
+  a->mutable_node()->set_id(1);
+  b->mutable_firmware()->set_communication_watchdog_us(341000);
+  EXPECT_FALSE(ValidateConfig(c).ok());
+  b->mutable_firmware()->set_communication_watchdog_us(1000000);
+  a->mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(false);
+  EXPECT_FALSE(ValidateConfig(c).ok());
+}
+
 TEST(ValidationTest, ValidatesRobotClockWithoutOpeningDevice) {
   auto config = MakeConfig();
   auto* clock = config.mutable_general()->mutable_robot_clock();
@@ -250,6 +290,28 @@ TEST(ValidationTest, RejectsInvalidSerialTimingWithoutHardware) {
   EXPECT_TRUE(ValidateConfig(config).ok());
 }
 
+TEST(ValidationTest, HostCoordinatorPolicyCannotBeIgnoredOnOtherTransports) {
+  auto config = MakeConfig();
+  auto* board = config.mutable_robot()->mutable_boards(0);
+  board->mutable_joshua_wire_host_policy()->set_operation_timeout_ms(200);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
+TEST(ValidationTest, SerialIoPolicyIsValidatedBeforeHardwareAccess) {
+  auto config = MakeConfig();
+  auto* policy = config.mutable_robot()
+                     ->mutable_boards(0)
+                     ->mutable_comm()
+                     ->mutable_serial_config()
+                     ->mutable_io_policy();
+  policy->set_write_timeout_ms(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  policy->set_write_timeout_ms(100);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  policy->set_max_pending_operations(0);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+}
+
 TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
   auto config = MakeConfig();
   config.mutable_robot()
@@ -267,6 +329,13 @@ TEST(ValidationTest, SharedSerialPortRequiresSameTimingPolicy) {
   sensor.mutable_sts3215_encoder_config()->set_board_name("second");
   *robot->mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_TRUE(ValidateConfig(config).ok());  // Explicit 100 equals the JoshuaWire default.
+  auto* policy =
+      robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->mutable_io_policy();
+  policy->set_read_timeout_ms(500);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  policy->set_read_timeout_ms(501);
+  EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
+  policy->clear_read_timeout_ms();
   robot->mutable_boards(1)->mutable_comm()->mutable_serial_config()->set_post_open_settle_ms(2000);
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }

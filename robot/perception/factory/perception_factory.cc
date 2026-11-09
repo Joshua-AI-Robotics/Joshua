@@ -17,6 +17,7 @@
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
 #include "robot/perception/position/sts3215_position_sensor.h"
+#include "robot/perception/scalar/board_scalar_sensor.h"
 #include "utils/status_macros.h"
 
 namespace robot::perception {
@@ -39,6 +40,26 @@ absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSt
 
 const std::vector<SensorImplementation>& PerceptionFactory::Implementations() {
   static const std::vector<SensorImplementation> entries = {
+      {SinglePerception::kJoshuaWireScalarConfig,
+       SCALAR,
+       "installed",
+       [](const SinglePerception& sensor,
+          const auto& boards) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         const auto& c = sensor.joshua_wire_scalar_config();
+         if (c.function_id() >= 255 || !c.period_us())
+           return absl::InvalidArgumentError("Invalid scalar function/period");
+         ABSL_ASSIGN_OR_RETURN(
+             auto config,
+             robot::board::ResolveBoardConfig(boards, sensor.sensor_name(), c.board_name()));
+         if (config->comm().transport_type() != robot::comm::FRAME_STREAM ||
+             !config->joshua_wire_host_policy().telemetry_bytes_per_second())
+           return absl::InvalidArgumentError(
+               "Scalar requires FRAME_STREAM and telemetry reservation");
+         ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*config));
+         ABSL_ASSIGN_OR_RETURN(auto stream, board->SubscribeScalar(c.function_id(), c.period_us()));
+         return std::make_unique<BoardScalarSensor>(stream, sensor.sensor_name());
+       },
+       "JoshuaWire scalar driver requires SCALAR."},
       {SinglePerception::kSts3215EncoderConfig,
        POSITION,
        "installed",

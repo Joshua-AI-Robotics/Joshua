@@ -40,6 +40,18 @@ class RecordingChannel : public robot::board::BoardChannel {
   absl::Status disable_status_ = absl::OkStatus();
 };
 
+TEST(StepperDriverTest, ExplicitEnablePolicyPreventsInitSideEffects) {
+  auto channel = std::make_shared<RecordingChannel>();
+  robot::action::Actuator config;
+  config.mutable_stepper_config()->set_require_explicit_enable(true);
+  StepperDriver driver(channel, config);
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->set_target_calls_, 0);
+  ASSERT_TRUE(driver.SetTorque(1).ok());
+  EXPECT_EQ(channel->enable_calls_, 1);
+}
+
 robot::action::Actuator MakeStepperActuator() {
   robot::action::Actuator actuator;
   actuator.set_actuator_name("stepper_1");

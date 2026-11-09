@@ -18,6 +18,7 @@
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_endpoint.h"
+#include "firmware/common/joshua_wire_sensor_stream.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
@@ -361,6 +362,8 @@ TEST_F(JoshuaWireSessionTest, InvalidRequestsDoNotConsumeIdsAndFailedResetKeepsC
   ASSERT_TRUE(session.Open().ok());
   EXPECT_FALSE(session.Exchange({0, 0, JW_CMD_PROFILE, 0, nullptr, 1}).ok());
   EXPECT_FALSE(session.Exchange(Command(JW_CMD_RESET_SESSION)).ok());
+  EXPECT_EQ(session.Exchange(Command(JW_CMD_STREAM_SAMPLE, 0)).status().code(),
+            absl::StatusCode::kInvalidArgument);
   EXPECT_EQ(transport->requests.size(), 1);
   transport->timeout = true;
   EXPECT_FALSE(session.Open().ok());
@@ -382,6 +385,27 @@ int AcceptConfiguration(void* context, const jw_command_t* command, uint8_t* out
     return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
   }
   return result;
+}
+
+TEST_F(JoshuaWireSessionTest, StreamQueriesRemainAvailableAfterUnknownOutcome) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->timeout = true;
+  EXPECT_FALSE(session.Exchange(Configure()).ok());
+  transport->timeout = false;
+  uint8_t bytes[JW_PROFILE_HEADER_LEN];
+  jw_profile_request_t query{
+      JW_PROFILE_SENSOR, 1, JW_SENSOR_STREAM_MINOR, JW_SENSOR_GET_SUBSCRIPTION, nullptr, 0};
+  ASSERT_EQ(jw_encode_profile_request(bytes, sizeof(bytes), &query), sizeof(bytes));
+  jw_command_t command{0, 0, JW_CMD_PROFILE, 0, bytes, sizeof(bytes)};
+  const auto before = transport->requests.size();
+  // This firmware has no sensor backend, but its correlated rejection must be
+  // readable: unknown outcomes cannot hide subscription reconciliation queries.
+  EXPECT_TRUE(session.Exchange(command).ok());
+  EXPECT_EQ(transport->requests.size(), before + 1);
+  query.operation = JW_SENSOR_SUBSCRIBE;
+  ASSERT_EQ(jw_encode_profile_request(bytes, sizeof(bytes), &query), sizeof(bytes));
+  EXPECT_EQ(session.Exchange(command).status().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport->requests.size(), before + 1);
 }
 
 TEST_F(JoshuaWireSessionTest, PendingActionRequiresItsOriginalCompletionToken) {

@@ -53,6 +53,21 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - **Extensibility** — new sensors and action types without breaking the core
 - **Modularity** — clear split between config, runtime packets, and ROS 2 topics
 
+## Hardware topology and latency budgets
+
+For high-bandwidth sensing or tight actuator deadlines, prefer separate actuator
+and sensor-acquisition boards with independent physical links. Shared boards/links
+remain supported when measurements show sufficient bandwidth and latency headroom
+under the intended worst-case workload. Keep feedback needed by the local motor
+control loop, such as encoder/current measurements, on the actuator controller.
+
+Queues and priorities manage contention but do not guarantee deadlines. Separate
+ROS nodes do not isolate a shared link, and separate boards may still contend for
+USB-controller or host resources. Qualify either arrangement against its command,
+stop and sensor-loss budgets; see the
+[topology comparison checklist](SERIAL_COMM_QUALIFICATION.md#hardware-topology-comparison-todo)
+for measurement requirements and outstanding work.
+
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run

@@ -111,6 +111,7 @@ jw_match_result_t jw_check_response(const jw_frame_t* request, const jw_frame_t*
   if (request->message_id != response->message_id) return JW_MATCH_MESSAGE_MISMATCH;
   if (request->cmd != response->cmd) return JW_MATCH_COMMAND_MISMATCH;
   if (request->channel != response->channel) return JW_MATCH_CHANNEL_MISMATCH;
+  if (response->cmd == JW_CMD_STREAM_SAMPLE) return JW_MATCH_UNSOLICITED;
   return JW_MATCH_OK;
 }
 
