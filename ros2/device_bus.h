@@ -1,7 +1,9 @@
 #pragma once
 // Mixed MCU sources and commands deliberately share this process and factory.
+#include <future>
 #include <map>
 
+#include "absl/status/status.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/action_subscriber.h"
@@ -39,8 +41,14 @@ class DeviceBus : public ActionSubscriber {
           RequestStopActions();
           reply->success = true;
           std::set<std::string> stopped_boards;
-          for (auto& [name, b] : boards_) {
-            const auto status = b->EmergencyStop();
+          // Start every stop before waiting: a lost reply on one port must not
+          // delay stop dispatch on another independent board.
+          std::map<std::string, std::future<absl::Status>> stops;
+          for (const auto& [name, board] : boards_)
+            stops.emplace(
+                name, std::async(std::launch::async, [board] { return board->EmergencyStop(); }));
+          for (auto& [name, stop] : stops) {
+            const auto status = stop.get();
             if (status.ok()) stopped_boards.insert(name);
             if (!status.ok() && !absl::IsUnimplemented(status)) {
               reply->success = false;
@@ -67,6 +75,7 @@ class DeviceBus : public ActionSubscriber {
   }
 
  private:
+  friend class McuBusTest;
   std::vector<std::unique_ptr<ros2_utils::ObservationPublisher>> observations_;
   std::map<std::string, std::shared_ptr<robot::board::BoardInterface>> boards_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_;
