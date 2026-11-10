@@ -12,7 +12,7 @@ evidence workflow and the outstanding physical qualification gates.
 | OpenAI Decisions adapter, API failure handling, and demo gates | [demo-plan/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](demo-plan/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
 | Shared C++ robot clock, configuration, and integration checklist | [ROBOT_TIME.md](ROBOT_TIME.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
-| Proposed reusable policy interface, MuJoCo/Isaac/hardware bridges, and implementation gates | [POLICY_INTERFACE_AND_BRIDGES_PLAN.md](POLICY_INTERFACE_AND_BRIDGES_PLAN.md) |
+| Proposed policy interface: Decisions API head first, then local models and simulator bridges | [POLICY_INTERFACE_AND_BRIDGES_PLAN.md](POLICY_INTERFACE_AND_BRIDGES_PLAN.md) |
 | AI integration vision, requirements, user scenarios, checkpoints, feedback orchestration, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Typed observation base contract, metadata and proposed adapters | [MCP_OBSERVATION_DESIGN.md](MCP_OBSERVATION_DESIGN.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
