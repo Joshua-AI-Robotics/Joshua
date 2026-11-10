@@ -82,9 +82,9 @@ Its 33-value state, 47 actor inputs, twelve outputs, and 20 ms period remain
 policy-specific. Do not turn them into Joshua-wide constants or require its
 Float32MultiArray protocol for other policies.
 
-The [shared runtime demo plan](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md#4-shared-interfaces-and-simulator-behavior)
+The [shared runtime demo plan](demo-plan/ROBOT_NERVOUS_SYSTEM_DEMO.md#4-shared-interfaces-and-simulator-behavior)
 owns execution-target selection, source ownership, and hardware lifecycle
-requirements. The [camera-head plan](../doc/CAMERA_HEAD_DEMO.md) owns its
+requirements. The [camera-head plan](demo-plan/CAMERA_HEAD_DEMO.md) owns its
 real-to-sim-to-real experiment. This plan supplies reusable policy mechanisms
 for those consumers; it does not create competing enable/stop state machines.
 Reconcile implementation status with source when taking up each milestone:
