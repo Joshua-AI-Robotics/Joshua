@@ -1,5 +1,19 @@
 # Read-only inspection MCP tools
 
+## Local preparation and launch
+
+Run `./scripts/joshua_mcp.sh prepare`, then `./scripts/joshua_mcp.sh check`
+from the repository root. Use the absolute path to `scripts/joshua_mcp.sh` with
+argument `serve` as a stdio client command. `--stack u24` selects Jazzy;
+`--config-root /absolute/workspace/config` selects the actual configuration
+directory to inspect. The default is this checkout's `config/config_preset`.
+
+This CPU-only launcher retains complete artifacts and pins their image and
+local Docker daemon. It needs no GPU, host ROS/Bazel, hardware mounts or robot
+launch. Client connection never compiles or installs dependencies. Use `doctor`
+for diagnostics; after source changes, prepare again and reconnect the client.
+The manual Bazel commands below remain available for development.
+
 `config_validation_server` exposes nine read-only tools over stdio when started
 with `--inspector`. `list_supported_components()` discovers factory-owned build
 metadata without a config. `list_supported_hardware(kind=None, usb_id=None, query=None)`

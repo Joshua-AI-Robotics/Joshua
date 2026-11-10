@@ -2,6 +2,23 @@
 
 Joshua's public entrypoints are Docker Compose services from the repo root. The Makefile provides optional shorthand.
 
+## `joshua_mcp.sh`
+
+Prepare the read-only MCP server with `./scripts/joshua_mcp.sh prepare`, verify
+inspection with `./scripts/joshua_mcp.sh check`, and use
+`./scripts/joshua_mcp.sh serve` as the client stdio command. `doctor` reports
+host, Docker, artifact and source status without installing anything. Add
+`--stack u24` for Jazzy; the default is Humble. `--config-root` selects the real
+workspace directory exposed for inspection.
+
+The dedicated [MCP Compose services](../docker-compose.mcp.yml) reuse the
+development images without GPU reservations, privileged mode, host networking
+or physical device mounts. ROS and Bazel remain in Docker. Preparation retains
+complete artifacts under ignored `dist/mcp/`; serving uses the pinned image,
+local Docker daemon and generation without rebuilding. Failed preparation
+preserves the prior active generation. Source changes require preparation and
+client reconnection before claiming that inspection reflects those changes.
+
 ## `setup.sh`
 
 `python3 scripts/qualify_serial.py --output /tmp/joshua-serial-evidence --runs 10`
