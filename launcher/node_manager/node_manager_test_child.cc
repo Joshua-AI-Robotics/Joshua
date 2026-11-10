@@ -9,6 +9,10 @@
 #include "utils/joshua_runtime.h"
 
 namespace {
+volatile sig_atomic_t cleanup_requested = 0;
+void RequestCleanup(int) {
+  cleanup_requested = 1;
+}
 void ExitOnTerm(int) {
   _exit(0);
 }
@@ -16,7 +20,11 @@ void ExitOnTerm(int) {
 
 JOSHUA_MAIN(argc, argv) {
   if (argc < 2) return 2;
-  const std::string mode = argv[1];
+  std::string mode = argv[1];
+  // Stand in for the packaged wrapper in the configured startup rollback test.
+  // Its arguments are <executable> <node_name> <node_id> <config_path>.
+  if (mode == "data_subscriber" && argc == 5)
+    mode = std::string(argv[3]) == "1" ? "ready" : "fail-init";
   if (mode == "fail-init") throw std::runtime_error("fixture initialization failed");
   if (mode == "closed-ready") {
     const char* fd = std::getenv("JOSHUA_READY_FD");
@@ -25,6 +33,7 @@ JOSHUA_MAIN(argc, argv) {
   }
   if (mode == "no-ready")
     for (;;) pause();
+  if (mode == "fail-cleanup") signal(SIGINT, RequestCleanup);
   if (mode == "term-only" || mode == "stubborn" || mode == "descendant") {
     signal(SIGINT, SIG_IGN);
     signal(SIGTERM, mode == "term-only" ? ExitOnTerm : SIG_IGN);
@@ -40,6 +49,11 @@ JOSHUA_MAIN(argc, argv) {
     if (!file.good()) return 4;
   }
   joshua::ThrowIfError(joshua::NotifyReady());
+  if (mode == "fail-cleanup") {
+    while (!cleanup_requested) usleep(1000);
+    joshua::RunCleanup("fixture cleanup", [] { throw std::runtime_error("fixture stop failed"); });
+    return 0;  // The process guard must preserve the cleanup failure.
+  }
   if (mode == "complete") return 0;
   if (mode == "fail-running") {
     usleep(100000);

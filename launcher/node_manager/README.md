@@ -80,6 +80,9 @@ default policy gives SIGINT three seconds and SIGTERM two seconds, followed by
 SIGKILL and a one-second reaping window. `ShutdownPolicy` allows callers to
 supply explicit grace periods. `Shutdown()` is idempotent and closes the job's
 control channels after reaping while retaining its status record.
+Nonzero application exit codes remain failures during requested shutdown;
+shutdown attempts to stop and reap every job before returning the retained failure.
+Expected shutdown signals continue to follow the shutdown policy.
 
 OS process grace periods use host elapsed time so shutdown remains available
 when RobotTime fails or pauses. Serial transaction deadlines use steady elapsed

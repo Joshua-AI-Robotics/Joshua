@@ -957,6 +957,19 @@ absl::Status NodeManager::Shutdown(const ShutdownPolicy& policy) {
   signal(SIGKILL);
   if (!wait(policy.kill_grace, true) && result.ok())
     result = absl::DeadlineExceededError("Node process groups have not all been reaped");
+  // A requested shutdown does not turn an application's cleanup error into
+  // success. Check retained exits after reaping so every owned job is stopped,
+  // including when the guardian could not deliver the application's exit event.
+  for (auto& node : nodes_) {
+    if (node.status.exited && node.status.exit_code > 0) {
+      node.status.expected_exit = false;
+      FailProcess(node,
+                  absl::UnavailableError("Node exited with an error: " + node.spec.name +
+                                         " exit=" + std::to_string(node.status.exit_code)))
+          .IgnoreError();
+    }
+    remember(node.failure);
+  }
   PublishObservation("monitor_finished");
   return result;
 }

@@ -152,6 +152,9 @@ TEST_F(NodeManagerTest, PassiveObservationRetainsApplicationExitAndPreventsLater
 
 TEST_F(NodeManagerTest, FailedExecAndInitializationRemainObservable) {
   for (const auto& mode : {"missing-executable", "fail-init", "closed-ready"}) {
+    // Each scenario represents a fresh launcher invocation. Failed shutdowns
+    // now remain visible to the previous invocation's process guard.
+    ASSERT_EQ(joshua::RunGuarded("process test", [] { return 0; }), 0);
     NodeManager manager;
     auto spec = Spec(mode);
     if (spec.name == "missing-executable") spec.executable += ".missing";
@@ -188,6 +191,85 @@ TEST_F(NodeManagerTest, PartialStartupFailureCanRollBackEveryStartedJob) {
   manager.Shutdown(FastShutdown()).IgnoreError();
   ASSERT_EQ(manager.GetNodeStatus().size(), 2);
   for (const auto& state : manager.GetNodeStatus()) EXPECT_TRUE(state.reaped);
+}
+
+TEST_F(NodeManagerTest, ConfiguredStartupFailureAutomaticallyRollsBackEveryStartedJob) {
+  char pattern[] = "/tmp/joshua-manager-startup-XXXXXX";
+  const auto* directory = mkdtemp(pattern);
+  ASSERT_NE(directory, nullptr);
+  const std::filesystem::path root(directory);
+  joshua::ScopeExit remove_directory([&] { std::filesystem::remove_all(root); });
+  const char* previous_runfiles = std::getenv("RUNFILES_DIR");
+  const bool had_runfiles = previous_runfiles != nullptr;
+  const std::string saved_runfiles = previous_runfiles ? previous_runfiles : "";
+  joshua::ScopeExit restore_runfiles([&] {
+    if (had_runfiles)
+      setenv("RUNFILES_DIR", saved_runfiles.c_str(), 1);
+    else
+      unsetenv("RUNFILES_DIR");
+  });
+  const auto ros2 = root / "_main" / "ros2";
+  std::filesystem::create_directories(ros2);
+  // Resolve only the test child, with no ROS node or hardware executable involved.
+  std::filesystem::create_symlink(fixture_, ros2 / "ros2_node_wrapper.sh");
+  std::filesystem::create_symlink(fixture_, ros2 / "data_subscriber");
+  ASSERT_EQ(setenv("RUNFILES_DIR", directory, 1), 0);
+  const auto config_path = root / "config.pbtxt";
+  {
+    std::ofstream file(config_path);
+    file << R"pb(ai {
+                   data_stores {
+                     single_data_stores { node { id: 1 node_type: DATA_SUBSCRIBER } }
+                     single_data_stores { node { id: 2 node_type: DATA_SUBSCRIBER } }
+                   }
+                 })pb";
+    ASSERT_TRUE(file.good());
+  }
+  NodeManager manager(config_path.string());
+  ASSERT_TRUE(manager.Initialize().ok());
+  const auto result = manager.LaunchAllNodes();
+  EXPECT_FALSE(result.ok());
+  // Check before any explicit Shutdown() call or the manager destructor can run.
+  const auto states = manager.GetNodeStatus();
+  ASSERT_EQ(states.size(), 2);
+  EXPECT_FALSE(manager.HasLiveNodes());
+  for (const auto& state : states) {
+    EXPECT_GT(state.guardian_pid, 0);
+    EXPECT_TRUE(state.exited);
+    EXPECT_TRUE(state.reaped);
+  }
+  EXPECT_EQ(states[1].exit_code, 1);
+  EXPECT_FALSE(states[1].expected_exit);
+}
+
+TEST_F(NodeManagerTest, ShutdownReportsCleanupFailureAndReapsEveryJob) {
+  NodeManager manager;
+  ASSERT_TRUE(manager.StartProcess(Spec("ready")).ok());
+  ASSERT_TRUE(manager.StartProcess(Spec("fail-cleanup")).ok());
+  ASSERT_TRUE(manager.AwaitReady(std::chrono::seconds(5)).ok());
+  const auto result = manager.Shutdown(FastShutdown());
+  EXPECT_EQ(result.code(), absl::StatusCode::kUnavailable);
+  const auto states = manager.GetNodeStatus();
+  ASSERT_EQ(states.size(), 2);
+  for (const auto& state : states) EXPECT_TRUE(state.reaped);
+  EXPECT_EQ(states[1].exit_code, 1);
+  EXPECT_FALSE(states[1].expected_exit);
+  EXPECT_EQ(states[1].state, NodeManager::State::kFailed);
+  EXPECT_NE(states[1].error.find("fail-cleanup"), std::string::npos);
+  EXPECT_EQ(manager.Shutdown(FastShutdown()), result);
+}
+
+TEST_F(NodeManagerTest, RequiredNodeFailureAutomaticallyStopsSiblings) {
+  NodeManager manager;
+  ASSERT_TRUE(manager.StartProcess(Spec("ready")).ok());
+  ASSERT_TRUE(manager.StartProcess(Spec("fail-running")).ok());
+  ASSERT_TRUE(manager.AwaitReady(std::chrono::seconds(5)).ok());
+  EXPECT_EQ(manager.MonitorNodes().code(), absl::StatusCode::kUnavailable);
+  const auto states = manager.GetNodeStatus();
+  ASSERT_EQ(states.size(), 2);
+  for (const auto& state : states) EXPECT_TRUE(state.reaped);
+  EXPECT_EQ(states[1].exit_code, 7);
+  EXPECT_FALSE(states[1].expected_exit);
 }
 
 TEST_F(NodeManagerTest, LiveProcessWithoutReadinessTimesOut) {
