@@ -190,3 +190,45 @@ This is a hardware regression check for the new image. The specific 16-byte TX
 capacity case is covered by native tests of the actual Teensy and ESP32 bindings;
 this bench run does not establish that the physical Teensy's writable capacity
 was 16 bytes. GPIO stop timing and physical motor stop remain unmeasured.
+
+## Opt-in mixed scalar reference artifact
+
+`teensy41-mixed-scalar` adds intrinsic A0 (digital pin 14 / ADC1 channel 7) as
+sensor function **128**, device 128, scalar-f32 in native 10-bit ADC counts.
+Robot config selects that function; STEP/DIR pins remain host-configured. A0 and
+ADC1 have exclusive runtime resource claims while subscribed, so conflicting
+actuator pin configuration is rejected before GPIO writes. A0 is a 3.3 V analog
+input; physical sensor, supply, common ground and wiring are qualification inputs.
+The operator selected Teensy 4.1 plus a scalar analog sensor for this fixture.
+
+```bash
+pio run -d firmware/teensy/41 -e teensy41-mixed-scalar
+```
+
+This explicit candidate pins PlatformIO's Teensy platform to 5.0.0; the default
+request-only artifact remains separate. The candidate uses register-level
+start/poll/cancel operations, relying on Teensy core startup ADC calibration. It
+never calls blocking `analogRead` during service. Calibration/ADC failure produces
+invalid measurements or startup failure, not fabricated readings. See the
+[PJRC ADC implementation](https://github.com/PaulStoffregen/cores/blob/master/teensy4/analog.c)
+for the intrinsic channel mapping and registers.
+
+Conversion service is outside request dispatch, with a 1000 us conversion budget.
+Requested stream periods are 1000..1000000 us, with a 100000 us sample-age schema.
+These are software limits for the reference artifact; they are not physical
+sampling or stopping qualification. No polling fallback or implicit actuator
+enable is provided. READ returns cached acquisition while subscribed.
+
+The artifact advertises configurable software watchdogs. Configure explicit
+communication/target budgets through core command 0x12 before enable/subscribe;
+reset/recovery clear that policy. The loop services watchdogs and motors before
+acquisition, admits RX despite pending TX, reserves an independent safety reply
+slot, and gives replies priority over coalescible telemetry. Reply-capacity
+exhaustion faults outputs locally without dispatching the unreplyable request.
+The 20 ms serial adapter TX-fault path remains active. All these claims have
+software tests; ADC voltage/accuracy, physical GPIO/stop timing and endurance are
+still unqualified. Nothing in build/test commands flashes the board.
+
+Use the [mixed serial qualification kit](../../../docs/SERIAL_COMM_QUALIFICATION.md)
+for artifact/source manifests, the frozen workload, metadata recording, deliberate
+disabled recovery and the outstanding physical evidence gates.

@@ -18,7 +18,10 @@ The probe opens only the selected board and does not honor
 `general.operation_mode`. It requires explicit `protocol: JOSHUA_WIRE`
 and never falls back to JW1. The older JW1 smoke tool is removed.
 
-Serial firmware has no communication-loss watchdog. Cleanup attempts
+Default serial images have no communication-loss watchdog. The opt-in mixed
+Teensy candidate has explicit watchdogs when configured by its runtime; use the
+[mixed qualification procedure](SERIAL_COMM_QUALIFICATION.md) for that artifact.
+The request-only probe does not configure those watchdogs. Cleanup attempts
 RESET_SESSION after command failure or SIGINT/SIGTERM, but a lost link, crash or
 SIGKILL can prevent it. A timeout means the command outcome may be unknown. Keep
 a physical motor-power cutoff available; USB disconnect is not an emergency stop.

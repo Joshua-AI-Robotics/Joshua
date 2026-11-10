@@ -16,6 +16,7 @@ cc_library(
         "//robot/perception/interfaces:perception_interface",
         "//robot/perception/lidar:lds01_driver",
         "//robot/perception/position:sts3215_position_sensor",
+        "//robot/perception/scalar:board_scalar_sensor",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

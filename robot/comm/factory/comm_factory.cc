@@ -1,46 +1,34 @@
 #include "robot/comm/factory/comm_factory.h"
 
-#include <boost/asio.hpp>
-#include <exception>
 #include <map>
 #include <mutex>
 #include <optional>
-#include <thread>
 
 #include "robot/comm/ethercat/ethercat_types.h"
 #include "robot/comm/ethercat/joshua_wire_ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_backend.h"
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/caller_sized_serial_transport.h"
+#include "robot/comm/serial/joshua_wire_frame_stream.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
-#include "robot/comm/serial/serial_device_identity.h"
 #include "utils/joshua_runtime.h"
 #include "utils/status_macros.h"
 
 namespace robot::comm {
 
 namespace {
-// One serial connection per port, with a fixed baud rate and shared I/O lock.
+// Weak leases release the physical owner when its last consumer goes away.
+// The owner's process claim remains reserved throughout close/destruction.
 struct PortResources {
-  std::shared_ptr<boost::asio::io_context> io_context{std::make_shared<boost::asio::io_context>()};
-  boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard{
-      boost::asio::make_work_guard(*io_context)};
-  std::thread io_context_thread{
-      joshua::StartWorker("serial io_context", [this] { io_context->run(); })};
-  std::shared_ptr<Serial> serial;
+  std::weak_ptr<Serial> serial;
+  std::weak_ptr<JoshuaWireFrameStream> frames;
   SerialConfig config;
   std::optional<uint32_t> joshua_timeout_ms;
-  ~PortResources() {
-    work_guard.reset();
-    io_context->stop();
-    if (io_context_thread.joinable()) io_context_thread.join();
-  }
 };
-
-static std::mutex g_serial_mutex;
-static std::map<std::string, std::unique_ptr<PortResources>> g_port_resources;  // keyed by device
+static auto& g_serial_mutex = *new std::mutex;
+static auto& g_port_resources = *new std::map<std::string, PortResources>;
 
 // Process-lifetime synchronization/cache storage avoids cross-translation-unit
 // static destruction races with BoardFactory's retained board instances.
@@ -158,55 +146,114 @@ absl::StatusOr<CommTransport> CreatePairedEthercat(const EthercatConfig& config)
 
 absl::StatusOr<std::shared_ptr<Serial>> CreateSerial(const robot::comm::SerialConfig& config) {
   ABSL_RETURN_IF_ERROR(CommFactory::ValidateSerialConfig(config));
-  ABSL_ASSIGN_OR_RETURN(const auto device, ResolveSerialDeviceIdentity(config.port()));
 
-  const std::string& port = config.port();
+  ABSL_ASSIGN_OR_RETURN(auto identity, SerialIoOwner::Identify(config.port()));
   const auto timeout = [](const SerialConfig& c) {
     return c.has_exchange_timeout_ms() ? c.exchange_timeout_ms() : kDefaultSerialExchangeTimeoutMs;
   };
-
-  std::lock_guard<std::mutex> lock(g_serial_mutex);
-  auto& port_res_ptr = g_port_resources[device.key];
-  if (!port_res_ptr) {
-    port_res_ptr = std::make_unique<PortResources>();
+  std::lock_guard lock(g_serial_mutex);
+  // Prune retired metadata rather than retaining every port path forever.
+  for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
+    if (it->second.serial.expired() && it->second.frames.expired())
+      it = g_port_resources.erase(it);
+    else
+      ++it;
   }
-
-  if (port_res_ptr->serial) {
-    const auto& existing = port_res_ptr->config;
-    if (existing.baudrate() != config.baudrate()) {
-      return absl::InvalidArgumentError("Serial port " + port + " is already open at baud rate " +
-                                        std::to_string(existing.baudrate()) + "; requested " +
-                                        std::to_string(config.baudrate()));
+  auto found = g_port_resources.find(identity.key);
+  if (found != g_port_resources.end()) {
+    auto& resources = found->second;
+    if (!resources.frames.expired())
+      return absl::InvalidArgumentError("FRAME_STREAM cannot share a port with request-only users");
+    if (auto serial = resources.serial.lock()) {
+      const auto& existing = resources.config;
+      if (existing.baudrate() != config.baudrate())
+        return absl::InvalidArgumentError("Serial port " + config.port() +
+                                          " is already open at baud rate " +
+                                          std::to_string(existing.baudrate()) + "; requested " +
+                                          std::to_string(config.baudrate()));
+      if (existing.post_open_settle_ms() != config.post_open_settle_ms() ||
+          SerialOptions(existing) != SerialOptions(config))
+        return absl::InvalidArgumentError("Serial port already has different timing/I/O policy");
+      ABSL_RETURN_IF_ERROR(serial->Open());
+      if (config.message_adapter() == JOSHUA_WIRE) {
+        if (resources.joshua_timeout_ms && *resources.joshua_timeout_ms != timeout(config))
+          return absl::InvalidArgumentError(
+              "Serial port already has different JoshuaWire timing policy");
+        resources.joshua_timeout_ms = timeout(config);
+      }
+      return serial;
     }
-    if (existing.post_open_settle_ms() != config.post_open_settle_ms())
-      return absl::InvalidArgumentError("Serial port " + port +
-                                        " already has different timing policy");
-    if (config.message_adapter() == JOSHUA_WIRE) {
-      if (port_res_ptr->joshua_timeout_ms && *port_res_ptr->joshua_timeout_ms != timeout(config))
-        return absl::InvalidArgumentError(
-            "Serial port already has different JoshuaWire timing policy");
-      port_res_ptr->joshua_timeout_ms = timeout(config);
+  }
+  ABSL_ASSIGN_OR_RETURN(auto serial,
+                        Serial::Create(config.port(),
+                                       static_cast<int>(config.baudrate()),
+                                       std::chrono::milliseconds(config.post_open_settle_ms()),
+                                       SerialOptions(config)));
+  if (serial->identity().key != identity.key)
+    return absl::UnavailableError("Serial device changed during factory open");
+  PortResources resources;
+  resources.serial = serial;
+  resources.config = config;
+  if (config.message_adapter() == JOSHUA_WIRE) resources.joshua_timeout_ms = timeout(config);
+  g_port_resources[identity.key] = std::move(resources);
+  return serial;
+}
+
+absl::StatusOr<CommTransport> CreateFrameStream(const Comm& comm) {
+  ABSL_RETURN_IF_ERROR(ValidateSerialCommConfig(comm));
+  const auto& config = comm.serial_config();
+  ABSL_RETURN_IF_ERROR(CommFactory::ValidateSerialConfig(config));
+  ABSL_ASSIGN_OR_RETURN(auto identity, SerialIoOwner::Identify(config.port()));
+  std::lock_guard lock(g_serial_mutex);
+  for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
+    if (it->second.serial.expired() && it->second.frames.expired())
+      it = g_port_resources.erase(it);
+    else
+      ++it;
+  }
+  auto found = g_port_resources.find(identity.key);
+  if (found != g_port_resources.end()) {
+    auto& resources = found->second;
+    if (!resources.serial.expired())
+      return absl::InvalidArgumentError("Request-only port cannot acquire a continuous receiver");
+    if (auto frames = resources.frames.lock()) {
+      const auto& existing = resources.config;
+      if (existing.baudrate() != config.baudrate() ||
+          existing.post_open_settle_ms() != config.post_open_settle_ms() ||
+          SerialOptions(existing) != SerialOptions(config) ||
+          SerialFramePolicyOptions(existing) != SerialFramePolicyOptions(config))
+        return absl::InvalidArgumentError("Frame stream port already has different I/O policy");
+      ABSL_RETURN_IF_ERROR(frames->status());
+      return CommTransport{std::static_pointer_cast<FrameStreamTransport>(frames)};
     }
-    return port_res_ptr->serial;
   }
-  try {
-    port_res_ptr->serial =
-        std::make_shared<Serial>(port_res_ptr->io_context,
-                                 device.path,
-                                 static_cast<int>(config.baudrate()),
-                                 std::chrono::milliseconds(config.post_open_settle_ms()));
-  } catch (const std::exception& e) {
-    return absl::UnavailableError(e.what());
-  }
-  port_res_ptr->config = config;
-  if (config.message_adapter() == JOSHUA_WIRE) port_res_ptr->joshua_timeout_ms = timeout(config);
-  return port_res_ptr->serial;
+  ABSL_ASSIGN_OR_RETURN(
+      auto frames,
+      JoshuaWireFrameStream::Open(config.port(),
+                                  static_cast<int>(config.baudrate()),
+                                  std::chrono::milliseconds(config.post_open_settle_ms()),
+                                  SerialOptions(config),
+                                  SerialFramePolicyOptions(config)));
+  if (frames->identity().key != identity.key)
+    return absl::UnavailableError("Serial device changed during frame stream open");
+  PortResources resources;
+  resources.frames = frames;
+  resources.config = config;
+  g_port_resources[identity.key] = std::move(resources);
+  return CommTransport{std::static_pointer_cast<FrameStreamTransport>(frames)};
 }
 
 }  // namespace
 
 const std::vector<CommImplementation>& CommFactory::Implementations() {
   static const std::vector<CommImplementation> entries = {
+      {SERIAL,
+       FRAME_STREAM,
+       "installed",
+       &CreateFrameStream,
+       "Host integration capability; existing board consumers remain request-only. "
+       "JOSHUA_WIRE continuous receive only; one coordinator, exclusive from raw/request-only "
+       "users."},
       {SERIAL,
        BYTE_STREAM,
        "installed",
@@ -275,7 +322,8 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
     return implementation.create(comm);
   }
   if (comm.comm_type() == SERIAL) {
-    return absl::InvalidArgumentError("SERIAL requires BYTE_STREAM or MESSAGE transport_type.");
+    return absl::InvalidArgumentError(
+        "SERIAL requires BYTE_STREAM, MESSAGE, or FRAME_STREAM transport_type.");
   }
   if (comm.comm_type() == ETHERCAT) {
     return absl::InvalidArgumentError(
@@ -291,6 +339,23 @@ absl::StatusOr<CommTransport> CommFactory::CreateComm(const robot::comm::Comm& c
 void CommFactory::SetCommTransportFactoryForTesting(
     std::function<absl::StatusOr<CommTransport>(const robot::comm::Comm&)> factory) {
   g_comm_transport_factory_for_testing = std::move(factory);
+}
+
+std::vector<SerialDiagnostics> CommFactory::SnapshotSerialConnections() {
+  std::vector<SerialDiagnostics> result;
+  std::lock_guard lock(g_serial_mutex);
+  for (auto it = g_port_resources.begin(); it != g_port_resources.end();) {
+    if (auto serial = it->second.serial.lock()) {
+      result.push_back(serial->Snapshot());
+      ++it;
+    } else if (auto frames = it->second.frames.lock()) {
+      result.push_back(frames->Snapshot());
+      ++it;
+    } else {
+      it = g_port_resources.erase(it);
+    }
+  }
+  return result;
 }
 
 void CommFactory::ResetSerialTransportCacheForTesting() {
@@ -320,7 +385,22 @@ absl::Status CommFactory::ValidatePairedEthercatConfig(const EthercatConfig& con
 }
 
 void CommFactory::ShutdownAll() noexcept {
-  joshua::RunCleanup("serial transport shutdown", [] { ResetSerialTransportCacheForTesting(); });
+  joshua::RunCleanup("serial transport shutdown", [] {
+    std::vector<std::shared_ptr<Serial>> serials;
+    std::vector<std::shared_ptr<JoshuaWireFrameStream>> streams;
+    {
+      std::lock_guard lock(g_serial_mutex);
+      for (auto& [name, resources] : g_port_resources) {
+        if (auto serial = resources.serial.lock()) serials.push_back(std::move(serial));
+        if (auto stream = resources.frames.lock()) streams.push_back(std::move(stream));
+      }
+    }
+    for (const auto& serial : serials)
+      joshua::RunCleanup("serial owner close", [&] { joshua::ThrowIfError(serial->Close()); });
+    for (const auto& stream : streams)
+      joshua::RunCleanup("serial frame stream close",
+                         [&] { joshua::ThrowIfError(stream->Close()); });
+  });
   joshua::RunCleanup("EtherCAT transport shutdown", [] {
     std::lock_guard<std::mutex> lock(g_ethercat_mutex);
     for (auto& [name, bus] : g_paired_buses) {

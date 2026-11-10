@@ -5,6 +5,11 @@ Process configuration, launch, monitoring, and shutdown are owned by
 This directory retains the passive `RuntimeObservation` adapter and its
 hardware-free tests and fixture.
 
+For mixed JoshuaWire MCU use `MCU_BUS` for every actuator and scalar perception
+on that board, with one shared node ID. The generator launches `ros2/mcu_bus`
+once for that ID; configuration validation rejects competing process owners.
+The launcher packages that binary along with the standalone node binaries.
+
 The launcher accepts `--observation_dir` and optional `--observe_sensor` flags.
 NodeManager validates the selection and acquires an exclusive lease on an
 existing private directory before launching children. It starts a private ROS

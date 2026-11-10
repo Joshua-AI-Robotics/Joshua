@@ -2,6 +2,8 @@
 // or retry responses with invalid CRC/session/message IDs.
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 
+#include <memory>
+
 #include "firmware/common/joshua_wire.h"
 
 namespace robot::comm {
@@ -13,24 +15,29 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSerialTransport::Exchange(
       static_cast<size_t>(request[JW_LENGTH_OFFSET]) + JW_LENGTH_FIELD_OVERHEAD != request.size()) {
     return absl::InvalidArgumentError("Serial Exchange requires a bounded JoshuaWire frame.");
   }
-  std::vector<uint8_t> response;
-  size_t total = 0;
+  struct Frame {
+    std::vector<uint8_t> response;
+    size_t total = 0;
+  };
+  auto frame = std::make_shared<Frame>();
+  frame->response.reserve(JW_MAX_FRAME_LEN);
   auto status = serial_->ExchangeUntil(
       request,
       timeout_,
       Serial::InputFlushPolicy::kDiscard,
-      [&](uint8_t byte) -> absl::StatusOr<bool> {
+      [frame](uint8_t byte) -> absl::StatusOr<bool> {
+        auto& response = frame->response;
         if (response.empty() && byte != JW_SYNC_BYTE) return false;
         response.push_back(byte);
         if (response.size() == JW_LENGTH_PREFIX_LEN) {
-          total = static_cast<size_t>(byte) + JW_LENGTH_FIELD_OVERHEAD;
-          if (total < JW_MIN_FRAME_LEN || total > JW_MAX_FRAME_LEN)
+          frame->total = static_cast<size_t>(byte) + JW_LENGTH_FIELD_OVERHEAD;
+          if (frame->total < JW_MIN_FRAME_LEN || frame->total > JW_MAX_FRAME_LEN)
             return absl::DataLossError("Serial response frame length is invalid; outcome unknown.");
         }
-        return total != 0 && response.size() == total;
+        return frame->total != 0 && response.size() == frame->total;
       });
   if (!status.ok()) return status;
-  return response;
+  return std::move(frame->response);
 }
 
 }  // namespace robot::comm

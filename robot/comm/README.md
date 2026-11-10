@@ -16,13 +16,13 @@ Consumers never switch on `comm_type` and never construct mechanism adapters.
 `CommFactory` validates the requested combination, opens or reuses the concrete
 link, and returns the configured capability in `CommTransport`.
 
-Current combinations are:
+Current combinations are (continuous frames are a host integration capability):
 
-| Mechanism | Byte stream | Message | Cyclic |
-| --- | --- | --- | --- |
-| Serial | yes | yes | no |
-| UDP | no | planned | no |
-| EtherCAT | no | JW paired only | JW paired only |
+| Mechanism | Byte stream | Message | Cyclic | Continuous frames |
+| --- | --- | --- | --- | --- |
+| Serial | yes | yes | no | JW integration |
+| UDP | no | planned | no | no |
+| EtherCAT | no | JW paired only | JW paired only | no |
 
 `ByteStream` provides ordered bytes without boundaries.
 [`MessageTransport`](interfaces/message_transport.h) exposes only `Send` and
@@ -65,9 +65,9 @@ absolute paths, allowing offline validation; unresolved aliases cannot establish
 device equivalence until their targets exist.
 
 `post_open_settle_ms` defaults to zero and applies once per physical open.
-Consumers of a port must agree on baudrate and settle policy. JoshuaWire adapters
+Consumers of a port must agree on baudrate, settle policy, and effective `io_policy`. JoshuaWire adapters
 also agree on their exchange timeout; raw byte-stream and caller-sized consumers
-share the bus lock without selecting JoshuaWire timing. ESP32 examples explicitly
+share the I/O owner without selecting JoshuaWire timing. ESP32 examples explicitly
 request a 2000 ms settle interval. See [config migration](../../config/README.md#serial-timing).
 
 ### Dependencies and tests
@@ -101,17 +101,46 @@ Serial `MESSAGE` configurations must explicitly select `serial_config.message_ad
 | `JOSHUA_WIRE` | JoshuaWire sync byte and length prefix | `JoshuaWireBoard` |
 
 `JoshuaWireSerialTransport` implements `MessageTransport` directly; it does not
-expose fixed-length forwarding. `CALLER_SIZED` retains existing input flushing
-and read timing. Only `JOSHUA_WIRE` accepts `exchange_timeout_ms` (100 ms when
-omitted), covering bus-lock wait, write and read. Missing/unknown adapters and
+expose fixed-length forwarding. `CALLER_SIZED` retains input flushing and uses the configured
+vendor transaction/idle budgets. Only `JOSHUA_WIRE` accepts `exchange_timeout_ms` (100 ms when
+omitted), covering queue wait, write and read. Missing/unknown adapters and
 message settings on `BYTE_STREAM` are rejected before opening the port.
 
-`Serial` provides raw `Write`/`Read` and a protocol-neutral `ExchangeUntil`
-transaction. A caller-supplied boundary callback consumes bytes under one bus
-lock across write and read; separate `Write` and `Read` calls cannot provide
-that atomicity. Adapters explicitly choose whether to preserve or discard
-pending input before a transaction. The caller-sized vendor transaction
-also holds the same lock throughout its write and read.
+`Serial` provides synchronous raw `Write`/`Read` and protocol-neutral transactions
+by submitting owned operations to one Linux `SerialIoOwner` per physical port.
+The worker alone performs post-open descriptor I/O, input flush, and close.
+Nonblocking reads/writes use poll plus an eventfd wake path. Waiting callers hold
+no owner lock. One FIFO operation runs at a time; a transaction covers its entire
+write/read, while separate raw calls cannot provide that atomicity. Framing
+callbacks run only bounded comm parser work, must not reenter/close/destroy the
+owner, and finish before the synchronous call returns. Application callbacks
+must run elsewhere.
+
+Admission bounds active/queued operations and reserved I/O bytes. Total monotonic
+deadlines include queue wait; raw/vendor read idle deadlines are independent.
+Queued expiry and cancellation wake promptly even while another operation waits
+for input. Comm-internal operation handles support cancellation and retain
+partial bytes and a typed publication result: `kNotSent` or
+`kMayHaveReachedDevice`. A write means bytes accepted by the OS, not confirmed
+physical delivery or execution. Cancellation/timeout cannot recall buffered
+bytes. The existing capability interfaces still return statuses, so their error
+code alone is not a safe retry decision. Protocol correlation and reconciliation
+remain the session/coordinator's responsibility.
+
+Canonical path and character-device identity unify aliases. A process claim,
+advisory file lock, and Linux exclusive tty claim guard against competing owners;
+these do not evict preexisting or privileged external readers. The factory holds
+weak leases, and the last consumer closes/joins the worker. Close is terminal:
+old handles reject new work; a fault completes all waiters as unavailable. A fresh
+owner generation requires releasing the old owner; there is no automatic reopen
+or command replay. `CommFactory::SnapshotSerialConnections()` returns read-only
+port/generation, state, queue, byte/error, and latency counters without exposing a
+descriptor or concrete transport. Operation latency includes queue time.
+
+See [serial config policy](../../config/README.md#serial-timing) for defaults and
+bounds. PTY tests cover cancellation/publication, queue expiry, backpressure,
+disconnect, close/reopen, aliases, framing limits, and fragmented full lidar scans.
+They do not establish physical UART/USB/stop timing.
 
 Runtime serial timeout arguments are double seconds; the factory converts
 `exchange_timeout_ms` once at the config boundary.
@@ -124,12 +153,44 @@ parser interprets bytes received through `ByteStream`, while a board codec
 interprets complete exchanges received through `MessageTransport`. JoshuaWire
 CRC, version and session correlation remain in the board/session layer.
 
-There must be one receive owner per port. A future shared continuous receiver
-must dispatch both replies and unsolicited sensor samples; it must not compete
-with synchronous reads on the same port. Request/reply input flushing discards
-samples, so it is unsuitable for that receive mode. This change provides an
-explicit preserve-input policy but does not implement continuous reception or
-allow independent readers to share incoming bytes safely.
+### Continuous frame reception (P3a)
+
+[`FrameStreamTransport`](interfaces/frame_stream_transport.h) is a separate
+complete-frame capability for one protocol coordinator. `FRAME_STREAM` selects it
+through `CommFactory`; it cannot be obtained as `MessageTransport` or
+`ByteStream`. Request-only presets retain their existing path. FRAME_STREAM
+JoshuaWire boards use the shared MCU coordinator for sessions, subscriptions,
+priority scheduling and deliberate reconnect reconciliation. The mixed Teensy
+reference preset binds actuator and scalar consumers in one MCU_BUS process.
+
+[`JoshuaWireFrameStream`](serial/joshua_wire_frame_stream.cc) runs the existing
+bounded decoder on the same physical I/O worker. It receives between writes,
+without input flushing, and validates revision/length/CRC. Receive work is bounded
+per poll iteration so incoming telemetry cannot indefinitely defer a writable
+frame. There is no additional reader thread or worker per consumer. Framed mode
+rejects raw reads, request/response reads and input flushes; factory checks prevent
+mixing either receive mode on one physical port, including aliases.
+
+`WriteFrame` accepts one valid host frame and an absolute deadline, retains the
+configured write cap, and reports bytes accepted by the OS. It does not wait for
+a reply or allocate protocol IDs. A partial-write failure retires the link before
+another frame can be written. Complete-frame bytes already buffered by the OS
+cannot be recalled. `Receive` waits until its deadline; `Interrupt` retains one
+pending scheduling wake without discarding frames. Close is terminal and wakes
+waiters. Exactly one coordinator owns receive consumption and terminal close.
+
+Reply storage is separate from notification storage and has priority on receive.
+Notification arrival coalesces the same session/token/function; a full queue
+replaces its oldest whole notification. Receipt timestamps survive queueing and
+coalescing. Reply overflow faults the link, invalidates queued frames and wakes
+waiters. Bounded snapshots expose assembly/queue occupancy, received/malformed
+frames, partial-frame expiry, telemetry loss, and reply overflows. An incomplete
+frame's idle expiry is applied and counted on the next input byte.
+
+This layer recognizes only the notification envelope kind; it does not validate
+sensor payload/schema, live subscription, boot, sequence or freshness. Those
+remain shared protocol responsibilities. No frame can satisfy a command until
+that coordinator validates correlation. See [configuration and defaults](../../config/README.md#continuous-frame-capability-p3a).
 
 The validated interfaces configure timeout policy in adapters rather than adding
 a deadline argument to every message call. The factory owns concrete adapters;

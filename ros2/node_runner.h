@@ -4,7 +4,9 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
+#include <vector>
 
 #include "config/config_utils.h"
 #include "config/validation.h"
@@ -18,13 +20,39 @@
 
 namespace ros2_utils {
 
+namespace detail {
+// Reuse ROS callback-group scheduling while guarding each executor worker.
+class GuardedMultiThreadedExecutor : public rclcpp::executors::MultiThreadedExecutor {
+ public:
+  explicit GuardedMultiThreadedExecutor(size_t threads)
+      : MultiThreadedExecutor(
+            rclcpp::ExecutorOptions(), threads, false, std::chrono::milliseconds(20)) {}
+
+  void spin() override {
+    if (spinning.exchange(true)) throw std::runtime_error("Executor is already spinning");
+    std::vector<std::thread> workers;
+    joshua::ScopeExit finish([&] {
+      joshua::RunCleanup("ROS executor cancellation", [&] { cancel(); });
+      for (auto& worker : workers)
+        if (worker.joinable()) worker.join();
+      spinning.store(false);
+    });
+    workers.reserve(get_number_of_threads());
+    for (size_t i = 0; i < get_number_of_threads(); ++i)
+      workers.push_back(joshua::StartWorker("ROS executor", [this, i] { run(i); }));
+    while (rclcpp::ok(context_) && spinning.load() && !joshua::ShutdownRequested())
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+};
+}  // namespace detail
+
 // argv: <binary> <node_name> <node_id> <config_path>.
 // Direct calls and JOSHUA_MAIN share a single process exception boundary.
 template <typename NodeT>
-int RunNode(int argc, char* argv[], const char* logger_name) {
+int RunNode(int argc, char* argv[], const char* logger_name, size_t executor_threads = 0) {
   return joshua::RunGuarded(logger_name, [&] {
     std::shared_ptr<NodeT> node;
-    std::unique_ptr<rclcpp::executors::SingleThreadedExecutor> executor;
+    std::unique_ptr<rclcpp::Executor> executor;
     bool ros_initialized = false;
     joshua::ScopeExit cleanup([&] {
       // Signal callbacks run through rclcpp's handler thread; the serial wait
@@ -60,13 +88,19 @@ int RunNode(int argc, char* argv[], const char* logger_name) {
     rclcpp::on_shutdown([] { joshua::RequestShutdown(); });
     JoshuaInit(config);
     node = std::make_shared<NodeT>(node_name, node_id, config);
-    executor = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
+    if (executor_threads)
+      executor = std::make_unique<detail::GuardedMultiThreadedExecutor>(executor_threads);
+    else
+      executor = std::make_unique<rclcpp::executors::SingleThreadedExecutor>();
     executor->add_node(node);
     if (joshua::ShutdownRequested()) return joshua::RuntimeFailed() ? 1 : 0;
     joshua::ThrowIfError(joshua::NotifyReady());
     // A finite executor wait also observes failures reported by worker threads.
-    while (rclcpp::ok() && !joshua::ShutdownRequested())
-      executor->spin_once(std::chrono::milliseconds(20));
+    if (executor_threads)
+      executor->spin();
+    else
+      while (rclcpp::ok() && !joshua::ShutdownRequested())
+        executor->spin_once(std::chrono::milliseconds(20));
     return joshua::RuntimeFailed() ? 1 : 0;
   });
 }

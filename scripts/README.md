@@ -4,6 +4,15 @@ Joshua's public entrypoints are Docker Compose services from the repo root. The 
 
 ## `setup.sh`
 
+`python3 scripts/qualify_serial.py --output /tmp/joshua-serial-evidence --runs 10`
+builds the mixed Teensy artifact without flashing and repeats the hardware-free
+mixed/serial/coordinator tests on both supported stacks. It freezes source and
+artifact hashes, PlatformIO dependencies, command logs and XML evidence in a new
+directory outside the repository. Docker is the only host build dependency;
+the host script uses Python's standard library. The report labels all evidence
+software-only and leaves physical qualification open. See
+[the qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
+
 Host bootstrap for Docker tooling and PTP device access:
 
 ```bash

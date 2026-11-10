@@ -33,6 +33,7 @@ void jw_runtime_reset(void* context) {
     transition(&runtime->functions[i].state, runtime->estopped, JW_REASON_SESSION_RESET);
 }
 void jw_runtime_fault(jw_device_runtime_t* runtime) {
+  if (runtime->estopped && runtime->state.reason == JW_REASON_DEVICE_FAULT) return;
   if (runtime->safety) runtime->safety(runtime->context, 1);
   runtime->estopped = 1;
   transition(&runtime->state, 1, JW_REASON_DEVICE_FAULT);
@@ -63,6 +64,7 @@ int jw_runtime_command(void* context, const jw_command_t* command, uint8_t* out,
       expected = 2;
       break;
     case JW_CMD_PROFILE:
+    case JW_CMD_CONFIGURE_WATCHDOGS:
       expected = command->payload_len;
       break;
     default:
@@ -71,6 +73,8 @@ int jw_runtime_command(void* context, const jw_command_t* command, uint8_t* out,
   if (command->payload_len != expected || (expected && !command->payload))
     return reply(out, cap, JW_STATUS_INVALID_PAYLOAD, NULL, 0);
   switch (command->cmd) {
+    case JW_CMD_CONFIGURE_WATCHDOGS:
+      return reply(out, cap, JW_STATUS_UNSUPPORTED, NULL, 0);
     case JW_CMD_IDENTIFY:
       len = jw_encode_identify_payload(data, sizeof(data), &r->identity);
       break;

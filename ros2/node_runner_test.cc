@@ -3,6 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cstdlib>
 #include <fstream>
 #include <stdexcept>
@@ -69,7 +70,7 @@ class ClockObservingNode : public rclcpp::Node {
 };
 
 template <typename NodeT>
-int RunWithClockConfig(const std::string& clock_config) {
+int RunWithClockConfig(const std::string& clock_config, size_t executor_threads = 0) {
   const char* test_tmpdir = std::getenv("TEST_TMPDIR");
   if (!test_tmpdir || setenv("ROS_LOG_DIR", test_tmpdir, 1) != 0) _exit(14);
   std::string path = std::string(test_tmpdir) + "/clock_runner.pbtxt";
@@ -80,7 +81,7 @@ int RunWithClockConfig(const std::string& clock_config) {
   }
   std::string binary = "node_runner_test", name = "clock_test", id = "1";
   char* argv[] = {binary.data(), name.data(), id.data(), path.data(), nullptr};
-  const int result = ros2_utils::RunNode<NodeT>(4, argv, "clock_test");
+  const int result = ros2_utils::RunNode<NodeT>(4, argv, "clock_test", executor_threads);
   if (rclcpp::ok()) _exit(16);
   return result;
 }
@@ -140,5 +141,49 @@ TEST_F(NodeRunnerClockTest, CallbackFailureDestroysNodeAndShutsDownRos) {
       },
       testing::ExitedWithCode(0),
       "fixture callback failure");
+}
+
+TEST_F(NodeRunnerClockTest, MultiThreadedCallbackFailureDestroysNodeAndShutsDownRos) {
+  ASSERT_EXIT(
+      {
+        const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC", 2);
+        _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
+      },
+      testing::ExitedWithCode(0),
+      "fixture callback failure");
+}
+
+class ConcurrentCallbacksNode : public rclcpp::Node {
+ public:
+  ConcurrentCallbacksNode(const std::string&, int, const config::Config&)
+      : rclcpp::Node("concurrent_callbacks") {
+    blocking_ = create_wall_timer(std::chrono::milliseconds(1), [this] {
+      entered_ = true;
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+      while (!released_ && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      if (!released_) throw std::runtime_error("Second callback group could not run");
+    });
+    stop_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    stop_ = create_wall_timer(
+        std::chrono::milliseconds(20),
+        [this] {
+          if (!entered_) return;
+          released_ = true;
+          rclcpp::shutdown();
+        },
+        stop_group_);
+  }
+
+ private:
+  std::atomic<bool> entered_{false}, released_{false};
+  rclcpp::CallbackGroup::SharedPtr stop_group_;
+  rclcpp::TimerBase::SharedPtr blocking_, stop_;
+};
+
+TEST_F(NodeRunnerClockTest, MultiThreadedRunnerKeepsStopCallbacksConcurrent) {
+  ASSERT_EXIT(_exit(RunWithClockConfig<ConcurrentCallbacksNode>("source: UTC", 2)),
+              testing::ExitedWithCode(0),
+              "");
 }
 }  // namespace

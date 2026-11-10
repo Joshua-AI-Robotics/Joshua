@@ -1,59 +1,57 @@
 #pragma once
 
-#include <glog/logging.h>
-
-#include <boost/asio.hpp>
-#include <boost/asio/serial_port_base.hpp>
 #include <chrono>
-#include <functional>
-#include <mutex>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "robot/comm/interfaces/byte_stream.h"
+#include "robot/comm/serial/serial_io_owner.h"
 
 namespace robot::comm {
 
-// A serial mechanism can provide both an ordered byte stream and atomic
-// byte transactions. Protocol adapters determine response boundaries.
-// A port has one receive owner: a future continuous receiver must dispatch both
-// replies and unsolicited samples, rather than racing these synchronous reads.
+// Synchronous compatibility facade. Every operation is admitted to the same
+// bounded I/O owner; callers never read or write the descriptor themselves.
 class Serial : public ByteStream {
  public:
-  enum class InputFlushPolicy { kPreserve, kDiscard };
-  using ResponseBoundary = std::function<absl::StatusOr<bool>(uint8_t)>;
+  using InputFlushPolicy = SerialIoOwner::InputFlushPolicy;
+  using ResponseBoundary = SerialIoOwner::ResponseBoundary;
+  static absl::StatusOr<std::shared_ptr<Serial>> Create(
+      const std::string& port,
+      int baudrate,
+      std::chrono::milliseconds settle = std::chrono::milliseconds(0),
+      SerialIoOptions options = {});
 
-  Serial(std::shared_ptr<boost::asio::io_context> io,
-         std::string uart_port,
-         int uart_baudrate,
-         std::chrono::milliseconds post_open_settle = std::chrono::milliseconds(0));
-  ~Serial();
   absl::Status Write(const std::vector<uint8_t>& data) override;
   absl::StatusOr<std::vector<uint8_t>> Read(size_t bytes_to_read) override;
-
-  // Caller-sized vendor transaction. Preserves input flushing and the
-  // existing read timeout; the bus lock covers both write and read.
   absl::StatusOr<std::vector<uint8_t>> AtomicRead(const std::vector<uint8_t>& command,
                                                   size_t expected_response_size);
   absl::Status Flush();
   absl::Status Open() override;
-  // Mechanism-only transaction. The adapter consumes each received byte and
-  // returns true at its message boundary, or an error. Runs under the bus lock;
-  // callbacks must not re-enter Serial. Timeout is in elapsed steady-clock seconds
-  // and includes bus-lock wait, write and read. Discarding pending input is an explicit
-  // request/reply policy and must not be used on an unsolicited sample stream.
+  absl::Status Close() {
+    return owner_->Close();
+  }
+  // Adapter framing only: bounded, nonblocking callback, no owner reentry or
+  // destruction. The callback finishes before this synchronous call returns.
+  // Timeout is in elapsed steady-clock seconds, including queue wait, write
+  // and read. Discarding input is
+  // explicitly request-only behavior, unsuitable for continuous telemetry.
   absl::Status ExchangeUntil(absl::Span<const uint8_t> request,
                              double timeout,
                              InputFlushPolicy input_flush_policy,
                              const ResponseBoundary& consume);
+  SerialDiagnostics Snapshot() const {
+    return owner_->Snapshot();
+  }
+  const SerialIoOwner::PortIdentity& identity() const {
+    return owner_->identity();
+  }
 
  private:
-  std::string uart_port_;
-  int uart_baudrate_;
-  std::shared_ptr<boost::asio::io_context> io_context_;
-  std::unique_ptr<boost::asio::serial_port> serial_;
-  std::timed_mutex mutex_;  // One bus lock across all raw and transaction I/O.
+  explicit Serial(std::shared_ptr<SerialIoOwner> owner) : owner_(std::move(owner)) {}
+  std::shared_ptr<SerialIoOwner> owner_;
 };
 }  // namespace robot::comm
