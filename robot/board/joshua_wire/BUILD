@@ -43,6 +43,7 @@ cc_test(
         "//robot/comm/factory:comm_factory",
         "//robot/perception/factory:perception_factory",
         "//ros2:mcu_bus_node",
+        "//utils:joshua_runtime",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",

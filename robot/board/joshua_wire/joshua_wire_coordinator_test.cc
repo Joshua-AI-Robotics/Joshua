@@ -39,6 +39,7 @@ class MemoryLink : public Link {
   std::deque<ReceivedFrame> incoming;
   std::vector<Bytes> writes;
   bool interrupted = false;
+  size_t interrupts = 0;
   absl::Status failure;
   uint8_t blocked_command = 0;
   uint8_t blocked_operation = 255;
@@ -108,6 +109,7 @@ class MemoryLink : public Link {
     {
       std::lock_guard lock(mutex);
       interrupted = true;
+      ++interrupts;
     }
     changed.notify_all();
   }
@@ -136,6 +138,10 @@ class MemoryLink : public Link {
   bool WaitWrites(size_t size) {
     std::unique_lock lock(mutex);
     return changed.wait_for(lock, 2s, [&] { return writes.size() >= size; });
+  }
+  bool WaitInterrupts(size_t count) {
+    std::unique_lock lock(mutex);
+    return changed.wait_for(lock, 2s, [&] { return interrupts >= count; });
   }
   Bytes Written(size_t index) {
     std::lock_guard lock(mutex);
@@ -451,6 +457,32 @@ TEST_F(CoordinatorTest, DisconnectInvalidatesEveryWaiterAndNeverReopensOldLease)
   EXPECT_FALSE(Coordinator::Acquire(link, policy).ok());
   EXPECT_FALSE(coordinator->Exchange(Command(JW_CMD_IDENTIFY)).ok());
 }
+TEST_F(CoordinatorTest, CloseDuringFaultTeardownDoesNotCancelTheDisabledReset) {
+  policy.set_heartbeat_period_ms(10);
+  policy.set_operation_timeout_ms(5000);
+  policy.set_attempt_timeout_ms(2000);
+  // The empty heartbeat reply faults the worker. Hold its terminal reset reply
+  // until the caller's Close has interrupted the receive wait.
+  link->on_write = [resets = 0](const jw_frame_t& frame) mutable {
+    return frame.cmd == JW_CMD_RESET_SESSION && ++resets > 1;
+  };
+  Open();
+  ASSERT_TRUE(link->WaitWrites(3));
+  ASSERT_TRUE(coordinator->Snapshot().faulted);
+  size_t interrupts;
+  {
+    std::lock_guard lock(link->mutex);
+    interrupts = link->interrupts;
+  }
+  auto closed = std::async(std::launch::async, [&] { return coordinator->Close(); });
+  ASSERT_TRUE(link->WaitInterrupts(interrupts + 1));
+  Respond(2);
+  const auto status = closed.get();
+  EXPECT_TRUE(status.ok()) << status;
+  EXPECT_TRUE(coordinator->Close().ok());
+  EXPECT_TRUE(coordinator->Snapshot().closed);
+}
+
 TEST_F(CoordinatorTest, CloseRetiresWaitersResetsDisabledAndIsIdempotent) {
   Open();
   {

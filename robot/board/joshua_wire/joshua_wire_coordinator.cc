@@ -728,10 +728,12 @@ absl::Status JoshuaWireCoordinator::Close() {
   std::lock_guard close_lock(impl_->close_mutex);
   {
     std::lock_guard lock(impl_->mutex);
+    // A fault may already be performing the terminal disabled reset. Only
+    // retire ordinary work on the first transition to closing.
+    if (!impl_->closing && impl_->active) impl_->active->cancel = true;
     impl_->closing = true;
     impl_->diagnostics.ready = false;
     impl_->RetireStreamsLocked();
-    if (impl_->active) impl_->active->cancel = true;
   }
   impl_->Wake();
   if (impl_->worker.joinable()) impl_->worker.join();
