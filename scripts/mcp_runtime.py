@@ -951,6 +951,20 @@ def main(argv=None):
         result = runtime.check(args.config)
     else:
         result = runtime.doctor()
+        from mcp_setup import registration_status
+
+        try:
+            registrations = registration_status(runtime.root, runtime.stack)
+        except (OSError, RuntimeError, ValueError) as error:
+            registrations = {"client": {"status": "attention", "detail": str(error)}}
+        result["registrations"] = registrations
+        if any(
+            isinstance(value, dict) and value.get("status") == "attention"
+            for value in registrations.values()
+        ):
+            result["ok"] = False
+            result["status"] = "error"
+            result["problems"].append("AI IDE registration needs attention; run setup.")
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if args.command == "prepare" or result.get("ok") else 1
 

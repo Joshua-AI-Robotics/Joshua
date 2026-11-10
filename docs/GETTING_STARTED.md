@@ -4,6 +4,11 @@ Joshua is Docker-first and GPU-first for development. The host should provide Do
 
 ## Host Bootstrap
 
+For AI-assisted inspection and configuration, start with
+`./scripts/joshua_mcp.sh setup`; see [MCP setup](MCP_SETUP.md). This dedicated
+CPU-only path requires no GPU or host installation of ROS/Bazel. The developer
+and robot-launch environments below retain their existing GPU defaults.
+
 Use the bootstrap script to prepare Docker and NVIDIA host tooling and PTP clock read access:
 
 ```bash

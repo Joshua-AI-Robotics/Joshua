@@ -1,7 +1,7 @@
 # Bazel build artifacts
 bazel-*
 dist/
-.cache/mcp/
+.cache/
 
 # Git
 .git
