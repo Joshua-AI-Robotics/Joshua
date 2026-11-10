@@ -250,6 +250,7 @@ class Runtime:
                 cwd=self.root,
                 env=self.clean_env() if env is None else env,
                 text=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE if capture else sys.stderr,
                 stderr=subprocess.PIPE if capture else sys.stderr,
                 timeout=timeout,

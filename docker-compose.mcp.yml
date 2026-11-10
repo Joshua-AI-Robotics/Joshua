@@ -70,6 +70,7 @@ services:
       ROS_DISTRO: ${JOSHUA_MCP_ROS_DISTRO:-humble}
       ENABLE_MOCK_SERIAL_PORTS: "false"
       HOME: /mcp-cache
+      USER: joshua
     volumes:
       - type: bind
         source: ${JOSHUA_MCP_ROOT:-.}

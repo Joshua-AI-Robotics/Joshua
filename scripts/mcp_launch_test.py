@@ -454,6 +454,28 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(self.runtime.read_state(), state)
 
 
+class ProtocolInputTest(unittest.TestCase):
+    def test_preflight_cannot_consume_an_early_initialize_message(self):
+        script = (
+            "import json,sys\n"
+            f"sys.path.insert(0, {str(HERE)!r})\n"
+            "from mcp_runtime import Runtime\n"
+            "command=[sys.executable,'-c','import sys; print(sys.stdin.read())']\n"
+            "preflight=Runtime('.').run(command)\n"
+            "print(json.dumps([preflight.stdout.strip(),sys.stdin.read()]))\n"
+        )
+        initialize = '{"jsonrpc":"2.0","id":1,"method":"initialize"}\n'
+        result = subprocess.run(
+            [os.sys.executable, "-c", script],
+            input=initialize,
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=True,
+        )
+        self.assertEqual(json.loads(result.stdout), ["", initialize])
+
+
 class SignalCleanupProcessTest(unittest.TestCase):
     def test_termination_signals_reap_cli_and_clean_before_releasing_lock(self):
         for signum in (signal.SIGTERM, signal.SIGHUP):
@@ -672,12 +694,16 @@ class ComposeContractTest(unittest.TestCase):
         self.assertFalse(prepare.get("cap_add"))
         self.assertFalse(prepare.get("privileged"))
         self.assertEqual(prepare["environment"]["HOME"], "/mcp-cache")
+        # Humble has no passwd entry for an arbitrary host UID. Bazel needs
+        # USER even though kernel permissions continue to use the numeric UID.
+        self.assertTrue(prepare["environment"].get("USER"))
         cache = next(
             mount for mount in prepare["volumes"] if mount["target"] == "/mcp-cache"
         )
         self.assertEqual(cache["type"], "bind")
         self.assertEqual(cache["source"], str(item.cache_dir))
-        self.assertFalse(cache["bind"]["create_host_path"])
+        # Compose v2 omits false booleans from its normalized JSON model.
+        self.assertFalse(cache.get("bind", {}).get("create_host_path", False))
 
 
 @unittest.skipUnless(
