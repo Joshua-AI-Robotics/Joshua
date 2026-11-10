@@ -79,8 +79,12 @@ plug-in and its wiring. MuJoCo and Isaac Sim provide separate simulation backend
 The proposed [policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
 extends this boundary with named observations and commands shared across
 simulation and hardware. Backend bridges handle state and command mapping;
-model logic stays in plug-ins and training remains external. These shared
-execution bridges are planned, not yet implemented on this branch.
+model logic stays in plug-ins and training remains external. The first priority
+is the OpenAI Decisions API camera-head adapter and its minimum asynchronous
+observation/command contract, using the qualified shared head runtime from
+[milestone #153](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+Broader local-model and simulator integration follows later. The adapter and
+shared execution bridges are planned, not yet implemented on this branch.
 
 ## Hardware topology and latency budgets
 
