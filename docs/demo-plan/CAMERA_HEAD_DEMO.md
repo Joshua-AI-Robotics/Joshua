@@ -69,7 +69,7 @@ after the required loop works. The primary rig connects through a compatible
 servo bus adapter. Optional sensors can use a Teensy or ESP32 acquisition path.
 
 A CLI or thin operator UI is sufficient. Reconcile this learning-first sequence
-with the separate [AI integration plan](../docs/AI_INTEGRATION.md) at C0.
+with the separate [AI integration plan](../AI_INTEGRATION.md) at C0.
 
 ### Task: a curious camera head
 
@@ -198,16 +198,16 @@ do not establish a working head.
 | Ubuntu host, display, and data cables | 1 set | Existing Ubuntu 22.04/Humble or 24.04/Jazzy Docker environment, with USB camera and servo adapter visible inside the container. Use the CPU Compose override if needed; the API variant performs remote inference and needs no local training GPU. |
 | Target and calibration/measurement aids | 1 set | A distinctive target, steady lighting, camera calibration board, independent angular reference, and a scale for payload measurements. |
 
-The baseline follows the checked-in [SO-100 bus/motor configuration](../config/config_preset/so100/teleoperate.pbtxt),
-[encoder configuration](../config/config_preset/so100/encoder_publish.pbtxt), and
-[camera example](../config/config_preset/example/publish_camera.pbtxt). Reuse their
+The baseline follows the checked-in [SO-100 bus/motor configuration](../../config/config_preset/so100/teleoperate.pbtxt),
+[encoder configuration](../../config/config_preset/so100/encoder_publish.pbtxt), and
+[camera example](../../config/config_preset/example/publish_camera.pbtxt). Reuse their
 configuration structure, not their arm-specific limits, speeds, idle positions,
 device paths, or node graph. The teleoperation preset reads a separate leader bus;
 the head needs commands and feedback from the **same** servo through one owner.
-Implementation references are the [Feetech board](../robot/board/feetech_bus/feetech_bus_board.cc),
-[STS3215 motor driver](../robot/action/motors/drivers/sts3215_driver.cc),
-[position sensor](../robot/perception/position/sts3215_position_sensor.cc), and
-[OpenCV camera](../robot/perception/camera/cv_camera.cc).
+Implementation references are the [Feetech board](../../robot/board/feetech_bus/feetech_bus_board.cc),
+[STS3215 motor driver](../../robot/action/motors/drivers/sts3215_driver.cc),
+[position sensor](../../robot/perception/position/sts3215_position_sensor.cc), and
+[OpenCV camera](../../robot/perception/camera/cv_camera.cc).
 
 For the alternative adapter, the manufacturer's [product description](https://docs.waveshare.com/Bus_Servo_Adapter_A)
 and [USB wiring instructions](https://docs.waveshare.com/Bus_Servo_Adapter_A/Product-Wiring-Example)
@@ -392,18 +392,18 @@ below cover the camera-head implementation and verification work.
 
 | Gap | Existing foundation and evidence | Work needed | Gate |
 | --- | --- | --- | --- |
-| G01 — Qualified actuator and measured state | [STS3215 driver](../robot/action/motors/drivers/sts3215_driver.cc) and [perception factory](../robot/perception/factory/perception_factory.cc) provide servo and encoder paths. | Qualify exact servo/adapter, angle conversion, calibration, limits, timing, and physical behavior for A/B. | C1 |
+| G01 — Qualified actuator and measured state | [STS3215 driver](../../robot/action/motors/drivers/sts3215_driver.cc) and [perception factory](../../robot/perception/factory/perception_factory.cc) provide servo and encoder paths. | Qualify exact servo/adapter, angle conversion, calibration, limits, timing, and physical behavior for A/B. | C1 |
 | G02 — Camera and target observations | OpenCV is a concrete perception driver; arbitrary distance sensors are not supported by the factory. | Add target detection, calibrated bearing, validity, timing, velocity estimation, and A/B camera calibration. Optional range sensing needs its own adapter. | C1, C2 |
 | G03 — Runtime bus ownership and run control | Shared I01/I02 work in the [platform backlog](ROBOT_NERVOUS_SYSTEM_DEMO.md#6-implementation-foundations-and-gaps). | Apply and physically qualify that control contract on the head. | C1, C4 |
 | G04 — Configuration and calibration | Shared I05/I06 tooling and readiness work in the platform backlog. | Supply the head-specific A/B presets and calibration artifacts from Section 5. | C0, C1, C6 |
 | G05 — Measurement data | Shared I04/I09 timing and recording work in the platform backlog. | Produce the aligned head dataset and fitting/training/evaluation splits from Section 5. | C2 |
-| G06 — Simulation learning | [AI documentation](../ai/README.md) says BC/RL training is unimplemented. | Integrate one pinned external trainer, task environment, reward, randomization, seed handling, checkpoint export, and smoke run. | C3 |
-| G07 — Policy deployment | [Inference host](../ai/inference/host.py) and model plug-ins exist. | Add the selected tracking-policy adapter, named synchronized inputs, action conversions, compatibility checks, and offline parity validation. | C3, C4 |
+| G06 — Simulation learning | [AI documentation](../../ai/README.md) says BC/RL training is unimplemented. | Integrate one pinned external trainer, task environment, reward, randomization, seed handling, checkpoint export, and smoke run. | C3 |
+| G07 — Policy deployment | [Inference host](../../ai/inference/host.py) and model plug-ins exist. | Add the selected tracking-policy adapter, named synchronized inputs, action conversions, compatibility checks, and offline parity validation. | C3, C4 |
 | G08 — Optional controller portability | Board/transport abstractions exist; they do not prove interchangeable physical behavior. | Qualify a second interface/controller without component-specific edits to shared recording/training/inference code. | C6 optional extension |
-| G09 — Outside-user and release evidence | Docker workflows, [documentation](../CONTRIBUTING.md), and monitoring UI exist. | Reproduce fresh-host setup and supported changes, time all assistance, distribute artifacts, and rehearse offline. | C5, C7 |
+| G09 — Outside-user and release evidence | Docker workflows, [documentation](../../CONTRIBUTING.md), and monitoring UI exist. | Reproduce fresh-host setup and supported changes, time all assistance, distribute artifacts, and rehearse offline. | C5, C7 |
 | G10 — Independent ROS 2 simulator connection | Shared I07 work and restart procedure in the platform plan. | Publish the head mapping manifest and retain the head's restart-continuity result. | C2, C7 |
-| G11 — Real-to-sim identification | [MuJoCo engine](../simulation/mujoco/engine.py) can step/read/render a model; [mirror mode](../simulation/mujoco/modes/mirror.py) sends incoming scalars to controls. | Fit an effective servo response and validate predictions on held-out real traces; establish camera calibration and uncertainty. Mirroring alone does not close this gap. | C2 |
-| G12 — Canonical head model | [Simulation config](../simulation/proto/simulation.proto) references model files. [PhysicalLayout](../config/proto/physical_layout.proto) describes link geometry/limits but does not establish a config-to-twin pipeline. | Add a fixed head template and schema/artifact references for camera, geometry, response parameters, and provenance; generate reproducibly without manual duplicate edits. | C2 |
+| G11 — Real-to-sim identification | [MuJoCo engine](../../simulation/mujoco/engine.py) can step/read/render a model; [mirror mode](../../simulation/mujoco/modes/mirror.py) sends incoming scalars to controls. | Fit an effective servo response and validate predictions on held-out real traces; establish camera calibration and uncertainty. Mirroring alone does not close this gap. | C2 |
+| G12 — Canonical head model | [Simulation config](../../simulation/proto/simulation.proto) references model files. [PhysicalLayout](../../config/proto/physical_layout.proto) describes link geometry/limits but does not establish a config-to-twin pipeline. | Add a fixed head template and schema/artifact references for camera, geometry, response parameters, and provenance; generate reproducibly without manual duplicate edits. | C2 |
 | G13 — Hardware-change lifecycle | Config-driven construction exists; hot reload and policy compatibility across changes are not established. | Implement stop/change/reconfigure/calibrate/validate/resume, invalidation rules, A/B evidence, and explicit reuse-versus-retrain decisions. Restart is allowed. | C6 |
 | G14 — Optional multizone ranging | The perception factory has no VL53L5CX implementation. | Add and qualify acquisition/telemetry and extend simulated observations if depth enters the learning path. | C1–C4 requalification; C6 optional extension |
 
@@ -427,7 +427,7 @@ transfer evaluation. Joint-count changes require a new contract.
 
 Numeric tolerances and operational limits remain TBD until C0/C1 measurement.
 An unspecified acceptance bound cannot pass a gate. JoshuaWire integrations, if
-added, must honor the [protocol contract](../docs/JOSHUA_WIRE.md); the primary
+added, must honor the [protocol contract](../JOSHUA_WIRE.md); the primary
 vendor servo bus does not become JoshuaWire by configuration alone.
 
 ## 6. Twelve-week checkpoint register
@@ -600,7 +600,7 @@ held-out comparator; and calibration/training/total elapsed time.
 
 At each review update owners, dates, dependencies, blockers, and the next measurable
 outcome. Preserve failed results and reopen gates affected by changed artifacts.
-Follow [AGENTS.md](../AGENTS.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) for
+Follow [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md) for
 execution authorization and implementation checks.
 
 | Review date | Gate / decision | Evidence | Next action / owner / due date |
