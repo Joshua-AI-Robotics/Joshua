@@ -204,7 +204,10 @@ ros2_cpp_library(
     name = "actuator_subscriber_test_source",
     testonly = True,
     textual_hdrs = ["actuator_subscriber.cc"],
-    visibility = ["//robot/board/joshua_wire:__pkg__"],
+    visibility = [
+        "//robot/board/joshua_wire:__pkg__",
+        "//ros2:__pkg__",
+    ],
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
@@ -217,6 +220,22 @@ ros2_cpp_library(
         "//ros2:__pkg__",
     ],
     deps = _MCU_BUS_DEPS,
+)
+
+ros2_cpp_test(
+    name = "actuator_subscriber_test",
+    srcs = ["actuator_subscriber_test.cc"],
+    deps = [
+        ":actuator_subscriber_test_source",
+        "//config:validation",
+        "//config/proto:config_cc_proto",
+        "//robot/board/factory:board_factory",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
 )
 
 ros2_cpp_test(

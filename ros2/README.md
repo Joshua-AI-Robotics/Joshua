@@ -10,7 +10,9 @@ Build nodes directly with `ros2_cpp_binary`; do not export node classes through
 headers or production node libraries. Shared behavior belongs in non-node
 utilities. `utils/actuator_commands.h/.cc` owns command subscriptions on a
 caller-owned node, so the standalone actuator and mixed MCU bus nodes can share
-command handling without inheriting from one another.
+command handling without inheriting from one another. One utility instance
+creates a driver for every actuator matching the node ID and retains all of
+each actuator's configured subscriptions.
 
 The actuator and MCU bus tests include each node implementation with
 `JOSHUA_NODE_TEST` defined to exclude its entrypoint, using narrowly visible,
