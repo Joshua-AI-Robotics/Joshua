@@ -48,6 +48,87 @@ class RegistrationTests(unittest.TestCase):
                 runtime.return_value.prepare.assert_not_called()
                 runtime.return_value.check.assert_called_once_with()
 
+    def test_setup_conflict_preserves_active_state_before_preparation(self):
+        import mcp_runtime
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "dist/mcp/u22/active.json"
+            active.parent.mkdir(parents=True)
+            original = json.dumps({"config_root": str(root / "original")})
+            active.write_text(original)
+            existing = setup.server_entry(root, "u22", root / "original")
+
+            def prepare_new_state():
+                active.write_text(json.dumps({"config_root": str(root / "other")}))
+                return {"prepare_seconds": 1.0}
+
+            with patch.object(mcp_runtime, "Runtime") as runtime, patch.object(
+                setup, "choose_client", return_value="codex"
+            ), patch.object(setup, "client_entry", return_value=existing), patch.object(
+                setup, "offer_bootstrap"
+            ) as bootstrap, patch.object(
+                setup.sys, "stderr", io.StringIO()
+            ):
+                runtime.return_value.doctor.return_value = {"ok": False}
+                runtime.return_value.prepare.side_effect = prepare_new_state
+                self.assertEqual(
+                    setup.main(
+                        ["--root", str(root), "--config-root", str(root / "other")]
+                    ),
+                    1,
+                )
+                self.assertEqual(active.read_text(), original)
+                runtime.return_value.prepare.assert_not_called()
+                bootstrap.assert_not_called()
+
+    def test_doctor_compares_registration_with_prepared_configuration(self):
+        import mcp_runtime
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = setup.server_entry(root, "u22", root / "original")
+            state_dir = root / "dist/mcp/u22"
+            state_dir.mkdir(parents=True)
+            (state_dir / "registration.json").write_text(
+                json.dumps({"clients": {"codex": entry}})
+            )
+            for config, expected in (
+                ("original", "saved"),
+                ("other", "attention"),
+                (None, "attention"),
+            ):
+                with self.subTest(config=config), patch.object(
+                    mcp_runtime, "Runtime"
+                ) as runtime, patch.object(setup, "check_project_shadow"), patch.object(
+                    setup, "client_entry", return_value=entry
+                ), patch.object(
+                    mcp_runtime.sys, "stdout", io.StringIO()
+                ) as output:
+                    runtime.return_value.root = root
+                    runtime.return_value.stack = "u22"
+                    state = (
+                        None
+                        if config is None
+                        else {
+                            "root": str(root),
+                            "stack": "u22",
+                            "config_root": str(root / config),
+                        }
+                    )
+                    runtime.return_value.doctor.return_value = {
+                        "ok": True,
+                        "status": "ready",
+                        "problems": [],
+                        "state": state,
+                    }
+                    code = mcp_runtime.main(["doctor"])
+                    result = json.loads(output.getvalue())
+                    self.assertEqual(
+                        result["registrations"]["codex"]["status"], expected
+                    )
+                    self.assertEqual(code, 0 if expected == "saved" else 1)
+
     def test_metadata_retains_multiple_clients(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -153,7 +153,7 @@ def user_config_cwd(client):
     return directory
 
 
-def register(client, entry, root):
+def check_registration(client, entry, root):
     check_project_shadow(client, root, entry)
     user_cwd = user_config_cwd(client)
     existing = client_entry(client, user_cwd)
@@ -164,7 +164,14 @@ def register(client, entry, root):
                 "is disabled. Resolve the conflict in the AI IDE, or keep using that "
                 "checkout; setup will not overwrite it."
             )
+        return True
+    return False
+
+
+def register(client, entry, root):
+    if check_registration(client, entry, root):
         return "existing"
+    user_cwd = user_config_cwd(client)
     if client == "codex":
         run_client(
             ["codex", "mcp", "add", "joshua", "--", entry["command"], *entry["args"]],
@@ -252,7 +259,7 @@ def offer_bootstrap(root, report):
         )
 
 
-def registration_status(root, stack):
+def registration_status(root, stack, state=None):
     """Read registration state; a saved entry does not prove client approval."""
     record = read_json(root / "dist/mcp" / stack / "registration.json")
     if not record:
@@ -264,10 +271,24 @@ def registration_status(root, stack):
     clients = record.get("clients", {})
     if not isinstance(clients, dict):
         raise SetupError("Cannot interpret saved registration metadata; rerun setup.")
+    expected = None
+    if (
+        isinstance(state, dict)
+        and state.get("root") == str(root)
+        and state.get("stack") == stack
+        and isinstance(state.get("config_root"), str)
+    ):
+        expected = server_entry(root, stack, Path(state["config_root"]))
     for client, entry in clients.items():
         if client not in ("codex", "claude"):
             continue
         try:
+            if expected is None or not same_server(entry, expected):
+                raise SetupError(
+                    "Saved registration does not match the currently prepared "
+                    "root, stack or config root. Keep matching settings or "
+                    "update them in the AI IDE and rerun setup."
+                )
             check_project_shadow(client, root, entry)
             if not same_server(client_entry(client, user_config_cwd(client)), entry):
                 raise SetupError("Saved registration has changed or is disabled.")
@@ -316,6 +337,9 @@ def main(argv=None):
         from mcp_runtime import McpError, Runtime
 
         client = choose_client(args.client)
+        entry = server_entry(root, args.stack, config_root)
+        if client != "manual":
+            check_registration(client, entry, root)
         runtime = Runtime(root, args.stack, config_root)
         report = runtime.doctor()
         offer_bootstrap(root, report)
@@ -326,7 +350,6 @@ def main(argv=None):
         )
         state = report["state"] if report.get("ok") else runtime.prepare()
         runtime.check()
-        entry = server_entry(root, args.stack, config_root)
         if client == "manual":
             print(json.dumps({"mcpServers": {"joshua": entry}}, indent=2))
             print(

@@ -954,7 +954,9 @@ def main(argv=None):
         from mcp_setup import registration_status
 
         try:
-            registrations = registration_status(runtime.root, runtime.stack)
+            registrations = registration_status(
+                runtime.root, runtime.stack, result.get("state")
+            )
         except (OSError, RuntimeError, ValueError) as error:
             registrations = {"client": {"status": "attention", "detail": str(error)}}
         result["registrations"] = registrations

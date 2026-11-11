@@ -51,7 +51,11 @@ The prepared generation pins its image ID, local Unix Docker endpoint and daemon
 identity. Remote Docker endpoints are rejected. Moving the checkout or replacing
 the daemon requires preparing and registering that location again. Conflicting
 existing registrations are reported, never silently replaced. Resolve the
-conflict in the IDE's MCP settings before retrying.
+conflict in the IDE's MCP settings before retrying. Setup checks the selected
+client for conflicts before preparing a replacement generation, so a rejected
+registration leaves the current prepared configuration intact. Doctor compares
+saved registrations with the prepared checkout, stack and config root as well
+as the current client settings; a mismatch requires attention.
 
 To inspect configurations elsewhere, pass an absolute `--config-root` directory
 to `setup` and `prepare`. That actual directory is mounted read-only; MCP paths
