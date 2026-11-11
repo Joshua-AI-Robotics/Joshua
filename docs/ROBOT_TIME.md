@@ -72,24 +72,10 @@ at exit. Uninstalled clocks close their descriptors when destroyed. Custom
 
 If native plugins are added later, they must share the owning runtime library;
 statically embedding independent copies in multiple shared objects can duplicate
-the state.
-
-The Python binding `//utils:robot_time_py` calls this same C++ implementation:
-
-```python
-from utils.robot_time import RobotTime, initialize
-
-initialize(config.general.robot_clock)  # Before the first RobotTime() call.
-now = RobotTime()
-```
-
-`initialize` accepts the generated `RobotClockConfig` protobuf and installs the
-clock once. Omitting it retains the C++ lazy default. Importing the module alone
-does not select or read a clock. Configuration failures raise `RuntimeError`;
-read failures raise `RobotTimeError`, a `RuntimeError` subclass. Python processes
-own their own clock, just like C++ processes. Future native extensions in the same
-Python process must share this owning library rather than embed another copy.
-The Python trajectory reader and AI timestamp behavior are unchanged.
+the state. The clock implementation and timestamp-source migration cover C++
+only. The existing Python trajectory reader follows the packet field name and
+seconds format; the AI directory retains its existing timestamp behavior.
+There is no Python RobotTime implementation or binding.
 
 ## Configuration and time domains
 
@@ -352,9 +338,7 @@ using a freshly built native `joshua:u24-jazzy` image. The standalone
 - [ ] Validate a synchronized multi-process deployment on configured hardware.
 
 Cached feedback expiry, publisher schedules and audio retry/stall detection use
-RobotTime seconds. The Python scalar recorder's startup and capture windows also
-use RobotTime; `--config` selects the preset's `general.robot_clock`, and omission
-uses the default clock. Serial exchange deadlines use `std::chrono::steady_clock`.
+RobotTime seconds. Serial exchange deadlines use `std::chrono::steady_clock`.
 OS waits and executor wakeups use platform timers;
 logging retains its existing clock semantics. Utility entrypoints that only display
 incoming stamps do not create new acquisition timestamps and need no clock installation.

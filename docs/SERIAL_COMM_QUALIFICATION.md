@@ -112,8 +112,7 @@ bazel build --config=u22 --config=x86-base \
 
 # Read-only ROS recorder; the runtime is launched separately after authorization.
 bazel-bin/tools/serial/record_scalar --topic /analog_a0/observation \
-  --sensor analog_a0 --seconds 60 --output /tmp/analog-a0.jsonl \
-  --config /path/to/reviewed-mixed-runtime.pbtxt
+  --sensor analog_a0 --seconds 60 --output /tmp/analog-a0.jsonl
 
 # Disabled recovery preflight. Stop the runtime before a real recovery.
 bazel-bin/robot/board/joshua_wire/joshua_wire_smoke \
@@ -129,14 +128,7 @@ acquisitions. Recorder and source receipt timestamps are separate clock-domain
 facts; do not subtract timestamps from different machines as if synchronized.
 The `--seconds` capture window starts on the first decoded scalar observation
 for the selected sensor, after a separate `--startup-timeout-seconds` wait
-(default 10, maximum 60). Both windows use `RobotTime()` through the shared C++
-clock binding. `--config` reads only the preset's `general.robot_clock`; it does
-not initialize boards or other robot devices. Omission uses the framework default
-(PTP with startup fallback to UTC). Clock jumps change the remaining wait:
-forward jumps can finish a window early, backward jumps extend elapsed waiting,
-and a paused clock pauses the window. Clock read failures terminate the recorder.
-The existing `recorder_steady_ns` receipt metadata remains monotonic.
-Missing sources fail within the robot-time startup budget;
+(default 10, maximum 60). Missing sources fail within that startup budget;
 health messages and malformed or wrong-sensor packets do not start the window.
 Set the startup timeout to zero to count capture time immediately after creating
 subscriptions. Health messages received during startup are retained for diagnosis.

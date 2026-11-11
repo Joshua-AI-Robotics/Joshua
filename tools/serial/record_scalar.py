@@ -6,12 +6,8 @@ import math
 import time
 from pathlib import Path
 
-from google.protobuf import text_format
-
-from config.proto import config_pb2
 from robot.perception.proto import perception_packet_pb2
 from ros2.utils.ros_python_paths import setup_import_paths
-from utils.robot_time import RobotTime, initialize
 
 setup_import_paths()
 import rclpy  # noqa: E402
@@ -24,18 +20,10 @@ def main():
     parser.add_argument("--topic", required=True)
     parser.add_argument("--sensor", required=True)
     parser.add_argument(
-        "--config", type=Path, help="Read general.robot_clock from this robot preset"
-    )
-    parser.add_argument(
         "--output", type=Path, required=True, help="New JSONL file; never overwritten"
     )
     parser.add_argument(
-        "--seconds",
-        type=int,
-        default=60,
-        choices=range(1, 3601),
-        metavar="1..3600",
-        help="Capture duration in RobotTime seconds (default: 60)",
+        "--seconds", type=int, default=60, choices=range(1, 3601), metavar="1..3600"
     )
     parser.add_argument(
         "--startup-timeout-seconds",
@@ -45,16 +33,10 @@ def main():
         metavar="0..60",
         help=(
             "Wait for the first matching scalar observation before starting --seconds "
-            "(default: 10 RobotTime seconds); zero starts the window immediately"
+            "(default: 10); zero starts the capture window immediately"
         ),
     )
     args = parser.parse_args()
-    if args.config is not None:
-        config = text_format.Parse(args.config.read_text(), config_pb2.Config())
-        initialize(config.general.robot_clock)
-    # Select/probe the default clock before creating ROS resources when no preset
-    # was supplied. Runtime clock errors propagate through the cleanup below.
-    RobotTime()
     rclpy.init()
     node = rclpy.create_node("joshua_scalar_recorder_" + str(time.monotonic_ns()))
     counts = {
@@ -94,7 +76,7 @@ def main():
                     counts["malformed"] += 1
                     return
                 if capture_deadline is None:
-                    capture_deadline = RobotTime() + args.seconds
+                    capture_deadline = time.monotonic() + args.seconds
                 fields = {
                     f.name: getattr(packet.scalar, f.name)
                     for f in packet.scalar.DESCRIPTOR.fields
@@ -130,21 +112,21 @@ def main():
                 UInt8MultiArray, args.topic, receive, observation_qos
             )
             node.create_subscription(String, args.topic + "/health", health, 10)
-            startup_deadline = RobotTime() + args.startup_timeout_seconds
+            startup_deadline = time.monotonic() + args.startup_timeout_seconds
             if args.startup_timeout_seconds == 0:
-                capture_deadline = RobotTime() + args.seconds
+                capture_deadline = time.monotonic() + args.seconds
             while rclpy.ok() and not exhausted:
                 end = (
                     capture_deadline
                     if capture_deadline is not None
                     else startup_deadline
                 )
-                remaining = end - RobotTime()
+                remaining = end - time.monotonic()
                 if remaining <= 0:
                     break
                 rclpy.spin_once(node, timeout_sec=min(0.1, remaining))
             startup_timed_out = (
-                capture_deadline is None and RobotTime() >= startup_deadline
+                capture_deadline is None and time.monotonic() >= startup_deadline
             )
             record(
                 {

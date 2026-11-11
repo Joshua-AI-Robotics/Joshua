@@ -9,8 +9,7 @@ launcher and ROS 2 nodes never invoke these.
   scalar/health recording to JSONL. It preserves validity and separate clock
   domains, opens no board and sends no commands. Observation subscriptions use
   best-effort delivery to accept either publisher reliability setting; captures
-  may contain gaps. Startup and capture windows use RobotTime; `--config` selects
-  the preset's clock settings. See the
+  may contain gaps. See the
   [serial qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
 
 - [`mcp/`](mcp/README.md) — nine read-only stdio MCP tools for config-free factory
