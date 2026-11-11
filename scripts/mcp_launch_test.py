@@ -178,6 +178,54 @@ class RuntimeTest(unittest.TestCase):
         _, env = self.runtime.compose_command(state, "mcp-prepare")
         self.assertEqual(env["JOSHUA_MCP_CACHE"], str(cache))
 
+    @unittest.skipIf(os.getuid() == 0, "Root bypasses directory permissions")
+    def test_prepare_reports_unwritable_storage_before_docker(self):
+        for relative in ("dist", ".cache", "dist/mcp/u22", ".cache/mcp/u22"):
+            with self.subTest(relative=relative):
+                blocked = self.root / relative
+                blocked.mkdir(parents=True, exist_ok=True)
+                blocked.chmod(0o555)
+                try:
+                    with self.assertRaises(runtime.McpError) as failure:
+                        self.prepare()
+                    self.assertEqual(failure.exception.code, "storage_unwritable")
+                    self.assertIn(str(blocked), str(failure.exception))
+                    self.assertIn("sudo chown", str(failure.exception))
+                    self.assertIn("chmod u+rwX", str(failure.exception))
+                    self.assertEqual(self.calls, [])
+                finally:
+                    blocked.chmod(0o755)
+
+    @unittest.skipIf(os.getuid() == 0, "Root bypasses directory permissions")
+    def test_prepare_reports_inaccessible_parent(self):
+        blocked = self.root / "dist"
+        blocked.mkdir()
+        blocked.chmod(0)
+        try:
+            with self.assertRaises(runtime.McpError) as failure:
+                self.prepare()
+            self.assertEqual(failure.exception.code, "storage_unwritable")
+            self.assertIn(str(blocked), str(failure.exception))
+            self.assertEqual(self.calls, [])
+        finally:
+            blocked.chmod(0o755)
+
+    @unittest.skipIf(os.getuid() == 0, "Root bypasses file permissions")
+    def test_prepare_reports_unwritable_lock_and_preserves_active_generation(self):
+        first = self.prepare()
+        self.calls.clear()
+        lock = self.runtime.state_dir / "prepare.lock"
+        lock.chmod(0o444)
+        try:
+            with self.assertRaises(runtime.McpError) as failure:
+                self.prepare()
+            self.assertEqual(failure.exception.code, "storage_unwritable")
+            self.assertIn(str(lock), str(failure.exception))
+            self.assertEqual(self.runtime.read_state(), first)
+            self.assertEqual(self.calls, [])
+        finally:
+            lock.chmod(0o644)
+
     def test_explicit_image_rebuild_reuses_restricted_build_definition(self):
         with mock.patch.object(runtime, "require_host"), mock.patch.object(
             runtime,

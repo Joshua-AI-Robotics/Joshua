@@ -9,10 +9,12 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -35,6 +37,35 @@ class McpError(RuntimeError):
     def __init__(self, message, code="runtime_error"):
         super().__init__(message)
         self.code = code
+
+
+def storage_permission_error(path):
+    blocked = Path(path)
+    while blocked != blocked.parent:
+        try:
+            blocked.stat()
+            break
+        except (FileNotFoundError, PermissionError):
+            blocked = blocked.parent
+    quoted = shlex.quote(str(blocked))
+    return McpError(
+        f"MCP storage is not writable: {blocked}. Existing Docker builds may "
+        "have created it as another user. If this checkout's storage should "
+        "belong to you, ask its owner/administrator to run "
+        f"`sudo chown {os.getuid()}:{os.getgid()} -- {quoted}`, then "
+        f"`chmod u+rwX -- {quoted}` and retry. No permissions were changed.",
+        "storage_unwritable",
+    )
+
+
+def writable_directory(path):
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        # Check real filesystem permissions, including ACLs, before Docker work.
+        with tempfile.TemporaryFile(dir=path):
+            pass
+    except PermissionError as error:
+        raise storage_permission_error(path) from error
 
 
 @contextlib.contextmanager
@@ -497,8 +528,13 @@ class Runtime:
 
     @contextlib.contextmanager
     def prepare_lock(self):
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-        with (self.state_dir / "prepare.lock").open("a") as stream:
+        writable_directory(self.state_dir)
+        path = self.state_dir / "prepare.lock"
+        try:
+            stream = path.open("a")
+        except PermissionError as error:
+            raise storage_permission_error(path) from error
+        with stream:
             try:
                 fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as error:
@@ -516,7 +552,7 @@ class Runtime:
         self.require_config_root()
         started = time.monotonic()
         with self.prepare_lock():
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            writable_directory(self.cache_dir)
             pin = self.resolve_docker()
             self.require_compose(pin)
             source = source_manifest(self.root)
@@ -540,7 +576,7 @@ class Runtime:
                         )
                     image = self.image_info(pin, "ubuntu:22.04")
             generations = self.state_dir / "generations"
-            generations.mkdir(exist_ok=True)
+            writable_directory(generations)
             identifier = uuid.uuid4().hex
             staging = generations / (".preparing-" + identifier)
             staging.mkdir()

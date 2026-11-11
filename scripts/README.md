@@ -19,6 +19,12 @@ local Docker daemon and generation without rebuilding. Failed preparation
 preserves the prior active generation. Source changes require preparation and
 client reconnection before claiming that inspection reflects those changes.
 
+If earlier Docker builds left unwritable `dist/` or `.cache/` paths,
+preparation stops with `storage_unwritable` and gives commands for the exact
+blocking path. Review those commands with the directory owner, repair only the
+reported path, and rerun preparation. The launcher never changes ownership or
+permissions automatically. The MCP cache is excluded from Docker build contexts.
+
 ## `setup.sh`
 
 `python3 scripts/qualify_serial.py --output /tmp/joshua-serial-evidence --runs 10`
