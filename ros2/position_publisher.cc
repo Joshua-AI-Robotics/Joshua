@@ -28,23 +28,19 @@ class PositionPublisher : public rclcpp::Node {
         if (!publisher.ok()) throw std::invalid_argument(publisher.status().ToString());
         timers_.push_back(ros2_utils::CreateRobotTimer(
             *this, 1.0 / pub.publish_rate_hz(), [interface, publish = *publisher]() {
-              try {
-                auto packet = interface->GetData();
-                if (!packet.ok()) {
-                  JOSHUA_LOG(WARNING) << "Cannot read position: " << packet.status().ToString();
-                  return;
-                }
-                auto position = ros2_utils::RequirePerceptionPosition(*packet);
-                if (!position.ok()) {
-                  JOSHUA_LOG(ERROR) << "Invalid position: " << position.status().ToString();
-                  return;
-                }
-                const auto status = publish(*position, packet->timestamp());
-                if (!status.ok()) {
-                  JOSHUA_LOG(ERROR) << "Cannot publish position: " << status.ToString();
-                }
-              } catch (const std::exception& error) {
-                JOSHUA_LOG(ERROR) << "Error publishing position: " << error.what();
+              auto packet = interface->GetData();
+              if (!packet.ok()) {
+                JOSHUA_LOG(WARNING) << "Cannot read position: " << packet.status().ToString();
+                return;
+              }
+              auto position = ros2_utils::RequirePerceptionPosition(*packet);
+              if (!position.ok()) {
+                JOSHUA_LOG(ERROR) << "Invalid position: " << position.status().ToString();
+                return;
+              }
+              const auto status = publish(*position, packet->timestamp());
+              if (!status.ok()) {
+                JOSHUA_LOG(ERROR) << "Cannot publish position: " << status.ToString();
               }
             }));
       }
@@ -56,6 +52,6 @@ class PositionPublisher : public rclcpp::Node {
   // publisher's config-driven rate. Each reading already retains RobotTime.
   std::vector<rclcpp::TimerBase::SharedPtr> timers_;
 };
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
 }

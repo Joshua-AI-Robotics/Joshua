@@ -21,6 +21,16 @@ ARG TARGETPLATFORM
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
+# CI can select another signed Ubuntu archive during upstream outages.
+# ARM64 continues to use ports.ubuntu.com.
+ARG UBUNTU_AMD64_MIRROR
+RUN if [ "${TARGETARCH}" = "amd64" ] && [ -n "${UBUNTU_AMD64_MIRROR}" ]; then \
+    sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu/|${UBUNTU_AMD64_MIRROR%/}/|g" \
+      -e "s|http://security.ubuntu.com/ubuntu/|${UBUNTU_AMD64_MIRROR%/}/|g" \
+      /etc/apt/sources.list.d/ubuntu.sources; \
+    fi
+
 # Set up locale
 RUN apt-get update && apt-get install -y locales && \
     locale-gen en_US en_US.UTF-8 && \

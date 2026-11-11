@@ -31,6 +31,9 @@ class Serial : public ByteStream {
                                                   size_t expected_response_size);
   absl::Status Flush();
   absl::Status Open() override;
+  absl::Status Close() {
+    return owner_->Close();
+  }
   // Adapter framing only: bounded, nonblocking callback, no owner reentry or
   // destruction. The callback finishes before this synchronous call returns.
   // Timeout is in elapsed steady-clock seconds, including queue wait, write

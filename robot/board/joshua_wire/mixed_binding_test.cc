@@ -30,6 +30,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "ros2/mcu_bus.h"
 #include "std_msgs/msg/bool.hpp"
+#include "utils/joshua_runtime.h"
 extern char** environ;
 
 ChannelState g_channels[1];
@@ -63,6 +64,9 @@ class MixedBindingTest : public ::testing::Test {
   jw_stream_decoder_t decoder{};
   std::deque<uint8_t> rx;
   void SetUp() override {
+    // Each fixture represents a new runtime. Expected faults in another test
+    // must not cancel this fixture's independent serial recovery commands.
+    ASSERT_EQ(joshua::RunGuarded("mixed binding test", [] { return 0; }), 0);
     ASSERT_NE(getenv("TEST_TMPDIR"), nullptr);
     ASSERT_EQ(setenv("ROS_LOG_DIR", getenv("TEST_TMPDIR"), 1), 0);
     ASSERT_EQ(setenv("ROS_DOMAIN_ID", RCLCPP_VERSION_MAJOR >= 20 ? "84" : "83", 1), 0);
@@ -280,9 +284,9 @@ TEST_F(MixedBindingTest, OperatorRecoveryProbeClearsLatchButNeverEnablesOrRestor
   options.allow_recover = true;
   options.settle_ms = 0;
   std::ostringstream report;
-  ASSERT_TRUE(
-      robot::board::diagnostics::RunSerialValidation(recovery, options, *message, report).ok())
-      << report.str();
+  const auto status =
+      robot::board::diagnostics::RunSerialValidation(recovery, options, *message, report);
+  ASSERT_TRUE(status.ok()) << status << '\n' << report.str();
   EXPECT_FALSE((*stream)->Latest().ok());
   std::lock_guard lock(firmware_mutex);
   EXPECT_FALSE(StepDirDeviceRuntime()->estopped);

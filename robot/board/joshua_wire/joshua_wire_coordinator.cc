@@ -18,6 +18,7 @@
 #include "firmware/common/joshua_wire_profiles.h"
 #include "firmware/common/joshua_wire_sensor_stream.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
+#include "utils/joshua_runtime.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -517,6 +518,7 @@ struct JoshuaWireCoordinator::Impl {
         }
       }
     } catch (...) {
+      joshua::ReportFailure("MCU coordinator", std::current_exception());
       Fault(absl::InternalError("Coordinator operation threw"));
       Work current;
       {
@@ -556,10 +558,16 @@ struct JoshuaWireCoordinator::Impl {
     try {
       close_status = link->status().ok() ? session.Close() : link->status();
     } catch (...) {
+      joshua::ReportFailure("MCU session teardown", std::current_exception());
       close_status = absl::InternalError("Session teardown threw");
     }
-    const auto closed = link->Close();
-    if (close_status.ok()) close_status = closed;
+    if (!joshua::RunCleanup("MCU link close",
+                            [&] {
+                              const auto closed = link->Close();
+                              if (close_status.ok()) close_status = closed;
+                            }) &&
+        close_status.ok())
+      close_status = absl::InternalError("MCU link close threw");
     std::lock_guard lock(mutex);
     active.reset();
     notifications.clear();
@@ -610,14 +618,14 @@ absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator>> JoshuaWireCoordinator::Ac
   (*cache)[link.get()] = {owner, state, link};
   state->startup->deadline = Clock::now() + Ms(policy.operation_timeout_ms);
   state->running = true;
-  state->worker = std::thread([state] { state->Run(); });
+  state->worker = joshua::StartWorker("MCU coordinator", [state] { state->Run(); });
   state->worker_id = state->worker.get_id();
   const auto startup = Operation(state->startup).Wait();
   if (!startup.status.ok()) return startup.status;
   return owner;
 }
 JoshuaWireCoordinator::~JoshuaWireCoordinator() {
-  Close().IgnoreError();
+  joshua::RunCleanup("MCU coordinator close", [&] { joshua::ThrowIfError(Close()); });
 }
 JoshuaWireCoordinator::Operation JoshuaWireCoordinator::Submit(const jw_command_t& command,
                                                                Clock::time_point deadline) {
@@ -720,10 +728,12 @@ absl::Status JoshuaWireCoordinator::Close() {
   std::lock_guard close_lock(impl_->close_mutex);
   {
     std::lock_guard lock(impl_->mutex);
+    // A fault may already be performing the terminal disabled reset. Only
+    // retire ordinary work on the first transition to closing.
+    if (!impl_->closing && impl_->active) impl_->active->cancel = true;
     impl_->closing = true;
     impl_->diagnostics.ready = false;
     impl_->RetireStreamsLocked();
-    if (impl_->active) impl_->active->cancel = true;
   }
   impl_->Wake();
   if (impl_->worker.joinable()) impl_->worker.join();

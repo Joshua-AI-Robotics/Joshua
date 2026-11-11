@@ -169,8 +169,12 @@ does not identify its epoch.
 
 Once selected, the clock source stays fixed. Runtime read errors throw
 `std::runtime_error` rather than silently switching sources or returning a
-fabricated timestamp. Consumers call `RobotTime()` directly and leave clock failures
-to their exception boundary. `TryRobotTime()` remains available as an optional
+fabricated timestamp. Consumers call `RobotTime()` directly. Clock failures are
+reported as `RobotTimeError`, derived from `std::runtime_error`. Managed C++ nodes
+and the launcher use the shared `JOSHUA_MAIN`/`RunNode` boundary and
+`JoshuaInit(config)`; worker and destructor boundaries are described in the
+[ROS runtime documentation](../ros2/README.md#process-runtime-and-failure-handling).
+`TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
 The actuator subscription boundary uses `TryRobotTime()` for headerless commands
 and reports clock failures as an `Unavailable` status instead of letting a clock
@@ -187,6 +191,9 @@ UTC/PTP can jump when the host adjusts time. RobotTime-based deadlines use
 Serial exchange timeouts use `std::chrono::steady_clock` to bound elapsed bus-lock
 wait, write, and read time independently of RobotTime adjustments, pauses, or
 read failures. These deadlines apply per attempt; a retry has its own timeout.
+Runtime shutdown can cancel ordinary serial waits. Cleanup scopes can still
+attempt stop commands; the launcher owns bounded OS-level escalation if cleanup
+cannot finish.
 
 ## Acquisition timestamps and ROS conversion
 

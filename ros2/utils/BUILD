@@ -49,7 +49,11 @@ ros2_cpp_binary(
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
         ":robot_timer",
+        "//config:config_utils",
+        "//config:validation",
         "//ros2:logging",
+        "//utils:joshua_runtime",
+        "//utils:scope_exit",
         "//utils:xbox_controller",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",

@@ -1,23 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
-    name = "node_generator",
-    srcs = ["node_generator.cc"],
-    hdrs = ["node_generator.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":runtime_observation",
-        "//config:config_utils",
-        "//config:validation",
-        "//ros2/proto:node_cc_proto",
-        "//utils:status_macros",
-        "@abseil-cpp//absl/container:flat_hash_map",
-        "@abseil-cpp//absl/status:status",
-        "@glog",
-    ],
-)
-
-cc_library(
     name = "runtime_observation",
     srcs = ["runtime_observation.cc"],
     hdrs = ["runtime_observation.h"],

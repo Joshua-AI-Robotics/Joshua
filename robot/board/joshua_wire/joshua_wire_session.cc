@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <exception>
 #include <random>
 #include <utility>
 
@@ -11,6 +12,7 @@
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "firmware/common/joshua_wire_sensor_stream.h"
+#include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -81,6 +83,10 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
   // Retry identical bytes/IDs only. The shared firmware endpoint replays its
   // last reply without repeating side effects, including unknown outcomes.
   std::vector<uint8_t> response;
+  const int exceptions = std::uncaught_exceptions();
+  joshua::ScopeExit track_outcome([&] {
+    if (std::uncaught_exceptions() > exceptions) uncertain_ = true;
+  });
   bool published = false;
   for (uint32_t attempt = 0; attempt < max_attempts_; ++attempt) {
     ExchangeOutcome outcome;
@@ -246,6 +252,10 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_comman
   if ((uncertain_ || pending_.count(JW_CHANNEL_NONE) || pending_.count(command.channel)) &&
       !IsReadOnly(command) && command.cmd != JW_CMD_ESTOP && command.cmd != JW_CMD_RECOVER)
     return absl::FailedPreconditionError("Reconcile unknown/pending action before mutation.");
+  const int exceptions = std::uncaught_exceptions();
+  joshua::ScopeExit record_outcome([&] {
+    if (std::uncaught_exceptions() > exceptions) uncertain_ = true;
+  });
   ABSL_ASSIGN_OR_RETURN(
       auto payload,
       ExchangeLocked(command.cmd, command.channel, command.payload, command.payload_len));

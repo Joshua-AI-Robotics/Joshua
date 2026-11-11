@@ -56,7 +56,8 @@ class SerialIoOwner {
    public:
     void Cancel() const;
     bool Ready() const;
-    Result Wait() const;
+    // An optional caller-side cancellation predicate never runs on the I/O worker.
+    Result Wait(const std::function<bool()>& cancelled = {}) const;
 
    private:
     struct State;

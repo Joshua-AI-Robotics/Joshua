@@ -35,6 +35,8 @@ firmware configuration/pin claims without creating an ESTOP latch. A later
 startup can configure disabled channels again; genuine ESTOPs still require
 explicit recovery.
 Close invalidates retained host calls even when the exchange fails or throws.
+Closing an already-faulted coordinator waits for its bounded disabled reset
+instead of cancelling that teardown.
 Actuator commands use PROFILE and decode the common status/execution prefix.
 Only actuator v1.0 target/feedback operations use a paired cyclic capability.
 

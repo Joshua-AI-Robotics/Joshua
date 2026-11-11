@@ -82,8 +82,10 @@ class McuBus : public ActionSubscriber {
   }
   ~McuBus() override {
     timers_.clear();
-    for (auto& s : sources_) s->Teardown().IgnoreError();
-    for (auto& b : boards_) b->Teardown().IgnoreError();
+    for (auto& s : sources_)
+      joshua::RunCleanup("MCU sensor teardown", [&] { joshua::ThrowIfError(s->Teardown()); });
+    for (auto& b : boards_)
+      joshua::RunCleanup("MCU board teardown", [&] { joshua::ThrowIfError(b->Teardown()); });
   }
 
  private:

@@ -16,7 +16,7 @@ struct ProcessFact {
   std::string node_type;
 };
 
-// Passive adapter owned by NodeGenerator. Prepare is ROS-free and must precede
+// Passive adapter owned by NodeManager. Prepare is ROS-free and must precede
 // forks; Start is called only after all forks. Failures never stop children.
 class RuntimeObservation {
  public:

@@ -6,7 +6,7 @@ build --action_env=CC=g++
 build --action_env=CXX=g++
 build --action_env=BAZEL_COMPILER=gcc
 
-# Enable legacy runfiles for Python binaries (needed for node_generator)
+# Enable legacy runfiles for Python binaries (needed for launcher-managed Python nodes)
 build --legacy_external_runfiles
 build --enable_runfiles
 

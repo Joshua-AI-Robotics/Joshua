@@ -24,6 +24,7 @@
 
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/comm/serial/serial_device_identity.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::comm {
 namespace {
@@ -157,8 +158,7 @@ struct SerialIoOwner::Impl {
     diagnostics.last_error = fault.ToString().substr(0, 512);
     closing = true;
   }
-  void Run() {
-    Work active;
+  void RunLoop(Work& active) {
     for (;;) {
       ExpireQueue();
       {
@@ -338,6 +338,15 @@ struct SerialIoOwner::Impl {
         }
       }
     }
+  }
+  void Run() {
+    Work active;
+    try {
+      RunLoop(active);
+    } catch (...) {
+      joshua::ReportFailure("serial I/O owner", std::current_exception());
+      Fault(absl::InternalError("Serial I/O worker threw"));
+    }
     std::deque<Work> abandoned;
     absl::Status reason;
     {
@@ -433,7 +442,7 @@ absl::StatusOr<std::shared_ptr<SerialIoOwner>> SerialIoOwner::Open(
     state->diagnostics.state = SerialLinkState::kReady;
     auto owner = std::shared_ptr<SerialIoOwner>(new SerialIoOwner(state));
     state->running = true;
-    state->worker = std::thread([state] { state->Run(); });
+    state->worker = joshua::StartWorker("serial I/O owner", [state] { state->Run(); });
     state->worker_id = state->worker.get_id();
     return owner;
   } catch (const std::exception& error) {
@@ -442,7 +451,7 @@ absl::StatusOr<std::shared_ptr<SerialIoOwner>> SerialIoOwner::Open(
 }
 
 SerialIoOwner::~SerialIoOwner() {
-  Close().IgnoreError();
+  joshua::RunCleanup("serial owner close", [&] { joshua::ThrowIfError(Close()); });
 }
 SerialIoOwner::Operation SerialIoOwner::Submit(Request request) {
   auto work = std::make_shared<Operation::State>();
@@ -512,9 +521,20 @@ bool SerialIoOwner::Operation::Ready() const {
   std::lock_guard lock(state_->mutex);
   return state_->done;
 }
-SerialIoOwner::Result SerialIoOwner::Operation::Wait() const {
+SerialIoOwner::Result SerialIoOwner::Operation::Wait(const std::function<bool()>& cancelled) const {
   std::unique_lock lock(state_->mutex);
-  state_->changed.wait(lock, [&] { return state_->done; });
+  if (!cancelled) {
+    state_->changed.wait(lock, [&] { return state_->done; });
+  } else {
+    while (!state_->done) {
+      state_->changed.wait_for(lock, std::chrono::milliseconds(10), [&] { return state_->done; });
+      if (!state_->done && cancelled()) {
+        lock.unlock();
+        Cancel();
+        lock.lock();
+      }
+    }
+  }
   return state_->result;
 }
 SerialDiagnostics SerialIoOwner::Snapshot() const {

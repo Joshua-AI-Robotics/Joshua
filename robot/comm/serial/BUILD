@@ -19,6 +19,7 @@ cc_library(
     deps = [
         ":serial_io_owner",
         "//robot/comm/interfaces:byte_stream",
+        "//utils:joshua_runtime",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
@@ -71,6 +72,7 @@ cc_test(
         ":serial",
         "//firmware/common:joshua_wire",
         "//robot/comm/interfaces:caller_sized_message_transport",
+        "//utils:joshua_runtime",
         "//utils:robot_time",
         "@googletest//:gtest_main",
     ],
@@ -89,6 +91,7 @@ cc_library(
     implementation_deps = [
         ":serial_config_validation",
         ":serial_device_identity",
+        "//utils:joshua_runtime",
         "@boost.asio",
     ],
     visibility = ["//robot/comm:__subpackages__"],

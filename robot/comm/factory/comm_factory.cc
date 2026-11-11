@@ -13,6 +13,7 @@
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
 #include "robot/comm/serial/serial.h"
 #include "robot/comm/serial/serial_config_validation.h"
+#include "utils/joshua_runtime.h"
 #include "utils/status_macros.h"
 
 namespace robot::comm {
@@ -381,5 +382,30 @@ absl::Status CommFactory::ValidateSerialConfig(const SerialConfig& config) {
 
 absl::Status CommFactory::ValidatePairedEthercatConfig(const EthercatConfig& config) {
   return robot::comm::ValidatePairedEthercatConfig(config);
+}
+
+void CommFactory::ShutdownAll() noexcept {
+  joshua::RunCleanup("serial transport shutdown", [] {
+    std::vector<std::shared_ptr<Serial>> serials;
+    std::vector<std::shared_ptr<JoshuaWireFrameStream>> streams;
+    {
+      std::lock_guard lock(g_serial_mutex);
+      for (auto& [name, resources] : g_port_resources) {
+        if (auto serial = resources.serial.lock()) serials.push_back(std::move(serial));
+        if (auto stream = resources.frames.lock()) streams.push_back(std::move(stream));
+      }
+    }
+    for (const auto& serial : serials)
+      joshua::RunCleanup("serial owner close", [&] { joshua::ThrowIfError(serial->Close()); });
+    for (const auto& stream : streams)
+      joshua::RunCleanup("serial frame stream close",
+                         [&] { joshua::ThrowIfError(stream->Close()); });
+  });
+  joshua::RunCleanup("EtherCAT transport shutdown", [] {
+    std::lock_guard<std::mutex> lock(g_ethercat_mutex);
+    for (auto& [name, bus] : g_paired_buses) {
+      joshua::RunCleanup(name.c_str(), [&] { bus->Stop(); });
+    }
+  });
 }
 }  // namespace robot::comm

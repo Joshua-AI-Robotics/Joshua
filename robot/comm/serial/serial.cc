@@ -3,6 +3,8 @@
 #include <climits>
 #include <cmath>
 
+#include "utils/joshua_runtime.h"
+
 namespace robot::comm {
 namespace {
 using Ms = std::chrono::milliseconds;
@@ -73,6 +75,8 @@ absl::Status Serial::ExchangeUntil(absl::Span<const uint8_t> bytes,
   request.timeout = std::chrono::ceil<Ms>(std::chrono::duration<double>(timeout));
   request.input = input;
   request.consume = consume;
-  return owner_->Submit(std::move(request)).Wait().status;
+  if (joshua::CancellationRequested())
+    return absl::CancelledError("Serial shutdown; request not sent.");
+  return owner_->Submit(std::move(request)).Wait(joshua::CancellationRequested).status;
 }
 }  // namespace robot::comm

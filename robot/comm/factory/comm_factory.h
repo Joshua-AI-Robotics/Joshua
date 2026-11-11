@@ -71,6 +71,9 @@ class CommFactory {
   static absl::Status ValidatePairedEthercatConfig(const robot::comm::EthercatConfig& config);
   static absl::Status ValidateSerialConfig(const robot::comm::SerialConfig& config);
 
+  // Called after board/driver teardown, before ROS context shutdown.
+  static void ShutdownAll() noexcept;
+
   // Replaces the result of CreateComm without changing the consumer call
   // path or opening hardware. Pass nullptr to restore production behavior.
   // For tests.

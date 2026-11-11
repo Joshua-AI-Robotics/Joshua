@@ -15,6 +15,7 @@
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -36,7 +37,7 @@ class JoshuaWireCommandClient {
                                             pair ? pair->response_timeout : absl::ZeroDuration());
   }
   ~JoshuaWireCommandClient() {
-    Close().IgnoreError();
+    joshua::RunCleanup("JoshuaWire client close", [&] { joshua::ThrowIfError(Close()); });
   }
   absl::Status Open() {
     std::lock_guard lock(mutex_);
@@ -47,14 +48,16 @@ class JoshuaWireCommandClient {
     std::unique_lock lock(mutex_);
     if (closed_) return absl::OkStatus();
     closed_ = true;
+    joshua::ScopeExit release([&] {
+      session_.reset();
+      transport_.reset();
+    });
     if (coordinator_) {
       auto coordinator = std::move(coordinator_);
       lock.unlock();
       return coordinator->Close();
     }
     auto status = session_ ? session_->Close() : absl::OkStatus();
-    session_.reset();
-    transport_.reset();  // Retained channels no longer keep a NIC lease alive.
     return status;
   }
   uint32_t protocol_version() const {
@@ -586,10 +589,12 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 }
 
 absl::Status JoshuaWireBoard::Teardown() {
+  joshua::ScopeExit release([&] {
+    channels_.clear();
+    commands_.reset();
+    initialized_ = false;
+  });
   const auto status = commands_ ? commands_->Close() : absl::OkStatus();
-  channels_.clear();
-  commands_.reset();
-  initialized_ = false;
   return status;
 }
 absl::Status JoshuaWireBoard::EmergencyStop() {

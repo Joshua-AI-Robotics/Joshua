@@ -1,15 +1,14 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "config/config_utils.h"
-#include "config/validation.h"
+#include "launcher/node_manager/node_manager.h"
 #include "launcher/simulation_launcher.h"
-#include "node_generator/node_generator.h"
-#include "utils/robot_time.h"
+#include "utils/joshua_runtime.h"
 #include "version.h"
 
 DEFINE_string(config,
@@ -19,10 +18,8 @@ DEFINE_string(config,
 DEFINE_string(observation_dir, "", "Existing private passive snapshot directory (opt-in)");
 DEFINE_string(observe_sensor, "", "One configured POSITION/JOINT_STATE sensor to observe");
 
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   gflags::SetVersionString(JOSHUA_VERSION);
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_logtostderr = 1;
   // Preserve idiomatic gflags names and the documented hyphenated aliases.
   std::vector<std::string> flag_storage;
   for (int i = 0; i < argc; ++i) {
@@ -40,82 +37,24 @@ int main(int argc, char* argv[]) {
   argv = flag_pointers.data();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  LOG(INFO) << "Starting Joshua Platform with config: " << FLAGS_config;
+  launcher::NodeManager manager(FLAGS_config);
+  joshua::ThrowIfError(manager.Initialize());
+  JoshuaInit(manager.config());
+  LOG(INFO) << "Starting Joshua Platform with config: " << manager.config_path();
 
-  auto config_or = config::config_util::LoadConfig(FLAGS_config);
-  if (!config_or.ok()) {
-    LOG(ERROR) << "Failed to load config: " << config_or.status();
-    return 1;
+  if (!FLAGS_observe_sensor.empty() && FLAGS_observation_dir.empty())
+    throw std::invalid_argument("--observe_sensor requires --observation_dir");
+  if (manager.config().general().operation_mode() == config::General::MODE_SIMULATION) {
+    if (!FLAGS_observation_dir.empty())
+      throw std::invalid_argument("Simulation passive observation is unsupported");
+    return launcher::RunSimulation(manager);
   }
-  const auto& config = config_or.value();
+  if (!FLAGS_observation_dir.empty())
+    joshua::ThrowIfError(manager.ConfigureObservation(FLAGS_observation_dir, FLAGS_observe_sensor));
 
-  const auto valid = config::ValidateConfig(config);
-  if (!valid.ok()) {
-    LOG(ERROR) << "Invalid config: " << valid;
-    return 1;
-  }
-  auto clock = joshua::MakeRobotClock(config.general().robot_clock());
-  if (!clock.ok()) {
-    LOG(ERROR) << "Failed to create robot clock: " << clock.status();
-    return 1;
-  }
-  const std::string clock_source((*clock)->SourceName());
-  const auto installed = joshua::SetGlobalRobotClock(std::move(*clock));
-  if (!installed.ok()) {
-    LOG(ERROR) << "Failed to install robot clock: " << installed;
-    return 1;
-  }
-  LOG(INFO) << "Robot clock initialized: " << clock_source;
-
-  if (!FLAGS_observe_sensor.empty() && FLAGS_observation_dir.empty()) {
-    LOG(ERROR) << "--observe_sensor requires --observation_dir";
-    return 1;
-  }
-  if (config.general().operation_mode() == config::General::MODE_SIMULATION) {
-    if (!FLAGS_observation_dir.empty()) {
-      LOG(ERROR) << "Simulation passive observation is unsupported.";
-      return 1;
-    }
-    return launcher::RunSimulation(FLAGS_config, config);
-  }
-
-  try {
-    node_generator::NodeGenerator node_generator(FLAGS_config);
-
-    if (const auto status = node_generator.Initialize(&config); !status.ok()) {
-      LOG(ERROR) << "Failed to initialize NodeGenerator: " << status;
-      return 1;
-    }
-
-    if (!FLAGS_observation_dir.empty()) {
-      auto status =
-          node_generator.ConfigureObservation(FLAGS_observation_dir, FLAGS_observe_sensor);
-      if (!status.ok()) {
-        LOG(ERROR) << status;
-        return 1;
-      }
-    }
-
-    if (const auto status = node_generator.LaunchAllNodes(); !status.ok()) {
-      LOG(ERROR) << "Failed to launch nodes: " << status;
-      return 1;
-    }
-
-    if (!node_generator.has_nodes()) {
-      LOG(WARNING) << "No nodes were launched successfully";
-      return 1;
-    }
-
-    auto res = node_generator.MonitorNodes();
-    if (!res.ok()) {
-      LOG(ERROR) << "Failed to monitor nodes: " << res;
-      return 1;
-    }
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "NodeGenerator error: " << e.what();
-    return 1;
-  }
-
-  LOG(INFO) << "Joshua Platform completed successfully";
+  const auto launched = manager.LaunchAllNodes();
+  if (absl::IsCancelled(launched) && manager.ShutdownRequested()) return 0;
+  joshua::ThrowIfError(launched);
+  joshua::ThrowIfError(manager.MonitorNodes());
   return 0;
 }

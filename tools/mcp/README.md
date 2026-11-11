@@ -93,7 +93,7 @@ and does not change the existing interfaces or response schemas.
 `get_runtime_status()`, `get_recent_logs(cursor=None, limit=50, min_level="WARN")`
 and `get_feedback(sensor_id)` read an operator-selected private snapshot
 directory. Without `--observation-dir`, these tools report `UNAVAILABLE`.
-The launcher and NodeGenerator own runtime processes; adapter `aclose()` only
+The launcher and NodeManager own runtime processes; adapter `aclose()` only
 closes observation descriptors. MCP never launches, stops or commands a robot.
 
 For an operator-authorized runtime, create a directory owned by its UID with

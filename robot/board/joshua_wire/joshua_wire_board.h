@@ -11,6 +11,7 @@
 #include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/proto/board.pb.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::board {
 
@@ -25,7 +26,7 @@ class JoshuaWireBoard : public BoardInterface {
   explicit JoshuaWireBoard(robot::board::BoardType expected_board_type)
       : expected_board_type_(expected_board_type) {}
   ~JoshuaWireBoard() override {
-    Teardown().IgnoreError();
+    joshua::RunCleanup("JoshuaWire board teardown", [&] { joshua::ThrowIfError(Teardown()); });
   }
 
   absl::Status Init(const robot::board::Board& config) final;
