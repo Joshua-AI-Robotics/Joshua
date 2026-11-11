@@ -89,6 +89,7 @@ _CAMERA_PUBLISHER_DEPS = [
     "//ros2/proto:node_cc_proto",
     "//ros2/utils:packet_parser",
     "//ros2/utils:qos_setting",
+    "//utils:robot_time",
     "@abseil-cpp//absl/status:status",
     "@abseil-cpp//absl/status:statusor",
     "@ros2_deps//:cpp_sensor_msgs",

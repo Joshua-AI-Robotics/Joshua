@@ -182,7 +182,8 @@ and shared runner validation. No hardware is required.
 
 `CAMERA_PUBLISHER` keeps configured image topics registered when a camera is
 temporarily unavailable at startup. It retries initialization with a one-second
-steady-clock backoff and reads frames only after initialization succeeds.
+backoff measured by `joshua::RobotTime()` and reads frames only after
+initialization succeeds. Clock corrections can shorten or extend the retry wait.
 A capture failure closes the failed session and uses the same initialization
 path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
 Initialization failures reported as invalid arguments fail startup. The shared

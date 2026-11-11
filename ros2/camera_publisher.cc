@@ -16,9 +16,10 @@
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
 #include "sensor_msgs/msg/image.hpp"
+#include "utils/robot_time.h"
 
 namespace {
-constexpr auto kCameraRetryBackoff = std::chrono::seconds(1);
+constexpr double kCameraRetryBackoffSeconds = 1.0;
 
 bool ValidateCameraPublisher(const ros2::data_type::Ros2DataType ros2_data_type) {
   return ros2_data_type == ros2::data_type::IMAGE;
@@ -27,8 +28,8 @@ bool ValidateCameraPublisher(const ros2::data_type::Ros2DataType ros2_data_type)
 
 class CameraPublisher : public rclcpp::Node {
  public:
-  using Clock = std::chrono::steady_clock;
-  using Now = std::function<Clock::time_point()>;
+  // Retry times are seconds in the configured robot clock's domain.
+  using Now = std::function<double()>;
   using Factory =
       std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
           const robot::perception::SinglePerception&)>;
@@ -48,7 +49,7 @@ class CameraPublisher : public rclcpp::Node {
     std::string name;
     std::unique_ptr<robot::perception::PerceptionInterface> interface;
     bool initialized = false;
-    Clock::time_point retry_after{};
+    double retry_after = 0.0;
   };
   struct Camera {
     std::string topic;
@@ -76,7 +77,7 @@ CameraPublisher::CameraPublisher(const std::string& node_name,
             return robot::perception::PerceptionFactory::CreatePerception(sensor,
                                                                           config.robot().boards());
           },
-          Clock::now) {}
+          joshua::RobotTime) {}
 
 CameraPublisher::CameraPublisher(const std::string& node_name,
                                  int node_id,
@@ -173,7 +174,7 @@ void CameraPublisher::ResetCamera(Source& source) {
                 source.name.c_str(),
                 status.ToString().c_str());
   }
-  source.retry_after = now_() + kCameraRetryBackoff;
+  source.retry_after = now_() + kCameraRetryBackoffSeconds;
 }
 
 void CameraPublisher::PublishCameraData() {

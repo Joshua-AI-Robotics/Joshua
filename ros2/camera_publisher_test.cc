@@ -132,21 +132,21 @@ class CameraPublisherTest : public testing::Test {
   }
 
   bool WaitUntil(const std::function<bool()>& predicate) {
-    const auto deadline = CameraPublisher::Clock::now() + 3s;
-    while (!predicate() && CameraPublisher::Clock::now() < deadline) {
+    const auto deadline = std::chrono::steady_clock::now() + 3s;
+    while (!predicate() && std::chrono::steady_clock::now() < deadline) {
       executor_.spin_once(5ms);
     }
     return predicate();
   }
 
   void SpinFor(std::chrono::milliseconds duration) {
-    const auto deadline = CameraPublisher::Clock::now() + duration;
-    while (CameraPublisher::Clock::now() < deadline) executor_.spin_once(5ms);
+    const auto deadline = std::chrono::steady_clock::now() + duration;
+    while (std::chrono::steady_clock::now() < deadline) executor_.spin_once(5ms);
   }
 
   config::Config config_;
   std::shared_ptr<FakeCameraState> state_ = std::make_shared<FakeCameraState>();
-  CameraPublisher::Clock::time_point now_{};
+  double now_ = 1'700'000'000.0;
   std::shared_ptr<CameraPublisher> publisher_;
   std::shared_ptr<rclcpp::Node> observer_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
@@ -167,7 +167,7 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
   EXPECT_EQ(state_->reads, 0);
   EXPECT_TRUE(images_.empty());
 
-  now_ += 1s;
+  now_ += 1.0;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -180,14 +180,14 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
 
 TEST_F(CameraPublisherTest, RepeatedOpenFailuresUseOneSecondBackoff) {
   Start();
-  now_ += 1s;
+  now_ += 1.0;
   ASSERT_TRUE(WaitUntil([&]() { return state_->initializations == 2; }));
   state_->available = true;
-  now_ += 500ms;
+  now_ += 0.5;
   SpinFor(50ms);
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->reads, 0);
-  now_ += 500ms;
+  now_ += 0.5;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 3);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -205,7 +205,7 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
   EXPECT_EQ(state_->reads, failed_reads);
   EXPECT_EQ(state_->initializations, 1);
 
-  now_ += 1s;
+  now_ += 1.0;
   // A session marker distinguishes recovered frames from previously queued DDS messages.
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty() && images_.back().data.at(2) == 2; }));
   EXPECT_EQ(state_->initializations, 2);
