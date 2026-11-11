@@ -53,7 +53,11 @@ the daemon requires preparing and registering that location again. Conflicting
 existing registrations are reported, never silently replaced. Resolve the
 conflict in the IDE's MCP settings before retrying. Setup checks the selected
 client for conflicts before preparing a replacement generation, so a rejected
-registration leaves the current prepared configuration intact. Doctor compares
+registration leaves the current prepared configuration intact. This applies
+across AI IDEs and manual setup: setup does not implicitly replace a different
+prepared config root shared by existing clients. For a deliberate change,
+coordinate all affected registrations and run `prepare` with the new settings
+before rerunning setup. Doctor compares
 saved registrations with the prepared checkout, stack and config root as well
 as the current client settings; a mismatch requires attention.
 

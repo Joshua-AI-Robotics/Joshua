@@ -201,6 +201,23 @@ def register(client, entry, root):
     return "added"
 
 
+def check_prepared_configuration(root, stack, config_root):
+    state = read_json(root / "dist/mcp" / stack / "active.json")
+    if state and (state.get("root"), state.get("stack"), state.get("config_root")) != (
+        str(root),
+        stack,
+        str(config_root),
+    ):
+        raise SetupError(
+            "This checkout and stack already have a different prepared configuration. "
+            "Setup will not replace shared artifacts used by other AI IDEs or manual "
+            "clients. Keep the existing root/stack/config-root settings. To change "
+            "them deliberately, coordinate all affected registrations and run "
+            "prepare with the new settings before rerunning setup. No setup changes "
+            "were made."
+        )
+
+
 def choose_client(requested):
     installed = [name for name in ("codex", "claude") if shutil.which(name)]
     if requested != "auto":
@@ -337,6 +354,7 @@ def main(argv=None):
         from mcp_runtime import McpError, Runtime
 
         client = choose_client(args.client)
+        check_prepared_configuration(root, args.stack, config_root)
         entry = server_entry(root, args.stack, config_root)
         if client != "manual":
             check_registration(client, entry, root)

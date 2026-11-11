@@ -38,7 +38,15 @@ class RegistrationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            state = {"prepare_seconds": 1.0}
+            state = {
+                "prepare_seconds": 1.0,
+                "root": str(root),
+                "stack": "u22",
+                "config_root": str(root / "config/config_preset"),
+            }
+            active = root / "dist/mcp/u22/active.json"
+            active.parent.mkdir(parents=True)
+            active.write_text(json.dumps(state))
             with patch.object(mcp_runtime, "Runtime") as runtime:
                 runtime.return_value.doctor.return_value = {"ok": True, "state": state}
                 with patch.object(setup, "choose_client", return_value="manual"), patch(
@@ -81,6 +89,55 @@ class RegistrationTests(unittest.TestCase):
                 self.assertEqual(active.read_text(), original)
                 runtime.return_value.prepare.assert_not_called()
                 bootstrap.assert_not_called()
+
+    def test_other_clients_and_manual_setup_preserve_shared_configuration(self):
+        import mcp_runtime
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            active = root / "dist/mcp/u22/active.json"
+            active.parent.mkdir(parents=True)
+            original = json.dumps(
+                {
+                    "root": str(root),
+                    "stack": "u22",
+                    "config_root": str(root / "original"),
+                }
+            )
+
+            def prepare_new_state():
+                active.write_text(json.dumps({"config_root": str(root / "other")}))
+                return {"prepare_seconds": 1.0}
+
+            for client in ("claude", "manual"):
+                active.write_text(original)
+                with self.subTest(client=client), patch.object(
+                    mcp_runtime, "Runtime"
+                ) as runtime, patch.object(
+                    setup, "choose_client", return_value=client
+                ), patch.object(
+                    setup, "check_registration", return_value=False
+                ), patch.object(
+                    setup, "register", return_value="added"
+                ), patch.object(
+                    setup, "record_registration"
+                ), patch.object(
+                    setup.subprocess,
+                    "run",
+                    return_value=subprocess.CompletedProcess([], 0),
+                ), patch.object(
+                    setup.sys, "stdout", io.StringIO()
+                ), patch.object(
+                    setup.sys, "stderr", io.StringIO()
+                ):
+                    runtime.return_value.doctor.return_value = {"ok": False}
+                    runtime.return_value.prepare.side_effect = prepare_new_state
+                    code = setup.main(
+                        ["--root", str(root), "--config-root", str(root / "other")]
+                    )
+                    self.assertEqual(active.read_text(), original)
+                    self.assertEqual(code, 1)
+                    runtime.return_value.prepare.assert_not_called()
 
     def test_doctor_compares_registration_with_prepared_configuration(self):
         import mcp_runtime
