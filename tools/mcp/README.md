@@ -258,7 +258,10 @@ all images, reaps the old helper and creates a new ROS context on retry. A reply
 racing a detected binding change is unavailable. The helper verifies the sole
 expected graph endpoint and actual received publisher GID at sample acceptance,
 and validates the endpoint again on query. Missing, wrong, multiple or replaced
-publishers clear the sample; metadata association does not authenticate hardware.
+publishers clear the sample. Endpoint changes refresh the passive subscription so
+replacement publishers can deliver new frames. Atomic heartbeat replacement keeps
+the pinned manifest readable; the final binding check still rejects a changed
+source. Metadata association does not authenticate hardware.
 
 Limits are fixed: one camera/helper/query, five-second read deadline including
 spawn/manifest/discovery/JPEG work, and one two-second cleanup budget. Failed

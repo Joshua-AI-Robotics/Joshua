@@ -101,8 +101,10 @@ std::string Gid(const uint8_t* bytes, size_t size) {
   }
   return s;
 }
+// Atomic replacement can unlink an inode already pinned by O_PATH. Its
+// descriptor remains valid; multiple hard links are still forbidden.
 bool Private(const struct stat& s) {
-  return S_ISREG(s.st_mode) && s.st_uid == geteuid() && !(s.st_mode & 077) && s.st_nlink == 1;
+  return S_ISREG(s.st_mode) && s.st_uid == geteuid() && !(s.st_mode & 077) && s.st_nlink <= 1;
 }
 struct Binding {
   std::string instance, camera, topic, node, ns, boot, time_ns;
@@ -115,7 +117,8 @@ struct Binding {
 Binding Manifest(int directory,
                  const std::string& camera,
                  const std::string& boot,
-                 const std::string& time_ns) {
+                 const std::string& time_ns,
+                 const ManifestReadHook& manifest_read_hook) {
   int pin = openat(directory, "camera-source.json", O_PATH | O_NOFOLLOW | O_CLOEXEC);
   if (pin < 0) throw std::runtime_error("Camera manifest absent");
   struct stat original {
@@ -124,6 +127,12 @@ Binding Manifest(int directory,
       original.st_size > 16384) {
     close(pin);
     throw std::runtime_error("Unsafe camera manifest");
+  }
+  try {
+    if (manifest_read_hook) manifest_read_hook();
+  } catch (...) {
+    close(pin);
+    throw;
   }
   int fd =
       open(("/proc/self/fd/" + std::to_string(pin)).c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
@@ -200,8 +209,12 @@ class Observer {
     eo.context = context;
     executor = std::make_unique<rclcpp::executors::SingleThreadedExecutor>(eo);
     executor->add_node(node);
+    Subscribe();
+  }
+  void Subscribe() {
+    subscription.reset();
     subscription = node->create_subscription<sensor_msgs::msg::Image>(
-        b.topic,
+        binding.topic,
         rclcpp::QoS(1).best_effort().durability_volatile(),
         [this](sensor_msgs::msg::Image::ConstSharedPtr m, const rclcpp::MessageInfo& info) {
           Receive(*m, info);
@@ -224,12 +237,19 @@ class Observer {
           e.topic_type() == "sensor_msgs/msg/Image")
         next = Gid(e.endpoint_gid().data(), e.endpoint_gid().size());
     }
+    if (next != gid) refresh_subscription = true;
     if (next != gid || next.empty())
       Clear("Expected sole camera publisher is missing, wrong, ambiguous or replaced");
     gid = next;
   }
   void Spin() {
     Graph();
+    if (refresh_subscription) {
+      // Humble can retain a matched reader without delivering replacement-writer
+      // frames. Refresh it outside callbacks, preserving the endpoint/GID gates.
+      Subscribe();
+      refresh_subscription = false;
+    }
     executor->spin_some(std::chrono::milliseconds(5));
     Graph();
   }
@@ -320,6 +340,7 @@ class Observer {
     }
   }
   JpegEncoder encoder;
+  bool refresh_subscription = false;
   std::string nonce, gid, diagnostic = "No associated image received";
   uint64_t receipt = 0, counter = 0;
   int width = 0, height = 0;
@@ -363,7 +384,10 @@ Value Error(uint64_t query,
   return v;
 }
 }  // namespace
-int RunImageObserver(int argc, char** argv, JpegEncoder encoder) {
+int RunImageObserver(int argc,
+                     char** argv,
+                     JpegEncoder encoder,
+                     ManifestReadHook manifest_read_hook) {
   if (!encoder)
     encoder = [](const cv::Mat& image, std::vector<uint8_t>& bytes) {
       return cv::imencode(".jpg", image, bytes, {cv::IMWRITE_JPEG_QUALITY, 80});
@@ -408,7 +432,7 @@ int RunImageObserver(int argc, char** argv, JpegEncoder encoder) {
       uint64_t query = std::stoull(input);
       input.clear();
       try {
-        auto binding = Manifest(directory, camera, boot, time_ns);
+        auto binding = Manifest(directory, camera, boot, time_ns, manifest_read_hook);
         if (observer && !(observer->binding == binding)) {
           observer.reset();
           Reply(Error(query,
@@ -423,7 +447,7 @@ int RunImageObserver(int argc, char** argv, JpegEncoder encoder) {
         observer->Spin();
         auto response = observer->Reply(query, camera);
         // Include encode/discovery in the binding race check, and re-check endpoint identity.
-        auto current = Manifest(directory, camera, boot, time_ns);
+        auto current = Manifest(directory, camera, boot, time_ns, manifest_read_hook);
         if (!(current == binding)) {
           observer.reset();
           Reply(Error(query, camera, "no_data", "Camera binding changed during query", true), {});

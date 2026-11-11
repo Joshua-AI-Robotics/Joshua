@@ -402,6 +402,13 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
+    name = "image_observer_manifest_race_fixture",
+    testonly = True,
+    srcs = ["image_observer_manifest_race_fixture.cc"],
+    deps = [":image_observer_backend"],
+)
+
+ros2_cpp_binary(
     name = "image_observer_race_fixture",
     testonly = True,
     srcs = ["image_observer_race_fixture.cc"],

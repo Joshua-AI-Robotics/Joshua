@@ -108,6 +108,18 @@ class ImageParserTest(unittest.IsolatedAsyncioTestCase):
                     (await source.read_latest()).availability.value, "unavailable"
                 )
                 manifest.unlink()
+                manifest.write_text(json.dumps(base))
+                manifest.chmod(0o600)
+                alias = Path(directory, "camera-manifest-hardlink")
+                os.link(manifest, alias)
+                try:
+                    result = await source.read_latest()
+                    self.assertEqual(result.availability.value, "unavailable")
+                    self.assertIsNone(result.payload)
+                    self.assertIn("Unsafe camera manifest", result.diagnostic)
+                finally:
+                    alias.unlink()
+                manifest.unlink()
                 manifest.write_text("x" * 16385)
                 manifest.chmod(0o600)
                 self.assertEqual(
@@ -247,6 +259,8 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = self.temp.name
+        self.fixture_mode = "normal"
+        self.fixture_transition = "initial normal"
         self.environment = dict(
             os.environ,
             ROS_DOMAIN_ID=str(50 + secrets.randbelow(120)),
@@ -270,6 +284,8 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def mode(self, value):
+        self.fixture_transition = f"{self.fixture_mode} -> {value}"
+        self.fixture_mode = value
         self.fixture.stdin.write((value + "\n").encode())
         await self.fixture.stdin.drain()
         await asyncio.wait_for(self.fixture.stdout.readline(), 5)
@@ -284,7 +300,10 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
             ):
                 return result
             await asyncio.sleep(0.05)
-        self.fail(f"did not reach {state}: {result}")
+        self.fail(
+            f"did not reach {state} in fixture transition "
+            f"{self.fixture_transition}: {result}"
+        )
 
     async def test_actual_ros_helper_adapter_sdk_jpeg_and_recovery(self):
         params = StdioServerParameters(
@@ -369,10 +388,9 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                     fresh.structuredContent["receipt_boottime_ns"],
                     stale.structuredContent["receipt_boottime_ns"],
                 )
-                for mode in (
-                    "wrong",
-                    "ambiguous",
-                    "missing",
+                # Repeated writer replacement catches readers that remain matched
+                # in the graph but stop delivering after a publisher disappears.
+                for mode in ("wrong", "ambiguous", "missing") * 3 + (
                     "invalid",
                     "oversize",
                     "bad_stamp",
@@ -428,6 +446,48 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(
             self.fixture.returncode, "MCP close stopped independent publisher"
         )
+
+    async def test_atomic_manifest_replacement_preserves_reader(self):
+        from tools.mcp.image_source import ImageSource
+
+        manifest = Path(self.directory, "camera-source.json")
+        for _ in range(100):
+            if manifest.exists():
+                break
+            await asyncio.sleep(0.01)
+        self.assertTrue(
+            manifest.exists(), "fixture did not publish its camera manifest"
+        )
+        with patch.dict(os.environ, self.environment):
+            source = ImageSource(
+                self.directory,
+                str(RUNFILES / "ros2/image_observer_manifest_race_fixture"),
+                "sensor:webcam",
+            )
+            try:
+                for _ in range(100):
+                    result = await source.read_latest()
+                    # The hook replaces the named inode on every read. A benign
+                    # unlink must not reset the reader before discovery completes.
+                    # The producer keeps heartbeats fresh during slow discovery.
+                    self.assertIsNotNone(source._process, result.diagnostic)
+                    if result.availability.value == "fresh":
+                        break
+                    await asyncio.sleep(0.03)
+                self.assertEqual(result.availability.value, "fresh", result.diagnostic)
+                self.assertIsNotNone(result.payload)
+                process = source._process
+                for _ in range(3):
+                    result = await source.read_latest()
+                    self.assertEqual(
+                        result.availability.value, "fresh", result.diagnostic
+                    )
+                    self.assertIsNotNone(result.payload)
+                    self.assertIs(
+                        source._process, process, "manifest rename reset helper"
+                    )
+            finally:
+                await source.aclose()
 
     async def test_binding_change_inside_encoder_rejects_old_bytes(self):
         from tools.mcp.image_source import ImageSource

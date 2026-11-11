@@ -242,7 +242,10 @@ publisher without hardware factory dependencies and decode the real MCP JPEG.
 processes to test framing, timeout, cancellation, late spawn and poisoned cleanup.
 A test-only encoder callback changes the manifest after real JPEG encoding and
 verifies the production post-encode binding check rejects the old image and
-reaps its helper. The production executable has no test codec controls.
+reaps its helper. A separate test-only manifest-read hook forces atomic heartbeat
+replacement between descriptor checks and verifies that the same helper remains
+usable; manifests with multiple hard links remain rejected. The production
+executable exposes neither test hook as a runtime option.
 A separate [physical C920 test record](hardware_tests/logitech_c920_mcp_2026-11-08.md)
 establishes real camera-to-MCP JPEG capture and publisher restart recovery on its
 pinned candidate. A separately configured AI client's deliberate scene-change
