@@ -1,5 +1,20 @@
-ROS 2 Type Resolver Utilities  
-==============================
+ROS 2 Nodes and Utilities
+========================
+
+C++ node layout
+---------------
+
+Each C++ node keeps its complete class and small `RunNode<T>()` entrypoint in
+one `.cc` file, following `camera_publisher.cc` and `position_publisher.cc`.
+Build nodes directly with `ros2_cpp_binary`; do not export node classes through
+headers or production node libraries. Shared behavior belongs in non-node
+utilities. `utils/actuator_commands.h/.cc` owns command subscriptions on a
+caller-owned node, so the standalone actuator and mixed MCU bus nodes can share
+command handling without inheriting from one another.
+
+The actuator and MCU bus tests include each node implementation with
+`JOSHUA_NODE_TEST` defined to exclude its entrypoint, using narrowly visible,
+test-only source targets and the system ROS build rules.
 
 Overview
 --------
@@ -73,7 +88,7 @@ enable behavior. Standalone node teardown still disables outputs in either case.
 Mixed MCU bus
 -------------
 
-[`mcu_bus`](mcu_bus.h) hosts scalar subscriptions and actuator commands in one
+[`mcu_bus`](mcu_bus.cc) hosts scalar subscriptions and actuator commands in one
 process, sharing the production board cache and coordinator. Give all consumers
 of the MCU the same `node.id` and `node_type: MCU_BUS`. The reference
 [preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real

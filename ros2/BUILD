@@ -1,7 +1,7 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_library", "ros2_cpp_test", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -160,63 +160,70 @@ ros2_cpp_binary(
     ],
 )
 
+_ACTUATOR_SUBSCRIBER_DEPS = [
+    "//config/proto:config_cc_proto",
+    "//ros2:logging",
+    "//ros2:node_runner",
+    "//ros2/utils:actuator_commands",
+    "@ros2_deps//:rclcpp",
+]
+
 ros2_cpp_binary(
     name = "actuator_subscriber",
-    srcs = [
-        "action_subscriber.h",
-        "actuator_subscriber.cc",
-    ],
-    data = [
-        "//config/config_preset:config_presets",
-    ],
+    srcs = ["actuator_subscriber.cc"],
+    data = ["//config/config_preset:config_presets"],
     set_up_ament = True,
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//robot/action/factory:action_factory",
-        "//robot/action/proto:action_cc_proto",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//ros2:logging",
-        "//ros2:node_runner",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@abseil-cpp//absl/strings",
-        "@protobuf",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:cpp_std_srvs",
-        "@ros2_deps//:rclcpp",
-    ],
+    deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-cc_library(
-    name = "mcu_bus_node",
-    hdrs = [
-        "action_subscriber.h",
-        "mcu_bus.h",
-    ],
-    deps = [
-        ":logging",
-        ":node_runner",
-        "//config/proto:config_cc_proto",
-        "//robot/action/factory:action_factory",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//robot/board/factory:board_factory",
-        "//robot/perception/factory:perception_factory",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@abseil-cpp//absl/status:status",
-        "@glog",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:cpp_std_srvs",
-        "@ros2_deps//:rclcpp",
-    ],
+_MCU_BUS_DEPS = [
+    "//config/proto:config_cc_proto",
+    "//robot/board/factory:board_factory",
+    "//robot/perception/factory:perception_factory",
+    "//ros2:logging",
+    "//ros2:node_runner",
+    "//ros2/utils:actuator_commands",
+    "//ros2/utils:qos_setting",
+    "@abseil-cpp//absl/status:status",
+    "@ros2_deps//:cpp_std_msgs",
+    "@ros2_deps//:cpp_std_srvs",
+    "@ros2_deps//:rclcpp",
+]
+
+ros2_cpp_binary(
+    name = "mcu_bus",
+    srcs = ["mcu_bus.cc"],
+    data = ["//config/config_preset:config_presets"],
+    set_up_ament = True,
+    deps = _MCU_BUS_DEPS,
 )
 
-cc_test(
+# Tests include the implementation with main excluded; production nodes stay
+# single-source executables and are never linked as reusable node libraries.
+ros2_cpp_library(
+    name = "actuator_subscriber_test_source",
+    testonly = True,
+    textual_hdrs = ["actuator_subscriber.cc"],
+    visibility = ["//robot/board/joshua_wire:__pkg__"],
+    deps = _ACTUATOR_SUBSCRIBER_DEPS,
+)
+
+ros2_cpp_library(
+    name = "mcu_bus_test_source",
+    testonly = True,
+    textual_hdrs = ["mcu_bus.cc"],
+    visibility = [
+        "//robot/board/joshua_wire:__pkg__",
+        "//ros2:__pkg__",
+    ],
+    deps = _MCU_BUS_DEPS,
+)
+
+ros2_cpp_test(
     name = "mcu_bus_test",
     srcs = ["mcu_bus_test.cc"],
     deps = [
-        ":mcu_bus_node",
+        ":mcu_bus_test_source",
         "//config/proto:config_cc_proto",
         "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
@@ -224,12 +231,6 @@ cc_test(
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
     ],
-)
-
-ros2_cpp_binary(
-    name = "mcu_bus",
-    srcs = ["mcu_bus.cc"],
-    deps = [":mcu_bus_node"],
 )
 
 ros2_py_binary(
