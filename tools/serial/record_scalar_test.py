@@ -20,7 +20,9 @@ def observation(sensor="analog_a0"):
 
 
 class RecorderTimingTest(unittest.TestCase):
-    def run_recorder(self, events, extra_args=()):
+    def run_recorder(
+        self, events, extra_args=(), robot_clock=lambda now: now, config=None
+    ):
         now = 0.0
         callbacks = {}
         pending = list(events)
@@ -31,6 +33,7 @@ class RecorderTimingTest(unittest.TestCase):
 
         def spin_once(_, timeout_sec):
             nonlocal now
+            self.assertLess(now, 30, "Recorder failed to reach its robot-time deadline")
             end = now + timeout_sec
             if pending and pending[0][0] <= end:
                 now, topic, message = pending.pop(0)
@@ -42,11 +45,13 @@ class RecorderTimingTest(unittest.TestCase):
         ros.create_node.return_value = node
         ros.ok.return_value = True
         ros.spin_once.side_effect = spin_once
-        clock = SimpleNamespace(
-            monotonic=lambda: now, monotonic_ns=lambda: int(now * 1_000_000_000)
-        )
+        clock = SimpleNamespace(monotonic_ns=lambda: int(now * 1_000_000_000))
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "capture.jsonl"
+            if config is not None:
+                config_path = Path(directory) / "config.pbtxt"
+                config_path.write_text(config)
+                extra_args = [*extra_args, "--config", str(config_path)]
             argv = [
                 "record_scalar",
                 "--topic",
@@ -62,14 +67,67 @@ class RecorderTimingTest(unittest.TestCase):
             with (
                 mock.patch.object(record_scalar, "rclpy", ros),
                 mock.patch.object(record_scalar, "time", clock),
+                mock.patch.object(record_scalar, "RobotTime", lambda: robot_clock(now)),
+                mock.patch.object(record_scalar, "initialize") as initialize,
                 mock.patch("sys.argv", argv),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
-                result = record_scalar.main()
+                try:
+                    result = record_scalar.main()
+                finally:
+                    node.destroy_node.assert_called_once()
+                    ros.shutdown.assert_called_once()
+                if config is not None:
+                    expected = record_scalar.text_format.Parse(
+                        config, record_scalar.config_pb2.Config()
+                    )
+                    initialize.assert_called_once_with(expected.general.robot_clock)
+                else:
+                    initialize.assert_not_called()
             records = [json.loads(line) for line in output.read_text().splitlines()]
-        node.destroy_node.assert_called_once()
-        ros.shutdown.assert_called_once()
         return result, now, records
+
+    def test_capture_uses_robot_clock_rate_and_config(self):
+        result, end, _ = self.run_recorder(
+            [(1.0, "/observation", observation())],
+            robot_clock=lambda now: 100 + 2 * now,
+            config="general { robot_clock { source: UTC } }",
+        )
+        self.assertEqual(result, 0)
+        self.assertAlmostEqual(end, 2.5)
+
+    def test_forward_jump_reaches_capture_deadline_early(self):
+        result, end, _ = self.run_recorder(
+            [(1.0, "/observation", observation())],
+            robot_clock=lambda now: now + (20 if now >= 2 else 0),
+        )
+        self.assertEqual(result, 0)
+        self.assertAlmostEqual(end, 2.0)
+
+    def test_backward_jump_waits_for_original_capture_deadline(self):
+        result, end, _ = self.run_recorder(
+            [(1.0, "/observation", observation())],
+            robot_clock=lambda now: now - (2 if now >= 2 else 0),
+        )
+        self.assertEqual(result, 0)
+        self.assertAlmostEqual(end, 6.0)
+
+    def test_startup_budget_uses_robot_time(self):
+        result, end, records = self.run_recorder([], robot_clock=lambda now: 2 * now)
+        self.assertEqual(result, 1)
+        self.assertAlmostEqual(end, 5.0)
+        self.assertTrue(records[-1]["startup_timed_out"])
+
+    def test_clock_failure_propagates_after_ros_cleanup(self):
+        def failing_clock(now):
+            if now >= 2:
+                raise RuntimeError("clock read failed")
+            return now
+
+        with self.assertRaisesRegex(RuntimeError, "clock read failed"):
+            self.run_recorder(
+                [(1.0, "/observation", observation())], robot_clock=failing_clock
+            )
 
     def test_delayed_source_gets_full_capture_window(self):
         result, end, records = self.run_recorder(
