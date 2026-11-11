@@ -39,7 +39,7 @@ class FakeJoshuaWireTransport : public robot::comm::MessageTransport {
       return absl::DataLossError("Invalid test request");
     if (queued_.empty()) {
       std::vector<uint8_t> out(JW_MAX_FRAME_LEN);
-      JoshuaService(&channel, exchange_calls_);
+      if (service_on_exchange) JoshuaService(&channel, exchange_calls_);
       const int len = jw_endpoint_process(&endpoint,
                                           bytes.data(),
                                           bytes.size(),
@@ -72,6 +72,7 @@ class FakeJoshuaWireTransport : public robot::comm::MessageTransport {
     return result;
   }
   int exchange_calls_ = 0;
+  bool service_on_exchange = true;
   std::vector<uint8_t> last_written_;
   std::vector<std::vector<uint8_t>> written_;
 

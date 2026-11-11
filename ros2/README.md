@@ -1,6 +1,56 @@
 ROS 2 Type Resolver Utilities  
 ==============================
 
+Process runtime and failure handling
+------------------------------------
+
+Managed C++ node entrypoints use `JOSHUA_MAIN(argc, argv)` from
+`utils/joshua_runtime.h`. The macro generates a guarded `main()` and delegates
+the written body to an ordinary function. It covers argument parsing, clock and
+node initialization, and callbacks executed by the node's executor. Direct
+`RunNode<T>()` calls use the same guard; nested runners reuse the outer boundary.
+
+```cpp
+JOSHUA_MAIN(argc, argv) {
+  return ros2_utils::RunNode<PositionPublisher>(argc, argv, "position_publisher");
+}
+```
+
+`RunNode<T>()` validates the config, calls `JoshuaInit(config)` to install the
+process clock, constructs the node, registers its executor, and notifies the
+launcher of readiness. A finite executor wait also observes worker failures.
+Nodes that request multiple executor threads keep ROS callback-group scheduling
+and guard each executor worker. This keeps MCU stop callbacks concurrent with
+ordinary work while reporting worker exceptions through the process runtime.
+`rclcpp` handles shutdown signals through its handler thread; the shutdown
+callback requests cancellation of ordinary serial waits.
+
+On exit the runner cancels ordinary work, releases executor/node resources,
+tears down the board cache, releases communication resources and their workers,
+and shuts down the ROS context. If ROS already received a shutdown signal its
+context may have stopped first. Cleanup catches and reports failures while
+continuing to other resources. It cannot make a throwing C++ destructor safe
+from outside that destructor; device destructors use the shared `RunCleanup()`
+boundary themselves.
+
+Use `joshua::StartWorker(name, callback)` for owned worker threads, and join them
+from their owner. A worker exception reports failure and requests process
+shutdown; it never escapes the thread entrypoint. Unexpected callback/clock
+exceptions propagate to the process guard. Expected device errors continue
+through status returns. A cleanup failure preserves a nonzero process result.
+Diagnostics do not depend on RobotTime.
+
+Cleanup scopes allow best-effort stop commands after ordinary waits have been
+cancelled. Serial commands use steady elapsed deadlines; a hung device can
+require the launcher's bounded SIGTERM/SIGKILL escalation. Teardown
+is an attempt, not an acknowledgement that a device physically stopped.
+
+Standalone Xbox publishing accepts an optional preset path before ROS options;
+without it `JoshuaInit()` uses protobuf clock defaults, including the documented
+startup fallback. No Python RobotTime implementation is introduced. See
+[`NodeManager`](../launcher/node_manager/README.md) for process ownership and
+readiness limitations.
+
 Overview
 --------
 `ros2/ros2_type_resolver.py` centralizes ROS 2 type handling for the codebase.
@@ -62,8 +112,46 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. Position sensors and actuators must use separate bus owners
-with the current standalone node layout.
+host sensor publishers. The standalone position/actuator nodes require separate
+bus owners. Mixed JoshuaWire scalar/actuator setups use `MCU_BUS` instead.
+
+Standalone actuator subscribers honor `stepper_config.require_explicit_enable`:
+when true, startup leaves outputs disabled until an explicit torque-enable
+command. Omitting the flag or setting it to false retains the existing startup
+enable behavior. Standalone node teardown still disables outputs in either case.
+
+Mixed MCU bus
+-------------
+
+[`mcu_bus`](mcu_bus.h) hosts scalar subscriptions and actuator commands in one
+process, sharing the production board cache and coordinator. Give all consumers
+of the MCU the same `node.id` and `node_type: MCU_BUS`. The reference
+[preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real
+hardware and must be reviewed before a deliberate run.
+
+Startup configures outputs but leaves them disabled. A BOOL `/<actuator>/torque`
+command explicitly enables/disables them; position topics retain native driver
+units. `~/estop` is a Trigger service in a separate callback group with two executor
+threads, so a blocked ordinary callback cannot hold the stop behind it. When a
+node owns multiple boards, it starts every stop concurrently before waiting for
+acknowledgments; a stalled board cannot delay stop dispatch to the others. Stop
+acknowledgment is protocol evidence; physical stop verification is unsupported.
+After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
+steps. No subscription, enable or target is automatically restored.
+
+Scalar topics publish serialized `PerceptionPacket` messages as
+`std_msgs/UInt8MultiArray`, retaining the named sensor, native unit code, validity,
+boot/clock identity, acquisition sequence/time, receipt age and loss counters.
+The packet's top-level timestamp is unset: no device-to-ROS clock mapping exists.
+The companion `<topic>/health` String reports usable, invalid/stale, or the source
+error. Record both topics; decoding uses `perception_packet.proto`. Receipt
+freshness does not establish absolute device acquisition age.
+
+Position, camera, lidar, audio and Xbox publisher callbacks use
+`utils/robot_timer.h` with double-second RobotTime deadlines. The executor polls
+those deadlines; a paused RobotTime pauses publication. Missed periods are
+skipped, and camera/lidar callbacks only read their own configured stream. See
+[publisher timers](../docs/ROBOT_TIME.md#publisher-timers) for clock-jump behavior.
 The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
 been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
 names and Float32 position values are unchanged.
@@ -116,8 +204,9 @@ The decoder emits `ActionPacket.joint`, retaining optional double-valued
 position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
 m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
 preserves the selected joint name, `header.frame_id`, and the source timestamp in
-`ActionPacket.timestamp_ns`. Nanoseconds must be below 1e9; zero and negative
-source times are preserved. Metadata does not schedule execution, enforce
+`ActionPacket.timestamp` as double seconds. The ROS nanosecond component must
+be below 1e9; zero and negative source times are retained within double
+precision. Metadata does not schedule execution, enforce
 freshness, identify a clock domain, or trigger coordinate transforms. Those
 policies belong to future clock/PTP and coordinate-handling work.
 
@@ -147,17 +236,22 @@ Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
 Position feedback still publishes one named position per sensor (using
-`sensor_name`), converted to radians with a ROS timestamp. It does not fabricate
-velocity or effort. Use an aggregator for synchronized multi-joint feedback.
+`sensor_name`), converted to radians with the original RobotTime acquisition
+timestamp. It does not fabricate velocity or effort. Use an aggregator for
+synchronized multi-joint feedback.
 Device zero references are retained; URDF offsets and mechanical calibration
 are not inferred.
+
+Camera and lidar publishers also preserve packet timestamps in double seconds.
+ROS conversion checks range and rounds the fractional seconds to nanoseconds; see
+[robot time](../docs/ROBOT_TIME.md#acquisition-timestamps-and-ros-conversion).
 
 Hardware and downstream constraints
 ----------------------------------
 
 The shared C++ runner (`RunNode<T>` in `node_runner.h`) loads and validates the
 full config before constructing a node, including when launched directly without
-`node_generator`. Position and actuator constructors rely on that shared check.
+`NodeManager`. Position and actuator constructors rely on that shared check.
 Config validation rejects invalid subscription settings before hardware
 initialization. JointState field and driver capability checks run on each command.
 Conversions reject non-finite values, overflow, underflow to zero, fractional integer feedback, and integer commands that lose precision
@@ -190,6 +284,12 @@ Initialization failures reported as invalid arguments fail startup. The shared
 config validator and OpenCV driver both check the required four-character pixel
 format before opening a device.
 
+Each topic uses its own robot-time publication timer. Image headers preserve the
+driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
+is a host capture-completion estimate, not a sensor exposure timestamp. Expected
+device errors use the recovery path; unexpected exceptions reach the shared
+runtime guard.
+
 The OpenCV backend uses two capture buffers so the next frame can remain queued
 while the previous one is read. The
 [Sunplus 1080p preset](../config/config_preset/example/sunplus_spca2281_1080p.pbtxt)
@@ -198,8 +298,39 @@ qualifying frame rate and measure received frames; the configured rate alone
 does not establish delivered performance.
 
 `//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
-delivery, and reinitialization after read failures using fake camera sources and
-a virtual retry clock. It opens no physical devices.
+delivery and timestamps, independent camera timers, exception propagation, and
+reinitialization after read failures using fake camera sources and a virtual
+retry clock. It opens no physical devices.
+
+## C++ node logging
+
+C++ nodes and utilities use `JOSHUA_LOG(INFO) << message` (also DEBUG, WARNING,
+ERROR and FATAL). The wrapper preserves the call site's file, line and function,
+and uses the actual ROS logger name, including node remapping. Configure via:
+
+```protobuf
+general { ros2_log_mode: ROS2_LOG_BOTH }
+```
+
+BOTH is the protobuf default: glog writes to stderr and ROS writes to `/rosout`
+and its configured file logger. ROS console output is disabled process-wide in
+this mode, including ROS library console diagnostics, to avoid duplicate output.
+`ROS2_LOG_ROS` uses normal ROS destinations; `ROS2_LOG_GLOG` uses glog for Joshua
+messages. ROS output flags such as disabling rosout remain honored.
+
+ROS severity settings filter the ROS destination; glog minloglevel filters glog,
+and DEBUG additionally requires glog verbosity >= 1 for that destination. FATAL
+always terminates the process after logging, regardless of backend. Startup and
+post-shutdown messages fall back to glog because ROS routing is unavailable.
+
+The mode covers Joshua C++ node logs, not Python loggers or direct driver/library
+LOG calls. The latter remain glog. A returned status carries no source location;
+returned errors are logged at the node boundary with topic context. Drivers preserve
+the failure details in their status rather than also logging the same error.
+Destructor cleanup failures are logged locally when no caller can receive a status.
+Standalone C++ utilities have no config input and use BOTH. The logging context
+is process-wide, matching Joshua's one-node-per-process launcher; component
+composition would require per-node contexts.
 
 ## Audio publishing
 
@@ -214,7 +345,7 @@ Each `std_msgs/msg/UInt8MultiArray.data` contains one serialized
 Decode with the generated perception_packet proto. Audio is interleaved `s16le`,
 and its length is `frames * channels * 2`. Sample rate, channels, frame count,
 source name, sequence, and discontinuity are carried with every chunk.
-`timestamp_ns` estimates the first sample's Unix realtime timestamp from unread
+`timestamp` estimates the first sample's configured RobotTime in seconds from unread
 ALSA frames. It is not a hardware timestamp or a synchronization guarantee.
 
 The source sample rate and `frames_per_chunk` determine publication cadence;

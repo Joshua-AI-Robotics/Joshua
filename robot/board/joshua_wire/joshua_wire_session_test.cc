@@ -18,6 +18,7 @@
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_endpoint.h"
+#include "firmware/common/joshua_wire_sensor_stream.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
@@ -140,6 +141,8 @@ class FirmwareTransport : public robot::comm::MessageTransport {
       return altered;
     }
     last_response = response;
+    if (throw_after_response)
+      throw std::runtime_error("clock failed after device accepted request");
     return response;
   }
   jw_endpoint_t endpoint{};
@@ -149,6 +152,7 @@ class FirmwareTransport : public robot::comm::MessageTransport {
   Bytes retained;
   Bytes last_response;
   bool timeout = false;
+  bool throw_after_response = false;
   bool throw_response = false;
   bool delay = false;
   int corrupt_field = -1;
@@ -179,6 +183,63 @@ class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
   std::shared_ptr<FirmwareTransport> firmware;
   int calls = 0;
 };
+
+TEST_F(JoshuaWireSessionTest, ExceptionAfterDeviceMutationKeepsOutcomeUnknown) {
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  transport->throw_after_response = true;
+  EXPECT_THROW(session.Exchange(Profile(JW_ACTUATOR_ENABLE)), std::runtime_error);
+  EXPECT_TRUE(transport->channel.enabled);
+  transport->throw_after_response = false;
+  const auto requests = transport->requests.size();
+  EXPECT_EQ(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport->requests.size(), requests);
+  EXPECT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+}
+
+TEST_F(JoshuaWireSessionTest, CloseExceptionStillInvalidatesTheSession) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->throw_after_response = true;
+  EXPECT_THROW(session.Close(), std::runtime_error);
+  transport->throw_after_response = false;
+  const auto requests = transport->requests.size();
+  EXPECT_TRUE(session.Close().ok());
+  EXPECT_EQ(transport->requests.size(), requests);
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+}
+
+TEST_F(JoshuaWireSessionTest, UnpublishedHookFailureDoesNotMakeTheSessionUncertain) {
+  bool reject = false;
+  JoshuaWireSession hooked(
+      transport,
+      [] { return 99; },
+      UINT32_MAX,
+      {},
+      absl::ZeroDuration(),
+      [&](absl::Span<const uint8_t> request) {
+        JoshuaWireSession::ExchangeOutcome outcome;
+        if (reject) {
+          outcome.status = absl::ResourceExhaustedError("Not admitted to the link");
+          outcome.published = false;
+          outcome.retryable = false;
+        } else {
+          auto result = transport->Exchange(request);
+          outcome.status = result.status();
+          if (result.ok()) outcome.response = std::move(*result);
+        }
+        return outcome;
+      });
+  ASSERT_TRUE(hooked.Open().ok());
+  ASSERT_TRUE(hooked.Exchange(Configure()).ok());
+  reject = true;
+  EXPECT_EQ(hooked.Exchange(Profile(JW_ACTUATOR_ENABLE)).status().code(),
+            absl::StatusCode::kResourceExhausted);
+  EXPECT_FALSE(hooked.Inspect().uncertain);
+  reject = false;
+  EXPECT_TRUE(hooked.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  EXPECT_TRUE(transport->channel.enabled);
+}
 TEST_F(JoshuaWireSessionTest, CommonRepliesAndProfileRoutingShareOneIdAllocator) {
   auto cyclic = std::make_shared<RoutedCyclic>(transport);
   JoshuaWireSession routed(
@@ -361,6 +422,8 @@ TEST_F(JoshuaWireSessionTest, InvalidRequestsDoNotConsumeIdsAndFailedResetKeepsC
   ASSERT_TRUE(session.Open().ok());
   EXPECT_FALSE(session.Exchange({0, 0, JW_CMD_PROFILE, 0, nullptr, 1}).ok());
   EXPECT_FALSE(session.Exchange(Command(JW_CMD_RESET_SESSION)).ok());
+  EXPECT_EQ(session.Exchange(Command(JW_CMD_STREAM_SAMPLE, 0)).status().code(),
+            absl::StatusCode::kInvalidArgument);
   EXPECT_EQ(transport->requests.size(), 1);
   transport->timeout = true;
   EXPECT_FALSE(session.Open().ok());
@@ -368,21 +431,45 @@ TEST_F(JoshuaWireSessionTest, InvalidRequestsDoNotConsumeIdsAndFailedResetKeepsC
   EXPECT_FALSE(session.Exchange(Configure()).ok());
   EXPECT_EQ(transport->requests.size(), count);
 }
+int AcceptConfiguration(void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+  auto* channel = static_cast<JoshuaChannel*>(context);
+  const int result = JoshuaCommand(context, command, out, cap);
+  jw_profile_request_t operation{};
+  jw_reply_t reply{};
+  if (result > 0 && jw_decode_reply_payload(out, result, &reply) == JW_RESULT_OK &&
+      reply.status == JW_STATUS_OK && command->cmd == JW_CMD_PROFILE &&
+      jw_decode_profile_request(command->payload, command->payload_len, &operation) ==
+          JW_RESULT_OK &&
+      operation.operation == JW_ACTUATOR_CONFIGURE) {
+    channel->function.state.action_execution = JW_EXECUTION_ACCEPTED;
+    return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
+  }
+  return result;
+}
+
+TEST_F(JoshuaWireSessionTest, StreamQueriesRemainAvailableAfterUnknownOutcome) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->timeout = true;
+  EXPECT_FALSE(session.Exchange(Configure()).ok());
+  transport->timeout = false;
+  uint8_t bytes[JW_PROFILE_HEADER_LEN];
+  jw_profile_request_t query{
+      JW_PROFILE_SENSOR, 1, JW_SENSOR_STREAM_MINOR, JW_SENSOR_GET_SUBSCRIPTION, nullptr, 0};
+  ASSERT_EQ(jw_encode_profile_request(bytes, sizeof(bytes), &query), sizeof(bytes));
+  jw_command_t command{0, 0, JW_CMD_PROFILE, 0, bytes, sizeof(bytes)};
+  const auto before = transport->requests.size();
+  // This firmware has no sensor backend, but its correlated rejection must be
+  // readable: unknown outcomes cannot hide subscription reconciliation queries.
+  EXPECT_TRUE(session.Exchange(command).ok());
+  EXPECT_EQ(transport->requests.size(), before + 1);
+  query.operation = JW_SENSOR_SUBSCRIBE;
+  ASSERT_EQ(jw_encode_profile_request(bytes, sizeof(bytes), &query), sizeof(bytes));
+  EXPECT_EQ(session.Exchange(command).status().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(transport->requests.size(), before + 1);
+}
+
 TEST_F(JoshuaWireSessionTest, PendingActionRequiresItsOriginalCompletionToken) {
-  transport->handler =
-      [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) -> int {
-    auto* channel = static_cast<JoshuaChannel*>(context);
-    const int result = JoshuaCommand(context, command, out, cap);
-    jw_profile_request_t operation{};
-    if (command->cmd == JW_CMD_PROFILE &&
-        jw_decode_profile_request(command->payload, command->payload_len, &operation) ==
-            JW_RESULT_OK &&
-        operation.operation == JW_ACTUATOR_CONFIGURE) {
-      channel->function.state.action_execution = JW_EXECUTION_ACCEPTED;
-      return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
-    }
-    return result;
-  };
+  transport->handler = AcceptConfiguration;
   ASSERT_TRUE(session.Open().ok());
   ASSERT_TRUE(session.Exchange(Configure()).ok());
   const auto token = transport->channel.function.state.action_message_id;
@@ -424,6 +511,97 @@ TEST_F(JoshuaWireSessionTest, PendingBoardActionGatesEveryFunctionUntilMatchingC
   ASSERT_TRUE(configured.ok());
   EXPECT_EQ((*configured)[0], JW_STATUS_UNAVAILABLE);
 }
+TEST_F(JoshuaWireSessionTest, CompletedBoardStopRetiresCanceledFunctionWithoutEnabling) {
+  transport->handler = AcceptConfiguration;
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_ESTOP)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+  auto enabled = session.Exchange(Profile(JW_ACTUATOR_ENABLE));
+  ASSERT_TRUE(enabled.ok());
+  EXPECT_EQ((*enabled)[0], JW_STATUS_UNAVAILABLE);  // Firmware still enforces ESTOP.
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_RECOVER)).ok());
+  EXPECT_FALSE(transport->channel.enabled);
+  EXPECT_FALSE(transport->channel.configured);
+  auto configured = session.Exchange(Configure());
+  ASSERT_TRUE(configured.ok()) << configured.status();
+  EXPECT_EQ((*configured)[1], JW_EXECUTION_ACCEPTED);
+  transport->channel.function.state.action_execution = JW_EXECUTION_COMPLETE;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+  ASSERT_TRUE(session.Exchange(Profile(JW_ACTUATOR_ENABLE)).ok());
+  EXPECT_TRUE(transport->channel.enabled);
+}
+
+TEST_F(JoshuaWireSessionTest, AcceptedBoardStopRetiresFunctionsOnlyAfterMatchingCompletion) {
+  transport->handler = [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+    const int result = AcceptConfiguration(context, command, out, cap);
+    if (command->cmd == JW_CMD_ESTOP) {
+      static_cast<JoshuaChannel*>(context)->runtime.state.action_execution = JW_EXECUTION_ACCEPTED;
+      return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_ACCEPTED, nullptr, 0);
+    }
+    return result;
+  };
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_ESTOP)).ok());
+  auto& board_state = transport->channel.runtime.state;
+  const auto stop_token = board_state.action_message_id;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+  board_state.action_execution = JW_EXECUTION_COMPLETE;
+  ++board_state.action_message_id;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+  board_state.action_message_id = stop_token;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_RECOVER)).ok());
+  EXPECT_FALSE(transport->channel.enabled);
+  auto configured = session.Exchange(Configure());
+  EXPECT_TRUE(configured.ok()) << configured.status();
+}
+
+TEST_F(JoshuaWireSessionTest, FailedBoardStopDoesNotRetirePendingFunction) {
+  transport->handler = [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+    if (command->cmd == JW_CMD_ESTOP)
+      return jw_encode_reply_payload(out, cap, JW_STATUS_ERROR, JW_EXECUTION_COMPLETE, nullptr, 0);
+    return AcceptConfiguration(context, command, out, cap);
+  };
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  auto stopped = session.Exchange(Command(JW_CMD_ESTOP));
+  ASSERT_TRUE(stopped.ok());
+  EXPECT_EQ((*stopped)[0], JW_STATUS_ERROR);
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+}
+
+TEST_F(JoshuaWireSessionTest, NamedDomainStopDoesNotRetireUnrelatedFunction) {
+  transport->handler = [](void* context, const jw_command_t* command, uint8_t* out, size_t cap) {
+    // This named domain does not include the pending actuator on domain zero.
+    if (command->cmd == JW_CMD_ESTOP)
+      return jw_encode_reply_payload(out, cap, JW_STATUS_OK, JW_EXECUTION_COMPLETE, nullptr, 0);
+    return AcceptConfiguration(context, command, out, cap);
+  };
+  ASSERT_TRUE(session.Open().ok());
+  ASSERT_TRUE(session.Exchange(Configure()).ok());
+  const uint8_t domain[] = {1, 0};
+  ASSERT_TRUE(session.Exchange({0, 0, JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, sizeof(domain)}).ok());
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+}
+
+TEST_F(JoshuaWireSessionTest, CompletedStopAndRecoveryDoNotResolveLostCommandOutcome) {
+  ASSERT_TRUE(session.Open().ok());
+  transport->timeout = true;
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kDeadlineExceeded);
+  transport->timeout = false;
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_ESTOP)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_RECOVER)).ok());
+  ASSERT_TRUE(session.Exchange(Command(JW_CMD_GET_STATUS, 0)).ok());
+  EXPECT_EQ(session.Exchange(Configure()).status().code(), absl::StatusCode::kFailedPrecondition);
+  ASSERT_TRUE(session.Open().ok());
+  EXPECT_TRUE(session.Exchange(Configure()).ok());
+}
+
 uint32_t ProfileU32(const uint8_t* p) {
   return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
 }
@@ -749,8 +927,10 @@ TEST_F(Am243EthercatProfileTest, SparseFunctionIdsHaveIndependentWatchdogSlots) 
 // object dictionary and real PDO packing. No separate development probe files.
 class SoesProfileTest : public Am243EthercatProfileTest {
  protected:
+  virtual void BeforeSoesInit() {}
   void SetUp() override {
     Am243EthercatProfileTest::SetUp();
+    BeforeSoesInit();
     soes_esc.fill(0);
     soes_esc[ESCREG_DLSTATUS] = 1;
     soes_time_us = 0;
@@ -894,6 +1074,60 @@ class SoesProfileTest : public Am243EthercatProfileTest {
     EXPECT_FALSE(channel.enabled);
   }
 };
+
+TEST_F(SoesProfileTest, ColdBootConfiguresWithoutRecoveryAndStillRequiresExplicitEnable) {
+  EXPECT_FALSE(profile.fault_latched);
+  EXPECT_FALSE(channel.estopped);
+  EXPECT_FALSE(channel.enabled);
+  const auto bytes = CoeCommand(JW_CMD_GET_STATUS, {}, JW_CHANNEL_NONE);
+  jw_device_status_t state{};
+  ASSERT_EQ(bytes.size(), JW_REPLY_HEADER_LEN + JW_DEVICE_STATUS_LEN);
+  ASSERT_EQ(jw_decode_device_status(
+                bytes.data() + JW_REPLY_HEADER_LEN, bytes.size() - JW_REPLY_HEADER_LEN, &state),
+            JW_RESULT_OK);
+  EXPECT_EQ(state.recovery & JW_RECOVERY_CLEAR_ESTOP, 0);
+  SetOp();
+  EXPECT_EQ(CoeCommand(kConfigure, Bytes(11)), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_TRUE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+  EXPECT_EQ(CoeCommand(kEnable), (Bytes{JW_STATUS_OK, JW_EXECUTION_COMPLETE}));
+  EXPECT_TRUE(channel.enabled);
+}
+
+TEST_F(SoesProfileTest, StateLossWhileDisabledStillLatchesAndSurvivesReset) {
+  ASSERT_FALSE(profile.fault_latched);
+  ASSERT_FALSE(channel.enabled);
+  const auto epoch = profile.stop_epoch;
+  ESC_stopoutput();
+  EXPECT_GT(profile.stop_epoch, epoch);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  Bytes reset(JWEC_SESSION_SIZE);
+  ProfilePut32(reset.data(), JWEC_RESET_OPERATION);
+  ProfilePut32(reset.data() + 4, 9);
+  ASSERT_EQ(Download(JWEC_SESSION_INDEX, reset)[8], 0x60);
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  EXPECT_FALSE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+}
+
+class InitiallyFaultedSoesProfileTest : public SoesProfileTest {
+ protected:
+  void BeforeSoesInit() override {
+    JoshuaEthercatProfileFault(&profile, JOSHUA_ECAT_FAULT_STATE);
+  }
+};
+
+TEST_F(InitiallyFaultedSoesProfileTest, InitializationNeverClearsExistingSafetyLatch) {
+  EXPECT_TRUE(profile.fault_latched);
+  EXPECT_TRUE(channel.estopped);
+  SetOp();
+  EXPECT_EQ(CoeCommand(kConfigure, Bytes(11)),
+            (Bytes{JW_STATUS_UNAVAILABLE, JW_EXECUTION_REJECTED}));
+  EXPECT_FALSE(channel.configured);
+  EXPECT_FALSE(channel.enabled);
+}
 
 TEST_F(SoesProfileTest, IndependentWatchdogRetiresAdmittedRecovery) {
   ConfigureAndEnable();

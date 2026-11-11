@@ -5,10 +5,55 @@ load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
+cc_library(
+    name = "robot_timer",
+    hdrs = ["robot_timer.h"],
+    deps = [
+        "//utils:robot_time",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "robot_timer_test",
+    srcs = ["robot_timer_test.cc"],
+    deps = [
+        ":robot_timer",
+        "//utils:robot_time",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "robot_time_conversion",
+    hdrs = ["robot_time_conversion.h"],
+    deps = [
+        "//utils:robot_time",
+        "@abseil-cpp//absl/status:statusor",
+        "@ros2_deps//:cpp_builtin_interfaces",
+        "@ros2_deps//:rosidl_runtime_c",
+    ],
+)
+
+cc_test(
+    name = "robot_time_conversion_test",
+    srcs = ["robot_time_conversion_test.cc"],
+    deps = [
+        ":robot_time_conversion",
+        "@googletest//:gtest_main",
+    ],
+)
+
 ros2_cpp_binary(
     name = "xbox_controller_publisher",
     srcs = ["xbox_controller_publisher.cc"],
     deps = [
+        ":robot_timer",
+        "//config:config_utils",
+        "//config:validation",
+        "//ros2:logging",
+        "//utils:joshua_runtime",
+        "//utils:scope_exit",
         "//utils:xbox_controller",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -19,6 +64,7 @@ ros2_cpp_binary(
     name = "camera_subscriber",
     srcs = ["camera_subscriber.cc"],
     deps = [
+        "//ros2:logging",
         "@local_deps//:opencv",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:rclcpp",
@@ -29,6 +75,7 @@ ros2_cpp_binary(
     name = "keyboard_publisher",
     srcs = ["keyboard_publisher.cc"],
     deps = [
+        "//ros2:logging",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -48,8 +95,8 @@ cc_library(
     name = "qos_setting",
     hdrs = ["qos_setting.h"],
     deps = [
+        "//ros2:logging",
         "//ros2/proto:node_cc_proto",
-        "@glog",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -74,10 +121,13 @@ cc_library(
     hdrs = ["packet_parser.h"],
     deps = [
         ":qos_setting",
+        ":robot_time_conversion",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
+        "//utils:robot_time",
         "//utils:status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -112,6 +162,7 @@ cc_test(
     srcs = ["packet_parser_cc_test.cc"],
     deps = [
         ":packet_parser",
+        "//utils:robot_time",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",

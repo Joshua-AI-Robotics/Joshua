@@ -248,7 +248,8 @@ class ValidationCliTest(unittest.TestCase):
     def test_integrity_references_and_declared_nonexistent_device(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "config.pbtxt"
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   perceptions { single_perceptions {
     node { id: 1 node_type: POSITION_PUBLISHER }
@@ -257,7 +258,8 @@ robot {
     sts3215_encoder_config { board_name: "missing" channel: 1 }
   }}
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(
                 (
@@ -268,7 +270,8 @@ robot {
                 ),
                 (1, "integrity", "invalid", "NOT_FOUND"),
             )
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   perceptions { single_perceptions {
     node { id: 1 node_type: LIDAR_PUBLISHER }
@@ -281,14 +284,16 @@ robot {
     }}
   }}
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual((process.returncode, report["result"]), (0, "valid"))
 
     def test_bus_conflict(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "conflict.pbtxt"
-            path.write_text("""
+            path.write_text(
+                """
 robot {
   boards {
     name: "bus"
@@ -310,7 +315,8 @@ robot {
     }
   }
 }
-""")
+""",
+            )
             process, report = self.run_validator("--config", str(path), input_path=path)
             self.assertEqual(
                 (process.returncode, report["stage"], report["status_code"]),
@@ -361,7 +367,12 @@ robot {
             with self.subTest(label=label):
                 self.assertFalse(
                     label.startswith(
-                        ("//launcher:", "//node_generator:", "//firmware:")
+                        (
+                            "//launcher:",
+                            "//launcher/",
+                            "//node_generator:",
+                            "//firmware:",
+                        )
                     )
                 )
                 if label.startswith("//simulation:"):
@@ -375,6 +386,15 @@ robot {
                             "//robot/board/factory:board_resolver.h",
                         },
                     )
+                if label.startswith("//robot/board/joshua_wire:"):
+                    self.assertIn(
+                        label,
+                        {
+                            "//robot/board/joshua_wire:coordinator_policy",
+                            "//robot/board/joshua_wire:coordinator_policy.h",
+                        },
+                        "validator depends on the MCU runtime coordinator",
+                    )
                 if label.startswith("//robot/comm/") and "/proto:" not in label:
                     # These helpers check protobuf fields without opening a bus.
                     # Keep the allowlist exact so transports remain excluded.
@@ -385,6 +405,13 @@ robot {
                             "//robot/comm/factory:comm_config_validation.h",
                             "//robot/comm/serial:serial_config_validation",
                             "//robot/comm/serial:serial_config_validation.h",
+                            "//robot/comm/serial:serial_device_identity",
+                            "//robot/comm/serial:serial_device_identity.cc",
+                            "//robot/comm/serial:serial_device_identity.h",
+                            "//robot/comm/serial:serial_io_options",
+                            "//robot/comm/serial:serial_io_options.h",
+                            "//robot/comm/serial:serial_frame_options",
+                            "//robot/comm/serial:serial_frame_options.h",
                         },
                         "validator depends on hardware communication implementation",
                     )

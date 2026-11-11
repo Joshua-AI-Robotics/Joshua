@@ -7,13 +7,15 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
-#include "absl/time/clock.h"
+#include "firmware/common/joshua_watchdogs.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
+#include "robot/board/joshua_wire/joshua_wire_coordinator.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
+#include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -22,6 +24,8 @@ namespace robot::board {
 // comm remains byte-oriented.
 class JoshuaWireCommandClient {
  public:
+  explicit JoshuaWireCommandClient(std::shared_ptr<JoshuaWireCoordinator> coordinator)
+      : coordinator_(std::move(coordinator)) {}
   JoshuaWireCommandClient(std::shared_ptr<robot::comm::MessageTransport> transport,
                           const robot::comm::PairedTransports* pair)
       : transport_(std::move(transport)) {
@@ -33,38 +37,98 @@ class JoshuaWireCommandClient {
                                             pair ? pair->response_timeout : absl::ZeroDuration());
   }
   ~JoshuaWireCommandClient() {
-    Close().IgnoreError();
+    joshua::RunCleanup("JoshuaWire client close", [&] { joshua::ThrowIfError(Close()); });
   }
   absl::Status Open() {
     std::lock_guard lock(mutex_);
+    if (coordinator_) return absl::OkStatus();
     return session_->Open();
   }
   absl::Status Close() {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     if (closed_) return absl::OkStatus();
     closed_ = true;
+    joshua::ScopeExit release([&] {
+      session_.reset();
+      transport_.reset();
+    });
+    if (coordinator_) {
+      auto coordinator = std::move(coordinator_);
+      lock.unlock();
+      return coordinator->Close();
+    }
     auto status = session_ ? session_->Close() : absl::OkStatus();
-    session_.reset();
-    transport_.reset();  // Retained channels no longer keep a NIC lease alive.
     return status;
   }
   uint32_t protocol_version() const {
     return JW_PROTO_VERSION;
   }
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command) {
-    std::lock_guard lock(mutex_);
+    std::unique_lock lock(mutex_);
     if (closed_) return absl::FailedPreconditionError("JoshuaWire board has been closed.");
+    if (coordinator_) {
+      auto coordinator = coordinator_;
+      lock.unlock();  // Stop must never wait behind another caller's Exchange.
+      return coordinator->Exchange(command);
+    }
     return session_->Exchange(command);
+  }
+  absl::StatusOr<std::shared_ptr<JoshuaWireCoordinator::Subscription>> Subscribe(uint8_t f,
+                                                                                 uint32_t period) {
+    std::unique_lock lock(mutex_);
+    if (closed_ || !coordinator_)
+      return absl::FailedPreconditionError("Scalar streaming requires an open FRAME_STREAM board");
+    auto coordinator = coordinator_;
+    lock.unlock();
+    return coordinator->Subscribe(f, period);
   }
 
  private:
   std::shared_ptr<robot::comm::MessageTransport> transport_;
+  std::shared_ptr<JoshuaWireCoordinator> coordinator_;
   std::unique_ptr<JoshuaWireSession> session_;
   bool closed_ = false;
   std::mutex mutex_;
 };
 
 namespace {
+class JoshuaWireScalarSensor : public ScalarSensor {
+ public:
+  JoshuaWireScalarSensor(std::shared_ptr<JoshuaWireCoordinator::Subscription> stream,
+                         uint32_t period)
+      : stream_(std::move(stream)), period_(period) {}
+  absl::Status Close() override {
+    return stream_->Close();
+  }
+  absl::StatusOr<ScalarObservation> Latest() const override {
+    ABSL_ASSIGN_OR_RETURN(auto o, stream_->Latest());
+    ScalarObservation value;
+    const auto& s = o.sample;
+    value.value = s.sample.value;
+    value.boot_id = s.sample.metadata.boot_id;
+    value.sequence = s.sample.metadata.sequence;
+    value.acquisition_us = s.sample.metadata.timestamp_us;
+    value.clock = s.sample.metadata.clock;
+    value.validity = s.sample.metadata.validity;
+    value.unit = o.schema.unit;
+    value.function_id = s.function_id;
+    value.session_id = s.session_id;
+    value.subscription_id = s.subscription_id;
+    value.period_us = period_;
+    value.dropped_acquisitions = s.dropped_acquisitions;
+    value.sequence_gaps = o.sequence_gaps;
+    value.overwritten = o.overwritten;
+    value.received_at = o.received_at;
+    value.receipt_age = o.receipt_age;
+    value.receipt_fresh = o.receipt_fresh;
+    value.usable = o.usable;
+    return value;
+  }
+
+ private:
+  std::shared_ptr<JoshuaWireCoordinator::Subscription> stream_;
+  uint32_t period_;
+};
 jw_command_t Command(uint8_t cmd,
                      uint8_t function,
                      const uint8_t* data = nullptr,
@@ -157,10 +221,10 @@ class JoshuaWireChannel : public BoardChannel {
     if (value.metadata.validity != JW_SAMPLE_VALID || value.metadata.boot_id != boot_ ||
         value.metadata.clock != schema_.feedback_clock)
       return absl::UnavailableError("Feedback invalid, stale, or from another boot/clock.");
-    const auto now = absl::Now();
+    const double now = RobotTime();
     if (sample_seen_ && value.metadata.sequence == sequence_) {
-      if (value.metadata.timestamp_us != timestamp_ ||
-          now - received_ > absl::Microseconds(schema_.max_feedback_age_us))
+      if (value.metadata.timestamp_us != timestamp_ || now < received_ ||
+          now - received_ > schema_.max_feedback_age_us / 1'000'000.0)
         return absl::UnavailableError("Cached feedback expired or changed without acquisition.");
     } else {
       if (sample_seen_ && (int32_t(value.metadata.sequence - sequence_) <= 0 ||
@@ -187,7 +251,7 @@ class JoshuaWireChannel : public BoardChannel {
   bool sample_seen_ = false;
   uint32_t sequence_ = 0;
   uint64_t timestamp_ = 0;
-  absl::Time received_;
+  double received_ = 0.0;
 };
 absl::Status ConfigureChannel(JoshuaWireCommandClient& commands, const Channel& channel) {
   jw_configure_step_dir_t config{};
@@ -214,10 +278,16 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(
         absl::StrCat("Board '", config.name(), "' is not a ", type_name, " board."));
   }
+  if (config.has_joshua_wire_host_policy() &&
+      config.comm().transport_type() != robot::comm::FRAME_STREAM)
+    return absl::InvalidArgumentError("JoshuaWire host policy requires FRAME_STREAM");
   if (config.comm().transport_type() != robot::comm::MESSAGE &&
-      config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Board '", config.name(), "' requires MESSAGE or MESSAGE_AND_CYCLIC transport."));
+      config.comm().transport_type() != robot::comm::MESSAGE_AND_CYCLIC &&
+      config.comm().transport_type() != robot::comm::FRAME_STREAM) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Board '",
+                     config.name(),
+                     "' requires MESSAGE, FRAME_STREAM or MESSAGE_AND_CYCLIC transport."));
   }
   if (config.comm().comm_type() == robot::comm::SERIAL &&
       config.comm().serial_config().message_adapter() != robot::comm::JOSHUA_WIRE) {
@@ -233,7 +303,10 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
     return absl::InvalidArgumentError(absl::StrCat(
         type_name, " board '", config.name(), "' requires a firmware{} spec for IDENTIFY."));
   }
-  if (config.channels_size() == 0) {
+  ABSL_RETURN_IF_ERROR(
+      ValidateCoordinatorPolicy(ResolveCoordinatorPolicy(config.joshua_wire_host_policy())));
+  ABSL_RETURN_IF_ERROR(ValidateWatchdogPolicy(config));
+  if (config.channels_size() == 0 && config.comm().transport_type() != robot::comm::FRAME_STREAM) {
     return absl::InvalidArgumentError(
         absl::StrCat(type_name, " board '", config.name(), "' declares no channels."));
   }
@@ -325,12 +398,17 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& comma
       (config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC &&
        !(identity.supported_planes & JW_PLANE_CYCLIC)) ||
       !(identity.safety_flags & JW_SAFETY_BOARD_ESTOP) ||
-      (identity.safety_flags & ~(JW_SAFETY_BOARD_ESTOP | JW_SAFETY_DOMAIN_ESTOP |
-                                 JW_SAFETY_PHYSICAL_VERIFICATION | JW_SAFETY_COMM_INTERRUPTED)))
+      (identity.safety_flags &
+       ~(JW_SAFETY_BOARD_ESTOP | JW_SAFETY_DOMAIN_ESTOP | JW_SAFETY_PHYSICAL_VERIFICATION |
+         JW_SAFETY_COMM_INTERRUPTED | JW_SAFETY_CONFIGURABLE_WATCHDOGS)))
     return absl::FailedPreconditionError("Incompatible JoshuaWire identity/limits/planes/safety.");
   // The configured transport timeout bounds the acceptable synchronous dispatch.
   const uint64_t timeout_us =
-      config.comm().has_serial_config()
+      config.comm().transport_type() == robot::comm::FRAME_STREAM
+          ? uint64_t(
+                ResolveCoordinatorPolicy(config.joshua_wire_host_policy()).attempt_timeout_ms) *
+                1000
+      : config.comm().has_serial_config()
           ? uint64_t(config.comm().serial_config().has_exchange_timeout_ms()
                          ? config.comm().serial_config().exchange_timeout_ms()
                          : 100) *
@@ -432,6 +510,21 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& comma
       (state.recovery & JW_RECOVERY_CLEAR_ESTOP))
     return absl::FailedPreconditionError("Board requires explicit recovery.");
   boot_id_ = identity.boot_id;
+  const bool watchdogs = identity.safety_flags & JW_SAFETY_CONFIGURABLE_WATCHDOGS;
+  if (watchdogs != (config.firmware().communication_watchdog_us() != 0))
+    return absl::FailedPreconditionError("Firmware watchdog capability and explicit policy differ");
+  if (watchdogs) {
+    uint8_t bytes[JW_WATCHDOG_POLICY_LEN];
+    const jw_watchdog_policy_t policy{config.firmware().communication_watchdog_us(),
+                                      config.firmware().target_watchdog_us()};
+    const int size = jw_encode_watchdog_policy(bytes, sizeof(bytes), &policy);
+    if (size < 0) return absl::InvalidArgumentError("Invalid firmware watchdog policy");
+    ABSL_ASSIGN_OR_RETURN(
+        auto response,
+        Data(commands, Command(JW_CMD_CONFIGURE_WATCHDOGS, JW_CHANNEL_NONE, bytes, size)));
+    if (response != std::vector<uint8_t>(bytes, bytes + size))
+      return absl::DataLossError("Firmware watchdog acknowledgment mismatch");
+  }
   return absl::OkStatus();
 }
 
@@ -443,17 +536,26 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
   ABSL_RETURN_IF_ERROR(ValidateConfig(config));
 
   ABSL_ASSIGN_OR_RETURN(auto transports, robot::comm::CommFactory::CreateComm(config.comm()));
-  ABSL_ASSIGN_OR_RETURN(auto transport,
-                        robot::comm::GetCommTransport<robot::comm::MessageTransport>(transports));
-  const auto* pair = std::get_if<robot::comm::PairedTransports>(&transports);
-  const bool wants_pair = config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
-  if (wants_pair != (pair != nullptr) ||
-      (pair && (!pair->cyclic || pair->response_timeout <= absl::ZeroDuration() ||
-                pair->response_timeout == absl::InfiniteDuration())))
-    return absl::InvalidArgumentError(
-        "Factory capabilities do not match JoshuaWire routing policy.");
+  std::shared_ptr<JoshuaWireCommandClient> commands;
+  if (config.comm().transport_type() == robot::comm::FRAME_STREAM) {
+    ABSL_ASSIGN_OR_RETURN(
+        auto frames, robot::comm::GetCommTransport<robot::comm::FrameStreamTransport>(transports));
+    ABSL_ASSIGN_OR_RETURN(auto coordinator,
+                          JoshuaWireCoordinator::Acquire(frames, config.joshua_wire_host_policy()));
+    commands = std::make_shared<JoshuaWireCommandClient>(std::move(coordinator));
+  } else {
+    ABSL_ASSIGN_OR_RETURN(auto transport,
+                          robot::comm::GetCommTransport<robot::comm::MessageTransport>(transports));
+    const auto* pair = std::get_if<robot::comm::PairedTransports>(&transports);
+    const bool wants_pair = config.comm().transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
+    if (wants_pair != (pair != nullptr) ||
+        (pair && (!pair->cyclic || pair->response_timeout <= absl::ZeroDuration() ||
+                  pair->response_timeout == absl::InfiniteDuration())))
+      return absl::InvalidArgumentError(
+          "Factory capabilities do not match JoshuaWire routing policy.");
 
-  auto commands = std::make_shared<JoshuaWireCommandClient>(std::move(transport), pair);
+    commands = std::make_shared<JoshuaWireCommandClient>(std::move(transport), pair);
+  }
   ABSL_RETURN_IF_ERROR(commands->Open());
   ABSL_RETURN_IF_ERROR(IdentifyAndValidate(*commands, config));
 
@@ -487,11 +589,26 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 }
 
 absl::Status JoshuaWireBoard::Teardown() {
+  joshua::ScopeExit release([&] {
+    channels_.clear();
+    commands_.reset();
+    initialized_ = false;
+  });
   const auto status = commands_ ? commands_->Close() : absl::OkStatus();
-  channels_.clear();
-  commands_.reset();
-  initialized_ = false;
   return status;
+}
+absl::Status JoshuaWireBoard::EmergencyStop() {
+  if (!initialized_ || !commands_) return absl::FailedPreconditionError("Board is not initialized");
+  const uint8_t domain[2] = {};
+  return Data(*commands_, Command(JW_CMD_ESTOP, JW_CHANNEL_NONE, domain, sizeof(domain))).status();
+}
+
+absl::StatusOr<std::shared_ptr<ScalarSensor>> JoshuaWireBoard::SubscribeScalar(uint32_t function,
+                                                                               uint32_t period_us) {
+  if (!initialized_ || !commands_) return absl::FailedPreconditionError("Board is not initialized");
+  if (function >= JW_CHANNEL_NONE) return absl::InvalidArgumentError("Invalid sensor function ID");
+  ABSL_ASSIGN_OR_RETURN(auto stream, commands_->Subscribe(function, period_us));
+  return std::make_shared<JoshuaWireScalarSensor>(std::move(stream), period_us);
 }
 
 }  // namespace robot::board

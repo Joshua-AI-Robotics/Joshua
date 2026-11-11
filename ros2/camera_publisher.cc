@@ -1,4 +1,3 @@
-#include <chrono>
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -11,10 +10,13 @@
 #include "robot/perception/factory/perception_factory.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/proto/perception.pb.h"
+#include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/proto/ros2_data_type.pb.h"
 #include "ros2/utils/packet_parser.h"
 #include "ros2/utils/qos_setting.h"
+#include "ros2/utils/robot_time_conversion.h"
+#include "ros2/utils/robot_timer.h"
 #include "sensor_msgs/msg/image.hpp"
 #include "utils/robot_time.h"
 
@@ -60,7 +62,7 @@ class CameraPublisher : public rclcpp::Node {
 
   bool InitializeCamera(Source& source);
   void ResetCamera(Source& source);
-  void PublishCameraData();
+  void PublishCameraData(size_t camera_index);
 
   Now now_;
   std::vector<Camera> cameras_;
@@ -85,6 +87,7 @@ CameraPublisher::CameraPublisher(const std::string& node_name,
                                  Factory factory,
                                  Now now)
     : Node(node_name), now_(std::move(now)) {
+  ros2_utils::SetLogNodeName(get_logger().get_name());
   for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
     if (single_perception.sensor_type() != robot::perception::SensorType::IMAGE ||
         static_cast<int>(single_perception.node().id()) != node_id) {
@@ -95,10 +98,8 @@ CameraPublisher::CameraPublisher(const std::string& node_name,
     const auto& qos_setting = single_perception.node().qos_setting();
     auto interface = factory(single_perception);
     if (!interface.ok()) {
-      RCLCPP_ERROR(this->get_logger(),
-                   "Failed to create perception interface for camera '%s': %s",
-                   sensor_name.c_str(),
-                   std::string(interface.status().message()).c_str());
+      JOSHUA_LOG(ERROR) << "Failed to create perception interface for camera '" << sensor_name
+                        << "': " << interface.status();
       continue;
     }
 
@@ -110,40 +111,36 @@ CameraPublisher::CameraPublisher(const std::string& node_name,
 
     for (const auto& publisher : single_perception.node().publishers()) {
       if (!ValidateCameraPublisher(publisher.ros2_data_type())) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Invalid publisher config for camera topic '%s' "
-                     "(ros2_data_type=%d). Require IMAGE.",
-                     publisher.topic().c_str(),
-                     static_cast<int>(publisher.ros2_data_type()));
+        JOSHUA_LOG(ERROR) << "Invalid publisher config for camera topic '" << publisher.topic()
+                          << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
+                          << "). Require IMAGE.";
         continue;
       }
 
       const auto qos = ros2_utils::CreateQosSetting(qos_setting);
+      const size_t camera_index = cameras_.size();
       cameras_.emplace_back(Camera{
           .topic = publisher.topic(),
           .source = source,
           .publisher = this->create_publisher<sensor_msgs::msg::Image>(publisher.topic(), qos),
-          .timer =
-              this->create_wall_timer(std::chrono::milliseconds(1000 / publisher.publish_rate_hz()),
-                                      [this]() { PublishCameraData(); })});
+          .timer = ros2_utils::CreateRobotTimer(
+              *this, 1.0 / publisher.publish_rate_hz(), [this, camera_index]() {
+                PublishCameraData(camera_index);
+              })});
     }
 
-    RCLCPP_INFO(this->get_logger(),
-                "Found camera '%s' in configuration for node_id %d. Publishing on %zu topics",
-                sensor_name.c_str(),
-                node_id,
-                static_cast<size_t>(single_perception.node().publishers().size()));
+    JOSHUA_LOG(INFO) << "Found camera '" << sensor_name << "' in configuration for node_id "
+                     << node_id << ". Publishing on "
+                     << single_perception.node().publishers().size() << " topics";
   }
 
   if (cameras_.empty()) {
-    RCLCPP_ERROR(this->get_logger(), "No camera found in configuration for node_id %d!", node_id);
+    JOSHUA_LOG(ERROR) << "No camera found in configuration for node_id " << node_id << "!";
     return;
   }
 
-  RCLCPP_INFO(this->get_logger(),
-              "Camera publisher node started with %zu camera topics for node_id %d!",
-              cameras_.size(),
-              node_id);
+  JOSHUA_LOG(INFO) << "Camera publisher node started with " << cameras_.size()
+                   << " camera topics for node_id " << node_id << "!";
 }
 
 bool CameraPublisher::InitializeCamera(Source& source) {
@@ -158,10 +155,8 @@ bool CameraPublisher::InitializeCamera(Source& source) {
     throw std::invalid_argument("Invalid camera configuration for '" + source.name +
                                 "': " + status.ToString());
   }
-  RCLCPP_WARN(this->get_logger(),
-              "Camera '%s' unavailable; retrying initialization in one second: %s",
-              source.name.c_str(),
-              status.ToString().c_str());
+  JOSHUA_LOG(WARNING) << "Camera '" << source.name
+                      << "' unavailable; retrying initialization in one second: " << status;
   return false;
 }
 
@@ -169,85 +164,69 @@ void CameraPublisher::ResetCamera(Source& source) {
   source.initialized = false;
   const auto status = source.interface->Teardown();
   if (!status.ok()) {
-    RCLCPP_WARN(this->get_logger(),
-                "Failed to close camera '%s': %s",
-                source.name.c_str(),
-                status.ToString().c_str());
+    JOSHUA_LOG(WARNING) << "Failed to close camera '" << source.name << "': " << status;
   }
   source.retry_after = now_() + kCameraRetryBackoffSeconds;
 }
 
-void CameraPublisher::PublishCameraData() {
-  if (cameras_.empty()) {
-    RCLCPP_ERROR(this->get_logger(), "Camera not initialized!");
+void CameraPublisher::PublishCameraData(size_t camera_index) {
+  const auto& camera = cameras_.at(camera_index);
+  auto& source = *camera.source;
+  if (!source.initialized) {
+    if (now_() < source.retry_after || !InitializeCamera(source)) return;
+  }
+  auto packet = source.interface->GetData();
+
+  if (!packet.ok()) {
+    ResetCamera(source);
+    JOSHUA_LOG(WARNING) << "Failed to get data from camera '" << source.name
+                        << "'; retrying in one second: " << packet.status();
     return;
   }
 
-  try {
-    for (const auto& camera : cameras_) {
-      auto& source = *camera.source;
-      if (!source.initialized) {
-        if (now_() < source.retry_after || !InitializeCamera(source)) continue;
-      }
-      auto packet = source.interface->GetData();
-
-      if (!packet.ok()) {
-        ResetCamera(source);
-        RCLCPP_WARN(this->get_logger(),
-                    "Failed to get data from camera '%s'; retrying in one second: %s",
-                    source.name.c_str(),
-                    packet.status().ToString().c_str());
-        continue;
-      }
-
-      const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
-      if (!image_status.ok()) {
-        RCLCPP_WARN(this->get_logger(),
-                    "Failed to get image data from camera '%s': %s",
-                    camera.topic.c_str(),
-                    image_status.message().data());
-        continue;
-      }
-
-      const auto& image_data = packet.value().image();
-
-      if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Invalid image dimensions: %dx%d, channels=%d",
-                     image_data.width(),
-                     image_data.height(),
-                     image_data.channels());
-        continue;
-      }
-
-      auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
-      image_msg->header.stamp = this->now();
-      image_msg->header.frame_id = "camera_frame";
-      image_msg->height = image_data.height();
-      image_msg->width = image_data.width();
-      image_msg->encoding = "rgb8";
-      image_msg->is_bigendian = false;
-      image_msg->step = image_data.width() * 3;
-
-      size_t data_size = image_data.width() * image_data.height() * 3;
-      image_msg->data.resize(data_size);
-
-      const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
-      for (size_t i = 0; i < data_size; i += 3) {
-        image_msg->data[i] = bgr_data[i + 2];
-        image_msg->data[i + 1] = bgr_data[i + 1];
-        image_msg->data[i + 2] = bgr_data[i];
-      }
-
-      camera.publisher->publish(*image_msg);
-    }
-  } catch (const std::exception& e) {
-    RCLCPP_ERROR(this->get_logger(), "Error publishing camera data: %s", e.what());
+  const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
+  if (!image_status.ok()) {
+    JOSHUA_LOG(WARNING) << "Failed to get image data from camera '" << camera.topic
+                        << "': " << image_status;
+    return;
   }
+
+  const auto& image_data = packet.value().image();
+  if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
+    JOSHUA_LOG(ERROR) << "Invalid image dimensions: " << image_data.width() << "x"
+                      << image_data.height() << ", channels=" << image_data.channels();
+    return;
+  }
+
+  auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
+  const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
+  if (!stamp.ok()) {
+    JOSHUA_LOG(ERROR) << "Invalid camera timestamp: " << stamp.status();
+    return;
+  }
+  image_msg->header.stamp = *stamp;
+  image_msg->header.frame_id = "camera_frame";
+  image_msg->height = image_data.height();
+  image_msg->width = image_data.width();
+  image_msg->encoding = "rgb8";
+  image_msg->is_bigendian = false;
+  image_msg->step = image_data.width() * 3;
+
+  size_t data_size = image_data.width() * image_data.height() * 3;
+  image_msg->data.resize(data_size);
+
+  const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
+  for (size_t i = 0; i < data_size; i += 3) {
+    image_msg->data[i] = bgr_data[i + 2];
+    image_msg->data[i + 1] = bgr_data[i + 1];
+    image_msg->data[i + 2] = bgr_data[i];
+  }
+
+  camera.publisher->publish(*image_msg);
 }
 
 #ifndef JOSHUA_CAMERA_PUBLISHER_TEST
-int main(int argc, char* argv[]) {
+JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
 }
 #endif

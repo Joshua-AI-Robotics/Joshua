@@ -77,6 +77,18 @@ TEST(Sts3215DriverTest, InitSeedsChannelWithConfiguredDefaultSpeed) {
   EXPECT_FLOAT_EQ(channel->last_value_, 3000.0f);
 }
 
+TEST(Sts3215DriverTest, InitAcceptsDisabledChannelWithoutEnablingTorque) {
+  auto channel = std::make_shared<RecordingChannel>();
+  channel->set_target_status_ = absl::FailedPreconditionError("channel is disabled");
+  Sts3215Driver driver(channel, MakeServoActuator());
+
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->disable_calls_, 0);
+  EXPECT_EQ(driver.SetSpeed(2000.0f).code(), absl::StatusCode::kFailedPrecondition);
+}
+
 TEST(Sts3215DriverTest, SetCommandsValidateInputs) {
   auto channel = std::make_shared<RecordingChannel>();
   Sts3215Driver driver(channel, MakeServoActuator());
@@ -160,7 +172,7 @@ TEST(Sts3215DriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsB
   command->set_joint_name("servo_1");
   command->set_position(3.14159265358979323846);
   command->set_frame_id("base");
-  packet.set_timestamp_ns(123);
+  packet.set_timestamp(123.25);
   ASSERT_TRUE(driver.SetAction(packet).ok());
   EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
   EXPECT_NEAR(channel->last_value_, 2048.0f, 0.001f);

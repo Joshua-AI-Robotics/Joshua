@@ -53,6 +53,24 @@ metadata. Neither query establishes readiness or changes config validation.
 
 ## Layout
 
+The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
+uses `FRAME_STREAM` and one `MCU_BUS` process for actuator and scalar consumers.
+`joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
+`period_us`; it does not declare an actuator channel. The firmware catalog must
+advertise that exact sensor/schema and period support. Subscriptions require an
+explicit aggregate `telemetry_bytes_per_second` reservation. The candidate uses
+100 Hz acquisition and 50 Hz latest-value publication; coalescing is observable.
+
+Images advertising configurable watchdogs require explicit
+`firmware.communication_watchdog_us` and `target_watchdog_us` (10000..10000000).
+`joshua_wire_host_policy.heartbeat_period_ms` must be positive and its period plus
+the ordinary-operation budget, polling budget and scheduling guard must be below
+the communication watchdog. A reserved internal GET_STATUS maintains communication
+and detects faults; it never refreshes targets. The mixed stepper configuration
+requires `require_explicit_enable: true`. Startup validation checks one process
+per serial bus before opening any device. These configured budgets remain subject
+to physical qualification.
+
 - `proto/` — the schema.
   - `robot.proto` — top-level `Robot`; composes the others.
   - `config.proto` — `General`, including `operation_mode`, which the launcher
@@ -63,7 +81,7 @@ metadata. Neither query establishes readiness or changes config validation.
   (`so100/`, `example/`).
 - `config_utils.h` — `LoadConfig`, which opens a `.pbtxt` and parses it into a
   `config::Config`. Parsing only; semantic checks happen later, in the
-  factories and `node_generator/`.
+  factories and `launcher/node_manager/`.
 
 ## Responsibilities
 
@@ -71,7 +89,7 @@ metadata. Neither query establishes readiness or changes config validation.
 - Stay the only place a robot-specific value appears: ports, joint limits, gear
   ratios, servo IDs, topic names, model paths.
 - Carry enough structure that an inconsistent setup can be rejected during
-  startup — in the factories and `node_generator/` — rather than at first
+  startup — in the factories and `launcher/node_manager/` — rather than at first
   motion.
 
 ## Non-Goals
@@ -126,21 +144,95 @@ serial_config {
 }
 ```
 
-The framed JoshuaWire exchange timeout includes waiting for the shared bus lock,
-writing and receiving a complete frame. Omitted means 100 ms; explicit values
-must be 1..INT_MAX milliseconds. Fixed-length vendor operations retain their
-existing deadlines. Settle delay is 0..INT_MAX milliseconds, defaults to zero,
-and runs once after physical open, not per request or session reset. All users
-of one port must agree on baudrate and settle delay. Only JoshuaWire users must
-agree on exchange timeout; omitted timeout and explicit 100 ms are equivalent.
-CALLER_SIZED and BYTE_STREAM consumers can share that port without selecting a
-JoshuaWire timeout. Invalid/conflicting settings fail before another open.
+The framed JoshuaWire exchange timeout includes queue wait, writing, and receiving
+a complete frame. Omitted means 100 ms; explicit values must be 1..INT_MAX
+milliseconds. `post_open_settle_ms` is 0..INT_MAX milliseconds, defaults to zero,
+and runs once after physical open, before exposing the connection.
+
+All raw, vendor, and framed operations share one nonblocking serial owner.
+Optional `serial_config.io_policy` controls its software budgets and admission:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `read_timeout_ms` | 500 | Total raw read budget, including queue wait |
+| `read_idle_timeout_ms` | 100 | Maximum gap while an active raw/vendor read awaits bytes |
+| `write_timeout_ms` | 100 | Total send-only or flush budget |
+| `transaction_timeout_ms` | 100 | Total CALLER_SIZED write/read budget |
+| `max_pending_operations` | 16 | Active plus queued operations, allowed range 1..1024 |
+| `max_pending_bytes` | 1048576 | Reserved request plus response bytes, range 1..16777216 |
+| `max_transfer_bytes` | 65536 | Request plus response limit per operation, range 1..1048576 and no larger than pending bytes |
+
+All four timeouts must be 1..INT_MAX milliseconds. Progress renews only the idle
+budget, never the total deadline. JoshuaWire uses `exchange_timeout_ms` for its
+total deadline and no separate idle deadline. Request-only framed requests reserve their
+maximum response budget at admission. Oversized/full-queue requests fail before
+publication. Raw/vendor partial responses return an error through the existing
+interfaces; internal operation results retain actual read/write progress.
+
+Consumers of a physical port must agree on baudrate, settle delay, and effective
+`io_policy`, including defaults. Only JoshuaWire users must also agree on
+`exchange_timeout_ms`; omitted timeout and explicit 100 ms are equivalent.
+CALLER_SIZED and BYTE_STREAM consumers do not select a JoshuaWire timeout.
+Preflight checks identical configured paths without opening hardware. At runtime,
+resolved device aliases share one owner; conflicts fail before another open.
+The last consumer releases the owner. A retained faulted connection is not
+silently reopened; release all consumers before creating a fresh generation.
+
+These defaults replace the former fixed raw/vendor timeouts. Configure them for
+the device cadence, USB/UART behavior, maximum response size, and scheduling
+margin. They are software limits, not measured hardware latency guarantees.
+For example, 2520 bytes require about 109 ms of 8N1 wire time at 230400 baud;
+raw reads must allow the full scan and gaps between its fragments.
 
 **ESP32 config migration:** the board-specific 2-second sleep has been removed.
 For a USB bridge that resets the MCU on open, set `post_open_settle_ms: 2000`
 as in the checked-in ESP32 example. Native USB or other links may need a
 different value; board type no longer guesses it. The manual JW probe's
 `--settle_ms` remains an additional diagnostic wait, not a runtime setting.
+
+### Continuous frame capability (P3a)
+
+`transport_type: FRAME_STREAM` with `message_adapter: JOSHUA_WIRE` selects the
+host integration capability for a future shared MCU coordinator. It exposes
+`FrameStreamTransport`, rather than `MessageTransport` or `ByteStream`. Existing
+board/session consumers and demo presets remain request-only; this capability
+alone does not enable sensor streaming or implement the coordinator.
+
+```text
+comm_type: SERIAL
+transport_type: FRAME_STREAM
+serial_config {
+  port: "/dev/serial/by-id/<configured-controller>"
+  baudrate: 115200
+  message_adapter: JOSHUA_WIRE
+  frame_policy {
+    frame_idle_timeout_ms: 100
+    max_reply_frames: 4
+    max_notification_frames: 32
+  }
+}
+```
+
+`frame_policy` is accepted only in this mode. Its omitted fields use the shown
+software defaults. Partial-frame idle timeout must be 1..INT_MAX milliseconds;
+reply and notification capacities must each be 1..256 frames. `io_policy` still
+controls physical write time and admission limits; `max_transfer_bytes` must be
+at least 96. `exchange_timeout_ms` is rejected: the forthcoming coordinator owns
+the complete operation/retry deadline above this duplex link.
+
+All consumers of a physical port must select the same receive mode and effective
+policies. A continuous receiver cannot share that port with raw/vendor or
+request-only JoshuaWire users, including through path aliases. Frame-mode users
+share one lease; exactly one coordinator must consume it. The last lease closes
+the receiver. There is no automatic reopen or protocol reset.
+
+Replies have reserved capacity and are returned before notifications. Pending
+notifications with the same session/token/function are replaced by the most
+recent arrival; when notification capacity is full, the oldest whole notification
+is dropped. Counters report both forms of loss. Reply overflow faults the link
+and wakes receivers instead of silently losing reply ownership. Profile metadata,
+subscription identity, sequence ordering and freshness still require coordinator
+validation; a received frame alone is not a usable sensor observation.
 
 ## JoshuaWire over EtherCAT
 
@@ -230,6 +322,10 @@ subscribers share `sts3215_servo_<joint>/position` topics, carrying native
 position values as `Float32` commands directly between the two nodes.
 Preset tests validate declared dependencies and serial-port ownership without
 opening hardware.
+For locally present serial devices, ownership and timing checks resolve path
+aliases using filesystem metadata, consistently with the runtime factories.
+Absent devices use normalized paths so offline validation remains available;
+aliases with missing targets cannot establish that two paths name one device.
 
 Serial `MESSAGE` communication requires an explicit
 `serial_config { ... message_adapter: CALLER_SIZED }` for vendor drivers,
@@ -237,7 +333,7 @@ or `message_adapter: JOSHUA_WIRE` for Joshua-owned MCU firmware. ESP32, Teensy
 and AM243 serial presets select the current revision-4 engine and firmware. Existing external serial MESSAGE configs must add this field;
 there is no implicit framing choice. `BYTE_STREAM` leaves it unspecified.
 `exchange_timeout_ms` applies only to `JOSHUA_WIRE`; fixed-length transactions
-retain their existing timing. See [communication](../robot/comm/README.md) for
+use `io_policy.transaction_timeout_ms` and `read_idle_timeout_ms`. See [communication](../robot/comm/README.md) for
 transaction and receive-ownership contracts.
 
 `config::ValidateConfig` in [validation.h](validation.h)
@@ -273,3 +369,35 @@ node defines the interpretation: actuator scalar position topics use native unit
 while JointState uses SI and selects the configured actuator by message name.
 Position encoding remains inside JointCommand for internal consumers. Scalar
 producers must convert normalized outputs before publishing.
+
+### JoshuaWire host coordinator policy
+
+For a Joshua `FRAME_STREAM` board, `joshua_wire_host_policy` configures the shared
+protocol queue. It is rejected on request-only/vendor boards. Omitted optional
+fields resolve to these software defaults:
+
+| Field | Default | Bound / meaning |
+| --- | --- | --- |
+| `operation_timeout_ms` | 200 | Queue plus all exact-byte attempts, 1..INT_MAX |
+| `attempt_timeout_ms` | 50 | One write/reply attempt, no larger than operation budget |
+| `polling_timeout_ms` | 40 | Total polling budget, no larger than operation budget |
+| `max_attempts` | 2 | 1..4, identical IDs/bytes only |
+| `max_pending_operations` | 16 | 1..1024 ordinary operations, including active |
+| `max_pending_bytes` | 4096 | 192..1048576 reserved request plus maximum reply bytes |
+| `max_priority_burst` | 8 | 1..1024 before considering lower priority with sufficient slack |
+| `scheduling_guard_ms` | 1 | Positive scheduling margin, at most INT_MAX |
+| `max_notifications` | 32 | 1..256 diagnostic latest raw envelopes |
+| `max_streams` | 16 | 1..255 shared subscriptions (P3c) |
+| `telemetry_bytes_per_second` | 0 | Explicit aggregate complete-frame reservation; zero prevents subscribing |
+
+ESTOP has an independent single admission slot. All MCU handles must agree on
+effective policy, including defaults. Polling fairness requires enough deadline
+slack; admission and deadlines report overload instead of promising an infeasible
+workload. Physical control/stop latency and telemetry capacity still require P6
+qualification. Runtime board/perception integration follows in P5.
+
+## C++ ROS logging
+
+`general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
+`ROS2_LOG_GLOG`. It controls C++ node `JOSHUA_LOG` calls; Python and direct driver
+logging are unchanged. See [logging behavior](../ros2/README.md#c-node-logging).

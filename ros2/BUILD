@@ -6,6 +6,18 @@ load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_library", "ros2_cp
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "logging",
+    srcs = ["logging.cc"],
+    hdrs = ["logging.h"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "@glog",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:rcutils",
+    ],
+)
+
+cc_library(
     name = "node_runner",
     hdrs = ["node_runner.h"],
     data = [
@@ -15,7 +27,12 @@ cc_library(
         "//config:config_utils",
         "//config:validation",
         "//config/proto:config_cc_proto",
+        "//robot/board/factory:board_factory",
+        "//robot/comm/factory:comm_factory",
+        "//ros2:logging",
+        "//utils:joshua_runtime",
         "//utils:robot_time",
+        "//utils:scope_exit",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
     ],
@@ -85,10 +102,13 @@ _CAMERA_PUBLISHER_DEPS = [
     "//robot/perception/interfaces:perception_interface",
     "//robot/perception/proto:perception_cc_proto",
     "//robot/perception/proto:perception_packet_cc_proto",
+    "//ros2:logging",
     "//ros2:node_runner",
     "//ros2/proto:node_cc_proto",
     "//ros2/utils:packet_parser",
     "//ros2/utils:qos_setting",
+    "//ros2/utils:robot_time_conversion",
+    "//ros2/utils:robot_timer",
     "//utils:robot_time",
     "@abseil-cpp//absl/status:status",
     "@abseil-cpp//absl/status:statusor",
@@ -132,9 +152,11 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:rclcpp",
     ],
 )
@@ -151,10 +173,13 @@ ros2_cpp_binary(
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
@@ -163,7 +188,10 @@ ros2_cpp_binary(
 
 ros2_cpp_binary(
     name = "actuator_subscriber",
-    srcs = ["actuator_subscriber.cc"],
+    srcs = [
+        "action_subscriber.h",
+        "actuator_subscriber.cc",
+    ],
     data = [
         "//config/config_preset:config_presets",
     ],
@@ -173,17 +201,61 @@ ros2_cpp_binary(
         "//robot/action/factory:action_factory",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/proto:node_cc_proto",
         "//ros2/utils:packet_parser",
         "//ros2/utils:qos_setting",
         "@abseil-cpp//absl/strings",
-        "@glog",
         "@protobuf",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:cpp_std_srvs",
         "@ros2_deps//:rclcpp",
     ],
+)
+
+cc_library(
+    name = "mcu_bus_node",
+    hdrs = [
+        "action_subscriber.h",
+        "mcu_bus.h",
+    ],
+    deps = [
+        ":logging",
+        ":node_runner",
+        "//config/proto:config_cc_proto",
+        "//robot/action/factory:action_factory",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//robot/board/factory:board_factory",
+        "//robot/perception/factory:perception_factory",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "@abseil-cpp//absl/status:status",
+        "@glog",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+cc_test(
+    name = "mcu_bus_test",
+    srcs = ["mcu_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//config/proto:config_cc_proto",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "mcu_bus",
+    srcs = ["mcu_bus.cc"],
+    deps = [":mcu_bus_node"],
 )
 
 ros2_py_binary(
@@ -249,6 +321,19 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "logging_test",
+    srcs = ["logging_test.cc"],
+    deps = [
+        ":logging",
+        "//config/proto:config_cc_proto",
+        "@glog",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:rclcpp",
+        "@ros2_deps//:rcutils",
+    ],
+)
+
 ros2_cpp_binary(
     name = "audio_publisher",
     srcs = ["audio_publisher.cc"],
@@ -256,8 +341,10 @@ ros2_cpp_binary(
         "//config/proto:config_cc_proto",
         "//robot/perception/audio:audio_capture",
         "//robot/perception/factory:perception_factory",
+        "//ros2:logging",
         "//ros2:node_runner",
         "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
     ],
 )

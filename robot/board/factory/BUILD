@@ -15,6 +15,8 @@ cc_library(
         "//robot/board/mock:mock_board",
         "//robot/board/proto:board_cc_proto",
         "//robot/board/teensy:teensy_board",
+        "//robot/comm/serial:serial_device_identity",
+        "//utils:joshua_runtime",
         "//utils:status_macros",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",

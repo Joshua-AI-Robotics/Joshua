@@ -36,7 +36,8 @@ Development is **Docker-first** — [CONTRIBUTING.md](CONTRIBUTING.md) is
 authoritative. Native Ubuntu development is not a supported entrypoint; ROS 2,
 Bazel, Python, and CUDA all live inside the images.
 
-The host bootstrap installs Docker and NVIDIA container support only:
+The host bootstrap installs Docker and NVIDIA container support and configures
+PTP clock read access:
 
 ```bash
 sudo ./scripts/setup.sh          # add --cpu on hosts without an NVIDIA GPU
@@ -115,6 +116,7 @@ touches their area:
   [ros2/](ros2/README.md), [simulation/](simulation/README.md),
   [ui/](ui/README.md), [firmware/](firmware/README.md),
   [scripts/](scripts/README.md), [tools/](tools/README.md),
+  [launcher/node_manager/](launcher/node_manager/README.md),
   [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
 - **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).

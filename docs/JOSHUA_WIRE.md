@@ -39,13 +39,18 @@ Length and CRC cover revision through payload. CRC is CCITT-FALSE. Session and
 message IDs are nonzero. Frames are 15..96 bytes; payloads are at most 81 bytes.
 The function byte is a stable ID `0..254`; `255` selects board scope. This is an
 explicit limit of 255 functions, not an eight-entry board array. Larger ID spaces
-require a future envelope revision. No allocation, fragmentation, streaming, or
-bulk transfer is implemented in this revision. Oversized/partial/bad-CRC/wrong-
+require a future envelope revision. The core implements no allocation,
+fragmentation, or bulk transfer; the optional sensor-stream extension below
+preserves this frame bound. Oversized/partial/bad-CRC/wrong-
 revision frames are discarded before dispatch and do not consume an ID. A
 transport must reject or boundedly reassemble data before passing one complete
 frame; unbounded buffers and automatic version downgrade are prohibited.
 
-Every response echoes session, message, command and function. Its payload starts
+Every response echoes session, message, command and function. Opt-in sensor
+notifications use the separate namespace described under sensor streaming below
+and are never responses. A host rejects them as commands; the firmware session
+discards inbound notifications without changing request IDs or replay state.
+Each response payload starts
 with `[status:u8][execution:u8]`, followed by command/profile-specific data.
 The common prefix leaves at most 79 bytes of response data; a PROFILE request's
 five-byte selector leaves at most 76 bytes of device payload. A response is never
@@ -99,6 +104,7 @@ Lengths below exclude the common response prefix.
 | 0e GET_STATUS | empty | 19-byte board/function state below |
 | 0f GET_DEPENDENCIES | generation:u32, cursor:u16 | generation:u32, next:u16, count:u8, up to sixteen dependency records |
 | 10 RECOVER | safety domain:u16 | empty, ACCEPTED or COMPLETE; never enables actuators |
+| 12 CONFIGURE_WATCHDOGS (opt-in) | communication_us:u32, target_us:u32 | exact eight-byte policy echo, COMPLETE; disabled-only |
 
 IDENTIFY data, in order:
 
@@ -163,6 +169,33 @@ Discovery pages are at most 61 bytes and dependency pages 71 bytes before the
 reply prefix, so board size never grows a response beyond the frame bound.
 Metadata that cannot fit must use a separately versioned, bounded profile
 operation; this revision does not imply a generic bulk-transfer service.
+
+### Opt-in configurable software watchdogs
+
+`JW_SAFETY_CONFIGURABLE_WATCHDOGS` (IDENTIFY safety bit 4) advertises core command
+0x12. It is board-scoped, negotiated, and optional in revision 4. The request and
+successful reply data are exactly eight little-endian bytes: communication timeout
+then target-freshness timeout, both in microseconds. Each must be 10000..10000000;
+zero or out-of-range values are rejected without changing the prior policy.
+Configuration requires every actuator disabled and no ESTOP/fault latch. It never
+enables outputs. The ordinary session owns IDs, replay, uncertainty and the common
+reply; a duplicate policy request does not restart a watchdog deadline.
+
+The mixed reference image requires this policy before actuator enable or sensor
+subscribe. Only newly dispatched successful commands refresh communication; exact
+cached retries do not. Only fresh accepted target/enable commands refresh the
+per-channel target deadline. Queries cannot refresh a moving target. A completed
+position goal or zero velocity has no moving-target deadline, while enabled
+holding outputs still require communication. Sensor-only streaming also requires
+communication. Evaluation runs before motor servicing and independently of RX,
+TX and conversion progress. Expiry disables/unconfigures outputs, cancels streams
+and conversions, latches DEVICE_FAULT with ACTION_COMPLETE and unsupported physical
+verification. It is a software-loop bound, not an independent hardware watchdog.
+Reset preserves the latch and clears policy; recovery never restores targets,
+subscriptions, configuration or enable state. Explicit recovery, policy/configure
+and enable are required again. The existing independent 20 ms serial TX-fault
+mechanism remains in force. Physical timeout/stop claims require qualification.
+
 
 ## One session owner per MCU, across all functions and transports
 
@@ -371,12 +404,98 @@ to READ replies, not write payloads. This PR provides the sensor, actuator and I
 value/sample codecs; boards implementing I/O must serialize its full metadata
 contract. Additional schemas do not change session/framing.
 
-Events/streaming are intentionally unimplemented and unadvertised. A future
-extension must define a distinct message kind/correlation namespace, subscription
-lifetime, stream IDs/sequences, rate/backpressure, loss/reboot/freshness and
-reconciliation semantics. An unsolicited sample never satisfies a request, and
-notifications never replace GET_STATUS. Bulk transfer similarly needs bounded
-chunking/ownership/timeouts before advertising support.
+### Opt-in sensor-profile 1.1 streaming
+
+The additive extension keeps revision-4 framing and its 96-byte bound. Sensor
+profile major 1, minor 1 adds operations below; actuator/I/O and polling profile
+versions and payloads remain unchanged. A function advertises streaming only
+when its complete backend and host path satisfy the remaining scheduling,
+acquisition, routing, and lifecycle gates. The current production MCU bindings
+do **not** advertise streaming. Shared codecs and subscription lifecycle code
+are available for integration; they do not implement acquisition or transport
+scheduling.
+
+Negotiation requires SENSOR profile 2, major 1, minor at least 1, all operation
+bits 0..3, and a supported scalar-f32 schema. Unknown schemas remain unusable.
+READ (operation 0) retains its existing v1.0 request/reply. New operations request
+minor **1** explicitly; they cannot be sent to a minor-0 function. A newer
+function must retain the selected minor-1 semantics. Older hosts never subscribe
+and consequently receive no unsolicited traffic. Older firmware rejects unknown
+operations/versions without side effects; no downgrade or polling fallback is
+performed implicitly.
+
+| SENSOR v1.1 operation | Request data | Successful reply data, after common prefix |
+| --- | --- | --- |
+| 1 SUBSCRIBE | period_us:u32, positive | active:u8, subscription_id:u32, period_us:u32 |
+| 2 UNSUBSCRIBE | subscription_id:u32, nonzero | Same state; active=0 with token/period retained. |
+| 3 GET_SUBSCRIPTION | empty | Same state; no mutation. |
+
+The state is exactly nine bytes. Before creation and after reset it is all zero.
+An active state requires a nonzero token and period. An inactive state retains
+both after cancellation, allowing a lost cancel reply to be reconciled. A new
+subscription uses the SUBSCRIBE request's message ID as its token; the full
+identity is `(session_id, function_id, subscription_id)`. IDs are allocated at
+dispatch by the existing coordinator and never reused within the session.
+
+The requested period must fit the backend's configured and qualified range. It
+is accepted exactly or rejected with INVALID_PAYLOAD, never silently clamped.
+A new-ID SUBSCRIBE while active returns BUSY without replacing the subscription.
+Canceling the current token is idempotent, including after it has stopped;
+canceling an absent/different token returns UNAVAILABLE without affecting a
+replacement. Rate changes require cancel and new creation. Invalid scope,
+version, payload, or reply capacity cannot partially change subscription state.
+
+Create/cancel are ordinary mutations: retry identical bytes/IDs only, then
+reconcile or reset after unknown outcomes. The normal endpoint replay cache owns
+exact duplicate replies; the subscription helper creates no second request-ID
+allocator or replay cache. GET_SUBSCRIPTION and minor-1 READ remain available to
+host sessions after an unknown mutation. A query alone does not clear generic
+session uncertainty or prove historical action execution; the later coordinator
+must reconcile the specific operation or deliberately reset.
+
+Telemetry uses reserved **command kind 0x11, STREAM_SAMPLE**, firmware to host
+only. The frame's session is the subscription session, its message field holds
+the SUBSCRIBE token, and its function byte identifies the sensor. The token is
+constant across samples and does not consume the ordinary request-ID sequence.
+Even identical session/message/function numbers cannot make a sample a command
+reply. The generic correlation helper rejects STREAM_SAMPLE, and firmware drops
+it on its request ingress before updating session/replay state.
+
+The first notification payload is exactly 31 bytes, without a common reply
+prefix; the complete frame is 46 bytes:
+
+```text
+profile:u16=2, major:u8=1, minor:u8=1, data_type:u8=SCALAR_F32(1),
+dropped_acquisitions:u32,
+validity:u8, clock:u8, boot_id:u32, acquisition_time_us:u64, sequence:u32,
+value:f32
+```
+
+Existing validity, finite-value, unit, clock, boot, and acquisition-sequence
+semantics apply. Invalid samples may carry NaN; usable samples may not. Units
+come from the negotiated sensor schema. The decoder checks frame size/CRC and
+the exact profile/type layout; consumers must additionally match the live
+subscription and validate boot/schema/clock/freshness. Repeated reads preserve
+the original sample identity and times. Reboot or new session invalidates all
+old subscription identities and clock mappings, even when token numbers repeat.
+
+The backend must acquire independently of command dispatch and submit no more
+than one notification per negotiated period. Latest-sample replacement is
+allowed only before frame submission. `dropped_acquisitions` is a saturating u32
+count, starting at zero for each subscription, of acquired samples omitted
+before submission (including downsampling/overwrite). Acquisition-sequence gaps
+also expose link/receiver loss; this counter alone does not promise losslessness.
+Invalid/slow acquisition must remain observable without fabricating fresh data.
+
+The portable subscription helper implements bounded control-state transitions
+only. A sensor backend composes it with READ, resets it with the session, and
+supplies period limits. It must not advertise the extension until rate-limited
+acquisition, bounded buffers, reply/sample demultiplexing, reserved stop/control
+capacity, and host lifetime/recovery handling are integrated and tested. No
+subscription operation enables an actuator or clears an ESTOP latch.
+
+Bulk transfer remains outside this extension and requires separately bounded
+chunking, ownership, and timeout contracts. Notifications never replace GET_STATUS.
 
 ## Stacked implementation and integration gates
 

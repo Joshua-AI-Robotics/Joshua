@@ -15,6 +15,7 @@ enum SensorType {
   IMU_6DOF = 4;
   FORCE_TORQUE = 5;
   AUDIO = 6;
+  SCALAR = 7;  // Typed scalar with acquisition/receipt and validity metadata.
 }
 
 message OpenCvConfig {
@@ -33,6 +34,11 @@ message Sts3215EncoderConfig {
 
 message Lds01Config {
   robot.comm.Comm comm = 1;
+}
+message JoshuaWireScalarConfig {
+  string board_name = 1;
+  uint32 function_id = 2;
+  uint32 period_us = 3;
 }
 
 // ALSA capture. PCM is interleaved signed 16-bit little endian.
@@ -56,6 +62,7 @@ message SinglePerception {
     Lds01Config lds01_config = 6;
     Sts3215EncoderConfig sts3215_encoder_config = 7;
     AlsaAudioConfig alsa_audio_config = 8;
+    JoshuaWireScalarConfig joshua_wire_scalar_config = 9;
   }
 }
 

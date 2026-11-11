@@ -2,8 +2,8 @@
 
 #include <glog/logging.h>
 
-#include <chrono>
 #include <cmath>
+#include <exception>
 #include <utility>
 
 #include "utils/status_macros.h"
@@ -16,11 +16,25 @@ Lds01Driver::Lds01Driver(std::shared_ptr<robot::comm::ByteStream> stream,
   id_ = lidar_config.sensor_name();
 }
 
+Lds01Driver::~Lds01Driver() {
+  try {
+    const auto status = Teardown();
+    if (!status.ok()) LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << status;
+  } catch (const std::exception& error) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed: " << error.what();
+  } catch (...) {
+    LOG(ERROR) << "LiDAR '" << id_ << "' teardown failed with an unknown exception";
+  }
+}
+
 absl::Status Lds01Driver::Init() {
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
   ABSL_RETURN_IF_ERROR(stream_->Open());
 
   // Send start motor command (required for LDS-01)
   std::vector<uint8_t> start_cmd = {'b'};
+  // A failed write may still have reached the motor; cleanup must try to stop it.
+  motor_stop_pending_ = true;
   ABSL_RETURN_IF_ERROR(stream_->Write(start_cmd));
 
   stop_receiving_.store(false);
@@ -28,11 +42,14 @@ absl::Status Lds01Driver::Init() {
 }
 
 absl::Status Lds01Driver::Teardown() {
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
   stop_receiving_.store(true);
+  if (!motor_stop_pending_) return absl::OkStatus();
 
   // Send stop motor command
   std::vector<uint8_t> stop_cmd = {'e'};
   ABSL_RETURN_IF_ERROR(stream_->Write(stop_cmd));
+  motor_stop_pending_ = false;
 
   return absl::OkStatus();
 }
@@ -69,6 +86,9 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         // Start sequence found, read in the rest of the message via a single blocking read
         LOG(INFO) << "Found start sequence, reading full scan...";
 
+        // Host receipt of scan start, retained while the rest of the scan arrives.
+        const double acquisition_time = RobotTime();
+
         ABSL_ASSIGN_OR_RETURN(auto remain_result, stream_->Read(2518));
 
         // Reconstruct the full packet: 0xFA, 0xA0 + remaining data
@@ -79,10 +99,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
         // Clear packet then set metadata before adding points
         reusable_packet_.Clear();
         reusable_packet_.set_perception_id(GetId());
-        reusable_packet_.set_timestamp_ns(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::high_resolution_clock::now().time_since_epoch())
-                .count());
+        reusable_packet_.set_timestamp(acquisition_time);
 
         const size_t total_len = 2 + remain_result.size();
 

@@ -88,6 +88,25 @@ cc_library(
 )
 
 cc_test(
+    name = "soem_ethercat_mapping_test",
+    srcs = ["soem_ethercat_mapping_test.cc"],
+    linkopts = [
+        "-Wl,--wrap=ecx_init",
+        "-Wl,--wrap=ecx_close",
+        "-Wl,--wrap=ecx_config_init",
+        "-Wl,--wrap=ecx_config_map_group",
+        "-Wl,--wrap=ecx_configdc",
+    ],
+    linkstatic = True,  # Apply SOEM link wrappers inside the backend as well.
+    deps = [
+        ":soem_ethercat_backend",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
+        "@soem",
+    ],
+)
+
+cc_test(
     name = "soem_ethercat_backend_test",
     srcs = ["soem_ethercat_backend_test.cc"],
     deps = [

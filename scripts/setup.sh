@@ -1,10 +1,10 @@
 #!/bin/bash
 # Joshua host bootstrap.
 #
-# This script intentionally installs/checks Docker host tooling only. Joshua
-# runtime dependencies such as ROS2, Bazel, Python packages, OpenCV, CUDA/CuDNN,
-# and project tools are provided by Docker images. NVIDIA Container Toolkit is
-# installed by default; --cpu skips GPU host setup for CPU-only development.
+# This script installs/checks Docker host tooling and grants PTP clock read access.
+# Joshua runtime dependencies such as ROS2, Bazel, Python packages, OpenCV,
+# CUDA/CuDNN, and project tools are provided by Docker images. NVIDIA Container
+# Toolkit is installed by default; --cpu skips GPU host setup.
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ fi
 
 NONROOT_USER="${SUDO_USER:-}"
 if [ -z "${NONROOT_USER}" ] || [ "${NONROOT_USER}" = "root" ]; then
-    echo -e "${YELLOW}Warning: could not determine the non-root user for docker group setup.${NC}"
+    echo -e "${YELLOW}Warning: could not determine the non-root user for docker/PTP group setup.${NC}"
 fi
 
 echo -e "${GREEN}=== Joshua Docker host bootstrap ===${NC}"
@@ -77,7 +77,7 @@ if [ -f "${DOCKER_SOURCES}" ] && [ -f "${LEGACY_DOCKER_LIST}" ] &&
 fi
 
 apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release
+apt-get install -y ca-certificates curl gnupg lsb-release udev
 
 install -m 0755 -d /etc/apt/keyrings
 if ! grep -Rqs "${DOCKER_REPOSITORY}" /etc/apt/sources.list /etc/apt/sources.list.d; then
@@ -96,9 +96,22 @@ fi
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+echo -e "${BLUE}Configuring read access to PTP hardware clocks...${NC}"
+groupadd --system --force ptp
 if [ -n "${NONROOT_USER}" ] && [ "${NONROOT_USER}" != "root" ]; then
-    usermod -aG docker "${NONROOT_USER}"
+    usermod -aG docker,ptp "${NONROOT_USER}"
 fi
+
+# Apply to existing clocks and future devices, including hosts with no PHC yet.
+# This grants read access without changing the hardware clock.
+PTP_RULES=/etc/udev/rules.d/99-joshua-ptp.rules
+install -m 0755 -d /etc/udev/rules.d
+cat > "${PTP_RULES}" <<'EOF'
+SUBSYSTEM=="ptp", KERNEL=="ptp[0-9]*", GROUP="ptp", MODE="0640"
+EOF
+chmod 0644 "${PTP_RULES}"
+udevadm control --reload-rules
+udevadm trigger --action=change --subsystem-match=ptp --settle
 
 systemctl enable --now docker >/dev/null 2>&1 || true
 
@@ -144,7 +157,8 @@ if [ "${INSTALL_GPU}" = true ]; then
 fi
 
 echo -e "${GREEN}Docker host bootstrap complete.${NC}"
-echo -e "${YELLOW}If this user was newly added to the docker group, log out and back in before running Docker without sudo.${NC}"
+echo -e "${YELLOW}Log out and back in to apply new docker/PTP group membership.${NC}"
+echo "PTP device read access is configured."
 echo
 echo "Next commands:"
 echo "  docker compose run --rm test-u22"

@@ -33,6 +33,10 @@ settled.
 - Expose process-data access to higher-level drivers without leaking a specific
   master implementation into the action layer.
 
+The SOEM process-data backing buffer is limited to 4096 bytes, including all
+outputs, inputs and mapped mailbox-status bytes. Larger maps fail configuration
+before process-data access or cyclic startup.
+
 ## Board-independent JW contract
 
 Host EtherCAT communication is selected by protocol capabilities, not board

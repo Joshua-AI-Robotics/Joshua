@@ -4,13 +4,29 @@ Joshua's public entrypoints are Docker Compose services from the repo root. The 
 
 ## `setup.sh`
 
-Host bootstrap for Docker only:
+`python3 scripts/qualify_serial.py --output /tmp/joshua-serial-evidence --runs 10`
+builds the mixed Teensy artifact without flashing and repeats the hardware-free
+mixed/serial/coordinator tests on both supported stacks. It freezes source and
+artifact hashes, PlatformIO dependencies, command logs and XML evidence in a new
+directory outside the repository. Docker is the only host build dependency;
+the host script uses Python's standard library. The report labels all evidence
+software-only and leaves physical qualification open. See
+[the qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
+
+Host bootstrap for Docker tooling and PTP device access:
 
 ```bash
 sudo ./scripts/setup.sh
 ```
 
-It installs/checks Docker Engine, Docker Compose v2, buildx, docker group membership, and NVIDIA Container Toolkit. It requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
+It installs/checks Docker Engine, Docker Compose v2, buildx, docker group membership, and NVIDIA Container Toolkit.
+
+It also creates a `ptp` group, adds the invoking sudo user, and installs
+`/etc/udev/rules.d/99-joshua-ptp.rules` to grant group read access (`0640`) to
+`/dev/ptp*`. The rule applies to existing and future clocks; no PTP device is
+required during setup. Log out and back in after new group membership.
+
+PTP setup grants device access; RobotTime reads the PHC directly without a UTC-offset setting and falls back to system UTC if unavailable. See [RobotTime](../docs/ROBOT_TIME.md#configuration-and-time-domains). The bootstrap requires an existing NVIDIA driver, but does not install the host CUDA toolkit, ROS2, Bazel, Python packages, OpenCV, CuDNN, or project runtime dependencies.
 
 Verify the default GPU-enabled developer shell:
 

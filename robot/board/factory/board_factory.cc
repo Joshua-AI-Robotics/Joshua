@@ -12,6 +12,8 @@
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
+#include "robot/comm/serial/serial_device_identity.h"
+#include "utils/joshua_runtime.h"
 #include "utils/status_macros.h"
 
 namespace robot::board {
@@ -22,10 +24,20 @@ struct CachedBoard {
   robot::board::BoardType board_type;
   std::string config_key;
   std::shared_ptr<BoardInterface> board;
+  std::string joshua_serial_identity;
 };
 
 static std::mutex g_board_mutex;
 static std::map<std::string, CachedBoard> g_boards;  // keyed by Board.name
+
+std::string JoshuaSerialPort(const robot::board::Board& config) {
+  const auto type = config.board_type();
+  if ((type == AM243 || type == TEENSY41 || type == ESP32) &&
+      config.comm().comm_type() == robot::comm::SERIAL &&
+      config.comm().serial_config().message_adapter() == robot::comm::JOSHUA_WIRE)
+    return config.comm().serial_config().port();
+  return {};
+}
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::Board& config) {
   if (config.board_type() == AM243 &&
@@ -84,6 +96,17 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
   }
 
   std::lock_guard<std::mutex> lock(g_board_mutex);
+  const auto port = JoshuaSerialPort(config);
+  auto resolved_config = config;
+  auto key_config = config;
+  std::string serial_identity;
+  if (!port.empty()) {
+    ABSL_ASSIGN_OR_RETURN(const auto device, robot::comm::ResolveSerialDeviceIdentity(port));
+    serial_identity = device.key;
+    resolved_config.mutable_comm()->mutable_serial_config()->set_port(device.path);
+    key_config.mutable_comm()->mutable_serial_config()->set_port(device.key);
+  }
+  const auto config_key = key_config.SerializeAsString();
   auto it = g_boards.find(config.name());
   if (it != g_boards.end()) {
     if (it->second.board_type != config.board_type()) {
@@ -96,24 +119,39 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
                        robot::board::BoardType_Name(config.board_type()),
                        "; two boards may not share one name."));
     }
-    if (it->second.config_key != config.SerializeAsString())
+    if (it->second.config_key != config_key)
       return absl::InvalidArgumentError(
           "Board name is already cached with a different configuration.");
     return it->second.board;
   }
 
+  if (!serial_identity.empty()) {
+    for (const auto& [name, cached] : g_boards) {
+      if (cached.joshua_serial_identity == serial_identity)
+        return absl::AlreadyExistsError(absl::StrCat(
+            "JoshuaWire serial port '",
+            port,
+            "' already belongs to board '",
+            name,
+            "'; reference that board's channels instead of creating a second session."));
+    }
+  }
   ABSL_ASSIGN_OR_RETURN(auto board, CreateBoard(config));
-  ABSL_RETURN_IF_ERROR(board->Init(config));
-  g_boards[config.name()] = CachedBoard{config.board_type(), config.SerializeAsString(), board};
+  ABSL_RETURN_IF_ERROR(board->Init(resolved_config));
+  g_boards[config.name()] = CachedBoard{config.board_type(), config_key, board, serial_identity};
   return board;
 }
 
-void BoardFactory::ResetForTesting() {
+void BoardFactory::ShutdownAll() noexcept {
   std::lock_guard<std::mutex> lock(g_board_mutex);
   for (auto& [name, cached] : g_boards) {
-    cached.board->Teardown().IgnoreError();
+    joshua::RunCleanup(name.c_str(), [&] { joshua::ThrowIfError(cached.board->Teardown()); });
   }
   g_boards.clear();
+}
+
+void BoardFactory::ResetForTesting() {
+  ShutdownAll();
 }
 
 }  // namespace robot::board

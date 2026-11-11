@@ -10,6 +10,7 @@
 #include <mutex>
 #include <vector>
 
+#include "absl/types/span.h"
 #include "firmware/common/joshua_wire_commands.h"
 #include "robot/comm/interfaces/correlated_cyclic_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
@@ -21,11 +22,28 @@ namespace robot::board {
 class JoshuaWireSession {
  public:
   using SessionIdSource = std::function<uint32_t()>;
+  struct ExchangeOutcome {
+    absl::Status status;
+    std::vector<uint8_t> response;
+    bool published = true;  // Legacy transports conservatively assume unknown.
+    bool retryable = true;
+  };
+  // Comm-neutral duplex scheduling hook. Invoked only inside this session's
+  // serialized operation; no reentry. This class remains the sole ID allocator.
+  using ExchangeHook = std::function<ExchangeOutcome(absl::Span<const uint8_t>)>;
+  struct Snapshot {
+    uint32_t session_id;
+    uint32_t next_message_id;
+    bool ready;
+    bool uncertain;
+  };
   explicit JoshuaWireSession(std::shared_ptr<robot::comm::MessageTransport> transport,
                              SessionIdSource source = {},
                              uint32_t message_id_limit = UINT32_MAX,
                              std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic = {},
-                             absl::Duration cyclic_timeout = absl::ZeroDuration());
+                             absl::Duration cyclic_timeout = absl::ZeroDuration(),
+                             ExchangeHook hook = {},
+                             uint32_t max_attempts = 2);
 
   // Every open starts a fresh session. Outputs stay disabled after resets.
   absl::Status Open();
@@ -35,6 +53,10 @@ class JoshuaWireSession {
   // The command payload is borrowed for the call; the returned payload is owned.
   // RESET_SESSION is managed by the lifecycle, not callable as a normal command.
   absl::StatusOr<std::vector<uint8_t>> Exchange(const jw_command_t& command);
+  Snapshot Inspect();
+  static bool IsReadOnly(const jw_command_t& command);
+  // Process-wide nonzero IDs, never reused before exhaustion. Not authentication.
+  static uint32_t AllocateSessionId();
 
  private:
   absl::Status ResetLocked();
@@ -47,13 +69,21 @@ class JoshuaWireSession {
   std::shared_ptr<robot::comm::CorrelatedCyclicTransport> cyclic_;
   const absl::Duration cyclic_timeout_;
   SessionIdSource source_;
+  ExchangeHook hook_;
+  const uint32_t max_attempts_;
   const uint32_t message_id_limit_;
   std::mutex mutex_;
   uint32_t session_id_ = 0;
   uint32_t next_message_id_ = 1;
   bool ready_ = false;
   bool uncertain_ = false;
-  std::map<uint8_t, std::pair<uint32_t, uint32_t>> pending_;
+  struct PendingAction {
+    uint32_t session_id;
+    uint32_t message_id;
+    // A completed successful board-wide stop/recovery supersedes function work.
+    bool cancels_functions;
+  };
+  std::map<uint8_t, PendingAction> pending_;
 };
 
 }  // namespace robot::board

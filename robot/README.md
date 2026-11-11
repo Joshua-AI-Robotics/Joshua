@@ -4,6 +4,10 @@ Hardware-facing code: everything between a `.pbtxt` config and a physical
 motor, sensor, or bus. ROS 2 nodes live in [ros2/](../ros2/README.md) and
 consume these interfaces; nothing here depends on ROS 2 message types.
 
+When choosing boards and physical links, follow
+[Hardware topology and latency budgets](../docs/ARCHITECTURE.md#hardware-topology-and-latency-budgets)
+for guidance on shared versus separate actuator and sensor-acquisition hardware.
+
 > This is the code that moves physical motors and opens real buses. Before
 > running anything from here, see the hardware-safety section of
 > [AGENTS.md](../AGENTS.md).
@@ -32,6 +36,13 @@ and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
 driver references, example presets, and intended support scope. Separate
 [test records](../docs/TESTED_HARDWARE.md) retain measurements and environments
 linked to those models by stable hardware ID.
+
+JoshuaWire scalar sensors resolve a board and function ID through the same board
+cache as actuators. A FRAME_STREAM board shares one coordinator/session and a
+reserved status heartbeat; it never refreshes actuator targets. The mixed runtime
+requires `stepper_config.require_explicit_enable`. Scalar packets preserve device
+acquisition and local receipt clocks separately, validity, units, boot identity
+and loss counters. Device timestamps are not converted to ROS time.
 All perceptions select a concrete driver through `SinglePerception.sensor_config`;
 the legacy camera/encoder/lidar config wrappers have been removed.
 
@@ -39,7 +50,7 @@ the legacy camera/encoder/lidar config wrappers have been removed.
 robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
 Phase 9, and the Pybricks bench driver moved to
 [tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
-Hardware-facing ROS 2 nodes are C++ only, and `node_generator` no longer
+Hardware-facing ROS 2 nodes are C++ only, and `NodeManager` no longer
 selects between backends.
 
 ## Responsibilities

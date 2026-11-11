@@ -68,8 +68,12 @@ before clearing configuration; the host must configure and explicitly enable
 channels again. ESTOP survives a new session; explicit RECOVER is required to clear it. The serial firmware session
 executes strictly increasing message IDs, replays the cached response for an
 identical immediate retry, and drops older IDs or changed requests reusing an ID.
-Session IDs provide correlation, not authentication. Serial has no communication-loss
-watchdog; simultaneous transport ownership still requires an arbiter.
+Session IDs provide correlation, not authentication. The default serial images
+have no communication-loss watchdog. The opt-in Teensy
+[`teensy41-mixed-scalar`](teensy/41/README.md) image adds explicitly configured
+communication and target watchdogs with scalar acquisition. Its software tests
+and cross-build do not establish physical timing or stopping qualification.
+Simultaneous transport ownership still requires an arbiter.
 
 Native Bazel tests exercise the actual MCU dispatch with simulated serial/GPIO,
 the AM243 software handler and host sessions. Tests never flash or move hardware.

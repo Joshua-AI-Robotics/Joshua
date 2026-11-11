@@ -19,6 +19,7 @@ struct FakeCameraState {
   bool available = false;
   bool configured = false;
   bool fail_next_read = false;
+  bool throw_next_read = false;
   int initializations = 0;
   int successful_initializations = 0;
   int reads = 0;
@@ -46,6 +47,10 @@ class FakeCamera : public robot::perception::PerceptionInterface {
 
   absl::StatusOr<robot::perception::PerceptionPacket> GetData() override {
     ++state_->reads;
+    if (state_->throw_next_read) {
+      state_->throw_next_read = false;
+      throw std::runtime_error("Unexpected camera failure");
+    }
     if (!state_->configured) {
       ++state_->uninitialized_reads;
       return absl::FailedPreconditionError("Read before configured initialization");
@@ -56,6 +61,7 @@ class FakeCamera : public robot::perception::PerceptionInterface {
     }
     robot::perception::PerceptionPacket packet;
     packet.set_perception_id(GetId());
+    packet.set_timestamp(123.125);
     auto* image = packet.mutable_image();
     image->set_width(1);
     image->set_height(1);
@@ -118,16 +124,15 @@ class CameraPublisherTest : public testing::Test {
     observer_.reset();
   }
 
-  void Start() {
+  void Start(CameraPublisher::Factory factory = {}) {
+    if (!factory) {
+      factory = [state = state_](const auto&)
+          -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+        return std::make_unique<FakeCamera>(state);
+      };
+    }
     publisher_ = std::make_shared<CameraPublisher>(
-        "camera_recovery_publisher",
-        1,
-        config_,
-        [state = state_](const auto&)
-            -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
-          return std::make_unique<FakeCamera>(state);
-        },
-        [this]() { return now_; });
+        "camera_recovery_publisher", 1, config_, std::move(factory), [this]() { return now_; });
     executor_.add_node(publisher_);
   }
 
@@ -174,6 +179,8 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
   ASSERT_EQ(images_.front().data.size(), 3);
   EXPECT_EQ(images_.front().data, (std::vector<uint8_t>{3, 2, 1}));
   EXPECT_EQ(images_.front().encoding, "rgb8");
+  EXPECT_EQ(images_.front().header.stamp.sec, static_cast<int32_t>(joshua::kRobotStartTime) + 123);
+  EXPECT_EQ(images_.front().header.stamp.nanosec, 125'000'000u);
   SpinFor(30ms);
   EXPECT_EQ(state_->initializations, 2);
 }
@@ -219,5 +226,37 @@ TEST_F(CameraPublisherTest, InvalidConfigurationFailsStartupInsteadOfRetrying) {
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->reads, 0);
   EXPECT_EQ(state_->teardowns, 1);
+}
+
+TEST_F(CameraPublisherTest, FastCameraTimerDoesNotReadOtherCameras) {
+  auto* perceptions = config_.mutable_robot()->mutable_perceptions();
+  const auto fast_config = perceptions->single_perceptions(0);
+  auto* slow_config = perceptions->add_single_perceptions();
+  *slow_config = fast_config;
+  slow_config->set_sensor_name("slow_camera");
+  auto* slow_publisher = slow_config->mutable_node()->mutable_publishers(0);
+  slow_publisher->set_topic("camera_recovery_test/slow_image");
+  slow_publisher->set_publish_rate_hz(1);
+  auto slow_state = std::make_shared<FakeCameraState>();
+  slow_state->available = true;
+  state_->available = true;
+  Start([fast_state = state_, slow_state](const auto& sensor)
+            -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+    return std::make_unique<FakeCamera>(sensor.sensor_name() == "slow_camera" ? slow_state
+                                                                              : fast_state);
+  });
+
+  SpinFor(100ms);
+  EXPECT_GT(state_->reads, 0);
+  EXPECT_EQ(slow_state->reads, 0);
+  ASSERT_TRUE(WaitUntil([&]() { return slow_state->reads > 0; }));
+}
+
+TEST_F(CameraPublisherTest, UnexpectedCaptureExceptionReachesExecutorBoundary) {
+  state_->available = true;
+  state_->throw_next_read = true;
+  Start();
+  EXPECT_THROW(WaitUntil([&]() { return state_->reads > 0; }), std::runtime_error);
+  EXPECT_TRUE(images_.empty());
 }
 }  // namespace

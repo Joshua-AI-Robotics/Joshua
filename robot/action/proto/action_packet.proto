@@ -42,10 +42,7 @@ message JointCommand {
 // Main action packet - uses oneof for type safety
 message ActionPacket {
   string action_id = 1;
-  // For joint, preserves the source stamp (including zero/negative
-  // values). Clock domain, scheduling and freshness are not inferred.
-  // TODO(hmoon): Sync the timestamp unit and source across the system.
-  uint64 timestamp_ns = 2;
+  double timestamp = 2;
   uint64 sqeuence_id = 3;  // Monotonically increasing sequence number for the action packet.
 
   oneof action_type {

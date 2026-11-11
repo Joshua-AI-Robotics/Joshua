@@ -42,6 +42,9 @@ typedef enum {
   JW_CMD_GET_STATUS = 0x0e,
   JW_CMD_GET_DEPENDENCIES = 0x0f,
   JW_CMD_RECOVER = 0x10,
+  // Opt-in sensor-profile 1.1 notification. Never a host request or reply.
+  JW_CMD_STREAM_SAMPLE = 0x11,
+  JW_CMD_CONFIGURE_WATCHDOGS = 0x12,  // Disabled-only, opt-in capability.
 } jw_cmd_t;
 
 typedef struct {
@@ -117,6 +120,7 @@ typedef struct {
 #define JW_SAFETY_DOMAIN_ESTOP (1u << 1)
 #define JW_SAFETY_PHYSICAL_VERIFICATION (1u << 2)
 #define JW_SAFETY_COMM_INTERRUPTED (1u << 3)
+#define JW_SAFETY_CONFIGURABLE_WATCHDOGS (1u << 4)
 
 typedef struct {
   uint32_t generation;

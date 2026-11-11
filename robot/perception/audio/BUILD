@@ -67,6 +67,7 @@ cc_test(
     linkopts = [
         "-lasound",
         "-Wl,--wrap=snd_pcm_readi",
+        "-Wl,--wrap=snd_pcm_avail_update",
     ],
     deps = [
         ":audio_config",
