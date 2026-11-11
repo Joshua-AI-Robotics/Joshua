@@ -98,6 +98,10 @@ hook for you, so run it yourself before pushing.
 
 ## Conventions
 
+- C++ ROS nodes live in one `.cc` file per node, including the small entrypoint
+  that delegates to `ros2_utils::RunNode<T>()`. Build with `ros2_cpp_binary`.
+  Do not split node classes into headers or production node libraries; share
+  non-node behavior through utilities instead. See [node layout](ros2/README.md).
 - All PRs target the **`develop`** branch.
 - Branch naming: `<github-username>/<topic>` (e.g. `djkim/initialize-web-app`) —
   branches are named for the **operator**, not the agent, so ownership and

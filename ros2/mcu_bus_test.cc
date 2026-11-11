@@ -1,5 +1,3 @@
-#include "ros2/mcu_bus.h"
-
 #include <chrono>
 #include <cstdlib>
 #include <future>
@@ -10,6 +8,10 @@
 
 #include "gtest/gtest.h"
 #include "rclcpp/version.h"
+
+// Exercise the complete node without exporting a production node header.
+#define JOSHUA_NODE_TEST
+#include "ros2/mcu_bus.cc"
 
 namespace {
 using namespace std::chrono_literals;

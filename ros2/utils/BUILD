@@ -1,9 +1,24 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_library", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
+
+ros2_cpp_library(
+    name = "actuator_commands",
+    srcs = ["actuator_commands.cc"],
+    hdrs = ["actuator_commands.h"],
+    deps = [
+        ":packet_parser",
+        "//config/proto:config_cc_proto",
+        "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:action_interface",
+        "//robot/action/proto:action_packet_cc_proto",
+        "//ros2:logging",
+        "@ros2_deps//:rclcpp",
+    ],
+)
 
 cc_library(
     name = "robot_timer",
