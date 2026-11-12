@@ -1,0 +1,36 @@
+# Camera-only preset for Sunplus SPCA2281 / XWF-1080P at 1920x1080.
+# Opens real camera hardware. Confirm its capture node is /dev/video0;
+# OpenCV's numeric device index may change when cameras are reconnected.
+general {
+  operation_mode: MODE_TEST
+  robot_type: ROBOT_TYPE_MANIPULATOR_ARM
+  name: "sunplus_camera_1080p_test"
+  id: 1
+}
+
+robot {
+  perceptions {
+    single_perceptions {
+      node {
+        id: 1
+        node_type: CAMERA_PUBLISHER
+        qos_setting { depth: 10 }
+        publishers {
+          ros2_data_type: IMAGE
+          topic: "sunplus_camera/image_raw"
+          publish_rate_hz: 30
+        }
+      }
+      sensor_name: "sunplus_spca2281"
+      id: 1
+      sensor_type: IMAGE
+      opencv_config {
+        id: 0
+        width: 1920
+        height: 1080
+        fps: 30
+        fourcc: "MJPG"
+      }
+    }
+  }
+}
