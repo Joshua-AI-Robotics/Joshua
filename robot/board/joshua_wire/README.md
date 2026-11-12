@@ -168,3 +168,32 @@ communication. It produces the existing numeric STEP/DIR fields, so no wire or
 firmware update is required for catalog adoption alone. Legacy presets without
 a profile preserve their numeric semantics; mixed wiring forms are rejected.
 See [MCU configuration](../../../config/README.md#mcu-pin-source-wiring).
+
+## Named MCU peripherals
+
+The explicit `teensy41-peripherals` and `esp32-peripherals` firmware artifacts add
+profile 4 slots 192..199. Configure `pin_profile` and named `Board.peripherals`
+with a unique `function_id`, `purpose`, and one operation. Drivers use the same
+OpenPwm/OpenSpi/OpenI2c/OpenUart/OpenDigitalPin interfaces as host boards. Physical
+connector aliases resolve to native IDs using the catalog before the link opens.
+Digital MCU pins use `peripherals.digital`; host digital pins remain in
+`host_gpio_config.pins`. No new ROS node or motion semantics are introduced.
+
+See the complete [Teensy](../../../config/config_preset/example/teensy_peripherals.pbtxt)
+and [ESP32](../../../config/config_preset/example/esp32_peripherals.pbtxt) examples
+and the [profile contract](../../../docs/JOSHUA_WIRE.md#opt-in-peripheral-profile-4-version-10)
+for payloads, routes, limits and safety. Initial PWM duty is stored while disabled;
+Enable is always explicit. UART is nonblocking on MCU, so Read can return empty.
+Pin and bus conflicts with STEP/DIR share one firmware resource table. Bus work
+returns BUSY while software STEP/DIR is enabled. All MCU PWM endpoints require
+one frequency; the hardware timer resolution is 12 bits. API duty is normalized
+and quantized on the wire and hardware.
+
+These images advertise a 200 ms candidate dispatch budget; select a larger
+message exchange timeout, such as 500 ms. FRAME_STREAM callers must likewise
+set attempt/operation budgets above it. The existing session/coordinator remains
+the only wire owner and validates successful operation acknowledgments before
+admitting another mutation. RESET/ESTOP/fault stop the same shared runtime.
+No communication-loss watchdog is added by this artifact. Native firmware tests,
+PTY integration and cross-builds are hardware-free evidence; physical timing
+and simultaneous native bus/STEP-DIR motion qualification remain outstanding.

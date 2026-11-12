@@ -122,3 +122,9 @@ firmware/
 Firmware variants should be explicit build artifacts. A board may support more
 than one transport in a single image when the transports can coexist safely;
 artifact names still identify the board, transport set, and protocol version.
+
+
+The explicit `teensy41-peripherals` / `esp32-peripherals` images additionally
+execute named GPIO/PWM/SPI/I2C/UART profile-4 operations. See the
+[peripheral contract](../docs/JOSHUA_WIRE.md#opt-in-peripheral-profile-4-version-10)
+for disabled STEP/DIR admission, native driver limits and pending hardware gates.

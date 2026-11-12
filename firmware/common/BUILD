@@ -335,3 +335,95 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "joshua_wire_peripheral",
+    srcs = ["joshua_wire_peripheral.c"],
+    hdrs = ["joshua_wire_peripheral.h"],
+    visibility = ["//visibility:public"],
+    deps = [":joshua_wire"],
+)
+
+cc_library(
+    name = "joshua_peripheral_handler",
+    srcs = ["joshua_peripheral_handler.c"],
+    hdrs = ["joshua_peripheral_handler.h"],
+    copts = [
+        "-x",
+        "c",
+        "-std=c11",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_device_runtime",
+        ":joshua_wire_peripheral",
+        ":joshua_wire_resources",
+    ],
+)
+
+cc_library(
+    name = "peripheral_test_firmware",
+    testonly = True,
+    srcs = ["joshua_peripheral_device.cpp"],
+    hdrs = ["joshua_peripheral_device.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":joshua_peripheral_handler",
+        ":stepdir_test_firmware",
+    ],
+)
+
+cc_test(
+    name = "joshua_peripheral_handler_test",
+    srcs = ["joshua_peripheral_handler_test.cc"],
+    deps = [
+        ":joshua_peripheral_handler",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# Compile the actual adapter for both platform API shapes against recorded I/O.
+cc_library(
+    name = "arduino_teensy_peripheral_test_firmware",
+    testonly = True,
+    srcs = ["joshua_arduino_peripherals.cpp"],
+    defines = ["JOSHUA_PERIPHERAL_REFERENCE"],
+    deps = [
+        ":peripheral_test_firmware",
+        "//firmware/testing:arduino",
+    ],
+)
+
+cc_library(
+    name = "arduino_esp32_peripheral_test_firmware",
+    testonly = True,
+    srcs = ["joshua_arduino_peripherals.cpp"],
+    defines = [
+        "JOSHUA_PERIPHERAL_REFERENCE",
+        "ESP32",
+    ],
+    deps = [
+        ":peripheral_test_firmware",
+        "//firmware/testing:arduino",
+    ],
+)
+
+cc_test(
+    name = "arduino_teensy_peripheral_test",
+    srcs = ["joshua_arduino_peripherals_test.cc"],
+    defines = ["EXPECTED_NATIVE_BOARD=1"],
+    deps = [
+        ":arduino_teensy_peripheral_test_firmware",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "arduino_esp32_peripheral_test",
+    srcs = ["joshua_arduino_peripherals_test.cc"],
+    defines = ["EXPECTED_NATIVE_BOARD=2"],
+    deps = [
+        ":arduino_esp32_peripheral_test_firmware",
+        "@googletest//:gtest_main",
+    ],
+)

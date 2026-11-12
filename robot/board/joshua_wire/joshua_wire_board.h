@@ -9,6 +9,7 @@
 #include "absl/status/statusor.h"
 #include "firmware/common/joshua_wire_commands.h"
 #include "firmware/common/joshua_wire_profiles.h"
+#include "robot/board/host_gpio/host_peripherals.h"
 #include "robot/board/interfaces/board_interface.h"
 #include "robot/board/proto/board.pb.h"
 #include "utils/joshua_runtime.h"
@@ -33,6 +34,11 @@ class JoshuaWireBoard : public BoardInterface {
   absl::StatusOr<std::shared_ptr<BoardChannel>> OpenChannel(uint32_t index) final;
   absl::StatusOr<std::shared_ptr<ScalarSensor>> SubscribeScalar(uint32_t function,
                                                                 uint32_t period_us) final;
+  absl::StatusOr<std::shared_ptr<PwmOutput>> OpenPwm(const std::string&) final;
+  absl::StatusOr<std::shared_ptr<robot::comm::SpiTransport>> OpenSpi(const std::string&) final;
+  absl::StatusOr<std::shared_ptr<robot::comm::I2cTransport>> OpenI2c(const std::string&) final;
+  absl::StatusOr<std::shared_ptr<robot::comm::ByteStream>> OpenUart(const std::string&) final;
+  absl::StatusOr<std::shared_ptr<DigitalPin>> OpenDigitalPin(const std::string&) final;
   absl::Status Teardown() final;
   absl::Status EmergencyStop() final;
 
@@ -46,6 +52,8 @@ class JoshuaWireBoard : public BoardInterface {
   uint32_t boot_id_ = 0;
   std::map<uint8_t, jw_actuator_schema_t> schemas_;
 
+  std::shared_ptr<HostPeripherals> peripherals_;
+  std::map<std::string, std::shared_ptr<DigitalPin>> digital_;
   bool initialized_ = false;
   std::string name_;
   std::shared_ptr<JoshuaWireCommandClient> commands_;

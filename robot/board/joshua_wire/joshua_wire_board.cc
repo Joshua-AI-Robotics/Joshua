@@ -12,6 +12,7 @@
 #include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/joshua_wire/joshua_wire_coordinator.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
+#include "robot/board/joshua_wire/peripheral_backend.h"
 #include "robot/board/pin/pin_resource.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/message_transport.h"
@@ -307,7 +308,8 @@ absl::Status JoshuaWireBoard::ValidateConfig(const robot::board::Board& config) 
   ABSL_RETURN_IF_ERROR(
       ValidateCoordinatorPolicy(ResolveCoordinatorPolicy(config.joshua_wire_host_policy())));
   ABSL_RETURN_IF_ERROR(ValidateWatchdogPolicy(config));
-  if (config.channels_size() == 0 && config.comm().transport_type() != robot::comm::FRAME_STREAM) {
+  if (config.channels_size() == 0 && config.peripherals().empty() &&
+      config.comm().transport_type() != robot::comm::FRAME_STREAM) {
     return absl::InvalidArgumentError(
         absl::StrCat(type_name, " board '", config.name(), "' declares no channels."));
   }
@@ -492,6 +494,23 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& comma
       return absl::FailedPreconditionError("Unsupported actuator schema/units/clock.");
     schemas_[channel.index()] = schema;
   }
+  for (const auto& p : config.peripherals()) {
+    const auto f = functions_.find(p.function_id());
+    if (f == functions_.end() || f->second.profile_id != JW_PROFILE_PERIPHERAL ||
+        f->second.profile_major != 1 || f->second.profile_minor != 0 ||
+        (f->second.operations & 127) != 127)
+      return absl::FailedPreconditionError("Required peripheral profile slot unavailable");
+    ABSL_ASSIGN_OR_RETURN(auto bytes,
+                          Data(commands, Command(JW_CMD_DESCRIBE_FUNCTION, p.function_id())));
+    uint8_t expected[JW_FUNCTION_DESCRIPTOR_LEN];
+    jw_encode_function_descriptor(expected, sizeof(expected), &f->second);
+    if (bytes.size() != JW_FUNCTION_DESCRIPTOR_LEN + JW_PERIPHERAL_SCHEMA_LEN ||
+        !std::equal(expected, expected + sizeof(expected), bytes.begin()) ||
+        !std::equal(jw_peripheral_schema,
+                    jw_peripheral_schema + JW_PERIPHERAL_SCHEMA_LEN,
+                    bytes.begin() + JW_FUNCTION_DESCRIPTOR_LEN))
+      return absl::FailedPreconditionError("Peripheral schema/limits mismatch");
+  }
   ABSL_ASSIGN_OR_RETURN(auto after, Data(commands, Command(JW_CMD_IDENTIFY, JW_CHANNEL_NONE)));
   jw_identify_response_t current{};
   if (jw_decode_identify_payload(after.data(), after.size(), &current) != JW_RESULT_OK ||
@@ -536,6 +555,7 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& input) {
         absl::StrCat("Board '", config.name(), "' is already initialized."));
   }
   ABSL_RETURN_IF_ERROR(ValidateConfig(config));
+  ABSL_ASSIGN_OR_RETURN(auto peripheral_resources, ResolveBoardPeripherals(config));
 
   ABSL_ASSIGN_OR_RETURN(auto transports, robot::comm::CommFactory::CreateComm(config.comm()));
   std::shared_ptr<JoshuaWireCommandClient> commands;
@@ -571,6 +591,35 @@ absl::Status JoshuaWireBoard::Init(const robot::board::Board& input) {
                                             schemas_.at(channel_config.index()));
   }
 
+  PeripheralExchange exchange =
+      [commands](uint8_t id,
+                 uint8_t op,
+                 const std::vector<uint8_t>& bytes) -> absl::StatusOr<std::vector<uint8_t>> {
+    uint8_t payload[JW_MAX_PAYLOAD_LEN];
+    const jw_profile_request_t q{JW_PROFILE_PERIPHERAL, 1, 0, op, bytes.data(), bytes.size()};
+    const int n = jw_encode_profile_request(payload, sizeof(payload), &q);
+    if (n < 0) return absl::InvalidArgumentError("Invalid peripheral payload");
+    return Data(*commands, Command(JW_CMD_PROFILE, id, payload, n));
+  };
+  Board bus_config = config;
+  bus_config.clear_peripherals();
+  std::map<std::string, std::shared_ptr<DigitalPin>> digital;
+  for (const auto& r : peripheral_resources) {
+    if (!r.config.has_digital()) {
+      *bus_config.add_peripherals() = r.config;
+      continue;
+    }
+    ABSL_ASSIGN_OR_RETURN(
+        const auto* profile,
+        FindPinProfile(config.pin_profile().id(), config.pin_profile().version()));
+    ABSL_ASSIGN_OR_RETURN(digital[r.config.name()],
+                          MakeJoshuaWireDigitalPin(r, *profile, exchange));
+  }
+  ABSL_ASSIGN_OR_RETURN(
+      auto peripherals,
+      HostPeripherals::Open(bus_config, MakeJoshuaWirePeripheralBackend(exchange)));
+  peripherals_ = std::move(peripherals);
+  digital_ = std::move(digital);
   name_ = config.name();
   commands_ = std::move(commands);
   channels_ = std::move(channels);
@@ -593,10 +642,14 @@ absl::StatusOr<std::shared_ptr<BoardChannel>> JoshuaWireBoard::OpenChannel(uint3
 absl::Status JoshuaWireBoard::Teardown() {
   joshua::ScopeExit release([&] {
     channels_.clear();
+    digital_.clear();
+    peripherals_.reset();
     commands_.reset();
     initialized_ = false;
   });
-  const auto status = commands_ ? commands_->Close() : absl::OkStatus();
+  absl::Status status;
+  if (peripherals_) status.Update(peripherals_->Close());
+  if (commands_) status.Update(commands_->Close());
   return status;
 }
 absl::Status JoshuaWireBoard::EmergencyStop() {
@@ -613,4 +666,32 @@ absl::StatusOr<std::shared_ptr<ScalarSensor>> JoshuaWireBoard::SubscribeScalar(u
   return std::make_shared<JoshuaWireScalarSensor>(std::move(stream), period_us);
 }
 
+}  // namespace robot::board
+
+namespace robot::board {
+absl::StatusOr<std::shared_ptr<PwmOutput>> JoshuaWireBoard::OpenPwm(const std::string& n) {
+  if (!initialized_ || !peripherals_) return absl::FailedPreconditionError("Board unavailable");
+  return peripherals_->Get<PwmOutput>(n);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::SpiTransport>> JoshuaWireBoard::OpenSpi(
+    const std::string& n) {
+  if (!initialized_ || !peripherals_) return absl::FailedPreconditionError("Board unavailable");
+  return peripherals_->Get<robot::comm::SpiTransport>(n);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::I2cTransport>> JoshuaWireBoard::OpenI2c(
+    const std::string& n) {
+  if (!initialized_ || !peripherals_) return absl::FailedPreconditionError("Board unavailable");
+  return peripherals_->Get<robot::comm::I2cTransport>(n);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::ByteStream>> JoshuaWireBoard::OpenUart(
+    const std::string& n) {
+  if (!initialized_ || !peripherals_) return absl::FailedPreconditionError("Board unavailable");
+  return peripherals_->Get<robot::comm::ByteStream>(n);
+}
+absl::StatusOr<std::shared_ptr<DigitalPin>> JoshuaWireBoard::OpenDigitalPin(const std::string& n) {
+  if (!initialized_) return absl::FailedPreconditionError("Board unavailable");
+  const auto it = digital_.find(n);
+  if (it == digital_.end()) return absl::NotFoundError("Undeclared digital pin");
+  return it->second;
+}
 }  // namespace robot::board

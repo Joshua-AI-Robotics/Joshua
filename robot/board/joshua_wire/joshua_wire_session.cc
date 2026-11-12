@@ -10,6 +10,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "firmware/common/joshua_wire.h"
+#include "firmware/common/joshua_wire_peripheral.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "firmware/common/joshua_wire_sensor_stream.h"
 #include "utils/scope_exit.h"
@@ -142,6 +143,14 @@ absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::ExchangeLocked(uint8_t c
         continue;
       }
     }
+    if (profile_valid && profile.profile_id == JW_PROFILE_PERIPHERAL && profile.major == 1 &&
+        profile.minor == 0 && reply.status == JW_STATUS_OK &&
+        (reply.execution != JW_EXECUTION_COMPLETE ||
+         !jw_peripheral_reply_valid(
+             profile.operation, profile.data, profile.data_len, reply.data, reply.data_len))) {
+      failure = absl::DataLossError("Malformed peripheral acknowledgment");
+      continue;
+    }
     return std::vector<uint8_t>(received.payload, received.payload + received.payload_len);
   }
   if (published) uncertain_ = true;
@@ -233,7 +242,10 @@ bool JoshuaWireSession::IsReadOnly(const jw_command_t& command) {
       profile.major == JW_PROFILE_VERSION_MAJOR && profile.minor == JW_SENSOR_STREAM_MINOR &&
       profile.data_len == 0 &&
       (profile.operation == JW_SENSOR_READ || profile.operation == JW_SENSOR_GET_SUBSCRIPTION);
-  return query || legacy_read || stream_read;
+  const bool peripheral_read = is_profile && profile.profile_id == JW_PROFILE_PERIPHERAL &&
+                               profile.major == 1 && profile.minor == 0 &&
+                               profile.operation == JW_PERIPHERAL_READ && !profile.data_len;
+  return query || legacy_read || stream_read || peripheral_read;
 }
 
 absl::StatusOr<std::vector<uint8_t>> JoshuaWireSession::Exchange(const jw_command_t& command) {

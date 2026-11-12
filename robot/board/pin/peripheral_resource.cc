@@ -8,6 +8,47 @@
 #include "robot/comm/serial/serial_config_validation.h"
 #include "utils/status_macros.h"
 namespace robot::board {
+absl::StatusOr<jw_peripheral_config_t> PeripheralConfig(const PeripheralResource& r) {
+  jw_peripheral_config_t c{};
+  for (const auto& pin : r.pins)
+    if (!pin.firmware_pin || *pin.firmware_pin > 254)
+      return absl::InvalidArgumentError("Peripheral has no native MCU pin");
+  for (unsigned i = 0; i < 4; ++i)
+    c.pins[i] = i < r.pins.size() ? static_cast<uint8_t>(*r.pins[i].firmware_pin) : 255;
+  const auto& p = r.config;
+  if (p.has_pwm()) {
+    c.kind = JW_PERIPHERAL_PWM;
+    c.value0 = p.pwm().frequency_hz();
+    c.value1 = std::lround(p.pwm().initial_duty_cycle() * 65535);
+  } else if (p.has_spi()) {
+    c.kind = JW_PERIPHERAL_SPI;
+    c.bus = p.spi().bus_index();
+    c.value0 = p.spi().settings().speed_hz();
+    c.value1 = p.spi().settings().mode();
+  } else if (p.has_i2c()) {
+    c.kind = JW_PERIPHERAL_I2C;
+    c.bus = p.i2c().bus_index();
+    c.value0 = p.i2c().settings().frequency_hz();
+    c.value1 = p.i2c().settings().address();
+    c.timeout_ms = p.i2c().settings().timeout_ms();
+  } else if (p.has_uart()) {
+    c.kind = JW_PERIPHERAL_UART;
+    c.bus = p.uart().bus_index();
+    c.value0 = p.uart().settings().baudrate();
+  } else if (p.has_digital()) {
+    c.kind = JW_PERIPHERAL_DIGITAL;
+    const auto& d = p.digital();
+    c.flags = (d.direction() == DIGITAL_OUTPUT ? 1 : 0) | (d.active_low() ? 2 : 0) |
+              (d.initial_value() ? 4 : 0) | (d.shutdown_value() ? 8 : 0) |
+              (static_cast<unsigned>(d.bias()) << 4);
+  } else
+    return absl::InvalidArgumentError("Unsupported MCU peripheral");
+  uint8_t bytes[JW_PERIPHERAL_CONFIG_LEN];
+  if (jw_encode_peripheral_config(bytes, sizeof(bytes), &c) < 0)
+    return absl::InvalidArgumentError("Invalid MCU peripheral settings");
+  return c;
+}
+
 std::string PinIdentity(const PinProfile& profile, const PinInfo& pin) {
   if (pin.firmware_pin) return "native:" + std::to_string(*pin.firmware_pin);
   if (!pin.chip_label.empty()) return pin.chip_label + ":" + pin.line_name;
@@ -108,7 +149,8 @@ absl::StatusOr<std::vector<PeripheralResource>> ResolveBoardPeripherals(const Bo
       case BoardPeripheral::kI2C: {
         const auto& p = c.i2c();
         ABSL_RETURN_IF_ERROR(robot::comm::ValidateI2cSettings(p.settings(), !host));
-        if ((host && p.bus_index()) || (!host && p.bus_index() > 1))
+        if ((host && p.bus_index()) ||
+            (!host && p.bus_index() > (board.board_type() == TEENSY41 ? 2u : 1u)))
           return absl::InvalidArgumentError("Unsupported I2C bus index");
         const auto group =
             "i2c:" + (host ? p.settings().controller() : std::to_string(p.bus_index())) + ":" +
@@ -126,7 +168,7 @@ absl::StatusOr<std::vector<PeripheralResource>> ResolveBoardPeripherals(const Bo
         if ((host && (p.bus_index() || p.controller().empty())) ||
             (!host &&
              (p.bus_index() < 1 || p.bus_index() > (board.board_type() == TEENSY41 ? 8 : 2) ||
-              !settings.port().empty() || !p.controller().empty())))
+              !settings.port().empty() || !p.controller().empty() || settings.has_io_policy())))
           return absl::InvalidArgumentError(
               "UART requires Linux controller selector or supported MCU bus 1..8/2");
         if (!settings.baudrate() || settings.baudrate() > 4000000 ||
@@ -144,6 +186,24 @@ absl::StatusOr<std::vector<PeripheralResource>> ResolveBoardPeripherals(const Bo
         }
         ABSL_RETURN_IF_ERROR(pin(p.tx(), PinFunction::kUart, {}));
         ABSL_RETURN_IF_ERROR(pin(p.rx(), PinFunction::kUart, {}));
+        break;
+      }
+      case BoardPeripheral::kDigital: {
+        if (host)
+          return absl::InvalidArgumentError("Host digital pins belong in host_gpio_config.pins");
+        auto d = c.digital();
+        if ((!d.name().empty() && d.name() != c.name()) ||
+            (!d.purpose().empty() && d.purpose() != c.purpose()))
+          return absl::InvalidArgumentError(
+              "Digital pin name/purpose must match peripheral identity");
+        d.set_name(c.name());
+        d.set_purpose(c.purpose());
+        ABSL_ASSIGN_OR_RETURN(auto resolved, ResolvePin(*profile, d));
+        *resource.config.mutable_digital() = d;
+        ABSL_RETURN_IF_ERROR(pin(d.pin(),
+                                 d.direction() == DIGITAL_OUTPUT ? PinFunction::kDigitalOutput
+                                                                 : PinFunction::kDigitalInput,
+                                 {}));
         break;
       }
       default:
@@ -166,6 +226,26 @@ absl::StatusOr<std::vector<PeripheralResource>> ResolveBoardPeripherals(const Bo
       if (!found)
         return absl::InvalidArgumentError(
             "Peripheral signals are not a documented executable header route");
+    }
+    if (!host && c.has_pwm())
+      ABSL_RETURN_IF_ERROR(claim({"mcu:pwm-timers", std::to_string(c.pwm().frequency_hz())}));
+    if (!host && c.has_uart())
+      ABSL_RETURN_IF_ERROR(claim({"mcu:uart:" + std::to_string(c.uart().bus_index()), {}}));
+    if (!host) {
+      ABSL_ASSIGN_OR_RETURN(auto native, PeripheralConfig(resource));
+      if (native.kind == JW_PERIPHERAL_SPI || native.kind == JW_PERIPHERAL_I2C) {
+        std::string settings;
+        const unsigned count = native.kind == JW_PERIPHERAL_SPI ? 3 : 2;
+        for (unsigned i = 0; i < count; ++i) settings += std::to_string(native.pins[i]) + ":";
+        if (native.kind == JW_PERIPHERAL_I2C)
+          settings += std::to_string(native.value0) + ":" + std::to_string(native.timeout_ms);
+        ABSL_RETURN_IF_ERROR(
+            claim({"mcu:bus:" + std::to_string(native.kind) + ":" + std::to_string(native.bus),
+                   settings}));
+      }
+      if (!jw_peripheral_route_valid(board.board_type() == TEENSY41 ? 1 : 2, &native))
+        return absl::InvalidArgumentError(
+            "Unsupported native MCU route, bias or I2C timeout policy");
     }
     result.push_back(std::move(resource));
   }

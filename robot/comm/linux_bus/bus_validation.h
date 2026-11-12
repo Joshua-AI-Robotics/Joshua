@@ -18,7 +18,7 @@ inline absl::Status ValidateSpiSettings(const SpiConfig& c, bool mcu = false) {
 }
 inline absl::Status ValidateI2cSettings(const I2cConfig& c, bool mcu = false) {
   if (c.address() < 8 || c.address() > 0x77 || c.timeout_ms() < 1 ||
-      c.timeout_ms() > (mcu ? 5u : 100u) ||
+      c.timeout_ms() > (mcu ? 50u : 100u) ||
       (mcu ? (c.frequency_hz() < 10000 || c.frequency_hz() > 400000) : c.frequency_hz() != 0))
     return absl::InvalidArgumentError(
         "I2C requires unreserved 7-bit address, timeout 1..100 ms; MCU clock 10..400 kHz, Linux "

@@ -441,3 +441,16 @@ Host GPIO boards also accept `Board.peripherals` entries with `name`, `purpose`
 and exactly one `pwm`, `spi`, `i2c` or `uart` configuration. Pin references use the
 same source catalog as digital GPIO. Validation resolves the entire board before
 I/O and rejects pin/channel collisions. See the [host API and settings](../robot/board/host_gpio/README.md#pwm-spi-i2c-and-uart).
+
+
+MCU `Board.peripherals` additionally require `pin_profile` and unique
+`function_id` 192..199, matching the explicit peripheral firmware artifact.
+Linux device/controller selectors are omitted on MCU; `bus_index` selects the
+native SPI/I2C/UART port. Named GPIO uses the digital operation. Pin capabilities,
+fixed Teensy signal routes, reserved ESP32 pins, bus compatibility and timer
+frequency are checked offline before serial acquisition. MCU inputs require an
+explicit bias; `AS_IS` cannot preserve a previous unknown native pull setting.
+Examples: [Teensy](config_preset/example/teensy_peripherals.pbtxt) and
+[ESP32](config_preset/example/esp32_peripherals.pbtxt). See the
+[host API](../robot/board/joshua_wire/README.md#named-mcu-peripherals) for execution
+limits, reference artifact timing and pending qualification.

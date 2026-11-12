@@ -18,6 +18,7 @@
 #include "firmware/common/joshua_ethercat_profile.h"
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_endpoint.h"
+#include "firmware/common/joshua_wire_peripheral.h"
 #include "firmware/common/joshua_wire_sensor_stream.h"
 #include "firmware/common/soes/joshua_ethercat_soes.h"
 #include "gtest/gtest.h"
@@ -169,6 +170,45 @@ class JoshuaWireSessionTest : public ::testing::Test {
     return session.Exchange(request);
   }
 };
+
+TEST(JoshuaWirePeripheralSessionTest, MalformedSuccessRetriesIdenticalBytesAndBlocksNewMutations) {
+  std::vector<Bytes> attempts;
+  JoshuaWireSession::ExchangeHook hook = [&](absl::Span<const uint8_t> bytes) {
+    jw_frame_t f{};
+    EXPECT_EQ(jw_decode_frame(bytes.data(), bytes.size(), &f), JW_RESULT_OK);
+    uint8_t reply[81];
+    const uint8_t wrong[] = {0};
+    const bool reset = f.cmd == JW_CMD_RESET_SESSION;
+    const int n = jw_encode_reply_payload(reply,
+                                          sizeof(reply),
+                                          JW_STATUS_OK,
+                                          JW_EXECUTION_COMPLETE,
+                                          reset ? nullptr : wrong,
+                                          reset ? 0 : 1);
+    Bytes result(96);
+    const int len = jw_encode_frame(
+        result.data(), result.size(), f.session_id, f.message_id, f.cmd, f.channel, reply, n);
+    result.resize(len);
+    if (!reset) attempts.emplace_back(bytes.begin(), bytes.end());
+    return JoshuaWireSession::ExchangeOutcome{absl::OkStatus(), result, true, true};
+  };
+  uint32_t session_id = 200;
+  JoshuaWireSession session(
+      nullptr, [&] { return ++session_id; }, UINT32_MAX, nullptr, absl::ZeroDuration(), hook);
+  ASSERT_TRUE(session.Open().ok());
+  const uint8_t transfer[] = {JW_PERIPHERAL_SPI, 1, 1, 42};
+  uint8_t payload[40];
+  const jw_profile_request_t p{
+      JW_PROFILE_PERIPHERAL, 1, 0, JW_PERIPHERAL_TRANSFER, transfer, sizeof(transfer)};
+  const int n = jw_encode_profile_request(payload, sizeof(payload), &p);
+  const jw_command_t q{0, 0, JW_CMD_PROFILE, 192, payload, static_cast<size_t>(n)};
+  EXPECT_EQ(session.Exchange(q).status().code(), absl::StatusCode::kDataLoss);
+  ASSERT_EQ(attempts.size(), 2u);
+  EXPECT_EQ(attempts[0], attempts[1]);
+  EXPECT_TRUE(session.Inspect().uncertain);
+  EXPECT_EQ(session.Exchange(q).status().code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(attempts.size(), 2u);
+}
 
 class RoutedCyclic : public robot::comm::CorrelatedCyclicTransport {
  public:

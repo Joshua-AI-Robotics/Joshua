@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+#include "firmware/common/joshua_peripheral_device.h"
 #include "firmware/common/joshua_stepdir_device.h"
 #include "firmware/common/joshua_wire_stream.h"
 #include "gtest/gtest.h"
@@ -177,6 +178,198 @@ TEST_P(FirmwareBindingTest, ProfileWiringUsesExistingFirmwarePayloadAndSharedCac
   auto shared = BoardFactory::GetOrCreate(native);
   ASSERT_TRUE(shared.ok()) << shared.status();
   EXPECT_EQ(board->get(), shared->get());
+}
+
+struct PeripheralFake {
+  jw_peripheral_config_t config[8]{};
+  bool configured[8]{};
+  bool enabled[8]{};
+  uint8_t value[8]{};
+  std::vector<uint8_t> uart;
+  unsigned transfers = 0;
+  bool fail = false;
+  unsigned board = 1;
+  jw_peripheral_ops_t Ops() {
+    return {this,
+            [](void* p, const jw_peripheral_config_t* c) {
+              return jw_peripheral_route_valid(static_cast<PeripheralFake*>(p)->board, c)
+                         ? JW_STATUS_OK
+                         : JW_STATUS_INVALID_PAYLOAD;
+            },
+            [](void* p, unsigned i, const jw_peripheral_config_t* c) {
+              auto& f = *static_cast<PeripheralFake*>(p);
+              f.config[i] = *c;
+              f.configured[i] = true;
+              return JW_STATUS_OK;
+            },
+            [](void* p,
+               unsigned i,
+               uint8_t op,
+               const uint8_t* q,
+               size_t n,
+               uint8_t* out,
+               size_t* size) {
+              auto& f = *static_cast<PeripheralFake*>(p);
+              *size = 0;
+              if (op == JW_PERIPHERAL_TRANSFER) {
+                ++f.transfers;
+                if (f.fail) return JW_STATUS_ERROR;
+                out[0] = q[2];
+                *size = 1 + q[2];
+                for (unsigned j = 0; j < q[2]; ++j)
+                  out[j + 1] = q[0] == JW_PERIPHERAL_SPI ? q[j + 3] : 42;
+                if (q[0] == JW_PERIPHERAL_UART && q[1]) f.uart.assign(q + 3, q + n);
+              } else if (op == JW_PERIPHERAL_READ) {
+                out[0] = f.value[i];
+                *size = 1;
+              } else if (op == JW_PERIPHERAL_WRITE) {
+                f.value[i] = q[0];
+                std::copy(q, q + n, out);
+                *size = n;
+              } else if (op == JW_PERIPHERAL_ENABLE || op == JW_PERIPHERAL_DISABLE)
+                f.enabled[i] = op == JW_PERIPHERAL_ENABLE;
+              return JW_STATUS_OK;
+            },
+            [](void* p, unsigned i) {
+              auto& f = *static_cast<PeripheralFake*>(p);
+              f.configured[i] = false;
+              f.enabled[i] = false;
+              return JW_STATUS_OK;
+            },
+            [](void*) {
+              for (uint8_t i = 0; i < g_num_channels; ++i)
+                if (g_channels[i].enabled) return 0;
+              return 1;
+            }};
+  }
+};
+void AddPeripherals(Board* b) {
+  const bool teensy = b->board_type() == TEENSY41;
+  b->mutable_pin_profile()->set_id(teensy ? "pjrc/teensy41" : "espressif/esp32-devkitc-v4-wroom32");
+  b->mutable_pin_profile()->set_version(1);
+  auto* motor = b->mutable_channels(0)->mutable_step_dir();
+  motor->set_step_pin(teensy ? 2 : 25);
+  motor->set_dir_pin(teensy ? 3 : 26);
+  motor->set_enable_pin(teensy ? 4 : 27);
+  auto add = [&](const char* name, unsigned id) {
+    auto* p = b->add_peripherals();
+    p->set_name(name);
+    p->set_purpose("test peripheral");
+    p->set_function_id(id);
+    return p;
+  };
+  auto* p = add("pwm", 192);
+  p->mutable_pwm()->mutable_pin()->set_firmware_pin(teensy ? 6 : 4);
+  p->mutable_pwm()->set_frequency_hz(1000);
+  p->mutable_pwm()->set_initial_duty_cycle(0.25);
+  auto* s = add("spi", 193)->mutable_spi();
+  s->mutable_clock()->set_firmware_pin(teensy ? 13 : 18);
+  s->mutable_mosi()->set_firmware_pin(teensy ? 11 : 23);
+  s->mutable_miso()->set_firmware_pin(teensy ? 12 : 19);
+  s->mutable_chip_select()->set_firmware_pin(teensy ? 10 : 13);
+  s->mutable_settings()->set_speed_hz(1000000);
+  auto* i = add("i2c", 194)->mutable_i2c();
+  i->mutable_sda()->set_firmware_pin(teensy ? 18 : 21);
+  i->mutable_scl()->set_firmware_pin(teensy ? 19 : 22);
+  i->mutable_settings()->set_address(0x48);
+  i->mutable_settings()->set_frequency_hz(100000);
+  i->mutable_settings()->set_timeout_ms(teensy ? 50 : 5);
+  auto* u = add("uart", 195)->mutable_uart();
+  u->set_bus_index(1);
+  u->mutable_settings()->set_baudrate(115200);
+  u->mutable_tx()->set_firmware_pin(teensy ? 1 : 17);
+  u->mutable_rx()->set_firmware_pin(teensy ? 0 : 16);
+  auto* d = add("digital", 196)->mutable_digital();
+  d->mutable_pin()->set_firmware_pin(teensy ? 5 : 32);
+  d->set_direction(DIGITAL_OUTPUT);
+  d->set_initial_value(false);
+  d->set_shutdown_value(false);
+  b->mutable_comm()->mutable_serial_config()->set_exchange_timeout_ms(500);
+}
+TEST_P(FirmwareBindingTest, PeripheralCapabilitiesShareSessionReplayAndTerminalLifetime) {
+  if (GetParam() == AM243) GTEST_SKIP();
+  PeripheralFake fake;
+  fake.board = GetParam() == TEENSY41 ? 1 : 2;
+  {
+    std::lock_guard lock(firmware_mutex);
+    ASSERT_TRUE(JoshuaPeripheralDeviceInit(fake.Ops()));
+  }
+  AddPeripherals(&config);
+  auto board = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto pwm = (*board)->OpenPwm("pwm");
+  auto spi = (*board)->OpenSpi("spi");
+  auto i2c = (*board)->OpenI2c("i2c");
+  auto uart = (*board)->OpenUart("uart");
+  auto digital = (*board)->OpenDigitalPin("digital");
+  ASSERT_TRUE(pwm.ok());
+  ASSERT_TRUE(spi.ok());
+  ASSERT_TRUE(i2c.ok());
+  ASSERT_TRUE(uart.ok());
+  ASSERT_TRUE(digital.ok());
+  EXPECT_FALSE((*board)->OpenPwm("spi").ok());
+  ASSERT_TRUE((*pwm)->SetDutyCycle(.5).ok());
+  ASSERT_TRUE((*pwm)->Enable().ok());
+  {
+    std::lock_guard lock(firmware_mutex);
+    drop_target_reply = true;
+  }
+  EXPECT_EQ((*spi)->Transfer({1, 2, 3}).value(), (Bytes{1, 2, 3}));
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_EQ(fake.transfers, 1u);
+  }
+  EXPECT_EQ((*i2c)->Transfer({0}, 2).value(), (Bytes{42, 42}));
+  EXPECT_TRUE((*uart)->Write({7, 8}).ok());
+  EXPECT_EQ((*uart)->Read(2).value(), (Bytes{42, 42}));
+  EXPECT_TRUE((*digital)->Write(true).ok());
+  EXPECT_TRUE((*digital)->Read().value());
+  auto channel = (*board)->OpenChannel(0);
+  ASSERT_TRUE(channel.ok());
+  ASSERT_TRUE((*channel)->Enable().ok());
+  EXPECT_EQ((*spi)->Transfer({1}).status().code(), absl::StatusCode::kResourceExhausted);
+  EXPECT_TRUE((*pwm)->Disable().ok());
+  ASSERT_TRUE((*channel)->Disable().ok());
+  ASSERT_TRUE((*board)->Teardown().ok());
+  EXPECT_FALSE((*pwm)->Enable().ok());
+  EXPECT_FALSE((*spi)->Transfer({1}).ok());
+  EXPECT_FALSE((*i2c)->Transfer({}, 1).ok());
+  EXPECT_FALSE((*uart)->Open().ok());
+  EXPECT_FALSE((*digital)->Write(true).ok());
+  {
+    std::lock_guard lock(firmware_mutex);
+    for (bool active : fake.configured) EXPECT_FALSE(active);
+  }
+}
+TEST_P(FirmwareBindingTest, BusFailureStopsAllOutputsAndLatchesUnknownOutcome) {
+  if (GetParam() == AM243) GTEST_SKIP();
+  PeripheralFake fake;
+  fake.board = GetParam() == TEENSY41 ? 1 : 2;
+  {
+    std::lock_guard lock(firmware_mutex);
+    ASSERT_TRUE(JoshuaPeripheralDeviceInit(fake.Ops()));
+  }
+  AddPeripherals(&config);
+  auto board = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(board.ok()) << board.status();
+  auto pwm = (*board)->OpenPwm("pwm");
+  auto spi = (*board)->OpenSpi("spi");
+  ASSERT_TRUE(pwm.ok());
+  ASSERT_TRUE(spi.ok());
+  ASSERT_TRUE((*pwm)->Enable().ok());
+  {
+    std::lock_guard lock(firmware_mutex);
+    fake.fail = true;
+  }
+  EXPECT_EQ((*spi)->Transfer({1}).status().code(), absl::StatusCode::kUnknown);
+  EXPECT_FALSE((*pwm)->Enable().ok());
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_TRUE(StepDirDeviceRuntime()->estopped);
+    for (bool active : fake.configured) EXPECT_FALSE(active);
+    EXPECT_EQ(fake.transfers, 1u);
+  }
+  (*board)->Teardown().IgnoreError();
 }
 
 TEST_P(FirmwareBindingTest, SerialAliasIsRejectedBeforeResettingTheExistingSession) {

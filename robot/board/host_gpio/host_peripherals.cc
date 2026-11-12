@@ -73,7 +73,7 @@ class Pwm final : public PwmOutput, public Gate<PwmOutput> {
   }
   absl::Status Disable() override {
     std::lock_guard lock(mutex_);
-    if (!target_) return absl::FailedPreconditionError("PWM handle closed");
+    if (!target_) return status_;
     return target_->Disable();
   }
   absl::Status Close() override {

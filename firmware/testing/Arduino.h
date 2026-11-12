@@ -12,6 +12,15 @@
 constexpr int HIGH = 1;
 constexpr int LOW = 0;
 constexpr int OUTPUT = 1;
+constexpr int INPUT = 0, INPUT_PULLUP = 2, INPUT_PULLDOWN = 3, SERIAL_8N1 = 0;
+int digitalRead(uint8_t);
+void analogWriteResolution(unsigned);
+void analogWriteFrequency(uint8_t, unsigned);
+void analogWrite(uint8_t, unsigned);
+double ledcSetup(unsigned, unsigned, unsigned);
+void ledcAttachPin(uint8_t, unsigned);
+void ledcWrite(unsigned, unsigned);
+void ledcDetachPin(uint8_t);
 extern int pin_values[256];
 extern int pin_writes;
 extern unsigned long clock_us;
@@ -26,7 +35,25 @@ inline bool digitalPinCanOutput(uint8_t pin) {
 
 class FakeArduinoSerial {
  public:
-  void begin(int) {}
+  void begin(int) {
+    started = true;
+  }
+  void begin(int, int, int rx_pin, int tx_pin) {
+    started = true;
+    rx = rx_pin;
+    tx = tx_pin;
+  }
+  void end() {
+    started = false;
+  }
+  void setRX(int p) {
+    rx = p;
+  }
+  void setTX(int p) {
+    tx = p;
+  }
+  bool started = false;
+  int rx = -1, tx = -1;
   void setTimeout(unsigned long) {}
   void setTxBufferSize(size_t) {}
   int available() {
@@ -57,6 +84,9 @@ class FakeArduinoSerial {
   int write_capacity = 64;
 };
 inline FakeArduinoSerial Serial;
+using HardwareSerial = FakeArduinoSerial;
+using HardwareSerialIMXRT = FakeArduinoSerial;
+inline HardwareSerial Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, Serial7, Serial8;
 
 #ifdef JOSHUA_MIXED_ADC_REFERENCE
 constexpr uint8_t A0 = 14;

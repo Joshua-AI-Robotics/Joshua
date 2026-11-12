@@ -8,7 +8,9 @@ cc_library(
     deps = [
         ":joshua_wire_coordinator",
         ":joshua_wire_session",
+        ":peripheral_backend",
         "//firmware/common:joshua_watchdogs",
+        "//firmware/common:joshua_wire_peripheral",
         "//firmware/common:joshua_wire_profiles",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/pin:pin_resource",
@@ -57,6 +59,7 @@ cc_test(
     srcs = ["firmware_binding_test.cc"],
     deps = [
         "//firmware/common:joshua_wire_stream",
+        "//firmware/common:peripheral_test_firmware",
         "//firmware/common:stepdir_test_firmware",
         "//robot/board/factory:board_factory",
         "//robot/board/joshua_wire/testing:board_config",
@@ -73,6 +76,7 @@ cc_library(
     deps = [
         "//firmware/common:joshua_wire",
         "//firmware/common:joshua_wire_commands",
+        "//firmware/common:joshua_wire_peripheral",
         "//firmware/common:joshua_wire_profiles",
         "//firmware/common:joshua_wire_sensor_stream",
         "//robot/comm/interfaces:correlated_cyclic_transport",
@@ -210,5 +214,16 @@ cc_test(
         "//robot/comm/factory:comm_factory",
         "//utils:joshua_runtime",
         "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "peripheral_backend",
+    srcs = ["peripheral_backend.cc"],
+    hdrs = ["peripheral_backend.h"],
+    deps = [
+        "//firmware/common:joshua_wire_peripheral",
+        "//robot/board/host_gpio:host_peripherals",
+        "//utils:status_macros",
     ],
 )

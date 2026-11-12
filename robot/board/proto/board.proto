@@ -265,5 +265,6 @@ message BoardPeripheral {
     SpiPeripheralConfig spi = 11;
     I2cPeripheralConfig i2c = 12;
     UartPeripheralConfig uart = 13;
+    DigitalPinConfig digital = 14;  // MCU only; outer name/purpose supply identity.
   }
 }

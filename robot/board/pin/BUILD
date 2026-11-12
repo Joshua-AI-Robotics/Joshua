@@ -76,6 +76,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":pin_resource",
+        "//firmware/common:joshua_wire_peripheral",
         "//robot/comm/linux_bus:bus_validation",
         "//robot/comm/serial:serial_config_validation",
         "//utils:status_macros",
