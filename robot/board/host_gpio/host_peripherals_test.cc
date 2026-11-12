@@ -79,6 +79,7 @@ class Backend final : public PeripheralBackend {
 };
 Board Config() {
   Board b;
+  b.set_name("host");
   b.set_board_type(HOST_GPIO);
   b.mutable_host_gpio_config()->set_profile_id("raspberrypi/pi5");
   b.mutable_host_gpio_config()->set_profile_version(1);
