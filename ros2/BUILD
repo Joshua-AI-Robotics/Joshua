@@ -338,7 +338,10 @@ ros2_cpp_binary(
 ros2_cpp_binary(
     name = "device_bus",
     srcs = ["device_bus.cc"],
-    deps = [":mcu_bus_node"],
+    deps = [
+        ":mcu_bus_node",
+        ":node_runner",
+    ],
 )
 
 cc_test(
