@@ -69,9 +69,10 @@ class DeviceBus : public ActionSubscriber {
         stop_group_);
   }
   ~DeviceBus() override {
-    ShutdownActions().IgnoreError();
+    ShutdownActions();
     observations_.clear();
-    for (auto& [name, b] : boards_) b->Teardown().IgnoreError();
+    for (auto& [name, b] : boards_)
+      joshua::RunCleanup("device board teardown", [&] { joshua::ThrowIfError(b->Teardown()); });
   }
 
  private:

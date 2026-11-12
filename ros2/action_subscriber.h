@@ -106,7 +106,7 @@ class ActionSubscriber : public rclcpp::Node {
   }
   ~ActionSubscriber() override {
     watchdog_.reset();
-    if (standalone_) ShutdownActions().IgnoreError();
+    if (standalone_) ShutdownActions();
   }
 
  protected:
@@ -119,10 +119,20 @@ class ActionSubscriber : public rclcpp::Node {
       result.Update(actuator.gate->Stop(stopped_boards.count(actuator.board_name) != 0));
     return result;
   }
-  absl::Status ShutdownActions() {
-    absl::Status result;
-    for (auto& actuator : gates_) result.Update(actuator.gate->Shutdown());
-    return result;
+  void ShutdownActions() {
+    joshua::RunCleanup("actuator shutdown", [&] {
+      RequestStopActions();
+      std::vector<std::thread> threads;
+      threads.reserve(gates_.size());
+      joshua::ScopeExit join([&] {
+        for (auto& thread : threads)
+          if (thread.joinable()) thread.join();
+      });
+      for (const auto& actuator : gates_)
+        threads.push_back(joshua::StartWorker("actuator teardown", [gate = actuator.gate] {
+          joshua::ThrowIfError(gate->Shutdown());
+        }));
+    });
   }
 
  private:
