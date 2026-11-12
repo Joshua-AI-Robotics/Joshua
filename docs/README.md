@@ -7,6 +7,7 @@ evidence workflow and the outstanding physical qualification gates.
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Production cleanup options for perception acquisition and ROS node ownership | [PRODUCTION_CODE_CLEANUP.md](PRODUCTION_CODE_CLEANUP.md) |
 | Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
 | Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |
 | OpenAI Decisions adapter, API failure handling, and demo gates | [../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
