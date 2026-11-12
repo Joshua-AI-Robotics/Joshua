@@ -379,6 +379,8 @@ robot {
                     self.assertIn(
                         label,
                         {
+                            "//firmware/common:joshua_wire_ethercat",
+                            "//firmware/common:joshua_wire_ethercat.h",
                             "//firmware/common:joshua_wire_peripheral",
                             "//firmware/common:joshua_wire_peripheral.c",
                             "//firmware/common:joshua_wire_peripheral.h",
@@ -389,7 +391,7 @@ robot {
                             "//firmware/common:joshua_wire_commands.c",
                             "//firmware/common:joshua_wire_commands.h",
                         },
-                        "validator depends on firmware execution instead of pure codecs",
+                        "validator depends on firmware execution",
                     )
                 if label.startswith("//simulation:"):
                     self.fail("validator depends on simulation runtime")
