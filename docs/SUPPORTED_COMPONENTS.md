@@ -35,7 +35,7 @@ determines which actuator can use each channel.
 | `AM243` | [JoshuaWire over serial or paired message/cyclic EtherCAT](../robot/board/joshua_wire/joshua_wire_board.cc) | [Serial](../config/config_preset/example/am243_serial_demo.pbtxt), [JW EtherCAT](../config/config_preset/example/am243_jw_ethercat_demo.pbtxt); current AM243 channels are software-only, with no STEP/DIR GPIO output |
 | `TEENSY41` | [Serial JoshuaWire](../robot/board/teensy/teensy_board.h) | [Stepper preset](../config/config_preset/example/teensy_stepper_demo.pbtxt) |
 | `ESP32` | [Serial JoshuaWire](../robot/board/esp32/esp32_board.h) | [Stepper preset](../config/config_preset/example/esp32_stepper_demo.pbtxt) |
-| `HOST_GPIO` | [Linux digital pins](../robot/board/host_gpio/README.md), Pi 5 J8 / Orin Nano P3768 J12 | [Pi 5](../config/config_preset/example/pi5_gpio.pbtxt), [Orin Nano](../config/config_preset/example/orin_nano_gpio.pbtxt); board API only, physical qualification pending |
+| `HOST_GPIO` | [Linux GPIO/PWM/SPI/I2C/UART](../robot/board/host_gpio/README.md), Pi 5 J8 / Orin Nano P3768 J12 | [Pi 5](../config/config_preset/example/pi5_gpio.pbtxt), [Orin Nano](../config/config_preset/example/orin_nano_gpio.pbtxt); board API only, physical qualification pending |
 | `MOCK` | [Test-only board](../robot/board/mock/mock_board.cc) | [Board factory tests](../robot/board/factory/board_factory_test.cc) |
 
 `ARDUINO_UNO` appears in the
@@ -46,8 +46,14 @@ example and is not evidence that either path works. For physical bring-up and
 firmware verification, use the [firmware status table](../firmware/README.md#current-firmware-records);
 in particular, ESP32 protocol verification does not establish motor rotation.
 
+Teensy 4.1 and ESP32-DevKitC V4 / WROOM-32 also have explicit peripheral
+reference images exposing GPIO/PWM/SPI/I2C/UART through the same board interfaces.
+See [named MCU peripherals](../robot/board/joshua_wire/README.md#named-mcu-peripherals)
+for native routes, disabled STEP/DIR bus admission, and pending physical
+qualification. Other carriers/modules are not implied by these pin catalogs.
+
 The [communication factory](../robot/comm/factory/comm_factory.cc) provides
-serial byte-stream and message transports, plus paired EtherCAT message/cyclic
+serial byte-stream and message transports, SPI full-duplex and I2C combined transfers, plus paired EtherCAT message/cyclic
 transport. EtherCAT requires explicit JoshuaWire protocol, endpoint, and timing
 configuration. The standalone `CYCLIC` transport and TI-demo runtime path are retired.
 Ethernet UDP is declared but rejected as unimplemented. The
