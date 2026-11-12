@@ -12,6 +12,7 @@
 #include "robot/board/host_gpio/host_gpio_board.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
+#include "robot/board/pin/peripheral_resource.h"
 #include "robot/board/pin/pin_resource.h"
 #include "robot/board/teensy/teensy_board.h"
 #include "robot/comm/serial/serial_device_identity.h"
@@ -98,6 +99,7 @@ const std::vector<BoardImplementation>& BoardFactory::Implementations() {
 absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
     const robot::board::Board& input) {
   ABSL_ASSIGN_OR_RETURN(auto config, ResolveMcuBoardPins(input));
+  ABSL_RETURN_IF_ERROR(ResolveBoardPeripherals(config).status());
   if (config.name().empty()) {
     return absl::InvalidArgumentError("Board config has no name; boards are cached by name.");
   }

@@ -14,6 +14,7 @@ cc_library(
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/mock:mock_board",
+        "//robot/board/pin:peripheral_resource",
         "//robot/board/pin:pin_resource",
         "//robot/board/proto:board_cc_proto",
         "//robot/board/teensy:teensy_board",

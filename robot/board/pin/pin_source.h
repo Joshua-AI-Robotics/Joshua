@@ -45,6 +45,12 @@ struct PinInfo {
   bool Supports(PinFunction function) const;
 };
 
+struct PeripheralPinRoute {
+  PinFunction function;
+  std::vector<uint32_t> pins;  // SPI clock/MOSI/MISO/CS; I2C SDA/SCL; UART TX/RX.
+  std::optional<uint32_t> chip_select;
+};
+
 struct PinProfile {
   std::string id;
   uint32_t version;
@@ -54,6 +60,7 @@ struct PinProfile {
   std::vector<PinInfo> pins;            // Every physical connector position.
   std::vector<std::string> sources;
   PinBackend backend = PinBackend::kLinux;
+  std::vector<PeripheralPinRoute> peripheral_routes;
 
   // Supply/ground/reserved positions remain inspectable. RequirePin additionally
   // checks the requested function and rejects reserved positions for drivers.

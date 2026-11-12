@@ -1,4 +1,4 @@
-# Host GPIO
+# Host GPIO and peripherals
 
 Digital input/output through the [board layer](../../README.md), with source
 documented profiles for Raspberry Pi 5 Model B J8 and Jetson Orin Nano on
@@ -47,8 +47,8 @@ const auto& mapping = *(*pwm)->pwm;  // controller == "rp1_pwm0", channel == 2
 Functions are typed (`kDigitalInput`, `kDigitalOutput`, `kPwm`, `kI2c`, `kSpi`,
 `kUart`, `kI2s`, `kClock`); drivers do not parse descriptive text. GPIO mappings
 and documented PWM controller/channel identities come from the same source.
-Pi 5 pins 8/12 share PWM0 channel 2, and pins 10/35 share channel 3: a future PWM
-backend must enforce controller/channel ownership as well as physical-pin
+Pi 5 pins 8/12 share PWM0 channel 2, and pins 10/35 share channel 3: the PWM
+backend enforces controller/channel ownership as well as physical-pin
 ownership. Hardware capability metadata does not install a PWM or peripheral
 backend, configure pinmux, or establish current availability. Other peripheral
 routes and functions outside the catalog's categories remain undescribed.
@@ -175,8 +175,77 @@ revision qualification remain pending. No hardware has been run for this change.
 
 ## Non-Goals
 
-Edge events, debounce, PWM, SPI/I2C/UART drivers, STEP/DIR pulse engines and
-motor feedback are unsupported. This API performs synchronous software I/O and
+Edge events, debounce, STEP/DIR pulse engines and motor feedback are unsupported. This API performs synchronous software I/O and
 makes no real-time timing guarantee. Existing motor channels and JoshuaWire
 configs retain their contracts. Digital ROS/action/perception adapters can use
 this board capability later; GPIO must not be encoded as joint positions.
+
+
+## PWM, SPI, I2C and UART
+
+`Board.peripherals` declares named endpoints with a required `purpose`. Drivers
+use `OpenPwm`, `OpenSpi`, `OpenI2c` or `OpenUart` on the same cached board.
+PWM exposes normalized duty in [0,1] and explicit Enable/Disable; startup always
+leaves it disabled. SPI exposes 8-bit full-duplex `Transfer(bytes)` (1..32 bytes).
+I2C exposes `Transfer(write_bytes, read_count)` (combined total 1..32), with a
+repeated start when both are present. UART exposes raw 8N1 `ByteStream` operations
+of 1..32 bytes; separate writes/reads are not atomic transactions. These are bus
+operations; sensor and actuator command interpretation belongs in drivers.
+
+```text
+peripherals {
+  name: "cooling_fan"
+  purpose: "PWM speed command"
+  pwm {
+    pin { header_pin: 32 }
+    frequency_hz: 1000
+    initial_duty_cycle: 0
+  }
+}
+```
+
+SPI settings require `device`, exact device-tree controller-node basename,
+`chip_select_index` (explicit 0 or 1), `speed_hz`, and mode 0..3. Pin roles are
+`clock`, `mosi`, `miso`, `chip_select`. Pi supports physical groups 23/19/21/24
+and 23/19/21/26. Orin also supports 13/37/22/18 and 13/37/22/16. Controller and
+CS identity are checked against the opened character device, independent of Linux
+bus numbering. Enable spidev and the correct pinmux before use.
+
+I2C settings require `device`, controller-node basename, 7-bit address 8..119,
+and `timeout_ms` 1..100. Host `frequency_hz` must be omitted: the kernel/device
+tree sets clock speed. Pi supports SDA/SCL pins 3/5; Orin supports 3/5 and 27/28.
+The kernel adapter must support raw I2C. Compatible endpoints share an adapter
+and serialize combined transactions. Kernel-bound target addresses are rejected;
+no FORCE ioctl is used. A short/error transfer faults the shared adapter.
+
+UART selects TX/RX 8/10, `controller`, and raw serial `settings { port: ...
+baudrate: ... }`; the existing serial owner supplies I/O deadlines and exclusive
+tty ownership. Neither bus numbers nor serial port names identify header routes.
+The controller assertion and documented pin group must both match. Pinmux is
+configured by the operator; the backend never rewrites a device tree or pad mux.
+
+PWM discovers controllers by device-tree identity, then uses the Linux PWM sysfs
+ABI. It refuses existing exports and disables/unexports on close. Pi uses RP1
+PWM0; Orin uses the cataloged Tegra controllers. Export/mux availability depends
+on installed kernel/overlays. The backend does not promise a physical waveform
+until hardware qualification. PWM setup write failures attempt disable and
+unexport and preserve cleanup errors.
+
+The pure resolver rejects pin/mux and shared PWM-channel conflicts before I/O,
+including aliases and digital pins. Production boards take cooperative per-user
+pin/mux locks under `/run/lock/joshua/uid-<uid>` (override `lease_directory` with an
+absolute shared directory). Compose mounts that directory across containers.
+Persistent lock files prevent unlink/lock races. These reservations coordinate
+Joshua processes of the same UID; kernel requests, PWM export ownership, device
+locks and permissions remain necessary for other processes. Shared SPI signals
+and compatible I2C buses are supported within one board; separate boards/processes
+cannot split the same pins. Give each physical bus one board owner.
+
+Teardown disables digital outputs and PWM before releasing bus endpoints and
+invalidates every retained handle. SPI/I2C errors are returned without automatic
+retry; a failed write may already have reached the target. Kernel SPI/I2C ioctls
+have driver-dependent completion time; configured I2C timeout is quantized by
+Linux and is not a hard wall-clock deadline. EmergencyStop cannot preempt an
+in-flight kernel ioctl. Hardware stop timing, loopback and electrical behavior
+remain unqualified. Tests use fake syscalls/sysfs and real temporary file locks;
+no physical peripherals are exercised.

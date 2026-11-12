@@ -68,8 +68,13 @@ class HostGpioBoard::Pin final : public DigitalPin {
   absl::Status fault_;
 };
 
-HostGpioBoard::HostGpioBoard() : HostGpioBoard(std::make_shared<LinuxGpioBackend>()) {}
-HostGpioBoard::HostGpioBoard(std::shared_ptr<GpioBackend> backend) : backend_(std::move(backend)) {}
+HostGpioBoard::HostGpioBoard() : HostGpioBoard(std::make_shared<LinuxGpioBackend>()) {
+  reserve_resources_ = true;
+}
+HostGpioBoard::HostGpioBoard(std::shared_ptr<GpioBackend> backend,
+                             std::shared_ptr<PeripheralBackend> peripherals)
+    : backend_(std::move(backend)),
+      peripheral_backend_(peripherals ? std::move(peripherals) : MakeLinuxPeripheralBackend()) {}
 HostGpioBoard::~HostGpioBoard() {
   Teardown().IgnoreError();
 }
@@ -78,11 +83,24 @@ absl::Status HostGpioBoard::Init(const Board& config) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (used_) return absl::FailedPreconditionError("GPIO board lifecycle already started");
   ABSL_ASSIGN_OR_RETURN(auto resources, ResolveHostGpioPins(config));
+  ABSL_RETURN_IF_ERROR(ResolveBoardPeripherals(config).status());
   ABSL_ASSIGN_OR_RETURN(const auto* profile,
                         FindPinProfile(config.host_gpio_config().profile_id(),
                                        config.host_gpio_config().profile_version()));
   if (!backend_) return absl::InvalidArgumentError("GPIO backend is null");
   ABSL_RETURN_IF_ERROR(backend_->CheckPlatform(*profile));
+  if (reserve_resources_) {
+    std::vector<std::string> claims;
+    for (const auto& p : resources) claims.push_back(PinIdentity(*profile, p.info));
+    ABSL_ASSIGN_OR_RETURN(auto peripherals, ResolveBoardPeripherals(config));
+    for (const auto& p : peripherals)
+      for (const auto& claim : p.claims) claims.push_back(claim.identity);
+    const auto& configured = config.host_gpio_config().lease_directory();
+    ABSL_ASSIGN_OR_RETURN(
+        reservations_,
+        ResourceLeases::Acquire(std::move(claims),
+                                configured.empty() ? "/run/lock/joshua" : configured));
+  }
   used_ = true;
   for (auto& resource : resources) {
     auto request = backend_->Request(resource);
@@ -104,6 +122,15 @@ absl::Status HostGpioBoard::Init(const Board& config) {
     pins_.emplace(pin->resource().config.name(), pin);
     acquisition_order_.push_back(std::move(pin));
   }
+  auto group = HostPeripherals::Open(config, peripheral_backend_);
+  if (!group.ok()) {
+    const auto cleanup = ClosePins();
+    return absl::Status(
+        group.status().code(),
+        std::string(group.status().message()) +
+            (cleanup.ok() ? "" : "; GPIO rollback: " + std::string(cleanup.message())));
+  }
+  peripherals_ = std::move(*group);
   initialized_ = true;
   return absl::OkStatus();
 }
@@ -125,12 +152,37 @@ absl::Status HostGpioBoard::ClosePins() {
   absl::Status result;
   for (auto it = acquisition_order_.rbegin(); it != acquisition_order_.rend(); ++it)
     result.Update((*it)->Close());
+  if (peripherals_) result.Update(peripherals_->Close());
   initialized_ = false;
+  reservations_.reset();
   // Keep closed pins and their faults until destruction; repeated cleanup reports
   // the original failure instead of converting an uncertain shutdown to success.
   return result;
 }
 
+absl::StatusOr<std::shared_ptr<PwmOutput>> HostGpioBoard::OpenPwm(const std::string& name) {
+  std::lock_guard lock(mutex_);
+  if (!initialized_) return absl::FailedPreconditionError("Board is closed");
+  return peripherals_->Get<PwmOutput>(name);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::SpiTransport>> HostGpioBoard::OpenSpi(
+    const std::string& name) {
+  std::lock_guard lock(mutex_);
+  if (!initialized_) return absl::FailedPreconditionError("Board is closed");
+  return peripherals_->Get<robot::comm::SpiTransport>(name);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::I2cTransport>> HostGpioBoard::OpenI2c(
+    const std::string& name) {
+  std::lock_guard lock(mutex_);
+  if (!initialized_) return absl::FailedPreconditionError("Board is closed");
+  return peripherals_->Get<robot::comm::I2cTransport>(name);
+}
+absl::StatusOr<std::shared_ptr<robot::comm::ByteStream>> HostGpioBoard::OpenUart(
+    const std::string& name) {
+  std::lock_guard lock(mutex_);
+  if (!initialized_) return absl::FailedPreconditionError("Board is closed");
+  return peripherals_->Get<robot::comm::ByteStream>(name);
+}
 absl::Status HostGpioBoard::Teardown() {
   std::lock_guard<std::mutex> lock(mutex_);
   return ClosePins();

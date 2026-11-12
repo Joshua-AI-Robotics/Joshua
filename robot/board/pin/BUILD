@@ -68,3 +68,25 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "peripheral_resource",
+    srcs = ["peripheral_resource.cc"],
+    hdrs = ["peripheral_resource.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":pin_resource",
+        "//robot/comm/linux_bus:bus_validation",
+        "//robot/comm/serial:serial_config_validation",
+        "//utils:status_macros",
+    ],
+)
+
+cc_test(
+    name = "peripheral_resource_test",
+    srcs = ["peripheral_resource_test.cc"],
+    deps = [
+        ":peripheral_resource",
+        "@googletest//:gtest_main",
+    ],
+)

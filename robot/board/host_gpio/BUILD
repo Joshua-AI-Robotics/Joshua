@@ -28,7 +28,9 @@ cc_library(
     hdrs = ["host_gpio_board.h"],
     deps = [
         ":gpio_backend",
+        ":host_peripherals",
         ":linux_gpio_backend",
+        ":resource_leases",
         "//robot/board/interfaces:board_interfaces",
         "//utils:status_macros",
         "@abseil-cpp//absl/strings",
@@ -49,6 +51,62 @@ cc_test(
     srcs = ["linux_gpio_backend_test.cc"],
     deps = [
         ":linux_gpio_backend",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "peripheral_backend",
+    srcs = ["peripheral_backend.cc"],
+    hdrs = ["peripheral_backend.h"],
+    deps = [
+        "//robot/board/interfaces:board_interfaces",
+        "//robot/board/pin:peripheral_resource",
+        "//robot/comm/factory:comm_factory",
+        "//utils:status_macros",
+    ],
+)
+
+cc_library(
+    name = "host_peripherals",
+    srcs = ["host_peripherals.cc"],
+    hdrs = ["host_peripherals.h"],
+    deps = [
+        ":peripheral_backend",
+        "//utils:status_macros",
+    ],
+)
+
+cc_library(
+    name = "resource_leases",
+    srcs = ["resource_leases.cc"],
+    hdrs = ["resource_leases.h"],
+    deps = ["@abseil-cpp//absl/status:statusor"],
+)
+
+cc_test(
+    name = "peripheral_backend_test",
+    srcs = ["peripheral_backend_test.cc"],
+    deps = [
+        ":peripheral_backend",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "resource_leases_test",
+    srcs = ["resource_leases_test.cc"],
+    deps = [
+        ":resource_leases",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "host_peripherals_test",
+    srcs = ["host_peripherals_test.cc"],
+    deps = [
+        ":host_peripherals",
         "@googletest//:gtest_main",
     ],
 )

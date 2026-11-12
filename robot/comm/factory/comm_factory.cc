@@ -8,6 +8,7 @@
 #include "robot/comm/ethercat/joshua_wire_ethercat_transport.h"
 #include "robot/comm/ethercat/soem_ethercat_backend.h"
 #include "robot/comm/factory/comm_config_validation.h"
+#include "robot/comm/linux_bus/linux_bus.h"
 #include "robot/comm/serial/caller_sized_serial_transport.h"
 #include "robot/comm/serial/joshua_wire_frame_stream.h"
 #include "robot/comm/serial/joshua_wire_serial_transport.h"
@@ -247,6 +248,24 @@ absl::StatusOr<CommTransport> CreateFrameStream(const Comm& comm) {
 
 const std::vector<CommImplementation>& CommFactory::Implementations() {
   static const std::vector<CommImplementation> entries = {
+      {SPI,
+       SPI_TRANSFER,
+       "installed",
+       [](const Comm& c) -> absl::StatusOr<CommTransport> {
+         if (!c.has_spi_config()) return absl::InvalidArgumentError("SPI requires spi_config");
+         ABSL_ASSIGN_OR_RETURN(auto bus, linux_bus::OpenSpi(c.spi_config()));
+         return CommTransport{std::move(bus)};
+       },
+       "8-bit SPI, mode 0..3, transfers 1..32 bytes, explicit controller identity"},
+      {I2C,
+       I2C_TRANSFER,
+       "installed",
+       [](const Comm& c) -> absl::StatusOr<CommTransport> {
+         if (!c.has_i2c_config()) return absl::InvalidArgumentError("I2C requires i2c_config");
+         ABSL_ASSIGN_OR_RETURN(auto bus, linux_bus::OpenI2c(c.i2c_config()));
+         return CommTransport{std::move(bus)};
+       },
+       "7-bit addressed I2C, combined transfers <=32 bytes, explicit controller identity"},
       {SERIAL,
        FRAME_STREAM,
        "installed",
@@ -385,6 +404,7 @@ absl::Status CommFactory::ValidatePairedEthercatConfig(const EthercatConfig& con
 }
 
 void CommFactory::ShutdownAll() noexcept {
+  linux_bus::ShutdownAll();
   joshua::RunCleanup("serial transport shutdown", [] {
     std::vector<std::shared_ptr<Serial>> serials;
     std::vector<std::shared_ptr<JoshuaWireFrameStream>> streams;

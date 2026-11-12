@@ -124,7 +124,8 @@ absl::StatusOr<std::vector<PinResource>> ResolveHostGpioPins(const Board& config
   ABSL_ASSIGN_OR_RETURN(const auto* profile, FindPinProfile(c.profile_id(), c.profile_version()));
   if (profile->backend != PinBackend::kLinux)
     return absl::InvalidArgumentError("HOST_GPIO requires a Linux pin source");
-  if (c.pins().empty()) return absl::InvalidArgumentError("HOST_GPIO has no pins");
+  if (c.pins().empty() && config.peripherals().empty())
+    return absl::InvalidArgumentError("HOST_GPIO has no configured pins/peripherals");
   std::set<std::string> names, claims;
   std::vector<PinResource> pins;
   for (const auto& pin : c.pins()) {

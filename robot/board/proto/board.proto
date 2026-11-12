@@ -134,6 +134,7 @@ message HostGpioBoardConfig {
   string profile_id = 1;
   uint32 profile_version = 2;  // Exact immutable catalog version, currently 1.
   repeated DigitalPinConfig pins = 3;
+  string lease_directory = 4;  // Default /run/lock/joshua; share across containers.
 }
 
 // One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
@@ -202,6 +203,7 @@ message Board {
   // Host coordinator budgets for FRAME_STREAM. Software defaults are not
   // hardware timing qualification. All handles of an MCU share this policy.
   JoshuaWireHostPolicy joshua_wire_host_policy = 7;
+  repeated BoardPeripheral peripherals = 9;
   PinProfileRef pin_profile = 8;  // MCU connector/native pin resolution.
   oneof board_config {
     Am243Config am243_config = 10;
@@ -226,4 +228,42 @@ message JoshuaWireHostPolicy {
   // Reserved internal GET_STATUS cadence. Zero disables heartbeat. Never
   // refreshes actuator targets. Requires explicit firmware watchdog budgets.
   uint32 heartbeat_period_ms = 12;
+}
+
+message PwmOutputConfig {
+  PinRef pin = 1;
+  uint32 frequency_hz = 2;
+  optional double initial_duty_cycle = 3;  // 0..1; starts disabled.
+}
+message SpiPeripheralConfig {
+  PinRef clock = 1;
+  PinRef mosi = 2;
+  PinRef miso = 3;
+  PinRef chip_select = 4;
+  robot.comm.SpiConfig settings = 5;
+  uint32 bus_index = 6;  // MCU native bus, ignored/rejected on Linux.
+}
+message I2cPeripheralConfig {
+  PinRef sda = 1;
+  PinRef scl = 2;
+  robot.comm.I2cConfig settings = 3;
+  uint32 bus_index = 4;
+}
+message UartPeripheralConfig {
+  PinRef tx = 1;
+  PinRef rx = 2;
+  robot.comm.SerialConfig settings = 3;  // 8N1 byte-stream policy.
+  uint32 bus_index = 4;
+  string controller = 5;  // Linux device-tree controller-node assertion.
+}
+message BoardPeripheral {
+  string name = 1;
+  string purpose = 2;
+  optional uint32 function_id = 3;  // MCU firmware slot 192..199; absent on Linux.
+  oneof operation {
+    PwmOutputConfig pwm = 10;
+    SpiPeripheralConfig spi = 11;
+    I2cPeripheralConfig i2c = 12;
+    UartPeripheralConfig uart = 13;
+  }
 }

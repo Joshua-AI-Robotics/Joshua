@@ -433,3 +433,11 @@ JoshuaWire configuration; firmware framing is unchanged. Mixing named wiring
 and legacy numeric pin fields is rejected. Existing numeric-only presets remain
 valid without a profile. These profiles claim only the listed connectors, not
 underside, USB-host, Ethernet or internal pads.
+
+
+### Named board peripherals
+
+Host GPIO boards also accept `Board.peripherals` entries with `name`, `purpose`
+and exactly one `pwm`, `spi`, `i2c` or `uart` configuration. Pin references use the
+same source catalog as digital GPIO. Validation resolves the entire board before
+I/O and rejects pin/channel collisions. See the [host API and settings](../robot/board/host_gpio/README.md#pwm-spi-i2c-and-uart).
