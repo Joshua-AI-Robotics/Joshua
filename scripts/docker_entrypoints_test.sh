@@ -179,8 +179,8 @@ fi
 
 required_python_packages=$(
   find . -type f \( -name 'BUILD' -o -name 'BUILD.*' \) \
-    -exec grep -hoE 'requirement\("[^"]+"\)' {} + \
-    | sed -E 's/requirement\("([^"]+)"\)/\1/' \
+    -exec grep -hoE '(^|[^[:alnum:]_])requirement\("[^"]+"\)' {} + \
+    | sed -E 's/^.*requirement\("([^"]+)"\)$/\1/' \
     | sort -u
 )
 

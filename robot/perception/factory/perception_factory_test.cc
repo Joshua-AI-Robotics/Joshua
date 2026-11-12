@@ -226,9 +226,13 @@ TEST_F(PerceptionFactoryTest, RejectsWrongDirectSensorTypesBeforeOpeningComm) {
   config::Robot robot;
   auto sensor = MakeLidar();
   sensor.set_sensor_type(POSITION);
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "Sensor 'front_scan': LDS01 requires RANGE_SCAN and BYTE_STREAM comm.");
   EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().code(),
             absl::StatusCode::kInvalidArgument);
   sensor.mutable_opencv_config();
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "Sensor 'front_scan': camera driver requires IMAGE.");
   EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().code(),
             absl::StatusCode::kInvalidArgument);
   EXPECT_FALSE(called);
@@ -242,5 +246,48 @@ TEST_F(PerceptionFactoryTest, RejectsLidarWithoutByteStreamConfig) {
             absl::StatusCode::kInvalidArgument);
 }
 
+TEST_F(PerceptionFactoryTest, PreservesMergedAudioValidationAndLazyConstruction) {
+  config::Robot robot;
+  SinglePerception sensor;
+  sensor.set_sensor_name("microphone");
+  sensor.set_sensor_type(AUDIO);
+  auto* audio = sensor.mutable_alsa_audio_config();
+  auto invalid = PerceptionFactory::CreatePerception(sensor, robot.boards());
+  EXPECT_EQ(invalid.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(invalid.status().message().find("ALSA requires device"), std::string::npos);
+  audio->set_device("declared-but-never-opened-test-device");
+  audio->set_sample_rate_hz(16000);
+  audio->set_channels(1);
+  audio->set_frames_per_chunk(160);
+  auto result = PerceptionFactory::CreatePerception(sensor, robot.boards());
+  ASSERT_TRUE(result.ok()) << result.status();
+  EXPECT_EQ((*result)->GetId(), "microphone");
+  sensor.set_sensor_type(IMAGE);
+  EXPECT_EQ(PerceptionFactory::CreatePerception(sensor, robot.boards()).status().message(),
+            "ALSA driver requires AUDIO sensor_type");
+}
+
 }  // namespace
+}  // namespace robot::perception
+
+namespace robot::perception {
+TEST(AudioFactoryTest, CreatesAudioLazilyAndRejectsInvalidConfig) {
+  SinglePerception config;
+  config.set_sensor_name("audio");
+  config.set_sensor_type(AUDIO);
+  auto* audio = config.mutable_alsa_audio_config();
+  audio->set_device("does-not-exist");
+  audio->set_sample_rate_hz(16000);
+  audio->set_channels(1);
+  audio->set_frames_per_chunk(320);
+  google::protobuf::RepeatedPtrField<robot::board::Board> boards;
+  auto result = PerceptionFactory::CreatePerception(config, boards);
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ((*result)->GetId(), "audio");
+  audio->set_channels(0);
+  EXPECT_FALSE(PerceptionFactory::CreatePerception(config, boards).ok());
+  audio->set_channels(1);
+  config.set_sensor_type(IMAGE);
+  EXPECT_FALSE(PerceptionFactory::CreatePerception(config, boards).ok());
+}
 }  // namespace robot::perception

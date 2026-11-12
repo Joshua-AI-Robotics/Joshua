@@ -28,9 +28,8 @@ At runtime Joshua uses protobuf packets internally and standard ROS 2 messages a
 
 **`action_packet.proto`** — action commands:
 
-- Simple: position, torque, speed
-- Presets: middle position, idle, teardown
-- Complex multi-parameter actions
+- `joint`: named motion command with optional position, velocity, effort, explicit position encoding, independent velocity/effort units, and source metadata
+- `preset`: middle position, idle, teardown, and torque enable/disable
 
 **`perception_packet.proto`** — unified perception:
 
@@ -54,6 +53,38 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - **Extensibility** — new sensors and action types without breaking the core
 - **Modularity** — clear split between config, runtime packets, and ROS 2 topics
 
+## Process runtime
+
+The C++ `JOSHUA_MAIN` entrypoint macro delegates to a shared exception guard.
+`JoshuaInit(config)` installs process services, starting with RobotTime; it does
+not install a catch that survives an ordinary function return. ROS adapters own
+their executor and node lifetime, and worker/destructor boundaries report
+failures through the ROS-independent runtime utility.
+
+The launcher owns one `NodeManager` in `launcher/node_manager/node_manager.h/.cc`.
+It loads the config, resolves executables, and owns each job's guardian,
+application PID, process group, readiness channels, exit history, and shutdown
+sequence. ROS nodes and simulation share that manager and one registry of plain
+node records. Robot drivers and ROS objects remain inside their application
+process. See the [node manager guide](../launcher/node_manager/README.md) for the
+Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
+for startup, cancellation, and cleanup.
+
+## Hardware topology and latency budgets
+
+For high-bandwidth sensing or tight actuator deadlines, prefer separate actuator
+and sensor-acquisition boards with independent physical links. Shared boards/links
+remain supported when measurements show sufficient bandwidth and latency headroom
+under the intended worst-case workload. Keep feedback needed by the local motor
+control loop, such as encoder/current measurements, on the actuator controller.
+
+Queues and priorities manage contention but do not guarantee deadlines. Separate
+ROS nodes do not isolate a shared link, and separate boards may still contend for
+USB-controller or host resources. Qualify either arrangement against its command,
+stop and sensor-loss budgets; see the
+[topology comparison checklist](SERIAL_COMM_QUALIFICATION.md#hardware-topology-comparison-todo)
+for measurement requirements and outstanding work.
+
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
@@ -61,4 +92,4 @@ Hardware Interface → Protobuf Packets → ROS 2 Publishers → ROS 2 Messages
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
 - [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
 - [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
-- [node_generator/README.md](../node_generator/README.md) — node generation from config
+- [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership

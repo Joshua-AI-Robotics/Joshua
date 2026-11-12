@@ -6,7 +6,7 @@ build --action_env=CC=g++
 build --action_env=CXX=g++
 build --action_env=BAZEL_COMPILER=gcc
 
-# Enable legacy runfiles for Python binaries (needed for node_generator)
+# Enable legacy runfiles for Python binaries (needed for launcher-managed Python nodes)
 build --legacy_external_runfiles
 build --enable_runfiles
 
@@ -30,6 +30,9 @@ run:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt
 test:u24 --action_env=PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/opt/ros/jazzy/local/lib/python3.12/dist-packages
 
 test --test_output=all
+# ROS C++ tests load middleware plugins through the sourced Docker environment.
+test --test_env=AMENT_PREFIX_PATH
+test --test_env=LD_LIBRARY_PATH
 
 # =============================================================================
 # CUDA / CuDNN Configuration

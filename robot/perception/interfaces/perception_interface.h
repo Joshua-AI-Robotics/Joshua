@@ -6,8 +6,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "robot/perception/proto/perception_packet.pb.h"
+#include "utils/robot_time.h"
 
 namespace robot::perception {
+
+// Expose the process-global clock to sensors without per-sensor clock state.
+using ::joshua::RobotTime;
 
 // Common lifecycle and sampling interface for all sensors.
 class PerceptionInterface {

@@ -3,7 +3,8 @@
 Vendor TI firmware, not Joshua-owned (`docs/BOARD_LAYER_RFC.md` §7.3 —
 vendor code stays as-is rather than migrating to the Joshua firmware
 pattern). Tracks AM243 setup, firmware experiments, and EtherCAT bring-up
-for Joshua. Paired host-side class: `robot/board/am243/am243_board.*`.
+for Joshua. The former TI-demo host-side board/codec/tools are retired;
+these vendor firmware build/flash assets remain for historical bring-up.
 See also `firmware/am243/ti_ethercat_simple_demo_v1.md` (the firmware
 record: provenance, expected slave identity) and `docs/ethercat.md` (the
 detailed EtherCAT bring-up log, including SDK version pitfalls).
@@ -28,10 +29,6 @@ firmware/am243/ti_ethercat_simple_demo_v1/
 - [x] LP-AM243 EtherCAT simple slave demo built and flashed (Industrial
       Communications SDK 09); host-side SOEM master reaches OPERATIONAL —
       see `docs/ethercat.md`
-- ⬜ Config-driven path (`.pbtxt → actuator_subscriber → Am243Board`)
-      proven end to end on this exact firmware image — see
-      `docs/BOARD_LAYER_RFC.md` §10 Phase 3's own caveat on this
-
 ## Prerequisites
 
 - Hardware: TI LP-AM243 LaunchPad (595-LP-AM243), USB-C cable (power),
@@ -107,21 +104,16 @@ EtherCAT slave demo — verify the board enumerates as an EtherCAT slave and
 reaches OPERATIONAL from the host side; see `docs/ethercat.md` for the
 full SOEM master scan trace and expected slave identity
 (`firmware/am243/ti_ethercat_simple_demo_v1.md` has the expected identity
-fields), or run the host smoke binary:
-
-```bash
-bazel run //robot/comm/ethercat:am243_demo_smoke -- <interface_name> 20 1
-```
+fields). The old Joshua TI-demo host smoke target is retired. Current Joshua
+EtherCAT runtime requires the separate
+[JW profile](../joshua_dual_transport/README.md#opt-in-jw-ethercat-profile),
+not this vendor image.
 
 ## Wiring / Pinout
 
 Not applicable — AM243 communicates over EtherCAT (a NIC-to-NIC Ethernet
-link, not a channel-table pinout contract), and this firmware doesn't
-expose a Joshua-authored channel table (`docs/BOARD_LAYER_RFC.md` §7.3 —
-the EtherCAT variant stays on its vendor-specific PDO codec,
-`robot/board/am243/am243_pdo_codec.*`). `Am243Board` also supports serial
-`joshua_wire_v1`, which requires a different, Joshua-compatible firmware
-image; that image is not this vendor demo.
+link, not a channel-table pinout contract), and this firmware does not expose
+JoshuaWire commands. Use the separate Joshua firmware for serial or JW EtherCAT.
 
 ## Known gaps / Troubleshooting
 
@@ -137,8 +129,7 @@ image; that image is not this vendor demo.
 
 ## Related files
 
-- `robot/board/am243/am243_board.*` — paired host-side `BoardInterface`
-- `robot/board/am243/am243_pdo_codec.*` — AM243-specific PDO byte layout
+- [JoshuaWire profile](../joshua_dual_transport/README.md) — current Joshua host integration
 - `firmware/am243/ti_ethercat_simple_demo_v1.md` — firmware record
   (provenance, expected slave identity)
 - `scripts/activate.sh` — create and activate the Python venv

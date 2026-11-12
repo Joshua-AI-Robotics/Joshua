@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
@@ -112,20 +113,8 @@ class PybricksMotorDriver:
         if action_type == "preset":
             self._handle_preset(action_packet.preset)
 
-        elif action_type == "complex":
-            self._handle_complex(action_packet.complex)
-
-        elif action_type == "position":
-            self._set_position(action_packet.position)
-
-        elif action_type == "dc":
-            self._set_dc(action_packet.dc)
-
-        elif action_type == "speed":
-            self._set_speed(action_packet.speed)
-
-        elif action_type == "torque":
-            self._set_torque(action_packet.torque)
+        elif action_type == "joint":
+            self._handle_joint(action_packet.joint)
 
         else:
             _log.warning(
@@ -167,51 +156,37 @@ class PybricksMotorDriver:
         else:
             _log.warning("Unknown preset command: %s", preset)
 
-    # -- Complex action handling (multi-field) --------------------------------
-
-    def _handle_complex(self, complex_action: action_packet_pb2.ComplexAction) -> None:
-        has_pos = complex_action.HasField("position")
-        has_spd = complex_action.HasField("speed")
-        has_dc = complex_action.HasField("dc")
-        has_dur = complex_action.HasField("duration_ms")
-
-        if not has_pos and not has_spd and not has_dc:
-            _log.warning("Complex action has no fields set")
+    def _handle_joint(self, command: action_packet_pb2.JointCommand) -> None:
+        if command.joint_name != self._spec.port:
+            raise ValueError("Joint name must match the Pybricks port")
+        if command.position_encoding != action_packet_pb2.JointCommand.POSITION_NATIVE:
+            raise ValueError("Pybricks tool requires native position encoding")
+        if command.units != action_packet_pb2.JointCommand.NATIVE:
+            raise ValueError(
+                "Pybricks tool supports native degrees, deg/s and duty percent only"
+            )
+        fields = [f for f in ("position", "velocity", "effort") if command.HasField(f)]
+        if not fields or any(not math.isfinite(getattr(command, f)) for f in fields):
+            raise ValueError("Joint command requires finite values")
+        if command.HasField("effort"):
+            if len(fields) != 1 or not -100 <= command.effort <= 100:
+                raise ValueError("Duty cycle must be alone and in [-100, 100]")
+            self._set_dc(command.effort)
             return
-
-        if has_spd:
-            speed = complex_action.speed
-            if speed >= 0:
-                self._move_speed = speed
-            else:
-                _log.warning("Invalid speed value: %s", speed)
-
-        if has_dc:
-            dc = complex_action.dc
-            if -100 <= dc <= 100:
-                self._set_dc(dc)
-            else:
-                _log.warning("Invalid dc value: %s", dc)
-
-        if has_pos and has_dur:
-            _log.debug(
-                "Complex with position + duration_ms "
-                "(duration ignored; using run_target)"
-            )
-
-        if has_pos:
-            self._set_position(complex_action.position)
-        elif has_spd and has_dur:
-            self._transport.run_time(
-                self._spec.hub_id,
-                self._spec.port,
-                self._move_speed,
-                complex_action.duration_ms,
-            )
-        elif has_spd:
-            self._transport.run_speed(
-                self._spec.hub_id, self._spec.port, self._move_speed
-            )
+        if command.HasField("position"):
+            if (
+                not self._spec.operational_lower_limit
+                <= command.position
+                <= self._spec.operational_upper_limit
+            ):
+                raise ValueError("Position outside operational limits")
+            if command.HasField("velocity"):
+                if command.velocity < 0:
+                    raise ValueError("Position move speed must be nonnegative")
+                self._move_speed = command.velocity
+            self._set_position(command.position)
+        else:
+            self._set_speed(command.velocity)
 
     # -- Primitive motor operations -------------------------------------------
 

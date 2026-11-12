@@ -5,6 +5,18 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
+  scalar/health recording to JSONL. It preserves validity and separate clock
+  domains, opens no board and sends no commands. Observation subscriptions use
+  best-effort delivery to accept either publisher reliability setting; captures
+  may contain gaps. See the
+  [serial qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
+
+- [`mcp/`](mcp/README.md) — seven read-only stdio MCP tools for config-free factory discovery,
+  per-call protobuf validation and device inspection, and optional private
+  runtime snapshots. The adapter never controls runtime or certifies hardware
+  readiness; validation-only startup remains available.
+
 - `lock_model.sh` — regenerate the per-model `requirements.lock` for one
   inference model. Model venvs install the repo-root `requirements.lock` plus
   the model's own, so this file should list **only** packages not already at

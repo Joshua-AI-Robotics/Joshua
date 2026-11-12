@@ -15,8 +15,7 @@ Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
 branches on `general.operation_mode`, not the name — and a `MODE_SIMULATION`
 preset may still declare real devices (`so100/sim_mirror.pbtxt` opens
 `/dev/ttyACM1`), and a preset naming no `/dev` path at all may still drive real
-hardware over the network (`example/am243_ethercat_demo.pbtxt` opens the
-`ethercat0` NIC). Since the mock drivers were removed
+hardware over the network (EtherCAT `interface_name` selects a real NIC). Since the mock drivers were removed
 ([docs/BOARD_LAYER_RFC.md](docs/BOARD_LAYER_RFC.md) §10 Phase 9), **no preset is
 hardware-free at the device level** — every one either opens a device or is a
 pure MuJoCo/Isaac simulation.
@@ -37,7 +36,8 @@ Development is **Docker-first** — [CONTRIBUTING.md](CONTRIBUTING.md) is
 authoritative. Native Ubuntu development is not a supported entrypoint; ROS 2,
 Bazel, Python, and CUDA all live inside the images.
 
-The host bootstrap installs Docker and NVIDIA container support only:
+The host bootstrap installs Docker and NVIDIA container support and configures
+PTP clock read access:
 
 ```bash
 sudo ./scripts/setup.sh          # add --cpu on hosts without an NVIDIA GPU
@@ -116,8 +116,10 @@ touches their area:
   [ros2/](ros2/README.md), [simulation/](simulation/README.md),
   [ui/](ui/README.md), [firmware/](firmware/README.md),
   [scripts/](scripts/README.md), [tools/](tools/README.md),
+  [launcher/node_manager/](launcher/node_manager/README.md),
   [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
+- **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of
   [CONTRIBUTING.md](CONTRIBUTING.md).

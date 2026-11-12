@@ -1,0 +1,22 @@
+general { operation_mode: MODE_TEST name: "audio_capture" }
+robot {
+  perceptions {
+    single_perceptions {
+      sensor_name: "microphone"
+      sensor_type: AUDIO
+      node {
+        id: 1
+        node_type: AUDIO_PUBLISHER
+        qos_setting { reliability_policy: QOS_RELIABILITY_POLICY_BEST_EFFORT depth: 10 }
+        publishers { topic: "/audio/pcm" ros2_data_type: UINT8_MULTI_ARRAY }
+      }
+      alsa_audio_config {
+        device: "default"
+        sample_rate_hz: 16000
+        channels: 1
+        frames_per_chunk: 320
+        capture_buffer_duration_ms: 200
+      }
+    }
+  }
+}

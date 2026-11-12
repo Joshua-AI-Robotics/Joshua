@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -9,15 +10,34 @@
 #include "robot/action/interfaces/action_interface.h"
 #include "robot/action/motors/drivers/stepper_driver.h"
 #include "robot/action/motors/drivers/sts3215_driver.h"
-#include "robot/action/motors/drivers/ti_demo_driver.h"
 #include "robot/board/factory/board_factory.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/board/factory/motor_channel_validation.h"
 #include "utils/status_macros.h"
 
 namespace robot::action {
+struct MotorImplementation {
+  MotorType type;
+  const char* support_scope;
+  std::unique_ptr<ActionInterface> (*create)(std::shared_ptr<robot::board::BoardChannel>,
+                                             const Actuator&);
+};
 class ActionFactory {
  public:
+  static const std::vector<MotorImplementation>& Implementations() {
+    static const std::vector<MotorImplementation> entries = {
+        {MOTOR_STS3215,
+         "installed",
+         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
+           return std::make_unique<Sts3215Driver>(channel, config);
+         }},
+        {MOTOR_STEPPER_NEMA17,
+         "installed",
+         [](auto channel, const Actuator& config) -> std::unique_ptr<ActionInterface> {
+           return std::make_unique<StepperDriver>(channel, config);
+         }}};
+    return entries;
+  }
   // Board-layer factory (docs/BOARD_LAYER_RFC.md §6.5): every actuator resolves
   // board_name against `boards`, validates motor_type against the channel's
   // drive, and constructs a motor driver. Callers must pass config.robot().boards()
@@ -59,6 +79,12 @@ class ActionFactory {
               "' sets deprecated actuator_type; omit it and set motor_type + board_name + "
               "channel (docs/BOARD_LAYER_RFC.md §6.3).");
     }
+    if (actuator.motor_type() == robot::action::MOTOR_TI_DEMO ||
+        actuator.has_am243_ethercat_config()) {
+      return absl::InvalidArgumentError(
+          "The TI-demo motor/actuator config is retired; configure a supported motor "
+          "and a JoshuaWire board instead.");
+    }
     if (actuator.motor_type() == robot::action::MotorType::MOTOR_INVALID) {
       return absl::Status(absl::StatusCode::kInvalidArgument,
                           "Actuator '" + actuator.actuator_name() + "' has no motor_type.");
@@ -69,31 +95,23 @@ class ActionFactory {
                               boards, owner, actuator.board_name(), actuator.channel()));
     ABSL_RETURN_IF_ERROR(
         robot::board::ValidateMotorChannel(actuator.motor_type(), resolved.channel->drive()));
+    if (resolved.board->comm().transport_type() == robot::comm::FRAME_STREAM &&
+        actuator.motor_type() == MOTOR_STEPPER_NEMA17 &&
+        !actuator.stepper_config().require_explicit_enable())
+      return absl::InvalidArgumentError("FRAME_STREAM steppers require explicit enable policy");
 
     ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
     ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(actuator.channel()));
 
-    switch (actuator.motor_type()) {
-      case robot::action::MotorType::MOTOR_TI_DEMO: {
-        auto driver = std::make_unique<robot::action::TiDemoDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      case robot::action::MotorType::MOTOR_STS3215: {
-        auto driver = std::make_unique<robot::action::Sts3215Driver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      case robot::action::MotorType::MOTOR_STEPPER_NEMA17: {
-        auto driver = std::make_unique<robot::action::StepperDriver>(channel, actuator);
-        ABSL_RETURN_IF_ERROR(driver->Init());
-        return driver;
-      }
-      default:
-        return absl::Status(absl::StatusCode::kUnimplemented,
-                            "Motor type " + robot::action::MotorType_Name(actuator.motor_type()) +
-                                " has no board-layer driver yet (docs/BOARD_LAYER_RFC.md §10).");
+    for (const auto& implementation : Implementations()) {
+      if (implementation.type != actuator.motor_type()) continue;
+      auto driver = implementation.create(channel, actuator);
+      ABSL_RETURN_IF_ERROR(driver->Init());
+      return driver;
     }
+    return absl::UnimplementedError(
+        "Motor type " + MotorType_Name(actuator.motor_type()) +
+        " has no board-layer driver yet (docs/BOARD_LAYER_RFC.md §10).");
   }
 
   ActionFactory() = default;

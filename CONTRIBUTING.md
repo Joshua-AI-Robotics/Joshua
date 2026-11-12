@@ -148,9 +148,9 @@ Joshua is organized around a single protobuf config that drives the runtime grap
 | Area | Path | Notes |
 |------|------|-------|
 | Config & presets | `config/`, `config/config_preset/` | Add or adjust `.pbtxt` presets; keep robot-specific files grouped |
-| Protobuf schemas | `config/proto/`, `ros2/proto/` | Coordinate with node generator and packet parser |
+| Protobuf schemas | `config/proto/`, `ros2/proto/` | Coordinate with NodeManager and packet parser |
 | ROS 2 nodes | `ros2/` | Actions, perceptions, bridges |
-| Node generator | `node_generator/` | Turns config into node definitions |
+| Node management | `launcher/node_manager/` | Owns node process lifecycles |
 | Launcher | `launcher/` | `joshua_main` entry point |
 | AI & data | `ai/` | Policies and dataset collection (DataStore) |
 | Simulation | `simulation/` | Models and sim presets |

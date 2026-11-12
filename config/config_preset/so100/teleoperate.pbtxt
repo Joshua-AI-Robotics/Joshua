@@ -11,7 +11,10 @@ robot {
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
-      serial_config { port: "/dev/ttyACM1" baudrate: 1000000 }
+      serial_config {
+        port: "/dev/ttyACM1" baudrate: 1000000
+        message_adapter: CALLER_SIZED
+      }
     }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
     channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
@@ -27,7 +30,10 @@ robot {
     comm {
       comm_type: SERIAL
       transport_type: MESSAGE
-      serial_config { port: "/dev/ttyACM0" baudrate: 1000000 }
+      serial_config {
+        port: "/dev/ttyACM0" baudrate: 1000000
+        message_adapter: CALLER_SIZED
+      }
     }
     channels { index: 1 drive: SERVO_BUS_UART servo_bus { servo_id: 1 } }
     channels { index: 2 drive: SERVO_BUS_UART servo_bus { servo_id: 2 } }
@@ -45,7 +51,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_1/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -74,7 +79,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_2/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -103,7 +107,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_3/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -132,7 +135,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_4/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -161,7 +163,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_5/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR
@@ -190,7 +191,6 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "sts3215_servo_6/position"
-          normalized: false
         }
       }
       action_type: ACTUATOR

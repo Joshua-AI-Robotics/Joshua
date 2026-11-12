@@ -17,5 +17,37 @@ cc_library(
     deps = [
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "caller_sized_message_transport",
+    hdrs = ["caller_sized_message_transport.h"],
+    deps = [":message_transport"],
+)
+
+cc_library(
+    name = "correlated_cyclic_transport",
+    hdrs = ["correlated_cyclic_transport.h"],
+    deps = [
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/time",
+        "@abseil-cpp//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "serial_diagnostics",
+    hdrs = ["serial_diagnostics.h"],
+)
+
+cc_library(
+    name = "frame_stream_transport",
+    hdrs = ["frame_stream_transport.h"],
+    deps = [
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
     ],
 )

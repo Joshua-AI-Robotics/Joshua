@@ -26,9 +26,8 @@ cc_library(
     srcs = ["simulation_launcher.cc"],
     hdrs = ["simulation_launcher.h"],
     deps = [
-        "//config/proto:config_cc_proto",
-        "//node_generator",
-        "@glog",
+        "//launcher/node_manager",
+        "//utils:joshua_runtime",
     ],
 )
 
@@ -38,10 +37,12 @@ cc_binary(
     data = [
         "//config/config_preset:config_presets",
         "//ros2:actuator_subscriber",
+        "//ros2:audio_publisher",
         "//ros2:camera_publisher",
         "//ros2:data_subscriber",
         "//ros2:inference",
         "//ros2:lidar_publisher",
+        "//ros2:mcu_bus",
         "//ros2:position_publisher",
         "//ros2:trajectory_publisher",
         "//simulation",
@@ -51,8 +52,8 @@ cc_binary(
     deps = [
         ":simulation_launcher",
         ":version",
-        "//config:config_utils",
-        "//node_generator",
+        "//launcher/node_manager",
+        "//utils:joshua_runtime",
         "@gflags",
         "@glog",
     ],

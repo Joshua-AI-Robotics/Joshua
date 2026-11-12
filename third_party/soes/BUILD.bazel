@@ -1,0 +1,29 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+exports_files(["upload_size.patch"])
+
+# HAL symbols are supplied by board firmware (or the existing native tests).
+cc_library(
+    name = "soes",
+    srcs = glob(
+        [
+            "soes/ecat_slv.c",
+            "soes/esc.c",
+            "soes/esc_coe.c",
+            "soes/esc_eep.c",
+        ],
+        allow_empty = True,
+    ),
+    hdrs = glob(
+        ["soes/*.h"],
+        allow_empty = True,
+    ),
+    copts = [
+        "-x",
+        "c",
+        "-std=c11",
+    ],
+    includes = ["soes"],
+    visibility = ["//visibility:public"],
+    deps = ["@project_joshua//firmware/common/soes:options"],
+)

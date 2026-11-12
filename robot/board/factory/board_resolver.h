@@ -15,6 +15,10 @@ struct ResolvedChannelConfig {
   const robot::board::Board* board = nullptr;
   const robot::board::Channel* channel = nullptr;
 };
+absl::StatusOr<const robot::board::Board*> ResolveBoardConfig(
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards,
+    absl::string_view owner,
+    absl::string_view board_name);
 
 // Resolves (board_name, channel) against boards{}, the single implementation
 // of the lookup both ActionFactory and PerceptionFactory need

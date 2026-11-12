@@ -25,6 +25,23 @@ texts.
 - Pandas: BSD-3-Clause — https://pandas.pydata.org/
 - PyArrow: Apache-2.0 — https://arrow.apache.org/
 - libevdev: MIT — https://www.freedesktop.org/wiki/Software/libevdev/
+- SOEM (Simple Open EtherCAT Master) v2.0.0: GPLv3 or commercial license — https://github.com/OpenEtherCATsociety/SOEM/tree/v2.0.0
+
+## SOEM
+
+Joshua uses the SOEM C library for EtherCAT communication through the `@soem`
+Bazel dependency, pinned to v2.0.0 in [MODULE.bazel](MODULE.bazel).
+
+Upstream copyright notices:
+
+- Copyright (C) 2005-2025 Speciaal Machinefabriek Ketels v.o.f.
+- Copyright (C) 2005-2025 Arthur Ketels
+- Copyright (C) 2009-2025 RT-Labs AB, Sweden
+
+SOEM v2.0.0 is dual-licensed under the [GNU General Public License, version 3](https://www.gnu.org/licenses/gpl-3.0.html)
+or a commercial license available from RT-Labs. See the
+[upstream v2.0.0 license notice](https://github.com/OpenEtherCATsociety/SOEM/blob/v2.0.0/LICENSE.md)
+for the applicable terms and commercial licensing contact.
 
 ## Notes
 

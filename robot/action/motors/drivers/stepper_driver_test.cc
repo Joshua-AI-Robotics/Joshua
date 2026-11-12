@@ -1,5 +1,6 @@
 #include "robot/action/motors/drivers/stepper_driver.h"
 
+#include <limits>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -18,7 +19,7 @@ class RecordingChannel : public robot::board::BoardChannel {
   }
   absl::Status Disable() override {
     disable_calls_++;
-    return absl::OkStatus();
+    return disable_status_;
   }
   absl::Status SetTarget(robot::board::TargetMode mode, float value) override {
     last_mode_ = mode;
@@ -36,7 +37,20 @@ class RecordingChannel : public robot::board::BoardChannel {
   robot::board::TargetMode last_mode_ = robot::board::TargetMode::kPosition;
   float last_value_ = 0.0f;
   absl::Status set_target_status_ = absl::OkStatus();
+  absl::Status disable_status_ = absl::OkStatus();
 };
+
+TEST(StepperDriverTest, ExplicitEnablePolicyPreventsInitSideEffects) {
+  auto channel = std::make_shared<RecordingChannel>();
+  robot::action::Actuator config;
+  config.mutable_stepper_config()->set_require_explicit_enable(true);
+  StepperDriver driver(channel, config);
+  ASSERT_TRUE(driver.Init().ok());
+  EXPECT_EQ(channel->enable_calls_, 0);
+  EXPECT_EQ(channel->set_target_calls_, 0);
+  ASSERT_TRUE(driver.SetTorque(1).ok());
+  EXPECT_EQ(channel->enable_calls_, 1);
+}
 
 robot::action::Actuator MakeStepperActuator() {
   robot::action::Actuator actuator;
@@ -157,7 +171,8 @@ TEST(StepperDriverTest, SetActionSurfacesChannelFailure) {
   ASSERT_TRUE(driver.Init().ok());
 
   robot::action::ActionPacket packet;
-  packet.set_position(10.0f);
+  packet.mutable_joint()->set_joint_name("stepper_1");
+  packet.mutable_joint()->set_position(10.0f);
 
   EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnavailable);
 }
@@ -173,5 +188,155 @@ TEST(StepperDriverTest, TeardownSetsIdleThenDisables) {
   EXPECT_EQ(channel->disable_calls_, 1);
 }
 
+TEST(StepperDriverTest, TeardownStillDisablesWhenIdleCommandFails) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->set_target_status_ = absl::UnavailableError("Idle command failed");
+
+  EXPECT_EQ(driver.Teardown(), channel->set_target_status_);
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, TeardownReportsDisableFailure) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->disable_status_ = absl::DeadlineExceededError("Disable reply missing");
+
+  EXPECT_EQ(driver.Teardown(), channel->disable_status_);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, TeardownPrioritizesDisableFailureWhenBothCommandsFail) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  channel->set_target_status_ = absl::UnavailableError("Idle command failed");
+  channel->disable_status_ = absl::DeadlineExceededError("Disable reply missing");
+
+  EXPECT_EQ(driver.Teardown(), channel->disable_status_);
+  EXPECT_EQ(channel->set_target_calls_, 1);
+  EXPECT_EQ(channel->disable_calls_, 1);
+}
+
+TEST(StepperDriverTest, JointCommandConvertsPositionAndRejectsUnsupportedFieldsBeforeWrites) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* command = packet.mutable_joint();
+  command->set_units(robot::action::JointCommand::SI);
+  command->set_position_encoding(JointCommand::POSITION_SI);
+  command->set_joint_name("stepper_1");
+  command->set_position(3.14159265358979323846 / 4.0);
+  command->set_frame_id("base");
+  packet.set_timestamp(123.25);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->last_mode_, robot::board::TargetMode::kPosition);
+  EXPECT_NEAR(channel->last_value_, 400.0f, 0.001f);
+  const int writes = channel->set_target_calls_;
+  const int enables = channel->enable_calls_;
+  const int disables = channel->disable_calls_;
+  for (double value : {0.0, -1.0, 1.0}) {
+    command->set_velocity(value);
+    EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
+    command->clear_velocity();
+    command->set_effort(value);
+    EXPECT_EQ(driver.SetAction(packet).code(), absl::StatusCode::kUnimplemented);
+    command->clear_effort();
+  }
+  command->set_position_encoding(JointCommand::POSITION_NORMALIZED_MINUS_ONE_ONE);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  command->set_position_encoding(JointCommand::POSITION_SI);
+  command->set_joint_name("wrong_joint");
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  command->set_joint_name("stepper_1");
+  for (double value : {std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::infinity(),
+                       std::numeric_limits<double>::max(),
+                       std::numeric_limits<double>::denorm_min(),
+                       1000.0}) {
+    command->set_position(value);
+    EXPECT_FALSE(driver.SetAction(packet).ok());
+  }
+  command->clear_position();
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  command->set_velocity(0);
+  command->set_effort(0);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  EXPECT_EQ(channel->enable_calls_, enables);
+  EXPECT_EQ(channel->disable_calls_, disables);
+}
+
+TEST(StepperDriverTest, NativeJointValidatesAllFieldsBeforeWriting) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* joint = packet.mutable_joint();
+  joint->set_joint_name("stepper_1");
+  joint->set_position(10);
+  joint->set_velocity(20);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  const int writes = channel->set_target_calls_;
+  joint->set_position(1e9);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  joint->clear_position();
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  joint->set_velocity(-1);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+}
+
+// Expose common validation without constructing a driver or touching hardware.
+class JointValidationAccess : public ActuatorInterface {
+ public:
+  using ActuatorInterface::ValidateJointCommand;
+};
+
+TEST(ActuatorValidationTest, CommonValidationDoesNotImposeDriverCapabilities) {
+  JointCommand command;
+  command.set_joint_name("joint");
+  command.set_position_encoding(JointCommand::POSITION_SI);
+  command.set_units(JointCommand::SI);
+  command.set_position(1);
+  command.set_velocity(-2);
+  command.set_effort(-3);
+  EXPECT_TRUE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  command.set_effort(std::numeric_limits<double>::max());
+  EXPECT_TRUE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "other").ok());
+  command.set_velocity(std::numeric_limits<double>::infinity());
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+  command.clear_position();
+  command.clear_velocity();
+  command.clear_effort();
+  EXPECT_FALSE(JointValidationAccess::ValidateJointCommand(command, "joint").ok());
+}
+
 }  // namespace
+TEST(StepperDriverTest, PositionEncodingIsIndependentOfVelocityUnits) {
+  auto channel = std::make_shared<RecordingChannel>();
+  StepperDriver driver(channel, MakeStepperActuator());
+  ASSERT_TRUE(driver.Init().ok());
+  ActionPacket packet;
+  auto* joint = packet.mutable_joint();
+  joint->set_joint_name("stepper_1");
+  joint->set_position_encoding(JointCommand::POSITION_SI);
+  joint->set_position(3.14159265358979323846 / 4.0);
+  joint->set_velocity(20);  // Native move speed, despite SI position.
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+  const int writes = channel->set_target_calls_;
+  joint->set_units(JointCommand::SI);
+  EXPECT_FALSE(driver.SetAction(packet).ok());
+  EXPECT_EQ(channel->set_target_calls_, writes);
+  joint->clear_velocity();
+  joint->set_position_encoding(JointCommand::POSITION_NATIVE);
+  joint->set_position(45);
+  ASSERT_TRUE(driver.SetAction(packet).ok());
+}
+
 }  // namespace robot::action

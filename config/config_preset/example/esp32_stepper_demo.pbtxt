@@ -1,17 +1,12 @@
 # Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
-# via joshua_wire_v1 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
+# via JoshuaWire 0.2.0 / revision 4 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
 # Phase 5) — same wire protocol and shared drive backend as
 # firmware/teensy/41/, a different firmware image
-# (firmware/esp32/, joins the same joshua_wire_v1 family).
+# (firmware/esp32/, joins the same JoshuaWire 0.2.0 / revision 4 family).
 #
-# PROTOCOL VERIFIED, MOTION NOT YET — firmware/esp32/ is flashed and the
-# joshua_wire_v1 handshake (IDENTIFY/ENABLE/SET_TARGET) is confirmed
-# against real hardware (firmware/esp32/README.md Status). Unlike
-# teensy_stepper_demo.pbtxt, nobody has wired this exact preset to a
-# TB6600/motor and confirmed it turns yet. Port, pins, and microstepping
-# below are reasonable starting defaults, not confirmed-working motion
-# values — check them against your actual driver before trusting them,
-# and update this comment (and firmware/esp32/README.md) once you have.
+# Revision-4 host and firmware migrate together. This firmware is cross-built
+# and tested with simulated GPIO; flashing and physical verification of this
+# revision are separate deliberate steps. Review the wiring before use.
 #
 # Launch:
 #   bazel run //launcher:joshua_main -- \
@@ -21,6 +16,8 @@
 # range [0, 360] (this preset's stepper_config converts to native steps
 # before it reaches the wire). Move speed is fixed by max_pulse_rate_hz
 # below (boot-time only, not adjustable per command).
+# Torque starts enabled. Bool on /esp32_stepper_1/torque explicitly controls
+# holding torque: false disables, true enables.
 
 general {
   operation_mode: MODE_TEST
@@ -40,10 +37,14 @@ robot {
       # (CP2102/CH340/...), not native USB CDC like Teensy 4.1 — check
       # `ls /dev/ttyUSB*` (or /dev/ttyACM* if your board does have native
       # USB, e.g. an ESP32-S2/S3) and adjust the port below if needed.
-      serial_config { port: "/dev/ttyUSB0" baudrate: 115200 }
+      serial_config {
+        port: "/dev/ttyUSB0" baudrate: 115200
+        message_adapter: JOSHUA_WIRE
+        post_open_settle_ms: 2000
+      }
     }
     firmware {
-      min_proto_version: 1
+      min_proto_version: 4
     }
     channels {
       index: 0
@@ -79,7 +80,10 @@ robot {
         subscriptions {
           ros2_data_type: FLOAT32
           topic: "esp32_stepper_1/position"
-          normalized: false
+        }
+        subscriptions {
+          ros2_data_type: BOOL
+          topic: "esp32_stepper_1/torque"
         }
       }
       action_type: ACTUATOR

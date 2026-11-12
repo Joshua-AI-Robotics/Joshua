@@ -496,7 +496,11 @@ cc_library(
             "-lrosidl_runtime_c",
         ],
     }}),
-    deps = [":rosidl_typesupport_interface"],
+    # Jazzy's public type_hash.h uses rcutils allocators.
+    deps = [
+        ":rcutils",
+        ":rosidl_typesupport_interface",
+    ],
 )
 
 cc_library(

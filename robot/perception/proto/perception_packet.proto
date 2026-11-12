@@ -40,15 +40,54 @@ message PointCloudData {
   string frame_id = 9;  // optional frame name for this cloud
 }
 
+// Audio payload contract. timestamp on the enclosing packet is the estimated
+// RobotTime in seconds of the first sample, adjusted for unread ALSA frames.
+message AudioData {
+  uint32 sample_rate_hz = 1;
+  uint32 channels = 2;
+  uint32 frames = 3;
+  string encoding = 4;     // "s16le": signed, interleaved, little endian PCM.
+  bytes data = 5;          // Exactly frames * channels * 2 bytes.
+  bool discontinuity = 6;  // First chunk after startup or overrun recovery.
+}
+
+// Wire contract v1: device acquisition clock is opaque and never substituted
+// for a ROS/Unix timestamp. Unit, validity and clock codes follow JoshuaWire.
+message ScalarData {
+  float value = 1;
+  uint32 unit = 2;
+  uint32 validity = 3;
+  uint32 clock = 4;
+  uint32 boot_id = 5;
+  uint64 acquisition_us = 6;
+  uint32 acquisition_sequence = 7;
+  uint32 function_id = 8;
+  uint32 session_id = 9;
+  uint32 subscription_id = 10;
+  uint32 period_us = 11;
+  uint32 dropped_acquisitions = 12;
+  uint64 sequence_gaps = 13;
+  uint64 overwritten = 14;
+  uint64 host_receipt_steady_ns = 15;
+  uint64 receipt_age_us = 16;
+  bool receipt_fresh = 17;
+  bool usable = 18;
+}
+
 // Main perception packet - uses oneof for type safety
 message PerceptionPacket {
   string perception_id = 1;
-  int64 timestamp_ns = 2;
+  // Host acquisition estimate in RobotTime seconds. Physical exposure and
+  // firmware acquisition times require device support and domain conversion.
+  double timestamp = 2;
+  uint64 sequence_id = 3;  // Monotonically increasing sequence number for the perception packet.
 
   oneof data_type {
-    ImageData image = 3;
-    PositionData position = 4;
-    SensorData sensor = 5;
-    PointCloudData point_cloud = 6;
+    ImageData image = 4;
+    PositionData position = 5;
+    SensorData sensor = 6;
+    PointCloudData point_cloud = 7;
+    AudioData audio = 8;
+    ScalarData scalar = 9;
   }
 }

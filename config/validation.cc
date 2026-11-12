@@ -1,12 +1,22 @@
 #include "config/validation.h"
 
+#include <cmath>
+#include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
+#include "robot/board/joshua_wire/coordinator_policy.h"
+#include "robot/comm/factory/comm_config_validation.h"
+#include "robot/comm/serial/serial_config_validation.h"
+#include "robot/comm/serial/serial_device_identity.h"
+#include "robot/perception/audio/audio_config.h"
+#include "ros2/utils/packet_parser.h"
+#include "utils/robot_time.h"
 #include "utils/status_macros.h"
 
 namespace config {
@@ -20,6 +30,7 @@ struct BoardChannelReference {
 struct DeviceResources {
   std::vector<BoardChannelReference> board_channels;
   std::vector<robot::comm::Comm> comms;
+  std::vector<std::string> scalar_boards;
 };
 
 struct DeviceDependencies {
@@ -45,6 +56,21 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
     return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_type."));
   }
   switch (sensor.sensor_config_case()) {
+    case SinglePerception::kJoshuaWireScalarConfig: {
+      const auto& c = sensor.joshua_wire_scalar_config();
+      if (sensor.sensor_type() != SensorType::SCALAR ||
+          sensor.node().node_type() != ros2::node::MCU_BUS || c.function_id() >= 255 ||
+          !c.period_us() || sensor.node().publishers().empty() ||
+          !sensor.node().subscriptions().empty())
+        return absl::InvalidArgumentError(
+            "Scalar streaming requires MCU_BUS, function/period and publishers");
+      for (const auto& p : sensor.node().publishers())
+        if (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY || p.topic().empty() ||
+            !p.publish_rate_hz() || p.publish_rate_hz() > 1000)
+          return absl::InvalidArgumentError(
+              "Scalar publishes PerceptionPacket as UINT8_MULTI_ARRAY at 1..1000 Hz");
+      return absl::OkStatus();
+    }
     case SinglePerception::kSts3215EncoderConfig: {
       if (sensor.sensor_type() != SensorType::POSITION) {
         return absl::InvalidArgumentError(
@@ -52,6 +78,21 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
       }
       return absl::OkStatus();
     }
+    case SinglePerception::kAlsaAudioConfig:
+      if (sensor.sensor_type() != SensorType::AUDIO ||
+          sensor.node().node_type() != ros2::node::AUDIO_PUBLISHER) {
+        return absl::InvalidArgumentError("ALSA requires AUDIO and AUDIO_PUBLISHER");
+      }
+      if (sensor.node().publishers().empty() || !sensor.node().subscriptions().empty())
+        return absl::InvalidArgumentError("Audio requires publishers and no subscriptions");
+      for (const auto& pub : sensor.node().publishers()) {
+        if (pub.topic().empty() || pub.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY ||
+            pub.publish_rate_hz() != 0)
+          return absl::InvalidArgumentError(
+              "Audio publishes protobuf packets as UINT8_MULTI_ARRAY; rate is determined by sample "
+              "rate / chunk frames (publish_rate_hz must be 0)");
+      }
+      return robot::perception::ValidateAudioConfig(sensor.alsa_audio_config());
     case SinglePerception::kOpencvConfig:
       if (sensor.sensor_type() != SensorType::IMAGE) {
         return absl::InvalidArgumentError(
@@ -76,7 +117,17 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
 }
 
 absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
+  std::set<std::string> audio_devices;
   for (const auto& sensor : perceptions.single_perceptions()) {
+    if (sensor.node().node_type() == ros2::node::MCU_BUS && !sensor.has_joshua_wire_scalar_config())
+      return absl::InvalidArgumentError("MCU_BUS supports JoshuaWire scalar perceptions");
+    if ((sensor.sensor_type() == robot::perception::AUDIO ||
+         sensor.node().node_type() == ros2::node::AUDIO_PUBLISHER) &&
+        !sensor.has_alsa_audio_config())
+      return absl::InvalidArgumentError("Audio sensor/node requires alsa_audio_config");
+    if (sensor.has_alsa_audio_config() &&
+        !audio_devices.insert(sensor.alsa_audio_config().device()).second)
+      return absl::InvalidArgumentError("Audio device must have a single capture owner");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
   }
   return absl::OkStatus();
@@ -88,6 +139,8 @@ absl::StatusOr<DeviceResources> CollectSensorDependencies(
     const robot::perception::SinglePerception& sensor) {
   using robot::perception::SinglePerception;
   switch (sensor.sensor_config_case()) {
+    case SinglePerception::kJoshuaWireScalarConfig:
+      return DeviceResources{{}, {}, {sensor.joshua_wire_scalar_config().board_name()}};
     case SinglePerception::kSts3215EncoderConfig: {
       const auto& config = sensor.sts3215_encoder_config();
       return DeviceResources{{{config.board_name(), config.channel()}}, {}};
@@ -95,6 +148,7 @@ absl::StatusOr<DeviceResources> CollectSensorDependencies(
     case SinglePerception::kLds01Config:
       return DeviceResources{{}, {sensor.lds01_config().comm()}};
     case SinglePerception::kOpencvConfig:
+    case SinglePerception::kAlsaAudioConfig:
       return DeviceResources{};
     default:
       return absl::InvalidArgumentError("Cannot collect dependencies without a sensor config.");
@@ -135,6 +189,49 @@ absl::Status ValidateNodeAssignments(const std::vector<DeviceDependencies>& devi
   return absl::OkStatus();
 }
 
+// Validate wire contracts without constructing any driver or opening devices.
+absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
+  std::map<std::string, ros2::data_type::Ros2DataType> topic_types;
+  auto check_topic = [&](std::string topic, ros2::data_type::Ros2DataType type) {
+    if (topic.empty()) return absl::InvalidArgumentError("Numeric endpoint needs a topic");
+    if (topic.front() != '/') topic = "/" + topic;
+    const auto [it, inserted] = topic_types.emplace(topic, type);
+    if (!inserted && it->second != type)
+      return absl::InvalidArgumentError("Conflicting message types on topic " + topic);
+    return absl::OkStatus();
+  };
+  for (const auto& sensor : robot.perceptions().single_perceptions()) {
+    if (sensor.node().node_type() != ros2::node::POSITION_PUBLISHER) continue;
+    for (const auto& pub : sensor.node().publishers()) {
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
+      if (pub.publish_rate_hz() == 0)
+        return absl::InvalidArgumentError("Position publisher requires a positive rate");
+      ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
+    }
+  }
+  for (const auto& action : robot.actions().single_actions()) {
+    if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
+        action.node().node_type() != ros2::node::MCU_BUS)
+      continue;
+    const auto& actuator = action.actuator();
+    for (const auto& sub : action.node().subscriptions()) {
+      ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
+      ABSL_RETURN_IF_ERROR(check_topic(sub.topic(), sub.ros2_data_type()));
+      std::string field = "position";
+      if (sub.ros2_data_type() != ros2::data_type::JOINT_STATE) {
+        ABSL_ASSIGN_OR_RETURN(field, ros2_utils::ParseActionTypeFromTopic(sub.topic()));
+      }
+      if (field == "position" &&
+          (!std::isfinite(actuator.operational_lower_limit()) ||
+           !std::isfinite(actuator.operational_upper_limit()) ||
+           actuator.operational_lower_limit() > actuator.operational_upper_limit() ||
+           !std::isfinite(actuator.operational_upper_limit() - actuator.operational_lower_limit())))
+        return absl::InvalidArgumentError("Invalid actuator operational limits");
+    }
+  }
+  return absl::OkStatus();
+}
+
 // Every declared board reference is resolved, regardless of sensor measurement
 // or driver type. Direct connections need no board reference.
 absl::StatusOr<std::vector<Connection>> ResolveConnections(
@@ -142,11 +239,23 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
     const std::vector<DeviceDependencies>& devices) {
   std::vector<Connection> connections;
   for (const auto& device : devices) {
+    for (const auto& name : device.resources.scalar_boards) {
+      ABSL_ASSIGN_OR_RETURN(auto board,
+                            robot::board::ResolveBoardConfig(boards, device.owner, name));
+      if (board->comm().transport_type() != robot::comm::FRAME_STREAM ||
+          !board->joshua_wire_host_policy().telemetry_bytes_per_second())
+        return absl::InvalidArgumentError(
+            "Scalar board requires FRAME_STREAM and telemetry reservation");
+      connections.push_back({device.owner, device.node.id(), board->comm()});
+    }
     for (const auto& reference : device.resources.board_channels) {
       ABSL_ASSIGN_OR_RETURN(auto resolved,
                             robot::board::ResolveChannelConfig(
                                 boards, device.owner, reference.board_name, reference.channel));
       connections.push_back({device.owner, device.node.id(), resolved.board->comm()});
+      if (device.node.node_type() == ros2::node::MCU_BUS &&
+          resolved.board->comm().transport_type() != robot::comm::FRAME_STREAM)
+        return absl::InvalidArgumentError("MCU_BUS actuator requires FRAME_STREAM board");
     }
     for (const auto& comm : device.resources.comms) {
       connections.push_back({device.owner, device.node.id(), comm});
@@ -156,12 +265,44 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
 }
 
 absl::Status ValidateSerialConnections(const std::vector<Connection>& connections) {
+  std::map<std::string, std::pair<uint64_t, uint32_t>> physical_policies;
+  std::map<std::string, robot::comm::SerialIoOptions> io_policies;
+  std::map<std::string, std::pair<bool, robot::comm::SerialFrameOptions>> frame_policies;
+  std::map<std::string, uint32_t> joshua_timeouts;
   for (const auto& connection : connections) {
     if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
+    ABSL_RETURN_IF_ERROR(robot::comm::ValidateSerialCommConfig(connection.comm));
     const auto& serial = connection.comm.serial_config();
-    if (serial.port().empty() || serial.baudrate() == 0) {
-      return absl::InvalidArgumentError(
-          absl::StrCat(connection.owner, ": serial comm requires a port and baudrate."));
+    auto status = robot::comm::ValidateSerialConfig(serial);
+    if (!status.ok()) {
+      return absl::InvalidArgumentError(absl::StrCat(connection.owner, ": ", status.message()));
+    }
+    // Match CommFactory: all users share physical settings, but only JW users
+    // select an exchange deadline. Adapter selection is local to each consumer.
+    ABSL_ASSIGN_OR_RETURN(const auto device,
+                          robot::comm::ResolveSerialDeviceIdentity(serial.port()));
+    const auto physical_policy = std::make_pair(serial.baudrate(), serial.post_open_settle_ms());
+    const auto [it, inserted] = physical_policies.emplace(device.key, physical_policy);
+    if (!inserted && it->second != physical_policy)
+      return absl::InvalidArgumentError("Serial port has conflicting baudrate/timing policy");
+    const auto [io_it, io_inserted] =
+        io_policies.emplace(device.key, robot::comm::SerialOptions(serial));
+    if (!io_inserted && io_it->second != robot::comm::SerialOptions(serial))
+      return absl::InvalidArgumentError("Serial port has conflicting I/O policy");
+    const auto frames =
+        std::make_pair(connection.comm.transport_type() == robot::comm::FRAME_STREAM,
+                       robot::comm::SerialFramePolicyOptions(serial));
+    const auto [frame_it, frame_inserted] = frame_policies.emplace(device.key, frames);
+    if (!frame_inserted && frame_it->second != frames)
+      return absl::InvalidArgumentError("Serial port has conflicting receive mode/frame policy");
+    if (serial.message_adapter() == robot::comm::JOSHUA_WIRE && !frames.first) {
+      const uint32_t timeout = serial.has_exchange_timeout_ms()
+                                   ? serial.exchange_timeout_ms()
+                                   : robot::comm::kDefaultSerialExchangeTimeoutMs;
+      const auto [timeout_it, timeout_inserted] = joshua_timeouts.emplace(device.key, timeout);
+      if (!timeout_inserted && timeout_it->second != timeout)
+        return absl::InvalidArgumentError(
+            "Serial port has conflicting JoshuaWire exchange timeouts");
     }
   }
   return absl::OkStatus();
@@ -170,15 +311,24 @@ absl::Status ValidateSerialConnections(const std::vector<Connection>& connection
 absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
   std::map<std::string, uint32_t> port_to_node_id;
   for (const auto& connection : connections) {
-    // Serial ports are process-owned. Other transports can add their own
-    // ownership rules here without introducing sensor-specific cases.
-    if (connection.comm.comm_type() != robot::comm::SERIAL) continue;
-    const auto& port = connection.comm.serial_config().port();
-    const auto [it, inserted] = port_to_node_id.emplace(port, connection.node_id);
+    // Both serial buses and EtherCAT NICs must have one node-process owner.
+    const bool serial = connection.comm.comm_type() == robot::comm::SERIAL;
+    const bool ethercat = connection.comm.comm_type() == robot::comm::ETHERCAT;
+    if (!serial && !ethercat) continue;
+    const std::string port =
+        serial ? "Serial port '" + connection.comm.serial_config().port()
+               : "EtherCAT NIC '" + connection.comm.ethercat_config().interface_name();
+    std::string identity = port;
+    if (serial) {
+      ABSL_ASSIGN_OR_RETURN(
+          const auto device,
+          robot::comm::ResolveSerialDeviceIdentity(connection.comm.serial_config().port()));
+      identity = device.key;
+    }
+    const auto [it, inserted] = port_to_node_id.emplace(identity, connection.node_id);
     if (!inserted && it->second != connection.node_id) {
       return absl::InvalidArgumentError(
-          absl::StrCat("Serial port '",
-                       port,
+          absl::StrCat(port,
                        "' is assigned to multiple node_ids (",
                        it->second,
                        " and ",
@@ -189,10 +339,75 @@ absl::Status ValidateBusOwnership(const std::vector<Connection>& connections) {
   return absl::OkStatus();
 }
 
+absl::Status ValidateEthercatBoards(
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+  std::map<std::string, std::string> policies;
+  std::map<std::pair<std::string, uint32_t>, std::string> endpoints;
+  for (const auto& board : boards) {
+    const auto& comm = board.comm();
+    if (comm.comm_type() != robot::comm::ETHERCAT) continue;
+    const auto& ec = comm.ethercat_config();
+    if (ec.interface_name().empty()) return absl::InvalidArgumentError("EtherCAT board has no NIC");
+    const bool paired = comm.transport_type() == robot::comm::MESSAGE_AND_CYCLIC;
+    if (paired) {
+      ABSL_RETURN_IF_ERROR(robot::comm::ValidatePairedEthercatConfig(ec));
+      if (board.protocol() != robot::board::JOSHUA_WIRE || board.has_am243_config())
+        return absl::InvalidArgumentError(
+            "Paired EtherCAT requires explicit JW and endpoint config in comm");
+      if (!endpoints.emplace(std::make_pair(ec.interface_name(), ec.slave_index()), board.name())
+               .second)
+        return absl::InvalidArgumentError(
+            "Multiple boards declare the same EtherCAT slave endpoint");
+    } else {
+      return absl::InvalidArgumentError(
+          "Legacy TI-demo EtherCAT is retired; explicit JW with MESSAGE_AND_CYCLIC is required");
+    }
+    const std::string policy = std::to_string(comm.transport_type()) + ":" +
+                               std::to_string(ec.process_data_mode()) + ":" +
+                               ec.timing().SerializeAsString();
+    const auto [it, added] = policies.emplace(ec.interface_name(), policy);
+    if (!added && it->second != policy)
+      return absl::InvalidArgumentError("EtherCAT NIC has conflicting profile or timing policies");
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
+  if (!config::General::Ros2LogMode_IsValid(config.general().ros2_log_mode()))
+    return absl::InvalidArgumentError("Unknown general.ros2_log_mode");
+  ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
   const auto& robot = config.robot();
+  ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
+  for (const auto& board : robot.boards()) {
+    ABSL_RETURN_IF_ERROR(robot::board::ValidateWatchdogPolicy(board));
+    if (board.has_joshua_wire_host_policy()) {
+      if (board.comm().comm_type() != robot::comm::SERIAL ||
+          board.comm().transport_type() != robot::comm::FRAME_STREAM ||
+          (board.board_type() != robot::board::TEENSY41 &&
+           board.board_type() != robot::board::ESP32 && board.board_type() != robot::board::AM243))
+        return absl::InvalidArgumentError(
+            "JoshuaWire host policy requires a Joshua FRAME_STREAM board");
+      ABSL_RETURN_IF_ERROR(robot::board::ValidateCoordinatorPolicy(
+          robot::board::ResolveCoordinatorPolicy(board.joshua_wire_host_policy())));
+    }
+    if (board.has_am243_config())
+      return absl::InvalidArgumentError(
+          "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
+  }
+  for (const auto& action : robot.actions().single_actions()) {
+    if (action.node().node_type() == ros2::node::MCU_BUS &&
+        (!action.has_actuator() ||
+         action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17 ||
+         !action.actuator().stepper_config().require_explicit_enable()))
+      return absl::InvalidArgumentError("MCU_BUS requires a stepper with require_explicit_enable");
+    if (action.has_actuator() && (action.actuator().motor_type() == robot::action::MOTOR_TI_DEMO ||
+                                  action.actuator().has_am243_ethercat_config()))
+      return absl::InvalidArgumentError(
+          "Legacy TI-demo motor/actuator config is retired; configure a supported motor");
+  }
+  ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
   ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));

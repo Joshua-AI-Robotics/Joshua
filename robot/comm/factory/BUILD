@@ -1,23 +1,46 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "comm_config_validation",
+    hdrs = ["comm_config_validation.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//firmware/common:joshua_wire_ethercat",
+        "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/serial:serial_config_validation",
+        "@abseil-cpp//absl/status:status",
+    ],
+)
 
 cc_library(
     name = "comm_factory",
     srcs = ["comm_factory.cc"],
     hdrs = ["comm_factory.h"],
+    implementation_deps = [
+        ":comm_config_validation",
+        "//robot/comm/ethercat:ethercat_master",
+        "//robot/comm/ethercat:joshua_wire_ethercat_transport",
+        "//robot/comm/ethercat:soem_ethercat_backend",
+        "//robot/comm/serial",
+        "//robot/comm/serial:caller_sized_serial_transport",
+        "//robot/comm/serial:joshua_wire_frame_stream",
+        "//robot/comm/serial:joshua_wire_serial_transport",
+        "//robot/comm/serial:serial_config_validation",
+        "//robot/comm/serial:serial_device_identity",
+        "//utils:joshua_runtime",
+        "//utils:status_macros",
+    ],
     visibility = ["//visibility:public"],
     deps = [
-        "//config/proto:robot_cc_proto",
-        "//robot/comm/ethercat:ethercat_transport",
-        "//robot/comm/ethercat:soem_ethercat_transport",
         "//robot/comm/interfaces:byte_stream",
+        "//robot/comm/interfaces:correlated_cyclic_transport",
+        "//robot/comm/interfaces:frame_stream_transport",
         "//robot/comm/interfaces:message_transport",
+        "//robot/comm/interfaces:serial_diagnostics",
         "//robot/comm/proto:comm_cc_proto",
-        "//robot/comm/serial",
         "@abseil-cpp//absl/status:status",
         "@abseil-cpp//absl/status:statusor",
-        "@boost.asio",
-        "@glog",
+        "@abseil-cpp//absl/time",
     ],
 )
 
@@ -26,8 +49,9 @@ cc_test(
     srcs = ["comm_factory_test.cc"],
     deps = [
         ":comm_factory",
-        "//robot/comm/ethercat:fake_ethercat_transport",
+        "//robot/comm/interfaces:caller_sized_message_transport",
         "//robot/comm/proto:comm_cc_proto",
+        "//robot/comm/testing:fake_transports",
         "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
     ],

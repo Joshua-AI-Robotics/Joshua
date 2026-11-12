@@ -1,0 +1,24 @@
+# Operator-only disabled recovery companion. REAL USB device; never launched
+# automatically. Use joshua_wire_smoke --mode=configure --allow_recover --channel=0
+# only after setup confirmation. It configures pins but never enables; cleanup
+# clears configuration. The runtime must be stopped first. Review wiring/port.
+robot {
+  boards {
+    name: "mixed_mcu" board_type: TEENSY41 protocol: JOSHUA_WIRE
+    comm {
+      comm_type: SERIAL transport_type: MESSAGE
+      serial_config {
+        port: "/dev/serial/by-id/JOSHUA_TEENSY41_REFERENCE"
+        baudrate: 115200 message_adapter: JOSHUA_WIRE
+      }
+    }
+    firmware { min_proto_version: 4 }
+    channels {
+      index: 0 drive: STEP_DIR
+      step_dir {
+        step_pin: 2 dir_pin: 3 enable_pin: 4 enable_active_low: true
+        max_pulse_rate_hz: 4000 step_pulse_width_us: 20
+      }
+    }
+  }
+}

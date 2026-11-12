@@ -4,6 +4,10 @@ Hardware-facing code: everything between a `.pbtxt` config and a physical
 motor, sensor, or bus. ROS 2 nodes live in [ros2/](../ros2/README.md) and
 consume these interfaces; nothing here depends on ROS 2 message types.
 
+When choosing boards and physical links, follow
+[Hardware topology and latency budgets](../docs/ARCHITECTURE.md#hardware-topology-and-latency-budgets)
+for guidance on shared versus separate actuator and sensor-acquisition hardware.
+
 > This is the code that moves physical motors and opens real buses. Before
 > running anything from here, see the hardware-safety section of
 > [AGENTS.md](../AGENTS.md).
@@ -27,6 +31,12 @@ code.
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
+JoshuaWire scalar sensors resolve a board and function ID through the same board
+cache as actuators. A FRAME_STREAM board shares one coordinator/session and a
+reserved status heartbeat; it never refreshes actuator targets. The mixed runtime
+requires `stepper_config.require_explicit_enable`. Scalar packets preserve device
+acquisition and local receipt clocks separately, validity, units, boot identity
+and loss counters. Device timestamps are not converted to ROS time.
 All perceptions select a concrete driver through `SinglePerception.sensor_config`;
 the legacy camera/encoder/lidar config wrappers have been removed.
 
@@ -34,7 +44,7 @@ the legacy camera/encoder/lidar config wrappers have been removed.
 robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
 Phase 9, and the Pybricks bench driver moved to
 [tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
-Hardware-facing ROS 2 nodes are C++ only, and `node_generator` no longer
+Hardware-facing ROS 2 nodes are C++ only, and `NodeManager` no longer
 selects between backends.
 
 ## Responsibilities
@@ -49,6 +59,13 @@ selects between backends.
   move bytes and know nothing about motors.
 - `perception/` — camera, encoder, and lidar drivers behind
   `perception/interfaces/`.
+
+AM243 JoshuaWire serial and EtherCAT configurations now use the shared
+`board/joshua_wire/` engine. CommFactory supplies either message-only or paired
+message/cyclic capabilities and owns the NIC lifecycle. The legacy TI-demo
+board/driver path is retired; `board/am243/` retains AM243 factory regression
+coverage, not a separate board implementation. See [JW EtherCAT configuration](../config/README.md#joshuawire-over-ethercat)
+for protocol selection and hardware-validation limits.
 
 ## Non-Goals
 
@@ -65,3 +82,33 @@ Adding a motor type, board, or transport should mean **one new file in one
 layer**, not a new enum value threaded through several. Communication mechanism
 and capability boundaries are described in [comm/README.md](comm/README.md).
 EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
+
+## Joint commands
+
+`ActionPacket.joint` is the motion payload for every actuator. Optional position,
+velocity, and effort distinguish omission from zero. `position_encoding` selects
+`POSITION_NATIVE` (default), `POSITION_SI`, `POSITION_NORMALIZED_ZERO_ONE`, or
+`POSITION_NORMALIZED_MINUS_ONE_ONE`. The separate `units` field applies only to
+velocity and effort: NATIVE preserves existing driver settings; SI means physical
+velocity and effort. JointState sets SI position encoding and SI velocity/effort
+units explicitly, preserving joint name, frame, timestamp, and supplied fields.
+
+STS3215 and stepper support native position/velocity combinations and SI
+position-only commands (radians converted to ticks/degrees). They reject effort;
+use presets to enable/disable torque. The legacy TI demo motor driver is retired;
+AM243 examples use the stepper driver over JoshuaWire. Drivers validate the entire payload before writes. Shared interface validation checks only
+name, field presence, enum validity and finiteness; each driver's implementation
+owns supported combinations, SI conversions, float range and operational limits.
+Channel failures are returned; a
+multi-field command is not a transactional hardware operation.
+
+Scalar topics retain native values: `/position` maps to position, `/speed` and
+`/velocity` to velocity, `/effort` to effort. Legacy `/torque` on STS3215/stepper
+maps to enable/disable presets. `/dc` remains unsupported by runtime motor drivers. The standalone Pybricks tool defines
+native effort as duty percent and requires it to be sent alone.
+
+Normalized positions map through configured operational limits once, then become
+POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invalid
+limits are rejected, never clamped. Native and SI positions are left for drivers.
+Position encoding does not normalize velocity or effort.
+Header metadata does not imply scheduling, clock synchronization, or transforms.

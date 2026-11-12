@@ -38,7 +38,9 @@ int main(int argc, char** argv) {
   comm->set_transport_type(robot::comm::TransportType::MESSAGE);
   comm->mutable_serial_config()->set_port(port);
   comm->mutable_serial_config()->set_baudrate(115200);
-  config.mutable_firmware()->set_min_proto_version(1);
+  comm->mutable_serial_config()->set_message_adapter(robot::comm::JOSHUA_WIRE);
+  comm->mutable_serial_config()->set_post_open_settle_ms(2000);
+  config.mutable_firmware()->set_min_proto_version(4);
   auto* channel = config.add_channels();
   channel->set_index(0);
   channel->set_drive(robot::board::DriveInterface::STEP_DIR);

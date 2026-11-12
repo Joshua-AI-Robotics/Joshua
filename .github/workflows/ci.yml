@@ -90,7 +90,12 @@ jobs:
           df -h
 
       - name: Build Docker image
-        run: docker compose build ${{ matrix.service }}
+        # Avoid archive.ubuntu.com/security.ubuntu.com DNS and mirror outages.
+        # Package signatures are still checked against Ubuntu's archive keyring.
+        run: >-
+          docker compose build
+          --build-arg UBUNTU_AMD64_MIRROR=http://mirrors.edge.kernel.org/ubuntu/
+          ${{ matrix.service }}
 
       # Regression check for the non-interactive ROS bug: task commands must
       # see a sourced ROS environment. CPU overlay because runners have no GPU.

@@ -1,41 +1,28 @@
-# Node Generator
+# Runtime observation
 
-The `Node Generator` is a core component of Joshua platform, responsible for dynamically instantiating and managing ROS2 nodes based on a configuration file. It acts as an orchestrator, parsing the user-defined robot configuration, launching the nodes, and monitoring their lifecycle.
+Process configuration, launch, monitoring, and shutdown are owned by
+[`launcher::NodeManager`](../launcher/node_manager/README.md).
+This directory retains the passive `RuntimeObservation` adapter and its
+hardware-free tests and fixture.
 
-## Workflow
+For mixed JoshuaWire MCU use `MCU_BUS` for every actuator and scalar perception
+on that board, with one shared node ID. The generator launches `ros2/mcu_bus`
+once for that ID; configuration validation rejects competing process owners.
+The launcher packages that binary along with the standalone node binaries.
 
-The Node Generator follows a clear, sequential process to bring the robotic system to life, as illustrated in the diagram above:
+The launcher accepts `--observation_dir` and optional `--observe_sensor` flags.
+NodeManager validates the selection and acquires an exclusive lease on an
+existing private directory before launching children. It starts a private ROS
+context after all forks, without installing global ROS signal handlers.
+Process monitoring runs before bounded observation work; initialization,
+callbacks, graph queries and snapshot publication failures stay contained.
 
-1.  **Parse the Config**: The process begins by reading a `.pbtxt` configuration file specified via the `--config` flag. This file contains all the necessary information about the robot's hardware, sensors, actuators, and AI policies.
-
-2.  **Analyze Nodes and Interfaces**: The generator analyzes the configuration to identify all the required node types. It groups these components by their assigned `node_id` and ensures no duplicates or conflicts (e.g., multiple nodes claiming the same serial port).
-
-3.  **Integrity Check for Config**: It performs a series of checks to ensure the configuration is valid and all required information is present. This step prevents runtime errors due to misconfiguration.
-
-4.  **Deploy/Run All Nodes**: Once the analysis is complete, the generator launches each node as a separate process using `fork()` and `execv()`. It intelligently resolves the binary path (checking Bazel's bin tree or packaged wrapper scripts) and sets up the necessary environment variables (e.g., `RUNFILES_DIR`) for each node.
-
-5.  **Monitor Running Nodes**: After launching, the Node Generator continuously monitors the status of all child processes. If a node terminates unexpectedly, it logs the event. It also handles graceful shutdown, sending `SIGINT` (and subsequently `SIGTERM`/`SIGKILL` if needed) to all child process groups when the main program exits.
-
-## Usage
-
-The Node Generator is executed from the command line, pointing to a specific configuration file.
-
-### Running the Node Generator
-
-Check the [launcher/joshua_main.cc](../launcher/joshua_main.cc)
-
-## Config validation
-
-[config/validation.h](../config/validation.h) exposes `config::ValidateConfig(const config::Config&)` as
-an independent library, separate from process launching. `CheckConfigIntegrity`
-and preset-validation tests both call it. The C++ ROS node runner also validates
-configs before constructing a node when launched directly.
-
-[config/validation.cc](../config/validation.cc) composes focused checks for node assignments,
-resource references, serial settings, and bus ownership. The entry point takes
-the full config so checks for boards, actuators, sensors, and future sections
-have one shared home. Add new checks as separate functions and call them from
-`config::ValidateConfig`. Sensor configuration checks and dependency extraction are
-separate private helpers in this module. Factories retain defensive checks for
-construction and initialization, and do not depend on node generation.
-Validation does not instantiate drivers, open devices, or launch nodes.
+Snapshots describe the launcher's loaded config, process facts, retained exits,
+bounded partial `/rosout` logs and one explicitly selected POSITION/JOINT_STATE
+stream. Log names do not prove runtime association. Feedback requires the sole
+expected publisher endpoint and actual message publisher GID, and cached data
+is invalidated when the endpoint set changes. Receipt freshness does not prove
+acquisition freshness or physical readiness. Simulation observation is
+unsupported. The [MCP guide](../tools/mcp/README.md#optional-runtime-observations)
+documents directory permissions, clock domain, fields and limitations. MCP is
+an optional reader; NodeManager remains the runtime owner.

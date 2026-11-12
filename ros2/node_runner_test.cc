@@ -1,5 +1,9 @@
 #include "ros2/node_runner.h"
 
+#include <time.h>
+#include <unistd.h>
+
+#include <atomic>
 #include <cstdlib>
 #include <fstream>
 #include <stdexcept>
@@ -8,10 +12,12 @@
 #include "gtest/gtest.h"
 
 namespace {
+bool unexpected_construction = false;
 class MustNotConstructNode : public rclcpp::Node {
  public:
   MustNotConstructNode(const std::string&, int, const config::Config&)
       : rclcpp::Node("unexpected_node") {
+    unexpected_construction = true;
     throw std::logic_error("Node constructed before config validation");
   }
 };
@@ -40,5 +46,144 @@ TEST(NodeRunnerTest, RejectsInvalidConfigBeforeConstructingNode) {
   std::string node_id = "1";
   char* argv[] = {binary.data(), node_name.data(), node_id.data(), config_path.data(), nullptr};
   EXPECT_EQ(ros2_utils::RunNode<MustNotConstructNode>(4, argv, "node_runner_test"), 1);
+  EXPECT_FALSE(unexpected_construction);
+}
+
+class ClockObservingNode : public rclcpp::Node {
+ public:
+  ClockObservingNode(const std::string&, int, const config::Config&)
+      : rclcpp::Node("clock_observing_node") {
+    timespec before{}, after{};
+    if (clock_gettime(CLOCK_MONOTONIC, &before) != 0) _exit(10);
+    const double now = RobotTime();
+    if (clock_gettime(CLOCK_MONOTONIC, &after) != 0) _exit(11);
+    if (now < before.tv_sec || now > after.tv_sec + 1.0) _exit(12);
+    // Spin one callback as well as reading from the constructor.
+    timer_ = create_wall_timer(std::chrono::milliseconds(1), [] {
+      if (RobotTime() <= 0) _exit(13);
+      rclcpp::shutdown();
+    });
+  }
+
+ private:
+  rclcpp::TimerBase::SharedPtr timer_;
+};
+
+template <typename NodeT>
+int RunWithClockConfig(const std::string& clock_config, size_t executor_threads = 0) {
+  const char* test_tmpdir = std::getenv("TEST_TMPDIR");
+  if (!test_tmpdir || setenv("ROS_LOG_DIR", test_tmpdir, 1) != 0) _exit(14);
+  std::string path = std::string(test_tmpdir) + "/clock_runner.pbtxt";
+  {
+    std::ofstream file(path);
+    file << "general { robot_clock { " << clock_config << " } }";
+    if (!file.good()) _exit(15);
+  }
+  std::string binary = "node_runner_test", name = "clock_test", id = "1";
+  char* argv[] = {binary.data(), name.data(), id.data(), path.data(), nullptr};
+  const int result = ros2_utils::RunNode<NodeT>(4, argv, "clock_test", executor_threads);
+  if (rclcpp::ok()) _exit(16);
+  return result;
+}
+
+class NodeRunnerClockTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+  }
+};
+
+TEST_F(NodeRunnerClockTest, InstallsConfiguredClockBeforeConstructionAndCallback) {
+  ASSERT_EXIT(_exit(RunWithClockConfig<ClockObservingNode>("source: MONOTONIC")),
+              testing::ExitedWithCode(0),
+              "");
+}
+
+TEST_F(NodeRunnerClockTest, ClockFailurePreventsNodeConstruction) {
+  ASSERT_EXIT(
+      _exit(RunWithClockConfig<MustNotConstructNode>("source: PTP require_ptp: true "
+                                                     "ptp_device: '/nonexistent-joshua-test/ptp'")),
+      testing::ExitedWithCode(1),
+      "Failed to create robot clock");
+}
+
+TEST_F(NodeRunnerClockTest, EarlyLazyInitializationPreventsNodeConstruction) {
+  ASSERT_EXIT(
+      {
+        RobotTime();
+        _exit(RunWithClockConfig<MustNotConstructNode>("source: UTC"));
+      },
+      testing::ExitedWithCode(1),
+      "already initialized");
+}
+
+class FailingCallbackNode : public rclcpp::Node {
+ public:
+  FailingCallbackNode(const std::string&, int, const config::Config&)
+      : rclcpp::Node("failing_callback") {
+    timer_ = create_wall_timer(std::chrono::milliseconds(1),
+                               [] { throw std::runtime_error("fixture callback failure"); });
+  }
+  ~FailingCallbackNode() override {
+    destroyed = true;
+  }
+  inline static bool destroyed = false;
+
+ private:
+  rclcpp::TimerBase::SharedPtr timer_;
+};
+
+TEST_F(NodeRunnerClockTest, CallbackFailureDestroysNodeAndShutsDownRos) {
+  ASSERT_EXIT(
+      {
+        const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC");
+        _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
+      },
+      testing::ExitedWithCode(0),
+      "fixture callback failure");
+}
+
+TEST_F(NodeRunnerClockTest, MultiThreadedCallbackFailureDestroysNodeAndShutsDownRos) {
+  ASSERT_EXIT(
+      {
+        const int result = RunWithClockConfig<FailingCallbackNode>("source: UTC", 2);
+        _exit(result == 1 && FailingCallbackNode::destroyed && !rclcpp::ok() ? 0 : 20);
+      },
+      testing::ExitedWithCode(0),
+      "fixture callback failure");
+}
+
+class ConcurrentCallbacksNode : public rclcpp::Node {
+ public:
+  ConcurrentCallbacksNode(const std::string&, int, const config::Config&)
+      : rclcpp::Node("concurrent_callbacks") {
+    blocking_ = create_wall_timer(std::chrono::milliseconds(1), [this] {
+      entered_ = true;
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+      while (!released_ && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      if (!released_) throw std::runtime_error("Second callback group could not run");
+    });
+    stop_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    stop_ = create_wall_timer(
+        std::chrono::milliseconds(20),
+        [this] {
+          if (!entered_) return;
+          released_ = true;
+          rclcpp::shutdown();
+        },
+        stop_group_);
+  }
+
+ private:
+  std::atomic<bool> entered_{false}, released_{false};
+  rclcpp::CallbackGroup::SharedPtr stop_group_;
+  rclcpp::TimerBase::SharedPtr blocking_, stop_;
+};
+
+TEST_F(NodeRunnerClockTest, MultiThreadedRunnerKeepsStopCallbacksConcurrent) {
+  ASSERT_EXIT(_exit(RunWithClockConfig<ConcurrentCallbacksNode>("source: UTC", 2)),
+              testing::ExitedWithCode(0),
+              "");
 }
 }  // namespace
