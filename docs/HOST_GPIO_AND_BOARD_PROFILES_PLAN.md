@@ -1,7 +1,39 @@
 # Host GPIO and board profiles plan
 
-Status: **proposal; documentation only**. No GPIO backend, profiles, protobuf
-changes, or hardware support are delivered by this PR.
+Status: **initial digital board support implemented** for Pi 5 and Jetson Orin
+Nano on NVIDIA P3768. See the [GPIO guide](../robot/board/host_gpio/README.md)
+for the shipped API, config, platform limits and tests. The remainder of this
+file records the broader proposal; illustrative schemas and future phases below
+are not implemented unless listed in the guide.
+
+Integration reviewed against develop's shared board cache, runtime cleanup and
+JoshuaWire coordinator, plus open PRs [#145](https://github.com/Joshua-AI-Robotics/Joshua/pull/145)
+(shared device runtime), [#149](https://github.com/Joshua-AI-Robotics/Joshua/pull/149)
+(Feetech fault lifecycle), and [#159](https://github.com/Joshua-AI-Robotics/Joshua/pull/159)
+(single-source ROS nodes). Digital I/O extends BoardInterface through a separate
+DigitalPin capability. Motor channels, communication framing and ROS nodes need
+no GPIO-specific changes. Host pin faults latch until reconstruction; cached
+boards and retained handles preserve teardown semantics.
+
+Implementation choices for this first slice:
+
+- `pin/pin_resource.h` separates immutable `PinInfo`/`PinProfile` facts from a
+  configured `PinResource` containing name, purpose and I/O policy. Profiles are
+  compiled data, keeping offline validation and deployed binaries independent
+  of runtime file paths. Versions are exact. A future data catalog can preserve
+  these types without changing the digital capability.
+- `Board.host_gpio_config` owns named digital claims. The ambiguous legacy
+  `Channel.host_gpio` schema remains allocated, but host motor channels are
+  rejected. GPIO is not represented as a motor or joint position.
+- The backend uses the stable Linux character-device v2 UAPI directly, avoiding
+  incompatible Ubuntu libgpiod major versions and extra runtime dependencies.
+  It requires host kernel/driver ABI v2 support (introduced in Linux 5.10),
+  validates device-tree platform identity and unique chip-label/line-name
+  identity, and acquires lines exclusively with atomic initial values.
+- This slice provides synchronous digital reads/writes and board-level cleanup.
+  Edge events, digital ROS/action/perception drivers, MCU profile adoption,
+  PWM and motor pulse engines remain follow-up work. Metadata alternatives
+  do not authorize peripheral operations or promise timing.
 
 Companion to [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) and
 [ARCHITECTURE.md](ARCHITECTURE.md). This plan adds local GPIO and a common pin

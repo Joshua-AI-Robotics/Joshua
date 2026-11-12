@@ -243,7 +243,7 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     catalog = result.structuredContent["data"]
                     scopes = {x["name"]: x["support_scope"] for x in catalog["boards"]}
                     self.assertEqual(scopes["MOCK"], "test_only")
-                    self.assertEqual(scopes["HOST_GPIO"], "unimplemented")
+                    self.assertEqual(scopes["HOST_GPIO"], "installed")
                     serial = next(
                         x
                         for x in catalog["communication"]
@@ -269,6 +269,24 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     audio = next(x for x in catalog["sensors"] if x["name"] == "AUDIO")
                     self.assertEqual(audio["sensor_config"], "alsa_audio_config")
                     self.assertEqual(audio["support_scope"], "installed")
+                    Path(directory, "gpio.pbtxt").write_text(
+                        'robot { boards { name: "local_gpio" board_type: HOST_GPIO '
+                        'host_gpio_config { profile_id: "raspberrypi/pi5" '
+                        'profile_version: 1 pins { name: "switch" '
+                        'purpose: "panel switch" '
+                        "pin { header_pin: 11 } direction: DIGITAL_INPUT } } } }"
+                    )
+                    gpio = await client.call_tool(
+                        "describe_device",
+                        {"config_path": "gpio.pbtxt", "device_id": "board:local_gpio"},
+                    )
+                    self.assertFalse(gpio.isError, gpio)
+                    device = gpio.structuredContent["data"]["device"]
+                    self.assertEqual(device["hardware_readiness"], "unknown")
+                    self.assertEqual(
+                        device["configured"]["host_gpio_config"]["pins"][0]["purpose"],
+                        "panel switch",
+                    )
                     for name in ("camera_a", "camera_b"):
                         Path(directory, name + ".pbtxt").write_text(candidate(name))
                         result = await client.call_tool(

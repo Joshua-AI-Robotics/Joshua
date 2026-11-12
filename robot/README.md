@@ -67,6 +67,12 @@ board/driver path is retired; `board/am243/` retains AM243 factory regression
 coverage, not a separate board implementation. See [JW EtherCAT configuration](../config/README.md#joshuawire-over-ethercat)
 for protocol selection and hardware-validation limits.
 
+Host digital GPIO for Pi 5 and Jetson Orin Nano (P3768 carrier) is a separate
+`BoardInterface::OpenDigitalPin(name)` capability. `PinResource` carries each
+pin's hardware facts and configured purpose. It shares the existing board cache
+and runtime cleanup; it does not use CommFactory or motor channels. See the
+[GPIO guide](board/host_gpio/README.md) for configuration and current limits.
+
 ## Non-Goals
 
 - ROS 2 node lifecycle, topics, or message types — see [ros2/](../ros2/README.md).

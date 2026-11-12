@@ -146,3 +146,25 @@ TEST_F(BoardFactoryTest, ResetForTestingDropsCache) {
 
 }  // namespace
 }  // namespace robot::board
+
+namespace robot::board {
+TEST(HostGpioFactoryTest, RegisteredAndRejectsMotionBeforeAccessingHardware) {
+  bool registered = false;
+  for (const auto& implementation : BoardFactory::Implementations()) {
+    if (implementation.type == HOST_GPIO) {
+      registered = implementation.create != nullptr;
+      EXPECT_STREQ(implementation.support_scope, "installed");
+    }
+  }
+  EXPECT_TRUE(registered);
+  Board config;
+  config.set_name("gpio");
+  config.set_board_type(HOST_GPIO);
+  config.add_channels()->set_drive(STEP_DIR);
+  EXPECT_EQ(BoardFactory::GetOrCreate(config).status().code(), absl::StatusCode::kInvalidArgument);
+  // A foreign GPIO config must not silently disappear in another board driver.
+  config.set_board_type(MOCK);
+  config.mutable_host_gpio_config();
+  EXPECT_EQ(BoardFactory::GetOrCreate(config).status().code(), absl::StatusCode::kInvalidArgument);
+}
+}  // namespace robot::board

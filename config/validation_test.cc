@@ -669,3 +669,43 @@ TEST(AudioValidationTest, RejectsDuplicateCaptureButAllowsTopicFanout) {
 }
 }  // namespace
 }  // namespace config
+
+namespace config {
+namespace {
+TEST(ConfigGpioValidationTest, ValidatesWithoutHardwareAndRejectsCrossBoardAliases) {
+  Config config;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(R"pb(
+                                                              robot {
+                                                                boards {
+                                                                  name: "gpio"
+                                                                  board_type: HOST_GPIO
+                                                                  host_gpio_config {
+                                                                    profile_id: "raspberrypi/pi5"
+                                                                    profile_version: 1
+                                                                    pins {
+                                                                      name: "switch"
+                                                                      purpose: "panel switch"
+                                                                      pin { header_pin: 11 }
+                                                                      direction: DIGITAL_INPUT
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            )pb",
+                                                            &config));
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  auto copy = config.robot().boards(0);
+  copy.set_name("other_name");
+  copy.mutable_host_gpio_config()->mutable_pins(0)->mutable_pin()->set_signal("J8.GPIO17");
+  *config.mutable_robot()->add_boards() = copy;
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+TEST(ConfigGpioValidationTest, RejectsGpioConfigOnAnotherBoardType) {
+  Config c;
+  auto* b = c.mutable_robot()->add_boards();
+  b->set_board_type(robot::board::TEENSY41);
+  b->mutable_host_gpio_config();
+  EXPECT_FALSE(ValidateConfig(c).ok());
+}
+}  // namespace
+}  // namespace config
