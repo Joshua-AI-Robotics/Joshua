@@ -276,9 +276,10 @@ their 64 KiB limit. These accepted-data limits cannot prevent DDS allocations
 before the callback and do not establish a strict process memory bound.
 
 Comparable boot/time-namespace CLOCK_BOOTTIME receipt and manifest freshness is
-three seconds. Rereads preserve original receipt time, source publication time,
+three seconds. Rereads preserve original receipt time, source ROS header time,
 and the helper nonce/counter `sample_id`; ROS Image has no native sequence, so
-`sample_sequence` is null. Publication time is labeled `publication_time`, and
+`sample_sequence` is null. `source_timestamp_semantics` is `source_header_time`;
+OpenCV uses a host capture-completion estimate rather than sensor exposure time.
 `acquisition_freshness` stays `unknown`.
 
 Capture settings are applied on successful first open and reopen. FourCC is

@@ -126,7 +126,7 @@ _IMAGE_SCHEMA = {
         "source_id": {"type": "string"},
         "availability": {"type": "string", "enum": ["fresh", "stale", "unavailable"]},
         "acquisition_freshness": {"type": "string", "const": "unknown"},
-        "source_timestamp_semantics": {"type": "string", "const": "publication_time"},
+        "source_timestamp_semantics": {"type": "string", "const": "source_header_time"},
     },
     "required": [
         "source_id",
@@ -144,7 +144,7 @@ async def _camera_result(source, arguments):
         "source_id": source.describe().source_id,
         "availability": "unavailable",
         "acquisition_freshness": "unknown",
-        "source_timestamp_semantics": "publication_time",
+        "source_timestamp_semantics": "source_header_time",
     }
     content = []
     if (
@@ -195,7 +195,7 @@ async def _camera_result(source, arguments):
             "source_id": source.describe().source_id,
             "availability": "unavailable",
             "acquisition_freshness": "unknown",
-            "source_timestamp_semantics": "publication_time",
+            "source_timestamp_semantics": "source_header_time",
             "unavailable_reason": "invalid_data",
             "diagnostic": "Image metadata exceeds 16 KiB.",
         }
@@ -211,7 +211,7 @@ async def _camera_result(source, arguments):
             "source_id": source.describe().source_id,
             "availability": "unavailable",
             "acquisition_freshness": "unknown",
-            "source_timestamp_semantics": "publication_time",
+            "source_timestamp_semantics": "source_header_time",
             "unavailable_reason": "invalid_data",
             "diagnostic": "Serialized image result exceeds 1 MiB.",
         }

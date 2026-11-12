@@ -54,9 +54,9 @@ absl::Status CvCamera::Init() {
 
   try {
     return OpenCameraLocked();
-  } catch (...) {
+  } catch (const cv::Exception& e) {
     (void)TeardownLocked();
-    return absl::InternalError("Camera initialization failed.");
+    return absl::InternalError("OpenCV initialization failed for camera " + id_ + ": " + e.what());
   }
 }
 
@@ -71,12 +71,10 @@ absl::Status CvCamera::TeardownLocked() {
       cap_->Release();
     }
   } catch (const std::exception& e) {
-    LOG(ERROR) << "Error: " << e.what();
     return absl::Status(absl::StatusCode::kInternal,
                         "Failed to teardown camera " + id_ + ": " + e.what());
   } catch (...) {
-    LOG(ERROR) << "Unknown exception in camera " << id_;
-    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
+    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera " + id_);
   }
   return absl::OkStatus();
 }
@@ -94,8 +92,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     const bool captured = cap_->Read(frame);
 
     if (!captured || frame.empty()) {
-      LOG(ERROR) << "Failed to capture an image from camera " << id_
-                 << " (camera_id: " << camera_id_ << ")";
       reusable_packet_.Clear();
       (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
@@ -107,22 +103,21 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
 
     // Validate frame properties
     if (frame.cols <= 0 || frame.rows <= 0) {
-      LOG(ERROR) << "Invalid frame dimensions from camera " << id_ << ": " << frame.cols << "x"
-                 << frame.rows;
       reusable_packet_.Clear();
       (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
-                          "Failed to capture an image from camera with invalid frame dimensions");
+                          "Invalid frame dimensions for camera " + id_ + ": " +
+                              std::to_string(frame.cols) + "x" + std::to_string(frame.rows));
     }
 
     if (frame.channels() != 3 || frame.depth() != CV_8U) {
-      LOG(ERROR) << "Unexpected number of channels from camera " << id_ << ": " << frame.channels()
-                 << " (expected 3 for BGR)";
       reusable_packet_.Clear();
       (void)TeardownLocked();
-      return absl::Status(
-          absl::StatusCode::kInternal,
-          "Failed to capture an image from camera with unexpected number of channels");
+      return absl::Status(absl::StatusCode::kInternal,
+                          "Unexpected frame type for camera " + id_ +
+                              ": channels=" + std::to_string(frame.channels()) +
+                              ", depth=" + std::to_string(frame.depth()) +
+                              " (expected 3 channels of unsigned 8-bit data)");
     }
 
     // Clear and populate the reusable packet
@@ -144,7 +139,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     const size_t data_size = static_cast<size_t>(frame.total()) * frame.elemSize();
 
     if (data_size == 0) {
-      LOG(ERROR) << "Frame data size is 0 for camera " << id_;
       reusable_packet_.Clear();
       (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
@@ -152,7 +146,6 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     }
 
     if (frame.data == nullptr) {
-      LOG(ERROR) << "Frame data pointer is null for camera " << id_;
       reusable_packet_.Clear();
       (void)TeardownLocked();
       return absl::Status(absl::StatusCode::kInternal,
@@ -167,21 +160,10 @@ absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
     return reusable_packet_;
 
   } catch (const cv::Exception& e) {
-    LOG(ERROR) << "OpenCV exception in camera " << id_ << ": " << e.what();
     reusable_packet_.Clear();
     (void)TeardownLocked();
     return absl::Status(absl::StatusCode::kInternal,
                         "OpenCV exception in camera " + id_ + ": " + e.what());
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Standard exception in camera " << id_ << ": " << e.what();
-    reusable_packet_.Clear();
-    (void)TeardownLocked();
-    return absl::Status(absl::StatusCode::kInternal, "Standard exception in camera");
-  } catch (...) {
-    LOG(ERROR) << "Unknown exception in camera " << id_;
-    reusable_packet_.Clear();
-    (void)TeardownLocked();
-    return absl::Status(absl::StatusCode::kInternal, "Unknown exception in camera");
   }
 }
 

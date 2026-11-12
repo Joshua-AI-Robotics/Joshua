@@ -385,7 +385,8 @@ buffer sizes after recovery, and bounded work for always-ready sources.
 Configured camera observation
 -----------------------------
 `camera_publisher` validates packet encoding, channels, signed dimensions and
-exact byte length before RGB conversion. Its ROS timestamp is publication time.
+exact byte length before RGB conversion. Its ROS header preserves the driver
+packet timestamp; OpenCV uses a host capture-completion estimate.
 `image_observer` is a separate passive C++ ROS helper owned by the optional MCP
 reader. It checks the sole expected endpoint and received publisher GID, retains
 one bounded RGB8/BGR8 sample (including row padding), and encodes a small JPEG

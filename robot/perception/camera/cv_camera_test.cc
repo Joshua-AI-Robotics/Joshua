@@ -8,7 +8,7 @@ namespace {
 class FakeCapture : public CameraCapture {
  public:
   bool opened = false, empty = false, false_read = false, throw_read = false, throw_set = false,
-       fail_open = false;
+       fail_open = false, unexpected_read = false, unexpected_set = false;
   std::vector<int> order;
   int opens = 0, releases = 0;
   std::map<int, double> settings;
@@ -21,7 +21,9 @@ class FakeCapture : public CameraCapture {
     return opened;
   }
   bool Set(int key, double value) override {
-    if (throw_set) throw std::runtime_error("configure failed");
+    if (unexpected_set) throw std::runtime_error("unexpected configure failure");
+    if (throw_set)
+      throw cv::Exception(cv::Error::StsError, "configure failed", "Set", __FILE__, __LINE__);
     order.push_back(key);
     settings[key] = value;
     return true;
@@ -30,7 +32,9 @@ class FakeCapture : public CameraCapture {
     return settings.at(key);
   }
   bool Read(cv::Mat& frame) override {
-    if (throw_read) throw std::runtime_error("capture failed");
+    if (unexpected_read) throw std::runtime_error("unexpected capture failure");
+    if (throw_read)
+      throw cv::Exception(cv::Error::StsError, "capture failed", "Read", __FILE__, __LINE__);
     if (!empty) frame = cv::Mat(2, 4, CV_8UC3, cv::Scalar(1, 2, 3)).clone();
     return !empty && !false_read;
   }
@@ -136,6 +140,23 @@ TEST(CvCameraTest, InitConfigurationExceptionResetsBeforeLaterRecovery) {
   ASSERT_TRUE(camera.GetData().ok());
   EXPECT_EQ(f->opens, 2);
   EXPECT_EQ(f->settings.at(cv::CAP_PROP_FPS), 30);
+}
+
+TEST(CvCameraTest, UnexpectedConfigurationExceptionPropagatesToRuntimeBoundary) {
+  auto fake = std::make_unique<FakeCapture>();
+  auto* f = fake.get();
+  CvCamera camera(Config(), std::move(fake));
+  f->unexpected_set = true;
+  EXPECT_THROW(camera.Init(), std::runtime_error);
+}
+
+TEST(CvCameraTest, UnexpectedCaptureExceptionPropagatesToRuntimeBoundary) {
+  auto fake = std::make_unique<FakeCapture>();
+  auto* f = fake.get();
+  CvCamera camera(Config(), std::move(fake));
+  ASSERT_TRUE(camera.Init().ok());
+  f->unexpected_read = true;
+  EXPECT_THROW(camera.GetData(), std::runtime_error);
 }
 
 TEST(CvCameraTest, FailedOpenHasFiniteAttemptsAndLaterReturningBackendRecovers) {

@@ -159,13 +159,24 @@ TEST_F(NodeManagerTest, ConfiguredCameraObservationUsesOnlyManagedProcessFacts) 
   const auto config_path = root / "config.pbtxt";
   {
     std::ofstream file(config_path);
-    file << R"pb(robot { perceptions { single_perceptions {
-      sensor_name: "webcam" sensor_type: IMAGE
-      opencv_config { id: 0 width: 640 height: 480 fps: 30 fourcc: "MJPG" }
-      node { id: 42 node_type: CAMERA_PUBLISHER publishers {
-        topic: "webcam/image" ros2_data_type: IMAGE publish_rate_hz: 30
-      } }
-    } } })pb";
+    file << R"pb(robot {
+                   perceptions {
+                     single_perceptions {
+                       sensor_name: "webcam"
+                       sensor_type: IMAGE
+                       opencv_config { id: 0 width: 640 height: 480 fps: 30 fourcc: "MJPG" }
+                       node {
+                         id: 42
+                         node_type: CAMERA_PUBLISHER
+                         publishers {
+                           topic: "webcam/image"
+                           ros2_data_type: IMAGE
+                           publish_rate_hz: 30
+                         }
+                       }
+                     }
+                   }
+                 })pb";
   }
   NodeManager manager(config_path.string());
   ASSERT_TRUE(manager.Initialize().ok());

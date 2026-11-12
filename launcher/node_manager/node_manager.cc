@@ -474,9 +474,9 @@ absl::Status NodeManager::ConfigureObservation(const std::string& directory,
   if (!initialized_ || graph_started_ || !nodes_.empty() || observation_started_)
     return absl::FailedPreconditionError(
         "Configure observation after initialization and before launch");
-  ABSL_ASSIGN_OR_RETURN(
-      observation_,
-      node_generator::RuntimeObservation::Prepare(config_, config_path_, directory, sensor, camera));
+  ABSL_ASSIGN_OR_RETURN(observation_,
+                        node_generator::RuntimeObservation::Prepare(
+                            config_, config_path_, directory, sensor, camera));
   return absl::OkStatus();
 }
 

@@ -215,7 +215,7 @@ Observation alone never proves physical readiness or task completion;
 
 The launcher derives a bounded camera manifest from protobuf under its existing
 private directory lease. It requires the selected publisher process to have one
-camera and one IMAGE publisher, avoiding the existing multi-camera timer fanout.
+camera and one IMAGE publisher, making the configured source unambiguous.
 The helper never links a hardware factory. It retains one validated RGB8/BGR8
 sample and original receipt time, checks the sole endpoint and actual message
 GID, and JPEG-encodes only on query. Its nonce/counter sample ID is independent
@@ -226,7 +226,8 @@ node/namespace or fixed ROS type. The old helper is reaped before a new context
 can start; failures poison the reader. Manifest boot/time namespace and heartbeat
 must be comparable and fresh. Binding and graph changes during a query suppress
 the image. Silence ages the original sample to stale without restamping it.
-The ROS source stamp remains publication metadata; acquisition freshness is unknown.
+The source timestamp preserves the ROS header (`source_header_time`); OpenCV
+uses a host capture-completion estimate. Acquisition freshness remains unknown.
 
 The source owns query/cleanup tasks so closing resolves pending readers CLOSED
 without cancelling consumer tasks. Caller cancellation waits for cleanup; one

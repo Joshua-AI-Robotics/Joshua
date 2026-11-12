@@ -331,6 +331,12 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(tools), 10)
                 image = next(t for t in tools if t.name == "get_camera_image")
                 self.assertEqual(image.inputSchema["required"], ["camera_id"])
+                self.assertEqual(
+                    image.outputSchema["properties"]["source_timestamp_semantics"][
+                        "const"
+                    ],
+                    "source_header_time",
+                )
                 result = await self.until(session, "fresh")
                 blocks = [c for c in result.content if c.type == "image"]
                 self.assertEqual(len(blocks), 1)
@@ -349,7 +355,7 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                 self.assertLess(blue, 20)
                 self.assertEqual(
                     result.structuredContent["source_timestamp_semantics"],
-                    "publication_time",
+                    "source_header_time",
                 )
                 self.assertEqual(
                     result.structuredContent["acquisition_freshness"], "unknown"
