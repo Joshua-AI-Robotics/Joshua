@@ -31,6 +31,12 @@ code.
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
+See [implemented components](../docs/SUPPORTED_COMPONENTS.md) for software paths
+and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
+driver references, example presets, and intended support scope. Separate
+[test records](../docs/TESTED_HARDWARE.md) retain measurements and environments
+linked to those models by stable hardware ID.
+
 JoshuaWire scalar sensors resolve a board and function ID through the same board
 cache as actuators. A FRAME_STREAM board shares one coordinator/session and a
 reserved status heartbeat; it never refreshes actuator targets. The mixed runtime
