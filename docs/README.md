@@ -15,6 +15,8 @@ evidence workflow and the outstanding physical qualification gates.
 | AI integration vision, requirements, user scenarios, checkpoints, feedback orchestration, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Typed observation base contract, metadata and proposed adapters | [MCP_OBSERVATION_DESIGN.md](MCP_OBSERVATION_DESIGN.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
+| Supported hardware models, aliases, drivers, presets, and intended scope | [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md) |
+| Separate hardware test records, environments, measured results, and limitations | [TESTED_HARDWARE.md](TESTED_HARDWARE.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
 | Pi 5 / Orin Nano digital GPIO API and pin resources | [../robot/board/host_gpio/README.md](../robot/board/host_gpio/README.md) |
 | Host GPIO and board pin profiles plan | [HOST_GPIO_AND_BOARD_PROFILES_PLAN.md](HOST_GPIO_AND_BOARD_PROFILES_PLAN.md) |

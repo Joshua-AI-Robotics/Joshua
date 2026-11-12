@@ -20,14 +20,17 @@ CvCamera::~CvCamera() {
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
 
+  // Protect direct driver callers before indexing the four-character format.
+  // Full preset validation belongs to config::ValidateConfig.
+  if (opencv_config_.fourcc().size() != 4) {
+    return absl::InvalidArgumentError("OpenCV FourCC requires exactly four characters");
+  }
+
   absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
     return status;
   }
 
-  if (opencv_config_.fourcc().size() < 4) {
-    return absl::Status(absl::StatusCode::kInvalidArgument, "FourCC is not specified");
-  }
   bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
                              cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
                                                      opencv_config_.fourcc()[1],
@@ -167,8 +170,10 @@ absl::Status CvCamera::OpenCameraLocked() {
       break;
     } else {
       if (cap_.open(camera_id_, cv::CAP_V4L2)) {
-        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 1)) {
-          LOG(ERROR) << "Could not set CAP_PROP_BUFFERSIZE to 1 for camera " << id_;
+        // Keep the next frame queued while the previous buffer is dequeued.
+        // A single buffer can starve continuous capture and drop frame rate.
+        if (!cap_.set(cv::CAP_PROP_BUFFERSIZE, 2)) {
+          LOG(ERROR) << "Could not set camera capture buffer count to 2 for " << id_;
         }
       }
     }
