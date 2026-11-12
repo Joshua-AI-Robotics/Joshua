@@ -49,9 +49,9 @@ message StepDirConfig {
   // mismatched firmware/channel-count/drive-type, but cannot verify a pin
   // number is physically wired the way config claims — that remains on
   // whoever wires the board.
-  uint32 step_pin = 4;
-  uint32 dir_pin = 5;
-  uint32 enable_pin = 6;
+  optional uint32 step_pin = 4;
+  optional uint32 dir_pin = 5;
+  optional uint32 enable_pin = 6;
   // STEP pulse HIGH width in microseconds. Host-configurable for the same
   // reason pins are: it's a fact about the specific STEP/DIR driver chip
   // wired up (an opto-isolated input may need a wider pulse than a direct
@@ -87,8 +87,21 @@ message HostGpioConfig {
 message PinRef {
   oneof address {
     uint32 header_pin = 1;
-    string signal = 2;  // e.g. "J8.GPIO17"; never an unqualified BCM number.
+    uint32 firmware_pin = 4;  // MCU native pin ID; requires a pinned MCU profile.
+    string signal = 2;        // e.g. "J8.GPIO17"; never an unqualified BCM number.
   }
+  string connector = 3;  // Required when physical positions are ambiguous.
+}
+
+message PinProfileRef {
+  string id = 1;
+  uint32 version = 2;
+}
+
+message StepDirWiring {
+  PinRef step = 1;
+  PinRef direction = 2;
+  PinRef enable = 3;
 }
 
 enum DigitalDirection {
@@ -136,6 +149,7 @@ message Channel {
     PwmConfig pwm = 12;
     HostGpioConfig host_gpio = 13;  // HOST_GPIO boards only.
   }
+  StepDirWiring step_dir_wiring = 14;  // Alternative to legacy numeric fields.
 }
 
 // Which firmware the host expects on the board; checked against the
@@ -188,6 +202,7 @@ message Board {
   // Host coordinator budgets for FRAME_STREAM. Software defaults are not
   // hardware timing qualification. All handles of an MCU share this policy.
   JoshuaWireHostPolicy joshua_wire_host_policy = 7;
+  PinProfileRef pin_profile = 8;  // MCU connector/native pin resolution.
   oneof board_config {
     Am243Config am243_config = 10;
     HostGpioBoardConfig host_gpio_config = 11;

@@ -8,21 +8,88 @@
 
 namespace robot::board {
 std::string PinResource::identity() const {
+  if (info.firmware_pin) return absl::StrCat(profile_id, ":mcu:", *info.firmware_pin);
   return absl::StrCat(info.chip_label, ":", info.line_name);
 }
 
-absl::StatusOr<PinResource> ResolvePin(const PinProfile& profile, const DigitalPinConfig& config) {
+absl::StatusOr<const PinInfo*> ResolvePinReference(const PinProfile& profile, const PinRef& ref) {
+  if (ref.address_case() == PinRef::kHeaderPin)
+    return profile.FindPin(ref.header_pin(), ref.connector());
   const PinInfo* found = nullptr;
   for (const auto& pin : profile.pins) {
-    const auto& ref = config.pin();
-    if ((ref.address_case() == PinRef::kHeaderPin && ref.header_pin() == pin.header_pin) ||
-        (ref.address_case() == PinRef::kSignal &&
-         ref.signal() == profile.connector + "." + pin.signal)) {
-      if (found) return absl::InvalidArgumentError("Ambiguous GPIO signal alias");
+    const auto& header = pin.connector.empty() ? profile.connector : pin.connector;
+    if ((ref.address_case() == PinRef::kSignal && ref.signal() == header + "." + pin.signal) ||
+        (ref.address_case() == PinRef::kFirmwarePin && pin.firmware_pin &&
+         *pin.firmware_pin == ref.firmware_pin())) {
+      if (found) return absl::InvalidArgumentError("Ambiguous pin reference");
       found = &pin;
     }
   }
-  if (!found) return absl::InvalidArgumentError("Unknown GPIO pin reference");
+  if (!found) return absl::InvalidArgumentError("Unknown pin reference");
+  if (!ref.connector().empty() &&
+      ref.connector() != (found->connector.empty() ? profile.connector : found->connector))
+    return absl::InvalidArgumentError("Pin reference connector mismatch");
+  return found;
+}
+
+absl::StatusOr<Board> ResolveMcuBoardPins(const Board& input) {
+  Board config = input;
+  if (!config.has_pin_profile()) {
+    for (const auto& channel : config.channels())
+      if (channel.has_step_dir_wiring())
+        return absl::InvalidArgumentError("Named MCU wiring requires pin_profile");
+    return config;
+  }
+  ABSL_ASSIGN_OR_RETURN(const auto* profile,
+                        FindPinProfile(config.pin_profile().id(), config.pin_profile().version()));
+  const bool compatible =
+      (config.board_type() == TEENSY41 && profile->id == "pjrc/teensy41") ||
+      (config.board_type() == ESP32 && profile->id == "espressif/esp32-devkitc-v4-wroom32");
+  if (!compatible || profile->backend != PinBackend::kMcu)
+    return absl::InvalidArgumentError("MCU pin profile does not match board type");
+  std::set<uint32_t> claims;
+  for (auto& channel : *config.mutable_channels()) {
+    if (channel.drive() != STEP_DIR || !channel.has_step_dir())
+      return absl::InvalidArgumentError("MCU profile wiring currently supports STEP_DIR");
+    auto* setup = channel.mutable_step_dir();
+    uint32_t ids[3];
+    if (channel.has_step_dir_wiring()) {
+      if (setup->has_step_pin() || setup->has_dir_pin() || setup->has_enable_pin())
+        return absl::InvalidArgumentError("Do not mix named wiring and legacy MCU numeric pins");
+      const auto& wiring = channel.step_dir_wiring();
+      const PinRef* refs[] = {&wiring.step(), &wiring.direction(), &wiring.enable()};
+      for (int i = 0; i < 3; ++i) {
+        ABSL_ASSIGN_OR_RETURN(const auto* pin, ResolvePinReference(*profile, *refs[i]));
+        if (pin->kind != PinKind::kGpio || !pin->Supports(PinFunction::kDigitalOutput) ||
+            !pin->firmware_pin)
+          return absl::InvalidArgumentError("STEP_DIR requires an available MCU output pin");
+        ids[i] = *pin->firmware_pin;
+      }
+      channel.clear_step_dir_wiring();
+    } else {
+      ids[0] = setup->step_pin();
+      ids[1] = setup->dir_pin();
+      ids[2] = setup->enable_pin();
+      for (const auto id : ids) {
+        PinRef ref;
+        ref.set_firmware_pin(id);
+        ABSL_ASSIGN_OR_RETURN(const auto* pin, ResolvePinReference(*profile, ref));
+        if (pin->kind != PinKind::kGpio || !pin->Supports(PinFunction::kDigitalOutput))
+          return absl::InvalidArgumentError("Configured MCU pin is unavailable for output");
+      }
+    }
+    for (const auto id : ids)
+      if (!claims.insert(id).second)
+        return absl::InvalidArgumentError("Duplicate MCU pin claim across channels/signals");
+    setup->set_step_pin(ids[0]);
+    setup->set_dir_pin(ids[1]);
+    setup->set_enable_pin(ids[2]);
+  }
+  return config;
+}
+
+absl::StatusOr<PinResource> ResolvePin(const PinProfile& profile, const DigitalPinConfig& config) {
+  ABSL_ASSIGN_OR_RETURN(const auto* found, ResolvePinReference(profile, config.pin()));
   if (found->kind != PinKind::kGpio)
     return absl::InvalidArgumentError("Power, ground, reserved or peripheral-only pin is not GPIO");
   if (config.name().empty() || config.purpose().empty())
@@ -39,7 +106,11 @@ absl::StatusOr<PinResource> ResolvePin(const PinProfile& profile, const DigitalP
   } else {
     return absl::InvalidArgumentError("Unsupported digital direction");
   }
-  return PinResource{profile.id, profile.version, profile.connector, *found, config};
+  return PinResource{profile.id,
+                     profile.version,
+                     found->connector.empty() ? profile.connector : found->connector,
+                     *found,
+                     config};
 }
 
 absl::StatusOr<std::vector<PinResource>> ResolveHostGpioPins(const Board& config) {
@@ -51,6 +122,8 @@ absl::StatusOr<std::vector<PinResource>> ResolveHostGpioPins(const Board& config
         "HOST_GPIO digital pins do not accept comm, firmware, protocol or motor channels");
   const auto& c = config.host_gpio_config();
   ABSL_ASSIGN_OR_RETURN(const auto* profile, FindPinProfile(c.profile_id(), c.profile_version()));
+  if (profile->backend != PinBackend::kLinux)
+    return absl::InvalidArgumentError("HOST_GPIO requires a Linux pin source");
   if (c.pins().empty()) return absl::InvalidArgumentError("HOST_GPIO has no pins");
   std::set<std::string> names, claims;
   std::vector<PinResource> pins;

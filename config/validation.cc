@@ -383,6 +383,7 @@ absl::Status ValidateConfig(const config::Config& config) {
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
   std::set<std::string> gpio_claims;
   for (const auto& board : robot.boards()) {
+    ABSL_RETURN_IF_ERROR(robot::board::ResolveMcuBoardPins(board).status());
     if (board.board_type() == robot::board::HOST_GPIO) {
       ABSL_ASSIGN_OR_RETURN(auto pins, robot::board::ResolveHostGpioPins(board));
       for (const auto& pin : pins)

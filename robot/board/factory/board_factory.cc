@@ -12,6 +12,7 @@
 #include "robot/board/host_gpio/host_gpio_board.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
+#include "robot/board/pin/pin_resource.h"
 #include "robot/board/teensy/teensy_board.h"
 #include "robot/comm/serial/serial_device_identity.h"
 #include "utils/joshua_runtime.h"
@@ -95,7 +96,8 @@ const std::vector<BoardImplementation>& BoardFactory::Implementations() {
 }
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
-    const robot::board::Board& config) {
+    const robot::board::Board& input) {
+  ABSL_ASSIGN_OR_RETURN(auto config, ResolveMcuBoardPins(input));
   if (config.name().empty()) {
     return absl::InvalidArgumentError("Board config has no name; boards are cached by name.");
   }
@@ -110,6 +112,14 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> BoardFactory::GetOrCreate(
     serial_identity = device.key;
     resolved_config.mutable_comm()->mutable_serial_config()->set_port(device.path);
     key_config.mutable_comm()->mutable_serial_config()->set_port(device.key);
+  }
+  // Preserve legacy cache equivalence for omitted and explicit native pin zero.
+  for (auto& c : *key_config.mutable_channels()) {
+    if (!c.has_step_dir()) continue;
+    auto* pins = c.mutable_step_dir();
+    if (pins->step_pin() == 0) pins->clear_step_pin();
+    if (pins->dir_pin() == 0) pins->clear_dir_pin();
+    if (pins->enable_pin() == 0) pins->clear_enable_pin();
   }
   const auto config_key = key_config.SerializeAsString();
   auto it = g_boards.find(config.name());

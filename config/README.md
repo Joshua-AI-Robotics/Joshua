@@ -409,3 +409,27 @@ These board-only examples do not launch a digital ROS node; device drivers use
 `BoardFactory::GetOrCreate` and `OpenDigitalPin`. Creating the board acquires real
 GPIO lines and applies initial output values. Host boards omit `comm`, firmware,
 protocol and motor channels. Existing MCU numeric pin configs remain unchanged.
+
+## MCU pin-source wiring
+
+Teensy 4.1 and ESP32-DevKitC V4/WROOM-32 accept an optional board-level
+`pin_profile { id: "pjrc/teensy41" version: 1 }` or
+`espressif/esp32-devkitc-v4-wroom32`. Each STEP/DIR channel can use:
+
+```text
+step_dir { max_pulse_rate_hz: 1000 }
+step_dir_wiring {
+  step { signal: "LEFT.GPIO2" }
+  direction { firmware_pin: 3 }
+  enable { connector: "LEFT" header_pin: 6 }
+}
+```
+
+Teensy `LEFT`/`RIGHT` are component-side outer headers with USB at the top;
+positions 1..24 count from the USB end. ESP32 uses the documented J2/J3
+positions 1..19. Explicit native zero is valid. Resolution validates output
+capability, reserved pins, and ownership, then sends the existing numeric
+JoshuaWire configuration; firmware framing is unchanged. Mixing named wiring
+and legacy numeric pin fields is rejected. Existing numeric-only presets remain
+valid without a profile. These profiles claim only the listed connectors, not
+underside, USB-host, Ethernet or internal pads.

@@ -27,8 +27,9 @@ Board Config() {
   return b;
 }
 TEST(PinResourceTest, CatalogCoversHeadersAndUniqueDigitalIdentities) {
-  ASSERT_EQ(PinProfiles().size(), 2);
+  ASSERT_EQ(PinProfiles().size(), 4);
   for (const auto& profile : PinProfiles()) {
+    if (profile.backend != PinBackend::kLinux) continue;
     ASSERT_EQ(profile.pins.size(), 40);
     std::set<uint32_t> positions;
     std::set<std::string> names;

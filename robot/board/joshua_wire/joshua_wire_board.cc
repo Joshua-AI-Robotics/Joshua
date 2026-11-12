@@ -12,6 +12,7 @@
 #include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/joshua_wire/joshua_wire_coordinator.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
+#include "robot/board/pin/pin_resource.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/proto/comm.pb.h"
@@ -528,7 +529,8 @@ absl::Status JoshuaWireBoard::IdentifyAndValidate(JoshuaWireCommandClient& comma
   return absl::OkStatus();
 }
 
-absl::Status JoshuaWireBoard::Init(const robot::board::Board& config) {
+absl::Status JoshuaWireBoard::Init(const robot::board::Board& input) {
+  ABSL_ASSIGN_OR_RETURN(auto config, ResolveMcuBoardPins(input));
   if (initialized_) {
     return absl::FailedPreconditionError(
         absl::StrCat("Board '", config.name(), "' is already initialized."));

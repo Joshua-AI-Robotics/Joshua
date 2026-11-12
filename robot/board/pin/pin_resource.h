@@ -20,6 +20,10 @@ struct PinResource {
   std::string identity() const;
 };
 
+absl::StatusOr<const PinInfo*> ResolvePinReference(const PinProfile& profile, const PinRef& ref);
+// Idempotent, hardware-free normalization to the existing firmware numeric IDs.
+absl::StatusOr<Board> ResolveMcuBoardPins(const Board& config);
+
 absl::StatusOr<PinResource> ResolvePin(const PinProfile& profile, const DigitalPinConfig& config);
 // Pure validation/resolution: does not inspect /dev or acquire any resource.
 absl::StatusOr<std::vector<PinResource>> ResolveHostGpioPins(const Board& config);

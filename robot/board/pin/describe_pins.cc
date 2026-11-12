@@ -29,10 +29,10 @@ int main(int argc, char** argv) {
       functions += PinFunctionName(function);
     }
     const auto pwm = pin.pwm ? pin.pwm->controller + ":" + std::to_string(pin.pwm->channel) : "";
-    std::cout << "| " << p.connector << '.' << pin.header_pin << " | " << pin.signal << " | "
-              << functions << " | " << pin.chip_label << ':' << pin.line_name << " | " << pwm
-              << " | " << pin.voltage_mv << " | " << pin.alternatives << " | " << pin.restrictions
-              << " |\n";
+    std::cout << "| " << (pin.connector.empty() ? p.connector : pin.connector) << '.'
+              << pin.header_pin << " | " << pin.signal << " | " << functions << " | "
+              << pin.chip_label << ':' << pin.line_name << " | " << pwm << " | " << pin.voltage_mv
+              << " | " << pin.alternatives << " | " << pin.restrictions << " |\n";
   }
   std::cout << "\nSources:\n\n";
   for (const auto& source : p.sources) std::cout << "- " << source << '\n';

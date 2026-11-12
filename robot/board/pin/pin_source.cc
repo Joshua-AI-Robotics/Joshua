@@ -33,22 +33,31 @@ bool PinInfo::Supports(PinFunction function) const {
   return std::find(functions.begin(), functions.end(), function) != functions.end();
 }
 
-absl::StatusOr<const PinInfo*> PinProfile::FindPin(uint32_t header_pin) const {
-  for (const auto& pin : pins)
-    if (pin.header_pin == header_pin) return &pin;
-  return absl::NotFoundError(absl::StrCat(id, " ", connector, " has no physical pin ", header_pin));
+absl::StatusOr<const PinInfo*> PinProfile::FindPin(uint32_t number,
+                                                   const std::string& selected) const {
+  const PinInfo* found = nullptr;
+  for (const auto& pin : pins) {
+    const auto& header = pin.connector.empty() ? connector : pin.connector;
+    if (pin.header_pin != number || (!selected.empty() && selected != header)) continue;
+    if (found)
+      return absl::InvalidArgumentError("Physical pin number is ambiguous; select its connector");
+    found = &pin;
+  }
+  if (found) return found;
+  return absl::NotFoundError(absl::StrCat(id, " has no physical pin ", selected, ":", number));
 }
 
-absl::StatusOr<const PinInfo*> PinProfile::RequirePin(uint32_t header_pin,
-                                                      PinFunction function) const {
-  auto pin = FindPin(header_pin);
+absl::StatusOr<const PinInfo*> PinProfile::RequirePin(uint32_t number,
+                                                      PinFunction function,
+                                                      const std::string& connector) const {
+  auto pin = FindPin(number, connector);
   if (!pin.ok()) return pin.status();
   if ((*pin)->kind == PinKind::kReserved || !(*pin)->Supports(function))
     return absl::FailedPreconditionError(absl::StrCat(id,
-                                                      " ",
-                                                      connector,
                                                       " pin ",
-                                                      header_pin,
+                                                      connector,
+                                                      ":",
+                                                      number,
                                                       " is reserved or has no documented ",
                                                       PinFunctionName(function),
                                                       " function"));
@@ -57,7 +66,9 @@ absl::StatusOr<const PinInfo*> PinProfile::RequirePin(uint32_t header_pin,
 
 const std::vector<PinProfile>& PinProfiles() {
   static const std::vector<PinProfile> catalog = {profiles::RaspberryPi5(),
-                                                  profiles::JetsonOrinNanoP3768()};
+                                                  profiles::JetsonOrinNanoP3768(),
+                                                  profiles::Teensy41(),
+                                                  profiles::Esp32DevKitC()};
   return catalog;
 }
 

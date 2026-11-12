@@ -8,6 +8,7 @@ namespace robot::board {
 namespace {
 TEST(PinSourceTest, PhysicalPinLookupIncludesPowerGroundAndPeripheralPins) {
   for (const auto& profile : PinProfiles()) {
+    if (profile.backend != PinBackend::kLinux) continue;
     ASSERT_EQ(profile.pins.size(), 40);
     for (uint32_t n = 1; n <= 40; ++n) {
       auto pin = profile.FindPin(n);

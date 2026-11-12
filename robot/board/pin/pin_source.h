@@ -9,6 +9,8 @@
 
 namespace robot::board {
 
+enum class PinBackend { kLinux, kMcu };
+
 enum class PinKind { kGpio, kPower, kGround, kPeripheral, kReserved };
 
 // Documented hardware functions, independent of the configured robot purpose
@@ -38,6 +40,8 @@ struct PinInfo {
   std::optional<PwmPinInfo> pwm;
   std::string alternatives;
   std::string restrictions;
+  std::string connector;                 // Override for boards with several headers.
+  std::optional<uint32_t> firmware_pin;  // Zero is valid; absent on non-GPIO positions.
   bool Supports(PinFunction function) const;
 };
 
@@ -49,11 +53,15 @@ struct PinProfile {
   std::vector<std::string> compatible;  // Exact device-tree compatible tokens.
   std::vector<PinInfo> pins;            // Every physical connector position.
   std::vector<std::string> sources;
+  PinBackend backend = PinBackend::kLinux;
 
   // Supply/ground/reserved positions remain inspectable. RequirePin additionally
   // checks the requested function and rejects reserved positions for drivers.
-  absl::StatusOr<const PinInfo*> FindPin(uint32_t header_pin) const;
-  absl::StatusOr<const PinInfo*> RequirePin(uint32_t header_pin, PinFunction function) const;
+  absl::StatusOr<const PinInfo*> FindPin(uint32_t header_pin,
+                                         const std::string& connector = {}) const;
+  absl::StatusOr<const PinInfo*> RequirePin(uint32_t header_pin,
+                                            PinFunction function,
+                                            const std::string& connector = {}) const;
 };
 
 const std::vector<PinProfile>& PinProfiles();
