@@ -375,6 +375,22 @@ robot {
                         )
                     )
                 )
+                if label.startswith("//firmware/"):
+                    self.assertIn(
+                        label,
+                        {
+                            "//firmware/common:joshua_wire_peripheral",
+                            "//firmware/common:joshua_wire_peripheral.c",
+                            "//firmware/common:joshua_wire_peripheral.h",
+                            "//firmware/common:joshua_wire",
+                            "//firmware/common:joshua_wire.c",
+                            "//firmware/common:joshua_wire.h",
+                            "//firmware/common:joshua_wire_commands",
+                            "//firmware/common:joshua_wire_commands.c",
+                            "//firmware/common:joshua_wire_commands.h",
+                        },
+                        "validator depends on firmware execution instead of pure codecs",
+                    )
                 if label.startswith("//simulation:"):
                     self.fail("validator depends on simulation runtime")
                 if label.startswith("//robot/board/factory:"):
