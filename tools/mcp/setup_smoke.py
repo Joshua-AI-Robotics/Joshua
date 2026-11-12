@@ -14,6 +14,8 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 EXPECTED_TOOLS = {
     "list_supported_components",
+    "list_supported_hardware",
+    "list_hardware_test_records",
     "validate_config",
     "list_devices",
     "describe_device",
