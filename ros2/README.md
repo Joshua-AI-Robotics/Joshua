@@ -1,6 +1,8 @@
 ROS 2 Type Resolver Utilities  
 ==============================
 
+AI-assisted changes follow the directory's [agent instructions](AGENTS.md).
+
 Process runtime and failure handling
 ------------------------------------
 

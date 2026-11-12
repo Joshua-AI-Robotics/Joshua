@@ -106,6 +106,30 @@ hook for you, so run it yourself before pushing.
 - The protobuf config is the single source of truth for a robot setup; don't
   duplicate configuration into code.
 
+## AI-assisted code generation
+
+- Before generating or refactoring code, read the applicable directory's README
+  and `AGENTS.md`, then inspect the existing implementation, related interfaces,
+  factories, callers, and tests. Reuse the established ownership and data flow.
+- Minimize implementation layers. Extend existing modules before introducing a
+  new abstraction, wrapper, manager, or runtime. A new abstraction must solve a
+  concrete current need that existing components cannot own clearly.
+- Keep code modular and scalable through cohesive responsibilities and existing
+  interfaces. Preserve support for multiple configured devices, sensors,
+  actuators, and topics; do not narrow a general implementation to one instance.
+- Preserve backward compatibility when refactoring: APIs, protobuf configs,
+  topics and payloads, units and timestamps, defaults, startup, and teardown.
+  When the task requires a behavior change, explain its compatibility impact and
+  migration, update affected callers/presets/docs, and verify relevant behavior.
+- Keep PRs focused and file counts small. Prefer editing existing files; add a
+  file only for a clear responsibility required by the change. Avoid boilerplate
+  splits, forwarding-only code files, and speculative frameworks.
+- Keep directory-specific generation rules in that directory's `AGENTS.md`,
+  using local deltas and the bridges required by
+  [the agent-doc contract](docs/AGENTS_RFC.md#7-nested-agentsmd-for-subsystems).
+  Add scoped guidance where needed instead of copying global rules into every
+  directory. ROS-specific rules live in [ros2/AGENTS.md](ros2/AGENTS.md).
+
 ## Read before you edit
 
 Links are not loaded automatically — actually open these files when the work
@@ -119,6 +143,8 @@ touches their area:
   [launcher/node_manager/](launcher/node_manager/README.md),
   [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
+- **ROS 2 nodes and utilities**: follow [ros2/AGENTS.md](ros2/AGENTS.md) for
+  directory-specific code generation and node layout rules.
 - **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of

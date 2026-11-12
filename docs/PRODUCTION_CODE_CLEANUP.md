@@ -1,6 +1,6 @@
 # Production code cleanup for perception acquisition
 
-**Status: proposal; documentation only.**
+**Status: documentation only; perception cleanup remains proposed.**
 
 Keep sensor acquisition and publication understandable within Joshua's existing
 factory, driver, board, and ROS node boundaries. The recommended direction is for
@@ -14,6 +14,15 @@ contract in [MCP_OBSERVATION_DESIGN.md](MCP_OBSERVATION_DESIGN.md). The single-s
 node cleanup in [PR #159](https://github.com/Joshua-AI-Robotics/Joshua/pull/159) is
 related work. These PRs are review context, not implementation prerequisites for
 merging this document.
+
+## AI-assisted code generation rules
+
+The repository-wide operating rules are in
+[AGENTS.md](../AGENTS.md#ai-assisted-code-generation). Directory-specific rules
+start with [ros2/AGENTS.md](../ros2/AGENTS.md), discovered alongside its existing
+README and inherited root guidance. These instruction files define how agents
+review and extend existing code; this proposal records the ownership options
+and implementation plan below.
 
 ## Problem and behavior to retain
 
