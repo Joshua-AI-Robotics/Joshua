@@ -1,5 +1,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
+exports_files(["cv_camera.cc"])
+
 cc_library(
     name = "cv_camera",
     srcs = ["cv_camera.cc"],

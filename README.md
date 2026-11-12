@@ -71,6 +71,9 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 |-------|--------|
 | Getting started | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Implemented components | [docs/SUPPORTED_COMPONENTS.md](docs/SUPPORTED_COMPONENTS.md) |
+| Supported hardware models, drivers, and presets | [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md) |
+| Hardware test records and measured limitations | [docs/TESTED_HARDWARE.md](docs/TESTED_HARDWARE.md) |
 | All docs index | [docs/README.md](docs/README.md) |
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](simulation/README.md) |

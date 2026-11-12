@@ -130,3 +130,10 @@ touches their area:
   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 - **Recurring tasks with a repo skill**: some tasks have a `joshua-*` skill that
   encodes the steps — see [docs/skills/](docs/skills/README.md).
+- **Hardware compatibility or model discovery**: read
+  [implemented components](docs/SUPPORTED_COMPONENTS.md) and
+  [supported hardware](docs/SUPPORTED_HARDWARE.md). MCP's
+  `list_supported_components` describes software implementations;
+  `list_supported_hardware` returns curated model information;
+  `list_hardware_test_records` returns separate [historical runs](docs/TESTED_HARDWARE.md)
+  linked by hardware ID. None establishes current hardware readiness.
