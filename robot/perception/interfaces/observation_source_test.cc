@@ -166,6 +166,45 @@ TEST(ObservationSourceTest, BlockingAcquisitionCannotBlockHealthSnapshotOrStopRe
   source.Stop();  // Teardown cancels the test backend before worker join.
   EXPECT_EQ(source.Get().health.state(), ObservationStatus::STOPPED);
 }
+TEST(ObservationSourceTest, ShutdownRunsTeardownOnceAndReportsCleanupFailure) {
+  struct FailingSensor : BlockingSensor {
+    FailingSensor(std::atomic<int>& calls, std::atomic<bool>& cancelled)
+        : calls(calls), cancelled(cancelled) {}
+    absl::Status Teardown() override {
+      ++calls;
+      cancelled = joshua::CancellationRequested();
+      BlockingSensor::Teardown().IgnoreError();
+      return absl::UnavailableError("sensor teardown failed");
+    }
+    std::atomic<int>& calls;
+    std::atomic<bool>& cancelled;
+  };
+  std::atomic<int> calls{0};
+  std::atomic<bool> cancelled{true};
+  EXPECT_EQ(joshua::RunGuarded(
+                "observation cleanup test",
+                [&] {
+                  auto sensor = std::make_unique<FailingSensor>(calls, cancelled);
+                  auto entered = sensor->entered.get_future();
+                  auto holder = std::make_shared<std::unique_ptr<FailingSensor>>(std::move(sensor));
+                  ObservationSource source(
+                      [holder]() -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+                        return std::unique_ptr<PerceptionInterface>(std::move(*holder));
+                      },
+                      1ms,
+                      10ms);
+                  EXPECT_EQ(entered.wait_for(1s), std::future_status::ready);
+                  joshua::RequestShutdown();
+                  source.Stop();
+                  source.Stop();
+                  return 0;
+                }),
+            1);
+  EXPECT_EQ(calls, 1);
+  EXPECT_FALSE(cancelled);
+  // Other tests represent independent process lifetimes.
+  EXPECT_EQ(joshua::RunGuarded("reset observation test runtime", [] { return 0; }), 0);
+}
 TEST(ObservationStateTest, MalformedImageCannotEstablishReadiness) {
   auto t = ObservationState::Clock::time_point{};
   ObservationState state(100ms, t);

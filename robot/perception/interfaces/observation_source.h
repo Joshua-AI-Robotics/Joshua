@@ -14,6 +14,7 @@
 #include <tuple>
 
 #include "robot/perception/interfaces/perception_interface.h"
+#include "utils/joshua_runtime.h"
 
 namespace robot::perception {
 
@@ -223,7 +224,11 @@ class ObservationSource {
       source = source_;
     }
     wake_.notify_all();
-    if (source) std::call_once(teardown_, [source] { source->Teardown().IgnoreError(); });
+    if (source)
+      std::call_once(teardown_, [source] {
+        joshua::RunCleanup("observation teardown",
+                           [&] { joshua::ThrowIfError(source->Teardown()); });
+      });
     if (worker_.joinable()) worker_.join();
     state_.Stop();
   }
@@ -257,7 +262,10 @@ class ObservationSource {
         wake_.wait_until(lock, start + period, [this] { return stopping_; });
         if (stopping_) break;
       }
-      std::call_once(teardown_, [source] { source->Teardown().IgnoreError(); });
+      std::call_once(teardown_, [source] {
+        joshua::RunCleanup("observation teardown",
+                           [&] { joshua::ThrowIfError(source->Teardown()); });
+      });
     } catch (const std::exception& e) {
       state_.Record(absl::InternalError(e.what()), ObservationState::Clock::now());
     }
