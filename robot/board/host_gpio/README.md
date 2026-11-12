@@ -9,15 +9,49 @@ lines and applies configured output values; follow the
 
 ## Contents
 
-- [pin_resource.h](../pin/pin_resource.h) — `PinInfo` hardware metadata,
-  `PinProfile` catalog identity and `PinResource` configured pin purpose/policy.
-- [pin_resource.cc](../pin/pin_resource.cc) — compiled, versioned profiles,
-  complete 40-position headers and pure offline resolution/validation.
+- [pin_source.h](../pin/pin_source.h) — reusable hardware definitions and typed
+  `PinFunction` queries, independent of robot configuration and hardware access.
+- Board tables: [Pi 5 J8](../pin/profiles/raspberry_pi5.cc) and
+  [Orin Nano J12](../pin/profiles/jetson_orin_nano.cc), one entry per physical pin.
+- [pin_resource.h](../pin/pin_resource.h) — a configured claim on a source pin,
+  including its robot-specific purpose and digital I/O policy.
+- [pin_resource.cc](../pin/pin_resource.cc) — offline wiring resolution and validation.
 - [digital_pin.h](../interfaces/digital_pin.h) — typed Boolean reads/writes.
 - [host_gpio_board.cc](host_gpio_board.cc) — board ownership, rollback, stop,
   handle invalidation and shutdown.
 - [linux_gpio_backend.cc](linux_gpio_backend.cc) — injectable exclusive Linux
   requests, controller/line discovery and platform checks.
+
+## Pin definitions for drivers
+
+The board tables are the source of physical pin definitions. For example, both
+headers have physical pin 1 = 3.3V, pin 2 = 5V and pin 6 = ground. On Pi 5,
+pin 12 = GPIO18 with digital I/O and RP1 PWM0 channel 2 as alternative functions;
+on Orin Nano P3768, pin 15 = GPIO12 with PWM controller `3280000.pwm`, channel 0.
+A pin can have several functions selected by pinmux.
+
+Drivers can inspect these facts before any robot wiring configuration or device
+acquisition. Include `pin_source.h` and depend on `//robot/board/pin:pin_source`:
+
+```cpp
+auto source = FindPinProfile("raspberrypi/pi5", 1);
+if (!source.ok()) return source.status();
+auto supply = (*source)->FindPin(2);  // kind == kPower, voltage_mv == 5000
+auto pwm = (*source)->RequirePin(12, PinFunction::kPwm);
+if (!pwm.ok()) return pwm.status();
+const auto& mapping = *(*pwm)->pwm;  // controller == "rp1_pwm0", channel == 2
+```
+
+`FindPin` looks up any physical position, including power and ground.
+`RequirePin` validates a driver's required function and rejects reserved pins.
+Functions are typed (`kDigitalInput`, `kDigitalOutput`, `kPwm`, `kI2c`, `kSpi`,
+`kUart`, `kI2s`, `kClock`); drivers do not parse descriptive text. GPIO mappings
+and documented PWM controller/channel identities come from the same source.
+Pi 5 pins 8/12 share PWM0 channel 2, and pins 10/35 share channel 3: a future PWM
+backend must enforce controller/channel ownership as well as physical-pin
+ownership. Hardware capability metadata does not install a PWM or peripheral
+backend, configure pinmux, or establish current availability. Other peripheral
+routes and functions outside the catalog's categories remain undescribed.
 
 ## Configuration and API
 

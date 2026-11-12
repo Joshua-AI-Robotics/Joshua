@@ -50,7 +50,7 @@ for the applicable terms and commercial licensing contact.
 
 ## NVIDIA Jetson.GPIO pin mappings
 
-The Orin Nano connector/line mapping in `robot/board/pin/pin_resource.cc` is
+The Orin Nano connector/line mapping in `robot/board/pin/profiles/jetson_orin_nano.cc` is
 derived from NVIDIA Jetson.GPIO v2.1.12 `gpio_pin_data.py`:
 https://github.com/NVIDIA/jetson-gpio/blob/v2.1.12/lib/python/Jetson/GPIO/gpio_pin_data.py
 

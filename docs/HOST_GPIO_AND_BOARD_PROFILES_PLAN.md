@@ -17,8 +17,10 @@ boards and retained handles preserve teardown semantics.
 
 Implementation choices for this first slice:
 
-- `pin/pin_resource.h` separates immutable `PinInfo`/`PinProfile` facts from a
-  configured `PinResource` containing name, purpose and I/O policy. Profiles are
+- `pin/pin_source.h` provides immutable `PinInfo`/`PinProfile` facts in separate
+  board tables, including typed functions and PWM controller/channel mappings.
+  Drivers use `FindPin`/`RequirePin` without GPIO config or hardware access.
+  `pin/pin_resource.h` adds a configured claim with name, purpose and I/O policy. Profiles are
   compiled data, keeping offline validation and deployed binaries independent
   of runtime file paths. Versions are exact. A future data catalog can preserve
   these types without changing the digital capability.
