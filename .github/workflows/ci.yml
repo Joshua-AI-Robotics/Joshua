@@ -90,12 +90,17 @@ jobs:
           df -h
 
       - name: Build Docker image
-        # Avoid archive.ubuntu.com/security.ubuntu.com DNS and mirror outages.
-        # Package signatures are still checked against Ubuntu's archive keyring.
-        run: >-
-          docker compose build
-          --build-arg UBUNTU_AMD64_MIRROR=http://mirrors.edge.kernel.org/ubuntu/
-          ${{ matrix.service }}
+        # Either archive can be temporarily unavailable. Keep signature checks
+        # enabled and fail the job if neither build succeeds.
+        env:
+          TEST_SERVICE: ${{ matrix.service }}
+        run: |
+          if ! docker compose build \
+            --build-arg UBUNTU_AMD64_MIRROR=http://mirrors.edge.kernel.org/ubuntu/ \
+            "$TEST_SERVICE"; then
+            echo "::warning::Docker build failed with the selected mirror; retrying Ubuntu's default archives."
+            docker compose build --build-arg UBUNTU_AMD64_MIRROR= "$TEST_SERVICE"
+          fi
 
       # Regression check for the non-interactive ROS bug: task commands must
       # see a sourced ROS environment. CPU overlay because runners have no GPU.
