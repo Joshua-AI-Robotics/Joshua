@@ -1,4 +1,4 @@
-"""Seven-tool inspection contract, including config-free discovery."""
+"""Read-only inspection contract, including config-free discovery and test history."""
 
 import asyncio
 import copy
@@ -27,7 +27,7 @@ FIXTURE = RUNFILES / "node_generator/observation_fixture"
 def candidate(name="camera", node_id=2):
     return (
         f'general {{name: "{name}"}} robot {{perceptions {{single_perceptions {{'
-        f'sensor_name: "{name}" sensor_type: IMAGE opencv_config {{}} '
+        f'sensor_name: "{name}" sensor_type: IMAGE opencv_config {{fourcc: "MJPG"}} '
         f"node {{id: {node_id} node_type: CAMERA_PUBLISHER}} }} }} }}"
     )
 
@@ -38,7 +38,7 @@ def oversized_candidate():
         name = str(i) + "x" * 390
         entries.append(
             f'single_perceptions {{sensor_name: "{name}" sensor_type: IMAGE '
-            "opencv_config {} node {id: 2 node_type: CAMERA_PUBLISHER}}"
+            'opencv_config {fourcc: "MJPG"} node {id: 2 node_type: CAMERA_PUBLISHER}}'
         )
     return "robot {perceptions {" + " ".join(entries) + "}}"
 
@@ -228,6 +228,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                         {t.name for t in tools},
                         {
                             "list_supported_components",
+                            "list_supported_hardware",
+                            "list_hardware_test_records",
                             "validate_config",
                             "list_devices",
                             "describe_device",
@@ -238,6 +240,64 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     )
                     self.assertTrue(all(t.annotations.readOnlyHint for t in tools))
                     self.assertTrue(all(t.outputSchema for t in tools))
+                    result = await client.call_tool(
+                        "list_supported_hardware",
+                        {"kind": "camera", "query": "XWF-1080P"},
+                    )
+                    self.assertFalse(result.isError, result)
+                    models = result.structuredContent
+                    self.assertEqual(models["scope"], "hardware_catalog")
+                    model = models["data"]["hardware"][0]
+                    self.assertEqual(model["model"], "XWF-1080P")
+                    self.assertNotIn("verification", model)
+                    self.assertNotIn("results", model)
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": model["id"]}
+                    )
+                    self.assertFalse(result.isError, result)
+                    history = result.structuredContent
+                    self.assertEqual(history["scope"], "hardware_test_history")
+                    run = history["data"]["records"][0]
+                    self.assertEqual(run["hardware_id"], model["id"])
+                    self.assertEqual(run["results"]["measured_fps"], 8.46)
+                    self.assertNotIn("model", run)
+                    self.assertNotIn("driver", run)
+                    self.assertIn("historical", history["limitations"][0])
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": "unknown-model"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(result.structuredContent["data"]["records"], [])
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": None}
+                    )
+                    self.assertTrue(result.isError)
+                    for query in ("Sunplus", "spca2281", "xwf-1080p"):
+                        result = await client.call_tool(
+                            "list_supported_hardware", {"query": query}
+                        )
+                        self.assertFalse(result.isError, result)
+                        self.assertEqual(
+                            len(result.structuredContent["data"]["hardware"]), 1
+                        )
+                    result = await client.call_tool(
+                        "list_supported_hardware", {"usb_id": "0000:0000"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(result.structuredContent["data"]["hardware"], [])
+                    for filters in (
+                        {"config_path": "../outside"},
+                        {"query": None},
+                        {"usb_id": []},
+                        {"usb_id": "invalid"},
+                    ):
+                        result = await client.call_tool(
+                            "list_supported_hardware", filters
+                        )
+                        self.assertTrue(result.isError, result)
+                        self.assertEqual(
+                            result.structuredContent["status_code"], "INVALID_ARGUMENT"
+                        )
                     result = await client.call_tool("list_supported_components", {})
                     self.assertFalse(result.isError, result)
                     catalog = result.structuredContent["data"]
@@ -321,7 +381,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                 name = "duplicate" if i in (0, 130) else f"camera_{i}"
                 entries.append(
                     f'single_perceptions {{sensor_name: "{name}" sensor_type: IMAGE '
-                    "opencv_config {} node {id: 2 node_type: CAMERA_PUBLISHER}}"
+                    'opencv_config {fourcc: "MJPG"} '
+                    "node {id: 2 node_type: CAMERA_PUBLISHER}}"
                 )
             Path(directory, "large.pbtxt").write_text(
                 "robot {perceptions {" + " ".join(entries) + "}}"

@@ -272,6 +272,36 @@ even when it has several subscriptions.
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
 
+## Camera publishing
+
+`CAMERA_PUBLISHER` keeps configured image topics registered when a camera is
+temporarily unavailable at startup. It retries initialization with a one-second
+backoff measured by `joshua::RobotTime()` and reads frames only after
+initialization succeeds. Clock corrections can shorten or extend the retry wait.
+A capture failure closes the failed session and uses the same initialization
+path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
+Initialization failures reported as invalid arguments fail startup. The shared
+config validator and OpenCV driver both check the required four-character pixel
+format before opening a device.
+
+Each topic uses its own robot-time publication timer. Image headers preserve the
+driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
+is a host capture-completion estimate, not a sensor exposure timestamp. Expected
+device errors use the recovery path; unexpected exceptions reach the shared
+runtime guard.
+
+The OpenCV backend uses two capture buffers so the next frame can remain queued
+while the previous one is read. The
+[Sunplus 1080p preset](../config/config_preset/example/sunplus_spca2281_1080p.pbtxt)
+requests 1920x1080 MJPG at 30 FPS. Use an optimized Bazel build (`-c opt`) when
+qualifying frame rate and measure received frames; the configured rate alone
+does not establish delivered performance.
+
+`//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
+delivery and timestamps, independent camera timers, exception propagation, and
+reinitialization after read failures using fake camera sources and a virtual
+retry clock. It opens no physical devices.
+
 ## C++ node logging
 
 C++ nodes and utilities use `JOSHUA_LOG(INFO) << message` (also DEBUG, WARNING,

@@ -98,6 +98,11 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": opencv_config requires IMAGE sensor_type."));
       }
+      if (sensor.opencv_config().fourcc().size() != 4) {
+        return absl::InvalidArgumentError(
+            "Camera pixel format must contain exactly four characters (for example, MJPG or "
+            "YUYV); set opencv_config.fourcc");
+      }
       return absl::OkStatus();
     case SinglePerception::kLds01Config:
       if (sensor.sensor_type() != SensorType::RANGE_SCAN) {
