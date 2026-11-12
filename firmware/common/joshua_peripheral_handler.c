@@ -66,8 +66,8 @@ static jw_status_t claim(jw_peripheral_slot_t* s, const jw_peripheral_config_t* 
                                                                                       : 1;
   // A bus's native pin tuple is part of its compatibility key. Shared SPI
   // endpoints may choose different transaction speeds/modes, never new routes.
-  uint32_t key = ((uint32_t)c->pins[0] << 24) | ((uint32_t)c->pins[1] << 16) |
-                 ((uint32_t)c->pins[2] << 8) | c->bus;
+  const uint32_t key = ((uint32_t)c->pins[0] << 24) | ((uint32_t)c->pins[1] << 16) |
+                       ((uint32_t)c->pins[2] << 8) | c->bus;
 
   for (unsigned i = 0; i < np; ++i) {
     const int shared = (c->kind == JW_PERIPHERAL_SPI && i < 3) || c->kind == JW_PERIPHERAL_I2C;
@@ -89,7 +89,7 @@ static jw_status_t claim(jw_peripheral_slot_t* s, const jw_peripheral_config_t* 
                                      JW_RESOURCE_TIMER,
                                      (uint16_t)(0x100u + c->bus),
                                      1,
-                                     (c->value0 << 3) | c->timeout_ms};
+                                     (c->value0 << 6) | c->timeout_ms};
       q[n++] = (jw_resource_claim_t){
           owner, JW_RESOURCE_BUS, (uint16_t)(0x4000u + c->bus * 128u + c->value1), 0, 0};
     }
