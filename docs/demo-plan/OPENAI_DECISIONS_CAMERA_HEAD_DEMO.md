@@ -151,5 +151,5 @@ Record prompt/preprocessing revisions, model/SDK identity, request correlation,
 responses/rejections, usage/cost, and applied commands in the shared evidence
 record. D gates establish this API path; C gates retain the trained-policy claims.
 The general-audience read-only inspection walkthrough remains a separate activity.
-Follow [AGENTS.md](../AGENTS.md) for execution authorization. No API adapter or
+Follow [AGENTS.md](../../AGENTS.md) for execution authorization. No API adapter or
 hardware result is established by this plan.

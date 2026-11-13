@@ -8,11 +8,12 @@ evidence workflow and the outstanding physical qualification gates.
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Local MCP setup, AI IDE connection and recovery | [MCP_SETUP.md](MCP_SETUP.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
-| Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |
-| OpenAI Decisions adapter, API failure handling, and demo gates | [../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
+| Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [demo-plan/ROBOT_NERVOUS_SYSTEM_DEMO.md](demo-plan/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
+| Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [demo-plan/CAMERA_HEAD_DEMO.md](demo-plan/CAMERA_HEAD_DEMO.md) |
+| OpenAI Decisions adapter, API failure handling, and demo gates | [demo-plan/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](demo-plan/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
 | Shared C++ robot clock, configuration, and integration checklist | [ROBOT_TIME.md](ROBOT_TIME.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
+| Proposed policy interface: Decisions API head first, then local models and simulator bridges | [POLICY_INTERFACE_AND_BRIDGES_PLAN.md](POLICY_INTERFACE_AND_BRIDGES_PLAN.md) |
 | AI integration vision, requirements, user scenarios, checkpoints, feedback orchestration, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
 | Typed observation base contract, metadata and proposed adapters | [MCP_OBSERVATION_DESIGN.md](MCP_OBSERVATION_DESIGN.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |

@@ -70,6 +70,22 @@ process. See the [node manager guide](../launcher/node_manager/README.md) for th
 Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
+## Policy execution
+
+The inference host owns ROS communication and scheduling; model plug-ins own
+preprocessing, inference, and action decoding. The protobuf preset selects the
+plug-in and its wiring. MuJoCo and Isaac Sim provide separate simulation backends.
+
+The proposed [policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
+extends this boundary with named observations and commands shared across
+simulation and hardware. Backend bridges handle state and command mapping;
+model logic stays in plug-ins and training remains external. The first priority
+is the OpenAI Decisions API camera-head adapter and its minimum asynchronous
+observation/command contract, using the qualified shared head runtime from
+[milestone #153](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+Broader local-model and simulator integration follows later. The adapter and
+shared execution bridges are planned, not yet implemented on this branch.
+
 ## Hardware topology and latency budgets
 
 For high-bandwidth sensing or tight actuator deadlines, prefer separate actuator
