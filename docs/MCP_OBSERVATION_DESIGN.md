@@ -2,11 +2,19 @@
 
 **Status: typed contract and one configured camera image adapter implemented.**
 [ImageSource](../tools/mcp/image_source.py) composes a persistent passive
-[C++ ROS image helper](../ros2/image_observer_backend.cc). The opt-in
+[C++ ROS image helper](../tools/mcp/image_observer_backend.cc). The opt-in
 `get_camera_image(camera_id)` returns standard MCP JPEG content for fresh
 samples and metadata only for stale samples. The existing nine tool contracts,
 validation-only startup and snapshot schema stay compatible. See the
 [camera setup and limits](../tools/mcp/README.md#optional-configured-camera-image).
+
+## Ownership
+
+The configured runtime owns devices and publishing. MCP tooling owns its ROS
+subscription, sample cache and bounded presentation. New source types extend
+that tooling through native ROS interfaces; they add no launcher arguments,
+driver hooks or observation manifests. The protobuf config remains the source
+of expected wiring, and discovery supplies observed endpoint facts.
 
 ## Goal and placement
 
@@ -26,7 +34,8 @@ flowchart LR
     O --> M[Typed MCP tools]
 ```
 
-The launcher owns processes; backends own ROS access and validation. Reader close
+The existing launcher and ROS nodes own execution. MCP tooling owns native ROS
+subscriptions, validation and bounded presentation. Reader close
 releases query resources without stopping a robot or camera. Other adapters can
 compose behind [RuntimeObserver](../tools/mcp/interfaces.py); the image adapter
 does not migrate that interface or the existing snapshot reader. SetupInspector
@@ -167,8 +176,8 @@ synchronized groups need separate contracts.
 
 Choose on-demand queries or bounded persistent subscriptions using measured
 frequency, latency and resource needs. Avoid a worker per device by default;
-keep heavy media work outside monitoring/control callbacks. The image adapter enforces its one-camera limits; this is not a system
-scalability benchmark.
+keep heavy media work outside monitoring/control callbacks. The image adapter enforces its
+one-camera limits; this is not a system scalability benchmark.
 
 Typed MCP tools can convert numeric results to structured data; the image tool uses
 standard [MCP image content](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#image-content).
@@ -213,41 +222,43 @@ Observation alone never proves physical readiness or task completion;
 
 ## Implemented camera boundary
 
-The launcher derives a bounded camera manifest from protobuf under its existing
-private directory lease. It requires the selected publisher process to have one
-camera and one IMAGE publisher, making the configured source unambiguous.
-The helper never links a hardware factory. It retains one validated RGB8/BGR8
-sample and original receipt time, checks the sole endpoint and actual message
-GID, and JPEG-encodes only on query. Its nonce/counter sample ID is independent
-of the generic optional sequence field.
+The existing protobuf configuration declares an IMAGE sensor and its publishing
+node, which owns capture and ROS publication. MCP's
+[endpoint resolver](../tools/mcp/ros_source_binding.h) uses the existing bounded
+protobuf inspection loader to select the unique sensor and its sole IMAGE topic;
+the [ROS helper](../tools/mcp/image_observer_backend.cc) subscribes to the derived
+IMAGE topic. Parsing and endpoint resolution do not run full config validation;
+the existing `validate_config` tool remains authoritative for that check. The
+resolver accepts any configured IMAGE sensor without selecting a driver or
+restricting other sensors on its node. All observation and JPEG code lives in
+`tools/mcp`. Runtime code has no MCP-specific arguments, callbacks or camera manifest. Another measurement
+adapter can reuse endpoint resolution when needed without extending the launcher.
 
-A binding change includes launcher instance, camera ID, domain, topic,
-node/namespace or fixed ROS type. The old helper is reaped before a new context
-can start; failures poison the reader. Manifest boot/time namespace and heartbeat
-must be comparable and fresh. Binding and graph changes during a query suppress
-the image. Silence ages the original sample to stale without restamping it.
-The source timestamp preserves the ROS header (`source_header_time`); OpenCV
-uses a host capture-completion estimate. Acquisition freshness remains unknown.
+The helper checks the configured node/namespace, fixed ROS Image type, sole
+publisher and each message's GID. Missing, wrong, ambiguous or replaced endpoints
+clear cached data. Query-boundary config rereads and post-encoding binding checks
+suppress an image if its configured mapping changes. Subscription recovery never
+starts or reconfigures the source node. A configured endpoint and matching GID
+are not proof of the runtime's loaded preset: runtime identity is null and loaded
+config/runtime association remains unknown.
 
-The source owns query/cleanup tasks so closing resolves pending readers CLOSED
-without cancelling consumer tasks. Caller cancellation waits for cleanup; one
-five-second read and one two-second cleanup budget bound observation work.
-Late spawn ownership includes a duplicated directory FD and a reaper callback.
-Synchronous physical OpenCV calls are not bounded by these observer deadlines.
-DDS can allocate message storage before application validation, so accepted frame
-bounds are not a strict process memory guarantee.
+The reader retains one validated RGB8/BGR8 sample with original receipt time and
+JPEG-encodes only on query. Its nonce/counter ID distinguishes helper samples;
+ROS Image has no native sequence. Comparable receipt age determines freshness;
+`source_header_time` preserves the ROS header and acquisition freshness stays
+unknown. One five-second read and one two-second cleanup budget bound queries.
+Closing reaps only the passive helper. DDS allocations before callback validation
+are outside accepted-frame bounds.
 
-[Image SDK tests](../tools/mcp/image_source_test.py) use a synthetic C++ ROS
-publisher without hardware factory dependencies and decode the real MCP JPEG.
-[Lifecycle tests](../tools/mcp/image_source_lifecycle_test.py) use real disposable
-processes to test framing, timeout, cancellation, late spawn and poisoned cleanup.
-A test-only encoder callback changes the manifest after real JPEG encoding and
-verifies the production post-encode binding check rejects the old image and
-reaps its helper. A separate test-only manifest-read hook forces atomic heartbeat
-replacement between descriptor checks and verifies that the same helper remains
-usable; manifests with multiple hard links remain rejected. The production
-executable exposes neither test hook as a runtime option.
-A separate [physical C920 test record](hardware_tests/logitech_c920_mcp_2026-11-08.md)
-establishes real camera-to-MCP JPEG capture and publisher restart recovery on its
-pinned candidate. A separately configured AI client's deliberate scene-change
-acceptance and physical USB unplug/replug remain untested by that record.
+The default MCP container remains isolated and CPU-only. Native DDS access to an
+existing ROS graph is a separate explicit, tested networking choice with matching
+`ROS_DOMAIN_ID`; MCP enables no network or hardware privileges automatically.
+See the [camera guide](../tools/mcp/README.md#optional-configured-camera-image)
+for fixed startup options, result bounds and readiness requirements.
+
+[Image SDK tests](../tools/mcp/image_source_test.py) use a synthetic publisher and
+decode real MCP JPEG content; [lifecycle tests](../tools/mcp/image_source_lifecycle_test.py)
+exercise process cleanup. The
+[physical C920 record](hardware_tests/logitech_c920_mcp_2026-11-08.md) applies only
+to its pinned historical revision. New physical camera, USB recovery and client
+scene-change checks remain necessary for this revision.

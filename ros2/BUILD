@@ -97,7 +97,6 @@ py_library(
 )
 
 _CAMERA_PUBLISHER_DEPS = [
-    ":camera_image",
     "//config/proto:config_cc_proto",
     "//robot/perception/factory:perception_factory",
     "//robot/perception/interfaces:perception_interface",
@@ -347,98 +346,5 @@ ros2_cpp_binary(
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
-    ],
-)
-
-cc_test(
-    name = "camera_image_test",
-    srcs = ["camera_image_test.cc"],
-    deps = [
-        ":camera_image",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "camera_image",
-    srcs = ["camera_image.cc"],
-    hdrs = ["camera_image.h"],
-    deps = [
-        "//robot/perception/proto:perception_packet_cc_proto",
-        "@abseil-cpp//absl/status:statusor",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "image_observer",
-    srcs = ["image_observer.cc"],
-    deps = [":image_observer_backend"],
-)
-
-cc_library(
-    name = "image_observer_backend",
-    srcs = ["image_observer_backend.cc"],
-    hdrs = ["image_observer_backend.h"],
-    deps = [
-        "@local_deps//:core",
-        "@local_deps//:imgcodecs",
-        "@local_deps//:imgproc",
-        "@protobuf",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "image_observer_fixture",
-    testonly = True,
-    srcs = ["image_observer_fixture.cc"],
-    deps = [
-        "//node_generator:runtime_observation",
-        "@ros2_deps//:cpp_sensor_msgs",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "image_observer_manifest_race_fixture",
-    testonly = True,
-    srcs = ["image_observer_manifest_race_fixture.cc"],
-    deps = [":image_observer_backend"],
-)
-
-ros2_cpp_binary(
-    name = "image_observer_race_fixture",
-    testonly = True,
-    srcs = ["image_observer_race_fixture.cc"],
-    deps = [
-        ":image_observer_backend",
-        "@local_deps//:imgcodecs",
-        "@protobuf",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "image_observer_codec_failure_fixture",
-    testonly = True,
-    srcs = ["image_observer_race_fixture.cc"],
-    defines = ["JOSHUA_TEST_CODEC_FAILURE"],
-    deps = [
-        ":image_observer_backend",
-        "@local_deps//:imgcodecs",
-        "@protobuf",
-    ],
-)
-
-ros2_cpp_binary(
-    name = "image_observer_codec_oversize_fixture",
-    testonly = True,
-    srcs = ["image_observer_race_fixture.cc"],
-    defines = ["JOSHUA_TEST_CODEC_OVERSIZE"],
-    deps = [
-        ":image_observer_backend",
-        "@local_deps//:imgcodecs",
-        "@protobuf",
     ],
 )

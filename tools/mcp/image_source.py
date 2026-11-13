@@ -8,6 +8,7 @@ import struct
 import time
 from dataclasses import dataclass
 
+from tools.mcp.config_validation_server import safe_reference
 from tools.mcp.observation_source import (
     Availability,
     ObservationLimits,
@@ -95,7 +96,7 @@ class ImageFrame:
 class ImageSource(ObservationSource[ImageFrame]):
     """Owns one helper and query task; never stops the independent runtime."""
 
-    def __init__(self, directory, executable, camera_id):
+    def __init__(self, config_root, executable, camera_id, config_path):
         if (
             type(camera_id) is not str
             or not camera_id.startswith("sensor:")
@@ -104,6 +105,16 @@ class ImageSource(ObservationSource[ImageFrame]):
             or "\x00" in camera_id
         ):
             raise ValueError("camera-id must identify one configured sensor")
+        if not safe_reference(config_path):
+            raise ValueError("ros-config must be a safe relative config path")
+        domain = os.environ.get("ROS_DOMAIN_ID", "0")
+        if not re.fullmatch(r"[0-9]{1,3}", domain) or int(domain) > 232:
+            raise ValueError("ROS_DOMAIN_ID must be an integer from 0 to 232")
+        self._domain = int(domain)
+        self._environment = dict(
+            os.environ, ROS_DOMAIN_ID=domain, RCUTILS_LOGGING_USE_STDOUT="0"
+        )
+        self._config_path = config_path
         self._descriptor = SourceDescriptor(
             camera_id,
             "image",
@@ -112,14 +123,8 @@ class ImageSource(ObservationSource[ImageFrame]):
             limits=ObservationLimits(5.0, 3.0, MAX_JPEG, 1),
         )
         self._fd = os.open(
-            directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+            config_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
         )
-        info = os.fstat(self._fd)
-        if info.st_uid != os.geteuid() or info.st_mode & 0o077:
-            os.close(self._fd)
-            raise ValueError(
-                "Observation directory must be private and owned by this UID"
-            )
         self._executable = os.path.abspath(executable)
         self._closed = self._poisoned = False
         self._process = self._query = self._stderr_task = self._spawn_task = None
@@ -156,7 +161,6 @@ class ImageSource(ObservationSource[ImageFrame]):
     async def _start(self):
         if self._process is not None:
             return
-        env = dict(os.environ, RCUTILS_LOGGING_USE_STDOUT="0")
         # Shield creation so cancellation cannot lose ownership of a spawned PID.
         spawn_fd = os.dup(self._fd)
 
@@ -164,8 +168,10 @@ class ImageSource(ObservationSource[ImageFrame]):
             try:
                 return await asyncio.create_subprocess_exec(
                     self._executable,
-                    "--directory-fd",
+                    "--root-fd",
                     str(spawn_fd),
+                    "--config",
+                    self._config_path,
                     "--camera-id",
                     self.describe().source_id,
                     pass_fds=(spawn_fd,),
@@ -173,7 +179,7 @@ class ImageSource(ObservationSource[ImageFrame]):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     limit=32768,
-                    env=env,
+                    env=self._environment,
                 )
             finally:
                 os.close(spawn_fd)
@@ -359,8 +365,9 @@ class ImageSource(ObservationSource[ImageFrame]):
         receipt = int(meta["receipt_boottime_ns"])
         if receipt > now:
             raise ValueError("Future receipt time")
+        if meta["runtime_instance"] is not None:
+            raise ValueError("ROS observation cannot identify a runtime instance")
         for key in (
-            "runtime_instance",
             "sample_id",
             "publisher_gid",
             "topic",
@@ -375,7 +382,8 @@ class ImageSource(ObservationSource[ImageFrame]):
             raise ValueError("Malformed publisher/sample identity")
         if (
             type(meta["ros_domain"]) is not int
-            or not 0 <= meta["ros_domain"] <= 232
+            or meta["ros_domain"] != self._domain
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", meta["node_name"])
             or meta["node_namespace"] != "/"
             or not re.fullmatch(r"(/[A-Za-z_][A-Za-z_0-9]*)+", meta["topic"])
         ):
@@ -407,7 +415,7 @@ class ImageSource(ObservationSource[ImageFrame]):
             frame,
             ObservationTime(receipt, self._clock),
             ObservationTime(sec * 10**9 + nano),
-            meta["runtime_instance"],
+            runtime_instance=None,
         )
 
     async def _read(self):

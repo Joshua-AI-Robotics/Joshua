@@ -19,11 +19,29 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from PIL import Image
 
 RUNFILES = Path(os.environ["TEST_SRCDIR"]) / os.environ["TEST_WORKSPACE"]
-HELPER = RUNFILES / "ros2/image_observer"
-FIXTURE = RUNFILES / "ros2/image_observer_fixture"
+HELPER = RUNFILES / "tools/mcp/image_observer"
+FIXTURE = RUNFILES / "tools/mcp/image_observer_fixture"
 SERVER = RUNFILES / "tools/mcp/config_validation_server"
 VALIDATOR = RUNFILES / "config/joshua_validate_config"
 INSPECTOR = RUNFILES / "config/joshua_inspect_config"
+CONFIG_PATH = "candidate.pbtxt"
+CANDIDATE = (
+    "\n"
+    "robot {\n"
+    "  perceptions {\n"
+    "    single_perceptions {\n"
+    '      sensor_name: "webcam"\n'
+    "      sensor_type: IMAGE\n"
+    "      node {\n"
+    "        id: 12\n"
+    "        node_type: CAMERA_PUBLISHER\n"
+    '        publishers { ros2_data_type: IMAGE topic: "/_mcp_test/image" '
+    "publish_rate_hz: 30 }\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
+    "}\n"
+)
 
 
 class ImageSourceContractTest(unittest.IsolatedAsyncioTestCase):
@@ -33,12 +51,41 @@ class ImageSourceContractTest(unittest.IsolatedAsyncioTestCase):
             "production ImageSource is missing",
         )
 
+    async def test_image_startup_requires_complete_safe_selection(self):
+        for options in (
+            ["--image-observer", str(HELPER)],
+            ["--camera-id", "sensor:webcam"],
+            ["--ros-config", CONFIG_PATH],
+            ["--image-observer", str(HELPER), "--camera-id", "sensor:webcam"],
+            [
+                "--image-observer",
+                str(HELPER),
+                "--camera-id",
+                "sensor:webcam",
+                "--ros-config",
+                "../candidate.pbtxt",
+            ],
+        ):
+            process = await asyncio.create_subprocess_exec(
+                str(SERVER),
+                "--validator",
+                str(VALIDATOR),
+                *options,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), 5)
+            self.assertEqual(process.returncode, 2, (options, stderr))
+            self.assertEqual(stdout, b"")
+            self.assertIn(b"--ros-config", stderr)
+
     async def test_no_runtime_close_and_descriptor(self):
         from tools.mcp.image_source import ImageSource
         from tools.mcp.observation_source import Availability, UnavailableReason
 
         with tempfile.TemporaryDirectory() as directory:
-            source = ImageSource(directory, str(HELPER), "sensor:webcam")
+            Path(directory, CONFIG_PATH).write_text(CANDIDATE)
+            source = ImageSource(directory, str(HELPER), "sensor:webcam", CONFIG_PATH)
             descriptor = source.describe()
             result = await source.read_latest()
             self.assertEqual(result.availability, Availability.UNAVAILABLE)
@@ -52,81 +99,41 @@ class ImageSourceContractTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ImageParserTest(unittest.IsolatedAsyncioTestCase):
-    async def test_rejects_malformed_manifest_without_touching_devices(self):
+    async def test_config_lookup_rejects_symlinks_without_touching_devices(self):
+        from tools.mcp.image_source import ImageSource
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            tempfile.TemporaryDirectory() as outside,
+        ):
+            target = Path(outside, "candidate.pbtxt")
+            target.write_text(CANDIDATE)
+            Path(directory, "file.pbtxt").symlink_to(target)
+            Path(directory, "nested").symlink_to(outside, target_is_directory=True)
+            for path in ("file.pbtxt", "nested/candidate.pbtxt"):
+                source = ImageSource(directory, str(HELPER), "sensor:webcam", path)
+                try:
+                    result = await source.read_latest()
+                    self.assertEqual(result.availability.value, "unavailable", result)
+                    self.assertIsNone(result.payload)
+                finally:
+                    await source.aclose()
+
+    async def test_malformed_or_unbounded_config_has_no_image(self):
         from tools.mcp.image_source import ImageSource
 
         with tempfile.TemporaryDirectory() as directory:
-            source = ImageSource(directory, str(HELPER), "sensor:webcam")
-            with open("/proc/sys/kernel/random/boot_id", encoding="ascii") as file:
-                boot = file.read().strip()
-            base = dict(
-                schema_version=1,
-                instance_id="synthetic",
-                camera_id="sensor:webcam",
-                topic="/_private/image",
-                node_name="camera_publisher_node_12",
-                node_namespace="/",
-                ros_type="sensor_msgs/msg/Image",
-                ros_domain=210,
-                boot_id=boot,
-                time_namespace=os.readlink("/proc/self/ns/time"),
-                clock_kind="CLOCK_BOOTTIME",
-                captured_boottime_ns=str(time.clock_gettime_ns(time.CLOCK_BOOTTIME)),
-                phase="monitoring",
-                process_present=True,
-            )
-            manifest = Path(directory, "camera-source.json")
-            try:
-                for field, value in [
-                    ("boot_id", "wrong"),
-                    ("time_namespace", "wrong"),
-                    ("captured_boottime_ns", "0"),
-                    ("captured_boottime_ns", str(2**64 - 1)),
-                    ("ros_domain", 233),
-                    ("ros_domain", True),
-                    ("process_present", False),
-                    ("node_namespace", "/other"),
-                    ("topic", "/bad//topic"),
-                    ("ros_type", "sensor_msgs/msg/JointState"),
-                    ("extra", 1),
-                ]:
-                    manifest.write_text(json.dumps(dict(base, **{field: value})))
-                    manifest.chmod(0o600)
-                    result = await source.read_latest()
-                    self.assertEqual(
-                        result.availability.value, "unavailable", (field, result)
-                    )
-                    self.assertIsNone(result.payload)
-                manifest.unlink()
-                os.mkfifo(manifest, 0o600)
-                self.assertEqual(
-                    (await source.read_latest()).availability.value, "unavailable"
+            for content in ("not a protobuf", "x" * (1024 * 1024 + 1)):
+                Path(directory, CONFIG_PATH).write_text(content)
+                source = ImageSource(
+                    directory, str(HELPER), "sensor:webcam", CONFIG_PATH
                 )
-                manifest.unlink()
-                manifest.symlink_to("/dev/null")
-                self.assertEqual(
-                    (await source.read_latest()).availability.value, "unavailable"
-                )
-                manifest.unlink()
-                manifest.write_text(json.dumps(base))
-                manifest.chmod(0o600)
-                alias = Path(directory, "camera-manifest-hardlink")
-                os.link(manifest, alias)
                 try:
                     result = await source.read_latest()
-                    self.assertEqual(result.availability.value, "unavailable")
+                    self.assertEqual(result.availability.value, "unavailable", result)
                     self.assertIsNone(result.payload)
-                    self.assertIn("Unsafe camera manifest", result.diagnostic)
                 finally:
-                    alias.unlink()
-                manifest.unlink()
-                manifest.write_text("x" * 16385)
-                manifest.chmod(0o600)
-                self.assertEqual(
-                    (await source.read_latest()).availability.value, "unavailable"
-                )
-            finally:
-                await source.aclose()
+                    await source.aclose()
 
     async def test_typed_adapter_rejects_malformed_payload_and_scalar_metadata(self):
         from tools.mcp.image_source import ImageSource
@@ -144,6 +151,10 @@ class ImageParserTest(unittest.IsolatedAsyncioTestCase):
                 ("source_stamp_nanosec", 1000000000),
                 ("clock_id", "other"),
                 ("publisher_gid", "bad"),
+                ("runtime_instance", "fabricated-runtime"),
+                ("ros_domain", 233),
+                ("ros_domain", 1),
+                ("node_name", "invalid-node"),
                 ("jpeg", b"\xff\xd8\xff\xd9"),
             ]:
                 helper = Path(directory, "fake")
@@ -161,7 +172,7 @@ class ImageParserTest(unittest.IsolatedAsyncioTestCase):
                     reason="",
                     diagnostic="",
                     reset=False,
-                    runtime_instance="runtime",
+                    runtime_instance=None,
                     receipt_boottime_ns=str(time.clock_gettime_ns(time.CLOCK_BOOTTIME)),
                     clock_id=clock,
                     source_stamp_sec=1,
@@ -195,7 +206,9 @@ class ImageParserTest(unittest.IsolatedAsyncioTestCase):
                     "sys.stdout.buffer.flush()\nsys.stdin.read()\n"
                 )
                 helper.chmod(0o700)
-                source = ImageSource(directory, str(helper), "sensor:webcam")
+                source = ImageSource(
+                    directory, str(helper), "sensor:webcam", CONFIG_PATH
+                )
                 try:
                     result = await source.read_latest()
                     self.assertEqual(
@@ -250,6 +263,10 @@ class ImageWireLimitTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(result.isError)
         self.assertFalse(any(c.type == "image" for c in result.content))
+        self.assertEqual(
+            result.structuredContent["config_loaded_association"], "unknown"
+        )
+        self.assertEqual(result.structuredContent["runtime_association"], "unknown")
         self.assertLessEqual(
             len(result.model_dump_json(by_alias=True).encode()), 1024 * 1024
         )
@@ -315,8 +332,8 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                 str(VALIDATOR),
                 "--inspector",
                 str(INSPECTOR),
-                "--observation-dir",
-                self.directory,
+                "--ros-config",
+                CONFIG_PATH,
                 "--image-observer",
                 str(HELPER),
                 "--camera-id",
@@ -357,8 +374,18 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                     result.structuredContent["source_timestamp_semantics"],
                     "source_header_time",
                 )
+                for field in (
+                    "acquisition_freshness",
+                    "config_loaded_association",
+                    "runtime_association",
+                ):
+                    self.assertEqual(result.structuredContent[field], "unknown")
+                    self.assertEqual(
+                        image.outputSchema["properties"][field]["const"], "unknown"
+                    )
+                self.assertIsNone(result.structuredContent["runtime_instance"])
                 self.assertEqual(
-                    result.structuredContent["acquisition_freshness"], "unknown"
+                    image.outputSchema["properties"]["runtime_instance"]["type"], "null"
                 )
                 self.assertLessEqual(
                     len(result.model_dump_json(by_alias=True).encode()), 1024 * 1024
@@ -368,6 +395,12 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertTrue(bad.isError)
                 self.assertFalse(any(c.type == "image" for c in bad.content))
+                self.assertEqual(
+                    bad.structuredContent["config_loaded_association"], "unknown"
+                )
+                self.assertEqual(
+                    bad.structuredContent["runtime_association"], "unknown"
+                )
                 await self.mode("silent")
                 fresh = await self.until(session, "fresh")
                 repeat = await self.until(session, "fresh")
@@ -409,13 +442,7 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                     self.assertFalse(any(c.type == "image" for c in result.content))
                     await self.mode("normal")
                     await self.until(session, "fresh")
-                for mode in (
-                    "padded",
-                    "bgr",
-                    "rebind_topic",
-                    "rebind_domain",
-                    "rebind_instance",
-                ):
+                for mode in ("padded", "bgr", "rebind_topic", "rebind_instance"):
                     before = (await self.until(session, "fresh")).structuredContent
                     await self.mode(mode)
                     result = await self.until(
@@ -434,17 +461,13 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                     self.assertLess(pixel[1], 20)
                     self.assertLess(pixel[2], 20)
                     if mode.startswith("rebind"):
+                        self.assertIsNone(report["runtime_instance"])
+                        self.assertNotEqual(report["sample_id"], before["sample_id"])
                         self.assertNotEqual(
-                            report["runtime_instance"], before["runtime_instance"]
-                        )
-                        self.assertNotEqual(
-                            report["sample_id"].split(":")[0],
-                            before["sample_id"].split(":")[0],
+                            report["publisher_gid"], before["publisher_gid"]
                         )
                     if mode == "rebind_topic":
                         self.assertNotEqual(report["topic"], before["topic"])
-                    if mode == "rebind_domain":
-                        self.assertNotEqual(report["ros_domain"], before["ros_domain"])
                 await self.mode("restart_silent")
                 await self.until(session, "unavailable")
                 await self.mode("normal")
@@ -453,61 +476,15 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
             self.fixture.returncode, "MCP close stopped independent publisher"
         )
 
-    async def test_atomic_manifest_replacement_preserves_reader(self):
-        from tools.mcp.image_source import ImageSource
-
-        manifest = Path(self.directory, "camera-source.json")
-        for _ in range(100):
-            if manifest.exists():
-                break
-            await asyncio.sleep(0.01)
-        self.assertTrue(
-            manifest.exists(), "fixture did not publish its camera manifest"
-        )
-        with patch.dict(os.environ, self.environment):
-            source = ImageSource(
-                self.directory,
-                str(RUNFILES / "ros2/image_observer_manifest_race_fixture"),
-                "sensor:webcam",
-            )
-            try:
-                for _ in range(100):
-                    result = await source.read_latest()
-                    # The hook replaces the named inode on every read. A benign
-                    # unlink must not reset the reader before discovery completes.
-                    # The producer keeps heartbeats fresh during slow discovery.
-                    self.assertIsNotNone(source._process, result.diagnostic)
-                    if result.availability.value == "fresh":
-                        break
-                    await asyncio.sleep(0.03)
-                self.assertEqual(result.availability.value, "fresh", result.diagnostic)
-                self.assertIsNotNone(result.payload)
-                process = source._process
-                for _ in range(3):
-                    result = await source.read_latest()
-                    self.assertEqual(
-                        result.availability.value, "fresh", result.diagnostic
-                    )
-                    self.assertIsNotNone(result.payload)
-                    self.assertIs(
-                        source._process, process, "manifest rename reset helper"
-                    )
-            finally:
-                await source.aclose()
-
     async def test_binding_change_inside_encoder_rejects_old_bytes(self):
         from tools.mcp.image_source import ImageSource
 
-        for _ in range(100):
-            if Path(self.directory, "camera-source.json").exists():
-                break
-            await asyncio.sleep(0.01)
-        await self.mode("pause_manifest")
         with patch.dict(os.environ, self.environment):
             source = ImageSource(
                 self.directory,
-                str(RUNFILES / "ros2/image_observer_race_fixture"),
+                str(RUNFILES / "tools/mcp/image_observer_race_fixture"),
                 "sensor:webcam",
+                CONFIG_PATH,
             )
             try:
                 for _ in range(60):
@@ -533,7 +510,10 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                 "image_observer_codec_oversize_fixture",
             ):
                 source = ImageSource(
-                    self.directory, str(RUNFILES / "ros2" / executable), "sensor:webcam"
+                    self.directory,
+                    str(RUNFILES / "tools/mcp" / executable),
+                    "sensor:webcam",
+                    CONFIG_PATH,
                 )
                 try:
                     for _ in range(100):

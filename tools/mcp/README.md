@@ -218,84 +218,69 @@ are independent of this tool.
 
 ## Optional configured camera image
 
-Build `//ros2:image_observer` alongside the three MCP/inspection targets above.
-The existing nine tools remain the default; enabling one image reader adds
-`get_camera_image(camera_id)` as a tenth tool. Python does not import ROS,
-OpenCV or a capture driver. The C++ launcher owns the camera process and device;
-MCP starts only one passive C++ ROS helper and kills/reaps that helper on close.
+Build `//tools/mcp:image_observer` alongside the MCP/inspection targets above.
+The existing nine tools remain the default; opting in adds
+`get_camera_image(camera_id)`. The launcher and configured ROS node remain the
+only owners of camera execution. MCP owns a passive native ROS 2 subscription,
+one bounded sample and its JPEG presentation. No launcher, node, driver or
+private camera manifest is added for MCP.
 
-After the operator confirms the camera is connected and ready, read the entire
-camera preset and all endpoints, then use the normal launcher with
-`--observation_dir=<private-directory> --observe_camera=webcam` for
-[`publish_camera.pbtxt`](../../config/config_preset/example/publish_camera.pbtxt).
-Create the mode `0700` shared directory using the same UID and filesystem mount
-as both processes, as described above. The selected sensor must be IMAGE with
-OpenCV settings, on a CAMERA_PUBLISHER node containing exactly one IMAGE sensor
-and exactly one IMAGE publisher. Other cameras can use separate node IDs.
-Competing normalized topic publishers, invalid runtime options, and publication
-rates outside 1..1000 Hz are rejected before launch. Simulation is unsupported.
-
-Add these fixed MCP startup arguments to the command above:
+Start an operator-authorized camera runtime through its normal launcher, after
+reading the entire preset and confirming readiness under the
+[hardware rules](../../AGENTS.md#hardware-safety--read-this-first). Configure
+MCP separately with these startup arguments:
 
 ```sh
---observation-dir /workspace/private-observations --image-observer /workspace/bazel-bin/ros2/image_observer --camera-id sensor:webcam
+--ros-config example/publish_camera.pbtxt --image-observer /workspace/bazel-bin/tools/mcp/image_observer --camera-id sensor:webcam
 ```
 
-Call `get_camera_image` with `{"camera_id":"sensor:webcam"}`. Requests cannot
-choose a device, topic, domain, executable, resolution or codec. The configured
-ID is enabled even when the runtime is absent: it reports `unavailable` until
-an associated sample arrives. A fresh result includes exactly one standard MCP
-`image/jpeg` image block, plus bounded text/structured metadata. A stale result
-contains metadata only. Unavailable/error results contain no image. A compatible
-MCP host owns displaying the image or providing it to its vision model; this
-tool performs no inference.
+`--ros-config` is relative to the selected `--config-root`. The helper uses the
+existing bounded protobuf inspection loader to resolve a
+unique configured IMAGE sensor and exactly one IMAGE topic on its declared node.
+This confines and parses the candidate; full configuration validation remains
+the separate `validate_config` tool. The reader does not require a particular
+camera driver. Other sensor types may share the node, but indistinguishable
+IMAGE sources are rejected. Requests select only the enabled camera ID; they cannot choose arbitrary ROS topics, paths, devices or programs.
+The config is reread at query boundaries. Changed endpoint mappings invalidate
+cached data and restart the passive helper before a new sample can be returned.
 
-The private `camera-source.json` is derived launcher metadata under the existing
-producer lease, separate from unchanged `snapshot.json`. Its binding includes
-launcher instance, configured ID, effective ROS domain, normalized topic,
-expected node/namespace and fixed ROS Image type. A changed binding invalidates
-all images, reaps the old helper and creates a new ROS context on retry. A reply
-racing a detected binding change is unavailable. The helper verifies the sole
-expected graph endpoint and actual received publisher GID at sample acceptance,
-and validates the endpoint again on query. Missing, wrong, multiple or replaced
-publishers clear the sample. Endpoint changes refresh the passive subscription so
-replacement publishers can deliver new frames. Atomic heartbeat replacement keeps
-the pinned manifest readable; the final binding check still rejects a changed
-source. Metadata association does not authenticate hardware.
+ROS discovery must reach the already-running publisher in the same
+`ROS_DOMAIN_ID`; set that environment consistently at startup. The default
+CPU-only MCP launcher remains isolated, read-only and unprivileged and does not
+configure a ROS network connection. ROS image observation requires an explicitly
+configured and tested DDS networking arrangement. A hardware-free Humble check
+verified separate read-only, unprivileged CPU containers using `--network container:<runtime>` and `--ipc container:<runtime>`
+with a shareable runtime IPC namespace. This is an explicit opt-in arrangement;
+MCP never enables host networking, exposes devices or starts the runtime.
 
-Limits are fixed: one camera/helper/query, five-second read deadline including
-spawn/manifest/discovery/JPEG work, and one two-second cleanup budget. Failed
-cleanup permanently disables further reads until MCP restarts; late spawns retain
-FD/PID ownership and get a best-effort reaper. Manifest and image metadata are
-at most 16 KiB each, helper stderr at most 64 KiB, accepted raw RGB8/BGR8 frames
-at most 1920×1080 and 8 MiB with checked row stride. One sample is retained.
-JPEG is aspect preserving, never upscaled, at most 640×480, quality 80 and
-512 KiB. The entire serialized MCP tool result is checked against 1 MiB,
-including base64, metadata, text and JSON escaping. Other text reports retain
-their 64 KiB limit. These accepted-data limits cannot prevent DDS allocations
-before the callback and do not establish a strict process memory bound.
+Call `get_camera_image` with `{"camera_id":"sensor:webcam"}`. A fresh result
+contains one standard MCP `image/jpeg` block and bounded metadata. Stale results
+contain metadata only; missing, invalid or ambiguous sources contain no image.
+A compatible AI client displays or interprets the image; the tool does no
+inference. The helper checks the sole expected graph endpoint and the received
+message's publisher GID, then checks again on query. Publisher changes clear the
+sample and refresh the subscription. These checks associate the image with a
+configured ROS endpoint; they do not authenticate hardware or prove which preset
+the runtime loaded. `runtime_instance` stays null and runtime/config-loaded
+association remains unknown.
 
-Comparable boot/time-namespace CLOCK_BOOTTIME receipt and manifest freshness is
-three seconds. Rereads preserve original receipt time, source ROS header time,
-and the helper nonce/counter `sample_id`; ROS Image has no native sequence, so
-`sample_sequence` is null. `source_timestamp_semantics` is `source_header_time`;
-OpenCV uses a host capture-completion estimate rather than sensor exposure time.
-`acquisition_freshness` stays `unknown`.
+Limits: one camera/helper/query, a five-second read deadline and two-second
+cleanup budget, 16 KiB image metadata, 64 KiB helper stderr, and RGB8/BGR8 input
+up to 1920×1080 and 8 MiB with checked row stride. One sample is retained. JPEG
+is aspect preserving, never upscaled, at most 640×480, quality 80 and 512 KiB.
+The entire serialized MCP result is capped at 1 MiB. DDS may allocate before
+application validation, so accepted-data limits are not a strict process memory
+bound. Failed cleanup disables further reads until MCP restarts.
 
-Capture settings are applied on successful first open and reopen. FourCC is
-required, must contain four printable ASCII bytes, and is applied before the
-resolution and frame rate. Two capture buffers preserve continuous acquisition. Reported image dimensions are actual frame dimensions, not requested
-settings. Finite capture retries/backoff do **not** bound synchronous OpenCV
-open/read/release calls: a stalled camera process may require operator recovery.
-The observer remains bounded and a silent, still-present publisher becomes stale;
-MCP never restarts or reconfigures the camera process.
+Receipt freshness uses comparable boot/time-namespace CLOCK_BOOTTIME time, with
+a three-second default. Rereads preserve original receipt time, ROS header time
+(`source_header_time`) and helper nonce/counter `sample_id`; ROS Image supplies
+no native sequence, so `sample_sequence` is null. Acquisition freshness stays
+unknown. Silence becomes stale; MCP never restarts or configures the camera.
 
-The synthetic ROS fixture → production helper → typed adapter → actual SDK
-stdio test decodes JPEG pixels and checks source/freshness, replacement,
-disconnect/recovery, silent-publisher staleness, padding and domain/topic/runtime
-changes. Child-process tests cover framing, cancellation, close, timeout and
-cleanup failure. A [physical C920 integration test](../../docs/hardware_tests/logitech_c920_mcp_2026-11-08.md)
-verified real 640x480 MCP JPEG capture and recovery after restarting Joshua in the
-same MCP session. Physical USB unplug/replug and a chosen AI client's deliberate
-scene-change test remain separate acceptance checks requiring current operator
-readiness confirmation.
+Synthetic ROS → helper → actual MCP SDK tests decode the JPEG and exercise
+source changes, publisher replacement, stale data and bounded cleanup. The
+[physical C920 record](../../docs/hardware_tests/logitech_c920_mcp_2026-11-08.md)
+applies to its older pinned revision. This revised ROS-only boundary needs new
+physical camera, USB recovery and AI-client scene-change acceptance; those steps
+require current operator confirmation.

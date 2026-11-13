@@ -1,4 +1,4 @@
-ROS 2 Type Resolver Utilities
+ROS 2 Type Resolver Utilities  
 ==============================
 
 Process runtime and failure handling
@@ -88,8 +88,8 @@ Fast paths
 
 Extend the resolver
 -------------------
-1) Add new types to `ROS2_TYPE_MAPPING` if missing.
-2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).
+1) Add new types to `ROS2_TYPE_MAPPING` if missing.  
+2) Extend `add_post_process_feature` to produce canonical field names for those types (e.g., map all scalar std_msgs to a single `"value"` field).  
 3) Extend `build_entry_for_message` to add a specialized path (decode/transform) before falling back to the generic dict conversion.
 
 Usage with DataStore
@@ -380,16 +380,3 @@ ALSA aliases for the same physical device cannot be detected statically.
 `//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
 virtual time to cover large and tiny chunks, short reads, delayed polls, changed
 buffer sizes after recovery, and bounded work for always-ready sources.
-
-
-Configured camera observation
------------------------------
-`camera_publisher` validates packet encoding, channels, signed dimensions and
-exact byte length before RGB conversion. Its ROS header preserves the driver
-packet timestamp; OpenCV uses a host capture-completion estimate.
-`image_observer` is a separate passive C++ ROS helper owned by the optional MCP
-reader. It checks the sole expected endpoint and received publisher GID, retains
-one bounded RGB8/BGR8 sample (including row padding), and encodes a small JPEG
-on query. It has no capture-driver or hardware-factory dependency. Camera/backend
-I/O remains in the existing publisher process. See the
-[MCP camera guide](../tools/mcp/README.md#optional-configured-camera-image).

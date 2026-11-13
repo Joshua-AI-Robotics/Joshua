@@ -121,9 +121,3 @@ acquisition freshness or physical readiness. Simulation observation is
 unsupported. The [MCP guide](../../tools/mcp/README.md#optional-runtime-observations)
 documents directory permissions, clock domain, fields and limitations. MCP is
 an optional reader; NodeManager remains the runtime owner.
-
-`--observe_camera=<sensor_name>` selects one configured IMAGE camera and derives
-a private `camera-source.json` under the same directory lease. Configuration
-preflight starts no process; the optional MCP image helper remains a separate
-passive reader. The manifest uses this manager's process facts and becomes
-unavailable when its camera process exits. See [camera setup](../../tools/mcp/README.md#optional-configured-camera-image).

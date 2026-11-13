@@ -1,6 +1,8 @@
-load("//:requirements.bzl", "requirement")
-load(":requirements.bzl", "mcp_requirement")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("//:requirements.bzl", "requirement")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary")
+load(":requirements.bzl", "mcp_requirement")
 
 exports_files([
     "requirements.in",
@@ -90,14 +92,13 @@ py_test(
     srcs = ["image_source_test.py"],
     data = [
         ":config_validation_server",
+        ":image_observer",
+        ":image_observer_codec_failure_fixture",
+        ":image_observer_codec_oversize_fixture",
+        ":image_observer_fixture",
+        ":image_observer_race_fixture",
         "//config:joshua_inspect_config",
         "//config:joshua_validate_config",
-        "//ros2:image_observer",
-        "//ros2:image_observer_codec_failure_fixture",
-        "//ros2:image_observer_codec_oversize_fixture",
-        "//ros2:image_observer_fixture",
-        "//ros2:image_observer_manifest_race_fixture",
-        "//ros2:image_observer_race_fixture",
     ],
     tags = ["local"],
     deps = [
@@ -134,4 +135,95 @@ py_test(
     ],
     main = "setup_smoke.py",
     deps = mcp_requirement("mcp"),
+)
+
+cc_library(
+    name = "ros_source_binding",
+    srcs = ["ros_source_binding.cc"],
+    hdrs = ["ros_source_binding.h"],
+    deps = [
+        "//config:config_validation_cli",
+        "//config/proto:config_cc_proto",
+        "@abseil-cpp//absl/status:status",
+        "@abseil-cpp//absl/status:statusor",
+        "@protobuf",
+    ],
+)
+
+cc_test(
+    name = "ros_source_binding_test",
+    srcs = ["ros_source_binding_test.cc"],
+    deps = [
+        ":ros_source_binding",
+        "//config/proto:config_cc_proto",
+        "@googletest//:gtest_main",
+        "@protobuf",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "image_observer",
+    srcs = ["image_observer.cc"],
+    deps = [":image_observer_backend"],
+)
+
+cc_library(
+    name = "image_observer_backend",
+    srcs = ["image_observer_backend.cc"],
+    hdrs = ["image_observer_backend.h"],
+    deps = [
+        ":ros_source_binding",
+        "@local_deps//:core",
+        "@local_deps//:imgcodecs",
+        "@local_deps//:imgproc",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "image_observer_fixture",
+    testonly = True,
+    srcs = ["image_observer_fixture.cc"],
+    deps = [
+        "//config/proto:config_cc_proto",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "image_observer_race_fixture",
+    testonly = True,
+    srcs = ["image_observer_race_fixture.cc"],
+    deps = [
+        ":image_observer_backend",
+        "@local_deps//:imgcodecs",
+        "@protobuf",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "image_observer_codec_failure_fixture",
+    testonly = True,
+    srcs = ["image_observer_race_fixture.cc"],
+    defines = ["JOSHUA_TEST_CODEC_FAILURE"],
+    deps = [
+        ":image_observer_backend",
+        "@local_deps//:imgcodecs",
+        "@protobuf",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "image_observer_codec_oversize_fixture",
+    testonly = True,
+    srcs = ["image_observer_race_fixture.cc"],
+    defines = ["JOSHUA_TEST_CODEC_OVERSIZE"],
+    deps = [
+        ":image_observer_backend",
+        "@local_deps//:imgcodecs",
+        "@protobuf",
+    ],
 )

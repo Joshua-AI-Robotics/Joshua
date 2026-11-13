@@ -126,12 +126,17 @@ _IMAGE_SCHEMA = {
         "source_id": {"type": "string"},
         "availability": {"type": "string", "enum": ["fresh", "stale", "unavailable"]},
         "acquisition_freshness": {"type": "string", "const": "unknown"},
+        "config_loaded_association": {"type": "string", "const": "unknown"},
+        "runtime_association": {"type": "string", "const": "unknown"},
+        "runtime_instance": {"type": "null"},
         "source_timestamp_semantics": {"type": "string", "const": "source_header_time"},
     },
     "required": [
         "source_id",
         "availability",
         "acquisition_freshness",
+        "config_loaded_association",
+        "runtime_association",
         "source_timestamp_semantics",
     ],
 }
@@ -144,6 +149,8 @@ async def _camera_result(source, arguments):
         "source_id": source.describe().source_id,
         "availability": "unavailable",
         "acquisition_freshness": "unknown",
+        "config_loaded_association": "unknown",
+        "runtime_association": "unknown",
         "source_timestamp_semantics": "source_header_time",
     }
     content = []
@@ -195,6 +202,8 @@ async def _camera_result(source, arguments):
             "source_id": source.describe().source_id,
             "availability": "unavailable",
             "acquisition_freshness": "unknown",
+            "config_loaded_association": "unknown",
+            "runtime_association": "unknown",
             "source_timestamp_semantics": "source_header_time",
             "unavailable_reason": "invalid_data",
             "diagnostic": "Image metadata exceeds 16 KiB.",
@@ -211,6 +220,8 @@ async def _camera_result(source, arguments):
             "source_id": source.describe().source_id,
             "availability": "unavailable",
             "acquisition_freshness": "unknown",
+            "config_loaded_association": "unknown",
+            "runtime_association": "unknown",
             "source_timestamp_semantics": "source_header_time",
             "unavailable_reason": "invalid_data",
             "diagnostic": "Serialized image result exceeds 1 MiB.",
@@ -279,7 +290,8 @@ def make_server(
                 types.Tool(
                     name="get_camera_image",
                     description=(
-                        "Read one operator-enabled camera JPEG. Receipt freshness "
+                        "Read one operator-selected native ROS camera JPEG. "
+                        "Receipt freshness "
                         "is separate from unknown acquisition freshness."
                     ),
                     inputSchema={

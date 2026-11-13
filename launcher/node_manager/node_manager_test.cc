@@ -150,62 +150,6 @@ TEST_F(NodeManagerTest, PassiveObservationRetainsApplicationExitAndPreventsLater
   EXPECT_EQ(exit.at("exit_code").number_value(), 0);
 }
 
-TEST_F(NodeManagerTest, ConfiguredCameraObservationUsesOnlyManagedProcessFacts) {
-  char pattern[] = "/tmp/joshua-manager-camera-XXXXXX";
-  const auto* directory = mkdtemp(pattern);
-  ASSERT_NE(directory, nullptr);
-  const std::filesystem::path root(directory);
-  joshua::ScopeExit remove_directory([&] { std::filesystem::remove_all(root); });
-  const auto config_path = root / "config.pbtxt";
-  {
-    std::ofstream file(config_path);
-    file << R"pb(robot {
-                   perceptions {
-                     single_perceptions {
-                       sensor_name: "webcam"
-                       sensor_type: IMAGE
-                       opencv_config { id: 0 width: 640 height: 480 fps: 30 fourcc: "MJPG" }
-                       node {
-                         id: 42
-                         node_type: CAMERA_PUBLISHER
-                         publishers {
-                           topic: "webcam/image"
-                           ros2_data_type: IMAGE
-                           publish_rate_hz: 30
-                         }
-                       }
-                     }
-                   }
-                 })pb";
-  }
-  NodeManager manager(config_path.string());
-  ASSERT_TRUE(manager.Initialize().ok());
-  EXPECT_FALSE(manager.ConfigureObservation(directory, "", "missing").ok());
-  ASSERT_TRUE(manager.ConfigureObservation(directory, "", "webcam").ok());
-  EXPECT_TRUE(manager.GetNodeStatus().empty());  // Preflight starts no camera or helper.
-  auto complete = Spec("complete");
-  complete.name = "camera_publisher_node_42";
-  complete.node_id = 42;
-  complete.node_type = "camera_publisher";
-  complete.allow_completion = true;
-  ASSERT_TRUE(manager.StartProcess(complete).ok());
-  ASSERT_TRUE(manager.AwaitReady(std::chrono::seconds(5)).ok());
-  ASSERT_TRUE(manager.MonitorNodes(complete.name).ok());
-  EXPECT_FALSE(manager.StartProcess(Spec("ready")).ok());
-  ASSERT_EQ(manager.GetNodeStatus().size(), 1);
-  EXPECT_TRUE(manager.GetNodeStatus()[0].reaped);
-  std::ifstream file(root / "camera-source.json");
-  ASSERT_TRUE(file.is_open());
-  const std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-  google::protobuf::Struct manifest;
-  ASSERT_TRUE(google::protobuf::util::JsonStringToMessage(json, &manifest).ok());
-  EXPECT_EQ(manifest.fields().at("camera_id").string_value(), "sensor:webcam");
-  EXPECT_EQ(manifest.fields().at("topic").string_value(), "/webcam/image");
-  EXPECT_EQ(manifest.fields().at("node_name").string_value(), complete.name);
-  EXPECT_EQ(manifest.fields().at("phase").string_value(), "monitor_finished");
-  EXPECT_FALSE(manifest.fields().at("process_present").bool_value());
-}
-
 TEST_F(NodeManagerTest, FailedExecAndInitializationRemainObservable) {
   for (const auto& mode : {"missing-executable", "fail-init", "closed-ready"}) {
     // Each scenario represents a fresh launcher invocation. Failed shutdowns

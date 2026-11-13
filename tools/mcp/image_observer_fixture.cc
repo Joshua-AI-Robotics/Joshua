@@ -1,14 +1,16 @@
-// Test-only synthetic publisher and launcher facts. No hardware dependencies.
+// Test-only standard ROS publisher and candidate config. No launcher or hardware.
 #include <poll.h>
 #include <unistd.h>
 
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <thread>
 
-#include "node_generator/runtime_observation.h"
+#include "config/proto/config.pb.h"
+#include "google/protobuf/text_format.h"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 int main(int argc, char** argv) {
@@ -28,7 +30,7 @@ int main(int argc, char** argv) {
   p->set_ros2_data_type(ros2::data_type::IMAGE);
   p->set_publish_rate_hz(30);
   using Publisher = rclcpp::Publisher<sensor_msgs::msg::Image>;
-  std::unique_ptr<node_generator::RuntimeObservation> observer;
+
   rclcpp::Context::SharedPtr context;
   rclcpp::Node::SharedPtr node, rogue;
   Publisher::SharedPtr publisher, other;
@@ -38,11 +40,12 @@ int main(int argc, char** argv) {
     node.reset();
     rogue.reset();
     if (context) context->shutdown("fixture binding replacement");
-    observer.reset();
-    auto result = node_generator::RuntimeObservation::Prepare(
-        config, "synthetic-fixture", argv[1], "", "webcam");
-    if (!result.ok()) throw std::runtime_error(std::string(result.status().message()));
-    observer = std::move(*result);
+    std::string text;
+    google::protobuf::TextFormat::PrintToString(config, &text);
+    const std::string target = std::string(argv[1]) + "/candidate.pbtxt";
+    std::ofstream(target + ".tmp") << text;
+    if (rename((target + ".tmp").c_str(), target.c_str()))
+      throw std::runtime_error("fixture config replace");
     context = std::make_shared<rclcpp::Context>();
     rclcpp::InitOptions init;
     init.auto_initialize_logging(false);
@@ -104,9 +107,6 @@ int main(int argc, char** argv) {
     if (mode == "short") m.data.pop_back();
     if (publisher && mode != "silent" && mode != "restart_silent") publisher->publish(m);
     if (other) other->publish(m);
-    if (mode != "pause_manifest")
-      observer->Tick(
-          {{int(getpid()), 12, "camera_publisher_node_12", "camera_publisher"}}, 1, "monitoring");
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
   }
   context->shutdown("fixture done");

@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library")
 
 exports_files(["cv_camera.cc"])
 
@@ -17,14 +17,5 @@ cc_library(
         "@local_deps//:core",
         "@local_deps//:imgcodecs",
         "@local_deps//:videoio",
-    ],
-)
-
-cc_test(
-    name = "cv_camera_test",
-    srcs = ["cv_camera_test.cc"],
-    deps = [
-        ":cv_camera",
-        "@googletest//:gtest_main",
     ],
 )

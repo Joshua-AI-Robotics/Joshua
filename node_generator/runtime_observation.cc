@@ -10,10 +10,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <deque>
 #include <fstream>
-#include <regex>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -180,13 +178,9 @@ class SnapshotWriter {
   ~SnapshotWriter() {
     Close();
   }
-  void PrepareCamera() {
-    CheckTarget("camera-source.json");
-  }
-  void Publish(const std::string& json, const char* target = "snapshot.json") {
-    if (json.size() > (std::string(target) == "camera-source.json" ? 16384 : 65536))
-      throw std::runtime_error("Snapshot exceeds 64 KiB.");
-    CheckTarget(target);
+  void Publish(const std::string& json) {
+    if (json.size() > 65536) throw std::runtime_error("Snapshot exceeds 64 KiB.");
+    CheckTarget();
     const int fd = openat(
         directory_, temporary_.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) throw std::runtime_error("Cannot create private snapshot temporary file.");
@@ -204,21 +198,21 @@ class SnapshotWriter {
     if (close(fd)) okay = false;
     if (okay) {
       try {
-        CheckTarget(target);
+        CheckTarget();
       } catch (...) {
         okay = false;
       }
     }
-    if (!okay || renameat(directory_, temporary_.c_str(), directory_, target)) {
+    if (!okay || renameat(directory_, temporary_.c_str(), directory_, "snapshot.json")) {
       unlinkat(directory_, temporary_.c_str(), 0);
       throw std::runtime_error("Atomic snapshot publication failed.");
     }
   }
 
  private:
-  void CheckTarget(const char* target = "snapshot.json") {
+  void CheckTarget() {
     struct stat s {};
-    if (fstatat(directory_, target, &s, AT_SYMLINK_NOFOLLOW) < 0) {
+    if (fstatat(directory_, "snapshot.json", &s, AT_SYMLINK_NOFOLLOW) < 0) {
       if (errno == ENOENT) return;
       throw std::runtime_error("Cannot inspect snapshot target.");
     }
@@ -240,9 +234,7 @@ struct RuntimeObservation::Impl {
   std::string boot = ReadIdentity("/proc/sys/kernel/random/boot_id");
   std::string time_namespace = TimeNamespace();
   std::unique_ptr<SnapshotWriter> writer;
-  Value config = Object(), feedback = Object(), camera_manifest = Object();
-  uint32_t camera_node = 0;
-  bool camera_enabled = false;
+  Value config = Object(), feedback = Object();
   std::set<std::string> loggers;
   std::deque<Value> logs, exits;
   uint64_t sequence = 0, log_sequence = 0, dropped = 0, truncated = 0, omitted_exits = 0;
@@ -476,22 +468,6 @@ struct RuntimeObservation::Impl {
       ++dropped;
     }
     writer->Publish(json + "\n");
-    if (camera_enabled) {
-      Set(camera_manifest, "captured_boottime_ns", Text(std::to_string(Now())));
-      Set(camera_manifest, "phase", Text(phase));
-      bool present = false;
-      for (const auto& p : processes)
-        if (p.node_id == camera_node &&
-            p.node_name == camera_manifest.struct_value().fields().at("node_name").string_value())
-          present = true;
-      Value flag;
-      flag.set_bool_value(present);
-      Set(camera_manifest, "process_present", flag);
-      json.clear();
-      if (!google::protobuf::util::MessageToJsonString(camera_manifest, &json).ok())
-        throw std::runtime_error("Cannot serialize camera binding.");
-      writer->Publish(json + "\n", "camera-source.json");
-    }
   }
 };
 
@@ -501,8 +477,7 @@ absl::StatusOr<std::unique_ptr<RuntimeObservation>> RuntimeObservation::Prepare(
     const config::Config& cfg,
     const std::string& source,
     const std::string& directory,
-    const std::string& sensor,
-    const std::string& camera) {
+    const std::string& sensor) {
   try {
     if (directory.empty() || source.size() > 4096 || sensor.size() > 128 ||
         cfg.general().name().size() > 256)
@@ -588,79 +563,6 @@ absl::StatusOr<std::unique_ptr<RuntimeObservation>> RuntimeObservation::Prepare(
     if (!sensor.empty() && publishers != 1)
       return absl::InvalidArgumentError(
           "Selected feedback topic has multiple configured publishers.");
-    if (!camera.empty()) {
-      if (camera.size() > 128)
-        return absl::InvalidArgumentError("Camera sensor name exceeds bound.");
-      const robot::perception::SinglePerception* selected = nullptr;
-      for (const auto& c : cfg.robot().perceptions().single_perceptions())
-        if (c.sensor_name() == camera) {
-          if (selected) return absl::InvalidArgumentError("Camera identity duplicated.");
-          selected = &c;
-        }
-      if (!selected || selected->sensor_type() != robot::perception::IMAGE ||
-          !selected->has_opencv_config() ||
-          selected->node().node_type() != ros2::node::CAMERA_PUBLISHER)
-        return absl::InvalidArgumentError("Select one IMAGE OpenCV sensor on CAMERA_PUBLISHER.");
-      const auto& c = *selected;
-      int cameras = 0;
-      for (const auto& other : cfg.robot().perceptions().single_perceptions())
-        if (other.sensor_type() == robot::perception::IMAGE && other.node().id() == c.node().id())
-          ++cameras;
-      if (cameras != 1 || c.node().publishers_size() != 1 ||
-          c.node().publishers(0).ros2_data_type() != ros2::data_type::IMAGE)
-        return absl::InvalidArgumentError(
-            "Observed CAMERA_PUBLISHER node must contain exactly one IMAGE sensor and one IMAGE "
-            "publisher; put other cameras on separate node IDs.");
-      const auto& o = c.opencv_config();
-      if (!o.width() || o.width() > 1920 || !o.height() || o.height() > 1080 || !o.fps() ||
-          o.fps() > 240 || o.id() > INT32_MAX)
-        return absl::InvalidArgumentError("Observed camera runtime options are invalid.");
-      if (!o.fourcc().empty()) {
-        if (o.fourcc().size() != 4)
-          return absl::InvalidArgumentError("FourCC must be empty or four printable ASCII bytes.");
-        for (unsigned char ch : o.fourcc())
-          if (ch < 32 || ch > 126)
-            return absl::InvalidArgumentError("FourCC must contain printable ASCII bytes.");
-      }
-      auto topic = c.node().publishers(0).topic();
-      if (!topic.empty() && topic.front() != '/') topic = "/" + topic;
-      if (topic.size() > 256 ||
-          !std::regex_match(topic, std::regex("(/[A-Za-z_][A-Za-z_0-9]*)+")) ||
-          (!c.node().publishers(0).publish_rate_hz() ||
-           c.node().publishers(0).publish_rate_hz() > 1000))
-        return absl::InvalidArgumentError(
-            "Camera requires one bounded absolute IMAGE topic and positive publication rate.");
-      int count = 0;
-      for (const auto* n : nodes)
-        for (const auto& p : n->publishers()) {
-          auto t = p.topic();
-          if (!t.empty() && t.front() != '/') t = "/" + t;
-          if (t == topic) ++count;
-        }
-      if (count != 1)
-        return absl::InvalidArgumentError("Camera topic has competing configured publishers.");
-      int domain = 0;
-      if (const char* value = std::getenv("ROS_DOMAIN_ID")) {
-        std::string d(value);
-        if (d.empty() || d.size() > 3 || d.find_first_not_of("0123456789") != std::string::npos ||
-            (domain = std::stoi(d)) > 232)
-          return absl::InvalidArgumentError("ROS_DOMAIN_ID must be 0..232.");
-      }
-      auto& m = impl->camera_manifest;
-      Set(m, "schema_version", Number(1));
-      Set(m, "instance_id", Text(impl->instance));
-      Set(m, "camera_id", Text("sensor:" + camera));
-      Set(m, "topic", Text(topic));
-      Set(m, "node_name", Text(NodeName(c.node())));
-      Set(m, "node_namespace", Text("/"));
-      Set(m, "ros_type", Text("sensor_msgs/msg/Image"));
-      Set(m, "ros_domain", Number(domain));
-      Set(m, "boot_id", Text(impl->boot));
-      Set(m, "time_namespace", Text(impl->time_namespace));
-      Set(m, "clock_kind", Text("CLOCK_BOOTTIME"));
-      impl->camera_enabled = true;
-      impl->camera_node = c.node().id();
-    }
     Set(impl->feedback, "sensor_id", Text(sensor));
     Set(impl->feedback, "source", selected_source);
     impl->FeedbackState(sensor.empty() ? "not_configured" : "unavailable");
@@ -674,7 +576,6 @@ absl::StatusOr<std::unique_ptr<RuntimeObservation>> RuntimeObservation::Prepare(
       *limits.mutable_list_value()->add_values() = Text(text);
     Set(impl->feedback, "limitations", limits);
     impl->writer = std::make_unique<SnapshotWriter>(directory, impl->instance);
-    if (impl->camera_enabled) impl->writer->PrepareCamera();
     return std::unique_ptr<RuntimeObservation>(new RuntimeObservation(std::move(impl)));
   } catch (const std::exception& e) {
     return absl::InvalidArgumentError(e.what());

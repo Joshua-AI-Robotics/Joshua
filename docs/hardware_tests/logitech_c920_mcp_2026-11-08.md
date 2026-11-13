@@ -3,7 +3,9 @@
 Manual test on November 8, 2026 (America/Los_Angeles), against Joshua commit
 `cdba38b2cf1e98efd4008fe16657fefc2618d2cf` from [PR #150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150).
 This records one physical camera unit's capture and publisher restart behavior.
-It is scoped integration evidence, not general model qualification.
+It is scoped integration evidence, not general model qualification. The later
+MCP-only ROS subscription revision removes the manifest/launcher options used
+below; this historical run does not qualify that revised implementation.
 
 ## Setup
 

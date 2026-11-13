@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.mcp.image_source import ImageSource
-from tools.mcp.observation_source import UnavailableReason
+from tools.mcp.observation_source import Availability, UnavailableReason
 
 
 class ImageLifecycleTest(unittest.IsolatedAsyncioTestCase):
@@ -22,16 +22,105 @@ class ImageLifecycleTest(unittest.IsolatedAsyncioTestCase):
             await source.aclose()
         self.temp.cleanup()
 
-    def source(self, code, camera_id="sensor:webcam"):
+    def source(self, code, camera_id="sensor:webcam", config_path="candidate.pbtxt"):
         helper = Path(self.temp.name, "helper" + str(len(self.sources)))
         helper.write_text(
             "#!/usr/bin/python3\nimport sys,time,struct,json,os\n"
             "q=int(sys.stdin.readline())\n" + code
         )
         helper.chmod(0o700)
-        source = ImageSource(self.temp.name, str(helper), camera_id)
+        source = ImageSource(self.temp.name, str(helper), camera_id, config_path)
         self.sources.append(source)
         return source
+
+    async def test_workspace_root_needs_no_private_runtime_directory(self):
+        os.chmod(self.temp.name, 0o755)
+        source = self.source("time.sleep(60)\n")
+        self.assertEqual(os.fstat(source._fd).st_mode & 0o777, 0o755)
+
+    async def test_config_selection_rejects_unsafe_relative_references(self):
+        for value in (
+            None,
+            "",
+            "/candidate.pbtxt",
+            "../candidate.pbtxt",
+            "nested//candidate.pbtxt",
+            "./candidate.pbtxt",
+            "bad\x00path",
+        ):
+            with self.subTest(config_path=value), self.assertRaises(ValueError):
+                self.source("time.sleep(60)\n", config_path=value)
+
+    async def test_helper_receives_pinned_root_and_fixed_config_selection(self):
+        root_inode = os.stat(self.temp.name).st_ino
+        source = self.source(
+            "assert sys.argv[1]=='--root-fd'\n"
+            f"assert os.fstat(int(sys.argv[2])).st_ino=={root_inode}\n"
+            "assert sys.argv[3:]==['--config','nested/candidate.pbtxt',"
+            "'--camera-id','sensor:webcam']\n"
+            "m=json.dumps(dict(query_id=q,camera_id='sensor:webcam',"
+            "availability='unavailable',"
+            "reason='no_data',diagnostic='native ROS only',reset=False)).encode()\n"
+            "os.write(1,struct.pack('!II',len(m),0)+m)\n",
+            config_path="nested/candidate.pbtxt",
+        )
+        result = await source.read_latest()
+        self.assertEqual(result.unavailable_reason, UnavailableReason.NO_DATA, result)
+        self.assertEqual(result.diagnostic, "native ROS only")
+
+    async def test_invalid_ros_domain_is_rejected_before_spawning(self):
+        for domain in ("", "-1", "233", "1.0", " 1", "１２", "0000"):
+            with self.subTest(domain=domain), patch.dict(
+                os.environ, ROS_DOMAIN_ID=domain
+            ):
+                with self.assertRaises(ValueError):
+                    self.source("time.sleep(60)\n")
+
+    async def test_ros_domain_environment_is_pinned_at_source_startup(self):
+        with patch.dict(os.environ, ROS_DOMAIN_ID="47"):
+            source = self.source(
+                "assert os.environ['ROS_DOMAIN_ID']=='47'\n"
+                "m=json.dumps(dict(query_id=q,camera_id='sensor:webcam',"
+                "availability='unavailable',"
+                "reason='no_data',diagnostic='pinned domain',reset=False)).encode()\n"
+                "os.write(1,struct.pack('!II',len(m),0)+m)\n"
+            )
+        with patch.dict(os.environ, ROS_DOMAIN_ID="93"):
+            result = await source.read_latest()
+        self.assertEqual(result.unavailable_reason, UnavailableReason.NO_DATA, result)
+        self.assertEqual(result.diagnostic, "pinned domain")
+
+    async def test_native_ros_metadata_cannot_claim_runtime_instance(self):
+        jpeg = bytes.fromhex("ffd8ffc00011080001000203011100021100031100ffda0002ffd9")
+        for instance in (None, "fabricated-runtime"):
+            source = self.source(
+                "clock='CLOCK_BOOTTIME:'+open('/proc/sys/kernel/random/boot_id')"
+                ".read().strip()+':'"
+                "+os.readlink('/proc/self/ns/time')\n"
+                "m=dict(query_id=q,camera_id='sensor:webcam',"
+                "availability='fresh',reason='',"
+                "diagnostic='',reset=False,runtime_instance=" + repr(instance) + ","
+                "receipt_boottime_ns=str(time.clock_gettime_ns(time.CLOCK_BOOTTIME)),"
+                "clock_id=clock,"
+                "source_stamp_sec=1,source_stamp_nanosec=2,"
+                "sample_id='helper:1',width=2,height=1,"
+                "source_width=2,source_height=1,source_encoding='rgb8',"
+                "frame_id='target',"
+                "publisher_gid='00'*24,topic='/camera/image',"
+                "node_name='camera_publisher_node_12',"
+                "node_namespace='/',ros_domain=0)\n"
+                "m=json.dumps(m).encode(); b=" + repr(jpeg) + "\n"
+                "os.write(1,struct.pack('!II',len(m),len(b))+m+b)\n"
+                "sys.stdin.read()\n"
+            )
+            result = await source.read_latest()
+            if instance is None:
+                self.assertEqual(result.availability, Availability.FRESH, result)
+                self.assertIsNone(result.runtime_instance)
+            else:
+                self.assertEqual(
+                    result.unavailable_reason, UnavailableReason.INVALID_DATA
+                )
 
     async def pending(self, source):
         task = asyncio.create_task(source.read_latest())

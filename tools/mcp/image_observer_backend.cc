@@ -1,4 +1,4 @@
-#include "ros2/image_observer_backend.h"
+#include "tools/mcp/image_observer_backend.h"
 // Passive ROS image reader. No hardware factories, capture handles or launcher ownership.
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -24,11 +25,11 @@
 #include "google/protobuf/util/json_util.h"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "tools/mcp/ros_source_binding.h"
 
-namespace ros2_utils {
+namespace joshua::mcp {
 namespace {
 using google::protobuf::Value;
-using Fields = google::protobuf::Map<std::string, Value>;
 Value Object() {
   Value v;
   v.mutable_struct_value();
@@ -75,22 +76,8 @@ std::string Json(const Value& v) {
 const Value& Field(const Value& v, const std::string& k) {
   const auto& f = v.struct_value().fields();
   auto it = f.find(k);
-  if (it == f.end()) throw std::runtime_error("Missing manifest field");
+  if (it == f.end()) throw std::runtime_error("Missing image metadata field");
   return it->second;
-}
-std::string Text(const Value& v, const std::string& k, size_t limit = 256) {
-  const auto& f = Field(v, k);
-  if (f.kind_case() != Value::kStringValue || f.string_value().size() > limit ||
-      f.string_value().find('\0') != std::string::npos)
-    throw std::runtime_error("Invalid manifest text");
-  return f.string_value();
-}
-int Integer(const Value& v, const std::string& k, int maximum) {
-  const auto& f = Field(v, k);
-  if (f.kind_case() != Value::kNumberValue || f.number_value() < 0 || f.number_value() > maximum ||
-      f.number_value() != static_cast<int>(f.number_value()))
-    throw std::runtime_error("Invalid manifest number");
-  return f.number_value();
 }
 std::string Gid(const uint8_t* bytes, size_t size) {
   const char* hex = "0123456789abcdef";
@@ -103,94 +90,17 @@ std::string Gid(const uint8_t* bytes, size_t size) {
 }
 // Atomic replacement can unlink an inode already pinned by O_PATH. Its
 // descriptor remains valid; multiple hard links are still forbidden.
-bool Private(const struct stat& s) {
-  return S_ISREG(s.st_mode) && s.st_uid == geteuid() && !(s.st_mode & 077) && s.st_nlink <= 1;
-}
-struct Binding {
-  std::string instance, camera, topic, node, ns, boot, time_ns;
-  int domain;
-  bool operator==(const Binding& b) const {
-    return instance == b.instance && camera == b.camera && topic == b.topic && node == b.node &&
-           ns == b.ns && domain == b.domain && boot == b.boot && time_ns == b.time_ns;
-  }
-};
-Binding Manifest(int directory,
-                 const std::string& camera,
-                 const std::string& boot,
-                 const std::string& time_ns,
-                 const ManifestReadHook& manifest_read_hook) {
-  int pin = openat(directory, "camera-source.json", O_PATH | O_NOFOLLOW | O_CLOEXEC);
-  if (pin < 0) throw std::runtime_error("Camera manifest absent");
-  struct stat original {
-  }, content{};
-  if (fstat(pin, &original) || !Private(original) || original.st_size <= 0 ||
-      original.st_size > 16384) {
-    close(pin);
-    throw std::runtime_error("Unsafe camera manifest");
-  }
-  try {
-    if (manifest_read_hook) manifest_read_hook();
-  } catch (...) {
-    close(pin);
-    throw;
-  }
-  int fd =
-      open(("/proc/self/fd/" + std::to_string(pin)).c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-  bool same = fd >= 0 && fstat(fd, &content) == 0 && Private(content) &&
-              original.st_dev == content.st_dev && original.st_ino == content.st_ino;
-  close(pin);
-  if (!same) {
-    if (fd >= 0) close(fd);
-    throw std::runtime_error("Camera manifest changed while opening");
-  }
-  std::array<char, 16385> buffer{};
-  size_t used = 0;
-  while (used < buffer.size()) {
-    auto n = read(fd, buffer.data() + used, buffer.size() - used);
-    if (n < 0 && errno == EINTR) continue;
-    if (n < 0) {
-      close(fd);
-      throw std::runtime_error("Manifest read failed");
-    }
-    if (!n) break;
-    used += n;
-  }
-  close(fd);
-  if (used > 16384) throw std::runtime_error("Oversized camera manifest");
-  Value v;
-  if (!google::protobuf::util::JsonStringToMessage(std::string(buffer.data(), used), &v).ok() ||
-      v.kind_case() != Value::kStructValue || v.struct_value().fields_size() != 14)
-    throw std::runtime_error("Invalid camera manifest schema");
-  if (Integer(v, "schema_version", 1) != 1 || Text(v, "camera_id") != camera ||
-      Text(v, "ros_type") != "sensor_msgs/msg/Image" || Text(v, "clock_kind") != "CLOCK_BOOTTIME" ||
-      Text(v, "boot_id") != boot || Text(v, "time_namespace") != time_ns ||
-      Text(v, "phase") != "monitoring" ||
-      Field(v, "process_present").kind_case() != Value::kBoolValue ||
-      !Field(v, "process_present").bool_value())
-    throw std::runtime_error("Camera binding unavailable or clock incomparable");
-  auto stamp = Text(v, "captured_boottime_ns", 20);
-  if (!std::regex_match(stamp, std::regex("[0-9]{1,20}")))
-    throw std::runtime_error("Invalid manifest time");
-  uint64_t captured = std::stoull(stamp), now = Now();
-  if (captured > now || now - captured > 3000000000ULL)
-    throw std::runtime_error("Camera manifest stale or in the future");
-  Binding b{Text(v, "instance_id", 128),
-            camera,
-            Text(v, "topic"),
-            Text(v, "node_name", 128),
-            Text(v, "node_namespace"),
-            boot,
-            time_ns,
-            Integer(v, "ros_domain", 232)};
-  if (b.instance.empty() || !std::regex_match(b.node, std::regex("[A-Za-z_][A-Za-z_0-9]*")) ||
-      b.ns != "/" || !std::regex_match(b.topic, std::regex("(/[A-Za-z_][A-Za-z_0-9]*)+")))
-    throw std::runtime_error("Invalid ROS camera binding");
-  return b;
+using Binding = joshua::mcp::RosSourceBinding;
+Binding Resolve(int root, const std::string& path, const std::string& camera, int domain) {
+  auto result = joshua::mcp::ResolveImageSource(root, path, camera, domain);
+  if (!result.ok()) throw std::runtime_error(std::string(result.status().message()));
+  return *result;
 }
 class Observer {
  public:
   Observer(const Binding& b, const JpegEncoder& encode)
       : binding(b), encoder(encode), nonce(Identity("/proc/sys/kernel/random/uuid")) {
+    clock = "CLOCK_BOOTTIME:" + Identity("/proc/sys/kernel/random/boot_id") + ":" + TimeNamespace();
     context = std::make_shared<rclcpp::Context>();
     rclcpp::InitOptions init;
     init.auto_initialize_logging(false);
@@ -289,9 +199,10 @@ class Observer {
         throw std::runtime_error(diagnostic);
       }
     }
-    Set(v, "runtime_instance", binding.instance);
+    (*v.mutable_struct_value()->mutable_fields())["runtime_instance"].set_null_value(
+        google::protobuf::NULL_VALUE);
     Set(v, "receipt_boottime_ns", std::to_string(receipt));
-    Set(v, "clock_id", "CLOCK_BOOTTIME:" + binding.boot + ":" + binding.time_ns);
+    Set(v, "clock_id", clock);
     Set(v, "source_stamp_sec", double(sample->header.stamp.sec));
     Set(v, "source_stamp_nanosec", double(sample->header.stamp.nanosec));
     Set(v, "sample_id", nonce + ":" + std::to_string(counter));
@@ -341,7 +252,7 @@ class Observer {
   }
   JpegEncoder encoder;
   bool refresh_subscription = false;
-  std::string nonce, gid, diagnostic = "No associated image received";
+  std::string clock, nonce, gid, diagnostic = "No associated image received";
   uint64_t receipt = 0, counter = 0;
   int width = 0, height = 0;
   std::optional<sensor_msgs::msg::Image> sample;
@@ -384,26 +295,26 @@ Value Error(uint64_t query,
   return v;
 }
 }  // namespace
-int RunImageObserver(int argc,
-                     char** argv,
-                     JpegEncoder encoder,
-                     ManifestReadHook manifest_read_hook) {
+int RunImageObserver(int argc, char** argv, JpegEncoder encoder) {
   if (!encoder)
     encoder = [](const cv::Mat& image, std::vector<uint8_t>& bytes) {
       return cv::imencode(".jpg", image, bytes, {cv::IMWRITE_JPEG_QUALITY, 80});
     };
   try {
-    if (argc != 5 || std::string(argv[1]) != "--directory-fd" ||
-        std::string(argv[3]) != "--camera-id")
+    if (argc != 7 || std::string(argv[1]) != "--root-fd" || std::string(argv[3]) != "--config" ||
+        std::string(argv[5]) != "--camera-id")
       return 2;
     int directory = std::stoi(argv[2]);
-    std::string camera = argv[4];
+    const std::string path = argv[4], camera = argv[6];
     struct stat d {};
-    if (fstat(directory, &d) || !S_ISDIR(d.st_mode) || d.st_uid != geteuid() || d.st_mode & 077 ||
-        camera.rfind("sensor:", 0) != 0 || camera.size() > 512 || camera.size() <= 7 ||
-        camera.find('\0') != std::string::npos)
+    if (fstat(directory, &d) || !S_ISDIR(d.st_mode)) return 2;
+    const std::string domain_text =
+        std::getenv("ROS_DOMAIN_ID") ? std::getenv("ROS_DOMAIN_ID") : "0";
+    if (domain_text.empty() || domain_text.size() > 3 ||
+        domain_text.find_first_not_of("0123456789") != std::string::npos)
       return 2;
-    const auto boot = Identity("/proc/sys/kernel/random/boot_id"), time_ns = TimeNamespace();
+    const int domain = std::stoi(domain_text);
+    if (domain > 232) return 2;
     std::unique_ptr<Observer> observer;
     std::string input;
     for (;;) {
@@ -432,7 +343,7 @@ int RunImageObserver(int argc,
       uint64_t query = std::stoull(input);
       input.clear();
       try {
-        auto binding = Manifest(directory, camera, boot, time_ns, manifest_read_hook);
+        auto binding = Resolve(directory, path, camera, domain);
         if (observer && !(observer->binding == binding)) {
           observer.reset();
           Reply(Error(query,
@@ -446,8 +357,9 @@ int RunImageObserver(int argc,
         if (!observer) observer = std::make_unique<Observer>(binding, encoder);
         observer->Spin();
         auto response = observer->Reply(query, camera);
-        // Include encode/discovery in the binding race check, and re-check endpoint identity.
-        auto current = Manifest(directory, camera, boot, time_ns, manifest_read_hook);
+        // Include encode/discovery in the candidate mapping race check, and re-check endpoint
+        // identity.
+        auto current = Resolve(directory, path, camera, domain);
         if (!(current == binding)) {
           observer.reset();
           Reply(Error(query, camera, "no_data", "Camera binding changed during query", true), {});
@@ -470,4 +382,4 @@ int RunImageObserver(int argc,
   }
 }
 
-}  // namespace ros2_utils
+}  // namespace joshua::mcp
