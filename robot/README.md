@@ -30,6 +30,20 @@ code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
+Feetech identification also reads each servo's status-return level (register 8).
+Level 1 register writes consume and validate their acknowledgment before releasing
+the bus; level 0 remains send-only. This includes torque and position writes.
+The host never changes the setting or automatically retries a write. A failed
+write or invalid write reply latches a fault across the shared board: further
+motion, enable and feedback requests are rejected, so a late reply cannot confirm
+a later command. Torque-disable requests still send best-effort bytes, but return
+an error stating that the outcome is unconfirmed; they never consume a reply or
+clear the fault. Host `recover` cannot clear this board fault. Secure the mechanism,
+inspect the device/link, close all consumers and deliberately restart the runtime
+before resuming. Changing the servo's reply policy externally also requires a
+runtime restart. See the
+[vendor reply contract](https://github.com/ftservo/FTServo_Arduino/blob/main/src/SCS.cpp)
+and [status-return register](https://docs.waveshare.com/Memory_Map_Explanation/ST_Servo_Memory_Map_Explanation).
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
 See [implemented components](../docs/SUPPORTED_COMPONENTS.md) for software paths
 and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
