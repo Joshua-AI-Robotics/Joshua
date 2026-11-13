@@ -430,6 +430,11 @@ requires explicit recovery, then enable; recovery never replays motion. These
 services clear only host state and cannot clear a firmware latch. JoshuaWire
 fault/ESTOP still needs deliberate device recovery and a fresh runtime. Composed
 `~/estop` also interlocks all host gates and invokes available board stop support.
+Each board performs any required channel-disable fallback independently, so a
+delayed acknowledgment on another board cannot hold up that fallback. Recovery
+stays blocked until all bus-wide stop work completes; a per-actuator stop cannot
+complete a pending bus-wide request. Completed stops still require explicit
+recovery and enable.
 No host acknowledgment is physical stop evidence.
 
 ## Observation readiness

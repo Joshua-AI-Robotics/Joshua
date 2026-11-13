@@ -106,27 +106,46 @@ class ControlGate {
   // Admission only: no command lock or driver I/O. A bus owner can interlock
   // every actuator before dispatching its independent board emergency stop.
   uint64_t RequestStop() {
-    return stop_epoch_.fetch_add(1) + 1;
+    std::lock_guard lock(stop_mutex_);
+    const auto epoch = stop_epoch_.load() + 1;
+    pending_stops_.insert(epoch);
+    stop_epoch_.store(epoch);
+    return epoch;
+  }
+  // Finish only the caller's request after its stop work has completed. This
+  // releases a pending-operation barrier, not the explicit recovery latch.
+  absl::Status CompleteStopRequest(uint64_t epoch) {
+    std::lock_guard lock(stop_mutex_);
+    if (!pending_stops_.erase(epoch))
+      return absl::InvalidArgumentError("Unknown or completed stop request");
+    return absl::OkStatus();
   }
   absl::Status Stop(bool output_already_disabled = false) {
     const auto epoch = RequestStop();
     std::lock_guard lock(mutex_);
-    if (state_ == State::kClosed) return absl::UnavailableError("Actuator is closed");
+    if (state_ == State::kClosed) {
+      CompleteStopRequest(epoch).IgnoreError();
+      return absl::UnavailableError("Actuator is closed");
+    }
     absl::Status status;
     if (output_already_disabled)
       state_ = State::kStopped;
     else
       status = DisableLocked(State::kStopped);
-    completed_stop_epoch_ = std::max(completed_stop_epoch_, epoch);
+    status.Update(CompleteStopRequest(epoch));
     return status;
   }
   absl::Status Recover(int64_t ros_now_ns) {
     std::lock_guard lock(mutex_);
     if (state_ == State::kEnabled || state_ == State::kClosed)
       return absl::FailedPreconditionError("Disable/stop before recovery");
-    const auto epoch = stop_epoch_.load();
-    if (epoch != completed_stop_epoch_)
-      return absl::FailedPreconditionError("Wait for the pending stop before recovery");
+    uint64_t epoch;
+    {
+      std::lock_guard lock(stop_mutex_);
+      if (!pending_stops_.empty())
+        return absl::FailedPreconditionError("Wait for every pending stop before recovery");
+      epoch = stop_epoch_.load();
+    }
     source_epoch_ns_ = ros_now_ns;
     last_stamp_ = -std::numeric_limits<double>::infinity();
     auto status = DisableLocked(State::kDisabled);
@@ -187,7 +206,9 @@ class ControlGate {
   Clock::time_point deadline_{};
   mutable std::mutex mutex_;
   std::atomic<uint64_t> stop_epoch_{0};
-  uint64_t recovered_stop_epoch_ = 0, completed_stop_epoch_ = 0;
+  std::mutex stop_mutex_;  // Never held across driver I/O or while acquiring mutex_.
+  std::set<uint64_t> pending_stops_;
+  uint64_t recovered_stop_epoch_ = 0;
   State state_ = State::kDisabled;
 };
 }  // namespace robot::action

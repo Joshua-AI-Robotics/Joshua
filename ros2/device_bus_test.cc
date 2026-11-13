@@ -2,8 +2,10 @@
 
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <future>
 #include <thread>
 
 #include "config/validation.h"
@@ -22,6 +24,11 @@ using namespace std::chrono_literals;
 // Exercises the production board, motor and encoder factories; only the wire is fake.
 class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
  public:
+  absl::Status Write(const std::vector<uint8_t>& bytes) override {
+    if (bytes.size() > 6 && bytes[5] == 40) enabled = bytes[6] != 0;
+    return robot::comm::FakeCallerSizedMessageTransport::Write(bytes);
+  }
+  std::atomic<bool> enabled{false};
   absl::StatusOr<std::vector<uint8_t>> SendAndReceive(const std::vector<uint8_t>& bytes,
                                                       size_t size) override {
     ++reads;
@@ -39,6 +46,38 @@ class ServoWire : public robot::comm::FakeCallerSizedMessageTransport {
   std::atomic<int> reads{0};
   std::atomic<bool> fail_reads{false};
 };
+
+// A different physical board whose ESTOP acknowledgment is deliberately delayed.
+class DelayedStopBoard : public robot::board::BoardInterface {
+ public:
+  absl::Status Init(const robot::board::Board&) override {
+    return absl::OkStatus();
+  }
+  absl::Status Teardown() override {
+    return absl::OkStatus();
+  }
+  absl::StatusOr<std::shared_ptr<robot::board::BoardChannel>> OpenChannel(uint32_t) override {
+    return absl::UnimplementedError("No channels in delayed stop fixture");
+  }
+  absl::Status EmergencyStop() override {
+    entered.set_value();
+    released_.wait();
+    return absl::DeadlineExceededError("Other board acknowledgment lost");
+  }
+  void Release() {
+    if (!released_once_) {
+      release_.set_value();
+      released_once_ = true;
+    }
+  }
+  std::promise<void> entered;
+
+ private:
+  std::promise<void> release_;
+  std::shared_future<void> released_ = release_.get_future().share();
+  bool released_once_ = false;
+};
+}  // namespace
 
 class DeviceBusTest : public testing::Test {
  protected:
@@ -142,6 +181,9 @@ class DeviceBusTest : public testing::Test {
       std::this_thread::sleep_for(5ms);
     } while (std::chrono::steady_clock::now() < deadline);
     return false;
+  }
+  void AddDelayedBoard(DeviceBus& runtime, std::shared_ptr<DelayedStopBoard> board) {
+    runtime.boards_.emplace("delayed_board", std::move(board));
   }
   bool Wrote(uint8_t reg, uint8_t value) {
     for (const auto& w : wire->written_)
@@ -278,4 +320,70 @@ TEST_F(DeviceBusTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   EXPECT_FALSE(config::ValidateConfig(config).ok());
   EXPECT_EQ(opens, 0);
 }
-}  // namespace
+
+TEST_F(DeviceBusTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecoveryInterlocked) {
+  config.mutable_robot()
+      ->mutable_actions()
+      ->mutable_single_actions(0)
+      ->mutable_actuator()
+      ->mutable_control_policy()
+      ->set_command_timeout_ms(10000);
+  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+  auto delayed = std::make_shared<DelayedStopBoard>();
+  AddDelayedBoard(*runtime, delayed);
+  auto entered = delayed->entered.get_future();
+  auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
+  const auto actuator = "/" + prefix + "/" + prefix + "/";
+  auto enable = client->create_client<std_srvs::srv::Trigger>(actuator + "enable");
+  auto local_stop = client->create_client<std_srvs::srv::Trigger>(actuator + "stop");
+  auto recover = client->create_client<std_srvs::srv::Trigger>(actuator + "recover");
+  auto estop = client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/estop");
+  rclcpp::executors::MultiThreadedExecutor multi(rclcpp::ExecutorOptions(), 2);
+  multi.add_node(runtime);
+  multi.add_node(client);
+  std::thread spin([&] { multi.spin(); });
+  joshua::ScopeExit cleanup([&] {
+    delayed->Release();
+    multi.cancel();
+    spin.join();
+    multi.remove_node(runtime);
+    multi.remove_node(client);
+  });
+  ASSERT_TRUE(enable->wait_for_service(2s));
+  ASSERT_TRUE(local_stop->wait_for_service(2s));
+  ASSERT_TRUE(recover->wait_for_service(2s));
+  ASSERT_TRUE(estop->wait_for_service(2s));
+  auto call = [&](const auto& service) {
+    auto reply = service->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+    if (reply.wait_for(2s) != std::future_status::ready) {
+      ADD_FAILURE() << "Control service did not complete";
+      return false;
+    }
+    return reply.get()->success;
+  };
+  ASSERT_TRUE(call(enable));
+  ASSERT_TRUE(wire->enabled);
+  auto stopped = estop->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+  ASSERT_EQ(entered.wait_for(2s), std::future_status::ready);
+  // The healthy Feetech board has no EmergencyStop implementation. Its actual
+  // torque-disable fallback must complete while the other board still waits.
+  const auto deadline = std::chrono::steady_clock::now() + 2s;
+  while (wire->enabled && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(1ms);
+  EXPECT_FALSE(wire->enabled);
+  EXPECT_EQ(stopped.wait_for(0s), std::future_status::timeout);
+  EXPECT_TRUE(call(local_stop));
+  EXPECT_FALSE(call(recover));
+  EXPECT_FALSE(call(enable));
+  EXPECT_FALSE(wire->enabled);
+
+  delayed->Release();
+  ASSERT_EQ(stopped.wait_for(2s), std::future_status::ready);
+  auto response = stopped.get();
+  EXPECT_FALSE(response->success);
+  EXPECT_NE(response->message.find("Other board acknowledgment lost"), std::string::npos);
+  EXPECT_FALSE(call(enable));
+  ASSERT_TRUE(call(recover));
+  EXPECT_TRUE(call(enable));
+  EXPECT_TRUE(wire->enabled);
+}

@@ -38,27 +38,30 @@ class DeviceBus : public ActionSubscriber {
         "~/estop",
         [this](std::shared_ptr<std_srvs::srv::Trigger::Request>,
                std::shared_ptr<std_srvs::srv::Trigger::Response> reply) {
-          RequestStopActions();
+          const auto requests = RequestStopActions();
           reply->success = true;
-          std::set<std::string> stopped_boards;
-          // Start every stop before waiting: a lost reply on one port must not
-          // delay stop dispatch on another independent board.
+          // Each board performs its own fallback before waiting on other boards.
+          // Keep the bus-wide requests pending until all stop work has finished.
           std::map<std::string, std::future<absl::Status>> stops;
           for (const auto& [name, board] : boards_)
-            stops.emplace(
-                name, std::async(std::launch::async, [board] { return board->EmergencyStop(); }));
+            stops.emplace(name, std::async(std::launch::async, [this, name, board] {
+                            auto status = board->EmergencyStop();
+                            const auto disabled = StopBoardActions(name, status.ok());
+                            if (absl::IsUnimplemented(status)) status = absl::OkStatus();
+                            status.Update(disabled);
+                            return status;
+                          }));
           for (auto& [name, stop] : stops) {
             const auto status = stop.get();
-            if (status.ok()) stopped_boards.insert(name);
-            if (!status.ok() && !absl::IsUnimplemented(status)) {
+            if (!status.ok()) {
               reply->success = false;
               reply->message += status.ToString() + "; ";
             }
           }
-          const auto disabled = StopActions(stopped_boards);
-          if (!disabled.ok()) {
+          const auto completed = CompleteStopActions(requests);
+          if (!completed.ok()) {
             reply->success = false;
-            reply->message += disabled.ToString() + "; ";
+            reply->message += completed.ToString() + "; ";
           }
           if (reply->success)
             reply->message =
@@ -77,6 +80,7 @@ class DeviceBus : public ActionSubscriber {
 
  private:
   friend class McuBusTest;
+  friend class DeviceBusTest;
   std::vector<std::unique_ptr<ros2_utils::ObservationPublisher>> observations_;
   std::map<std::string, std::shared_ptr<robot::board::BoardInterface>> boards_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_;
