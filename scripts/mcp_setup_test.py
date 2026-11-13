@@ -262,6 +262,134 @@ class RegistrationTests(unittest.TestCase):
                     "claude", root, {"command": "/new", "args": []}
                 )
 
+    def test_setup_preserves_project_disabled_registration_before_preparation(self):
+        import mcp_runtime
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = setup.server_entry(root, "u22", root / "config/config_preset")
+            config = root / ".claude.json"
+            original = json.dumps(
+                {
+                    "mcpServers": {"joshua": entry},
+                    "projects": {str(root): {"disabledMcpServers": ["joshua"]}},
+                }
+            )
+            config.write_text(original)
+            with patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": directory}), patch.object(
+                setup, "choose_client", return_value="claude"
+            ), patch.object(mcp_runtime, "Runtime") as runtime, patch.object(
+                setup, "run_client"
+            ) as run, patch.object(
+                setup, "record_registration"
+            ), patch.object(
+                setup.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0),
+            ), patch.object(
+                setup.sys, "stdout", io.StringIO()
+            ), patch.object(
+                setup.sys, "stderr", io.StringIO()
+            ) as error:
+                runtime.return_value.doctor.return_value = {
+                    "ok": True,
+                    "state": {"prepare_seconds": 1.0},
+                }
+                self.assertEqual(setup.main(["--root", str(root)]), 1)
+            self.assertIn("disabled", error.getvalue())
+            self.assertIn("/mcp", error.getvalue())
+            runtime.assert_not_called()
+            run.assert_not_called()
+            self.assertEqual(config.read_text(), original)
+
+    def test_doctor_reports_project_disabled_registration_without_repair(self):
+        import mcp_runtime
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = setup.server_entry(root, "u22", root / "config/config_preset")
+            state = {
+                "root": str(root),
+                "stack": "u22",
+                "config_root": str(root / "config/config_preset"),
+            }
+            metadata = root / "dist/mcp/u22/registration.json"
+            metadata.parent.mkdir(parents=True)
+            metadata.write_text(json.dumps({"clients": {"claude": entry}}))
+            config = root / ".claude.json"
+            for disabled, expected in ((["joshua"], "attention"), (["other"], "saved")):
+                original = json.dumps(
+                    {
+                        "mcpServers": {"joshua": entry},
+                        "projects": {str(root): {"disabledMcpServers": disabled}},
+                    }
+                )
+                config.write_text(original)
+                with self.subTest(disabled=disabled), patch.dict(
+                    os.environ, {"CLAUDE_CONFIG_DIR": directory}
+                ), patch.object(mcp_runtime, "Runtime") as runtime, patch.object(
+                    setup, "run_client"
+                ) as run, patch.object(
+                    mcp_runtime.sys, "stdout", io.StringIO()
+                ) as output:
+                    runtime.return_value.root = root
+                    runtime.return_value.stack = "u22"
+                    runtime.return_value.doctor.return_value = {
+                        "ok": True,
+                        "status": "ready",
+                        "problems": [],
+                        "state": state,
+                    }
+                    code = mcp_runtime.main(["doctor"])
+                    report = json.loads(output.getvalue())
+                    registration = report["registrations"]["claude"]
+                    self.assertEqual(registration["status"], expected)
+                    self.assertEqual(code, 1 if expected == "attention" else 0)
+                    self.assertEqual(report["ok"], expected == "saved")
+                    if expected == "attention":
+                        self.assertIn("/mcp", registration["detail"])
+                    runtime.return_value.prepare.assert_not_called()
+                    run.assert_not_called()
+                    self.assertEqual(config.read_text(), original)
+
+    def test_json_adapter_ignores_disabled_registration_in_other_projects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = setup.server_entry(root, "u22", root / "config/config_preset")
+            config = root / ".claude.json"
+            original = json.dumps(
+                {
+                    "mcpServers": {"joshua": entry},
+                    "projects": {
+                        str(root): {"disabledMcpServers": ["other"]},
+                        str(root / "other"): {"disabledMcpServers": ["joshua"]},
+                    },
+                }
+            )
+            config.write_text(original)
+            with patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": directory}), patch.object(
+                setup, "run_client"
+            ) as run:
+                self.assertEqual(setup.register("claude", entry, root), "existing")
+            run.assert_not_called()
+            self.assertEqual(config.read_text(), original)
+
+    def test_json_adapter_rejects_malformed_project_disabled_servers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = setup.server_entry(root, "u22", root / "config/config_preset")
+            config = root / ".claude.json"
+            for disabled in (None, "joshua", {"joshua": True}, [42]):
+                original = json.dumps(
+                    {"projects": {str(root): {"disabledMcpServers": disabled}}}
+                )
+                config.write_text(original)
+                with self.subTest(disabled=disabled), patch.dict(
+                    os.environ, {"CLAUDE_CONFIG_DIR": directory}
+                ), self.assertRaisesRegex(setup.SetupError, "disabledMcpServers"):
+                    setup.check_registration("claude", entry, root)
+                self.assertEqual(config.read_text(), original)
+
     def test_selection_is_explicit_when_multiple_clients_noninteractive(self):
         with patch.object(setup.shutil, "which", return_value="/cli"), patch.object(
             setup.sys.stdin, "isatty", return_value=False

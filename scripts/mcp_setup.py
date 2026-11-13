@@ -137,6 +137,17 @@ def check_project_shadow(client, root, expected):
                 "A project MCP configuration shadows Joshua. "
                 "Resolve it in the AI IDE, then retry."
             )
+    disabled = project.get("disabledMcpServers", [])
+    if not isinstance(disabled, list) or any(
+        not isinstance(name, str) for name in disabled
+    ):
+        raise SetupError("Cannot interpret project disabledMcpServers configuration.")
+    if "joshua" in disabled:
+        raise SetupError(
+            "Joshua is disabled for this project in Claude Code. "
+            "Re-enable Joshua through /mcp, then retry. "
+            "Setup will not change this setting."
+        )
 
 
 def user_config_cwd(client):
