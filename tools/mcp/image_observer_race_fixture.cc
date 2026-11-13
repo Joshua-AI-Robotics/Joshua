@@ -25,10 +25,13 @@ int main(int argc, char** argv) {
         bool okay = cv::imencode(".jpg", image, bytes, {cv::IMWRITE_JPEG_QUALITY, 80});
         std::ifstream input(path);
         std::string text((std::istreambuf_iterator<char>(input)), {});
-        const std::string original = "/_joshua_image_fixture/image";
-        const auto position = text.find(original);
-        if (position == std::string::npos) throw std::runtime_error("fixture topic not found");
-        text.replace(position, original.size(), "/changed_inside_codec");
+        const std::string marker = "topic: \"";
+        const auto field = text.find(marker);
+        if (field == std::string::npos) throw std::runtime_error("fixture topic not found");
+        const auto position = field + marker.size();
+        const auto end = text.find('"', position);
+        if (end == std::string::npos) throw std::runtime_error("fixture topic malformed");
+        text.replace(position, end - position, "/changed_inside_codec");
         std::ofstream(path + ".tmp") << text;
         if (rename((path + ".tmp").c_str(), path.c_str()))
           throw std::runtime_error("fixture candidate replace");

@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import secrets
 import sys
 import tempfile
@@ -276,6 +277,7 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = self.temp.name
+        self.fixture_stderr = bytearray()
         self.fixture_mode = "normal"
         self.fixture_transition = "initial normal"
         self.environment = dict(
@@ -289,15 +291,25 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
             self.directory,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
             env=self.environment,
         )
-        await asyncio.wait_for(self.fixture.stdout.readline(), 10)
+        self.fixture_stderr_task = asyncio.create_task(self.drain_fixture_stderr())
+        self.assertEqual(
+            await asyncio.wait_for(self.fixture.stdout.readline(), 10), b"READY\n"
+        )
+
+    async def drain_fixture_stderr(self):
+        while chunk := await self.fixture.stderr.read(4096):
+            self.fixture_stderr.extend(
+                chunk[: max(0, 65536 - len(self.fixture_stderr))]
+            )
 
     async def asyncTearDown(self):
         if self.fixture.returncode is None:
             self.fixture.kill()
         await self.fixture.wait()
+        await self.fixture_stderr_task
         self.temp.cleanup()
 
     async def mode(self, value):
@@ -321,6 +333,31 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
             f"did not reach {state} in fixture transition "
             f"{self.fixture_transition}: {result}"
         )
+
+    async def test_fixtures_in_one_domain_have_distinct_topics(self):
+        with tempfile.TemporaryDirectory() as other_directory:
+            other = await asyncio.create_subprocess_exec(
+                str(FIXTURE),
+                other_directory,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=self.environment,
+            )
+            try:
+                self.assertEqual(
+                    await asyncio.wait_for(other.stdout.readline(), 10), b"READY\n"
+                )
+
+                def topic(directory):
+                    text = Path(directory, CONFIG_PATH).read_text()
+                    return re.search(r'topic: "([^"]+)"', text).group(1)
+
+                self.assertNotEqual(topic(self.directory), topic(other_directory))
+            finally:
+                if other.returncode is None:
+                    other.kill()
+                await other.wait()
 
     async def test_actual_ros_helper_adapter_sdk_jpeg_and_recovery(self):
         params = StdioServerParameters(
@@ -516,12 +553,40 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
                     CONFIG_PATH,
                 )
                 try:
-                    for _ in range(100):
+                    # ROS discovery is asynchronous, separate from the per-read
+                    # five-second deadline. Wait for the codec to actually run.
+                    started = time.monotonic()
+                    deadline = started + 10
+                    transitions = []
+                    while True:
                         result = await source.read_latest()
-                        if "JPEG encoding failed" in result.diagnostic:
+                        state = (
+                            source._process.pid if source._process else None,
+                            result.diagnostic,
+                        )
+                        if not transitions or transitions[-1] != state:
+                            transitions.append(state)
+                        if (
+                            "JPEG encoding failed" in result.diagnostic
+                            or time.monotonic() >= deadline
+                        ):
                             break
                         await asyncio.sleep(0.03)
-                    self.assertIn("JPEG encoding failed", result.diagnostic)
+                    evidence = dict(
+                        executable=executable,
+                        domain=self.environment["ROS_DOMAIN_ID"],
+                        config=Path(self.directory, CONFIG_PATH).read_text(),
+                        fixture_exit=self.fixture.returncode,
+                        helper_transitions=transitions[-10:],
+                        fixture_stderr=self.fixture_stderr.decode(errors="replace")[
+                            -2048:
+                        ],
+                    )
+                    self.assertIn("JPEG encoding failed", result.diagnostic, evidence)
+                    print(
+                        f"{executable}: discovery/codec outcome in "
+                        f"{time.monotonic() - started:.3f}s"
+                    )
                     self.assertIsNone(result.payload)
                     self.assertIsNone(source._process)
                 finally:

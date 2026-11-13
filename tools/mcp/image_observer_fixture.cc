@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -26,7 +27,11 @@ int main(int argc, char** argv) {
   camera->mutable_node()->set_id(12);
   camera->mutable_node()->set_node_type(ros2::node::CAMERA_PUBLISHER);
   auto* p = camera->mutable_node()->add_publishers();
-  p->set_topic("/_joshua_image_fixture/image");
+  // DDS discovery can outlive a killed test participant. Isolate each fixture's
+  // topics even when two tests happen to choose the same ROS domain.
+  const std::string fixture_topic =
+      "/_joshua_image_fixture/f" + std::to_string(std::hash<std::string>{}(argv[1])) + "/image";
+  p->set_topic(fixture_topic);
   p->set_ros2_data_type(ros2::data_type::IMAGE);
   p->set_publish_rate_hz(30);
   using Publisher = rclcpp::Publisher<sensor_msgs::msg::Image>;
@@ -67,7 +72,7 @@ int main(int argc, char** argv) {
       std::getline(std::cin, mode);
       if (mode == "exit") break;
       if (mode == "rebind_topic") {
-        p->set_topic("/joshua_image_fixture/rebound");
+        p->set_topic(fixture_topic + "/rebound");
         create();
       }
       if (mode == "rebind_instance") create();
