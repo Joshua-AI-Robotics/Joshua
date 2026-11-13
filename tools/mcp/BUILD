@@ -80,3 +80,23 @@ py_test(
     srcs = ["observation_source_test.py"],
     deps = [":observation_source"],
 )
+
+py_binary(
+    name = "setup_smoke",
+    srcs = ["setup_smoke.py"],
+    deps = mcp_requirement("mcp"),
+)
+
+py_test(
+    name = "setup_smoke_test",
+    size = "medium",
+    srcs = ["setup_smoke.py"],
+    args = ["--test"],
+    data = [
+        ":config_validation_server",
+        "//config:joshua_inspect_config",
+        "//config:joshua_validate_config",
+    ],
+    main = "setup_smoke.py",
+    deps = mcp_requirement("mcp"),
+)

@@ -1,0 +1,123 @@
+# Standalone CPU-only local MCP services. Do not merge with the dev-shell file.
+# The build definitions deliberately match docker-compose.yml's supported images.
+x-runtime: &runtime
+  image: ${JOSHUA_MCP_IMAGE:-joshua:u22-humble}
+  pull_policy: never
+  init: true
+  user: ${JOSHUA_MCP_USER:-1000:1000}
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  network_mode: none
+  stdin_open: true
+  tty: false
+  working_dir: /workspace
+  environment:
+    ROS_DISTRO: ${JOSHUA_MCP_ROS_DISTRO:-humble}
+    ENABLE_MOCK_SERIAL_PORTS: "false"
+    PYTHONDONTWRITEBYTECODE: "1"
+    HOME: /tmp
+  tmpfs:
+    - /tmp:rw,exec,nosuid,nodev,mode=1777
+  labels:
+    io.joshua.mcp.root: ${JOSHUA_MCP_ROOT_ID:-unset}
+    io.joshua.mcp.stack: ${JOSHUA_MCP_STACK:-u22}
+    io.joshua.mcp.role: serve
+    io.joshua.mcp.owner: ${JOSHUA_MCP_OWNER:-unknown}
+  volumes:
+    - type: bind
+      source: ${JOSHUA_MCP_ROOT:-.}
+      target: /workspace
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${JOSHUA_MCP_ARTIFACTS:-./dist/mcp/unprepared}
+      target: /opt/joshua-mcp
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${JOSHUA_MCP_CONFIG_ROOT:-./config/config_preset}
+      target: /configs
+      read_only: true
+      bind:
+        create_host_path: false
+
+services:
+  mcp-build-u22:
+    image: joshua:u22-humble
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu22
+      platforms: [linux/amd64]
+    profiles: [build]
+  mcp-build-u24:
+    image: joshua:u24-jazzy
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.ubuntu24
+      platforms: [linux/amd64]
+    profiles: [build]
+  mcp-prepare:
+    image: ${JOSHUA_MCP_IMAGE:-joshua:u22-humble}
+    pull_policy: never
+    init: true
+    cap_drop: [ALL]
+    user: ${JOSHUA_MCP_USER:-1000:1000}
+    security_opt: [no-new-privileges:true]
+    environment:
+      ROS_DISTRO: ${JOSHUA_MCP_ROS_DISTRO:-humble}
+      ENABLE_MOCK_SERIAL_PORTS: "false"
+      HOME: /mcp-cache
+      USER: joshua
+    volumes:
+      - type: bind
+        source: ${JOSHUA_MCP_ROOT:-.}
+        target: /workspace
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${JOSHUA_MCP_ARTIFACTS:-./dist/mcp/unprepared}
+        target: /artifacts
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${JOSHUA_MCP_CACHE:-./.cache/mcp/u22}
+        target: /mcp-cache
+        bind:
+          create_host_path: false
+    working_dir: /workspace
+    labels:
+      io.joshua.mcp.root: ${JOSHUA_MCP_ROOT_ID:-unset}
+      io.joshua.mcp.stack: ${JOSHUA_MCP_STACK:-u22}
+      io.joshua.mcp.role: prepare
+      io.joshua.mcp.owner: ${JOSHUA_MCP_OWNER:-unknown}
+    command: [python3, /workspace/scripts/mcp_container_prepare.py, --stack, "${JOSHUA_MCP_STACK:-u22}"]
+  mcp-serve:
+    <<: *runtime
+    command:
+      - /opt/joshua-mcp/tools/mcp/config_validation_server
+      - --validator
+      - /opt/joshua-mcp/config/joshua_validate_config
+      - --inspector
+      - /opt/joshua-mcp/config/joshua_inspect_config
+      - --config-root
+      - /configs
+  mcp-check:
+    <<: *runtime
+    stdin_open: false
+    labels:
+      io.joshua.mcp.root: ${JOSHUA_MCP_ROOT_ID:-unset}
+      io.joshua.mcp.stack: ${JOSHUA_MCP_STACK:-u22}
+      io.joshua.mcp.role: check
+      io.joshua.mcp.owner: ${JOSHUA_MCP_OWNER:-unknown}
+    command: [/opt/joshua-mcp/tools/mcp/setup_smoke]
+  mcp-probe:
+    <<: *runtime
+    stdin_open: false
+    labels:
+      io.joshua.mcp.root: ${JOSHUA_MCP_ROOT_ID:-unset}
+      io.joshua.mcp.stack: ${JOSHUA_MCP_STACK:-u22}
+      io.joshua.mcp.role: probe
+      io.joshua.mcp.owner: ${JOSHUA_MCP_OWNER:-unknown}

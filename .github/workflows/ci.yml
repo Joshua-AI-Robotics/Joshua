@@ -53,6 +53,9 @@ jobs:
       - name: Check Docker-first invariants
         run: ./scripts/docker_entrypoints_test.sh
 
+      - name: Test local MCP launcher
+        run: python3 -m unittest discover -s scripts -p 'mcp_*_test.py'
+
   docker-test:
     name: Docker tests (${{ matrix.os }})
     runs-on: ubuntu-22.04
