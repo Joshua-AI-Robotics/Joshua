@@ -4,6 +4,7 @@
 #include <memory>
 #include <set>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "config/proto/config.pb.h"
@@ -110,13 +111,25 @@ class ActionSubscriber : public rclcpp::Node {
   }
 
  protected:
-  void RequestStopActions() {
-    for (auto& actuator : gates_) actuator.gate->RequestStop();
+  using StopRequests =
+      std::vector<std::pair<std::shared_ptr<robot::action::ControlGate>, uint64_t>>;
+  StopRequests RequestStopActions() {
+    StopRequests requests;
+    requests.reserve(gates_.size());
+    for (auto& actuator : gates_)
+      requests.emplace_back(actuator.gate, actuator.gate->RequestStop());
+    return requests;
   }
-  absl::Status StopActions(const std::set<std::string>& stopped_boards = {}) {
+  absl::Status CompleteStopActions(const StopRequests& requests) {
+    absl::Status result;
+    for (const auto& [gate, request] : requests) result.Update(gate->CompleteStopRequest(request));
+    return result;
+  }
+  absl::Status StopBoardActions(const std::string& board_name, bool output_already_disabled) {
     absl::Status result;
     for (auto& actuator : gates_)
-      result.Update(actuator.gate->Stop(stopped_boards.count(actuator.board_name) != 0));
+      if (actuator.board_name == board_name)
+        result.Update(actuator.gate->Stop(output_already_disabled));
     return result;
   }
   void ShutdownActions() {

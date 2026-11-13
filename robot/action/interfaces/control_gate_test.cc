@@ -29,6 +29,7 @@ class FakeAction : public ActionInterface {
       ++enables;
     }
     if (p.preset() == PRESET_DISABLE_TORQUE) {
+      if (!disable_status.ok()) return disable_status;
       enabled = false;
       ++disables;
     }
@@ -37,6 +38,7 @@ class FakeAction : public ActionInterface {
   bool enabled = true;
   int targets = 0, enables = 0, disables = 0;
   absl::Status target_status;
+  absl::Status disable_status;
 };
 ActionPacket Target(uint64_t stamp = 0) {
   ActionPacket p;
@@ -174,10 +176,10 @@ TEST(ControlGateTest, StopAdmissionBypassesBlockedIoAndRejectsQueuedMotionUntilR
   auto target =
       std::async(std::launch::async, [&] { return gate.Execute("default", Target(), 0, t); });
   action->entered.get_future().wait();
-  auto interlocked = std::async(std::launch::async, [&] { gate.RequestStop(); });
+  auto interlocked = std::async(std::launch::async, [&] { return gate.RequestStop(); });
   EXPECT_EQ(interlocked.wait_for(100ms), std::future_status::ready);
   action->release.set_value();
-  interlocked.get();
+  const auto request = interlocked.get();
   EXPECT_TRUE(target.get().ok());
   EXPECT_EQ(gate.state(), ControlGate::State::kStopped);
   EXPECT_FALSE(gate.Execute("default", Target(), 0, t).ok());
@@ -188,6 +190,8 @@ TEST(ControlGateTest, StopAdmissionBypassesBlockedIoAndRejectsQueuedMotionUntilR
   ASSERT_TRUE(gate.Stop(true).ok());  // Independent board stop already disabled outputs.
   EXPECT_EQ(action->disables, disables);
   EXPECT_FALSE(gate.Enable(t).ok());
+  EXPECT_FALSE(gate.Recover(0).ok());
+  ASSERT_TRUE(gate.CompleteStopRequest(request).ok());
   ASSERT_TRUE(gate.Recover(0).ok());
   EXPECT_FALSE(action->enabled);
   ASSERT_TRUE(gate.Enable(t).ok());
@@ -198,12 +202,63 @@ TEST(ControlGateTest, ANewStopCannotBeClearedByEarlierRecovery) {
   ControlGate gate(action, {}, {"default"});
   ASSERT_TRUE(gate.Initialize().ok());
   ASSERT_TRUE(gate.Stop(true).ok());
-  gate.RequestStop();
+  const auto request = gate.RequestStop();
   EXPECT_FALSE(gate.Recover(0).ok());
   EXPECT_FALSE(gate.SelectSource("default", 0).ok());
   ASSERT_TRUE(gate.Stop(true).ok());
+  EXPECT_FALSE(gate.Recover(0).ok());
+  ASSERT_TRUE(gate.CompleteStopRequest(request).ok());
   ASSERT_TRUE(gate.Recover(0).ok());
   EXPECT_EQ(gate.state(), ControlGate::State::kDisabled);
+}
+
+TEST(ControlGateTest, LocalStopCannotCompletePendingBusStop) {
+  auto action = std::make_shared<FakeAction>();
+  ControlGate gate(action, {}, {"default"});
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Enable(ControlGate::Clock::now()).ok());
+  const auto bus_stop = gate.RequestStop();
+  ASSERT_TRUE(gate.Stop().ok());
+  EXPECT_FALSE(gate.Recover(0).ok());
+  EXPECT_FALSE(gate.Enable(ControlGate::Clock::now()).ok());
+  EXPECT_FALSE(action->enabled);
+  ASSERT_TRUE(gate.CompleteStopRequest(bus_stop).ok());
+  EXPECT_FALSE(gate.Enable(ControlGate::Clock::now()).ok());
+  ASSERT_TRUE(gate.Recover(0).ok());
+  EXPECT_TRUE(gate.Enable(ControlGate::Clock::now()).ok());
+}
+
+TEST(ControlGateTest, OutOfOrderCompletionDoesNotClearOtherRequests) {
+  auto action = std::make_shared<FakeAction>();
+  ControlGate gate(action, {}, {"default"});
+  ASSERT_TRUE(gate.Initialize().ok());
+  const auto first = gate.RequestStop();
+  const auto second = gate.RequestStop();
+  ASSERT_TRUE(gate.Stop(true).ok());
+  ASSERT_TRUE(gate.CompleteStopRequest(second).ok());
+  EXPECT_FALSE(gate.CompleteStopRequest(second).ok());
+  EXPECT_FALSE(gate.CompleteStopRequest(second + 100).ok());
+  EXPECT_FALSE(gate.Recover(0).ok());
+  ASSERT_TRUE(gate.CompleteStopRequest(first).ok());
+  ASSERT_TRUE(gate.Recover(0).ok());
+  EXPECT_TRUE(gate.Enable(ControlGate::Clock::now()).ok());
+}
+
+TEST(ControlGateTest, CompletingBusRequestPreservesFailedDisableFault) {
+  auto action = std::make_shared<FakeAction>();
+  ControlGate gate(action, {}, {"default"});
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Enable(ControlGate::Clock::now()).ok());
+  const auto bus_stop = gate.RequestStop();
+  action->disable_status = absl::UnavailableError("Disable acknowledgment lost");
+  EXPECT_FALSE(gate.Stop().ok());
+  ASSERT_TRUE(gate.CompleteStopRequest(bus_stop).ok());
+  EXPECT_EQ(gate.state(), ControlGate::State::kFault);
+  EXPECT_FALSE(gate.Enable(ControlGate::Clock::now()).ok());
+  EXPECT_FALSE(gate.Recover(0).ok());
+  action->disable_status = absl::OkStatus();
+  EXPECT_TRUE(gate.Recover(0).ok());
+  EXPECT_FALSE(action->enabled);
 }
 }  // namespace
 }  // namespace robot::action
