@@ -84,6 +84,10 @@ for protocol selection and hardware-validation limits.
 
 ## Before you change this
 
+Read [AGENTS.md](AGENTS.md) for modular implementation, factory selection, and
+resource ownership rules, alongside the project
+[coding guidelines](../docs/CODING_GUIDELINES.md).
+
 Adding a motor type, board, or transport should mean **one new file in one
 layer**, not a new enum value threaded through several. Communication mechanism
 and capability boundaries are described in [comm/README.md](comm/README.md).
