@@ -249,8 +249,12 @@ cached data and restart the passive helper before a new sample can be returned.
 ROS discovery must reach the already-running publisher in the same
 `ROS_DOMAIN_ID`; set that environment consistently at startup. The default
 CPU-only MCP launcher remains isolated, read-only and unprivileged and does not
-configure a ROS network connection. ROS image observation requires an explicitly
-configured and tested DDS networking arrangement. A hardware-free Humble check
+configure a ROS network connection. To opt in through the standalone launcher,
+prepare this revision, then add `--ros-config`, `--camera-id` and
+`--runtime-container` to `serve`; see [camera setup](../../docs/MCP_SETUP.md#optional-camera-images).
+The launcher selects the existing runtime's network/IPC namespaces and ROS
+settings while keeping devices with the runtime. ROS image observation requires
+this explicitly configured and tested DDS arrangement. A hardware-free Humble check
 verified separate read-only, unprivileged CPU containers using `--network container:<runtime>` and `--ipc container:<runtime>`
 with a shareable runtime IPC namespace. This is an explicit opt-in arrangement;
 MCP never enables host networking, exposes devices or starts the runtime.

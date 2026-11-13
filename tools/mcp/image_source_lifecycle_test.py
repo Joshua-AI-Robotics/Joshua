@@ -293,6 +293,69 @@ class ImageLifecycleTest(unittest.IsolatedAsyncioTestCase):
             await task
         self.assertIsNotNone(process.returncode)
 
+    async def test_cancellation_with_backpressured_stdout_allows_next_query(self):
+        source = self.source("os.write(1,b'x'*262144)\ntime.sleep(60)\n")
+        await source._start()
+        process = source._process
+        original = process.stdout.readexactly
+        release = asyncio.Event()
+
+        async def delayed_read(size):
+            await release.wait()
+            return await original(size)
+
+        # Hold the consumer while a real child fills stdout past its pause
+        # threshold. This deterministically exercises cancellation under pipe
+        # backpressure, independent of JPEG contents or scheduler timing.
+        process.stdout.readexactly = delayed_read
+        actual_kill = process.kill
+
+        def delayed_exit():
+            # Reproduce wait() starting before the child's asynchronous exit
+            # notification, rather than its already-exited fast path.
+            asyncio.get_running_loop().call_later(0.05, actual_kill)
+
+        process.kill = delayed_exit
+        task = asyncio.create_task(source.read_latest())
+        try:
+            deadline = asyncio.get_running_loop().time() + 5
+            while not process.stdout._paused:
+                self.assertLess(asyncio.get_running_loop().time(), deadline)
+                await asyncio.sleep(0.01)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertIsNotNone(process.returncode)
+            self.assertFalse(source._poisoned)
+            self.assertIsNone(source._process)
+            self.assertTrue(
+                process.stdout.at_eof(),
+                "Cleanup left a paused stdout transport and buffered output behind",
+            )
+        finally:
+            release.set()
+            process.kill = actual_kill
+            process.stdout.readexactly = original
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            if process.returncode is None:
+                process.kill()
+            await asyncio.wait_for(process.stdout.read(), 1)
+            await asyncio.wait_for(process.wait(), 1)
+
+        Path(source._executable).write_text(
+            "#!/usr/bin/python3\nimport sys,json,struct,os\n"
+            "q=int(sys.stdin.readline())\n"
+            "m=json.dumps(dict(query_id=q,camera_id='sensor:webcam',"
+            "availability='unavailable',reason='no_data',"
+            "diagnostic='recovered',reset=False)).encode()\n"
+            "os.write(1,struct.pack('!II',len(m),0)+m)\n"
+        )
+        result = await source.read_latest()
+        self.assertEqual(result.unavailable_reason, UnavailableReason.NO_DATA)
+        self.assertEqual(result.diagnostic, "recovered")
+
     async def test_default_five_second_timeout_reaps_process(self):
         source = self.source("time.sleep(60)\n")
         started = time.monotonic()

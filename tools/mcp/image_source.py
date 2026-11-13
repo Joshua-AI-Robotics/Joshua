@@ -158,6 +158,13 @@ class ImageSource(ObservationSource[ImageFrame]):
                 return
             self._stderr_size = min(65537, self._stderr_size + len(data))
 
+    @staticmethod
+    async def _discard_output(stream):
+        # After a query stops, release pipe backpressure without retaining its
+        # abandoned response. Process.wait() alone need not observe pipe EOF.
+        while await stream.read(4096):
+            pass
+
     async def _start(self):
         if self._process is not None:
             return
@@ -205,7 +212,14 @@ class ImageSource(ObservationSource[ImageFrame]):
             try:
                 if process.returncode is None:
                     process.kill()
-                await asyncio.wait_for(process.wait(), CLEANUP_TIMEOUT)
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        process.wait(),
+                        self._discard_output(process.stdout),
+                        self._discard_output(process.stderr),
+                    ),
+                    CLEANUP_TIMEOUT,
+                )
             except (OSError, asyncio.TimeoutError):
                 pass
 
@@ -232,12 +246,22 @@ class ImageSource(ObservationSource[ImageFrame]):
                     return
                 self._spawn_task = None
             if self._process is not None:
+                if self._stderr_task is None:
+                    self._stderr_task = asyncio.create_task(
+                        self._drain_stderr(self._process.stderr)
+                    )
                 try:
                     if self._process.returncode is None:
                         self._process.kill()
                 except ProcessLookupError:
                     pass
-                await asyncio.wait_for(self._process.wait(), remaining())
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        self._process.wait(),
+                        self._discard_output(self._process.stdout),
+                    ),
+                    remaining(),
+                )
                 self._process = None
             if self._stderr_task is not None:
                 self._stderr_task.cancel()

@@ -84,6 +84,45 @@ to read that same guide directly. Client trust, organization policy and
 project-level overrides still apply. After switching projects, verify discovery
 again; project settings may shadow the user registration.
 
+## Optional camera images
+
+`prepare` also retains the native image observer. The default `serve` and `check`
+remain inspection-only and need no running camera. To add `get_camera_image`,
+select an already-running, operator-authorized camera runtime with its own
+non-host network namespace and `--ipc shareable`. Starting that runtime follows
+the [hardware rules](../AGENTS.md#hardware-safety--read-this-first); MCP does not
+start or reconfigure it.
+
+For a camera-only runtime, `--network none --ipc shareable` provides an isolated
+namespace shared by its existing publisher and the passive MCP observer.
+
+Prepare this revision, then use the following absolute command and arguments
+in any MCP client's stdio settings (replace the checkout path and runtime name):
+
+```text
+/absolute/path/to/Joshua/scripts/joshua_mcp.sh serve --ros-config example/publish_camera.pbtxt --camera-id sensor:webcam --runtime-container camera-runtime
+```
+
+Supply all three camera options together. `--ros-config` is relative to the
+selected `--config-root`; add the same `--stack` and `--config-root` arguments
+used by preparation when overriding their defaults. The selected container must
+exist on the prepared local Docker daemon, be running without pause/restart,
+and own a shareable IPC namespace. Host networking and indirect
+`container:<other>` network namespaces are rejected. The launcher inspects its
+immutable ID, `ROS_DOMAIN_ID` (0 when absent, otherwise one integer 0–232) and
+`ROS_LOCALHOST_ONLY` (0 when absent, otherwise exactly 0 or 1), then joins that
+container's network and IPC namespaces using the pinned ID. Both ROS settings
+are copied to the observer and must match the publisher's environment.
+
+The observer remains CPU-only, unprivileged and read-only, with no device,
+Docker socket or GPU mounts. Its cleanup removes only its own MCP container.
+After replacing the runtime container, reconnect the client to select its new
+ID. Setup registration remains inspection-only; enter these opt-in arguments in
+the client's MCP settings. Older prepared generations still serve inspection;
+camera use requires preparing a generation containing the helper. See the
+[image contract](../tools/mcp/README.md#optional-configured-camera-image) for
+freshness, endpoint association and image limits.
+
 ## Recovery and limits
 
 Use `check` for a bounded initialize → tool discovery → component inspection

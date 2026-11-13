@@ -7,8 +7,9 @@ This supersedes the older implementation's camera-path evidence in the
 
 ## Tested candidate and setup
 
-- PR #150 follow-up to `d943ebd7412c53ad3ce02b49ce119bedcaaae7e8`, including
-  the shared-node/distinct-topic resolver fix. Tested `ros_source_binding.cc`
+- PR #150 revision `5eae3ba4edb70086ef38e9c8d11b420db43a1789`, including
+  the shared-node/distinct-topic resolver fix, before the later cleanup and
+  standalone-launch updates. Tested `ros_source_binding.cc`
   SHA-256: `0e6e6ab5905a5e65a45e28dcee1bd8897f3dc531772f8c7722661b5d4b38e3f6`.
 - Ubuntu x86-64 host, existing Ubuntu 22.04 / ROS 2 Humble Docker image,
   CPU-only. No host dependency installation.
