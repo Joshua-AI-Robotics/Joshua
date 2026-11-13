@@ -30,15 +30,6 @@ absl::StatusOr<RosSourceBinding> ResolveImageSource(int root_fd,
   }
   if (!selected || selected->sensor_type() != robot::perception::IMAGE)
     return absl::InvalidArgumentError("Select one configured IMAGE sensor.");
-  // A topic on a shared node does not distinguish which of its cameras produced a frame.
-  // Refuse the identity claim instead of guessing a sensor-to-publisher mapping.
-  for (const auto& sensor : config->robot().perceptions().single_perceptions()) {
-    if (&sensor != selected && sensor.sensor_type() == robot::perception::IMAGE &&
-        sensor.node().id() == selected->node().id() &&
-        sensor.node().node_type() == selected->node().node_type())
-      return absl::InvalidArgumentError(
-          "Configured IMAGE source cannot be distinguished on its shared node.");
-  }
   const ros2::node::Publisher* publisher = nullptr;
   for (const auto& candidate : selected->node().publishers()) {
     if (candidate.ros2_data_type() != ros2::data_type::IMAGE) continue;
@@ -50,6 +41,18 @@ absl::StatusOr<RosSourceBinding> ResolveImageSource(int root_fd,
   if (!topic.empty() && topic.front() != '/') topic = "/" + topic;
   if (topic.size() > 256 || !std::regex_match(topic, std::regex("(/[A-Za-z_][A-Za-z_0-9]*)+")))
     return absl::InvalidArgumentError("Configured image topic must be a valid absolute ROS name.");
+  // Cameras can share a node when each owns a distinct IMAGE topic. Reject
+  // overlapping topic ownership instead of rejecting the supported node layout.
+  for (const auto& sensor : config->robot().perceptions().single_perceptions()) {
+    if (&sensor == selected || sensor.sensor_type() != robot::perception::IMAGE) continue;
+    for (const auto& candidate : sensor.node().publishers()) {
+      if (candidate.ros2_data_type() != ros2::data_type::IMAGE) continue;
+      auto other_topic = candidate.topic();
+      if (!other_topic.empty() && other_topic.front() != '/') other_topic = "/" + other_topic;
+      if (other_topic == topic)
+        return absl::InvalidArgumentError("Configured IMAGE topic has ambiguous sensor ownership.");
+    }
+  }
   auto node = ros2::node::NodeType_Name(selected->node().node_type());
   std::transform(
       node.begin(), node.end(), node.begin(), [](unsigned char c) { return std::tolower(c); });

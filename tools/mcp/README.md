@@ -239,8 +239,10 @@ existing bounded protobuf inspection loader to resolve a
 unique configured IMAGE sensor and exactly one IMAGE topic on its declared node.
 This confines and parses the candidate; full configuration validation remains
 the separate `validate_config` tool. The reader does not require a particular
-camera driver. Other sensor types may share the node, but indistinguishable
-IMAGE sources are rejected. Requests select only the enabled camera ID; they cannot choose arbitrary ROS topics, paths, devices or programs.
+camera driver. Cameras may share a node when each owns a distinct IMAGE topic;
+overlapping configured IMAGE-topic ownership is rejected, including relative
+and absolute spellings of the same topic. Requests select only the enabled
+camera ID; they cannot choose arbitrary ROS topics, paths, devices or programs.
 The config is reread at query boundaries. Changed endpoint mappings invalidate
 cached data and restart the passive helper before a new sample can be returned.
 
@@ -280,7 +282,8 @@ unknown. Silence becomes stale; MCP never restarts or configures the camera.
 
 Synthetic ROS → helper → actual MCP SDK tests decode the JPEG and exercise
 source changes, publisher replacement, stale data and bounded cleanup. The
-[physical C920 record](../../docs/hardware_tests/logitech_c920_mcp_2026-11-08.md)
-applies to its older pinned revision. This revised ROS-only boundary needs new
-physical camera, USB recovery and AI-client scene-change acceptance; those steps
-require current operator confirmation.
+[physical C920 record](../../docs/hardware_tests/logitech_c920_mcp_2026-11-13.md)
+verifies this native ROS boundary through the actual MCP SDK, including runtime
+stop/restart in the same session. Physical USB unplug/replug, AI IDE rendering
+and fresh-host installation remain separate acceptance checks requiring their
+own evidence and applicable operator confirmation.

@@ -64,16 +64,40 @@ TEST_F(RosSourceBindingTest, RejectsUnconfinedAndAmbiguousSources) {
          "} }";
   EXPECT_FALSE(joshua::mcp::ResolveImageSource(root_, "candidate.pbtxt", "sensor:webcam", 21).ok());
 }
-TEST_F(RosSourceBindingTest, RejectsIndistinguishableSensorsOnSharedImagePublisher) {
+TEST_F(RosSourceBindingTest, ResolvesDistinctImageTopicsOnSharedNode) {
   std::ofstream output(directory_ + "/candidate.pbtxt");
   output << "robot { perceptions { ";
-  for (const auto* name : {"first", "second"})
+  for (const auto* name : {"left", "right"})
     output << "single_perceptions { sensor_name: \"" << name
            << "\" sensor_type: IMAGE node { id: 12 node_type: CAMERA_PUBLISHER "
-           << "publishers { ros2_data_type: IMAGE topic: \"/shared\" } } } ";
+           << "publishers { ros2_data_type: IMAGE topic: \"" << name << "/image\" } } } ";
   output << "} }";
   output.close();
-  EXPECT_FALSE(joshua::mcp::ResolveImageSource(root_, "candidate.pbtxt", "sensor:first", 0).ok());
+  for (const auto* name : {"left", "right"}) {
+    const auto result =
+        joshua::mcp::ResolveImageSource(root_, "candidate.pbtxt", std::string("sensor:") + name, 0);
+    ASSERT_TRUE(result.ok()) << result.status();
+    EXPECT_EQ(result->topic, std::string("/") + name + "/image");
+    EXPECT_EQ(result->node, "camera_publisher_node_12");
+  }
+}
+TEST_F(RosSourceBindingTest, RejectsIndistinguishableSensorsOnSharedImagePublisher) {
+  for (const auto* second_topic : {"/shared", "shared"}) {
+    for (int second_node : {12, 13}) {
+      std::ofstream output(directory_ + "/candidate.pbtxt");
+      output << "robot { perceptions { "
+                "single_perceptions { sensor_name: \"first\" sensor_type: IMAGE "
+                "node { id: 12 node_type: CAMERA_PUBLISHER "
+                "publishers { ros2_data_type: IMAGE topic: \"/shared\" } } } "
+                "single_perceptions { sensor_name: \"second\" sensor_type: IMAGE "
+                "node { id: "
+             << second_node << " node_type: CAMERA_PUBLISHER "
+             << "publishers { ros2_data_type: IMAGE topic: \"" << second_topic << "\" } } } } }";
+      output.close();
+      for (const auto* source : {"sensor:first", "sensor:second"})
+        EXPECT_FALSE(joshua::mcp::ResolveImageSource(root_, "candidate.pbtxt", source, 0).ok());
+    }
+  }
 }
 TEST_F(RosSourceBindingTest, DoesNotRequireOpenCvOrSpecificPublisherImplementation) {
   std::string config =
