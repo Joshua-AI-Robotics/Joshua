@@ -8,7 +8,7 @@
 #include "absl/status/statusor.h"
 #include "config/proto/config.pb.h"
 
-namespace node_generator {
+namespace launcher {
 struct ProcessFact {
   int pid;
   uint32_t node_id;
@@ -36,4 +36,4 @@ class RuntimeObservation {
   explicit RuntimeObservation(std::unique_ptr<Impl> impl);
   std::unique_ptr<Impl> impl_;
 };
-}  // namespace node_generator
+}  // namespace launcher

@@ -1,4 +1,4 @@
-#include "node_generator/runtime_observation.h"
+#include "launcher/node_manager/runtime_observation.h"
 
 #include <fcntl.h>
 #include <sys/file.h>
@@ -23,7 +23,7 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "version.h"
 
-namespace node_generator {
+namespace launcher {
 namespace {
 using google::protobuf::Value;
 Value Object() {
@@ -621,4 +621,4 @@ void RuntimeObservation::Tick(const std::vector<ProcessFact>& processes,
   } catch (...) { /* Last atomic snapshot ages out; child monitoring continues. */
   }
 }
-}  // namespace node_generator
+}  // namespace launcher
