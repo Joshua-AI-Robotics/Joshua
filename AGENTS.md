@@ -126,6 +126,8 @@ touches their area:
   node source layout and entrypoints.
 - **Robot implementation**: read [robot/AGENTS.md](robot/AGENTS.md) for modular
   drivers, factory selection, and resource ownership.
+- **Configuration**: read [config/AGENTS.md](config/AGENTS.md) for centralized
+  validation, schema evolution, and preset rules.
 - **Any subsystem**: read that directory's README first —
   [ai/](ai/README.md), [robot/](robot/README.md), [config/](config/README.md),
   [ros2/](ros2/README.md), [simulation/](simulation/README.md),

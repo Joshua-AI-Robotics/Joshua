@@ -13,6 +13,10 @@ bazel run //launcher:joshua_main -- --config config/config_preset/so100/sim_pass
 > `operation_mode` it declares. Read the preset before running it — see the
 > hardware-safety section of [AGENTS.md](../AGENTS.md).
 
+Read the directory [coding rules](AGENTS.md) for validation ownership, schema
+evolution, and presets, alongside the project
+[coding guidelines](../docs/CODING_GUIDELINES.md).
+
 ## Validate config integrity without launching Joshua
 
 Build `//config:joshua_validate_config` in the development container, then
@@ -80,8 +84,8 @@ to physical qualification.
 - `config_preset/<robot>/` — checked-in presets, one per robot and task
   (`so100/`, `example/`).
 - `config_utils.h` — `LoadConfig`, which opens a `.pbtxt` and parses it into a
-  `config::Config`. Parsing only; semantic checks happen later, in the
-  factories and `launcher/node_manager/`.
+  `config::Config`. Parsing only; semantic checks go through
+  `config::ValidateConfig` before driver construction.
 
 ## Responsibilities
 
@@ -89,8 +93,8 @@ to physical qualification.
 - Stay the only place a robot-specific value appears: ports, joint limits, gear
   ratios, servo IDs, topic names, model paths.
 - Carry enough structure that an inconsistent setup can be rejected during
-  startup — in the factories and `launcher/node_manager/` — rather than at first
-  motion.
+  startup through `config::ValidateConfig`, before constructing drivers or
+  executing motion.
 
 ## Non-Goals
 
@@ -347,6 +351,12 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 There is no central sensor-to-publisher allowlist; node validation checks that
 node types are specified and each node ID has one consistent type.
+
+The [directory rules](AGENTS.md) require static configuration validation to live
+in `config/validation.cc`. The current implementation still delegates some
+checks to helpers in `robot/`, `ros2/`, and `utils/`; consolidating those checks
+is migration work needed to meet that rule. Runtime safety checks remain with
+their operating components.
 
 
 Position publishers and actuator subscribers select compiled ROS message types

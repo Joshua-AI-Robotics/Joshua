@@ -16,6 +16,7 @@ or after instructions change.
 | --- | --- |
 | `ros2/` | [Component nodes and binary entrypoints](../ros2/AGENTS.md) |
 | `robot/` | [Modular implementations and factory boundaries](../robot/AGENTS.md) |
+| `config/` | [Centralized validation, schemas, and presets](../config/AGENTS.md) |
 
 The root [AGENTS.md](../AGENTS.md) and its tool bridges route agents here.
 A Markdown link is not an automatic import. Documentation checks validate

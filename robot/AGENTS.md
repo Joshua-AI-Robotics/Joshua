@@ -13,7 +13,10 @@ apply throughout `robot/`.
   independently understandable and changeable.
 - Select and assemble implementations through the existing `ActionFactory`,
   `PerceptionFactory`, `BoardFactory`, and `CommFactory`. Keep concrete selection,
-  construction checks, and resource resolution in the responsible factory.
+  assembly, and resource resolution in the responsible factory. Static config
+  validation belongs in `config/validation.cc`, following
+  [config/AGENTS.md](../config/AGENTS.md); runtime safety checks remain at their
+  operating boundaries.
   Update its existing registration table and protobuf declaration when needed;
   do not introduce another factory hierarchy or configuration format.
 - Consumers depend on interfaces and capabilities, not concrete drivers or

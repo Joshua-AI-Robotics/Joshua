@@ -10,6 +10,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Coding guidelines: clear ownership, minimal layers, and ROS 2 reuse | [CODING_GUIDELINES.md](CODING_GUIDELINES.md) |
 | ROS 2 component source layout and binary entrypoints | [../ros2/AGENTS.md](../ros2/AGENTS.md) |
 | Robot modular implementations, factories, and resource ownership | [../robot/AGENTS.md](../robot/AGENTS.md) |
+| Centralized config validation, schema evolution, and preset rules | [../config/AGENTS.md](../config/AGENTS.md) |
 | Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
 | Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |
 | OpenAI Decisions adapter, API failure handling, and demo gates | [../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
