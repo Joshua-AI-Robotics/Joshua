@@ -14,7 +14,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "config/proto/config.pb.h"
-#include "node_generator/runtime_observation.h"
+#include "launcher/node_manager/runtime_observation.h"
 #include "ros2/proto/node.pb.h"
 
 namespace launcher {
@@ -139,7 +139,7 @@ class NodeManager {
   ::config::Config config_;
   std::map<uint32_t, ros2::node::NodeType> identified_nodes_;
   std::vector<NodeRecord> nodes_;
-  std::unique_ptr<node_generator::RuntimeObservation> observation_;
+  std::unique_ptr<RuntimeObservation> observation_;
   bool observation_started_ = false;
   std::chrono::steady_clock::time_point last_observation_{};
   bool initialized_ = false;

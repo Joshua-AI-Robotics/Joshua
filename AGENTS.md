@@ -117,7 +117,6 @@ touches their area:
   [ui/](ui/README.md), [firmware/](firmware/README.md),
   [scripts/](scripts/README.md), [tools/](tools/README.md),
   [launcher/node_manager/](launcher/node_manager/README.md),
-  [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
 - **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read

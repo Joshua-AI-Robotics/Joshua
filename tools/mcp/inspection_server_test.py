@@ -21,7 +21,7 @@ RUNFILES = Path(os.environ["TEST_SRCDIR"]) / os.environ["TEST_WORKSPACE"]
 SERVER = RUNFILES / "tools/mcp/config_validation_server"
 VALIDATOR = RUNFILES / "config/joshua_validate_config"
 INSPECTOR = RUNFILES / "config/joshua_inspect_config"
-FIXTURE = RUNFILES / "node_generator/observation_fixture"
+FIXTURE = RUNFILES / "launcher/node_manager/observation_fixture"
 
 
 def candidate(name="camera", node_id=2):
