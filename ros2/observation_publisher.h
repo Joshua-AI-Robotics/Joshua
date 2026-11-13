@@ -24,7 +24,8 @@ class ObservationPublisher {
  public:
   ObservationPublisher(rclcpp::Node& node,
                        const robot::perception::SinglePerception& sensor,
-                       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+                       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards,
+                       robot::perception::ObservationSource::Factory factory = {}) {
     if (sensor.node().publishers().empty()) return;
     // Validate/build every output before the factory can open any device.
     std::vector<Publish> publishers;
@@ -34,10 +35,12 @@ class ObservationPublisher {
     uint32_t rate = 1;
     for (const auto& p : sensor.node().publishers()) rate = std::max(rate, p.publish_rate_hz());
     const auto& policy = sensor.observation_policy();
+    if (!factory)
+      factory = [sensor, boards] {
+        return robot::perception::PerceptionFactory::CreateInitializedPerception(sensor, boards);
+      };
     source_ = std::make_shared<robot::perception::ObservationSource>(
-        [sensor, boards] {
-          return robot::perception::PerceptionFactory::CreateInitializedPerception(sensor, boards);
-        },
+        std::move(factory),
         std::chrono::nanoseconds(1000000000ull / rate),
         std::chrono::milliseconds(policy.has_stale_after_ms() ? policy.stale_after_ms() : 1000),
         robot::perception::ObservationDescription{

@@ -15,6 +15,7 @@
 #include "robot/perception/audio/audio_config.h"
 #include "robot/perception/camera/camera_config.h"
 #include "robot/perception/camera/cv_camera.h"
+#include "robot/perception/camera/recovering_camera.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
 #include "robot/perception/position/sts3215_position_sensor.h"
@@ -156,8 +157,11 @@ absl::StatusOr<std::unique_ptr<PerceptionInterface>> PerceptionFactory::CreateIn
     const SinglePerception& sensor,
     const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
   ABSL_ASSIGN_OR_RETURN(auto source, CreatePerception(sensor, boards));
-  // The legacy LDS01 factory already initializes the device. Other constructors
-  // are lazy; applying camera properties requires the explicit Init call.
+  // Camera opens and recovery run on the observation worker. Syntax has already
+  // been checked by CreatePerception before a device can be opened.
+  if (sensor.has_opencv_config()) return std::make_unique<RecoveringCamera>(std::move(source));
+  // The legacy LDS01 factory already initializes the device. Other non-camera
+  // constructors are lazy and require the explicit Init call.
   if (!sensor.has_lds01_config()) ABSL_RETURN_IF_ERROR(source->Init());
   return source;
 }

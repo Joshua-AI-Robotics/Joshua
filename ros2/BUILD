@@ -1,7 +1,7 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_py_binary")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_test", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -118,6 +118,16 @@ ros2_cpp_binary(
         "@ros2_deps//:cpp_sensor_msgs",
         "@ros2_deps//:cpp_std_msgs",
         "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_cpp_test(
+    name = "camera_publisher_test",
+    srcs = ["camera_publisher_test.cc"],
+    deps = [
+        ":observation_publisher",
+        "//robot/perception/camera:recovering_camera",
+        "@googletest//:gtest_main",
     ],
 )
 

@@ -14,6 +14,7 @@ cc_library(
         "//robot/perception/audio:audio_config",
         "//robot/perception/camera:camera_config",
         "//robot/perception/camera:cv_camera",
+        "//robot/perception/camera:recovering_camera",
         "//robot/perception/interfaces:perception_interface",
         "//robot/perception/lidar:lds01_driver",
         "//robot/perception/position:sts3215_position_sensor",

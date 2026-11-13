@@ -27,6 +27,17 @@ def main():
     parser.add_argument(
         "--seconds", type=int, default=60, choices=range(1, 3601), metavar="1..3600"
     )
+    parser.add_argument(
+        "--startup-timeout-seconds",
+        type=int,
+        default=10,
+        choices=range(0, 61),
+        metavar="0..60",
+        help=(
+            "Wait for the first matching scalar observation before starting --seconds "
+            "(default: 10); zero starts the capture window immediately"
+        ),
+    )
     args = parser.parse_args()
     rclpy.init()
     node = rclpy.create_node("joshua_scalar_recorder_" + str(time.monotonic_ns()))
@@ -39,6 +50,7 @@ def main():
     }
     written = 0
     exhausted = False
+    capture_deadline = None
     try:
         with args.output.open("x") as output:
 
@@ -52,6 +64,7 @@ def main():
                 written += len(line.encode())
 
             def receive(message):
+                nonlocal capture_deadline
                 if len(message.data) > 4096:
                     counts["malformed"] += 1
                     return
@@ -64,6 +77,8 @@ def main():
                 if not packet.HasField("scalar") or packet.perception_id != args.sensor:
                     counts["malformed"] += 1
                     return
+                if capture_deadline is None:
+                    capture_deadline = time.monotonic() + args.seconds
                 fields = {
                     f.name: getattr(packet.scalar, f.name)
                     for f in packet.scalar.DESCRIPTOR.fields
@@ -102,16 +117,28 @@ def main():
                 UInt8MultiArray, args.topic, receive, observation_qos
             )
             node.create_subscription(String, args.topic + "/health", health, 10)
-            end = time.monotonic() + args.seconds
-            while rclpy.ok() and not exhausted and time.monotonic() < end:
-                rclpy.spin_once(
-                    node, timeout_sec=min(0.1, max(0, end - time.monotonic()))
+            startup_deadline = time.monotonic() + args.startup_timeout_seconds
+            if args.startup_timeout_seconds == 0:
+                capture_deadline = time.monotonic() + args.seconds
+            while rclpy.ok() and not exhausted:
+                end = (
+                    capture_deadline
+                    if capture_deadline is not None
+                    else startup_deadline
                 )
+                remaining = end - time.monotonic()
+                if remaining <= 0:
+                    break
+                rclpy.spin_once(node, timeout_sec=min(0.1, remaining))
+            startup_timed_out = (
+                capture_deadline is None and time.monotonic() >= startup_deadline
+            )
             record(
                 {
                     "kind": "summary",
                     "counts": counts,
                     "capacity_exhausted": exhausted,
+                    "startup_timed_out": startup_timed_out,
                     "scope": (
                         "ROS receipt observations; no physical or "
                         "cross-clock age verification"
@@ -121,7 +148,15 @@ def main():
     finally:
         node.destroy_node()
         rclpy.shutdown()
-    print(json.dumps({"counts": counts, "capacity_exhausted": exhausted}))
+    print(
+        json.dumps(
+            {
+                "counts": counts,
+                "capacity_exhausted": exhausted,
+                "startup_timed_out": startup_timed_out,
+            }
+        )
+    )
     return (
         0 if counts["observations"] and not exhausted and not counts["malformed"] else 1
     )

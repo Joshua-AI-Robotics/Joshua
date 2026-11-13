@@ -126,6 +126,12 @@ reports missing/malformed observations. Duplicate publication is permitted by th
 latest-value model; use boot/session/token/acquisition sequence to count distinct
 acquisitions. Recorder and source receipt timestamps are separate clock-domain
 facts; do not subtract timestamps from different machines as if synchronized.
+The `--seconds` capture window starts on the first decoded scalar observation
+for the selected sensor, after a separate `--startup-timeout-seconds` wait
+(default 10, maximum 60). Missing sources fail within that startup budget;
+health messages and malformed or wrong-sensor packets do not start the window.
+Set the startup timeout to zero to count capture time immediately after creating
+subscriptions. Health messages received during startup are retained for diagnosis.
 For a complete capture, also use ROS bag on observation, health, commands and
 `/rosout` topics. A successful recorder exit is receipt evidence, not qualification.
 

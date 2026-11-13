@@ -277,6 +277,38 @@ even when it has several subscriptions.
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
 
+## Camera publishing
+
+`CAMERA_PUBLISHER` keeps configured image topics registered when a camera is
+temporarily unavailable at startup. It retries initialization with a one-second
+backoff measured by `joshua::RobotTime()` and reads frames only after
+initialization succeeds. Clock corrections can shorten or extend the retry wait.
+A capture failure closes the failed session and uses the same initialization
+path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
+Invalid camera syntax fails preflight; invalid arguments from a backend remain
+visible in observation health without repeated opens. The shared
+config validator and OpenCV driver both check the required four-character pixel
+format before opening a device.
+
+Each topic uses its own robot-time publication timer. Image headers preserve the
+driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
+is a host capture-completion estimate, not a sensor exposure timestamp. Expected
+device errors use the recovery path; unexpected acquisition exceptions appear in
+observation health. Acquisition and retries run on the shared worker, independently
+of ROS publication timers.
+
+The OpenCV backend uses two capture buffers so the next frame can remain queued
+while the previous one is read. The
+[Sunplus 1080p preset](../config/config_preset/example/sunplus_spca2281_1080p.pbtxt)
+requests 1920x1080 MJPG at 30 FPS. Use an optimized Bazel build (`-c opt`) when
+qualifying frame rate and measure received frames; the configured rate alone
+does not establish delivered performance.
+
+`//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
+delivery and timestamps, shared acquisition across topics, exception reporting, and
+reinitialization after read failures using fake camera sources and a virtual
+retry clock. It opens no physical devices.
+
 ## C++ node logging
 
 C++ nodes and utilities use `JOSHUA_LOG(INFO) << message` (also DEBUG, WARNING,
@@ -420,6 +452,7 @@ payload publication pauses when unusable; invalid/stale scalar packets remain
 inspectable with `usable=false`. No stale sample becomes a new measurement.
 
 Sensor construction errors are reported through status until deliberate restart;
+camera open/read failures use the recovery path described above, while
 no board session or subscription is automatically restored. Acquisition workers
 are joined on shutdown after requesting backend teardown. Driver calls must be
 bounded or support teardown cancellation; a permanently blocked backend can still

@@ -1,4 +1,4 @@
-"""Seven-tool inspection contract, including config-free discovery."""
+"""Read-only inspection contract, including config-free discovery and test history."""
 
 import asyncio
 import copy
@@ -228,6 +228,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                         {t.name for t in tools},
                         {
                             "list_supported_components",
+                            "list_supported_hardware",
+                            "list_hardware_test_records",
                             "validate_config",
                             "list_devices",
                             "describe_device",
@@ -238,6 +240,64 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     )
                     self.assertTrue(all(t.annotations.readOnlyHint for t in tools))
                     self.assertTrue(all(t.outputSchema for t in tools))
+                    result = await client.call_tool(
+                        "list_supported_hardware",
+                        {"kind": "camera", "query": "XWF-1080P"},
+                    )
+                    self.assertFalse(result.isError, result)
+                    models = result.structuredContent
+                    self.assertEqual(models["scope"], "hardware_catalog")
+                    model = models["data"]["hardware"][0]
+                    self.assertEqual(model["model"], "XWF-1080P")
+                    self.assertNotIn("verification", model)
+                    self.assertNotIn("results", model)
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": model["id"]}
+                    )
+                    self.assertFalse(result.isError, result)
+                    history = result.structuredContent
+                    self.assertEqual(history["scope"], "hardware_test_history")
+                    run = history["data"]["records"][0]
+                    self.assertEqual(run["hardware_id"], model["id"])
+                    self.assertEqual(run["results"]["measured_fps"], 8.46)
+                    self.assertNotIn("model", run)
+                    self.assertNotIn("driver", run)
+                    self.assertIn("historical", history["limitations"][0])
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": "unknown-model"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(result.structuredContent["data"]["records"], [])
+                    result = await client.call_tool(
+                        "list_hardware_test_records", {"hardware_id": None}
+                    )
+                    self.assertTrue(result.isError)
+                    for query in ("Sunplus", "spca2281", "xwf-1080p"):
+                        result = await client.call_tool(
+                            "list_supported_hardware", {"query": query}
+                        )
+                        self.assertFalse(result.isError, result)
+                        self.assertEqual(
+                            len(result.structuredContent["data"]["hardware"]), 1
+                        )
+                    result = await client.call_tool(
+                        "list_supported_hardware", {"usb_id": "0000:0000"}
+                    )
+                    self.assertFalse(result.isError, result)
+                    self.assertEqual(result.structuredContent["data"]["hardware"], [])
+                    for filters in (
+                        {"config_path": "../outside"},
+                        {"query": None},
+                        {"usb_id": []},
+                        {"usb_id": "invalid"},
+                    ):
+                        result = await client.call_tool(
+                            "list_supported_hardware", filters
+                        )
+                        self.assertTrue(result.isError, result)
+                        self.assertEqual(
+                            result.structuredContent["status_code"], "INVALID_ARGUMENT"
+                        )
                     result = await client.call_tool("list_supported_components", {})
                     self.assertFalse(result.isError, result)
                     catalog = result.structuredContent["data"]

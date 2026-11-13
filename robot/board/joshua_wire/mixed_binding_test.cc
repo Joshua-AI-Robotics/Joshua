@@ -517,6 +517,9 @@ TEST_P(MixedRecorderQosTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExpl
                                    "analog_a0",
                                    "--seconds",
                                    "3",
+                                   // Child DDS discovery has its own bounded startup budget.
+                                   "--startup-timeout-seconds",
+                                   "10",
                                    "--output",
                                    capture};
   std::vector<char*> argv;
