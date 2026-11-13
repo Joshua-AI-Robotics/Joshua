@@ -2,6 +2,10 @@
 
 ## Local preparation and launch
 
+Start with `./scripts/joshua_mcp.sh setup` for guided preparation and AI IDE
+registration. See [MCP setup](../../docs/MCP_SETUP.md) for prerequisites, generic
+client settings and recovery. The commands below remain useful for development.
+
 Run `./scripts/joshua_mcp.sh prepare`, then `./scripts/joshua_mcp.sh check`
 from the repository root. Use the absolute path to `scripts/joshua_mcp.sh` with
 argument `serve` as a stdio client command. `--stack u24` selects Jazzy;

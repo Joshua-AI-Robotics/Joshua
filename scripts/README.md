@@ -4,6 +4,11 @@ Joshua's public entrypoints are Docker Compose services from the repo root. The 
 
 ## `joshua_mcp.sh`
 
+Use `./scripts/joshua_mcp.sh setup` for guided prerequisite checks, preparation,
+AI IDE registration and first inspection. Existing installations and policies
+are preserved; other clients receive standard stdio settings. See the
+[setup guide](../docs/MCP_SETUP.md) for recovery and hardware-integration steps.
+
 Prepare the read-only MCP server with `./scripts/joshua_mcp.sh prepare`, verify
 inspection with `./scripts/joshua_mcp.sh check`, and use
 `./scripts/joshua_mcp.sh serve` as the client stdio command. `doctor` reports

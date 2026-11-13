@@ -10,6 +10,20 @@ Joshua turns a single protobuf config into a running robot stack on ROS 2: hardw
 
 One config file is the source of truth—for example [`config/config_preset/so100/teleoperate.pbtxt`](config/config_preset/so100/teleoperate.pbtxt) defines the full SO100 teleop setup. See [Architecture](docs/ARCHITECTURE.md) for how config, protobuf packets, and ROS 2 fit together.
 
+## Start with Joshua MCP
+
+From the repository root, run `./scripts/joshua_mcp.sh setup` to prepare the
+local MCP server and connect your AI IDE. This inspection workflow runs on CPU;
+ROS, Bazel and project libraries stay inside Docker. Setup checks your host,
+guides any missing prerequisites and verifies the first inspection.
+
+AI assistants should check the Joshua MCP connection when starting a session.
+If it is unavailable, explain what is missing and prompt the user to run setup
+or reconnect their AI IDE. Once connected, use the
+[guided integration workflow](docs/skills/joshua-guided-integration/SKILL.md)
+to configure existing hardware or add a component. See the
+[setup guide](docs/MCP_SETUP.md) for requirements and recovery.
+
 ## Quick start
 
 Joshua is Docker-first. Install Docker host tooling, open either supported ROS environment, then run the launcher through Docker:

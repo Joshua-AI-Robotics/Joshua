@@ -6,6 +6,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Topic | Guide |
 |-------|--------|
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
+| Local MCP setup, AI IDE connection and recovery | [MCP_SETUP.md](MCP_SETUP.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
 | Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |

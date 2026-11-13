@@ -6,6 +6,19 @@ Bazel. Human-facing docs live in [README.md](README.md) and
 [docs/](docs/README.md); this file is the entry point for coding agents. Launch
 agents from the repository root so this file is picked up.
 
+## Start each session with Joshua MCP
+
+Check whether Joshua MCP is connected and call `list_supported_components`
+before MCP-dependent configuration work. If unavailable, explain the missing
+connection and prompt the user to run `./scripts/joshua_mcp.sh setup` from the
+repository root, or reconnect their AI IDE if already configured. Independent
+source and documentation work can continue while setup is pending.
+
+Use the [guided integration skill](docs/skills/joshua-guided-integration/SKILL.md)
+for existing-hardware configuration or component development. Read the
+[setup guide](docs/MCP_SETUP.md) when diagnosing a connection. Setup verifies
+inspection; it does not launch robot hardware or bypass client approvals.
+
 ## Hardware safety — read this first
 
 Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
