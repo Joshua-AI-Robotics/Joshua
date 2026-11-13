@@ -30,6 +30,17 @@ pure MuJoCo/Isaac simulation.
 - Firmware is never flashed automatically. Flashing is a deliberate,
   human-initiated operation — see [firmware/README.md](firmware/README.md).
 
+## Implementation direction
+
+At the start of each implementation or review task, open and follow
+[docs/CODING_GUIDELINES.md](docs/CODING_GUIDELINES.md). It defines the required
+principles for clear ownership, minimal layers, and reuse of ROS 2 for all
+contributions, including AI-assisted work.
+
+Before editing a directory, also open its applicable nested `AGENTS.md` files
+from the repository root down, even when the agent was launched at the root.
+Re-read guidance when starting a new task or when the instructions change.
+
 ## Development environment
 
 Development is **Docker-first** — [CONTRIBUTING.md](CONTRIBUTING.md) is
@@ -111,6 +122,10 @@ hook for you, so run it yourself before pushing.
 Links are not loaded automatically — actually open these files when the work
 touches their area:
 
+- **ROS 2 implementation**: read [ros2/AGENTS.md](ros2/AGENTS.md) for component
+  node source layout and entrypoints.
+- **Robot implementation**: read [robot/AGENTS.md](robot/AGENTS.md) for modular
+  drivers, factory selection, and resource ownership.
 - **Any subsystem**: read that directory's README first —
   [ai/](ai/README.md), [robot/](robot/README.md), [config/](config/README.md),
   [ros2/](ros2/README.md), [simulation/](simulation/README.md),

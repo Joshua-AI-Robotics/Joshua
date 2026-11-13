@@ -1,6 +1,12 @@
 ROS 2 Type Resolver Utilities  
 ==============================
 
+Development rules
+-----------------
+
+Read [AGENTS.md](AGENTS.md) for the required component source layout and binary
+entrypoints, alongside the project [coding guidelines](../docs/CODING_GUIDELINES.md).
+
 Process runtime and failure handling
 ------------------------------------
 
