@@ -112,13 +112,14 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. The standalone position/actuator nodes require separate
-bus owners. Mixed JoshuaWire scalar/actuator setups use `MCU_BUS` instead.
+host sensor publishers. Use `DEVICE_BUS` for commands and board-backed feedback
+on one bus. Mixed JoshuaWire scalar/actuator setups also support `MCU_BUS`.
 
-Standalone actuator subscribers honor `stepper_config.require_explicit_enable`:
-when true, startup leaves outputs disabled until an explicit torque-enable
-command. Omitting the flag or setting it to false retains the existing startup
-enable behavior. Standalone node teardown still disables outputs in either case.
+All ROS actuator runtimes start disabled, including STS3215 and legacy stepper
+presets. Driver construction is forced to remain disabled. Enable deliberately
+through the configured torque topic or `~/<actuator>/enable` Trigger service.
+This changes prior standalone startup behavior; existing command-only producers
+must add an explicit operator enable step.
 
 Mixed MCU bus
 -------------
@@ -136,6 +137,10 @@ threads, so a blocked ordinary callback cannot hold the stop behind it. When a
 node owns multiple boards, it starts every stop concurrently before waiting for
 acknowledgments; a stalled board cannot delay stop dispatch to the others. Stop
 acknowledgment is protocol evidence; physical stop verification is unsupported.
+Ordinary subscriptions, control services and the lease watchdog share one callback
+group. ESTOP interlocks every host gate without waiting for command I/O, dispatches
+board stops, then completes the host stop. Acknowledged board stops replace redundant
+channel disables; boards without that capability still receive channel disables.
 After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
 steps. No subscription, enable or target is automatically restored.
 
@@ -169,7 +174,7 @@ contains the complete node, with no separate position-publisher header.
 |---|---|
 | FLOAT32, FLOAT64, signed/unsigned 8/16/32/64-bit integers, BYTE, CHAR | `data` contains one native-unit value. |
 | Corresponding numeric MULTI_ARRAY types | Exactly one contiguous value in `data`; no joint-index inference. |
-| JOINT_STATE | Publisher emits one named joint's position in radians and a ROS timestamp. Subscriber selects `actuator_name` from `name` regardless of array order. |
+| JOINT_STATE | Publisher emits one named joint's position in radians with host receipt Unix time. Subscriber selects `actuator_name` from `name` regardless of array order. |
 | BOOL | Subscription only: torque-enable gate for STS3215 or stepper drivers. |
 | Other types (Image, Pose, String, etc.) | Rejected: no defined position/command conversion. |
 
@@ -204,11 +209,11 @@ The decoder emits `ActionPacket.joint`, retaining optional double-valued
 position, velocity, and effort in SI units (rad, rad/s, N*m for revolute joints;
 m, m/s, N for prismatic joints). An omitted value is distinct from zero. It also
 preserves the selected joint name, `header.frame_id`, and the source timestamp in
-`ActionPacket.timestamp` as double seconds. The ROS nanosecond component must
-be below 1e9; zero and negative source times are retained within double
-precision. Metadata does not schedule execution, enforce
-freshness, identify a clock domain, or trigger coordinate transforms. Those
-policies belong to future clock/PTP and coordinate-handling work.
+`ActionPacket.timestamp` as double RobotTime seconds. Nanoseconds must be below
+1e9; zero and negative source times are retained within double precision.
+Metadata alone does not schedule execution or trigger coordinate transforms.
+Source-age enforcement is opt-in through the control policy described below;
+its ROS clock relationship must be established separately.
 
 `ActionPacket.joint` is the motion payload for every actuator. Optional position,
 velocity, and effort distinguish omission from zero. `position_encoding` selects
@@ -267,7 +272,7 @@ even when it has several subscriptions.
 | STS3215/stepper torque is enable/disable | Never map JointState physical effort to these gates. Reject effort; Bool remains restricted to enable gates. |
 | Inference still produces FLOAT32; trajectory supports FLOAT32 and JOINT_STATE | JointState waypoints require SI values and preserve optional fields. Driver capabilities still apply; changing the wire type does not add velocity/effort control. |
 | Dataset message types/shapes can change | Update dataset/model expectations and keep topic types stable during recording. |
-| Multiple command sources can target a device | Coordinate command ownership externally; message-type support does not add arbitration. |
+| Multiple command sources can target a device | Configured source IDs share the actuator control gate; independent publishers on one source topic still require external coordination. |
 
 Tests cover typed pub/sub, conversion failures, named-joint selection and units,
 and shared runner validation. No hardware is required.
@@ -280,15 +285,17 @@ backoff measured by `joshua::RobotTime()` and reads frames only after
 initialization succeeds. Clock corrections can shorten or extend the retry wait.
 A capture failure closes the failed session and uses the same initialization
 path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
-Initialization failures reported as invalid arguments fail startup. The shared
+Invalid camera syntax fails preflight; invalid arguments from a backend remain
+visible in observation health without repeated opens. The shared
 config validator and OpenCV driver both check the required four-character pixel
 format before opening a device.
 
 Each topic uses its own robot-time publication timer. Image headers preserve the
 driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
 is a host capture-completion estimate, not a sensor exposure timestamp. Expected
-device errors use the recovery path; unexpected exceptions reach the shared
-runtime guard.
+device errors use the recovery path; unexpected acquisition exceptions appear in
+observation health. Acquisition and retries run on the shared worker, independently
+of ROS publication timers.
 
 The OpenCV backend uses two capture buffers so the next frame can remain queued
 while the previous one is read. The
@@ -298,7 +305,7 @@ qualifying frame rate and measure received frames; the configured rate alone
 does not establish delivered performance.
 
 `//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
-delivery and timestamps, independent camera timers, exception propagation, and
+delivery and timestamps, shared acquisition across topics, exception reporting, and
 reinitialization after read failures using fake camera sources and a virtual
 retry clock. It opens no physical devices.
 
@@ -380,3 +387,116 @@ ALSA aliases for the same physical device cannot be detected statically.
 `//robot/perception/audio:audio_capture_test` uses a finite fake PCM buffer and
 virtual time to cover large and tiny chunks, short reads, delayed polls, changed
 buffer sizes after recovery, and bounded work for always-ready sources.
+
+## Shared board runtime
+
+`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+observations in one process. Assign every consumer of a bus the same node ID
+and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+no transport implementation is selected by the node. Position publishers retain
+the existing numeric/JointState contracts. `MCU_BUS` remains supported for existing
+JoshuaWire scalar/stepper configurations.
+
+The composed owner explicitly disables actuators at startup and tears them down
+before releasing boards. Steppers require `require_explicit_enable: true` so their
+driver initialization cannot enable early. Camera/lidar acquisition remains in
+its existing standalone nodes. This feature does not qualify physical motion,
+link-loss stopping or a particular rig.
+
+## Shared control lifecycle
+
+Each actuator has one transport-independent `ControlGate` shared by its topics.
+`Subscription.source_id` (default `default`) identifies a configured producer.
+`Actuator.control_policy.initial_source` selects the initial producer; other
+producers cannot enable or move the actuator. This is topic-based arbitration,
+not publisher authentication. Use separate JointState command topics for multiple
+sources; the existing numeric topics keep their actuator-name contract.
+
+`command_timeout_ms` defaults to 1000 ms. Accepted motion renews the steady-clock
+lease; repeated enables, telemetry, rejected inputs and board heartbeats do not.
+Expiry attempts a disable and latches a stop, checked every 10 ms and at command
+admission. Host scheduling/driver delay applies. Link loss still requires the
+selected device's watchdog and physical qualification.
+
+An optional positive `max_input_age_ms` requires motion as JointState with
+nonzero, increasing stamps in the receiver's ROS clock. Future, old, repeated and
+pre-selection/pre-recovery stamps are rejected. Numeric motion has no acquisition
+time and cannot be used with that bound; absent the bound, only local command
+inactivity is enforced. Producers must independently gate their input freshness.
+
+`~/<actuator>/stop`, `/recover`, `/enable` and `/select_<source_id>` are Trigger
+services. Selection requires disabled state. Stop/driver failure/lease expiry
+requires explicit recovery, then enable; recovery never replays motion. These
+services clear only host state and cannot clear a firmware latch. JoshuaWire
+fault/ESTOP still needs deliberate device recovery and a fresh runtime. Composed
+`~/estop` also interlocks all host gates and invokes available board stop support.
+Each board performs any required channel-disable fallback independently, so a
+delayed acknowledgment on another board cannot hold up that fallback. Recovery
+stays blocked until all bus-wide stop work completes; a per-actuator stop cannot
+complete a pending bus-wide request. Completed stops still require explicit
+recovery and enable.
+No host acknowledgment is physical stop evidence.
+
+## Observation readiness
+
+Position, camera, lidar and board scalar publishers share `ObservationSource`:
+one acquisition worker and one bounded latest sample per configured sensor,
+with all of its output topics reading that sample. Reads never run on the ROS
+executor. Readiness requires validated data; invalid samples, acquisition errors
+and stalled sources remain observable. Repeated scalar acquisitions do not
+refresh the last-valid time.
+
+Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
+with `observation_status`) and a short `/health` String. Status includes starting,
+ready, invalid, stale, error or stopped state, optional last-valid receipt age,
+and valid/invalid/error/recovery counters. Last error/recovery timestamps and the
+last error text remain available after recovery, including brief faults. Scalar `/health` retains its existing summary.
+The status timer runs every 50 ms independently of acquisition. Configure
+`sensor.observation_policy.stale_after_ms` (positive, default 1000 ms). Native
+payload publication pauses when unusable; invalid/stale scalar packets remain
+inspectable with `usable=false`. No stale sample becomes a new measurement.
+
+Sensor construction errors are reported through status until deliberate restart;
+camera open/read failures use the recovery path described above, while
+no board session or subscription is automatically restored. Acquisition workers
+are joined on shutdown after requesting backend teardown. Driver calls must be
+bounded or support teardown cancellation; a permanently blocked backend can still
+hold shutdown. This does not impose a physical acquisition/stop-time guarantee.
+Audio retains its separate streaming contract.
+
+## Sample identity, clocks and recording
+
+The shared observation runtime assigns every distinct sample a `sample_metadata`
+record: source-instance identity, generation-local sequence, discontinuity,
+host receipt in Unix and steady nanoseconds, Linux boot clock identity, native
+units/frame, and measurement validity. Cached publication preserves identity and
+receipt timestamps. Startup, acquisition errors and device/session/subscription
+changes mark the next distinct sample as a discontinuity. Wall-clock adjustments
+do not affect monotonic freshness calculations. Host clock IDs distinguish clock
+domains; they do not establish synchronization between machines.
+
+Scalar metadata also retains acquisition ticks, their scale, device boot/clock
+identity and source sequence. The original scalar timestamps and loss counters
+remain intact. Camera exposure time, lidar scan acquisition time and servo
+measurement time are unavailable through the current drivers, so acquisition
+fields stay absent. Host receipt means completed acquisition/read, not physical
+response. Source-native position is STS3215 ticks; native JointState output
+converts that position to radians. Unsupported velocity remains absent.
+
+Image, cloud and packet-aware JointState headers preserve the driver's RobotTime
+acquisition/read estimate, translated to the ROS epoch. The packet's double-second
+`timestamp` retains that estimate; `sample_metadata` carries host receipt Unix
+and steady nanoseconds separately. No physical acquisition or device clock
+mapping is inferred. Configure `observation_policy.frame_id` when a calibrated
+frame is available. Preserve the configuration defining conversions and frames.
+
+Each native topic has a `/metadata` UInt8MultiArray containing a serialized
+PerceptionPacket with the matching sample metadata. `/status` also references
+the last sample. Record those topics alongside native data. Numeric std_msgs
+have no sample ID or header, so a companion topic cannot guarantee atomic pairing.
+For exact replay/recording, select `observation_packet: true` and
+`ros2_data_type: UINT8_MULTI_ARRAY` on a position, camera or lidar publisher.
+That output carries payload and metadata in one serialized PerceptionPacket;
+scalar outputs already use this contract. Multiple outputs still share one
+acquisition. Decode with the generated perception proto; retain unknown/absent
+source timing explicitly. The scalar recorder includes the metadata in JSONL.

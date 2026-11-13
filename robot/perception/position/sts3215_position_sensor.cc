@@ -35,7 +35,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Sts3215PositionSensor::GetDa
   reusable_packet_.set_timestamp(RobotTime());
   auto* position = reusable_packet_.mutable_position();
   position->set_position(feedback.position);
-  position->set_velocity(feedback.velocity);
+  if (feedback.velocity_valid) position->set_velocity(feedback.velocity);
   return reusable_packet_;
 }
 

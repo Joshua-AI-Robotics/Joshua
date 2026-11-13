@@ -66,8 +66,8 @@ robot::perception::SinglePerception MakeSensorConfig() {
 }
 
 TEST(Sts3215PositionSensorTest, PublishesThePositionTheChannelReports) {
-  auto channel = std::make_shared<RecordingChannel>(
-      robot::board::ChannelFeedback{.position = 2048.0f, .velocity = 12.0f});
+  auto channel = std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{
+      .position = 2048.0f, .velocity = 12.0f, .velocity_valid = true});
   Sts3215PositionSensor sensor(channel, MakeSensorConfig());
 
   ASSERT_TRUE(sensor.Init().ok());
@@ -107,6 +107,15 @@ TEST(Sts3215PositionSensorTest, UsesConfiguredDoubleRobotTime) {
         testing::ExitedWithCode(0),
         "");
   }
+}
+
+TEST(Sts3215PositionSensorTest, MissingVelocityRemainsAbsent) {
+  auto channel =
+      std::make_shared<RecordingChannel>(robot::board::ChannelFeedback{.position = 2048});
+  Sts3215PositionSensor sensor(channel, MakeSensorConfig());
+  auto packet = sensor.GetData();
+  ASSERT_TRUE(packet.ok());
+  EXPECT_FALSE(packet->position().has_velocity());
 }
 
 // A sensor observes; it must never command. The channel it holds can do

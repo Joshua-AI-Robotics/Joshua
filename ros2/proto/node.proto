@@ -17,7 +17,8 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
-  MCU_BUS = 9;  // One process owns mixed MCU actuator + scalar subscriptions.
+  DEVICE_BUS = 10;  // Board-backed commands and observations share one process.
+  MCU_BUS = 9;      // One process owns mixed MCU actuator + scalar subscriptions.
 }
 
 enum QosReliabilityPolicy {
@@ -53,12 +54,16 @@ message QosSetting {
 }
 
 message Publisher {
+  // Emit a complete PerceptionPacket in UINT8_MULTI_ARRAY, retaining identity,
+  // timing, validity and payload atomically. False keeps the existing native type.
+  bool observation_packet = 4;
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;
 }
 
 message Subscription {
+  string source_id = 3;  // Actuator command owner; unset means "default".
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
 }

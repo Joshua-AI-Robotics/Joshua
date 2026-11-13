@@ -308,14 +308,15 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
-Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
-such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
-the camera must support the selected format.
+Camera initialization applies the configured capture settings. Set an explicit
+four-character pixel format, such as `fourcc: "MJPG"` or `fourcc: "YUYV"`;
+missing or malformed formats fail validation before a camera is opened. The
+checked-in camera presets select MJPG.
 
-One serial bus must belong to one node process. Position sensors use
-`POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
-does not read or publish sensors. Reading sensors from an actuator's bus in a
-separate process is not supported by the current bus ownership model.
+One serial bus must belong to one node process. Use `DEVICE_BUS` to compose
+commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`
+and `ACTUATOR_SUBSCRIBER` remain available for independent buses; they cannot
+share a port across processes.
 The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
 the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
 subscribers share `sts3215_servo_<joint>/position` topics, carrying native
@@ -395,6 +396,46 @@ effective policy, including defaults. Polling fairness requires enough deadline
 slack; admission and deadlines report overload instead of promising an infeasible
 workload. Physical control/stop latency and telemetry capacity still require P6
 qualification. Runtime board/perception integration follows in P5.
+
+## Shared board runtime
+
+`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+observations in one process. Assign every consumer of a bus the same node ID
+and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+no transport implementation is selected by the node. Position publishers retain
+the existing numeric/JointState contracts. `MCU_BUS` remains supported for existing
+JoshuaWire scalar/stepper configurations.
+
+The composed owner explicitly disables actuators at startup and tears them down
+before releasing boards. Steppers require `require_explicit_enable: true` so their
+driver initialization cannot enable early. Camera/lidar acquisition remains in
+its existing standalone nodes. This feature does not qualify physical motion,
+link-loss stopping or a particular rig.
+
+## Control policy
+
+All ROS actuator nodes now start disabled. Optional `actuator.control_policy`
+sets `initial_source` (default `default`), positive `command_timeout_ms` (default
+1000) and positive `max_input_age_ms` (unset means no source-age claim). Assign
+`source_id` on actuator subscriptions when selecting multiple producers. Source
+IDs are lowercase ROS identifiers, up to 64 characters. Input-age enforcement
+requires JointState motion with synchronized ROS timestamps; Bool enable gates
+remain explicit operator actions. See the shared lifecycle in
+[ROS runtime documentation](../ros2/README.md#shared-control-lifecycle).
+
+## Observation metadata and packet output
+
+`observation_policy { stale_after_ms: 1000 frame_id: "base" }` configures receipt
+freshness and an optional calibrated frame. Source-native units are fixed by the
+selected driver; an STS3215 encoder requires a servo-bus channel.
+
+Native outputs retain their message types and add `/metadata` and `/status`
+packet companions. For atomic payload/identity/timing recording, a publisher may
+select `observation_packet: true` with `UINT8_MULTI_ARRAY`; otherwise position
+arrays retain their existing numeric meaning. Camera and lidar native outputs
+require IMAGE and POINTCLOUD2 respectively. See [sample clocks and recording](../ros2/README.md#sample-identity-clocks-and-recording)
+for timestamp meaning, unavailable acquisition time, generation markers and
+native-unit conversions.
 
 ## C++ ROS logging
 

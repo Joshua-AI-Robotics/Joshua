@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
@@ -7,24 +8,22 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-
-// Exercise the private node implementation without a public header or executable main.
-#define JOSHUA_CAMERA_PUBLISHER_TEST
-#include "ros2/camera_publisher.cc"
+#include "robot/perception/camera/recovering_camera.h"
+#include "ros2/observation_publisher.h"
 
 namespace {
 using namespace std::chrono_literals;
 
 struct FakeCameraState {
-  bool available = false;
-  bool configured = false;
-  bool fail_next_read = false;
-  bool throw_next_read = false;
-  int initializations = 0;
-  int successful_initializations = 0;
-  int reads = 0;
-  int teardowns = 0;
-  int uninitialized_reads = 0;
+  std::atomic<bool> available{false};
+  std::atomic<bool> configured{false};
+  std::atomic<bool> fail_next_read{false};
+  std::atomic<bool> throw_next_read{false};
+  std::atomic<int> initializations{0};
+  std::atomic<int> successful_initializations{0};
+  std::atomic<int> reads{0};
+  std::atomic<int> teardowns{0};
+  std::atomic<int> uninitialized_reads{0};
   absl::Status configuration_status;
 };
 
@@ -67,7 +66,8 @@ class FakeCamera : public robot::perception::PerceptionInterface {
     image->set_height(1);
     image->set_channels(3);
     image->set_encoding("bgr8");
-    const char data[] = {static_cast<char>(state_->successful_initializations), '\x02', '\x03'};
+    const char data[] = {
+        static_cast<char>(state_->successful_initializations.load()), '\x02', '\x03'};
     image->set_data(data, 3);
     return packet;
   }
@@ -119,20 +119,36 @@ class CameraPublisherTest : public testing::Test {
   void TearDown() override {
     if (publisher_) executor_.remove_node(publisher_);
     executor_.remove_node(observer_);
+    source_.reset();
     publisher_.reset();
     subscription_.reset();
     observer_.reset();
   }
 
-  void Start(CameraPublisher::Factory factory = {}) {
+  using Factory =
+      std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
+          const robot::perception::SinglePerception&)>;
+  void Start(Factory factory = {}) {
     if (!factory) {
       factory = [state = state_](const auto&)
           -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
         return std::make_unique<FakeCamera>(state);
       };
     }
-    publisher_ = std::make_shared<CameraPublisher>(
-        "camera_recovery_publisher", 1, config_, std::move(factory), [this]() { return now_; });
+    publisher_ = std::make_shared<rclcpp::Node>("camera_recovery_publisher");
+    const auto sensor = config_.robot().perceptions().single_perceptions(0);
+    source_ = std::make_unique<ros2_utils::ObservationPublisher>(
+        *publisher_,
+        sensor,
+        config_.robot().boards(),
+        [this,
+         factory,
+         sensor]() -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+          auto camera = factory(sensor);
+          if (!camera.ok()) return camera.status();
+          return std::make_unique<robot::perception::RecoveringCamera>(
+              std::move(*camera), [this] { return now_.load(); });
+        });
     executor_.add_node(publisher_);
   }
 
@@ -151,8 +167,9 @@ class CameraPublisherTest : public testing::Test {
 
   config::Config config_;
   std::shared_ptr<FakeCameraState> state_ = std::make_shared<FakeCameraState>();
-  double now_ = 1'700'000'000.0;
-  std::shared_ptr<CameraPublisher> publisher_;
+  std::atomic<double> now_{1'700'000'000.0};
+  std::shared_ptr<rclcpp::Node> publisher_;
+  std::unique_ptr<ros2_utils::ObservationPublisher> source_;
   std::shared_ptr<rclcpp::Node> observer_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
   rclcpp::executors::SingleThreadedExecutor executor_;
@@ -161,6 +178,7 @@ class CameraPublisherTest : public testing::Test {
 
 TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializationRecovers) {
   Start();
+  ASSERT_TRUE(WaitUntil([&] { return state_->teardowns == 1; }));
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->teardowns, 1);
   ASSERT_TRUE(
@@ -172,7 +190,7 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
   EXPECT_EQ(state_->reads, 0);
   EXPECT_TRUE(images_.empty());
 
-  now_ += 1.0;
+  now_ = now_ + 1.0;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -187,14 +205,15 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
 
 TEST_F(CameraPublisherTest, RepeatedOpenFailuresUseOneSecondBackoff) {
   Start();
-  now_ += 1.0;
-  ASSERT_TRUE(WaitUntil([&]() { return state_->initializations == 2; }));
+  ASSERT_TRUE(WaitUntil([&] { return state_->teardowns == 1; }));
+  now_ = now_ + 1.0;
+  ASSERT_TRUE(WaitUntil([&]() { return state_->teardowns == 2; }));
   state_->available = true;
-  now_ += 0.5;
+  now_ = now_ + 0.5;
   SpinFor(50ms);
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->reads, 0);
-  now_ += 0.5;
+  now_ = now_ + 0.5;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 3);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -207,12 +226,12 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
   state_->fail_next_read = true;
   ASSERT_TRUE(WaitUntil([&]() { return state_->teardowns == 1; }));
   EXPECT_FALSE(state_->configured);
-  const auto failed_reads = state_->reads;
+  const auto failed_reads = state_->reads.load();
   SpinFor(50ms);
   EXPECT_EQ(state_->reads, failed_reads);
   EXPECT_EQ(state_->initializations, 1);
 
-  now_ += 1.0;
+  now_ = now_ + 1.0;
   // A session marker distinguishes recovered frames from previously queued DDS messages.
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty() && images_.back().data.at(2) == 2; }));
   EXPECT_EQ(state_->initializations, 2);
@@ -220,43 +239,78 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
   EXPECT_EQ(state_->uninitialized_reads, 0);
 }
 
-TEST_F(CameraPublisherTest, InvalidConfigurationFailsStartupInsteadOfRetrying) {
+TEST_F(CameraPublisherTest, InvalidConfigurationIsReportedWithoutRetrying) {
   state_->configuration_status = absl::InvalidArgumentError("Invalid camera pixel format");
-  EXPECT_THROW(Start(), std::invalid_argument);
+  std::string health;
+  auto subscription = observer_->create_subscription<std_msgs::msg::String>(
+      "camera_recovery_test/image/health", 10, [&](std_msgs::msg::String::ConstSharedPtr message) {
+        health = message->data;
+      });
+  Start();
+  ASSERT_TRUE(
+      WaitUntil([&] { return health.find("Invalid camera pixel format") != std::string::npos; }));
+  now_ = now_ + 10.0;
+  SpinFor(50ms);
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->reads, 0);
   EXPECT_EQ(state_->teardowns, 1);
+  EXPECT_TRUE(images_.empty());
 }
 
-TEST_F(CameraPublisherTest, FastCameraTimerDoesNotReadOtherCameras) {
-  auto* perceptions = config_.mutable_robot()->mutable_perceptions();
-  const auto fast_config = perceptions->single_perceptions(0);
-  auto* slow_config = perceptions->add_single_perceptions();
-  *slow_config = fast_config;
-  slow_config->set_sensor_name("slow_camera");
-  auto* slow_publisher = slow_config->mutable_node()->mutable_publishers(0);
-  slow_publisher->set_topic("camera_recovery_test/slow_image");
-  slow_publisher->set_publish_rate_hz(1);
-  auto slow_state = std::make_shared<FakeCameraState>();
-  slow_state->available = true;
+TEST_F(CameraPublisherTest, MultipleTopicsShareOneAcquisitionAndInitialization) {
+  auto* sensor = config_.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto second = sensor->node().publishers(0);
+  second.set_topic("camera_recovery_test/second_image");
+  *sensor->mutable_node()->add_publishers() = second;
+  std::vector<sensor_msgs::msg::Image> other_images;
+  auto subscription = observer_->create_subscription<sensor_msgs::msg::Image>(
+      second.topic(), 10, [&](sensor_msgs::msg::Image::ConstSharedPtr message) {
+        other_images.push_back(*message);
+      });
   state_->available = true;
-  Start([fast_state = state_, slow_state](const auto& sensor)
-            -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
-    return std::make_unique<FakeCamera>(sensor.sensor_name() == "slow_camera" ? slow_state
-                                                                              : fast_state);
-  });
-
-  SpinFor(100ms);
-  EXPECT_GT(state_->reads, 0);
-  EXPECT_EQ(slow_state->reads, 0);
-  ASSERT_TRUE(WaitUntil([&]() { return slow_state->reads > 0; }));
+  Start();
+  ASSERT_TRUE(WaitUntil([&] { return !images_.empty() && !other_images.empty(); }));
+  EXPECT_EQ(state_->initializations, 1);
+  EXPECT_EQ(state_->uninitialized_reads, 0);
+  EXPECT_EQ(images_.back().data, other_images.back().data);
+  EXPECT_EQ(images_.back().header.frame_id, "camera_frame");
 }
 
-TEST_F(CameraPublisherTest, UnexpectedCaptureExceptionReachesExecutorBoundary) {
+TEST_F(CameraPublisherTest, UnexpectedCaptureExceptionIsVisibleInObservationHealth) {
+  std::string health;
+  auto subscription = observer_->create_subscription<std_msgs::msg::String>(
+      "camera_recovery_test/image/health", 10, [&](std_msgs::msg::String::ConstSharedPtr message) {
+        health = message->data;
+      });
   state_->available = true;
   state_->throw_next_read = true;
   Start();
-  EXPECT_THROW(WaitUntil([&]() { return state_->reads > 0; }), std::runtime_error);
+  ASSERT_TRUE(
+      WaitUntil([&] { return health.find("Unexpected camera failure") != std::string::npos; }));
   EXPECT_TRUE(images_.empty());
+  source_.reset();
+  EXPECT_EQ(state_->teardowns, 1);
+}
+
+TEST_F(CameraPublisherTest, FastPublicationDoesNotIncreaseAnotherCamerasAcquisitionRate) {
+  auto slow_sensor = config_.robot().perceptions().single_perceptions(0);
+  slow_sensor.set_sensor_name("slow_camera");
+  slow_sensor.mutable_node()->mutable_publishers(0)->set_topic("camera_recovery_test/slow_image");
+  slow_sensor.mutable_node()->mutable_publishers(0)->set_publish_rate_hz(1);
+  auto slow_state = std::make_shared<FakeCameraState>();
+  slow_state->available = true;
+  state_->available = true;
+  Start();
+  ros2_utils::ObservationPublisher slow(
+      *publisher_,
+      slow_sensor,
+      config_.robot().boards(),
+      [slow_state]() -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+        return std::make_unique<robot::perception::RecoveringCamera>(
+            std::make_unique<FakeCamera>(slow_state));
+      });
+  ASSERT_TRUE(WaitUntil([&] { return slow_state->reads > 0 && state_->reads > 5; }));
+  EXPECT_EQ(slow_state->reads, 1);
+  EXPECT_EQ(slow_state->initializations, 1);
 }
 }  // namespace

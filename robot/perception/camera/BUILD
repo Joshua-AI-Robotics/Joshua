@@ -3,11 +3,29 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 exports_files(["cv_camera.cc"])
 
 cc_library(
+    name = "camera_config",
+    hdrs = ["camera_config.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//robot/perception/proto:perception_cc_proto",
+        "@abseil-cpp//absl/status:status",
+    ],
+)
+
+cc_library(
+    name = "recovering_camera",
+    hdrs = ["recovering_camera.h"],
+    visibility = ["//visibility:public"],
+    deps = ["//robot/perception/interfaces:perception_interface"],
+)
+
+cc_library(
     name = "cv_camera",
     srcs = ["cv_camera.cc"],
     hdrs = ["cv_camera.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":camera_config",
         "//robot/perception/interfaces:camera_interface",
         "//robot/perception/proto:perception_cc_proto",
         "//robot/perception/proto:perception_packet_cc_proto",

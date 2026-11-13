@@ -6,6 +6,8 @@ import math
 import time
 from pathlib import Path
 
+from google.protobuf.json_format import MessageToDict
+
 from robot.perception.proto import perception_packet_pb2
 from ros2.utils.ros_python_paths import setup_import_paths
 
@@ -91,6 +93,9 @@ def main():
                         "recorder_steady_ns": time.monotonic_ns(),
                         "sensor": packet.perception_id,
                         "scalar": fields,
+                        "sample_metadata": MessageToDict(
+                            packet.sample_metadata, preserving_proto_field_name=True
+                        ),
                     }
                 )
 

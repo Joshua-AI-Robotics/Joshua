@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -48,4 +48,22 @@ cc_library(
     name = "audio_interface",
     hdrs = ["audio_interface.h"],
     deps = [":perception_interface"],
+)
+
+cc_library(
+    name = "observation_source",
+    hdrs = ["observation_source.h"],
+    deps = [
+        ":perception_interface",
+        "//utils:joshua_runtime",
+    ],
+)
+
+cc_test(
+    name = "observation_source_test",
+    srcs = ["observation_source_test.cc"],
+    deps = [
+        ":observation_source",
+        "@googletest//:gtest_main",
+    ],
 )

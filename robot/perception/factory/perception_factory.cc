@@ -13,7 +13,9 @@
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/audio/alsa_audio.h"
 #include "robot/perception/audio/audio_config.h"
+#include "robot/perception/camera/camera_config.h"
 #include "robot/perception/camera/cv_camera.h"
+#include "robot/perception/camera/recovering_camera.h"
 #include "robot/perception/interfaces/perception_interface.h"
 #include "robot/perception/lidar/lds01_driver.h"
 #include "robot/perception/position/sts3215_position_sensor.h"
@@ -31,6 +33,8 @@ absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> CreateSt
       auto resolved,
       robot::board::ResolveChannelConfig(boards, owner, config.board_name(), config.channel()));
 
+  if (resolved.channel->drive() != robot::board::SERVO_BUS_UART)
+    return absl::InvalidArgumentError("STS3215 position units require a servo-bus channel");
   ABSL_ASSIGN_OR_RETURN(auto board, robot::board::BoardFactory::GetOrCreate(*resolved.board));
   ABSL_ASSIGN_OR_RETURN(auto channel, board->OpenChannel(config.channel()));
   return std::make_unique<Sts3215PositionSensor>(channel, sensor);
@@ -84,6 +88,7 @@ const std::vector<SensorImplementation>& PerceptionFactory::Implementations() {
        "installed",
        [](const SinglePerception& sensor,
           const auto&) -> absl::StatusOr<std::unique_ptr<PerceptionInterface>> {
+         ABSL_RETURN_IF_ERROR(ValidateCameraConfig(sensor.opencv_config()));
          return std::make_unique<CvCamera>(sensor);
        },
        "camera driver requires IMAGE."},
@@ -146,6 +151,19 @@ PerceptionFactory::CreatePerception(
     return implementation.create(single_perception, boards);
   }
   return absl::InvalidArgumentError(absl::StrCat(owner, " has no sensor_config."));
+}
+
+absl::StatusOr<std::unique_ptr<PerceptionInterface>> PerceptionFactory::CreateInitializedPerception(
+    const SinglePerception& sensor,
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
+  ABSL_ASSIGN_OR_RETURN(auto source, CreatePerception(sensor, boards));
+  // Camera opens and recovery run on the observation worker. Syntax has already
+  // been checked by CreatePerception before a device can be opened.
+  if (sensor.has_opencv_config()) return std::make_unique<RecoveringCamera>(std::move(source));
+  // The legacy LDS01 factory already initializes the device. Other non-camera
+  // constructors are lazy and require the explicit Init call.
+  if (!sensor.has_lds01_config()) ABSL_RETURN_IF_ERROR(source->Init());
+  return source;
 }
 
 }  // namespace robot::perception

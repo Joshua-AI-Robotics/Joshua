@@ -88,7 +88,7 @@ class McuBusTest : public testing::Test {
   std::shared_ptr<StopBoard> AddBoard(absl::Status result) {
     auto board = std::make_shared<StopBoard>(std::move(result));
     boards_.push_back(board);
-    runtime_->boards_.push_back(board);
+    runtime_->boards_.emplace("board_" + std::to_string(boards_.size()), board);
     return board;
   }
 
@@ -134,5 +134,7 @@ TEST_F(McuBusTest, ReportsSuccessWhenEveryBoardAcknowledges) {
   EXPECT_EQ(second->WaitForStop(0s), std::future_status::ready);
   const auto response = reply.get();
   EXPECT_TRUE(response->success);
-  EXPECT_EQ(response->message, "Protocol stop acknowledged; physical verification unsupported");
+  EXPECT_EQ(response->message,
+            "Host stop interlocked; available board stop acknowledged; physical verification "
+            "unsupported");
 }

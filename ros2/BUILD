@@ -1,7 +1,7 @@
 # System ROS2 rules (using system-installed ROS2 libraries)
 load("@rules_python//python:defs.bzl", "py_library")
 load("//:requirements.bzl", "requirement")
-load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_library", "ros2_cpp_test", "ros2_py_binary")
+load("//:system_ros2_rules.bzl", "ros2_cpp_binary", "ros2_cpp_test", "ros2_py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -96,48 +96,37 @@ py_library(
     ] + requirement("numpy"),
 )
 
-_CAMERA_PUBLISHER_DEPS = [
-    "//config/proto:config_cc_proto",
-    "//robot/perception/factory:perception_factory",
-    "//robot/perception/interfaces:perception_interface",
-    "//robot/perception/proto:perception_cc_proto",
-    "//robot/perception/proto:perception_packet_cc_proto",
-    "//ros2:logging",
-    "//ros2:node_runner",
-    "//ros2/proto:node_cc_proto",
-    "//ros2/utils:packet_parser",
-    "//ros2/utils:qos_setting",
-    "//ros2/utils:robot_time_conversion",
-    "//ros2/utils:robot_timer",
-    "//utils:robot_time",
-    "@abseil-cpp//absl/status:status",
-    "@abseil-cpp//absl/status:statusor",
-    "@ros2_deps//:cpp_sensor_msgs",
-    "@ros2_deps//:cpp_std_msgs",
-    "@ros2_deps//:rclcpp",
-]
-
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
     set_up_ament = True,
-    deps = _CAMERA_PUBLISHER_DEPS,
-)
-
-# Let the test include the private implementation without compiling it separately.
-ros2_cpp_library(
-    name = "camera_publisher_test_source",
-    testonly = True,
-    textual_hdrs = ["camera_publisher.cc"],
-    visibility = ["//visibility:private"],
-    deps = _CAMERA_PUBLISHER_DEPS,
+    deps = [
+        ":observation_publisher",
+        "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/proto:perception_packet_cc_proto",
+        "//ros2:logging",
+        "//ros2:node_runner",
+        "//ros2/proto:node_cc_proto",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
 )
 
 ros2_cpp_test(
     name = "camera_publisher_test",
     srcs = ["camera_publisher_test.cc"],
     deps = [
-        ":camera_publisher_test_source",
+        ":observation_publisher",
+        "//robot/perception/camera:recovering_camera",
         "@googletest//:gtest_main",
     ],
 )
@@ -150,6 +139,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//ros2:logging",
@@ -169,6 +159,7 @@ ros2_cpp_binary(
     ],
     set_up_ament = True,
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/factory:perception_factory",
         "//robot/perception/proto:perception_cc_proto",
@@ -199,6 +190,7 @@ ros2_cpp_binary(
     deps = [
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_cc_proto",
         "//robot/action/proto:action_packet_cc_proto",
         "//ros2:logging",
@@ -218,13 +210,16 @@ cc_library(
     name = "mcu_bus_node",
     hdrs = [
         "action_subscriber.h",
+        "device_bus.h",
         "mcu_bus.h",
     ],
     deps = [
         ":logging",
         ":node_runner",
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/action/factory:action_factory",
+        "//robot/action/interfaces:control_gate",
         "//robot/action/proto:action_packet_cc_proto",
         "//robot/board/factory:board_factory",
         "//robot/perception/factory:perception_factory",
@@ -338,6 +333,7 @@ ros2_cpp_binary(
     name = "audio_publisher",
     srcs = ["audio_publisher.cc"],
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/audio:audio_capture",
         "//robot/perception/factory:perception_factory",
@@ -346,5 +342,46 @@ ros2_cpp_binary(
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "device_bus",
+    srcs = ["device_bus.cc"],
+    deps = [
+        ":mcu_bus_node",
+        ":node_runner",
+    ],
+)
+
+cc_test(
+    name = "device_bus_test",
+    srcs = ["device_bus_test.cc"],
+    deps = [
+        ":mcu_bus_node",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/testing:fake_caller_sized_message_transport",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+cc_library(
+    name = "observation_publisher",
+    hdrs = ["observation_publisher.h"],
+    deps = [
+        ":logging",
+        "//config/proto:config_cc_proto",
+        "//robot/perception/factory:perception_factory",
+        "//robot/perception/interfaces:observation_source",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
+        "//utils:status_macros",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
     ],
 )
