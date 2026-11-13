@@ -143,9 +143,9 @@ capped at 64 KiB, including Unicode escaping; a larger report returns
 [`observation_source.py`](observation_source.py) provides a standalone, stdlib-only
 `ObservationSource[T]` ABC and validated frozen metadata/result records. Concrete
 adapters own payload validation, bounds and lifecycle enforcement. The
-[design and usage examples](../../docs/MCP_OBSERVATION_DESIGN.md) distinguish the
-implemented base from deferred adapters. This library exposes no new MCP tool
-and does not change the existing interfaces or response schemas.
+[design and usage examples](../../docs/MCP_OBSERVATION_DESIGN.md) describe the
+implemented image adapter and remaining proposed adapters. The generic base
+keeps the existing interfaces and response schemas.
 
 ## Optional runtime observations
 
@@ -214,3 +214,80 @@ python3 -m venv /tmp/mcp-lock-env
 
 Use `requirements_3.12.lock` for the Python 3.12 run. Root and model lockfiles
 are independent of this tool.
+
+
+## Optional configured camera image
+
+Build `//tools/mcp:image_observer` alongside the MCP/inspection targets above.
+The existing nine tools remain the default; opting in adds
+`get_camera_image(camera_id)`. The launcher and configured ROS node remain the
+only owners of camera execution. MCP owns a passive native ROS 2 subscription,
+one bounded sample and its JPEG presentation. No launcher, node, driver or
+private camera manifest is added for MCP.
+
+Start an operator-authorized camera runtime through its normal launcher, after
+reading the entire preset and confirming readiness under the
+[hardware rules](../../AGENTS.md#hardware-safety--read-this-first). Configure
+MCP separately with these startup arguments:
+
+```sh
+--ros-config example/publish_camera.pbtxt --image-observer /workspace/bazel-bin/tools/mcp/image_observer --camera-id sensor:webcam
+```
+
+`--ros-config` is relative to the selected `--config-root`. The helper uses the
+existing bounded protobuf inspection loader to resolve a
+unique configured IMAGE sensor and exactly one IMAGE topic on its declared node.
+This confines and parses the candidate; full configuration validation remains
+the separate `validate_config` tool. The reader does not require a particular
+camera driver. Cameras may share a node when each owns a distinct IMAGE topic;
+overlapping configured IMAGE-topic ownership is rejected, including relative
+and absolute spellings of the same topic. Requests select only the enabled
+camera ID; they cannot choose arbitrary ROS topics, paths, devices or programs.
+The config is reread at query boundaries. Changed endpoint mappings invalidate
+cached data and restart the passive helper before a new sample can be returned.
+
+ROS discovery must reach the already-running publisher in the same
+`ROS_DOMAIN_ID`; set that environment consistently at startup. The default
+CPU-only MCP launcher remains isolated, read-only and unprivileged and does not
+configure a ROS network connection. To opt in through the standalone launcher,
+prepare this revision, then add `--ros-config`, `--camera-id` and
+`--runtime-container` to `serve`; see [camera setup](../../docs/MCP_SETUP.md#optional-camera-images).
+The launcher selects the existing runtime's network/IPC namespaces and ROS
+settings while keeping devices with the runtime. ROS image observation requires
+this explicitly configured and tested DDS arrangement. A hardware-free Humble check
+verified separate read-only, unprivileged CPU containers using `--network container:<runtime>` and `--ipc container:<runtime>`
+with a shareable runtime IPC namespace. This is an explicit opt-in arrangement;
+MCP never enables host networking, exposes devices or starts the runtime.
+
+Call `get_camera_image` with `{"camera_id":"sensor:webcam"}`. A fresh result
+contains one standard MCP `image/jpeg` block and bounded metadata. Stale results
+contain metadata only; missing, invalid or ambiguous sources contain no image.
+A compatible AI client displays or interprets the image; the tool does no
+inference. The helper checks the sole expected graph endpoint and the received
+message's publisher GID, then checks again on query. Publisher changes clear the
+sample and refresh the subscription. These checks associate the image with a
+configured ROS endpoint; they do not authenticate hardware or prove which preset
+the runtime loaded. `runtime_instance` stays null and runtime/config-loaded
+association remains unknown.
+
+Limits: one camera/helper/query, a five-second read deadline and two-second
+cleanup budget, 16 KiB image metadata, 64 KiB helper stderr, and RGB8/BGR8 input
+up to 1920×1080 and 8 MiB with checked row stride. One sample is retained. JPEG
+is aspect preserving, never upscaled, at most 640×480, quality 80 and 512 KiB.
+The entire serialized MCP result is capped at 1 MiB. DDS may allocate before
+application validation, so accepted-data limits are not a strict process memory
+bound. Failed cleanup disables further reads until MCP restarts.
+
+Receipt freshness uses comparable boot/time-namespace CLOCK_BOOTTIME time, with
+a three-second default. Rereads preserve original receipt time, ROS header time
+(`source_header_time`) and helper nonce/counter `sample_id`; ROS Image supplies
+no native sequence, so `sample_sequence` is null. Acquisition freshness stays
+unknown. Silence becomes stale; MCP never restarts or configures the camera.
+
+Synthetic ROS → helper → actual MCP SDK tests decode the JPEG and exercise
+source changes, publisher replacement, stale data and bounded cleanup. The
+[physical C920 record](../../docs/hardware_tests/logitech_c920_mcp_2026-11-13.md)
+verifies this native ROS boundary through the actual MCP SDK, including runtime
+stop/restart in the same session. Physical USB unplug/replug, AI IDE rendering
+and fresh-host installation remain separate acceptance checks requiring their
+own evidence and applicable operator confirmation.

@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import signal
@@ -30,6 +31,8 @@ BINARIES = (
     "config/joshua_validate_config",
     "config/joshua_inspect_config",
 )
+IMAGE_OBSERVER = "tools/mcp/image_observer"
+PREPARED_BINARIES = (*BINARIES, IMAGE_OBSERVER)
 ROOT_LABEL = "io.joshua.mcp.root"
 
 
@@ -405,11 +408,15 @@ class Runtime:
                 "JOSHUA_MCP_USER": f"{os.getuid()}:{os.getgid()}",
                 "JOSHUA_MCP_OWNER": owner_token(os.getpid()) or "unknown",
                 "JOSHUA_MCP_CACHE": str(self.cache_dir),
+                "JOSHUA_MCP_NETWORK_MODE": "none",
+                "JOSHUA_MCP_IPC_MODE": "private",
+                "JOSHUA_MCP_ROS_DOMAIN_ID": "0",
+                "JOSHUA_MCP_ROS_LOCALHOST_ONLY": "0",
             }
         )
         return env
 
-    def compose_command(self, state, service, extra=(), artifact_dir=None):
+    def compose_command(self, state, service, extra=(), artifact_dir=None, camera=None):
         name = f"joshua-mcp-{self.root_id}-{self.stack}-{uuid.uuid4().hex[:12]}"
         definition = (
             None
@@ -427,7 +434,17 @@ class Runtime:
             service,
             *extra,
         ]
-        return command, self.compose_env(state, artifact_dir)
+        env = self.compose_env(state, artifact_dir)
+        if camera is not None:
+            env.update(
+                {
+                    "JOSHUA_MCP_NETWORK_MODE": "container:" + camera["runtime_id"],
+                    "JOSHUA_MCP_IPC_MODE": "container:" + camera["runtime_id"],
+                    "JOSHUA_MCP_ROS_DOMAIN_ID": camera["domain_id"],
+                    "JOSHUA_MCP_ROS_LOCALHOST_ONLY": camera["localhost_only"],
+                }
+            )
+        return command, env
 
     def cleanup_container(self, state, name):
         try:
@@ -625,7 +642,7 @@ class Runtime:
                     timeout=None,
                 )
                 self.daemon_info(pin)
-                for name in BINARIES:
+                for name in PREPARED_BINARIES:
                     if not (staging / name).is_file():
                         raise McpError(
                             f"Missing prepared artifact: {name}", "artifacts_invalid"
@@ -869,16 +886,163 @@ class Runtime:
                 "MCP protocol check did not produce a passing report", "smoke_failed"
             ) from error
 
-    def serve(self):
+    def camera_connection(self, state, container):
+        helper = self.state_dir / state["generation"] / IMAGE_OBSERVER
+        if not helper.is_file() or not os.access(helper, os.X_OK):
+            raise McpError(
+                "Prepared camera helper is missing or not executable; run prepare "
+                "again before enabling camera images",
+                "camera_helper_missing",
+            )
+        result = self.docker(
+            state["docker"], "container", "inspect", "--", container, check=False
+        )
+        if result.returncode:
+            raise McpError(
+                "Cannot inspect the selected running camera runtime container "
+                f"{container}; select an existing container on the prepared "
+                "Docker daemon",
+                "camera_runtime_unavailable",
+            )
+        try:
+            info = json.loads(result.stdout)
+            if not isinstance(info, list) or len(info) != 1:
+                raise ValueError("expected one container")
+            info = info[0]
+            identity = info["Id"]
+            status = info["State"]
+            namespaces = info["HostConfig"]
+            if not isinstance(identity, str) or not re.fullmatch(
+                r"[0-9a-f]{64}", identity
+            ):
+                raise ValueError("immutable container ID unavailable")
+            if (
+                status["Running"] is not True
+                or status["Paused"] is not False
+                or status["Restarting"] is not False
+            ):
+                raise ValueError("runtime must be running, not paused or restarting")
+            if namespaces["IpcMode"] != "shareable":
+                raise ValueError(
+                    "runtime requires its own shareable IPC namespace (--ipc shareable)"
+                )
+            network = namespaces["NetworkMode"]
+            if (
+                not isinstance(network, str)
+                or not network
+                or network == "host"
+                or network.startswith("container:")
+            ):
+                raise ValueError("runtime requires its own non-host network namespace")
+            environment = info["Config"]["Env"] or []
+            if not isinstance(environment, list) or not all(
+                isinstance(entry, str) for entry in environment
+            ):
+                raise ValueError("runtime environment unavailable")
+            domains = [
+                entry.partition("=")[2]
+                for entry in environment
+                if entry.partition("=")[0] == "ROS_DOMAIN_ID"
+            ]
+            domain = domains[0] if domains else "0"
+            if (
+                len(domains) > 1
+                or not re.fullmatch(r"[0-9]{1,3}", domain)
+                or int(domain) > 232
+            ):
+                raise ValueError(
+                    "runtime ROS_DOMAIN_ID must be one integer from 0 to 232"
+                )
+            localhost_values = [
+                entry.partition("=")[2]
+                for entry in environment
+                if entry.partition("=")[0] == "ROS_LOCALHOST_ONLY"
+            ]
+            localhost_only = localhost_values[0] if localhost_values else "0"
+            if len(localhost_values) > 1 or localhost_only not in ("0", "1"):
+                raise ValueError("runtime ROS_LOCALHOST_ONLY must be exactly 0 or 1")
+        except (ValueError, TypeError, KeyError, IndexError) as error:
+            raise McpError(
+                f"Cannot use camera runtime {container}: {error}. "
+                "Select an existing compatible runtime; MCP does not start or "
+                "reconfigure it.",
+                "camera_runtime_invalid",
+            ) from error
+        return {
+            "runtime_id": identity,
+            "domain_id": domain,
+            "localhost_only": localhost_only,
+        }
+
+    def serve(self, ros_config=None, camera_id=None, runtime_container=None):
+        selection = (ros_config, camera_id, runtime_container)
+        camera_enabled = any(value is not None for value in selection)
+        if camera_enabled:
+            if not all(value is not None for value in selection):
+                raise McpError(
+                    "--ros-config, --camera-id and --runtime-container "
+                    "are required together",
+                    "invalid_camera_selection",
+                )
+            if (
+                not isinstance(ros_config, str)
+                or not ros_config
+                or len(ros_config.encode("utf-8")) > 4096
+                or "\0" in ros_config
+                or any(part in ("", ".", "..") for part in ros_config.split("/"))
+            ):
+                raise McpError(
+                    "--ros-config must be a safe relative config path",
+                    "invalid_camera_selection",
+                )
+            if (
+                not isinstance(camera_id, str)
+                or not camera_id.startswith("sensor:")
+                or not camera_id[7:].strip()
+                or len(camera_id.encode("utf-8")) > 512
+                or "\0" in camera_id
+            ):
+                raise McpError(
+                    "--camera-id must identify one configured sensor",
+                    "invalid_camera_selection",
+                )
+            if not isinstance(runtime_container, str) or not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}", runtime_container
+            ):
+                raise McpError(
+                    "--runtime-container must be an explicit Docker container "
+                    "name or ID",
+                    "invalid_camera_selection",
+                )
         require_host()
         state = self.checked_state()
+        camera = (
+            self.camera_connection(state, runtime_container) if camera_enabled else None
+        )
         if state["source"] != source_manifest(self.root):
             print(
                 "Joshua MCP source changed; serving the prepared generation. "
                 "Run prepare to update.",
                 file=sys.stderr,
             )
-        command, env = self.compose_command(state, "mcp-serve")
+        extra = ()
+        if camera_enabled:
+            extra = (
+                "/opt/joshua-mcp/tools/mcp/config_validation_server",
+                "--validator",
+                "/opt/joshua-mcp/config/joshua_validate_config",
+                "--inspector",
+                "/opt/joshua-mcp/config/joshua_inspect_config",
+                "--config-root",
+                "/configs",
+                "--ros-config",
+                ros_config,
+                "--camera-id",
+                camera_id,
+                "--image-observer",
+                "/opt/joshua-mcp/" + IMAGE_OBSERVER,
+            )
+        command, env = self.compose_command(state, "mcp-serve", extra, camera=camera)
         name = command[command.index("--name") + 1]
         child = None
         previous = {}
@@ -936,15 +1100,35 @@ def main(argv=None):
     )
     parser.add_argument("--config-root", type=Path)
     parser.add_argument("--config", help="Relative preset to validate during check")
+    parser.add_argument("--ros-config", help="Relative camera preset (serve only)")
+    parser.add_argument(
+        "--camera-id", help="Configured IMAGE sensor identity (serve only)"
+    )
+    parser.add_argument(
+        "--runtime-container",
+        help="Existing camera runtime container name or ID (serve only)",
+    )
     parser.add_argument(
         "--rebuild-image",
         action="store_true",
         help="Explicitly rebuild the stack image during prepare",
     )
     args = parser.parse_args(argv)
+    if args.command != "serve" and any(
+        value is not None
+        for value in (args.ros_config, args.camera_id, args.runtime_container)
+    ):
+        parser.error(
+            "--ros-config, --camera-id and --runtime-container are only "
+            "supported by serve"
+        )
     runtime = Runtime(args.root, args.stack, args.config_root)
     if args.command == "serve":
-        return runtime.serve()
+        return runtime.serve(
+            ros_config=args.ros_config,
+            camera_id=args.camera_id,
+            runtime_container=args.runtime_container,
+        )
     if args.command == "prepare":
         result = runtime.prepare(rebuild_image=args.rebuild_image)
     elif args.command == "check":

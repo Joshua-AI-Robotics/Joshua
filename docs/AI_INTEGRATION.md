@@ -234,7 +234,7 @@ current implementations and example presets are indexed in the
 | Area | Current implementation | Limitation |
 |---|---|---|
 | Configuration | Protobuf schemas, presets, [`config::ValidateConfig`](../config/README.md), and a read-only [integrity CLI and MCP adapter](../tools/mcp/README.md) | The `.pbtxt` config is the source of truth. The integrity CLI checks parsing and existing integrity rules. The read-only MCP adapter adds config-free factory discovery and candidate device inspection; installed software metadata does not certify compatibility or hardware readiness. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) edits configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
-| Execution | The launcher, [node manager](../launcher/node_manager/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeManager manages ROS 2 node processes. Optional private snapshots expose process facts, partial ROS logs and one explicitly selected POSITION/JOINT_STATE stream through a read-only observer. Simulation observation, motion and general task execution remain outside this contract. |
+| Execution | The launcher, [node manager](../launcher/node_manager/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeManager manages ROS 2 node processes. Optional private snapshots expose process facts, partial ROS logs and one explicitly selected POSITION/JOINT_STATE stream through a read-only observer. An opt-in MCP-owned ROS subscriber reads bounded JPEG images from one configured IMAGE publisher. Simulation observation, motion and general task execution remain outside this contract. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
 | Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
@@ -245,10 +245,13 @@ stable IDs, drivers, example presets, and intended support scope.
 `list_hardware_test_records` retrieves separate dated environments, measurements,
 limits, and evidence by hardware ID. Tests do not automatically broaden model
 support, and neither query attests current hardware readiness.
+The optional [camera image tool](../tools/mcp/README.md#optional-configured-camera-image)
+adds one configured JPEG source, with receipt freshness and unknown acquisition
+freshness. Camera observation does not perform inference or execute tasks.
 Factory-owned metadata identifies build implementations and gaps without driver
 construction. Protobuf candidates remain authoritative for declared devices.
-The launcher owns runtime; MCP reads bounded private snapshots and never controls
-it. Publisher association and recent receipt are evidence with stated limits,
+The launcher owns runtime; MCP reads bounded private snapshots and optional
+camera images through its native ROS subscriber. It never controls runtime. Publisher association and recent receipt are evidence with stated limits,
 not hardware attestation or task completion. Configuration writing, motion,
 full commissioning and general task execution remain follow-up work.
 

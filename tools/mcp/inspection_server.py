@@ -1,6 +1,8 @@
 """Central read-only MCP registration and backend delegation."""
 
+import base64
 import json
+from dataclasses import asdict
 
 from mcp import types
 from mcp.server.lowlevel import NotificationOptions, Server
@@ -118,7 +120,127 @@ def _schema(name):
     }
 
 
-def make_server(inspector, observer=None, validation_only=False, hardware_catalog=None):
+_IMAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "source_id": {"type": "string"},
+        "availability": {"type": "string", "enum": ["fresh", "stale", "unavailable"]},
+        "acquisition_freshness": {"type": "string", "const": "unknown"},
+        "config_loaded_association": {"type": "string", "const": "unknown"},
+        "runtime_association": {"type": "string", "const": "unknown"},
+        "runtime_instance": {"type": "null"},
+        "source_timestamp_semantics": {"type": "string", "const": "source_header_time"},
+    },
+    "required": [
+        "source_id",
+        "availability",
+        "acquisition_freshness",
+        "config_loaded_association",
+        "runtime_association",
+        "source_timestamp_semantics",
+    ],
+}
+
+
+async def _camera_result(source, arguments):
+    from tools.mcp.observation_source import Availability
+
+    report = {
+        "source_id": source.describe().source_id,
+        "availability": "unavailable",
+        "acquisition_freshness": "unknown",
+        "config_loaded_association": "unknown",
+        "runtime_association": "unknown",
+        "source_timestamp_semantics": "source_header_time",
+    }
+    content = []
+    if (
+        type(arguments) is not dict
+        or set(arguments) != {"camera_id"}
+        or arguments["camera_id"] != source.describe().source_id
+    ):
+        report.update(
+            unavailable_reason="invalid_argument",
+            diagnostic="Require exactly the operator-enabled camera_id.",
+        )
+    else:
+        result = await source.read_latest()
+        report.update(
+            availability=result.availability.value,
+            unavailable_reason=(
+                result.unavailable_reason.value if result.unavailable_reason else None
+            ),
+            diagnostic=result.diagnostic,
+        )
+        if result.payload is not None:
+            frame = result.payload
+            report.update(
+                {key: value for key, value in asdict(frame).items() if key != "jpeg"}
+            )
+            report.update(
+                runtime_instance=result.runtime_instance,
+                receipt_boottime_ns=str(result.receipt_time.nanoseconds),
+                receipt_clock_id=result.receipt_time.clock_id,
+                source_timestamp_ns=(
+                    str(result.source_time.nanoseconds) if result.source_time else None
+                ),
+                sample_sequence=result.sample_sequence,
+            )
+            if result.availability is Availability.FRESH:
+                content.append(
+                    types.ImageContent(
+                        type="image",
+                        data=base64.b64encode(frame.jpeg).decode("ascii"),
+                        mimeType="image/jpeg",
+                    )
+                )
+    encoded = json.dumps(
+        report, ensure_ascii=True, separators=(",", ":"), allow_nan=False
+    )
+    if len(encoded.encode("utf-8")) > 16384:
+        report = {
+            "source_id": source.describe().source_id,
+            "availability": "unavailable",
+            "acquisition_freshness": "unknown",
+            "config_loaded_association": "unknown",
+            "runtime_association": "unknown",
+            "source_timestamp_semantics": "source_header_time",
+            "unavailable_reason": "invalid_data",
+            "diagnostic": "Image metadata exceeds 16 KiB.",
+        }
+        encoded = json.dumps(report, separators=(",", ":"))
+        content = []
+    response = types.CallToolResult(
+        content=[types.TextContent(type="text", text=encoded)] + content,
+        structuredContent=report,
+        isError=report["availability"] == "unavailable",
+    )
+    if len(response.model_dump_json(by_alias=True).encode("utf-8")) > 1024 * 1024:
+        report = {
+            "source_id": source.describe().source_id,
+            "availability": "unavailable",
+            "acquisition_freshness": "unknown",
+            "config_loaded_association": "unknown",
+            "runtime_association": "unknown",
+            "source_timestamp_semantics": "source_header_time",
+            "unavailable_reason": "invalid_data",
+            "diagnostic": "Serialized image result exceeds 1 MiB.",
+        }
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=json.dumps(report))],
+            structuredContent=report,
+            isError=True,
+        )
+    return response
+
+
+def make_server(
+    inspector,
+    observer=None,
+    validation_only=False,
+    hardware_catalog=None,
+    image_source=None,
+):
     hardware_catalog = (
         hardware_catalog if hardware_catalog is not None else HardwareCatalog()
     )
@@ -129,7 +251,7 @@ def make_server(inspector, observer=None, validation_only=False, hardware_catalo
 
     @app.list_tools()
     async def list_tools():
-        return [
+        tools = [
             types.Tool(
                 name=name,
                 description=description,
@@ -163,8 +285,40 @@ def make_server(inspector, observer=None, validation_only=False, hardware_catalo
             if not validation_only or name == "validate_config"
         ]
 
+        if image_source is not None and not validation_only:
+            tools.append(
+                types.Tool(
+                    name="get_camera_image",
+                    description=(
+                        "Read one operator-selected native ROS camera JPEG. "
+                        "Receipt freshness "
+                        "is separate from unknown acquisition freshness."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"camera_id": {"type": "string"}},
+                        "required": ["camera_id"],
+                        "additionalProperties": False,
+                    },
+                    outputSchema=_IMAGE_SCHEMA,
+                    annotations=types.ToolAnnotations(
+                        readOnlyHint=True,
+                        destructiveHint=False,
+                        idempotentHint=True,
+                        openWorldHint=False,
+                    ),
+                )
+            )
+        return tools
+
     @app.call_tool(validate_input=False)
     async def call_tool(name, arguments):
+        if (
+            name == "get_camera_image"
+            and image_source is not None
+            and not validation_only
+        ):
+            return await _camera_result(image_source, arguments)
         allowed = {"validate_config"} if validation_only else set(_NAMES)
         schema = _schema(name)
         valid = type(arguments) is dict and set(schema["required"]) <= set(
@@ -292,8 +446,8 @@ def make_server(inspector, observer=None, validation_only=False, hardware_catalo
     return app
 
 
-async def run_stdio(inspector, observer):
-    app = make_server(inspector, observer)
+async def run_stdio(inspector, observer, image_source=None):
+    app = make_server(inspector, observer, image_source=image_source)
     options = InitializationOptions(
         server_name="joshua-inspection",
         server_version="0.1.0",
@@ -303,5 +457,7 @@ async def run_stdio(inspector, observer):
         async with stdio_server() as (reader, writer):
             await app.run(reader, writer, options)
     finally:
+        if image_source is not None:
+            await image_source.aclose()
         await inspector.aclose()
         await observer.aclose()

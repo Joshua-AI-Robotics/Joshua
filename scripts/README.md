@@ -16,6 +16,12 @@ host, Docker, artifact and source status without installing anything. Add
 `--stack u24` for Jazzy; the default is Humble. `--config-root` selects the real
 workspace directory exposed for inspection.
 
+For an already-running camera runtime, `serve --ros-config <relative-preset>
+--camera-id sensor:<name> --runtime-container <container-name-or-id>` explicitly
+adds the passive image tool. The runtime must own a non-host network namespace
+and shareable IPC; the launcher pins its inspected ID and ROS domain. See the
+[camera setup](../docs/MCP_SETUP.md#optional-camera-images) for client settings.
+
 The dedicated [MCP Compose services](../docker-compose.mcp.yml) reuse the
 development images without GPU reservations, privileged mode, host networking
 or physical device mounts. ROS and Bazel remain in Docker. Preparation retains

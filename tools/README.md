@@ -15,7 +15,8 @@ launcher and ROS 2 nodes never invoke these.
 - [`mcp/`](mcp/README.md) — nine read-only stdio MCP tools for config-free factory
   discovery, curated hardware models, separate historical hardware test records,
   per-call protobuf validation and device inspection, and optional private
-  runtime snapshots. The adapter never controls runtime or certifies hardware
+  runtime snapshots, plus an opt-in configured camera image tool using native
+  ROS subscriptions. The adapter never controls runtime or certifies hardware
   readiness; validation-only startup remains available.
 
 - `lock_model.sh` — regenerate the per-model `requirements.lock` for one
