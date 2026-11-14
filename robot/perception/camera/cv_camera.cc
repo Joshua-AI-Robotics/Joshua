@@ -168,7 +168,10 @@ absl::Status CvCamera::OpenCameraLocked() {
       break;
     } else {
       LOG(ERROR) << "Camera " << id_ << " has not opened. Attempting to reopen...";
-      if (cap_.open(camera_id_, cv::CAP_V4L2)) {
+      const bool opened = opencv_config_.device_path().empty()
+                              ? cap_.open(camera_id_, cv::CAP_V4L2)
+                              : cap_.open(opencv_config_.device_path(), cv::CAP_V4L2);
+      if (opened) {
         auto configured = ConfigureCameraLocked();
         if (!configured.ok()) {
           cap_.release();
@@ -183,9 +186,10 @@ absl::Status CvCamera::OpenCameraLocked() {
   if (cap_.isOpened()) {
     status = absl::OkStatus();
   } else {
-    LOG(ERROR) << "ERROR: Could not open camera with id " << camera_id_;
-    status = absl::Status(absl::StatusCode::kInternal,
-                          "Could not open camera with id " + std::to_string(camera_id_));
+    const auto device = opencv_config_.device_path().empty() ? std::to_string(camera_id_)
+                                                             : opencv_config_.device_path();
+    LOG(ERROR) << "ERROR: Could not open camera " << device;
+    status = absl::Status(absl::StatusCode::kInternal, "Could not open camera " + device);
   }
 
   return status;

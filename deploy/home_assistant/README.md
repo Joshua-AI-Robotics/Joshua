@@ -183,6 +183,80 @@ With the services installed, both Home Assistant and the complete Joshua pipelin
 start after reboot. A single Pi power/network failure also stops Home Assistant's
 watchdog; external uptime monitoring is needed to report that failure remotely.
 
+## Stable USB devices and host recovery
+
+Linux can reorder both video and ALSA devices after reboot. In the private
+runtime protobuf preset, set each camera's `opencv_config.device_path` to its
+own `/dev/v4l/by-id/...-video-index0` link from `ls -l /dev/v4l/by-id/`. This
+overrides `id`; a missing device fails instead of falling back to the other
+camera. Two cameras that report the same USB identity require `/dev/v4l/by-path/`
+links and fixed USB ports instead. Do not commit your device identifiers.
+
+For the microphone, inspect `/proc/asound/cards` and select its current `cardN`.
+The opt-in installer generates a local udev rule from that card's USB vendor,
+product and serial, rejecting ambiguous attached devices. It assigns a stable
+ALSA ID even when the card number changes:
+
+```bash
+sudo python3 "$scripts/install_microphone_identity.py" cardN JoshuaMic
+# Set the private preset's alsa_audio_config.device to:
+# "plughw:CARD=JoshuaMic,DEV=0"
+sudo systemctl restart joshua-monitor
+```
+
+The camera driver owns capture and reopening. udev owns persistent microphone
+naming. The existing protobuf preset remains the source of capture settings;
+there is no second device resolver or generated runtime preset.
+
+Host recovery is a separate, opt-in systemd timer for Ubuntu's netplan/networkd
+setup, with a netplan WPA service for Wi-Fi. It does not monitor ROS topics or
+restart the media graph. First inspect a read-only connectivity check, then
+install it on a Pi with an available, unused hardware watchdog:
+
+```bash
+python3 "$scripts/network_recovery.py" --check
+sudo bash "$scripts/install_recovery.sh"
+sudo journalctl -u joshua-network-recovery -n 20
+systemctl show -p RuntimeWatchdogUSec -p RebootWatchdogUSec
+cat /sys/class/watchdog/watchdog0/state
+```
+
+After a three-minute boot grace period, checks run about every 30 seconds:
+
+- Internet probes try TCP port 443 on two independent public IPs, without DNS.
+  When those fail, gateway ping or a fresh reachable ARP neighbor distinguishes
+  local connectivity from upstream failure. A reachable gateway with no internet
+  causes no reboot; local recording can continue.
+- Two minutes of local failure restarts the interface's netplan WPA service
+  (Wi-Fi only), then reconfigures/renews it through networkd. Five minutes allows
+  one normal `systemctl reboot`, letting services shut down cleanly.
+- Reboots are limited to one per hour and one per continuous local outage.
+  The outage latch clears only after five minutes of local connectivity.
+  `/var/lib/joshua-network-recovery/state.json` persists the guard across boots;
+  clock rollback suppresses reboots, and corrupt state fails closed.
+  Limited devices continue reconnection attempts at ten-minute intervals.
+- If internet works but Tailscale is unavailable for two minutes, restart only
+  `tailscaled`, at most once per ten minutes. Logged-out, stopped or unapproved
+  Tailscale states require operator attention instead of restart loops.
+
+These checks cannot always distinguish an unresponsive router from a Pi Wi-Fi
+fault; either can trigger the single local-outage reboot. Public probe filtering
+can also mask internet availability. They do not prove every phone is reachable.
+
+The installer enables systemd's hardware watchdog with a 15-second requested
+timeout and a two-minute shutdown watchdog. PID 1 feeds it; if that stops, the
+hardware resets the Pi. This protects against some OS hangs, independently of
+the network timer. It is a reset, not an electrical power cycle, and does not
+repair a failed power supply. A watchdog reset may leave the current clip
+unfinished. No watchdog expiry or forced kernel hang is part of normal tests.
+
+Disable network recovery with `sudo systemctl disable --now
+joshua-network-recovery.timer`. Remove
+`/etc/systemd/system.conf.d/70-joshua-watchdog.conf` and run
+`sudo systemctl daemon-reexec` to restore the previous systemd watchdog defaults.
+Keep the microphone rule when rolling back packages; numeric video presets can
+still be used with older packages. Back up the runtime preset before upgrading.
+
 Back up the entire deployment directory including `.storage` and private secrets.
 It contains account credentials and must not be committed. Update the pinned image
 versions deliberately and check config before restarting. Stop with

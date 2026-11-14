@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Joshua network connectivity every 30 seconds
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=30s
+AccuracySec=1s
+Unit=joshua-network-recovery.service
+
+[Install]
+WantedBy=timers.target

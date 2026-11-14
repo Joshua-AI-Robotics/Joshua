@@ -76,6 +76,11 @@ not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
 
+For USB cameras, prefer `opencv_config.device_path` with a stable
+`/dev/v4l/by-id/...-video-index0` path. It overrides the numeric `id`, including
+when reopening after a disconnect, and never falls back to another device.
+Keep machine-specific paths in the private runtime preset.
+
 One serial bus must belong to one node process. Position sensors use
 `POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
 does not read or publish sensors. Reading sensors from an actuator's bus in a

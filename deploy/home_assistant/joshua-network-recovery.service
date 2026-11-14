@@ -1,0 +1,11 @@
+[Unit]
+Description=Joshua host network recovery
+After=network.target tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/joshua/network_recovery.py
+StateDirectory=joshua-network-recovery
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=75

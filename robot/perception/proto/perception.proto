@@ -23,6 +23,9 @@ message OpenCvConfig {
   uint32 height = 3;
   uint32 fps = 4;
   string fourcc = 5;
+  // Stable V4L2 path, e.g. /dev/v4l/by-id/usb-...-video-index0.
+  // When set, overrides id; a missing path never falls back to another camera.
+  string device_path = 6;
 }
 
 message Sts3215EncoderConfig {

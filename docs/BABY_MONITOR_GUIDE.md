@@ -664,6 +664,36 @@ source /opt/ros/jazzy/setup.bash
 | Processes alive but topics stop after SSH logout | Confirm `Linger=yes`; rerun the current service installer, then restart the monitor. |
 | Entities unavailable after launcher stopped | Expected after input/heartbeat expiry; the independent HA watchdog should alert if enabled and configured. |
 
+## Recovery after device reordering or network failure
+
+Use `opencv_config.device_path` with each camera's own
+`/dev/v4l/by-id/<CAMERA_USB_ID>-video-index0` link in the private runtime config.
+The path takes precedence over `id` and is reused when reopening the camera.
+An unavailable path never falls back to another camera. For the USB microphone,
+`install_microphone_identity.py cardN JoshuaMic` (run with sudo) installs a local
+udev rule; configure `plughw:CARD=JoshuaMic,DEV=0` instead of an enumerated card
+name such as `Camera_1`. Keep actual hardware identifiers off the public remote.
+
+The opt-in `deploy/home_assistant/install_recovery.sh` installs a systemd timer
+and enables the Pi hardware watchdog. The timer checks connectivity about every
+30 seconds after a three-minute boot grace period. It reconnects the local
+network after two minutes of failure and permits a normal reboot after five
+minutes. Reboots are limited to one per hour and one per continuous outage,
+with the guard saved across boots. Five healthy minutes clear the outage latch.
+If the gateway remains reachable but internet probes fail, recording continues
+without rebooting. If internet works but Tailscale fails, only Tailscale restarts.
+An unresponsive router cannot always be distinguished from a Pi Wi-Fi fault;
+either can cause the single permitted reboot. This does not repair the network's
+underlying cause.
+
+The hardware watchdog requests a 15-second timeout and resets the Pi if systemd
+stops feeding it. A separate two-minute shutdown watchdog covers a stuck late
+shutdown. These are resets, not electrical power cycles; a forced reset may
+leave the current recording unfinished. See the
+[deployment instructions](../deploy/home_assistant/README.md#stable-usb-devices-and-host-recovery)
+for installation, read-only checks, logs and disabling recovery. Tests exercise
+the recovery policy without intentionally hanging the kernel.
+
 ## Where to change the implementation
 
 | Area | Source | Deployment required |
