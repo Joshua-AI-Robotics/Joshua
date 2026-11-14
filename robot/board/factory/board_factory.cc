@@ -9,6 +9,7 @@
 #include "firmware/common/joshua_wire_commands.h"
 #include "robot/board/esp32/esp32_board.h"
 #include "robot/board/feetech_bus/feetech_bus_board.h"
+#include "robot/board/host_gpio/host_gpio_board.h"
 #include "robot/board/joshua_wire/joshua_wire_board.h"
 #include "robot/board/mock/mock_board.h"
 #include "robot/board/teensy/teensy_board.h"
@@ -40,6 +41,8 @@ std::string JoshuaSerialPort(const robot::board::Board& config) {
 }
 
 absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::Board& config) {
+  if (config.has_host_gpio_config() && config.board_type() != HOST_GPIO)
+    return absl::InvalidArgumentError("host_gpio_config requires HOST_GPIO");
   if (config.board_type() == AM243 &&
       (config.has_am243_config() ||
        (config.comm().comm_type() == robot::comm::ETHERCAT &&
@@ -85,7 +88,9 @@ const std::vector<BoardImplementation>& BoardFactory::Implementations() {
        "installed",
        []() -> std::shared_ptr<BoardInterface> { return std::make_shared<Esp32Board>(); }},
       {ARDUINO_UNO, "unimplemented", nullptr},
-      {HOST_GPIO, "unimplemented", nullptr}};
+      {HOST_GPIO, "installed", []() -> std::shared_ptr<BoardInterface> {
+         return std::make_shared<HostGpioBoard>();
+       }}};
   return entries;
 }
 

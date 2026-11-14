@@ -18,7 +18,7 @@ enum BoardType {
   ARDUINO_UNO = 3;
   FEETECH_BUS = 4;  // STS/SCS smart-servo register bus; the "board" is the
                     // servo's own MCU.
-  HOST_GPIO = 5;    // No external controller; host pins drive the motor.
+  HOST_GPIO = 5;    // Host-local digital pins; no external controller.
   MOCK = 6;         // Tests; channels are in-memory fakes.
   ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire
                     // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
@@ -77,8 +77,50 @@ message PwmConfig {
 }
 
 message HostGpioConfig {
+  // Legacy motor-channel shape, retained for diagnostics. HOST_GPIO uses
+  // Board.host_gpio_config and rejects motor channels until a pulse backend exists.
   string gpio_chip = 1;      // e.g. "/dev/gpiochip0"
   repeated uint32 pins = 2;  // Pin group on the host header.
+}
+
+// Header positions and profile-qualified aliases resolve to one physical pin.
+message PinRef {
+  oneof address {
+    uint32 header_pin = 1;
+    string signal = 2;  // e.g. "J8.GPIO17"; never an unqualified BCM number.
+  }
+}
+
+enum DigitalDirection {
+  DIGITAL_DIRECTION_UNSPECIFIED = 0;
+  DIGITAL_INPUT = 1;
+  DIGITAL_OUTPUT = 2;
+}
+
+enum DigitalBias {
+  DIGITAL_BIAS_AS_IS = 0;
+  DIGITAL_BIAS_DISABLED = 1;
+  DIGITAL_BIAS_PULL_UP = 2;
+  DIGITAL_BIAS_PULL_DOWN = 3;
+}
+
+message DigitalPinConfig {
+  string name = 1;     // Board-local API handle, e.g. "status_led".
+  string purpose = 2;  // Wiring intent, e.g. "cabinet ready indicator".
+  PinRef pin = 3;
+  DigitalDirection direction = 4;
+  bool active_low = 5;
+  DigitalBias bias = 6;
+  // Logical values (after active_low). Both are required for outputs and
+  // rejected for inputs. Release/crash levels require external circuitry.
+  optional bool initial_value = 7;
+  optional bool shutdown_value = 8;
+}
+
+message HostGpioBoardConfig {
+  string profile_id = 1;
+  uint32 profile_version = 2;  // Exact immutable catalog version, currently 1.
+  repeated DigitalPinConfig pins = 3;
 }
 
 // One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
@@ -148,6 +190,7 @@ message Board {
   JoshuaWireHostPolicy joshua_wire_host_policy = 7;
   oneof board_config {
     Am243Config am243_config = 10;
+    HostGpioBoardConfig host_gpio_config = 11;
   }
 }
 

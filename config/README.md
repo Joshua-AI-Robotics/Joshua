@@ -401,3 +401,20 @@ qualification. Runtime board/perception integration follows in P5.
 `general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
 `ROS2_LOG_GLOG`. It controls C++ node `JOSHUA_LOG` calls; Python and direct driver
 logging are unchanged. See [logging behavior](../ros2/README.md#c-node-logging).
+
+## Host digital GPIO
+
+`HOST_GPIO` uses `host_gpio_config` with an exact `profile_id`/`profile_version`
+and named `pins`, each with a purpose, physical header position or qualified
+signal, direction, polarity and optional bias. Outputs require explicit logical
+`initial_value` and `shutdown_value`. The board API exposes digital pins separately
+from motor channels. Offline validation rejects pin conflicts (including aliases
+and different board names), power/ground/reserved pins and unsupported policies.
+
+See the [GPIO API and profile guide](../robot/board/host_gpio/README.md),
+[Pi 5 board example](config_preset/example/pi5_gpio.pbtxt) and
+[Orin Nano P3768 example](config_preset/example/orin_nano_gpio.pbtxt).
+These board-only examples do not launch a digital ROS node; device drivers use
+`BoardFactory::GetOrCreate` and `OpenDigitalPin`. Creating the board acquires real
+GPIO lines and applies initial output values. Host boards omit `comm`, firmware,
+protocol and motor channels. Existing MCU numeric pin configs remain unchanged.
