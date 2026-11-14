@@ -11,6 +11,7 @@
 #include "firmware/common/joshua_wire.h"
 #include "firmware/common/joshua_wire_profiles.h"
 #include "robot/board/joshua_wire/joshua_wire_session.h"
+#include "robot/board/pin/pin_resource.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "utils/status_macros.h"
 
@@ -184,7 +185,8 @@ absl::Status RunSession(JoshuaWireSession& session,
 }
 }  // namespace
 
-absl::Status ValidateSerialOptions(const Board& board, const SerialValidationOptions& options) {
+absl::Status ValidateSerialOptions(const Board& input, const SerialValidationOptions& options) {
+  ABSL_ASSIGN_OR_RETURN(auto board, ResolveMcuBoardPins(input));
   if (!SupportedBoard(board.board_type()) || board.name().empty() ||
       board.protocol() != JOSHUA_WIRE || board.firmware().min_proto_version() > JW_PROTO_VERSION ||
       board.comm().comm_type() != robot::comm::SERIAL ||
@@ -241,11 +243,12 @@ absl::Status ValidateSerialOptions(const Board& board, const SerialValidationOpt
   return absl::OkStatus();
 }
 
-absl::Status RunSerialValidation(const Board& board,
+absl::Status RunSerialValidation(const Board& input,
                                  const SerialValidationOptions& options,
                                  std::shared_ptr<robot::comm::MessageTransport> transport,
                                  std::ostream& output,
                                  std::function<bool()> cancelled) {
+  ABSL_ASSIGN_OR_RETURN(auto board, ResolveMcuBoardPins(input));
   ABSL_RETURN_IF_ERROR(ValidateSerialOptions(board, options));
   if (!transport) return absl::InvalidArgumentError("Missing message transport.");
   JoshuaWireSession session(std::move(transport));

@@ -1,0 +1,29 @@
+# NVIDIA P3768 carrier only. Configure Jetson pinmux before board acquisition.
+# Board API example: no ROS node currently consumes digital pins automatically.
+# Creating this board opens real GPIO and sets outputs. Validate offline first.
+robot {
+  boards {
+    name: "local_gpio"
+    board_type: HOST_GPIO
+    host_gpio_config {
+      profile_id: "nvidia/orin-nano-p3768"
+      profile_version: 1
+      pins {
+        name: "ready_led"
+        purpose: "external status LED through a suitable current-limiting resistor"
+        pin { header_pin: 7 }  # J12 GPIO09, Linux PAC.06
+        direction: DIGITAL_OUTPUT
+        initial_value: false
+        shutdown_value: false
+      }
+      pins {
+        name: "panel_switch"
+        purpose: "panel switch to ground"
+        pin { signal: "J12.GPIO01" }  # J12 physical pin 29, Linux PQ.05
+        direction: DIGITAL_INPUT
+        active_low: true
+        bias: DIGITAL_BIAS_AS_IS  # Jetson.GPIO does not configure pulls; use pinmux/external pull.
+      }
+    }
+  }
+}

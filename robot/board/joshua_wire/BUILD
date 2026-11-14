@@ -11,6 +11,7 @@ cc_library(
         "//firmware/common:joshua_watchdogs",
         "//firmware/common:joshua_wire_profiles",
         "//robot/board/interfaces:board_interfaces",
+        "//robot/board/pin:pin_resource",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/interfaces:message_transport",
@@ -140,6 +141,7 @@ cc_library(
     deps = [
         ":joshua_wire_session",
         "//firmware/common:joshua_wire_commands",
+        "//robot/board/pin:pin_resource",
         "//robot/board/proto:board_cc_proto",
         "//robot/comm/interfaces:message_transport",
         "//robot/comm/proto:comm_cc_proto",

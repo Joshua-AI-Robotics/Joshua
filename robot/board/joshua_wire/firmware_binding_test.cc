@@ -144,6 +144,41 @@ TEST_P(FirmwareBindingTest, FactoryDiscoversCurrentFirmwareAndDrivesConfiguredBa
   }
 }
 
+TEST_P(FirmwareBindingTest, ProfileWiringUsesExistingFirmwarePayloadAndSharedCache) {
+  if (GetParam() == AM243) GTEST_SKIP() << "No AM243 connector profile in this increment";
+  config.mutable_pin_profile()->set_id(
+      GetParam() == TEENSY41 ? "pjrc/teensy41" : "espressif/esp32-devkitc-v4-wroom32");
+  config.mutable_pin_profile()->set_version(1);
+  auto* c = config.mutable_channels(0);
+  c->mutable_step_dir()->clear_step_pin();
+  c->mutable_step_dir()->clear_dir_pin();
+  c->mutable_step_dir()->clear_enable_pin();
+  auto* w = c->mutable_step_dir_wiring();
+  const uint32_t first = GetParam() == TEENSY41 ? 0 : 25;
+  const uint32_t direction = GetParam() == TEENSY41 ? 2 : 26;
+  const uint32_t enable = GetParam() == TEENSY41 ? 3 : 27;
+  w->mutable_step()->set_firmware_pin(first);
+  w->mutable_direction()->set_firmware_pin(direction);
+  w->mutable_enable()->set_firmware_pin(enable);
+  auto board = BoardFactory::GetOrCreate(config);
+  ASSERT_TRUE(board.ok()) << board.status();
+  {
+    std::lock_guard lock(firmware_mutex);
+    EXPECT_EQ(g_channels[0].step_dir.config.step_pin, first);
+    EXPECT_EQ(g_channels[0].step_dir.config.dir_pin, direction);
+    EXPECT_EQ(g_channels[0].step_dir.config.enable_pin, enable);
+    EXPECT_FALSE(g_channels[0].enabled);
+  }
+  auto native = config;
+  native.mutable_channels(0)->clear_step_dir_wiring();
+  native.mutable_channels(0)->mutable_step_dir()->set_step_pin(first);
+  native.mutable_channels(0)->mutable_step_dir()->set_dir_pin(direction);
+  native.mutable_channels(0)->mutable_step_dir()->set_enable_pin(enable);
+  auto shared = BoardFactory::GetOrCreate(native);
+  ASSERT_TRUE(shared.ok()) << shared.status();
+  EXPECT_EQ(board->get(), shared->get());
+}
+
 TEST_P(FirmwareBindingTest, SerialAliasIsRejectedBeforeResettingTheExistingSession) {
   auto first = BoardFactory::GetOrCreate(config);
   ASSERT_TRUE(first.ok()) << first.status();
