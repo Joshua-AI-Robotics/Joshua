@@ -15,17 +15,19 @@ R2S2R training/transfer and broader policy/simulator integration follow later.
 
 ## 1. Outcome and scope
 
-First, build a reusable OpenAI Decisions API interface on the shared asynchronous
-inference runtime. It accepts application-supplied image, text, and JSON evidence
-and question definitions, constructs API requests, and returns validated decisions.
-Camera-head questions, joint requirements, and motor-control logic belong to the
-application using this interface.
+First, build a reusable OpenAI Decisions API policy adapter on the shared
+asynchronous inference runtime. It accepts configured image, text, and JSON
+evidence and question definitions, constructs API requests, and converts accepted
+decisions into named motor commands. Like every versioned policy adapter, it
+declares joint requirements, command modes, and units. The preset and referenced
+calibration supply the task-specific questions and decision-to-command mapping;
+the adapter owns applying that mapping before returning commands.
 
 Then build the [OpenAI Decisions API camera-head demo](demo-plan/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md)
 as its first consumer. The demo supplies USB camera images and the current pan
-angle read back from the STS3215 servo, defines its questions and acceptance thresholds, and maps
-accepted decisions to bounded head movements. It needs no IMU, trained checkpoint,
-or simulator execution bridge.
+angle read back from the STS3215 servo and configures questions, acceptance
+thresholds, and the adapter's bounded head-movement mapping. It needs no IMU,
+trained checkpoint, or simulator execution bridge.
 
 Then run compatible policies through Joshua against MuJoCo, Isaac Sim, or physical
 hardware without changing their observation and action meanings. Later, expand
@@ -68,21 +70,28 @@ separate simulator-view/restart requirements remain in its own plan.
 
 The [official Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
 defines typed answers from image, text, and JSON evidence; Joshua executes any
-resulting movement. The reusable adapter owns API request construction and response
-validation. Applications supply evidence, questions, and acceptance settings;
-the shared runtime enforces request identity, deadlines, and lifecycle rules.
-The adapter returns decisions without interpreting them as motor commands.
+resulting movement. The reusable adapter owns API request construction, response
+validation, and conversion of accepted decisions to the shared named motor-command
+contract. Applications configure evidence, questions, acceptance settings, and
+motor mappings; the shared runtime enforces request identity, deadlines, lifecycle,
+and command admission. Raw decisions remain internal results and diagnostic evidence,
+not an alternative adapter output contract. Refused, invalid, or no-motion results
+produce no new motor command and report their outcome to the existing control owner.
 Verify API/model/SDK availability and pin versions when implementing.
 
 Validate this interface with synthetic evidence and captured responses before
-building the demo. Include a non-head question fixture to verify that the adapter
-does not require joint state, head-specific choices, or a motor command sink.
+building the demo. Include a non-head motor-policy fixture with a configured named
+joint, measured-state samples where required by its mapping, and a test command
+sink. It must exercise the same command contract without hard-coded head questions
+or joint names. Hardware-free fixtures retain motor semantics through the test sink.
 
 ### Next delivery: camera-head demo on the reusable interface
 
 Follow the camera-head demo's D0 contract for question choices, preprocessing,
 confidence thresholds, cadence, request/retry budget, and bounded movement.
-Keep these settings and the choice-to-pan converter in the demo integration.
+Keep these settings in the demo preset and calibration artifacts. The Decisions
+adapter applies the configured choice-to-pan conversion as its action decoding;
+the demo does not add a second decision-to-command stage after the adapter.
 
 The demo reads the STS3215 servo's built-in position feedback through the servo
 bus and converts it to the camera head's pan angle using its calibration. This
@@ -94,9 +103,9 @@ Use this path:
 ```text
 camera image + current pan angle read back from the servo
     -> admissible observation snapshot
-    -> asynchronous Decisions adapter -> validated decision
-    -> calibrated bounded pan mapping -> named joint position command (e.g., head_pan target = 0.52 radians)
-    -> existing C++ control gate and bus owner -> measured feedback
+    -> asynchronous Decisions adapter (API validation + calibrated bounded pan mapping)
+    -> named joint position command (e.g., head_pan target = 0.52 radians)
+    -> shared command admission -> existing C++ control gate and bus owner -> measured feedback
 ```
 
 - The shared runtime owns sample metadata, image/joint age and skew checks,
@@ -106,10 +115,11 @@ camera image + current pan angle read back from the servo
   the total request budget.
 - The ROS-free Decisions plug-in owns request construction and response validation:
   question/type/choice, finite confidence/probabilities, refusal, and API errors.
-  Keep SDK dependencies in its model environment. No API-specific branches belong
-  in the shared scheduler or device driver.
-- An explicit head converter maps an accepted left/right choice to one bounded
-  increment from fresh measured position, then an absolute SI target. Calibration,
+  It also owns configured decision-to-command decoding. Keep SDK dependencies in
+  its model environment. No API-specific branches belong in the shared scheduler
+  or device driver.
+- The adapter's configured head mapping converts an accepted left/right choice
+  to one bounded increment from fresh measured position, then an absolute SI target. Calibration,
   deadband, step size, speed/position limits, and target-loss behavior come from the
   preset and referenced artifacts. Centered/absent/uncertain/refused results do not
   create new pan increments; invoke the selected local hold/stop behavior as defined
@@ -231,9 +241,10 @@ distinct source labels and configurations.
 | Component | Owns | Does not own |
 | --- | --- | --- |
 | Policy plug-in | Tensor layout, normalization, image preparation, task encoding, recurrent state, gait/controller logic, action decoding | ROS endpoints, physics stepping, physical device access |
-| OpenAI Decisions API plug-in | API request construction and response validation for application-supplied evidence and questions | Head-specific questions, motor-command conversion, shared scheduling, hardware ownership |
-| Camera-head demo integration | Head observations, questions and acceptance settings; calibrated choice-to-target conversion | API transport internals, hardware ownership, enable/stop authority |
-| Shared policy runtime | Binding validation, bounded state assembly, scheduling, inference request identity, output validation, lifecycle and diagnostics | Robot-specific gait or reward functions |
+| OpenAI Decisions API plug-in | API request construction, response validation, and configured decision-to-command conversion; returns named motor commands through the common adapter contract | Shared scheduling, physical device access, enable/stop authority |
+| Camera-head demo integration | Head observation wiring, questions, acceptance settings, and calibration/mapping configuration consumed by the adapter | API transport internals, a second command decoder, hardware ownership, enable/stop authority |
+| `config::ValidateConfig` in `config/validation.cc` | All static configuration checks, including declared policy bindings, names, modes, units, bounds, and resource ownership | Device probing, negotiated capabilities, live sample or command admission |
+| Shared policy runtime | Consumption of validated config, runtime capability checks, bounded state assembly, scheduling, inference request identity, output admission, lifecycle and diagnostics | Independent static config acceptance rules, robot-specific gait or reward functions |
 | Simulation bridge | Engine names/indices, frame/unit conversion, simulated observations, action application, stepping/reset | Learned weights or model-specific normalization |
 | Hardware ROS bridge | Bind configured streams and named commands; integrate with existing control ownership and fault handling | Opening serial/NIC devices or replacing C++ drivers |
 | Estimator/preprocessor | Declared derived measurements such as body gravity direction or joint velocity, with validity and timing | Pretending estimated state is direct sensor feedback |
@@ -259,6 +270,13 @@ participating in initialize/reset/close lifecycle. Shared envelopes preserve
 identity, units/frames, validity, and timing; command admission validates those
 semantics and rejects incompatible or expired outputs. These checks apply even
 when an adapter uses no optional execution helpers.
+
+Motor semantics are mandatory for every versioned adapter, including Decisions.
+Each declares named target joints, supported motor-command modes, and units.
+An invocation may produce no new command with an explicit outcome, but a raw
+decision-only result is not a substitute for this contract. API response parsing
+can use private helpers inside the plug-in; it does not introduce a separate
+adapter interface or require a generic conversion framework.
 
 Compose additional behavior only when a consumer needs it:
 
@@ -293,12 +311,24 @@ Unversioned adapters retain their existing behavior. A new adapter declares:
   actions or bounded chunks.
 - Robot/model compatibility requirements and required estimator definitions.
 
-A bridge advertises what it can actually provide and consume. Resolve logical
-names to configured endpoints and simulator joints once at binding time.
-Reject missing inputs, duplicate names, unsupported modes, unit/frame mismatch,
-or incompatible artifacts before admitting commands. Shape equality alone is
-insufficient. Do not silently replace missing measurements with zero or ground
-truth. Validate bounds and dynamic availability again while running.
+All static configuration checks belong in `config/validation.cc`, exposed through
+`config::ValidateConfig`, with private helpers in that file. Validate declared
+required inputs, unique logical names, endpoint references, supported configured
+modes, unit/frame declarations, bounds, and resource ownership before construction.
+Parsing, static validation, and adapter/bridge construction remain separate.
+Launchers, direct inference entrypoints, replay tools, and simulator paths must
+use this validator through the shared validation entrypoint; do not copy its
+acceptance rules into Python adapters, hosts, or bridges. Keep static declarations
+available in protobuf configuration so validation requires no SDK, model loading,
+ROS initialization, or hardware access.
+
+A bridge advertises what it can actually provide and consume. Binding resolves
+validated logical names to endpoints and simulator joints, then checks negotiated
+capabilities and loaded artifact compatibility at their runtime boundaries.
+Admission checks live availability, sample freshness, actual payload units/frames,
+and command validity, including bounds. Shape equality alone is insufficient.
+Do not silently replace missing measurements with zero or ground truth. These
+runtime defenses do not form a second static configuration-validation path.
 
 ### Observation samples and assembled input
 
@@ -336,8 +366,9 @@ limits before accepting the complete batch. Start with absolute SI position
 targets; revolute joints use radians. Other joint types need explicit units and
 verified driver support.
 
-Keep model normalization and relative-to-absolute conversion inside the plug-in
-or an explicitly selected converter. Driver calibration remains authoritative
+Keep model normalization and relative-to-absolute conversion inside the plug-in's
+action decoding, including any explicitly selected conversion helper it uses.
+The Decisions adapter follows this same rule. Driver calibration remains authoritative
 for physical native-unit conversion. Apply each conversion exactly once. Reuse
 the existing `JointCommand`/`POSITION_SI` path; never publish radians to legacy
 scalar native-unit topics by assuming they mean the same thing.
@@ -395,6 +426,8 @@ must not change the meaning of simulation time.
 
 Support direct in-process calls first, then ROS transport with identical
 semantic records. Both paths run the same compatibility and output validators.
+Both invoke `config::ValidateConfig` for static configuration; runtime capability
+and output checks remain at their operating boundaries.
 Use an explicit, versioned wire envelope with integer sequence/generation IDs;
 the spider prototype's float-array IDs are not the general protocol.
 
@@ -444,6 +477,11 @@ calibration references, allowed command sources, operational bounds, policy
 selection, and artifact paths. Extend existing schemas where needed; introduce
 no parallel robot YAML/JSON configuration system.
 
+Add configuration-only rules to `config/validation.cc` and cover them in
+`config/validation_test.cc` with valid, invalid, and meaningful boundary cases.
+Update affected preset and CLI checks. Static validation must remain usable
+offline without constructing adapters, starting workers, or probing devices.
+
 A local-model deployment bundle contains weights, normalization, model-specific
 controller assets, contract version, expected input/output semantics, required runtime
 dependencies, robot-model/calibration provenance, and reference inference
@@ -492,9 +530,9 @@ Live API checks and physical qualification are separate evidence.
 
 | Step | Deliverable and likely areas | Dependencies | Acceptance gate |
 | --- | --- | --- | --- |
-| P1 — Reusable evidence/decision contract and replay fixtures | Application-supplied image/text/JSON evidence and question definitions; sample/request/generation identities, validated decision and failure results; deterministic provider fixtures | Review existing inference contracts; physical hardware and the head's D0 settings are not required | Pure checks reject invalid evidence, question/answer mismatches, and incompatible contract versions. A non-head fixture works without joint state or a motor sink. Core imports need no API SDK, simulator, or model weights. Existing adapters retain behavior. |
-| P2 — Reusable asynchronous OpenAI Decisions API adapter | API request/response handling, one in-flight request and bounded pending snapshot, configurable freshness/deadlines/retry budget, source/reset invalidation, validated decisions, and request/result recording | P1; selected SDK/API contract; shared asynchronous runtime interfaces | Hardware-free tests cover refusal, malformed/nonfinite answers, application-supplied confidence thresholds, stale/duplicate observations, late/out-of-order completion, wrong run/config/source, source changes, stop/recovery, rate limits, outages, and shutdown. No result is consumed twice or emitted after stop. Slow API work does not block ingestion or stop. Non-head fixtures run without head questions or motor mapping. Live API schema/access checks are separately recorded. |
-| P3 — Camera-head demo integration and qualification | Supply camera/joint observations, D0 questions and settings, age/skew/motion checks, bounded head converter, named SI ROS command sink, and recording/display integration; pin configuration A, calibrate mapping, and run authorized API trials and live/offline fallback | P1-P2; production runtime interfaces from #145/#149/#143/#133; D0 contract; #153 qualified head and API access before physical trials | D1 uses hardware-free production-path ROS tests on Humble and Jazzy to verify names/units/frames, calibration, bounded mapping, freshness, expiry, stop/recovery, and failure handling. D2 records tracking, target loss, operator stop, failures/deadlines, and late-response rejection with measured joint response and latency/usage. Preserve all attempts, identities, timing, and interventions. Software acknowledgments do not establish physical stop. API recovery cannot automatically enable. D3/D4 remain in the demo plan. |
+| P1 — Reusable motor-policy contract and replay fixtures | Configured image/text/JSON evidence and questions; named joints, modes, units, decision-to-command mappings, sample/request/generation identities, and command/no-command outcomes; deterministic provider fixtures | Review existing inference contracts; physical hardware and the head's D0 settings are not required | Static binding rules pass through `config::ValidateConfig` with valid/invalid/boundary tests. Pure checks reject invalid evidence, question/answer mismatches, and incompatible contract versions. A non-head motor fixture emits named SI commands to a test sink using the common contract. Core imports need no API SDK, simulator, or model weights. Existing adapters retain behavior. |
+| P2 — Reusable asynchronous OpenAI Decisions API adapter | API request/response handling and configured conversion to named motor commands; one in-flight request and bounded pending snapshot, configurable freshness/deadlines/retry budget, source/reset invalidation, and request/result/command recording | P1; selected SDK/API contract; shared asynchronous runtime interfaces | Hardware-free tests cover refusal, malformed/nonfinite answers, configured confidence thresholds, stale/duplicate observations, late/out-of-order completion, wrong run/config/source, source changes, stop/recovery, rate limits, outages, and shutdown. Verify configured joint names, units, calibrated bounded conversion, and explicit no-command outcomes. No result is consumed twice or dispatched as a command after stop. Slow API work does not block ingestion or stop. Non-head motor fixtures use the same contract with different questions and mappings. Live API schema/access checks are separately recorded. |
+| P3 — Camera-head demo integration and qualification | Supply camera/joint observations, D0 questions and settings, age/skew/motion checks, the adapter's calibrated head-mapping configuration, named SI ROS command sink, and recording/display integration; pin configuration A and run authorized API trials and live/offline fallback | P1-P2; production runtime interfaces from #145/#149/#143/#133; D0 contract; #153 qualified head and API access before physical trials | D1 uses hardware-free production-path ROS tests on Humble and Jazzy to verify names/units/frames, calibration, bounded mapping, freshness, expiry, stop/recovery, and failure handling. D2 records tracking, target loss, operator stop, failures/deadlines, and late-response rejection with measured joint response and latency/usage. Preserve all attempts, identities, timing, and interventions. Software acknowledgments do not establish physical stop. API recovery cannot automatically enable. D3/D4 remain in the demo plan. |
 | P4 — Broader fixtures and MuJoCo direct path | Add numeric locomotion and image/task VLA fixtures; revise requirements/helpers only for demonstrated needs; generic named mappings and lockstep execution | P1-P2; scheduled after the camera-head demo delivery | Both fixtures use the shared interface without provider/model-specific host branches. Hardware-free preset completes repeatable episodes with reset, joint permutations, rotated frames, limits, and control/physics timestep checks. No spider or trained-model dependency. |
 | P5 — Simulator ROS execution transport | Extend the P3 hardware ROS contract to independent simulator/inference processes and lockstep identity | P3-P4 | Actual ROS exchanges on both supported stacks cover matching, duplicates/gaps, timeout, process death, wrong session, QoS mismatch, and shutdown. Direct and ROS replay agree within fixed tolerances; report serialization/copying/transport overhead. |
 | P6 — Local-model migration and export proof | Opt-in SmolVLA migration plus a frozen locomotion adapter/exporter if available | P4-P5; selected model artifacts | Actual models validate the broader fixtures. Camera/task inputs and named joints work without locomotion assumptions. No scalar arrival-history indexing for migrated state. Reference outputs/reset tests pass; legacy presets remain until replacements are validated. |
@@ -601,8 +639,9 @@ claim zero-copy behavior without measurement.
   control owner from the demo plan; reconcile with current MCU/standalone-node
   behavior before P3. The inference host must not acquire a second device owner.
 - **First consumer and later generality:** P1/P2 use Decisions response replay
-  with application-supplied questions, including a non-head fixture. P3 adds the
-  head converter and a bounded local-controller fixture. P4 adds numeric locomotion and image/task
+  with configured questions and motor mappings, including a non-head named-joint
+  fixture and test command sink. P3 configures the adapter's head mapping and adds
+  a bounded local-controller fixture. P4 adds numeric locomotion and image/task
   fixtures; P6 adds actual local-model evidence. Do not make those later consumers
   prerequisites for the API head, or declare the broader interface stable from
   the first consumer alone.
@@ -616,7 +655,8 @@ claim zero-copy behavior without measurement.
   enabling a locomotion policy on hardware.
 
 The reusable OpenAI Decisions API interface delivery is complete when P1-P2 pass,
-including non-head replay. The subsequent camera-head demo delivery is complete
+including non-head motor-command replay through the common adapter contract.
+The subsequent camera-head demo delivery is complete
 when P3 and its D1/D2 evidence pass. Neither delivery requires the broader
 stabilization target below.
 
