@@ -1,0 +1,22 @@
+# Board API example. Initializing this board opens the serial device and configures GPIO.
+robot {
+  boards {
+    name: "teensy_catalog"
+    board_type: TEENSY41
+    protocol: JOSHUA_WIRE
+    pin_profile { id: "pjrc/teensy41" version: 1 }
+    comm {
+      comm_type: SERIAL transport_type: MESSAGE
+      serial_config { port: "/dev/ttyACM0" baudrate: 115200 message_adapter: JOSHUA_WIRE }
+    }
+    channels {
+      index: 0 drive: STEP_DIR
+      step_dir { max_pulse_rate_hz: 1000 enable_active_low: true }
+      step_dir_wiring {
+        step { signal: "LEFT.GPIO2" }
+        direction { signal: "LEFT.GPIO3" }
+        enable { connector: "LEFT" header_pin: 6 }
+      }
+    }
+  }
+}

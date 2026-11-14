@@ -197,3 +197,17 @@ a deadline argument to every message call. The factory owns concrete adapters;
 consumers receive capability interfaces. This migration does not introduce the
 plan's proposed `CommLease` or `required_transports` API. Tests enforce concrete
 adapter visibility and provide hardware-free capability fakes.
+
+
+### Linux peripheral transfers
+
+`SPI`/`SPI_TRANSFER` yields `SpiTransport`; `I2C`/`I2C_TRANSFER` yields
+`I2cTransport`. The private Linux adapters validate device-tree controller
+identity, take advisory ownership and serialize kernel transfers. SPI requires
+mode 0..3, 8-bit words and 1..32 full-duplex bytes. I2C supports combined
+write/read repeated-start transfers with a configured 7-bit target and total
+1..32 bytes. Errors/short transfers latch a fault; they are never replayed.
+Kernel ioctl duration depends on the driver. Shared I2C owners require the same
+adapter timeout. Final lease release closes the descriptor; ShutdownAll is
+terminal even for retained handles. Board-level pin source validation and mux
+ownership are described in the [host guide](../board/host_gpio/README.md#pwm-spi-i2c-and-uart).

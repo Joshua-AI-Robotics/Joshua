@@ -158,3 +158,13 @@ identity/catalog reconciliation, which runs with mutations interlocked. It then
 returns a fresh disabled session; targets, enables and subscriptions are never
 replayed. Old handles remain unavailable. Production session IDs are unique
 within the process until exhaustion; custom test sources must provide fresh IDs.
+
+## Pin-source configuration
+
+`Board.pin_profile` enables connector/alias/native-pin resolution for Teensy 4.1
+and ESP32-DevKitC V4/WROOM-32. The factory, direct board initialization and manual
+serial preflight all normalize through the same pure resolver before opening
+communication. It produces the existing numeric STEP/DIR fields, so no wire or
+firmware update is required for catalog adoption alone. Legacy presets without
+a profile preserve their numeric semantics; mixed wiring forms are rejected.
+See [MCU configuration](../../../config/README.md#mcu-pin-source-wiring).

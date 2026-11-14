@@ -8,6 +8,8 @@ enum CommType {
   SERIAL = 1;
   ETHERCAT = 2;
   ETHERNET_UDP = 3;
+  SPI = 4;
+  I2C = 5;
 }
 
 // The communication behavior required by the consumer. CommType selects the
@@ -22,6 +24,8 @@ enum TransportType {
   // Continuous complete frames, consumed by one shared protocol coordinator.
   // SERIAL/JOSHUA_WIRE only. Cannot share a port with raw/request-only users.
   FRAME_STREAM = 5;
+  SPI_TRANSFER = 6;
+  I2C_TRANSFER = 7;
 }
 
 message Comm {
@@ -30,6 +34,8 @@ message Comm {
     SerialConfig serial_config = 2;
     EthercatConfig ethercat_config = 3;
     UdpConfig udp_config = 4;
+    SpiConfig spi_config = 6;
+    I2cConfig i2c_config = 7;
   }
   TransportType transport_type = 5;
 }
@@ -118,4 +124,22 @@ message EthercatTiming {
   uint32 mailbox_step_budget_us = 5;
   uint32 scheduling_guard_us = 6;
   uint32 response_timeout_us = 7;
+}
+
+// Linux device selectors carry an exact device-tree controller-node assertion.
+// MCU bindings use native bus IDs from board config and leave these selectors empty.
+message SpiConfig {
+  string device = 1;
+  string controller = 2;
+  uint32 speed_hz = 3;
+  uint32 mode = 4;
+  optional uint32 chip_select_index = 6;  // Host device-tree reg assertion.
+  uint32 bits_per_word = 5;               // 0 selects 8; this implementation accepts only 8.
+}
+message I2cConfig {
+  string device = 1;
+  string controller = 2;
+  uint32 address = 3;       // 7-bit unreserved address, 0x08..0x77.
+  uint32 timeout_ms = 4;    // 1..100; Linux rounds to kernel 10 ms units.
+  uint32 frequency_hz = 5;  // MCU only. Linux bus clock is configured by device tree.
 }
