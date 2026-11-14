@@ -51,3 +51,12 @@ cc_library(
         "@abseil-cpp//absl/types:span",
     ],
 )
+
+cc_library(
+    name = "peripheral_transports",
+    hdrs = [
+        "i2c_transport.h",
+        "spi_transport.h",
+    ],
+    deps = ["@abseil-cpp//absl/status:statusor"],
+)

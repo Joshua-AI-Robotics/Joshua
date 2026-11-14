@@ -1,0 +1,58 @@
+# Board API example for the opt-in esp32-peripherals image.
+# Initializing opens a real serial link and configures native pins; no ROS node is launched.
+robot {
+  boards {
+    name: "esp32_peripherals"
+    board_type: ESP32
+    protocol: JOSHUA_WIRE
+    firmware { min_proto_version: 4 }
+    pin_profile { id: "espressif/esp32-devkitc-v4-wroom32" version: 1 }
+    comm {
+      comm_type: SERIAL
+      transport_type: MESSAGE
+      serial_config {
+        port: "/dev/ttyUSB0"
+        baudrate: 115200
+        message_adapter: JOSHUA_WIRE
+        exchange_timeout_ms: 500
+        post_open_settle_ms: 2000
+      }
+    }
+    peripherals {
+      name: "fan" purpose: "cooling speed output" function_id: 192
+      pwm { pin { signal: "J3.GPIO4" } frequency_hz: 1000 initial_duty_cycle: 0 }
+    }
+    peripherals {
+      name: "adc" purpose: "external SPI ADC link" function_id: 193
+      spi {
+        bus_index: 0
+        clock { firmware_pin: 18 } mosi { firmware_pin: 23 }
+        miso { firmware_pin: 19 } chip_select { firmware_pin: 13 }
+        settings { speed_hz: 1000000 mode: 0 bits_per_word: 8 }
+      }
+    }
+    peripherals {
+      name: "temperature" purpose: "I2C temperature sensor link" function_id: 194
+      i2c {
+        bus_index: 0
+        sda { firmware_pin: 21 } scl { firmware_pin: 22 }
+        settings { address: 72 frequency_hz: 100000 timeout_ms: 5 }
+      }
+    }
+    peripherals {
+      name: "gps" purpose: "raw GPS UART" function_id: 195
+      uart {
+        bus_index: 1
+        tx { firmware_pin: 17 } rx { firmware_pin: 16 }
+        settings { baudrate: 115200 }
+      }
+    }
+    peripherals {
+      name: "ready" purpose: "panel ready indicator" function_id: 196
+      digital {
+        pin { signal: "J2.GPIO32" }
+        direction: DIGITAL_OUTPUT initial_value: false shutdown_value: false
+      }
+    }
+  }
+}

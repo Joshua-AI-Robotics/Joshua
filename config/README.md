@@ -401,3 +401,65 @@ qualification. Runtime board/perception integration follows in P5.
 `general.ros2_log_mode` selects `ROS2_LOG_BOTH` (default), `ROS2_LOG_ROS`, or
 `ROS2_LOG_GLOG`. It controls C++ node `JOSHUA_LOG` calls; Python and direct driver
 logging are unchanged. See [logging behavior](../ros2/README.md#c-node-logging).
+
+## Host digital GPIO
+
+`HOST_GPIO` uses `host_gpio_config` with an exact `profile_id`/`profile_version`
+and named `pins`, each with a purpose, physical header position or qualified
+signal, direction, polarity and optional bias. Outputs require explicit logical
+`initial_value` and `shutdown_value`. The board API exposes digital pins separately
+from motor channels. Offline validation rejects pin conflicts (including aliases
+and different board names), power/ground/reserved pins and unsupported policies.
+
+See the [GPIO API and profile guide](../robot/board/host_gpio/README.md),
+[Pi 5 board example](config_preset/example/pi5_gpio.pbtxt) and
+[Orin Nano P3768 example](config_preset/example/orin_nano_gpio.pbtxt).
+These board-only examples do not launch a digital ROS node; device drivers use
+`BoardFactory::GetOrCreate` and `OpenDigitalPin`. Creating the board acquires real
+GPIO lines and applies initial output values. Host boards omit `comm`, firmware,
+protocol and motor channels. Existing MCU numeric pin configs remain unchanged.
+
+## MCU pin-source wiring
+
+Teensy 4.1 and ESP32-DevKitC V4/WROOM-32 accept an optional board-level
+`pin_profile { id: "pjrc/teensy41" version: 1 }` or
+`espressif/esp32-devkitc-v4-wroom32`. Each STEP/DIR channel can use:
+
+```text
+step_dir { max_pulse_rate_hz: 1000 }
+step_dir_wiring {
+  step { signal: "LEFT.GPIO2" }
+  direction { firmware_pin: 3 }
+  enable { connector: "LEFT" header_pin: 6 }
+}
+```
+
+Teensy `LEFT`/`RIGHT` are component-side outer headers with USB at the top;
+positions 1..24 count from the USB end. ESP32 uses the documented J2/J3
+positions 1..19. Explicit native zero is valid. Resolution validates output
+capability, reserved pins, and ownership, then sends the existing numeric
+JoshuaWire configuration; firmware framing is unchanged. Mixing named wiring
+and legacy numeric pin fields is rejected. Existing numeric-only presets remain
+valid without a profile. These profiles claim only the listed connectors, not
+underside, USB-host, Ethernet or internal pads.
+
+
+### Named board peripherals
+
+Host GPIO boards also accept `Board.peripherals` entries with `name`, `purpose`
+and exactly one `pwm`, `spi`, `i2c` or `uart` configuration. Pin references use the
+same source catalog as digital GPIO. Validation resolves the entire board before
+I/O and rejects pin/channel collisions. See the [host API and settings](../robot/board/host_gpio/README.md#pwm-spi-i2c-and-uart).
+
+
+MCU `Board.peripherals` additionally require `pin_profile` and unique
+`function_id` 192..199, matching the explicit peripheral firmware artifact.
+Linux device/controller selectors are omitted on MCU; `bus_index` selects the
+native SPI/I2C/UART port. Named GPIO uses the digital operation. Pin capabilities,
+fixed Teensy signal routes, reserved ESP32 pins, bus compatibility and timer
+frequency are checked offline before serial acquisition. MCU inputs require an
+explicit bias; `AS_IS` cannot preserve a previous unknown native pull setting.
+Examples: [Teensy](config_preset/example/teensy_peripherals.pbtxt) and
+[ESP32](config_preset/example/esp32_peripherals.pbtxt). See the
+[host API](../robot/board/joshua_wire/README.md#named-mcu-peripherals) for execution
+limits, reference artifact timing and pending qualification.

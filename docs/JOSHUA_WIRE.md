@@ -521,3 +521,77 @@ reconnect and bounded scheduling admission. The scheduling/acquisition portions
 are fixtures, not evidence of production thread/deadline guarantees; H/F/T must
 supply those integration tests. Golden core/profile payload and frame tests
 cover exact byte layouts, CRC, limits, malformed values, IDs and JW1 preservation.
+
+## Opt-in peripheral profile 4, version 1.0
+
+Profile 4 is separate from timestamped scalar I/O profile 3. It exposes configured
+pin/bus operations, without encoding them as actuator targets. Functions 192..199
+in the explicit Teensy/ESP32 peripheral images are eight dynamically configured
+slots. DESCRIBE_FUNCTION schema is exactly `50 01 00 3e 20 32` (hex): signature,
+major/minor, kind bitmask, maximum transfer bytes 32, maximum I2C timeout field
+50 ms. Hosts check the descriptor, operation mask and complete schema before
+applying any peripheral settings. Core revision 4 and frame limits are unchanged.
+
+All integers below are little-endian. CONFIGURE=0 has exactly 18 bytes:
+`kind:u8, bus:u8, pins[4]:u8, value0:u32, value1:u32, timeout_ms:u16,
+flags:u8, reserved:u8=0`. Unused pins must be 255; used pins are distinct native
+firmware IDs. Kinds and ordered pin roles are:
+
+| Kind | Pins | value0 | value1 |
+| --- | --- | --- | --- |
+| PWM=1 | output | frequency Hz | initial normalized duty ×65535 |
+| SPI=2 | clock, MOSI, MISO, CS | speed Hz | mode 0..3 |
+| I2C=3 | SDA, SCL | frequency Hz | unreserved 7-bit address |
+| UART=4 | TX, RX | baud (9600..4000000) | zero |
+| DIGITAL=5 | input/output | zero | zero |
+
+Only I2C uses timeout_ms. Only DIGITAL uses flags: bit0 output, bit1 active-low,
+bit2 initial logical value, bit3 shutdown logical value, bits4..5 bias (0 as-is,
+1 disabled, 2 pull-up, 3 pull-down); bits6..7 are zero. Input values cannot set
+initial/shutdown bits. MCU inputs require an explicit supported bias; preserving
+an unknown previous pull is unsupported. Outputs omit bias. UART0, ESP32 boot
+straps/flash, input-only output routes, and uncataloged pins are rejected.
+
+TRANSFER=1 data is `kind:u8, write_count:u8, read_count:u8, write_bytes`.
+SPI is full duplex, counts equal in 1..32. I2C combined counts total 1..32 and uses
+a repeated start. UART uses either write or immediate nonblocking read, total
+1..32; a read may return fewer bytes, including zero. Successful data is
+`read_count:u8, bytes`; SPI/I2C counts must exactly match the requested read count.
+UART write completion means accepted into its native TX buffer, not delivery.
+
+READ=2 is digital only, empty request and one logical 0/1 reply. WRITE=3 is a
+logical 0/1 byte for digital output or a normalized u16 duty for PWM. ENABLE=4
+and DISABLE=5 are PWM only and have empty requests/replies. RELEASE=6 releases a
+configured slot and its claims, with empty request/reply. CONFIGURE and WRITE
+success echo their exact request data. The host session checks these semantics
+before accepting another mutation; malformed success retains exact-byte retry
+and unresolved-outcome gating. Bus reads consume external state and remain
+mutation-classified. No automatic new action retries follow a transport failure.
+
+Configuration preflights shared pin/timer/bus claims before native setup. A slot
+must RELEASE before reconfiguration. PWM starts disabled; all PWM slots use one
+frequency to protect native shared timers. I2C shared buses require identical
+routes, clock and timeout, with exclusive target addresses. SPI shares only an
+identical clock/MOSI/MISO route; endpoints have exclusive CS. UART ports are
+exclusive. Bus errors after an attempted operation fault the whole runtime,
+return UNKNOWN and stop/release all outputs. Exact retries replay the cached
+outcome without another transfer. Reset/ESTOP/fault use the existing shared safety
+callback; digital shutdown levels and PWM disable precede bus release. Retained
+host handles become terminal at teardown. Recovery never enables outputs.
+
+The opt-in Arduino images are synchronous peripheral **reference candidates**.
+They use the native vendor bus drivers, reject peripheral configuration/release
+and bus transfers while any STEP/DIR channel is enabled, and advertise a
+conservative 200000 us software admission budget. Configure a response timeout
+above that budget (examples use 500 ms). PWM runs in hardware independently.
+ESP32 I2C requests timeout 1..5 ms. Teensy Wire has fixed 50 ms phase timeouts and
+an idle wait; only timeout_ms=50 and clocks 100/400 kHz are admitted. Combined
+transactions can include multiple phases. This field is not a wall-clock bound.
+
+These reference artifacts do not establish the hard dispatch/stop qualification
+required by the integration gates above. Native-driver stalls cannot be preempted
+by serial ESTOP, and the default serial communication-loss watchdog is absent.
+Physical timing, faults, waveform/loopback, electrical loading, and pinmux
+qualification remain required before robot deployment. An asynchronous native
+bus implementation is needed for simultaneous bus work and software STEP/DIR
+motion. Default and mixed-scalar images do not advertise profile 4.

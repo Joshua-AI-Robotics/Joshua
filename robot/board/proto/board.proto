@@ -18,7 +18,7 @@ enum BoardType {
   ARDUINO_UNO = 3;
   FEETECH_BUS = 4;  // STS/SCS smart-servo register bus; the "board" is the
                     // servo's own MCU.
-  HOST_GPIO = 5;    // No external controller; host pins drive the motor.
+  HOST_GPIO = 5;    // Host-local digital pins; no external controller.
   MOCK = 6;         // Tests; channels are in-memory fakes.
   ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire
                     // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
@@ -49,9 +49,9 @@ message StepDirConfig {
   // mismatched firmware/channel-count/drive-type, but cannot verify a pin
   // number is physically wired the way config claims — that remains on
   // whoever wires the board.
-  uint32 step_pin = 4;
-  uint32 dir_pin = 5;
-  uint32 enable_pin = 6;
+  optional uint32 step_pin = 4;
+  optional uint32 dir_pin = 5;
+  optional uint32 enable_pin = 6;
   // STEP pulse HIGH width in microseconds. Host-configurable for the same
   // reason pins are: it's a fact about the specific STEP/DIR driver chip
   // wired up (an opto-isolated input may need a wider pulse than a direct
@@ -77,8 +77,64 @@ message PwmConfig {
 }
 
 message HostGpioConfig {
+  // Legacy motor-channel shape, retained for diagnostics. HOST_GPIO uses
+  // Board.host_gpio_config and rejects motor channels until a pulse backend exists.
   string gpio_chip = 1;      // e.g. "/dev/gpiochip0"
   repeated uint32 pins = 2;  // Pin group on the host header.
+}
+
+// Header positions and profile-qualified aliases resolve to one physical pin.
+message PinRef {
+  oneof address {
+    uint32 header_pin = 1;
+    uint32 firmware_pin = 4;  // MCU native pin ID; requires a pinned MCU profile.
+    string signal = 2;        // e.g. "J8.GPIO17"; never an unqualified BCM number.
+  }
+  string connector = 3;  // Required when physical positions are ambiguous.
+}
+
+message PinProfileRef {
+  string id = 1;
+  uint32 version = 2;
+}
+
+message StepDirWiring {
+  PinRef step = 1;
+  PinRef direction = 2;
+  PinRef enable = 3;
+}
+
+enum DigitalDirection {
+  DIGITAL_DIRECTION_UNSPECIFIED = 0;
+  DIGITAL_INPUT = 1;
+  DIGITAL_OUTPUT = 2;
+}
+
+enum DigitalBias {
+  DIGITAL_BIAS_AS_IS = 0;
+  DIGITAL_BIAS_DISABLED = 1;
+  DIGITAL_BIAS_PULL_UP = 2;
+  DIGITAL_BIAS_PULL_DOWN = 3;
+}
+
+message DigitalPinConfig {
+  string name = 1;     // Board-local API handle, e.g. "status_led".
+  string purpose = 2;  // Wiring intent, e.g. "cabinet ready indicator".
+  PinRef pin = 3;
+  DigitalDirection direction = 4;
+  bool active_low = 5;
+  DigitalBias bias = 6;
+  // Logical values (after active_low). Both are required for outputs and
+  // rejected for inputs. Release/crash levels require external circuitry.
+  optional bool initial_value = 7;
+  optional bool shutdown_value = 8;
+}
+
+message HostGpioBoardConfig {
+  string profile_id = 1;
+  uint32 profile_version = 2;  // Exact immutable catalog version, currently 1.
+  repeated DigitalPinConfig pins = 3;
+  string lease_directory = 4;  // Default /run/lock/joshua; share across containers.
 }
 
 // One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
@@ -94,6 +150,7 @@ message Channel {
     PwmConfig pwm = 12;
     HostGpioConfig host_gpio = 13;  // HOST_GPIO boards only.
   }
+  StepDirWiring step_dir_wiring = 14;  // Alternative to legacy numeric fields.
 }
 
 // Which firmware the host expects on the board; checked against the
@@ -146,8 +203,11 @@ message Board {
   // Host coordinator budgets for FRAME_STREAM. Software defaults are not
   // hardware timing qualification. All handles of an MCU share this policy.
   JoshuaWireHostPolicy joshua_wire_host_policy = 7;
+  repeated BoardPeripheral peripherals = 9;
+  PinProfileRef pin_profile = 8;  // MCU connector/native pin resolution.
   oneof board_config {
     Am243Config am243_config = 10;
+    HostGpioBoardConfig host_gpio_config = 11;
   }
 }
 
@@ -168,4 +228,43 @@ message JoshuaWireHostPolicy {
   // Reserved internal GET_STATUS cadence. Zero disables heartbeat. Never
   // refreshes actuator targets. Requires explicit firmware watchdog budgets.
   uint32 heartbeat_period_ms = 12;
+}
+
+message PwmOutputConfig {
+  PinRef pin = 1;
+  uint32 frequency_hz = 2;
+  optional double initial_duty_cycle = 3;  // 0..1; starts disabled.
+}
+message SpiPeripheralConfig {
+  PinRef clock = 1;
+  PinRef mosi = 2;
+  PinRef miso = 3;
+  PinRef chip_select = 4;
+  robot.comm.SpiConfig settings = 5;
+  uint32 bus_index = 6;  // MCU native bus, ignored/rejected on Linux.
+}
+message I2cPeripheralConfig {
+  PinRef sda = 1;
+  PinRef scl = 2;
+  robot.comm.I2cConfig settings = 3;
+  uint32 bus_index = 4;
+}
+message UartPeripheralConfig {
+  PinRef tx = 1;
+  PinRef rx = 2;
+  robot.comm.SerialConfig settings = 3;  // 8N1 byte-stream policy.
+  uint32 bus_index = 4;
+  string controller = 5;  // Linux device-tree controller-node assertion.
+}
+message BoardPeripheral {
+  string name = 1;
+  string purpose = 2;
+  optional uint32 function_id = 3;  // MCU firmware slot 192..199; absent on Linux.
+  oneof operation {
+    PwmOutputConfig pwm = 10;
+    SpiPeripheralConfig spi = 11;
+    I2cPeripheralConfig i2c = 12;
+    UartPeripheralConfig uart = 13;
+    DigitalPinConfig digital = 14;  // MCU only; outer name/purpose supply identity.
+  }
 }

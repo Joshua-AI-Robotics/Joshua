@@ -57,6 +57,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - /run/lock/joshua:/run/lock/joshua
       # Persist Bazel cache to host machine
       - bazel-cache-u22:/root/.cache/bazel
     environment:
@@ -84,6 +85,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - /run/lock/joshua:/run/lock/joshua
       - bazel-cache-u24:/root/.cache/bazel
     environment:
       - ROS_DISTRO=jazzy
@@ -243,6 +245,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - /run/lock/joshua:/run/lock/joshua
       - bazel-cache-u22-arm64:/root/.cache/bazel
     environment:
       - ROS_DISTRO=humble
@@ -310,6 +313,7 @@ services:
     volumes:
       - .:/workspace
       - /dev:/dev
+      - /run/lock/joshua:/run/lock/joshua
       - bazel-cache-u24-arm64:/root/.cache/bazel
     environment:
       - ROS_DISTRO=jazzy

@@ -14,8 +14,10 @@
 #include "robot/comm/interfaces/byte_stream.h"
 #include "robot/comm/interfaces/correlated_cyclic_transport.h"
 #include "robot/comm/interfaces/frame_stream_transport.h"
+#include "robot/comm/interfaces/i2c_transport.h"
 #include "robot/comm/interfaces/message_transport.h"
 #include "robot/comm/interfaces/serial_diagnostics.h"
+#include "robot/comm/interfaces/spi_transport.h"
 #include "robot/comm/proto/comm.pb.h"
 
 namespace robot::comm {
@@ -34,7 +36,9 @@ using CommTransport = std::variant<std::shared_ptr<ByteStream>,
                                    std::shared_ptr<MessageTransport>,
                                    std::shared_ptr<CorrelatedCyclicTransport>,
                                    PairedTransports,
-                                   std::shared_ptr<FrameStreamTransport>>;
+                                   std::shared_ptr<FrameStreamTransport>,
+                                   std::shared_ptr<SpiTransport>,
+                                   std::shared_ptr<I2cTransport>>;
 
 template <typename Transport>
 absl::StatusOr<std::shared_ptr<Transport>> GetCommTransport(const CommTransport& transport) {

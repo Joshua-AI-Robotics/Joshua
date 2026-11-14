@@ -2,6 +2,9 @@
 #include <Entropy.h>
 
 #include "joshua_stepdir_device.h"
+#ifdef JOSHUA_PERIPHERAL_REFERENCE
+#include "joshua_peripheral_device.h"
+#endif
 #include "transport_serial.h"
 #ifdef JOSHUA_MIXED_ADC_REFERENCE
 #include "adc_reference.h"
@@ -9,6 +12,9 @@
 #include "joshua_mixed_serial.h"
 #endif
 namespace {
+#ifdef JOSHUA_PERIPHERAL_REFERENCE
+bool peripheral_ready;
+#endif
 SerialTransport serial;
 frame_transport_t transport;
 #ifndef JOSHUA_MIXED_ADC_REFERENCE
@@ -36,6 +42,13 @@ uint32_t BootId() {
 
 void setup() {
   StepDirDeviceInit(BootId(), "teensy-stepdir", ValidOutputPin);
+#ifdef JOSHUA_PERIPHERAL_REFERENCE
+  peripheral_ready = JoshuaArduinoPeripheralsInit();
+  if (!peripheral_ready) {
+    StepDirDeviceFault();
+    return;
+  }
+#endif
   transport = TransportSerialInit(&serial, {115200, 20});
   serial_frame_transport_set_tx_timeout(
       &serial, JW_SERIAL_TX_STOP_TIMEOUT_MS, TransmitTimeout, nullptr);
@@ -56,6 +69,9 @@ void setup() {
 #endif
 }
 void loop() {
+#ifdef JOSHUA_PERIPHERAL_REFERENCE
+  if (!peripheral_ready) return;
+#endif
 #ifdef JOSHUA_MIXED_ADC_REFERENCE
   if (mixed_ready) jw_mixed_serial_service(&scheduler);
 #else

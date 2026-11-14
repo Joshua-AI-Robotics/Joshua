@@ -1,0 +1,58 @@
+# Board API example for the opt-in teensy41-peripherals image.
+# Initializing opens a real serial link and configures native pins; no ROS node is launched.
+robot {
+  boards {
+    name: "teensy_peripherals"
+    board_type: TEENSY41
+    protocol: JOSHUA_WIRE
+    firmware { min_proto_version: 4 }
+    pin_profile { id: "pjrc/teensy41" version: 1 }
+    comm {
+      comm_type: SERIAL
+      transport_type: MESSAGE
+      serial_config {
+        port: "/dev/ttyACM0"
+        baudrate: 115200
+        message_adapter: JOSHUA_WIRE
+        exchange_timeout_ms: 500
+
+      }
+    }
+    peripherals {
+      name: "fan" purpose: "cooling speed output" function_id: 192
+      pwm { pin { signal: "LEFT.GPIO6" } frequency_hz: 1000 initial_duty_cycle: 0 }
+    }
+    peripherals {
+      name: "adc" purpose: "external SPI ADC link" function_id: 193
+      spi {
+        bus_index: 0
+        clock { firmware_pin: 13 } mosi { firmware_pin: 11 }
+        miso { firmware_pin: 12 } chip_select { firmware_pin: 10 }
+        settings { speed_hz: 1000000 mode: 0 bits_per_word: 8 }
+      }
+    }
+    peripherals {
+      name: "temperature" purpose: "I2C temperature sensor link" function_id: 194
+      i2c {
+        bus_index: 0
+        sda { firmware_pin: 18 } scl { firmware_pin: 19 }
+        settings { address: 72 frequency_hz: 100000 timeout_ms: 50 }
+      }
+    }
+    peripherals {
+      name: "gps" purpose: "raw GPS UART" function_id: 195
+      uart {
+        bus_index: 1
+        tx { firmware_pin: 1 } rx { firmware_pin: 0 }
+        settings { baudrate: 115200 }
+      }
+    }
+    peripherals {
+      name: "ready" purpose: "panel ready indicator" function_id: 196
+      digital {
+        pin { signal: "LEFT.GPIO5" }
+        direction: DIGITAL_OUTPUT initial_value: false shutdown_value: false
+      }
+    }
+  }
+}

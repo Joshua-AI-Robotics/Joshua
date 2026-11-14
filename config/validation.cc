@@ -11,6 +11,8 @@
 #include "absl/strings/str_cat.h"
 #include "robot/board/factory/board_resolver.h"
 #include "robot/board/joshua_wire/coordinator_policy.h"
+#include "robot/board/pin/peripheral_resource.h"
+#include "robot/board/pin/pin_resource.h"
 #include "robot/comm/factory/comm_config_validation.h"
 #include "robot/comm/serial/serial_config_validation.h"
 #include "robot/comm/serial/serial_device_identity.h"
@@ -385,7 +387,27 @@ absl::Status ValidateConfig(const config::Config& config) {
   ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
+  std::map<std::string, const robot::board::Board*> gpio_claims;
   for (const auto& board : robot.boards()) {
+    ABSL_RETURN_IF_ERROR(robot::board::ResolveMcuBoardPins(board).status());
+    ABSL_ASSIGN_OR_RETURN(auto peripherals, robot::board::ResolveBoardPeripherals(board));
+    if (board.board_type() == robot::board::HOST_GPIO) {
+      for (const auto& p : peripherals)
+        for (const auto& c : p.claims) {
+          const auto [it, inserted] = gpio_claims.emplace(c.identity, &board);
+          if (!inserted && it->second != &board)
+            return absl::InvalidArgumentError("Multiple host boards claim peripheral resource " +
+                                              c.identity);
+        }
+    }
+    if (board.board_type() == robot::board::HOST_GPIO) {
+      ABSL_ASSIGN_OR_RETURN(auto pins, robot::board::ResolveHostGpioPins(board));
+      for (const auto& pin : pins)
+        if (!gpio_claims.emplace(pin.identity(), &board).second)
+          return absl::InvalidArgumentError("Multiple boards claim GPIO " + pin.identity());
+    } else if (board.has_host_gpio_config()) {
+      return absl::InvalidArgumentError("host_gpio_config requires HOST_GPIO");
+    }
     ABSL_RETURN_IF_ERROR(robot::board::ValidateWatchdogPolicy(board));
     if (board.has_joshua_wire_host_policy()) {
       if (board.comm().comm_type() != robot::comm::SERIAL ||

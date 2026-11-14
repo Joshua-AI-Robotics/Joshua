@@ -149,3 +149,20 @@ outcome reporting use the portable C `joshua_actuator_handler`. Device callbacks
 retain pin validation, resource ownership, target limits, cached acquisition and
 hardware actions. Teensy/ESP32 register these callbacks in `joshua_stepdir_device`;
 AM243 uses `am243_software_backend` and has no physical STEP/DIR output.
+
+
+## Opt-in peripheral reference artifact
+
+Build `esp32-peripherals` with `pio run -d firmware/esp32 -e esp32-peripherals`.
+This explicit image adds eight profile-4 slots for digital GPIO, hardware PWM,
+SPI, I2C and native UART. It uses the same JoshuaWire serial session and resource
+table as STEP/DIR. No pins are configured at boot and no output is enabled
+implicitly. The default and mixed-scalar artifacts remain separate.
+
+The [profile contract](../../docs/JOSHUA_WIRE.md#opt-in-peripheral-profile-4-version-10)
+and [host configuration](../../robot/board/joshua_wire/README.md#named-mcu-peripherals)
+define native routes, clock/timeouts and bus-versus-motion admission. The image
+advertises a 200 ms candidate dispatch budget and requires a larger host response
+timeout. Native bus I/O cannot run while STEP/DIR is enabled; physical timing,
+waveforms, stop behavior and electrical qualification remain pending. Build
+commands never upload or flash firmware.

@@ -232,3 +232,20 @@ still unqualified. Nothing in build/test commands flashes the board.
 Use the [mixed serial qualification kit](../../../docs/SERIAL_COMM_QUALIFICATION.md)
 for artifact/source manifests, the frozen workload, metadata recording, deliberate
 disabled recovery and the outstanding physical evidence gates.
+
+
+## Opt-in peripheral reference artifact
+
+Build `teensy41-peripherals` with `pio run -d firmware/teensy/41 -e teensy41-peripherals`.
+This explicit image adds eight profile-4 slots for digital GPIO, hardware PWM,
+SPI, I2C and native UART. It uses the same JoshuaWire serial session and resource
+table as STEP/DIR. No pins are configured at boot and no output is enabled
+implicitly. The default and mixed-scalar artifacts remain separate.
+
+The [profile contract](../../../docs/JOSHUA_WIRE.md#opt-in-peripheral-profile-4-version-10)
+and [host configuration](../../../robot/board/joshua_wire/README.md#named-mcu-peripherals)
+define native routes, clock/timeouts and bus-versus-motion admission. The image
+advertises a 200 ms candidate dispatch budget and requires a larger host response
+timeout. Native bus I/O cannot run while STEP/DIR is enabled; physical timing,
+waveforms, stop behavior and electrical qualification remain pending. Build
+commands never upload or flash firmware.

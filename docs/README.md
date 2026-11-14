@@ -19,6 +19,8 @@ evidence workflow and the outstanding physical qualification gates.
 | Supported hardware models, aliases, drivers, presets, and intended scope | [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md) |
 | Separate hardware test records, environments, measured results, and limitations | [TESTED_HARDWARE.md](TESTED_HARDWARE.md) |
 | Board layer RFC (motor × board × transport) | [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) |
+| Pi 5 / Orin Nano digital GPIO API and pin resources | [../robot/board/host_gpio/README.md](../robot/board/host_gpio/README.md) |
+| Host GPIO and board pin profiles plan | [HOST_GPIO_AND_BOARD_PROFILES_PLAN.md](HOST_GPIO_AND_BOARD_PROFILES_PLAN.md) |
 | Board/comm separation and JoshuaWire EtherCAT plan | [BOARD_COMM_SEPARATION_PLAN.md](BOARD_COMM_SEPARATION_PLAN.md) |
 | Serial reliability, mixed sensor streaming/control, and implementation review gates | [SERIAL_COMM_IMPROVEMENT_PLAN.md](SERIAL_COMM_IMPROVEMENT_PLAN.md) |
 | Shared JoshuaWire code, test layout and migration adapters | [../firmware/common/README.md](../firmware/common/README.md) |

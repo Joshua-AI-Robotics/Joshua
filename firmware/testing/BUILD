@@ -6,6 +6,9 @@ cc_library(
     hdrs = [
         "Arduino.h",
         "Entropy.h",
+        "SPI.h",
+        "Wire.h",
+        "esp_arduino_version.h",
         "esp_system.h",
     ],
     includes = ["."],

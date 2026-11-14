@@ -152,3 +152,17 @@ intrinsic scalar function. Native tests compile the actual application and
 Teensy setup/loop/register adapter against controlled clock, ADC and GPIO hooks.
 The explicit Teensy candidate is described in the board README; physical
 qualification and P5 runtime wiring remain separate.
+
+## Opt-in peripheral execution
+
+`joshua_wire_peripheral` defines profile 4 payloads, exact success validation and
+shared native route validation. `joshua_peripheral_handler` owns bounded slots,
+resource admission, action status and fail-closed safety; callbacks supply native
+I/O. `joshua_peripheral_device` composes those slots with the existing STEP/DIR
+runtime and resource table. `joshua_arduino_peripherals` supplies SPI/Wire/UART,
+GPIO and 12-bit hardware PWM only under `JOSHUA_PERIPHERAL_REFERENCE`.
+
+The explicit Teensy/ESP32 artifacts leave all resources unconfigured at boot.
+Bus operations require STEP/DIR disabled; native I2C can block dispatch. They
+are reference candidates, with a conservative 200 ms admission budget and pending
+physical timing/stop qualification. See [the full contract](../../docs/JOSHUA_WIRE.md#opt-in-peripheral-profile-4-version-10).
