@@ -2,6 +2,8 @@
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,6 +99,62 @@ class RecordingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             RecordingStore(alias, 20, 50)
 
+    def test_shared_store_prunes_oldest_across_streams_and_keeps_open_clips(self):
+        peer = RecordingStore(self.root, 20, 50, "webcam")
+        self.addCleanup(peer.close)
+        primary_run = self.store.begin_session()
+        secondary_run = peer.begin_session()
+        oldest = self.clip(1, run=primary_run)
+        newer = self.clip(2, run=secondary_run)
+        primary_open = self.clip(3, completed=False, run=primary_run)
+        secondary_open = self.clip(4, completed=False, run=secondary_run)
+
+        def disk(_):
+            occupied = sum(p.stat().st_size for p in self.store.clips())
+            return SimpleNamespace(f_blocks=1000, f_bavail=550 - occupied, f_frsize=1)
+
+        # The webcam's cleanup must reclaim the older IR clip, not its newer clip.
+        with patch("os.statvfs", side_effect=disk):
+            self.assertTrue(peer.prune()[0])
+        self.assertFalse(oldest.exists())
+        self.assertTrue(newer.exists())
+        with patch.object(peer, "space", return_value=(0, 200)):
+            self.assertFalse(peer.prune()[0])
+        self.assertTrue(primary_open.exists())
+        self.assertTrue(secondary_open.exists())
+
+    def test_orphan_child_protects_session_until_it_exits(self):
+        peer = RecordingStore(self.root, 20, 50, "webcam")
+        self.addCleanup(peer.close)
+        session = self.store.begin_session()
+        active = self.clip(1, completed=False, run=session)
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import sys; sys.stdin.read()"],
+            stdin=subprocess.PIPE,
+            pass_fds=(self.store.lock, self.store.stream_lock, self.store.session_lock),
+        )
+        try:
+            self.store.close()  # Simulate parent death; child still owns the clip.
+            with self.assertRaises(BlockingIOError):
+                RecordingStore(self.root, 20, 50)
+            with patch.object(peer, "space", return_value=(0, 200)):
+                peer.prune()
+                self.assertTrue(active.exists())
+                child.communicate(timeout=5)
+                peer.prune()
+            self.assertFalse(active.exists())
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.communicate(timeout=5)
+
+    def test_completion_hook_accepts_named_camera_session(self):
+        session = self.store.begin_session()
+        active = self.clip(1, completed=False, run=session)
+        with patch.dict(os.environ, {"MTX_SEGMENT_PATH": str(active)}):
+            mark_complete()
+        self.assertTrue(active.with_suffix(".complete").is_file())
+
     def test_symlinks_and_foreign_files_are_preserved(self):
         external = Path(self.temp.name) / "external"
         external.mkdir()
@@ -159,7 +217,7 @@ class RecordingTest(unittest.TestCase):
         process.wait.assert_called_once()
         self.assertIsNone(recorder.process)
         self.assertEqual(recorder.status["state"], "paused_low_space")
-        status = json.loads((recorder.store.root / "status.json").read_text())
+        status = json.loads((recorder.store.root / "status-baby.json").read_text())
         self.assertEqual(status["reserve_percent"], 20)
         with patch.object(recorder.store, "prune", return_value=(True, 400, 200)):
             with patch("subprocess.Popen", return_value=process) as launch:

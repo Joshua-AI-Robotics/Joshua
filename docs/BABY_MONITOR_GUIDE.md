@@ -554,9 +554,9 @@ An empty `recording_directory` disables recording. Use an empty, dedicated
 writable directory; relative paths other than `~/...`, percent signs, and
 newlines are rejected. The default duration is 120 seconds; keyframe alignment
 may make clips slightly longer, and shutdown or a lost input makes shorter clips.
-Each process session has a `run-<ID>/` directory containing timestamped `.mp4`
+Each process session has a `run-<STREAM_NAME>-<ID>/` directory containing timestamped `.mp4`
 files and `.complete` markers for finalized clips. Leave the markers in place.
-H.264 video and Opus audio can be viewed with a player that supports both, such
+H.264 video and, when configured, Opus audio can be viewed with a player that supports both, such
 as VLC. A recording timeline/download UI in Home Assistant is separate future work.
 
 The reserve is **20% of the entire filesystem containing the recordings**, not
@@ -570,30 +570,53 @@ you want to keep outside the managed directory.
 
 If it cannot reclaim enough space, it closes the recording process, makes its
 last clip eligible for cleanup, and waits for space before resuming. Live viewing,
-inference, and notifications continue. The directory is locked against concurrent
-recorders. After a restart, interrupted clips from previous sessions can expire;
+inference, and notifications continue. Multiple streams can share the directory:
+each stream has one exclusive recorder, and an interprocess lock serializes
+oldest-first cleanup across all streams. Per-session locks, also inherited by
+recorder children, protect every writer's unfinished clips. After a restart,
+interrupted clips from previous sessions can expire;
 an abrupt power loss can leave the final fragment incomplete. This policy is not
 a filesystem partition or quota: unrelated applications can still consume the
 reserve between checks. Recording errors and pauses are reported in the journal,
-`status.json`, and the `recording` field of `/media/events`; they do not currently
+`status-<STREAM_NAME>.json`, and the `recording` field of each media node's events;
+they do not currently
 send a dedicated phone alert.
 
 Check recordings on the Pi:
 
 ```bash
-cat "$HOME/joshua-data/recordings/status.json"
+cat "$HOME/joshua-data/recordings/status-baby.json"
+cat "$HOME/joshua-data/recordings/status-webcam.json"
 find "$HOME/joshua-data/recordings" -name '*.complete' -type f | sort | tail
 du -sh "$HOME/joshua-data/recordings"
 df -h "$HOME/joshua-data/recordings"
 journalctl -u joshua-monitor.service -n 100 --no-pager
 ```
 
-`status.json` includes state, available bytes, reserved bytes, and the number of
+Each status file includes state, available bytes, reserved bytes, and the number of
 clips deleted by the current recorder process. Check `observed_at_ns` as well;
 a stopped service leaves its last status file on disk. Files remain local and
 private; no footage is uploaded to Home Assistant cloud storage. Package updates
 keep recordings outside versioned releases. Edit the runtime config and restart
 `joshua-monitor.service` to change recording settings.
+
+### Record two cameras
+
+Set the three recording fields above on **both** `utilities.media_streams`
+entries, with the same recording directory and reserve percentage. Keep stream
+names and listener ports distinct. Each recorder copies its own local encoded
+RTSP feed; recording the second camera does not add another capture or video
+encode. Audio is included only when that stream subscribes to audio. For an IR
+stream named `baby` and a video-only stream named `webcam`, clips live under
+`run-baby-*/` and `run-webcam-*/`, respectively. Both draw from one storage budget;
+cleanup removes the oldest eligible clip across both cameras and older legacy
+`run-<ID>/` directories. The available history will be shorter with two feeds.
+
+Restart all recording nodes together when upgrading from the single-writer
+version: its exclusive directory lock intentionally prevents mixed old/new
+writers. Legacy `status.json` and `recorder.json` files are not updated by the
+new version; use the per-stream files and check their timestamps. Older packages
+do not recognize the new named session directories for retention.
 
 ## Operate and troubleshoot
 
