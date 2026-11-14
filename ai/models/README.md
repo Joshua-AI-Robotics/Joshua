@@ -7,6 +7,11 @@ For the full **add-a-model workflow** (base + model locks, Bazel hubs),
 see [`../README.md`](../README.md). Model venvs always include the global
 base; optional `requirements_lock` adds model-specific packages.
 
+**Proposed extension—not implemented:** see the
+[policy interface and bridges plan](../../docs/POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
+for the versioned adapter design. The API and lifecycle below describe the current
+implementation.
+
 ## Layout
 
 ```text

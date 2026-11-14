@@ -72,9 +72,10 @@ for startup, cancellation, and cleanup.
 
 ## Policy execution
 
-The inference host owns ROS communication and scheduling; model plug-ins own
-preprocessing, inference, and action decoding. The protobuf preset selects the
-plug-in and its wiring. MuJoCo and Isaac Sim provide separate simulation backends.
+The existing `InferenceHost` ROS node owns subscriptions, publishers, and inference
+invocation timing. Model plug-ins own preprocessing, model execution, and decoding
+results into motor commands. The protobuf preset selects the plug-in and its
+wiring. MuJoCo and Isaac Sim provide separate simulation backends.
 
 The proposed [policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
 extends this boundary with named observations and commands shared across
@@ -109,8 +110,10 @@ for measurement requirements and outstanding work.
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
+- [Policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md) — proposed adapter and execution-bridge extensions; not implemented
 - [ai/README.md](../ai/README.md) — inference engine, model plug-ins, per-model venvs
+- [ai/models/README.md](../ai/models/README.md) — current model-adapter contract and worked example
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
 - [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
-- [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
+- [ros2/README.md](../ros2/README.md) — ROS node runtime, command transport, and type resolver utilities
 - [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership

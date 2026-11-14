@@ -8,6 +8,11 @@ Joshua supports two simulation backends, both launched through the unified
 | `SIM_BACKEND_MUJOCO` (default) | MuJoCo | Interactive viewing, trajectory playback, hardware mirroring, offscreen rendering |
 | `SIM_BACKEND_ISAAC_SIM` | NVIDIA Isaac Sim | GPU-accelerated PhysX simulation of USD robot assets |
 
+**Proposed extension—not implemented:** the
+[policy interface and bridges plan](../docs/POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
+describes future policy execution bridges. The modes and setup below describe the
+current backends.
+
 ## Directory layout
 
 ```
