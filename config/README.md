@@ -308,6 +308,24 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
+
+For USB cameras, prefer `opencv_config.device_path` with a stable V4L2 link from
+`/dev/v4l/by-id/`. For example, in your local preset:
+
+```text
+opencv_config {
+  device_path: "/dev/v4l/by-id/<camera-usb-id>-video-index0"
+  width: 640 height: 480 fps: 30 fourcc: "MJPG"
+}
+```
+
+Replace the placeholder with the link for your camera's capture interface. A
+nonempty `device_path` takes precedence over numeric `id`, including when the
+driver reopens after a disconnect. If that path is unavailable, capture fails;
+it never falls back to another camera. An omitted or empty path preserves
+numeric-index behavior. Cameras with identical USB identities need
+`/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
+in private runtime presets rather than committed examples.
 Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
 such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
 the camera must support the selected format.
