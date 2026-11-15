@@ -102,7 +102,8 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
           c.function_id() >= 255 || !c.period_us() || sensor.node().publishers().empty() ||
           !sensor.node().subscriptions().empty())
         return absl::InvalidArgumentError(
-            "Scalar streaming requires MCU_BUS, function/period and publishers");
+            "Scalar streaming requires DEVICE_BUS (or deprecated MCU_BUS), function/period and "
+            "publishers");
       for (const auto& p : sensor.node().publishers())
         if (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY || p.topic().empty() ||
             !p.publish_rate_hz() || p.publish_rate_hz() > 1000)

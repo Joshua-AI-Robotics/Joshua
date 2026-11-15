@@ -48,7 +48,10 @@ TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
   EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
 }
 
-TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
+// Keep the deprecated spelling covered while exercising DEVICE_BUS as the primary path.
+class ComposedBusValidationTest : public testing::TestWithParam<ros2::node::NodeType> {};
+
+TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   auto c = MakeConfig();
   auto* b = c.mutable_robot()->mutable_boards(0);
   b->set_board_type(robot::board::TEENSY41);
@@ -60,7 +63,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   b->mutable_joshua_wire_host_policy()->set_telemetry_bytes_per_second(10000);
   auto* s = c.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   s->set_sensor_type(robot::perception::SCALAR);
-  s->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  s->mutable_node()->set_node_type(GetParam());
   auto* scalar = s->mutable_joshua_wire_scalar_config();
   scalar->set_board_name("bus");
   scalar->set_function_id(128);
@@ -71,7 +74,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   p->set_publish_rate_hz(50);
   auto* a = c.mutable_robot()->mutable_actions()->add_single_actions();
   a->mutable_node()->set_id(1);
-  a->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  a->mutable_node()->set_node_type(GetParam());
   a->set_action_type(robot::action::ACTUATOR);
   a->mutable_actuator()->set_board_name("bus");
   a->mutable_actuator()->set_channel(1);
@@ -87,6 +90,13 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   a->mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(false);
   EXPECT_FALSE(ValidateConfig(c).ok());
 }
+
+INSTANTIATE_TEST_SUITE_P(SupportedNames,
+                         ComposedBusValidationTest,
+                         testing::Values(ros2::node::DEVICE_BUS, ros2::node::MCU_BUS),
+                         [](const testing::TestParamInfo<ros2::node::NodeType>& info) {
+                           return ros2::node::NodeType_Name(info.param);
+                         });
 
 TEST(ValidationTest, ValidatesRobotClockWithoutOpeningDevice) {
   auto config = MakeConfig();

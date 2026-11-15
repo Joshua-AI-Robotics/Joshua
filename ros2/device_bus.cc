@@ -149,7 +149,7 @@ class DeviceBus : public rclcpp::Node {
   }
 
  private:
-  friend class McuBusTest;
+  friend class DeviceBusStopTest;
   friend class DeviceBusTest;
   struct ControlledActuator {
     std::shared_ptr<robot::action::ControlGate> gate;
@@ -373,7 +373,7 @@ class DeviceBus : public rclcpp::Node {
   rclcpp::CallbackGroup::SharedPtr stop_group_;
 };
 
-// MCU_BUS is the legacy config/executable name for this same composed node.
+// MCU_BUS is the deprecated compatibility name for this same composed node.
 using McuBus = DeviceBus;
 #ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {

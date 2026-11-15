@@ -119,7 +119,7 @@ metadata. Neither query establishes readiness or changes config validation.
 ## Layout
 
 The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
-uses `FRAME_STREAM` and one `MCU_BUS` process for actuator and scalar consumers.
+uses `FRAME_STREAM` and one `DEVICE_BUS` process for actuator and scalar consumers.
 `joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
 `period_us`; it does not declare an actuator channel. The firmware catalog must
 advertise that exact sensor/schema and period support. Subscriptions require an
@@ -467,8 +467,18 @@ qualification. Runtime board/perception integration follows in P5.
 observations in one process. Assign every consumer of a bus the same node ID
 and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. `MCU_BUS` remains supported for existing
-JoshuaWire scalar/stepper configurations.
+the existing numeric/JointState contracts. `MCU_BUS` is deprecated but remains
+supported for existing JoshuaWire scalar/stepper configurations. Use `DEVICE_BUS`
+for new configurations.
+
+To migrate, change every `node_type: MCU_BUS` on a bus to `DEVICE_BUS`, keeping
+the same shared node ID, board references, topics, and hardware/control settings.
+The launcher then selects `ros2/device_bus` instead of `ros2/mcu_bus`. Update any
+direct executable references and node-name-based tooling. Default node names
+change from `mcu_bus_node_<id>` to `device_bus_node_<id>`, including private service paths
+such as `~/<actuator>/enable` and `~/estop`; explicitly configured topic names
+remain unchanged. Do not mix node types under one node ID. The legacy enum value
+9, executable, and validation restrictions remain available during deprecation.
 
 The composed owner explicitly disables actuators at startup and tears them down
 before releasing boards. Steppers require `require_explicit_enable: true` so their

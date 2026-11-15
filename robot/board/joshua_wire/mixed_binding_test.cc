@@ -1,4 +1,4 @@
-// Production board/perception + MCU_BUS over a PTY and the actual mixed loop.
+// Production board/perception + DEVICE_BUS over a PTY and the actual mixed loop.
 // Only GPIO, ADC and time are native hooks; no device is opened or flashed.
 #include <fcntl.h>
 #include <spawn.h>
@@ -288,7 +288,7 @@ TEST_F(MixedBindingTest, RosEstopPreemptsBlockedCommandAndWatchdogWithTwoExecuto
   for (auto& sub : *action->mutable_node()->mutable_subscriptions())
     sub.set_topic(name + sub.topic().substr(sub.topic().find_last_of('/')));
   ASSERT_TRUE(config::ValidateConfig(local).ok()) << config::ValidateConfig(local);
-  auto runtime = std::make_shared<McuBus>(name, 1, local);
+  auto runtime = std::make_shared<DeviceBus>(name, 1, local);
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   auto enable = client->create_publisher<std_msgs::msg::Bool>(name + "/torque", 1);
   auto command = client->create_publisher<std_msgs::msg::Float32>(name + "/position", 1);
@@ -493,7 +493,7 @@ TEST_P(MixedRecorderQosTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExpl
     for (auto& pub : *s.mutable_node()->mutable_publishers()) pub.set_topic(prefix + pub.topic());
   }
   ASSERT_TRUE(config::ValidateConfig(local).ok());
-  auto runtime = std::make_shared<McuBus>(name, 1, local);
+  auto runtime = std::make_shared<DeviceBus>(name, 1, local);
   EXPECT_FALSE(Enabled());
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   std::atomic<bool> observed{false};

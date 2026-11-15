@@ -279,8 +279,8 @@ ros2_cpp_library(
 )
 
 cc_test(
-    name = "mcu_bus_test",
-    srcs = ["mcu_bus_test.cc"],
+    name = "device_bus_stop_test",
+    srcs = ["device_bus_stop_test.cc"],
     deps = [
         ":device_bus_test_source",
         "//config/proto:config_cc_proto",
@@ -292,6 +292,7 @@ cc_test(
     ],
 )
 
+# Deprecated compatibility executable for existing MCU_BUS configurations.
 ros2_cpp_binary(
     name = "mcu_bus",
     srcs = ["device_bus.cc"],
