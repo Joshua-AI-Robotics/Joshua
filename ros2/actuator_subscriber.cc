@@ -1,22 +1,24 @@
-#include <memory>
-#include <string>
-
-#include "config/proto/config.pb.h"
-#include "rclcpp/rclcpp.hpp"
-#include "ros2/logging.h"
+#include "ros2/action_subscriber.h"
 #include "ros2/node_runner.h"
-#include "ros2/utils/actuator_commands.h"
 
 class ActionSubscriber : public rclcpp::Node {
  public:
-  ActionSubscriber(const std::string& node_name, int node_id, const config::Config& config)
-      : Node(node_name) {
+  ActionSubscriber(const std::string& name, int id, const config::Config& config)
+      : Node(name), commands_(*this) {
     ros2_utils::SetLogNodeName(get_logger().get_name());
-    commands_ = std::make_unique<ros2_utils::ActuatorCommands>(*this, node_id, config);
+    bool complete = false;
+    joshua::ScopeExit rollback([&] {
+      if (!complete) commands_.ShutdownActions();
+    });
+    commands_.Initialize(id, config);
+    complete = true;
+  }
+  ~ActionSubscriber() override {
+    commands_.ShutdownActions();
   }
 
  private:
-  std::unique_ptr<ros2_utils::ActuatorCommands> commands_;
+  ActuatorCommands commands_;
 };
 
 #ifndef JOSHUA_NODE_TEST

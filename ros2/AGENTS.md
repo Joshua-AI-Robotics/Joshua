@@ -220,7 +220,7 @@ must add an explicit operator enable step.
 Mixed MCU bus
 -------------
 
-[`mcu_bus`](mcu_bus.cc) hosts scalar subscriptions and actuator commands in one
+[`mcu_bus`](device_bus.cc) hosts scalar subscriptions and actuator commands in one
 process, sharing the production board cache and coordinator. Give all consumers
 of the MCU the same `node.id` and `node_type: MCU_BUS`. The reference
 [preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real
@@ -388,8 +388,11 @@ format before opening a device.
 Each topic uses its own robot-time publication timer. Image headers preserve the
 driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
 is a host capture-completion estimate, not a sensor exposure timestamp. Expected
-device errors use the recovery path; unexpected exceptions reach the shared
-runtime guard.
+device errors use the recovery path; unexpected acquisition exceptions report a
+process failure through `joshua::StartWorker()` and request shutdown. Acquisition
+and retry scheduling belong to each camera record in `camera_publisher.cc`,
+independently of ROS publication timers. This changes the former health-only
+handling of unexpected exceptions; expected device errors remain recoverable.
 
 The OpenCV backend uses two capture buffers so the next frame can remain queued
 while the previous one is read. The
@@ -533,12 +536,24 @@ No host acknowledgment is physical stop evidence.
 
 ## Observation readiness
 
-Position, camera, lidar and board scalar publishers share `ObservationSource`:
-one acquisition worker and one bounded latest sample per configured sensor,
-with all of its output topics reading that sample. Reads never run on the ROS
-executor. Readiness requires validated data; invalid samples, acquisition errors
-and stalled sources remain observable. Repeated scalar acquisitions do not
-refresh the last-valid time.
+Camera, lidar, position, and composed bus nodes own their sensor records in their
+`.cc` implementations. Each blocking sensor has one guarded acquisition worker and
+one bounded latest sample shared by all its outputs. `ObservationState` supplies
+validation, identity and freshness transitions without owning a driver or worker;
+`AddObservationOutputs` creates output callbacks on the owning node and returns
+timers to its sensor record. Blocking reads never run on the ROS executor.
+Board scalar records instead read the coordinator's existing cache in publication
+and health callbacks, with no acquisition worker. Repeated cache reads retain
+sample identity and receipt times and do not refresh the last-valid time.
+
+Blocking acquisition uses steady elapsed time at the maximum configured output
+rate for that sensor. A slow read skips waiting for the expired period; it does not
+queue catch-up reads. Each output retains its independent RobotTime publication
+cadence. Paused/backward RobotTime waits for the outstanding publication deadline;
+forward jumps skip missed periods without a burst. Acquisition and 50 ms health
+callbacks continue while publication is paused. Camera retry backoff still uses
+RobotTime. Readiness requires validated data; invalid samples, acquisition errors,
+and stalled sources remain observable.
 
 Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
 with `observation_status`) and a short `/health` String. Status includes starting,
@@ -551,15 +566,49 @@ payload publication pauses when unusable; invalid/stale scalar packets remain
 inspectable with `usable=false`. No stale sample becomes a new measurement.
 
 Sensor construction errors are reported through status until deliberate restart;
-no board session or subscription is automatically restored. Acquisition workers
-are joined on shutdown after requesting backend teardown. Driver calls must be
-bounded or support teardown cancellation; a permanently blocked backend can still
-hold shutdown. This does not impose a physical acquisition/stop-time guarantee.
-Audio retains its separate streaming contract.
+camera open/read failures use the recovery path described above, while
+no board session or subscription is automatically restored. Each node cancels all
+sensor records before joining them. `PerceptionInterface::RequestStop()` is a
+nonblocking terminal request, separate from final `Teardown()`. Workers perform
+final cleanup after leaving device I/O, including when initialization or a read
+throws. Completed records clean up if a later factory or thread start fails.
+Shared board release follows actuator shutdown and sensor cleanup; a position
+sensor never closes the bus to cancel another consumer's I/O.
+
+Serial feedback/read completion is bounded by the configured transport operation
+and queue budget; lidar additionally attempts its motor-stop write during cleanup.
+The OpenCV V4L2 backend cannot guarantee an interruptible open/read: its stop flag
+prevents later operations, but cannot interrupt an already blocked call. A managed
+camera process therefore relies on NodeManager's existing SIGINT/SIGTERM/SIGKILL
+escalation if graceful joining stalls. Directly embedding or launching that node
+without a supervisor does not acquire this fallback. Forced termination is visible
+in process status and cannot promise device cleanup or physical stopping. Finite
+backend budgets must also fit the configured process grace periods.
+Audio retains its separate streaming/chunk contract.
+
+## Component source layout and tests
+
+Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint live
+in the same `.cc` and compile directly with `ros2_cpp_binary`. The MCU executable
+is a compatibility build of the complete `device_bus.cc`, preserving its name and
+two-thread executor without a forwarding node or duplicate bus implementation.
+`ActuatorCommands` in the existing `action_subscriber.h` binds control gates and
+services to a caller-owned node; standalone and bus nodes explicitly initialize
+and shut down those bindings. Neither node inherits another node.
+
+Hardware-free tests include the same node `.cc` through narrowly visible,
+`testonly` source targets, defining `JOSHUA_NODE_TEST` to exclude only the binary
+entrypoint. Production nodes are not split into a library and separate main.
+`perception_nodes_test` covers responsive health during blocked reads, initialization
+cancellation, factory/thread rollback, cleanup failure, clock pause/jumps, and
+worker-free scalar cache fan-out. `perception_shutdown_test` runs an uninterruptible
+fake capture in a separate process and verifies the existing manager kills and
+reaps it. Actuator, bus and PTY tests preserve explicit enable, lease/recovery,
+shared ownership and concurrent stop behavior.
 
 ## Sample identity, clocks and recording
 
-The shared observation runtime assigns every distinct sample a `sample_metadata`
+The node-owned observation state assigns every distinct sample a `sample_metadata`
 record: source-instance identity, generation-local sequence, discontinuity,
 host receipt in Unix and steady nanoseconds, Linux boot clock identity, native
 units/frame, and measurement validity. Cached publication preserves identity and

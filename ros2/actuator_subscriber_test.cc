@@ -117,6 +117,18 @@ TEST_F(ActuatorSubscriberTest,
   }));
   EXPECT_EQ(other_node->get_subscription_count(), 0u);
 
+  // Current #145 contract: every actuator starts disabled and requires explicit enable.
+  for (int index = 0; index < 2; ++index) {
+    EXPECT_EQ(channels_[index]->SetTarget(robot::board::TargetMode::kPosition, 1).code(),
+              absl::StatusCode::kFailedPrecondition);
+    auto enable = client_->create_client<std_srvs::srv::Trigger>("/" + prefix_ + "_runtime/" +
+                                                                 Name(index) + "/enable");
+    ASSERT_TRUE(WaitUntil([&] { return enable->service_is_ready(); }));
+    auto result = enable->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+    ASSERT_TRUE(WaitUntil([&] { return result.wait_for(0ms) == std::future_status::ready; }));
+    ASSERT_TRUE(result.get()->success);
+  }
+
   Message message;
   message.data = 11;
   first->publish(message);
@@ -141,12 +153,11 @@ TEST_F(ActuatorSubscriberTest,
 
   executor_->remove_node(runtime_);
   runtime_.reset();
-  // Both owned actuators return to their individual idle positions, then disable.
+  // Both owned actuators are disabled during node teardown.
   // Multiple subscriptions on the first actuator must not lose the second one.
   for (int index = 0; index < 2; ++index) {
     const auto feedback = channels_[index]->ReadFeedback();
     ASSERT_TRUE(feedback.ok());
-    EXPECT_FLOAT_EQ(feedback->position, (index + 1) * (index + 2));
     EXPECT_EQ(channels_[index]->SetTarget(robot::board::TargetMode::kPosition, 1).code(),
               absl::StatusCode::kFailedPrecondition);
   }

@@ -17,7 +17,8 @@
 #include "ros2/utils/packet_parser.h"
 #include "std_srvs/srv/trigger.hpp"
 
-class ActionSubscriber : public rclcpp::Node {
+// Focused command bindings on a caller-owned node; the node calls Initialize/ShutdownActions.
+class ActuatorCommands {
   struct ControlledActuator {
     std::shared_ptr<robot::action::ControlGate> gate;
     std::string board_name;
@@ -28,15 +29,11 @@ class ActionSubscriber : public rclcpp::Node {
   };
 
  public:
-  ActionSubscriber(const std::string& name,
-                   int id,
-                   const config::Config& config,
-                   bool standalone = true)
-      : Node(name), standalone_(standalone) {
-    ros2_utils::SetLogNodeName(get_logger().get_name());
+  explicit ActuatorCommands(rclcpp::Node& node) : node_(node) {}
+  void Initialize(int id, const config::Config& config) {
     // Keep all ordinary control work in the subscriptions' mutually exclusive
     // group. Waiting on a busy gate must not occupy the spare ESTOP thread.
-    control_group_ = get_node_base_interface()->get_default_callback_group();
+    control_group_ = node_.get_node_base_interface()->get_default_callback_group();
     for (const auto& action : config.robot().actions().single_actions()) {
       if (action.action_type() != robot::action::ACTUATOR ||
           action.node().id() != static_cast<uint32_t>(id))
@@ -60,7 +57,7 @@ class ActionSubscriber : public rclcpp::Node {
       const auto& a = action.actuator();
       for (const auto& sub : action.node().subscriptions()) {
         auto result = ros2_utils::CreateActionMessageSubscription(
-            *this,
+            node_,
             sub,
             action,
             [this,
@@ -75,7 +72,7 @@ class ActionSubscriber : public rclcpp::Node {
                 if (status.ok())
                   status = gate->Execute(source,
                                          *packet,
-                                         now().nanoseconds(),
+                                         node_.now().nanoseconds(),
                                          robot::action::ControlGate::Clock::now());
               }
               if (!status.ok()) JOSHUA_LOG(WARNING) << "Command rejected: " << status.ToString();
@@ -87,17 +84,18 @@ class ActionSubscriber : public rclcpp::Node {
           a.actuator_name().empty() ? "actuator_" + std::to_string(a.id()) : a.actuator_name();
       const std::string prefix = "~/" + key + "/";
       AddService(prefix + "enable", [this, gate] {
-        return gate->Enable(robot::action::ControlGate::Clock::now(), now().nanoseconds());
+        return gate->Enable(robot::action::ControlGate::Clock::now(), node_.now().nanoseconds());
       });
       AddService(prefix + "stop", [gate] { return gate->Stop(); });
-      AddService(prefix + "recover", [this, gate] { return gate->Recover(now().nanoseconds()); });
+      AddService(prefix + "recover",
+                 [this, gate] { return gate->Recover(node_.now().nanoseconds()); });
       for (const auto& source : sources)
         AddService(prefix + "select_" + source, [this, gate, source] {
-          return gate->SelectSource(source, now().nanoseconds());
+          return gate->SelectSource(source, node_.now().nanoseconds());
         });
     }
     // Local command lease is independent of board heartbeats and display consumers.
-    watchdog_ = create_wall_timer(
+    watchdog_ = node_.create_wall_timer(
         std::chrono::milliseconds(10),
         [this] {
           for (auto& actuator : gates_)
@@ -105,12 +103,6 @@ class ActionSubscriber : public rclcpp::Node {
         },
         control_group_);
   }
-  ~ActionSubscriber() override {
-    watchdog_.reset();
-    if (standalone_) ShutdownActions();
-  }
-
- protected:
   using StopRequests =
       std::vector<std::pair<std::shared_ptr<robot::action::ControlGate>, uint64_t>>;
   StopRequests RequestStopActions() {
@@ -133,6 +125,9 @@ class ActionSubscriber : public rclcpp::Node {
     return result;
   }
   void ShutdownActions() {
+    watchdog_.reset();
+    if (shutdown_) return;
+    shutdown_ = true;
     joshua::RunCleanup("actuator shutdown", [&] {
       RequestStopActions();
       std::vector<std::thread> threads;
@@ -150,7 +145,7 @@ class ActionSubscriber : public rclcpp::Node {
 
  private:
   void AddService(const std::string& name, std::function<absl::Status()> action) {
-    services_.push_back(create_service<std_srvs::srv::Trigger>(
+    services_.push_back(node_.create_service<std_srvs::srv::Trigger>(
         name,
         [action](std::shared_ptr<std_srvs::srv::Trigger::Request>,
                  std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
@@ -163,7 +158,8 @@ class ActionSubscriber : public rclcpp::Node {
         rmw_qos_profile_services_default,
         control_group_));
   }
-  bool standalone_;
+  rclcpp::Node& node_;
+  bool shutdown_ = false;
   std::vector<ControlledActuator> gates_;
   std::list<ActuatorSubscription> subscriptions_;
   std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;

@@ -44,7 +44,7 @@ ros2_cpp_test(
         "//robot/comm/factory:comm_factory",
         "//robot/perception/factory:perception_factory",
         "//ros2:actuator_subscriber_test_source",
-        "//ros2:mcu_bus_test_source",
+        "//ros2:device_bus_test_source",
         "//utils:joshua_runtime",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",

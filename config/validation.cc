@@ -50,6 +50,23 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   using robot::perception::SensorType;
   using robot::perception::SinglePerception;
   const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+  // Component nodes only acquire their own sensor kinds. Do not accept outputs
+  // which the selected executable would silently ignore after node construction.
+  if (!sensor.node().publishers().empty()) {
+    const auto node = sensor.node().node_type();
+    const auto kind = sensor.sensor_type();
+    const bool supported =
+        (node == ros2::node::CAMERA_PUBLISHER && kind == SensorType::IMAGE) ||
+        (node == ros2::node::LIDAR_PUBLISHER && kind == SensorType::RANGE_SCAN) ||
+        (node == ros2::node::POSITION_PUBLISHER && kind == SensorType::POSITION) ||
+        (node == ros2::node::AUDIO_PUBLISHER && kind == SensorType::AUDIO) ||
+        (node == ros2::node::MCU_BUS && kind == SensorType::SCALAR) ||
+        (node == ros2::node::DEVICE_BUS &&
+         (kind == SensorType::POSITION || kind == SensorType::SCALAR));
+    if (!supported)
+      return absl::InvalidArgumentError(
+          absl::StrCat(owner, ": node.node_type does not support configured sensor_type outputs"));
+  }
   if (sensor.observation_policy().has_stale_after_ms() &&
       (!sensor.observation_policy().stale_after_ms() ||
        sensor.observation_policy().stale_after_ms() > INT32_MAX))

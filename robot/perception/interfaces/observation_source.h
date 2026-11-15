@@ -5,16 +5,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <condition_variable>
 #include <fstream>
-#include <functional>
 #include <memory>
 #include <mutex>
-#include <thread>
 #include <tuple>
 
 #include "robot/perception/interfaces/perception_interface.h"
-#include "utils/joshua_runtime.h"
 
 namespace robot::perception {
 
@@ -81,10 +77,10 @@ class ObservationState {
               int64_t unix_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                     std::chrono::system_clock::now().time_since_epoch())
                                     .count()) {
-    std::lock_guard lock(mutex_);
-    if (health_.state() == ObservationStatus::STOPPED) return;
     auto status = result.status();
     if (result.ok()) status = ValidateObservation(*result);
+    std::lock_guard lock(mutex_);
+    if (health_.state() == ObservationStatus::STOPPED) return;
     if (!status.ok()) {
       pending_discontinuity_ = true;
       health_.set_state(ObservationStatus::ERROR);
@@ -198,85 +194,4 @@ class ObservationState {
   std::shared_ptr<const PerceptionPacket> packet_;
 };
 
-// One acquisition owner per configured sensor. Slow reads never run on the ROS
-// executor; all output topics fan out from the same bounded latest sample.
-class ObservationSource {
- public:
-  using Factory = std::function<absl::StatusOr<std::unique_ptr<PerceptionInterface>>()>;
-  ObservationSource(Factory factory,
-                    std::chrono::nanoseconds period,
-                    std::chrono::milliseconds stale_after,
-                    ObservationDescription description = {})
-      : state_(stale_after, ObservationState::Clock::now(), std::move(description)),
-        worker_([this, factory, period] { Run(factory, period); }) {}
-  ~ObservationSource() {
-    Stop();
-  }
-  ObservationState::Snapshot Get() const {
-    return state_.Get();
-  }
-  void Stop() {
-    std::lock_guard close_lock(close_mutex_);
-    std::shared_ptr<PerceptionInterface> source;
-    {
-      std::lock_guard lock(mutex_);
-      stopping_ = true;
-      source = source_;
-    }
-    wake_.notify_all();
-    if (source)
-      std::call_once(teardown_, [source] {
-        joshua::RunCleanup("observation teardown",
-                           [&] { joshua::ThrowIfError(source->Teardown()); });
-      });
-    if (worker_.joinable()) worker_.join();
-    state_.Stop();
-  }
-
- private:
-  void Run(const Factory& factory, std::chrono::nanoseconds period) {
-    try {
-      auto made = factory();
-      if (!made.ok()) {
-        state_.Record(made.status(), ObservationState::Clock::now());
-        return;
-      }
-      auto source = std::shared_ptr<PerceptionInterface>(std::move(*made));
-      {
-        std::lock_guard lock(mutex_);
-        source_ = source;
-      }
-      for (;;) {
-        {
-          std::lock_guard lock(mutex_);
-          if (stopping_) break;
-        }
-        const auto start = ObservationState::Clock::now();
-        auto packet = source->GetData();
-        {
-          std::lock_guard lock(mutex_);
-          if (stopping_) break;
-        }
-        state_.Record(std::move(packet), ObservationState::Clock::now());
-        std::unique_lock lock(mutex_);
-        wake_.wait_until(lock, start + period, [this] { return stopping_; });
-        if (stopping_) break;
-      }
-      std::call_once(teardown_, [source] {
-        joshua::RunCleanup("observation teardown",
-                           [&] { joshua::ThrowIfError(source->Teardown()); });
-      });
-    } catch (const std::exception& e) {
-      state_.Record(absl::InternalError(e.what()), ObservationState::Clock::now());
-    }
-  }
-  ObservationState state_;
-  mutable std::mutex mutex_;
-  std::condition_variable wake_;
-  bool stopping_ = false;
-  std::shared_ptr<PerceptionInterface> source_;
-  std::mutex close_mutex_;
-  std::once_flag teardown_;
-  std::thread worker_;
-};
 }  // namespace robot::perception

@@ -28,6 +28,9 @@
 #include "robot/board/joshua_wire/serial_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/factory/perception_factory.h"
+#define JOSHUA_NODE_TEST
+#include "ros2/actuator_subscriber.cc"
+#include "ros2/device_bus.cc"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "utils/joshua_runtime.h"

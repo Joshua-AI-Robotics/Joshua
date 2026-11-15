@@ -2,6 +2,7 @@
 
 #include <glog/logging.h>
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <opencv2/videoio.hpp>
@@ -25,10 +26,16 @@ class CvCamera : public CameraInterface {
   std::string GetId() override;
   absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
   absl::Status Teardown() override;
+  // OpenCV's V4L2 call cannot reliably be interrupted. This prevents further I/O;
+  // a permanently blocked call requires the launcher's process escalation.
+  void RequestStop() noexcept override {
+    stopping_.store(true);
+  }
 
  private:
   const uint8_t MAX_CAMERA_OPEN_TRIES_ = 3;
   cv::VideoCapture cap_;
+  std::atomic<bool> stopping_{false};
   mutable std::mutex cap_mutex_;
   std::string id_;
   uint64_t camera_id_;

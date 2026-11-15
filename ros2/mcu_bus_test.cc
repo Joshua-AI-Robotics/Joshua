@@ -1,3 +1,4 @@
+#define JOSHUA_NODE_TEST
 #include <chrono>
 #include <cstdlib>
 #include <future>
@@ -8,6 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "rclcpp/version.h"
+#include "ros2/device_bus.cc"
 
 // Exercise the complete node without exporting a production node header.
 #define JOSHUA_NODE_TEST

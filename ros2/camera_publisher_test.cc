@@ -7,9 +7,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-
-// Exercise the private node implementation without a public header or executable main.
-#define JOSHUA_CAMERA_PUBLISHER_TEST
+#define JOSHUA_NODE_TEST
 #include "ros2/camera_publisher.cc"
 
 namespace {
@@ -122,6 +120,7 @@ class CameraPublisherTest : public testing::Test {
     publisher_.reset();
     subscription_.reset();
     observer_.reset();
+    EXPECT_EQ(joshua::RunGuarded("reset camera test runtime", [] { return 0; }), 0);
   }
 
   void Start(CameraPublisher::Factory factory = {}) {
@@ -132,7 +131,9 @@ class CameraPublisherTest : public testing::Test {
       };
     }
     publisher_ = std::make_shared<CameraPublisher>(
-        "camera_recovery_publisher", 1, config_, std::move(factory), [this]() { return now_; });
+        "camera_recovery_publisher", 1, config_, factory, joshua::StartWorker, [this] {
+          return now_.load();
+        });
     executor_.add_node(publisher_);
   }
 
@@ -151,8 +152,8 @@ class CameraPublisherTest : public testing::Test {
 
   config::Config config_;
   std::shared_ptr<FakeCameraState> state_ = std::make_shared<FakeCameraState>();
-  double now_ = 1'700'000'000.0;
-  std::shared_ptr<CameraPublisher> publisher_;
+  std::atomic<double> now_{1'700'000'000.0};
+  std::shared_ptr<rclcpp::Node> publisher_;
   std::shared_ptr<rclcpp::Node> observer_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
   rclcpp::executors::SingleThreadedExecutor executor_;
@@ -228,35 +229,53 @@ TEST_F(CameraPublisherTest, InvalidConfigurationFailsStartupInsteadOfRetrying) {
   EXPECT_EQ(state_->teardowns, 1);
 }
 
-TEST_F(CameraPublisherTest, FastCameraTimerDoesNotReadOtherCameras) {
-  auto* perceptions = config_.mutable_robot()->mutable_perceptions();
-  const auto fast_config = perceptions->single_perceptions(0);
-  auto* slow_config = perceptions->add_single_perceptions();
-  *slow_config = fast_config;
-  slow_config->set_sensor_name("slow_camera");
-  auto* slow_publisher = slow_config->mutable_node()->mutable_publishers(0);
-  slow_publisher->set_topic("camera_recovery_test/slow_image");
-  slow_publisher->set_publish_rate_hz(1);
-  auto slow_state = std::make_shared<FakeCameraState>();
-  slow_state->available = true;
+TEST_F(CameraPublisherTest, MultipleTopicsShareOneAcquisitionAndInitialization) {
+  auto* sensor = config_.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto second = sensor->node().publishers(0);
+  second.set_topic("camera_recovery_test/second_image");
+  *sensor->mutable_node()->add_publishers() = second;
+  std::vector<sensor_msgs::msg::Image> other_images;
+  auto subscription = observer_->create_subscription<sensor_msgs::msg::Image>(
+      second.topic(), 10, [&](sensor_msgs::msg::Image::ConstSharedPtr message) {
+        other_images.push_back(*message);
+      });
   state_->available = true;
-  Start([fast_state = state_, slow_state](const auto& sensor)
-            -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
-    return std::make_unique<FakeCamera>(sensor.sensor_name() == "slow_camera" ? slow_state
-                                                                              : fast_state);
-  });
-
-  SpinFor(100ms);
-  EXPECT_GT(state_->reads, 0);
-  EXPECT_EQ(slow_state->reads, 0);
-  ASSERT_TRUE(WaitUntil([&]() { return slow_state->reads > 0; }));
+  Start();
+  ASSERT_TRUE(WaitUntil([&] { return !images_.empty() && !other_images.empty(); }));
+  EXPECT_EQ(state_->initializations, 1);
+  EXPECT_EQ(state_->uninitialized_reads, 0);
+  EXPECT_EQ(images_.back().data, other_images.back().data);
+  EXPECT_EQ(images_.back().header.frame_id, "camera_frame");
 }
 
-TEST_F(CameraPublisherTest, UnexpectedCaptureExceptionReachesExecutorBoundary) {
+TEST_F(CameraPublisherTest, UnexpectedCaptureExceptionFailsProcessAndCleansUp) {
   state_->available = true;
   state_->throw_next_read = true;
   Start();
-  EXPECT_THROW(WaitUntil([&]() { return state_->reads > 0; }), std::runtime_error);
+  ASSERT_TRUE(WaitUntil([&] { return joshua::RuntimeFailed(); }));
+  EXPECT_TRUE(joshua::ShutdownRequested());
   EXPECT_TRUE(images_.empty());
+  executor_.remove_node(publisher_);
+  publisher_.reset();
+  EXPECT_EQ(state_->teardowns, 1);
+}
+
+TEST_F(CameraPublisherTest, FastPublicationDoesNotIncreaseAnotherCamerasAcquisitionRate) {
+  auto slow_sensor = config_.robot().perceptions().single_perceptions(0);
+  slow_sensor.set_sensor_name("slow_camera");
+  slow_sensor.mutable_node()->mutable_publishers(0)->set_topic("camera_recovery_test/slow_image");
+  slow_sensor.mutable_node()->mutable_publishers(0)->set_publish_rate_hz(1);
+  auto slow_state = std::make_shared<FakeCameraState>();
+  slow_state->available = true;
+  state_->available = true;
+  *config_.mutable_robot()->mutable_perceptions()->add_single_perceptions() = slow_sensor;
+  Start([&](const auto& sensor)
+            -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+    return std::make_unique<FakeCamera>(sensor.sensor_name() == "slow_camera" ? slow_state
+                                                                              : state_);
+  });
+  ASSERT_TRUE(WaitUntil([&] { return slow_state->reads > 0 && state_->reads > 5; }));
+  EXPECT_EQ(slow_state->reads, 1);
+  EXPECT_EQ(slow_state->initializations, 1);
 }
 }  // namespace

@@ -402,8 +402,16 @@ checks and dependency extraction are separate private helpers in that module.
 Adding a driver updates those helpers; the shared resource checks
 remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
-There is no central sensor-to-publisher allowlist; node validation checks that
-node types are specified and each node ID has one consistent type.
+For sensors declaring outputs, `ValidateConfig` checks that the selected component
+node supports their kind: camera/IMAGE, lidar/RANGE_SCAN, position/POSITION,
+audio/AUDIO, MCU/SCALAR, or DEVICE_BUS/POSITION and SCALAR. Previously the generic
+observation node could accept cross-kind assignments; these now fail before
+hardware construction instead of being silently ignored by a component node.
+Migrate such external configs to the matching node type (and distinct node IDs
+when necessary). Existing checked-in presets retain their assignments.
+Resource-only entries without outputs retain their existing validation behavior.
+Node validation also checks that node types are specified and each node ID has
+one consistent type.
 
 
 Position publishers and actuator subscribers select compiled ROS message types

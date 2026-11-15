@@ -147,9 +147,18 @@ limits are rejected, never clamped. Native and SI positions are left for drivers
 Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
-## Directory navigation
-
-- [action/](action/AGENTS.md)
-- [board/](board/AGENTS.md)
-- [comm/](comm/AGENTS.md)
-- [perception/](perception/AGENTS.md)
+The observation state in `perception/interfaces/observation_source.h` validates
+samples and maintains latest-only data plus identity/readiness/freshness/error
+state. It owns no driver or acquisition thread. Sensor-specific ROS nodes own
+acquisition workers and publication; board scalar streams reuse their coordinator
+cache directly. `PerceptionFactory::CreatePerception` selects and constructs a
+driver; its caller must now call `Init()` explicitly, including for LDS01 (formerly
+initialized inside the factory). The redundant `CreateInitializedPerception` API
+and camera recovery wrapper have been removed; their in-repository callers have
+migrated. Camera nodes schedule retries, while the camera driver reapplies device
+settings on every `Init()`. `RequestStop()` is separate from `Teardown()`; see the
+[ROS shutdown contract](../ros2/README.md#observation-readiness) for bounded serial
+reads and the OpenCV process-escalation fallback. None of this sends actuator
+commands. Shared actuator gates in `action/interfaces/control_gate.h` implement
+explicit enable, source selection, local command leases, and latched recovery
+above motor drivers and transports.

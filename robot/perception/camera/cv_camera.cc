@@ -21,6 +21,7 @@ CvCamera::~CvCamera() {
 
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
+  if (stopping_) return absl::CancelledError("Camera stopped");
 
   const auto config_status = ValidateCameraConfig(opencv_config_);
   if (!config_status.ok()) {
@@ -32,6 +33,7 @@ absl::Status CvCamera::Init() {
   if (!status.ok()) {
     return status;
   }
+  if (stopping_) return absl::CancelledError("Camera stopped");
 
   bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
                              cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
@@ -81,12 +83,10 @@ absl::Status CvCamera::TeardownLocked() {
 
 absl::StatusOr<robot::perception::PerceptionPacket> CvCamera::GetData() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
+  if (stopping_) return absl::CancelledError("Camera stopped");
 
   try {
-    absl::Status status = OpenCameraLocked();
-    if (!status.ok()) {
-      return status;
-    }
+    if (!cap_.isOpened()) return absl::FailedPreconditionError("Camera requires Init before read");
 
     cv::Mat frame;
     cap_ >> frame;
@@ -167,6 +167,7 @@ absl::Status CvCamera::OpenCameraLocked() {
   absl::Status status;
 
   for (uint8_t i = 0; i < MAX_CAMERA_OPEN_TRIES_; i++) {
+    if (stopping_) return absl::CancelledError("Camera stopped");
     if (cap_.isOpened()) {
       status = absl::OkStatus();
       break;

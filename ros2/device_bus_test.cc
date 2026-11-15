@@ -1,4 +1,5 @@
-#include "ros2/device_bus.h"
+#define JOSHUA_NODE_TEST
+#include "ros2/device_bus.cc"
 
 #include <unistd.h>
 
@@ -14,6 +15,7 @@
 #include "rclcpp/version.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/comm/testing/fake_caller_sized_message_transport.h"
+#include "ros2/utils/robot_time_conversion.h"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"

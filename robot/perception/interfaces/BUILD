@@ -55,7 +55,6 @@ cc_library(
     hdrs = ["observation_source.h"],
     deps = [
         ":perception_interface",
-        "//utils:joshua_runtime",
     ],
 )
 

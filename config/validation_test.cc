@@ -205,13 +205,34 @@ TEST(ValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
   node->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
   EXPECT_TRUE(ValidateConfig(config).ok());
 }
-TEST(ValidationTest, DoesNotMaintainASensorToPublisherAllowlist) {
+TEST(ValidationTest, ResourceOnlySensorWithoutOutputsDoesNotRequirePublisherCapability) {
   auto config = MakeConfig();
   auto& robot = *config.mutable_robot();
   robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->set_node_type(
       ros2::node::CAMERA_PUBLISHER);
-  // Publisher capabilities are not a shared resource-validation concern.
+  // No outputs are requested; retain resource-only validation for this entry.
   EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, RejectsOutputsThatTheSelectedComponentNodeCannotPublish) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto* output = sensor->mutable_node()->add_publishers();
+  output->set_topic("joint/position");
+  output->set_ros2_data_type(ros2::data_type::FLOAT32);
+  output->set_publish_rate_hz(30);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  sensor->mutable_node()->set_node_type(ros2::node::DEVICE_BUS);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  for (const auto type : {ros2::node::CAMERA_PUBLISHER,
+                          ros2::node::LIDAR_PUBLISHER,
+                          ros2::node::ACTUATOR_SUBSCRIBER}) {
+    sensor->mutable_node()->set_node_type(type);
+    auto status = ValidateConfig(config);
+    EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_NE(status.message().find("Sensor 'joint'"), absl::string_view::npos);
+    EXPECT_NE(status.message().find("node.node_type"), absl::string_view::npos);
+  }
 }
 TEST(ValidationTest, RejectsUnspecifiedNodeType) {
   auto config = MakeConfig();
