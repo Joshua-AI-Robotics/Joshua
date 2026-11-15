@@ -9,7 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "rclcpp/version.h"
-#include "ros2/device_bus.cc"
+#include "ros2/board_node.cc"
 
 // Exercise the complete node without exporting a production node header.
 #define JOSHUA_NODE_TEST
@@ -57,7 +57,7 @@ class StopBoard : public robot::board::BoardInterface {
 };
 }  // namespace
 
-class DeviceBusStopTest : public testing::Test {
+class BoardNodeStopTest : public testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NE(std::getenv("TEST_TMPDIR"), nullptr);
@@ -66,7 +66,7 @@ class DeviceBusStopTest : public testing::Test {
     ASSERT_EQ(setenv("ROS_LOCALHOST_ONLY", "1", 1), 0);
     rclcpp::init(0, nullptr);
     // Empty config avoids constructing any production board or serial owner.
-    runtime_ = std::make_shared<DeviceBus>("stop_test", 1, config::Config{});
+    runtime_ = std::make_shared<BoardNode>("stop_test", 1, config::Config{});
     client_node_ = std::make_shared<rclcpp::Node>("stop_test_client");
     client_ = client_node_->create_client<std_srvs::srv::Trigger>("/stop_test/estop");
     executor_ =
@@ -97,14 +97,14 @@ class DeviceBusStopTest : public testing::Test {
   }
 
   std::vector<std::shared_ptr<StopBoard>> boards_;
-  std::shared_ptr<DeviceBus> runtime_;
+  std::shared_ptr<BoardNode> runtime_;
   rclcpp::Node::SharedPtr client_node_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;
   std::unique_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
   std::thread spin_;
 };
 
-TEST_F(DeviceBusStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
+TEST_F(BoardNodeStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
   auto first = AddBoard(absl::DeadlineExceededError("first board acknowledgment lost"));
   auto second = AddBoard(absl::UnavailableError("second board disconnected"));
   auto healthy = AddBoard(absl::OkStatus());
@@ -127,7 +127,7 @@ TEST_F(DeviceBusStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure
   EXPECT_NE(response->message.find("second board disconnected"), std::string::npos);
 }
 
-TEST_F(DeviceBusStopTest, ReportsSuccessWhenEveryBoardAcknowledges) {
+TEST_F(BoardNodeStopTest, ReportsSuccessWhenEveryBoardAcknowledges) {
   auto first = AddBoard(absl::OkStatus());
   auto second = AddBoard(absl::OkStatus());
   first->Release();

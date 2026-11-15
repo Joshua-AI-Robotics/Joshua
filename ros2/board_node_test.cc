@@ -1,5 +1,5 @@
 #define JOSHUA_NODE_TEST
-#include "ros2/device_bus.cc"
+#include "ros2/board_node.cc"
 
 #include <unistd.h>
 
@@ -90,7 +90,7 @@ class DelayedStopBoard : public robot::board::BoardInterface {
 };
 }  // namespace
 
-class DeviceBusTest : public testing::Test {
+class BoardNodeTest : public testing::TestWithParam<ros2::node::NodeType> {
  protected:
   static void SetUpTestSuite() {
     ASSERT_NE(getenv("TEST_TMPDIR"), nullptr);
@@ -138,7 +138,7 @@ class DeviceBusTest : public testing::Test {
                 action_type: ACTUATOR
                 node {
                   id: 1
-                  node_type: DEVICE_BUS
+                  node_type: BOARD_NODE
                   subscriptions { topic: "joint/position" ros2_data_type: FLOAT32 }
                   subscriptions { topic: "joint/torque" ros2_data_type: BOOL }
                 }
@@ -160,7 +160,7 @@ class DeviceBusTest : public testing::Test {
                 sts3215_encoder_config { board_name: "servo_bus" channel: 1 }
                 node {
                   id: 1
-                  node_type: DEVICE_BUS
+                  node_type: BOARD_NODE
                   publishers { topic: "measured" ros2_data_type: JOINT_STATE publish_rate_hz: 50 }
                 }
               }
@@ -168,6 +168,16 @@ class DeviceBusTest : public testing::Test {
           }
         )pb",
         &config));
+    config.mutable_robot()
+        ->mutable_actions()
+        ->mutable_single_actions(0)
+        ->mutable_node()
+        ->set_node_type(GetParam());
+    config.mutable_robot()
+        ->mutable_perceptions()
+        ->mutable_single_perceptions(0)
+        ->mutable_node()
+        ->set_node_type(GetParam());
     prefix = "test_bus_" + std::to_string(getpid());
     auto* a = config.mutable_robot()->mutable_actions()->mutable_single_actions(0);
     a->mutable_actuator()->set_actuator_name(prefix);
@@ -193,7 +203,7 @@ class DeviceBusTest : public testing::Test {
     } while (std::chrono::steady_clock::now() < deadline);
     return false;
   }
-  void AddDelayedBoard(DeviceBus& runtime, std::shared_ptr<DelayedStopBoard> board) {
+  void AddDelayedBoard(BoardNode& runtime, std::shared_ptr<DelayedStopBoard> board) {
     runtime.boards_.emplace("delayed_board", std::move(board));
   }
   bool Wrote(uint8_t reg, uint8_t value) {
@@ -208,7 +218,7 @@ class DeviceBusTest : public testing::Test {
   rclcpp::executors::SingleThreadedExecutor executor;
 };
 
-TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
+TEST_P(BoardNodeTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   sensor->mutable_observation_policy()->set_frame_id("base");
   auto* packet_output = sensor->mutable_node()->add_publishers();
@@ -217,7 +227,7 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   packet_output->set_observation_packet(true);
   packet_output->set_publish_rate_hz(50);
   ASSERT_TRUE(config::ValidateConfig(config).ok()) << config::ValidateConfig(config);
-  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+  auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   EXPECT_EQ(opens, 1);
   EXPECT_TRUE(Wrote(40, 0));
   EXPECT_FALSE(Wrote(40, 1));
@@ -281,8 +291,8 @@ TEST_F(DeviceBusTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   executor.remove_node(client);
 }
 
-TEST_F(DeviceBusTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery) {
-  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+TEST_P(BoardNodeTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery) {
+  auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   auto enable =
       client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/enable");
@@ -317,8 +327,8 @@ TEST_F(DeviceBusTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery)
   executor.remove_node(client);
 }
 
-TEST_F(DeviceBusTest, HostRecoveryCannotClearUncertainServoWrite) {
-  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+TEST_P(BoardNodeTest, HostRecoveryCannotClearUncertainServoWrite) {
+  auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   auto enable =
       client->create_client<std_srvs::srv::Trigger>("/" + prefix + "/" + prefix + "/enable");
@@ -352,7 +362,7 @@ TEST_F(DeviceBusTest, HostRecoveryCannotClearUncertainServoWrite) {
   executor.remove_node(client);
 }
 
-TEST_F(DeviceBusTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
+TEST_P(BoardNodeTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   config.mutable_robot()
       ->mutable_perceptions()
       ->mutable_single_perceptions(0)
@@ -367,14 +377,14 @@ TEST_F(DeviceBusTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   EXPECT_EQ(opens, 0);
 }
 
-TEST_F(DeviceBusTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecoveryInterlocked) {
+TEST_P(BoardNodeTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecoveryInterlocked) {
   config.mutable_robot()
       ->mutable_actions()
       ->mutable_single_actions(0)
       ->mutable_actuator()
       ->mutable_control_policy()
       ->set_command_timeout_ms(10000);
-  auto runtime = std::make_shared<DeviceBus>(prefix, 1, config);
+  auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   auto delayed = std::make_shared<DelayedStopBoard>();
   AddDelayedBoard(*runtime, delayed);
   auto entered = delayed->entered.get_future();
@@ -433,3 +443,10 @@ TEST_F(DeviceBusTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecovery
   EXPECT_TRUE(call(enable));
   EXPECT_TRUE(wire->enabled);
 }
+
+INSTANTIATE_TEST_SUITE_P(SupportedNames,
+                         BoardNodeTest,
+                         testing::Values(ros2::node::BOARD_NODE, ros2::node::DEVICE_BUS),
+                         [](const testing::TestParamInfo<ros2::node::NodeType>& info) {
+                           return ros2::node::NodeType_Name(info.param);
+                         });

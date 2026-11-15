@@ -1,4 +1,4 @@
-// Mixed MCU sources and commands deliberately share this process and factory.
+// Board-backed observations and actuator commands share this process and factory.
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -34,13 +34,13 @@
 #include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
-class DeviceBus : public rclcpp::Node {
+class BoardNode : public rclcpp::Node {
  public:
   using Factory =
       std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
           const robot::perception::SinglePerception&)>;
   using WorkerStart = std::function<std::thread(std::string, std::function<void()>)>;
-  DeviceBus(const std::string& name,
+  BoardNode(const std::string& name,
             int id,
             const config::Config& config,
             Factory factory = {},
@@ -144,13 +144,13 @@ class DeviceBus : public rclcpp::Node {
     }
     complete = true;
   }
-  ~DeviceBus() override {
+  ~BoardNode() override {
     Shutdown();
   }
 
  private:
-  friend class DeviceBusStopTest;
-  friend class DeviceBusTest;
+  friend class BoardNodeStopTest;
+  friend class BoardNodeTest;
   struct ControlledActuator {
     std::shared_ptr<robot::action::ControlGate> gate;
     std::string board_name;
@@ -373,14 +373,17 @@ class DeviceBus : public rclcpp::Node {
   rclcpp::CallbackGroup::SharedPtr stop_group_;
 };
 
-// MCU_BUS is the deprecated compatibility name for this same composed node.
-using McuBus = DeviceBus;
+// Deprecated compatibility names share this same node implementation.
+using DeviceBus = BoardNode;
+using McuBus = BoardNode;
 #ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
 #ifdef JOSHUA_MCU_COMPAT
-  return ros2_utils::RunNode<DeviceBus>(argc, argv, "mcu_bus", 2);
+  return ros2_utils::RunNode<BoardNode>(argc, argv, "mcu_bus", 2);
+#elif defined(JOSHUA_DEVICE_BUS_COMPAT)
+  return ros2_utils::RunNode<BoardNode>(argc, argv, "device_bus", 2);
 #else
-  return ros2_utils::RunNode<DeviceBus>(argc, argv, "device_bus", 2);
+  return ros2_utils::RunNode<BoardNode>(argc, argv, "board_node", 2);
 #endif
 }
 #endif

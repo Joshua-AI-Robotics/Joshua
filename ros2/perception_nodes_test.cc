@@ -3,8 +3,8 @@
 #include <future>
 
 #include "gtest/gtest.h"
+#include "ros2/board_node.cc"
 #include "ros2/camera_publisher.cc"
-#include "ros2/device_bus.cc"
 #include "ros2/lidar_publisher.cc"
 #include "ros2/position_publisher.cc"
 
@@ -355,7 +355,7 @@ TEST_F(PerceptionNodesTest, ScalarCacheHasNoWorkerAndHealthRefreshesWhileRobotTi
   second.set_topic("sensor_test/second");
   *sensor->mutable_node()->add_publishers() = second;
   int workers = 0;
-  auto node = std::make_shared<DeviceBus>(
+  auto node = std::make_shared<BoardNode>(
       "cached_sensor_test",
       1,
       config,

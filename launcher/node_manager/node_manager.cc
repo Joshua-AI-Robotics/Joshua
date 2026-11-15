@@ -564,7 +564,9 @@ absl::Status NodeManager::LaunchAllNodes() {
   if (graph_started_) return absl::FailedPreconditionError("Node graph already started");
   std::vector<LaunchSpec> specs;
   for (const auto& [id, type] : identified_nodes_) {
-    const auto name = NodeTypeToString(type) + "_node_" + std::to_string(id);
+    // BOARD_NODE already includes the node suffix; preserve every legacy name.
+    const auto suffix = type == ros2::node::BOARD_NODE ? "_" : "_node_";
+    const auto name = NodeTypeToString(type) + suffix + std::to_string(id);
     ABSL_ASSIGN_OR_RETURN(auto spec, BuildNodeLaunchSpec(type, id, name));
     ABSL_RETURN_IF_ERROR(GetTopicsForNode(id, spec.publish_topics, spec.subscribe_topics));
     specs.push_back(std::move(spec));

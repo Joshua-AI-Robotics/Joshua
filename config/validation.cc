@@ -23,6 +23,11 @@
 namespace config {
 namespace {
 
+// DEVICE_BUS retains the full board-node contract; MCU_BUS keeps its narrower legacy rules.
+bool IsBoardNode(ros2::node::NodeType type) {
+  return type == ros2::node::BOARD_NODE || type == ros2::node::DEVICE_BUS;
+}
+
 struct BoardChannelReference {
   std::string board_name;
   uint32_t channel;
@@ -61,8 +66,7 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
         (node == ros2::node::POSITION_PUBLISHER && kind == SensorType::POSITION) ||
         (node == ros2::node::AUDIO_PUBLISHER && kind == SensorType::AUDIO) ||
         (node == ros2::node::MCU_BUS && kind == SensorType::SCALAR) ||
-        (node == ros2::node::DEVICE_BUS &&
-         (kind == SensorType::POSITION || kind == SensorType::SCALAR));
+        (IsBoardNode(node) && (kind == SensorType::POSITION || kind == SensorType::SCALAR));
     if (!supported)
       return absl::InvalidArgumentError(
           absl::StrCat(owner, ": node.node_type does not support configured sensor_type outputs"));
@@ -83,7 +87,7 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
     if ((sensor.node().node_type() == ros2::node::CAMERA_PUBLISHER ||
          sensor.node().node_type() == ros2::node::LIDAR_PUBLISHER ||
          sensor.node().node_type() == ros2::node::POSITION_PUBLISHER ||
-         sensor.node().node_type() == ros2::node::DEVICE_BUS) &&
+         IsBoardNode(sensor.node().node_type())) &&
         (!p.publish_rate_hz() || p.publish_rate_hz() > 1000))
       return absl::InvalidArgumentError("Observation publisher rate must be 1..1000 Hz");
   }
@@ -98,11 +102,12 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
       const auto& c = sensor.joshua_wire_scalar_config();
       if (sensor.sensor_type() != SensorType::SCALAR ||
           (sensor.node().node_type() != ros2::node::MCU_BUS &&
-           sensor.node().node_type() != ros2::node::DEVICE_BUS) ||
+           !IsBoardNode(sensor.node().node_type())) ||
           c.function_id() >= 255 || !c.period_us() || sensor.node().publishers().empty() ||
           !sensor.node().subscriptions().empty())
         return absl::InvalidArgumentError(
-            "Scalar streaming requires DEVICE_BUS (or deprecated MCU_BUS), function/period and "
+            "Scalar streaming requires BOARD_NODE (or deprecated DEVICE_BUS/MCU_BUS), "
+            "function/period and "
             "publishers");
       for (const auto& p : sensor.node().publishers())
         if (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY || p.topic().empty() ||
@@ -170,9 +175,9 @@ absl::Status ValidateSensorConfigs(
     if (sensor.has_alsa_audio_config() &&
         !audio_devices.insert(sensor.alsa_audio_config().device()).second)
       return absl::InvalidArgumentError("Audio device must have a single capture owner");
-    if (sensor.node().node_type() == ros2::node::DEVICE_BUS &&
-        !sensor.has_joshua_wire_scalar_config() && !sensor.has_sts3215_encoder_config())
-      return absl::InvalidArgumentError("DEVICE_BUS requires board-backed position/scalar sensors");
+    if (IsBoardNode(sensor.node().node_type()) && !sensor.has_joshua_wire_scalar_config() &&
+        !sensor.has_sts3215_encoder_config())
+      return absl::InvalidArgumentError("BOARD_NODE requires board-backed position/scalar sensors");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
     if (sensor.has_sts3215_encoder_config()) {
       const auto& c = sensor.sts3215_encoder_config();
@@ -255,7 +260,7 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
   };
   for (const auto& sensor : robot.perceptions().single_perceptions()) {
     if ((sensor.node().node_type() != ros2::node::POSITION_PUBLISHER &&
-         sensor.node().node_type() != ros2::node::DEVICE_BUS) ||
+         !IsBoardNode(sensor.node().node_type())) ||
         sensor.sensor_type() != robot::perception::POSITION)
       continue;
     for (const auto& pub : sensor.node().publishers()) {
@@ -270,8 +275,7 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
   std::set<std::pair<std::string, uint32_t>> controlled_channels;
   for (const auto& action : robot.actions().single_actions()) {
     if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
-        action.node().node_type() != ros2::node::MCU_BUS &&
-        action.node().node_type() != ros2::node::DEVICE_BUS)
+        action.node().node_type() != ros2::node::MCU_BUS && !IsBoardNode(action.node().node_type()))
       continue;
     const auto& actuator = action.actuator();
     const std::string key = actuator.actuator_name().empty()
@@ -491,14 +495,14 @@ absl::Status ValidateConfig(const config::Config& config) {
           "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
   }
   for (const auto& action : robot.actions().single_actions()) {
-    if (action.node().node_type() == ros2::node::DEVICE_BUS &&
+    if (IsBoardNode(action.node().node_type()) &&
         (!action.has_actuator() || action.action_type() != robot::action::ACTUATOR ||
          (action.actuator().motor_type() != robot::action::MOTOR_STS3215 &&
           action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17) ||
          (action.actuator().motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
           !action.actuator().stepper_config().require_explicit_enable())))
       return absl::InvalidArgumentError(
-          "DEVICE_BUS requires a supported actuator with disabled startup");
+          "BOARD_NODE requires a supported actuator with disabled startup");
     if (action.node().node_type() == ros2::node::MCU_BUS &&
         (!action.has_actuator() ||
          action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17 ||

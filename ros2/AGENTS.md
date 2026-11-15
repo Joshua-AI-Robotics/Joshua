@@ -208,9 +208,9 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. Use `DEVICE_BUS` for commands and board-backed feedback
-on one bus, including mixed JoshuaWire scalar/actuator setups. `MCU_BUS` is a
-deprecated compatibility option.
+host sensor publishers. Use `BOARD_NODE` for commands and board-backed feedback
+on one bus, including mixed JoshuaWire scalar/actuator setups. `DEVICE_BUS` and
+`MCU_BUS` are deprecated compatibility options.
 
 All ROS actuator runtimes start disabled, including STS3215 and legacy stepper
 presets. Driver construction is forced to remain disabled. Enable deliberately
@@ -221,9 +221,9 @@ must add an explicit operator enable step.
 Mixed MCU bus
 -------------
 
-[`device_bus`](device_bus.cc) hosts scalar subscriptions and actuator commands in one
+[`board_node`](board_node.cc) hosts scalar subscriptions and actuator commands in one
 process, sharing the production board cache and coordinator. Give all consumers
-of the MCU the same `node.id` and `node_type: DEVICE_BUS`. The reference
+of the MCU the same `node.id` and `node_type: BOARD_NODE`. The reference
 [preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real
 hardware and must be reviewed before a deliberate run.
 
@@ -488,13 +488,13 @@ buffer sizes after recovery, and bounded work for always-ready sources.
 
 ## Shared board runtime
 
-`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+`BOARD_NODE` composes actuator commands and board-backed position/scalar
 observations in one process. Assign every consumer of a bus the same node ID
-and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+and `node_type: BOARD_NODE`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. `MCU_BUS` is deprecated and retained
-only for existing JoshuaWire scalar/stepper configurations, with its original validation restrictions
-and `mcu_bus` executable. New configurations should use `DEVICE_BUS`. See the
+the existing numeric/JointState contracts. `DEVICE_BUS` and `MCU_BUS` are deprecated
+and retained with their original enum values, validation restrictions, and
+executables. New configurations should use `BOARD_NODE`. See the
 [configuration migration instructions](../config/README.md#shared-board-runtime)
 for node-name and private-service changes.
 
@@ -593,10 +593,11 @@ Audio retains its separate streaming/chunk contract.
 ## Component source layout and tests
 
 Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint live
-in the same `.cc` and compile directly with `ros2_cpp_binary`. The deprecated MCU
-executable is a compatibility build of the complete `device_bus.cc`, preserving its name and
-two-thread executor without a forwarding node or duplicate bus implementation.
-`actuator_subscriber.cc` and `device_bus.cc` each own their actuator configuration,
+in the same `.cc` and compile directly with `ros2_cpp_binary`. The deprecated
+`device_bus` and `mcu_bus` executables are compatibility builds of the complete
+`board_node.cc`, preserving their names and two-thread executor without forwarding
+nodes or duplicate implementations.
+`actuator_subscriber.cc` and `board_node.cc` each own their actuator configuration,
 subscriptions, control services, watchdog, and teardown workers. Shared control
 policy stays in `ControlGate`, and message conversion stays in the packet utilities.
 The component sources retain their ROS wiring so setup and shutdown are visible

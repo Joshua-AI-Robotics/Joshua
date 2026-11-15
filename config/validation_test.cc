@@ -48,7 +48,7 @@ TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
   EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
 }
 
-// Keep the deprecated spelling covered while exercising DEVICE_BUS as the primary path.
+// Keep deprecated spellings covered while exercising BOARD_NODE as the primary path.
 class ComposedBusValidationTest : public testing::TestWithParam<ros2::node::NodeType> {};
 
 TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
@@ -93,7 +93,9 @@ TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) 
 
 INSTANTIATE_TEST_SUITE_P(SupportedNames,
                          ComposedBusValidationTest,
-                         testing::Values(ros2::node::DEVICE_BUS, ros2::node::MCU_BUS),
+                         testing::Values(ros2::node::BOARD_NODE,
+                                         ros2::node::DEVICE_BUS,
+                                         ros2::node::MCU_BUS),
                          [](const testing::TestParamInfo<ros2::node::NodeType>& info) {
                            return ros2::node::NodeType_Name(info.param);
                          });
@@ -232,8 +234,10 @@ TEST(ValidationTest, RejectsOutputsThatTheSelectedComponentNodeCannotPublish) {
   output->set_ros2_data_type(ros2::data_type::FLOAT32);
   output->set_publish_rate_hz(30);
   EXPECT_TRUE(ValidateConfig(config).ok());
-  sensor->mutable_node()->set_node_type(ros2::node::DEVICE_BUS);
-  EXPECT_TRUE(ValidateConfig(config).ok());
+  for (const auto type : {ros2::node::BOARD_NODE, ros2::node::DEVICE_BUS}) {
+    sensor->mutable_node()->set_node_type(type);
+    EXPECT_TRUE(ValidateConfig(config).ok());
+  }
   for (const auto type : {ros2::node::CAMERA_PUBLISHER,
                           ros2::node::LIDAR_PUBLISHER,
                           ros2::node::ACTUATOR_SUBSCRIBER}) {

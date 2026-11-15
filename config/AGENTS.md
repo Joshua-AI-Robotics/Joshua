@@ -119,7 +119,7 @@ metadata. Neither query establishes readiness or changes config validation.
 ## Layout
 
 The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
-uses `FRAME_STREAM` and one `DEVICE_BUS` process for actuator and scalar consumers.
+uses `FRAME_STREAM` and one `BOARD_NODE` process for actuator and scalar consumers.
 `joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
 `period_us`; it does not declare an actuator channel. The firmware catalog must
 advertise that exact sensor/schema and period support. Subscriptions require an
@@ -369,7 +369,7 @@ four-character pixel format, such as `fourcc: "MJPG"` or `fourcc: "YUYV"`;
 missing or malformed formats fail validation before a camera is opened. The
 checked-in camera presets select MJPG.
 
-One serial bus must belong to one node process. Use `DEVICE_BUS` to compose
+One serial bus must belong to one node process. Use `BOARD_NODE` to compose
 commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`
 and `ACTUATOR_SUBSCRIBER` remain available for independent buses; they cannot
 share a port across processes.
@@ -404,7 +404,7 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 For sensors declaring outputs, `ValidateConfig` checks that the selected component
 node supports their kind: camera/IMAGE, lidar/RANGE_SCAN, position/POSITION,
-audio/AUDIO, MCU/SCALAR, or DEVICE_BUS/POSITION and SCALAR. Previously the generic
+audio/AUDIO, MCU/SCALAR, or BOARD_NODE/POSITION and SCALAR. Previously the generic
 observation node could accept cross-kind assignments; these now fail before
 hardware construction instead of being silently ignored by a component node.
 Migrate such external configs to the matching node type (and distinct node IDs
@@ -463,22 +463,26 @@ qualification. Runtime board/perception integration follows in P5.
 
 ## Shared board runtime
 
-`DEVICE_BUS` composes actuator commands and board-backed position/scalar
+`BOARD_NODE` composes actuator commands and board-backed position/scalar
 observations in one process. Assign every consumer of a bus the same node ID
-and `node_type: DEVICE_BUS`. Existing factories share the board and transport;
+and `node_type: BOARD_NODE`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. `MCU_BUS` is deprecated but remains
-supported for existing JoshuaWire scalar/stepper configurations. Use `DEVICE_BUS`
-for new configurations.
+the existing numeric/JointState contracts. Use `BOARD_NODE` for new configurations.
+`DEVICE_BUS` and `MCU_BUS` are deprecated compatibility options. `DEVICE_BUS`
+retains the same supported devices; `MCU_BUS` retains its narrower JoshuaWire
+scalar/stepper restrictions. All three executables use the same implementation.
 
-To migrate, change every `node_type: MCU_BUS` on a bus to `DEVICE_BUS`, keeping
-the same shared node ID, board references, topics, and hardware/control settings.
-The launcher then selects `ros2/device_bus` instead of `ros2/mcu_bus`. Update any
-direct executable references and node-name-based tooling. Default node names
-change from `mcu_bus_node_<id>` to `device_bus_node_<id>`, including private service paths
-such as `~/<actuator>/enable` and `~/estop`; explicitly configured topic names
-remain unchanged. Do not mix node types under one node ID. The legacy enum value
-9, executable, and validation restrictions remain available during deprecation.
+To migrate, change every `node_type: DEVICE_BUS` or `node_type: MCU_BUS` on a bus
+to `BOARD_NODE`, keeping the same shared node ID, board references, topics, and
+hardware/control settings. The launcher selects `ros2/board_node`. Update direct
+executable references and node-name-based tooling: the launcher names the new node
+`board_node_<id>` instead of `device_bus_node_<id>` or
+`mcu_bus_node_<id>`. This also changes private service paths such as
+`~/<actuator>/enable` and `~/estop`; explicitly configured topic names remain
+unchanged. Do not mix node types under one node ID. The legacy enum values
+(`MCU_BUS = 9`, `DEVICE_BUS = 10`), executables, and validation restrictions remain
+available during deprecation; `BOARD_NODE = 11` is a distinct value so old
+configurations retain their existing executable and node names.
 
 The composed owner explicitly disables actuators at startup and tears them down
 before releasing boards. Steppers require `require_explicit_enable: true` so their

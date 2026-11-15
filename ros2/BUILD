@@ -246,7 +246,7 @@ ros2_cpp_library(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-_DEVICE_BUS_DEPS = [
+_BOARD_NODE_DEPS = [
     "//utils:scope_exit",
     "//utils:status_macros",
     ":logging",
@@ -268,21 +268,21 @@ _DEVICE_BUS_DEPS = [
 ]
 
 ros2_cpp_library(
-    name = "device_bus_test_source",
+    name = "board_node_test_source",
     testonly = True,
-    textual_hdrs = ["device_bus.cc"],
+    textual_hdrs = ["board_node.cc"],
     visibility = [
         "//robot/board/joshua_wire:__pkg__",
         "//ros2:__pkg__",
     ],
-    deps = _DEVICE_BUS_DEPS,
+    deps = _BOARD_NODE_DEPS,
 )
 
 cc_test(
-    name = "device_bus_stop_test",
-    srcs = ["device_bus_stop_test.cc"],
+    name = "board_node_stop_test",
+    srcs = ["board_node_stop_test.cc"],
     deps = [
-        ":device_bus_test_source",
+        ":board_node_test_source",
         "//config/proto:config_cc_proto",
         "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
@@ -295,9 +295,9 @@ cc_test(
 # Deprecated compatibility executable for existing MCU_BUS configurations.
 ros2_cpp_binary(
     name = "mcu_bus",
-    srcs = ["device_bus.cc"],
+    srcs = ["board_node.cc"],
     local_defines = ["JOSHUA_MCU_COMPAT"],
-    deps = _DEVICE_BUS_DEPS,
+    deps = _BOARD_NODE_DEPS,
 )
 
 ros2_py_binary(
@@ -393,16 +393,24 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
+    name = "board_node",
+    srcs = ["board_node.cc"],
+    deps = _BOARD_NODE_DEPS,
+)
+
+# Deprecated compatibility executable for existing DEVICE_BUS configurations.
+ros2_cpp_binary(
     name = "device_bus",
-    srcs = ["device_bus.cc"],
-    deps = _DEVICE_BUS_DEPS,
+    srcs = ["board_node.cc"],
+    local_defines = ["JOSHUA_DEVICE_BUS_COMPAT"],
+    deps = _BOARD_NODE_DEPS,
 )
 
 cc_test(
-    name = "device_bus_test",
-    srcs = ["device_bus_test.cc"],
+    name = "board_node_test",
+    srcs = ["board_node_test.cc"],
     deps = [
-        ":device_bus_test_source",
+        ":board_node_test_source",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/testing:fake_caller_sized_message_transport",
         "@googletest//:gtest_main",
@@ -433,8 +441,8 @@ ros2_cpp_test(
     name = "perception_nodes_test",
     srcs = ["perception_nodes_test.cc"],
     deps = [
+        ":board_node_test_source",
         ":camera_publisher_test_source",
-        ":device_bus_test_source",
         ":lidar_publisher_test_source",
         ":position_publisher_test_source",
         "@googletest//:gtest_main",

@@ -4,9 +4,8 @@ package ros2.node;
 
 import "ros2/proto/ros2_data_type.proto";
 
-// Enum values here must match with the file name under ros2/
-// (e.g. camera_publisher.cc, position_publisher.cc, etc.)
-// This is used to resolve the native binary path.
+// Enum names map to lowercase executable names under ros2/. Compatibility
+// executables may share a source file with the preferred node implementation.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -17,9 +16,10 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
-  DEVICE_BUS = 10;  // Board-backed commands and observations share one process.
-  // Compatibility only: use DEVICE_BUS for new and migrated configurations.
+  BOARD_NODE = 11;  // Owns shared board connections, actuator commands, and observations.
+  // Compatibility only: use BOARD_NODE for new and migrated configurations.
   MCU_BUS = 9 [deprecated = true];
+  DEVICE_BUS = 10 [deprecated = true];
 }
 
 enum QosReliabilityPolicy {
