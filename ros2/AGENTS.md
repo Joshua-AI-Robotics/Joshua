@@ -592,9 +592,11 @@ Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint liv
 in the same `.cc` and compile directly with `ros2_cpp_binary`. The MCU executable
 is a compatibility build of the complete `device_bus.cc`, preserving its name and
 two-thread executor without a forwarding node or duplicate bus implementation.
-`ActuatorCommands` in the existing `action_subscriber.h` binds control gates and
-services to a caller-owned node; standalone and bus nodes explicitly initialize
-and shut down those bindings. Neither node inherits another node.
+`actuator_subscriber.cc` and `device_bus.cc` each own their actuator configuration,
+subscriptions, control services, watchdog, and teardown workers. Shared control
+policy stays in `ControlGate`, and message conversion stays in the packet utilities.
+The component sources retain their ROS wiring so setup and shutdown are visible
+without another lifecycle owner. Neither node inherits another node.
 
 Hardware-free tests include the same node `.cc` through narrowly visible,
 `testonly` source targets, defining `JOSHUA_NODE_TEST` to exclude only the binary

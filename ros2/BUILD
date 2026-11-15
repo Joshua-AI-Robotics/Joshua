@@ -209,35 +209,30 @@ ros2_cpp_library(
     deps = _LIDAR_PUBLISHER_DEPS,
 )
 
-cc_library(
-    name = "actuator_commands",
-    hdrs = ["action_subscriber.h"],
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//robot/action/factory:action_factory",
-        "//robot/action/interfaces:control_gate",
-        "//robot/action/proto:action_cc_proto",
-        "//robot/action/proto:action_packet_cc_proto",
-        "//ros2:logging",
-        "//ros2:node_runner",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "@abseil-cpp//absl/strings",
-        "@protobuf",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:cpp_std_srvs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
+_ACTUATOR_SUBSCRIBER_DEPS = [
+    "//config/proto:config_cc_proto",
+    "//utils:scope_exit",
+    "//utils:status_macros",
+    "//robot/action/factory:action_factory",
+    "//robot/action/interfaces:control_gate",
+    "//robot/action/proto:action_cc_proto",
+    "//robot/action/proto:action_packet_cc_proto",
+    "//ros2:logging",
+    "//ros2:node_runner",
+    "//ros2/proto:node_cc_proto",
+    "//ros2/utils:packet_parser",
+    "//ros2/utils:qos_setting",
+    "@abseil-cpp//absl/strings",
+    "@protobuf",
+    "@ros2_deps//:cpp_std_msgs",
+    "@ros2_deps//:cpp_std_srvs",
+    "@ros2_deps//:rclcpp",
+]
 
 ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
-    deps = [
-        ":actuator_commands",
-        ":node_runner",
-    ],
+    deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
 ros2_cpp_library(
@@ -251,28 +246,9 @@ ros2_cpp_library(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-ros2_cpp_library(
-    name = "mcu_bus_test_source",
-    testonly = True,
-    textual_hdrs = ["mcu_bus.cc"],
-    visibility = [
-        "//robot/board/joshua_wire:__pkg__",
-        "//ros2:__pkg__",
-    ],
-    deps = _MCU_BUS_DEPS,
-)
-
-ros2_cpp_test(
-    name = "actuator_subscriber_test",
-    srcs = ["actuator_subscriber_test.cc"],
-    deps = [
-        ":actuator_commands",
-        ":node_runner",
-    ],
-)
-
 _DEVICE_BUS_DEPS = [
-    ":actuator_commands",
+    "//utils:scope_exit",
+    "//utils:status_macros",
     ":logging",
     ":node_runner",
     ":observation_publisher",
