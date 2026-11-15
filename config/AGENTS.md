@@ -468,21 +468,18 @@ observations in one process. Assign every consumer of a bus the same node ID
 and `node_type: BOARD_NODE`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
 the existing numeric/JointState contracts. Use `BOARD_NODE` for new configurations.
-`DEVICE_BUS` and `MCU_BUS` are deprecated compatibility options. `DEVICE_BUS`
-retains the same supported devices; `MCU_BUS` retains its narrower JoshuaWire
-scalar/stepper restrictions. All three executables use the same implementation.
+`BOARD_NODE` uses protobuf value 9. `MCU_BUS` and `DEVICE_BUS` are removed,
+including their executables.
 
-To migrate, change every `node_type: DEVICE_BUS` or `node_type: MCU_BUS` on a bus
+To migrate, change every `node_type: MCU_BUS` or `node_type: DEVICE_BUS` on a bus
 to `BOARD_NODE`, keeping the same shared node ID, board references, topics, and
-hardware/control settings. The launcher selects `ros2/board_node`. Update direct
-executable references and node-name-based tooling: the launcher names the new node
-`board_node_<id>` instead of `device_bus_node_<id>` or
-`mcu_bus_node_<id>`. This also changes private service paths such as
-`~/<actuator>/enable` and `~/estop`; explicitly configured topic names remain
-unchanged. Do not mix node types under one node ID. The legacy enum values
-(`MCU_BUS = 9`, `DEVICE_BUS = 10`), executables, and validation restrictions remain
-available during deprecation; `BOARD_NODE = 11` is a distinct value so old
-configurations retain their existing executable and node names.
+hardware/control settings. Replace direct `ros2/mcu_bus` or `ros2/device_bus`
+invocations with `ros2/board_node`. Update node-name-based tooling from
+`mcu_bus_node_<id>` or `device_bus_node_<id>` to `board_node_<id>`. This also changes
+private service paths such as `~/<actuator>/enable` and `~/estop`; explicitly
+configured topic names remain unchanged. All entries sharing a node ID must use
+the same node type. Old text enum names are rejected. Numeric value 9 now means
+`BOARD_NODE`; values 10 and 11 are unrecognized.
 
 The composed owner explicitly disables actuators at startup and tears them down
 before releasing boards. Steppers require `require_explicit_enable: true` so their

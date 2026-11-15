@@ -373,17 +373,8 @@ class BoardNode : public rclcpp::Node {
   rclcpp::CallbackGroup::SharedPtr stop_group_;
 };
 
-// Deprecated compatibility names share this same node implementation.
-using DeviceBus = BoardNode;
-using McuBus = BoardNode;
 #ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
-#ifdef JOSHUA_MCU_COMPAT
-  return ros2_utils::RunNode<BoardNode>(argc, argv, "mcu_bus", 2);
-#elif defined(JOSHUA_DEVICE_BUS_COMPAT)
-  return ros2_utils::RunNode<BoardNode>(argc, argv, "device_bus", 2);
-#else
   return ros2_utils::RunNode<BoardNode>(argc, argv, "board_node", 2);
-#endif
 }
 #endif

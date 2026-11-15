@@ -209,8 +209,7 @@ Position publishing
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
 host sensor publishers. Use `BOARD_NODE` for commands and board-backed feedback
-on one bus, including mixed JoshuaWire scalar/actuator setups. `DEVICE_BUS` and
-`MCU_BUS` are deprecated compatibility options.
+on one bus, including mixed JoshuaWire scalar/actuator setups.
 
 All ROS actuator runtimes start disabled, including STS3215 and legacy stepper
 presets. Driver construction is forced to remain disabled. Enable deliberately
@@ -492,9 +491,8 @@ buffer sizes after recovery, and bounded work for always-ready sources.
 observations in one process. Assign every consumer of a bus the same node ID
 and `node_type: BOARD_NODE`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. `DEVICE_BUS` and `MCU_BUS` are deprecated
-and retained with their original enum values, validation restrictions, and
-executables. New configurations should use `BOARD_NODE`. See the
+the existing numeric/JointState contracts. The old `MCU_BUS` and `DEVICE_BUS`
+node types and executables are removed. See the
 [configuration migration instructions](../config/README.md#shared-board-runtime)
 for node-name and private-service changes.
 
@@ -593,10 +591,8 @@ Audio retains its separate streaming/chunk contract.
 ## Component source layout and tests
 
 Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint live
-in the same `.cc` and compile directly with `ros2_cpp_binary`. The deprecated
-`device_bus` and `mcu_bus` executables are compatibility builds of the complete
-`board_node.cc`, preserving their names and two-thread executor without forwarding
-nodes or duplicate implementations.
+in the same `.cc` and compile directly with `ros2_cpp_binary`. `board_node.cc`
+provides the shared board runtime with a two-thread executor.
 `actuator_subscriber.cc` and `board_node.cc` each own their actuator configuration,
 subscriptions, control services, watchdog, and teardown workers. Shared control
 policy stays in `ControlGate`, and message conversion stays in the packet utilities.

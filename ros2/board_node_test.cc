@@ -90,7 +90,7 @@ class DelayedStopBoard : public robot::board::BoardInterface {
 };
 }  // namespace
 
-class BoardNodeTest : public testing::TestWithParam<ros2::node::NodeType> {
+class BoardNodeTest : public testing::Test {
  protected:
   static void SetUpTestSuite() {
     ASSERT_NE(getenv("TEST_TMPDIR"), nullptr);
@@ -168,16 +168,6 @@ class BoardNodeTest : public testing::TestWithParam<ros2::node::NodeType> {
           }
         )pb",
         &config));
-    config.mutable_robot()
-        ->mutable_actions()
-        ->mutable_single_actions(0)
-        ->mutable_node()
-        ->set_node_type(GetParam());
-    config.mutable_robot()
-        ->mutable_perceptions()
-        ->mutable_single_perceptions(0)
-        ->mutable_node()
-        ->set_node_type(GetParam());
     prefix = "test_bus_" + std::to_string(getpid());
     auto* a = config.mutable_robot()->mutable_actions()->mutable_single_actions(0);
     a->mutable_actuator()->set_actuator_name(prefix);
@@ -218,7 +208,7 @@ class BoardNodeTest : public testing::TestWithParam<ros2::node::NodeType> {
   rclcpp::executors::SingleThreadedExecutor executor;
 };
 
-TEST_P(BoardNodeTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
+TEST_F(BoardNodeTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   sensor->mutable_observation_policy()->set_frame_id("base");
   auto* packet_output = sensor->mutable_node()->add_publishers();
@@ -291,7 +281,7 @@ TEST_P(BoardNodeTest, CommandsAndNamedFeedbackShareOneBoardAndTransport) {
   executor.remove_node(client);
 }
 
-TEST_P(BoardNodeTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery) {
+TEST_F(BoardNodeTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery) {
   auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   auto enable =
@@ -327,7 +317,7 @@ TEST_P(BoardNodeTest, EstopFallsBackToChannelDisableAndRequiresExplicitRecovery)
   executor.remove_node(client);
 }
 
-TEST_P(BoardNodeTest, HostRecoveryCannotClearUncertainServoWrite) {
+TEST_F(BoardNodeTest, HostRecoveryCannotClearUncertainServoWrite) {
   auto runtime = std::make_shared<BoardNode>(prefix, 1, config);
   auto client = std::make_shared<rclcpp::Node>(prefix + "_client");
   auto enable =
@@ -362,7 +352,7 @@ TEST_P(BoardNodeTest, HostRecoveryCannotClearUncertainServoWrite) {
   executor.remove_node(client);
 }
 
-TEST_P(BoardNodeTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
+TEST_F(BoardNodeTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   config.mutable_robot()
       ->mutable_perceptions()
       ->mutable_single_perceptions(0)
@@ -377,7 +367,7 @@ TEST_P(BoardNodeTest, ValidationRejectsCompetingOwnerAndUnsupportedSensor) {
   EXPECT_EQ(opens, 0);
 }
 
-TEST_P(BoardNodeTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecoveryInterlocked) {
+TEST_F(BoardNodeTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecoveryInterlocked) {
   config.mutable_robot()
       ->mutable_actions()
       ->mutable_single_actions(0)
@@ -443,10 +433,3 @@ TEST_P(BoardNodeTest, IndependentFallbackStopsBeforeSlowBoardAndKeepsBusRecovery
   EXPECT_TRUE(call(enable));
   EXPECT_TRUE(wire->enabled);
 }
-
-INSTANTIATE_TEST_SUITE_P(SupportedNames,
-                         BoardNodeTest,
-                         testing::Values(ros2::node::BOARD_NODE, ros2::node::DEVICE_BUS),
-                         [](const testing::TestParamInfo<ros2::node::NodeType>& info) {
-                           return ros2::node::NodeType_Name(info.param);
-                         });

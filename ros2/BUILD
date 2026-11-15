@@ -292,14 +292,6 @@ cc_test(
     ],
 )
 
-# Deprecated compatibility executable for existing MCU_BUS configurations.
-ros2_cpp_binary(
-    name = "mcu_bus",
-    srcs = ["board_node.cc"],
-    local_defines = ["JOSHUA_MCU_COMPAT"],
-    deps = _BOARD_NODE_DEPS,
-)
-
 ros2_py_binary(
     name = "trajectory_publisher",
     srcs = [
@@ -395,14 +387,6 @@ ros2_cpp_binary(
 ros2_cpp_binary(
     name = "board_node",
     srcs = ["board_node.cc"],
-    deps = _BOARD_NODE_DEPS,
-)
-
-# Deprecated compatibility executable for existing DEVICE_BUS configurations.
-ros2_cpp_binary(
-    name = "device_bus",
-    srcs = ["board_node.cc"],
-    local_defines = ["JOSHUA_DEVICE_BUS_COMPAT"],
     deps = _BOARD_NODE_DEPS,
 )
 

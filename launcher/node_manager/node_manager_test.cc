@@ -242,7 +242,7 @@ TEST_F(NodeManagerTest, ConfiguredStartupFailureAutomaticallyRollsBackEveryStart
   EXPECT_FALSE(states[1].expected_exit);
 }
 
-TEST_F(NodeManagerTest, BoardNodeAndLegacyNamesResolveTheirOwnExecutables) {
+TEST_F(NodeManagerTest, BoardNodeResolvesItsExecutableAndNodeName) {
   char pattern[] = "/tmp/joshua-board-node-names-XXXXXX";
   const auto* directory = mkdtemp(pattern);
   ASSERT_NE(directory, nullptr);
@@ -261,33 +261,23 @@ TEST_F(NodeManagerTest, BoardNodeAndLegacyNamesResolveTheirOwnExecutables) {
   std::filesystem::create_directories(ros2);
   // Resolve only the readiness fixture, never a production hardware executable.
   std::filesystem::create_symlink(fixture_, ros2 / "ros2_node_wrapper.sh");
-  for (const auto* executable : {"board_node", "device_bus", "mcu_bus"})
-    std::filesystem::create_symlink(fixture_, ros2 / executable);
+  std::filesystem::create_symlink(fixture_, ros2 / "board_node");
   ASSERT_EQ(setenv("RUNFILES_DIR", directory, 1), 0);
   const auto config_path = root / "config.pbtxt";
   {
     std::ofstream file(config_path);
     // Resource-free entries exercise configured node dispatch without hardware setup.
-    file << R"pb(ai {
-                   data_stores {
-                     single_data_stores { node { id: 1 node_type: BOARD_NODE } }
-                     single_data_stores { node { id: 2 node_type: DEVICE_BUS } }
-                     single_data_stores { node { id: 3 node_type: MCU_BUS } }
-                   }
-                 })pb";
+    file
+        << R"pb(ai { data_stores { single_data_stores { node { id: 1 node_type: BOARD_NODE } } } })pb";
     ASSERT_TRUE(file.good());
   }
   NodeManager manager(config_path.string());
   ASSERT_TRUE(manager.Initialize().ok());
   ASSERT_TRUE(manager.LaunchAllNodes().ok());
   const auto states = manager.GetNodeStatus();
-  ASSERT_EQ(states.size(), 3);
+  ASSERT_EQ(states.size(), 1);
   EXPECT_EQ(states[0].node_type, "board_node");
   EXPECT_EQ(states[0].name, "board_node_1");
-  EXPECT_EQ(states[1].node_type, "device_bus");
-  EXPECT_EQ(states[1].name, "device_bus_node_2");
-  EXPECT_EQ(states[2].node_type, "mcu_bus");
-  EXPECT_EQ(states[2].name, "mcu_bus_node_3");
   for (const auto& state : states) EXPECT_TRUE(state.ready);
   EXPECT_TRUE(manager.Shutdown(FastShutdown()).ok());
 }

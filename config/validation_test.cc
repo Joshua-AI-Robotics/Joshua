@@ -48,10 +48,7 @@ TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
   EXPECT_TRUE(ValidateConfig(MakeConfig()).ok());
 }
 
-// Keep deprecated spellings covered while exercising BOARD_NODE as the primary path.
-class ComposedBusValidationTest : public testing::TestWithParam<ros2::node::NodeType> {};
-
-TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
+TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   auto c = MakeConfig();
   auto* b = c.mutable_robot()->mutable_boards(0);
   b->set_board_type(robot::board::TEENSY41);
@@ -63,7 +60,7 @@ TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) 
   b->mutable_joshua_wire_host_policy()->set_telemetry_bytes_per_second(10000);
   auto* s = c.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   s->set_sensor_type(robot::perception::SCALAR);
-  s->mutable_node()->set_node_type(GetParam());
+  s->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
   auto* scalar = s->mutable_joshua_wire_scalar_config();
   scalar->set_board_name("bus");
   scalar->set_function_id(128);
@@ -74,7 +71,7 @@ TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) 
   p->set_publish_rate_hz(50);
   auto* a = c.mutable_robot()->mutable_actions()->add_single_actions();
   a->mutable_node()->set_id(1);
-  a->mutable_node()->set_node_type(GetParam());
+  a->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
   a->set_action_type(robot::action::ACTUATOR);
   a->mutable_actuator()->set_board_name("bus");
   a->mutable_actuator()->set_channel(1);
@@ -91,14 +88,29 @@ TEST_P(ComposedBusValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) 
   EXPECT_FALSE(ValidateConfig(c).ok());
 }
 
-INSTANTIATE_TEST_SUITE_P(SupportedNames,
-                         ComposedBusValidationTest,
-                         testing::Values(ros2::node::BOARD_NODE,
-                                         ros2::node::DEVICE_BUS,
-                                         ros2::node::MCU_BUS),
-                         [](const testing::TestParamInfo<ros2::node::NodeType>& info) {
-                           return ros2::node::NodeType_Name(info.param);
-                         });
+TEST(ValidationTest, BoardNodeUsesNineAndRejectsRemovedBusNames) {
+  for (const auto* name : {"MCU_BUS", "DEVICE_BUS"}) {
+    ros2::node::NodeType type;
+    EXPECT_FALSE(ros2::node::NodeType_Parse(name, &type)) << name;
+  }
+  auto board_config = MakeConfig();
+  auto* node = board_config.mutable_robot()
+                   ->mutable_perceptions()
+                   ->mutable_single_perceptions(0)
+                   ->mutable_node();
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString("id: 1 node_type: 9", node));
+  EXPECT_EQ(node->node_type(), ros2::node::BOARD_NODE);
+  EXPECT_TRUE(ValidateConfig(board_config).ok());
+  for (const auto value : {10, 11}) {
+    auto config = MakeConfig();
+    config.mutable_robot()
+        ->mutable_perceptions()
+        ->mutable_single_perceptions(0)
+        ->mutable_node()
+        ->set_node_type(static_cast<ros2::node::NodeType>(value));
+    EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument) << value;
+  }
+}
 
 TEST(ValidationTest, ValidatesRobotClockWithoutOpeningDevice) {
   auto config = MakeConfig();
@@ -234,10 +246,8 @@ TEST(ValidationTest, RejectsOutputsThatTheSelectedComponentNodeCannotPublish) {
   output->set_ros2_data_type(ros2::data_type::FLOAT32);
   output->set_publish_rate_hz(30);
   EXPECT_TRUE(ValidateConfig(config).ok());
-  for (const auto type : {ros2::node::BOARD_NODE, ros2::node::DEVICE_BUS}) {
-    sensor->mutable_node()->set_node_type(type);
-    EXPECT_TRUE(ValidateConfig(config).ok());
-  }
+  sensor->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
+  EXPECT_TRUE(ValidateConfig(config).ok());
   for (const auto type : {ros2::node::CAMERA_PUBLISHER,
                           ros2::node::LIDAR_PUBLISHER,
                           ros2::node::ACTUATOR_SUBSCRIBER}) {
