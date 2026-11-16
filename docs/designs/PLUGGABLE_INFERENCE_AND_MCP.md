@@ -10,12 +10,12 @@ Extend the existing [InferenceAdapter](../../ai/inference/adapter.py) and
 plug-in; a compatible API or local policy can replace it through protobuf
 configuration and registered artifacts.
 
-| Owner | Responsibility |
-| --- | --- |
-| Inference host | ROS inputs, task/session state, asynchronous scheduling, deadlines and result admission. |
-| Policy plug-in | Preprocessing, model/API calls, response validation and conversion to named SI commands. Keep provider SDKs in its model environment. |
-| Existing control owner | Command-source ownership, limits, leases, enable/stop/recovery and device bus. |
-| MCP server | Thin ROS adaptation of tested task operations, camera/feedback inspection and results. |
+| Owner | Purpose | Responsibility |
+| --- | --- | --- |
+| Inference host | Manage the task lifecycle. | ROS inputs, task/session state, asynchronous scheduling, deadlines and result admission. |
+| Policy plug-in | Turn observations into proposed commands. | Preprocessing, model/API calls, response validation and conversion to named SI commands. Keep provider SDKs in its model environment. |
+| Existing control owner | Own and constrain robot execution. | Command-source ownership, limits, leases, enable/stop/recovery and device bus. |
+| MCP server | Expose robot tasks to AI clients. | Thin ROS adaptation of tested task operations, camera/feedback inspection and results. |
 
 Use versioned inputs/results carrying names, units, sample/request identity,
 generation and validity; preserve legacy adapters. Provider choices/errors stay
@@ -30,33 +30,18 @@ These are proposed operations, not tools currently exposed. Codex or another
 agent connects through the existing [stdio setup](../MCP_SETUP.md), discovers
 capabilities, previews a task, obtains direct human approval, then starts it.
 
-| Operation | Input | Output |
-| --- | --- | --- |
-| Discover | Configured target | Supported tasks/policies, requirements and readiness gaps. |
-| Preview | Target, configured policy, goal/duration and total timeout | Immutable preview ID, resolved limits, deadlines and request/spend budgets. |
-| Start | Approved preview ID | Run ID and accepted/blocked state. Retries return the same run. |
-| Status/result | Run ID | State, bounded progress, measured feedback, terminal outcome and reason. |
-| Stop | Run ID | Cancellation state, then terminal result and measured stop status. |
+| Operation | Purpose | Input | Output |
+| --- | --- | --- | --- |
+| Discover | Check what this target can do. | Configured target | Supported tasks/policies, requirements and readiness gaps. |
+| Preview | Review task scope before approval. | Target, configured policy, goal/duration and total timeout | Immutable preview ID, resolved limits, deadlines and request/spend budgets. |
+| Start | Begin the approved task. | Approved preview ID | Run ID and accepted/blocked state. Retries return the same run. |
+| Status/result | Inspect progress and the outcome. | Run ID | State, bounded progress, measured feedback, terminal outcome and reason. |
+| Stop | Request an end to the active task. | Run ID | Cancellation state, then terminal result and measured stop status. |
 
 Reuse existing read-only camera/feedback tools. Results distinguish known,
 unknown and stale evidence. Model arguments or automatic tool approval cannot
 assert human readiness; the backend must verify a single-use, preview-bound
 human grant. Unsupported client confirmation leaves motion unavailable.
-
-## Bounds
-
-Admit one active task per head. Keep one inference request in flight and one
-latest pending snapshot; isolate blocking calls and bound shutdown. Enforce
-monotonic task and shorter request timeouts; retries cannot extend duration or
-usage budgets. An unmet goal ends as `timed_out`; completing an approved tracking
-interval normally completes that duration-based task.
-
-Admit each inference result once. Recheck input freshness/motion, state, deadline
-and generations before inference, on response and at command handoff. Stop, takeover or invalidation fences queued
-and in-flight work before authority changes. Timeout revokes tracking authority
-and applies the qualified hold/stop policy; late responses cannot move the head.
-Unknown acquisition timing stays explicit. Acknowledgment is not measured stop.
-Reconnect reads the run without replay, re-enable or deadline extension.
 
 ## POC dependencies and validation
 
@@ -68,12 +53,12 @@ shared extension; identify its implementation PR before coding. Target one
 integration PR on our side. Dependencies are described by role; consult the
 linked PRs for their current scope and state.
 
-| PR | Core design or implementation |
-| --- | --- |
-| [#151](https://github.com/Joshua-AI-Robotics/Joshua/pull/151) | Shared policy contracts and asynchronous inference design. |
-| [#145](https://github.com/Joshua-AI-Robotics/Joshua/pull/145) | Shared device-bus ownership and enable/stop/recovery controls. |
-| [#149](https://github.com/Joshua-AI-Robotics/Joshua/pull/149) | Feetech command acknowledgment and fault handling. |
-| [#150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150) | Native ROS camera images through MCP. |
+| PR | Core design or implementation | How it enables the POC MCP layer |
+| --- | --- | --- |
+| [#151](https://github.com/Joshua-AI-Robotics/Joshua/pull/151) | Shared policy contracts and asynchronous inference design. | Gives MCP-started tasks a shared policy/inference contract. |
+| [#145](https://github.com/Joshua-AI-Robotics/Joshua/pull/145) | Shared device-bus ownership and enable/stop/recovery controls. | Keeps MCP requests under shared control ownership and stop/recovery rules. |
+| [#149](https://github.com/Joshua-AI-Robotics/Joshua/pull/149) | Feetech command acknowledgment and fault handling. | Supplies acknowledgment and fault evidence for MCP status/results. |
+| [#150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150) | Native ROS camera images through MCP. | Lets MCP clients inspect the camera through native ROS images. |
 
 Head integration and qualification are tracked in
 [#153](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
