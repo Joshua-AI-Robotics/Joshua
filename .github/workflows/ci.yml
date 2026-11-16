@@ -41,6 +41,9 @@ jobs:
       - name: Verify every top-level directory has an owner
         run: ./hooks/codeowners_check.sh
 
+      - name: Verify project version matches VERSION
+        run: python3 hooks/version_check.py
+
   entrypoint-contract:
     name: Docker entrypoint contract
     runs-on: ubuntu-22.04
