@@ -1,0 +1,28 @@
+# Board API example: no ROS node currently consumes digital pins automatically.
+# Creating this board opens real GPIO and sets outputs. Validate offline first.
+robot {
+  boards {
+    name: "local_gpio"
+    board_type: HOST_GPIO
+    host_gpio_config {
+      profile_id: "raspberrypi/pi5"
+      profile_version: 1
+      pins {
+        name: "ready_led"
+        purpose: "external status LED through a suitable current-limiting resistor"
+        pin { header_pin: 11 }  # J8 GPIO17
+        direction: DIGITAL_OUTPUT
+        initial_value: false
+        shutdown_value: false
+      }
+      pins {
+        name: "panel_switch"
+        purpose: "panel switch to ground"
+        pin { signal: "J8.GPIO27" }  # J8 physical pin 13
+        direction: DIGITAL_INPUT
+        active_low: true
+        bias: DIGITAL_BIAS_PULL_UP
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ cc_library(
         "//firmware/common:joshua_wire_commands",
         "//robot/board/esp32:esp32_board",
         "//robot/board/feetech_bus:feetech_bus_board",
+        "//robot/board/host_gpio:host_gpio_board",
         "//robot/board/interfaces:board_interfaces",
         "//robot/board/joshua_wire:joshua_wire_board",
         "//robot/board/mock:mock_board",

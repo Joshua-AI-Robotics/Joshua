@@ -131,6 +131,7 @@ touches their area:
   [scripts/](scripts/README.md), [tools/](tools/README.md),
   [launcher/node_manager/](launcher/node_manager/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
+- **Host GPIO/pin resources**: read [robot/board/host_gpio/README.md](robot/board/host_gpio/README.md).
 - **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of

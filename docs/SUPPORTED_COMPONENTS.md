@@ -35,13 +35,15 @@ determines which actuator can use each channel.
 | `AM243` | [JoshuaWire over serial or paired message/cyclic EtherCAT](../robot/board/joshua_wire/joshua_wire_board.cc) | [Serial](../config/config_preset/example/am243_serial_demo.pbtxt), [JW EtherCAT](../config/config_preset/example/am243_jw_ethercat_demo.pbtxt); current AM243 channels are software-only, with no STEP/DIR GPIO output |
 | `TEENSY41` | [Serial JoshuaWire](../robot/board/teensy/teensy_board.h) | [Stepper preset](../config/config_preset/example/teensy_stepper_demo.pbtxt) |
 | `ESP32` | [Serial JoshuaWire](../robot/board/esp32/esp32_board.h) | [Stepper preset](../config/config_preset/example/esp32_stepper_demo.pbtxt) |
+| `HOST_GPIO` | [Linux digital pins](../robot/board/host_gpio/README.md), Pi 5 J8 / Orin Nano P3768 J12 | [Pi 5](../config/config_preset/example/pi5_gpio.pbtxt), [Orin Nano](../config/config_preset/example/orin_nano_gpio.pbtxt); board API only, physical qualification pending |
 | `MOCK` | [Test-only board](../robot/board/mock/mock_board.cc) | [Board factory tests](../robot/board/factory/board_factory_test.cc) |
 
-`ARDUINO_UNO` and `HOST_GPIO` appear in the
-[board schema](../robot/board/proto/board.proto), but the factory rejects them
-as unimplemented. A schema enum is not implementation or test evidence.
-For physical bring-up and firmware verification, use the
-[firmware status table](../firmware/README.md#current-firmware-records);
+`ARDUINO_UNO` appears in the
+[board schema](../robot/board/proto/board.proto), but the factory rejects it
+as unimplemented. The [board-layer example](../config/config_preset/example/board_layer_example.pbtxt)
+contains an Arduino/UDP
+example and is not evidence that either path works. For physical bring-up and
+firmware verification, use the [firmware status table](../firmware/README.md#current-firmware-records);
 in particular, ESP32 protocol verification does not establish motor rotation.
 
 The [communication factory](../robot/comm/factory/comm_factory.cc) provides
