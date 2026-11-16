@@ -2,6 +2,7 @@
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ from unittest.mock import Mock, patch
 from ros2.utils.media_recording import (
     Recorder,
     RecordingStore,
+    finalize_clip,
     mark_complete,
     recorder_config,
     validate_recording,
@@ -24,6 +26,8 @@ def options(directory):
         recording_directory=str(directory),
         recording_segment_sec=120,
         recording_reserve_percent=20,
+        recording_camera_name="ircam",
+        recording_timezone="America/Los_Angeles",
         bitrate_kbps=1500,
         rtsp_port=8554,
         stream_name="baby",
@@ -148,12 +152,57 @@ class RecordingTest(unittest.TestCase):
                 child.kill()
             child.communicate(timeout=5)
 
-    def test_completion_hook_accepts_named_camera_session(self):
+    def test_completion_hook_publishes_flat_local_name_after_close(self):
         session = self.store.begin_session()
         active = self.clip(1, completed=False, run=session)
+        self.assertFalse(list(self.root.glob("*.mp4")))
         with patch.dict(os.environ, {"MTX_SEGMENT_PATH": str(active)}):
-            mark_complete()
-        self.assertTrue(active.with_suffix(".complete").is_file())
+            command = recorder_config(options(self.root), session)["paths"][
+                "recording"
+            ]["runOnRecordSegmentComplete"]
+            subprocess.run(shlex.split(command), check=True, timeout=10)
+        self.assertFalse(active.exists())
+        saved = self.root / "202610170500_ircam.mp4"
+        self.assertEqual(saved.read_bytes(), b"x" * 100)
+        self.assertEqual(saved.stat().st_mtime, 1)
+        self.assertEqual(list(self.root.glob("*.mp4")), [saved])
+
+    def test_local_dates_and_dst_collisions_never_overwrite(self):
+        session = self.store.begin_session()
+        for stamp, expected in (
+            ("20261116T051800", "202611152118_ircam.mp4"),
+            ("20260716T041800", "202607152118_ircam.mp4"),
+            ("20261101T083000", "202611010130_ircam.mp4"),
+            ("20261101T093000", "202611010130_ircam__2.mp4"),
+            ("20261101T093010", "202611010130_ircam__3.mp4"),
+        ):
+            clip = session / f"recording-{stamp}-000000.mp4"
+            clip.write_text(stamp)
+            with self.store.retention_lock():
+                saved = finalize_clip(clip, self.root, "ircam", "America/Los_Angeles")
+            self.assertEqual(saved.name, expected)
+            self.assertEqual(saved.read_text(), stamp)
+        self.assertEqual(
+            (self.root / "202611010130_ircam.mp4").read_text(), "20261101T083000"
+        )
+
+    def test_flat_retention_is_oldest_first_and_keeps_both_open_streams(self):
+        peer = RecordingStore(self.root, 20, 50, "webcam")
+        self.addCleanup(peer.close)
+        primary = self.clip(1, completed=False, run=self.store.begin_session())
+        secondary = self.clip(2, completed=False, run=peer.begin_session())
+        oldest = self.root / "202611152118_ircam.mp4"
+        oldest.write_bytes(b"x" * 100)
+        os.utime(oldest, (1, 1))
+        newest = self.root / "202611152120_webcam.mp4"
+        newest.write_bytes(b"x" * 100)
+        os.utime(newest, (2, 2))
+        with patch("os.statvfs", side_effect=lambda _: self.disk()):
+            self.assertFalse(peer.prune()[0])
+        self.assertFalse(oldest.exists())
+        self.assertFalse(newest.exists())
+        self.assertTrue(primary.exists())
+        self.assertTrue(secondary.exists())
 
     def test_symlinks_and_foreign_files_are_preserved(self):
         external = Path(self.temp.name) / "external"
@@ -173,16 +222,30 @@ class RecordingTest(unittest.TestCase):
         self.assertTrue(foreign.exists())
 
     def test_completion_hook_and_write_failure(self):
-        active = self.clip(1, completed=False)
-        self.store.current = active.parent
+        active = self.clip(1, completed=False, run=self.store.begin_session())
         with patch.dict(os.environ, {"MTX_SEGMENT_PATH": str(active)}):
-            mark_complete()
-        self.assertTrue(active.with_suffix(".complete").exists())
+            mark_complete(str(self.root), "ircam", "America/Los_Angeles")
+        saved = self.root / "202610170500_ircam.mp4"
+        self.assertTrue(saved.exists())
         with patch.object(self.store, "space", return_value=(0, 200)):
             with patch.object(Path, "unlink", side_effect=PermissionError("read-only")):
                 with self.assertRaises(PermissionError):
                     self.store.prune()
-        self.assertTrue(active.exists())
+        self.assertTrue(saved.exists())
+
+    def test_hook_rejects_foreign_and_symlink_paths(self):
+        active = self.clip(1, completed=False, run=self.store.begin_session())
+        foreign = self.root / active.name
+        foreign.write_bytes(b"keep")
+        for clip in (foreign, self.root / "missing.mp4"):
+            with patch.dict(os.environ, {"MTX_SEGMENT_PATH": str(clip)}):
+                with self.assertRaises(ValueError):
+                    mark_complete(str(self.root), "ircam", "UTC")
+        link = active.with_name("recording-20261017T120000-000002.mp4")
+        link.symlink_to(foreign)
+        with self.assertRaises(ValueError):
+            finalize_clip(link, self.root, "ircam", "UTC")
+        self.assertEqual(foreign.read_bytes(), b"keep")
 
     def test_recording_config_is_headless_encoded_stream_copy(self):
         config = recorder_config(options(self.root), self.root / ("run-" + "a" * 32))
@@ -199,10 +262,13 @@ class RecordingTest(unittest.TestCase):
             ("recording_directory", "/data/%path"),
             ("recording_segment_sec", 1),
             ("recording_reserve_percent", 19),
+            ("recording_camera_name", "../ircam"),
+            ("recording_camera_name", "x" * 65),
+            ("recording_timezone", "Unknown/Timezone"),
         ):
             config = options(self.root)
             setattr(config, field, value)
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, KeyError)):
                 validate_recording(config)
 
     def test_low_space_stops_only_recorder_and_resumes_after_reclaim(self):
@@ -217,7 +283,7 @@ class RecordingTest(unittest.TestCase):
         process.wait.assert_called_once()
         self.assertIsNone(recorder.process)
         self.assertEqual(recorder.status["state"], "paused_low_space")
-        status = json.loads((recorder.store.root / "status-baby.json").read_text())
+        status = json.loads((recorder.store.staging / "status-ircam.json").read_text())
         self.assertEqual(status["reserve_percent"], 20)
         with patch.object(recorder.store, "prune", return_value=(True, 400, 200)):
             with patch("subprocess.Popen", return_value=process) as launch:
@@ -225,6 +291,25 @@ class RecordingTest(unittest.TestCase):
         launch.assert_called_once()
         self.assertEqual(recorder.status["state"], "waiting_for_stream")
         recorder.stop_process()
+
+    def test_segment_publication_gap_does_not_restart_recorder(self):
+        recorder = Recorder(options(Path(self.temp.name) / "gap"), "unused")
+        self.addCleanup(recorder.close)
+        process = Mock()
+        process.poll.return_value = None
+        with patch("subprocess.Popen", return_value=process):
+            with patch("time.monotonic", return_value=100):
+                recorder.tick()
+            active = self.clip(1, completed=False, run=recorder.store.current)
+            with patch("time.monotonic", return_value=130):
+                with patch("time.time", return_value=1):
+                    recorder.tick()
+            with patch.dict(os.environ, {"MTX_SEGMENT_PATH": str(active)}):
+                mark_complete(str(recorder.store.root), "ircam", "UTC")
+            with patch("time.monotonic", return_value=132):
+                recorder.tick()
+        self.assertEqual(recorder.status["state"], "recording")
+        process.terminate.assert_not_called()
 
 
 if __name__ == "__main__":

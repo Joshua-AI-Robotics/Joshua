@@ -31,6 +31,11 @@ message MediaStream {
   // Zero selects 120 seconds / 20 percent respectively.
   uint32 recording_segment_sec = 12;
   uint32 recording_reserve_percent = 13;
+  // Filename label, independent of the live stream URL. Empty uses stream_name.
+  // Use 1..64 letters, digits, underscores, or hyphens; unique per directory.
+  string recording_camera_name = 14;
+  // IANA timezone for YYYYMMDDHHMM_<camera>.mp4 names. Empty selects UTC.
+  string recording_timezone = 15;
 }
 
 // STRING event inputs and one distinct STRING delivery-status output.

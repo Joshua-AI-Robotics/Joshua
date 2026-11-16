@@ -542,22 +542,50 @@ reboot. The media node encodes the camera and microphone once. A separate,
 listener-free MediaMTX process reads the local RTSP stream and saves those encoded
 tracks as fragmented MP4 files; no second camera capture or encode is needed.
 
-The media-stream block in the editable runtime protobuf config controls it:
+Set these fields on each media-stream entry in the private runtime protobuf
+config. Use `recording_camera_name: "webcam"` for the second camera:
 
 ```protobuf
-recording_directory: "~/joshua-data/recordings"
+recording_directory: "~/joshua-recordings"
 recording_segment_sec: 120
 recording_reserve_percent: 20
+recording_camera_name: "ircam"
+recording_timezone: "America/Los_Angeles"
 ```
+
+Both cameras save completed recordings directly into **one folder**, for example:
+
+```text
+joshua-recordings/
+  202611152118_ircam.mp4
+  202611152118_webcam.mp4
+  202611152120_ircam.mp4
+  202611152120_webcam.mp4
+```
+
+The timestamp is the clip's **start time** in the configured IANA timezone;
+Los Angeles daylight saving changes are handled automatically. An empty timezone
+selects UTC. The camera label defaults to `stream_name`, but can be set separately
+so recording names do not change live-stream URLs or Home Assistant cameras.
+Labels must be unique per directory and contain 1..64 letters, digits,
+underscores, or hyphens. If a reconnect, short segment, or repeated DST minute
+would reuse a filename, the next clip gets `__2`, `__3`, etc. Existing footage
+is never overwritten.
 
 An empty `recording_directory` disables recording. Use an empty, dedicated
 writable directory; relative paths other than `~/...`, percent signs, and
 newlines are rejected. The default duration is 120 seconds; keyframe alignment
 may make clips slightly longer, and shutdown or a lost input makes shorter clips.
-Each process session has a `run-<STREAM_NAME>-<ID>/` directory containing timestamped `.mp4`
-files and `.complete` markers for finalized clips. Leave the markers in place.
-H.264 video and, when configured, Opus audio can be viewed with a player that supports both, such
-as VLC. A recording timeline/download UI in Home Assistant is separate future work.
+Segments are approximately two minutes from stream startup; their start times
+are not synchronized to even wall-clock minutes across cameras.
+
+Unfinished files and recorder state stay inside the hidden `.inprogress/`
+subdirectory. Only after MediaMTX closes a file does the completion hook publish
+it into the visible list. Session IDs inside the hidden directory protect open
+files after crashes; they are not recording folders to browse. Keep the hidden
+state and ownership/lock files intact. H.264 video and optional Opus audio can
+be viewed with a player supporting both, such as VLC. A recording timeline and
+download UI in Home Assistant is separate future work.
 
 The reserve is **20% of the entire filesystem containing the recordings**, not
 20% of whatever happens to be free. Existing OS, Docker, logs, packages, and other
@@ -569,54 +597,41 @@ never deletes unrelated files or the clip currently being written. Save clips
 you want to keep outside the managed directory.
 
 If it cannot reclaim enough space, it closes the recording process, makes its
-last clip eligible for cleanup, and waits for space before resuming. Live viewing,
-inference, and notifications continue. Multiple streams can share the directory:
-each stream has one exclusive recorder, and an interprocess lock serializes
-oldest-first cleanup across all streams. Per-session locks, also inherited by
-recorder children, protect every writer's unfinished clips. After a restart,
-interrupted clips from previous sessions can expire;
-an abrupt power loss can leave the final fragment incomplete. This policy is not
-a filesystem partition or quota: unrelated applications can still consume the
-reserve between checks. Recording errors and pauses are reported in the journal,
-`status-<STREAM_NAME>.json`, and the `recording` field of each media node's events;
-they do not currently
-send a dedicated phone alert.
+last staged clip eligible for cleanup, and waits for space before resuming. Live
+viewing, inference, and notifications continue. Both cameras share oldest-first
+cleanup through an interprocess lock. Per-session locks, also inherited by
+recorder children, protect unfinished clips. Interrupted files from an old
+session can expire; abrupt power loss can leave the final fragment incomplete.
+This policy is not a filesystem partition or quota: unrelated applications can
+consume the reserve between checks. Errors and pauses appear in the journal,
+`.inprogress/status-<CAMERA_NAME>.json`, and the `recording` field of each media
+node's events. They do not currently send a dedicated phone alert.
 
 Check recordings on the Pi:
 
 ```bash
-cat "$HOME/joshua-data/recordings/status-baby.json"
-cat "$HOME/joshua-data/recordings/status-webcam.json"
-find "$HOME/joshua-data/recordings" -name '*.complete' -type f | sort | tail
-du -sh "$HOME/joshua-data/recordings"
-df -h "$HOME/joshua-data/recordings"
+ls -1 "$HOME/joshua-recordings/"*.mp4 | sort
+cat "$HOME/joshua-recordings/.inprogress/status-ircam.json"
+cat "$HOME/joshua-recordings/.inprogress/status-webcam.json"
+du -sh "$HOME/joshua-recordings"
+df -h "$HOME/joshua-recordings"
 journalctl -u joshua-monitor.service -n 100 --no-pager
 ```
 
-Each status file includes state, available bytes, reserved bytes, and the number of
-clips deleted by the current recorder process. Check `observed_at_ns` as well;
+Each status file includes state, available bytes, reserved bytes, and the number
+of clips deleted by the current recorder process. Check `observed_at_ns` as well;
 a stopped service leaves its last status file on disk. Files remain local and
-private; no footage is uploaded to Home Assistant cloud storage. Package updates
-keep recordings outside versioned releases. Edit the runtime config and restart
-`joshua-monitor.service` to change recording settings.
+private. Package updates keep recordings outside versioned releases. Edit the
+runtime config and restart `joshua-monitor.service` to change settings.
 
-### Record two cameras
+### Upgrade from session folders
 
-Set the three recording fields above on **both** `utilities.media_streams`
-entries, with the same recording directory and reserve percentage. Keep stream
-names and listener ports distinct. Each recorder copies its own local encoded
-RTSP feed; recording the second camera does not add another capture or video
-encode. Audio is included only when that stream subscribes to audio. For an IR
-stream named `baby` and a video-only stream named `webcam`, clips live under
-`run-baby-*/` and `run-webcam-*/`, respectively. Both draw from one storage budget;
-cleanup removes the oldest eligible clip across both cameras and older legacy
-`run-<ID>/` directories. The available history will be shorter with two feeds.
-
-Restart all recording nodes together when upgrading from the single-writer
-version: its exclusive directory lock intentionally prevents mixed old/new
-writers. Legacy `status.json` and `recorder.json` files are not updated by the
-new version; use the per-stream files and check their timestamps. Older packages
-do not recognize the new named session directories for retention.
+Stop all recording nodes before changing the recording layout. This version
+uses a different ownership marker and rejects older recording roots; choose a
+new empty directory and update both media-stream entries. Retire old diagnostic
+recordings and session directories only after verifying completed files from
+both cameras in the new location. Preserve or remove previous footage according
+to your own retention needs. Older packages cannot manage the flat layout.
 
 ## Operate and troubleshoot
 

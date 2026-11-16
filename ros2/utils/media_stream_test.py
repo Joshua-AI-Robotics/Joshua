@@ -84,6 +84,8 @@ class MediaTest(unittest.TestCase):
         c.recording_directory = str(Path(recordings.name) / "clips")
         c.recording_segment_sec = 2
         c.recording_reserve_percent = 20
+        c.recording_camera_name = "ircam"
+        c.recording_timezone = "America/Los_Angeles"
         events = []
         stream = MediaStream(c, True, lambda *event: events.append(event))
         stop = threading.Event()
@@ -176,8 +178,9 @@ class MediaTest(unittest.TestCase):
             receiver.set_state(Gst.State.PLAYING)
             wait_for(lambda: counts["v"] >= 15 and counts["a"] >= 30)
             recording_root = Path(c.recording_directory)
-            wait_for(lambda: list(recording_root.glob("run-*/*.complete")))
-            clip = next(recording_root.glob("run-*/*.complete")).with_suffix(".mp4")
+            wait_for(lambda: list(recording_root.glob("*.mp4")))
+            clip = next(recording_root.glob("*.mp4"))
+            self.assertRegex(clip.name, r"^[0-9]{12}_ircam(?:__[0-9]+)?\.mp4$")
             # Read a finalized file through the real demuxer and both decoders.
             # This checks the recording, independently of live RTSP reception.
             file_reader = Gst.parse_launch(

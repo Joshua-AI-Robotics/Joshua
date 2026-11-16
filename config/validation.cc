@@ -332,12 +332,16 @@ absl::Status ValidateMediaStreams(const config::Config& config) {
     const auto& recording = s.recording_directory();
     if ((!recording.empty() && recording[0] != '/' && recording.rfind("~/", 0) != 0) ||
         recording.find_first_of("%\n\r") != std::string::npos ||
+        s.recording_camera_name().size() > 64 ||
+        s.recording_camera_name().find_first_not_of(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
+            std::string::npos ||
         (s.recording_segment_sec() &&
          (s.recording_segment_sec() < 2 || s.recording_segment_sec() > 600)) ||
         (s.recording_reserve_percent() &&
          (s.recording_reserve_percent() < 20 || s.recording_reserve_percent() > 90)))
       return absl::InvalidArgumentError(
-          "Invalid recording directory, segment duration, or reserve");
+          "Invalid recording directory, camera name, segment duration, or reserve");
     if (!s.listen_address().empty()) {
       in_addr address{};
       if (inet_pton(AF_INET, s.listen_address().c_str(), &address) != 1)

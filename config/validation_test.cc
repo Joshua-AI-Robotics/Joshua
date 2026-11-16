@@ -256,7 +256,14 @@ TEST(ValidationTest, MediaStreamingRejectsConflictsAndPublicListeners) {
   stream->set_recording_directory("~/joshua-data/recordings");
   stream->set_recording_segment_sec(120);
   stream->set_recording_reserve_percent(20);
+  stream->set_recording_camera_name("ircam");
+  stream->set_recording_timezone("America/Los_Angeles");
   EXPECT_TRUE(ValidateConfig(config).ok());
+  stream->set_recording_camera_name("../ircam");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_camera_name(std::string(65, 'a'));
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  stream->set_recording_camera_name("ircam");
   stream->set_recording_directory("relative");
   EXPECT_FALSE(ValidateConfig(config).ok());
   stream->set_recording_directory("/data/%path");

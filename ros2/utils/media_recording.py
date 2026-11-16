@@ -16,15 +16,25 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 LOG = logging.getLogger(__name__)
-OWNER = "joshua-continuous-recording-v1\n"
+OWNER = "joshua-continuous-recording-v2\n"
 RUN = re.compile(r"run-(?:[A-Za-z0-9_-]+-)?[0-9a-f]{32}")
 CLIP = re.compile(r"recording-[0-9]{8}T[0-9]{6}-[0-9]{6}\.mp4")
+SAVED_CLIP = re.compile(r"[0-9]{12}_[A-Za-z0-9_-]{1,64}(?:__[0-9]+)?\.mp4")
+
+
+def recording_name(options):
+    return options.recording_camera_name or options.stream_name
 
 
 def validate_recording(options):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", recording_name(options)):
+        raise ValueError("Invalid recording camera name")
+    ZoneInfo(options.recording_timezone or "UTC")
     directory = options.recording_directory
     if directory and not (directory.startswith("/") or directory.startswith("~/")):
         raise ValueError("Recording directory must be absolute or start with ~/")
@@ -81,6 +91,12 @@ class RecordingStore:
                     0o600,
                 )
                 fcntl.flock(self.stream_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.staging = self.root / ".inprogress"
+                if self.staging.is_symlink():
+                    raise ValueError(
+                        "Recording staging directory must not be a symlink"
+                    )
+                self.staging.mkdir(mode=0o700, exist_ok=True)
         except Exception:
             self.close()
             raise
@@ -100,7 +116,7 @@ class RecordingStore:
         with self.retention_lock():
             if self.current is not None:
                 raise RuntimeError("Recording session already open")
-            session = self.root / f"run-{self.stream_name}-{uuid.uuid4().hex}"
+            session = self.staging / f"run-{self.stream_name}-{uuid.uuid4().hex}"
             session.mkdir(mode=0o700)
             self.session_lock = os.open(
                 session / ".writer.lock",
@@ -134,8 +150,12 @@ class RecordingStore:
             os.close(fd)
 
     def clips(self):
-        clips = []
-        for run in self.root.iterdir():
+        clips = [
+            p
+            for p in self.root.iterdir()
+            if SAVED_CLIP.fullmatch(p.name) and not p.is_symlink() and p.is_file()
+        ]
+        for run in list(self.root.iterdir()) + list(self.staging.iterdir()):
             if not RUN.fullmatch(run.name) or run.is_symlink() or not run.is_dir():
                 continue
             for clip in run.iterdir():
@@ -168,6 +188,9 @@ class RecordingStore:
             candidates = []
             active = {}
             for clip in self.clips():
+                if clip.parent == self.root:
+                    candidates.append(clip)  # Only closed clips are published here.
+                    continue
                 if clip.parent not in active:
                     active[clip.parent] = self.session_active(clip.parent)
                 if not active[clip.parent] or clip.with_suffix(".complete").is_file():
@@ -182,7 +205,7 @@ class RecordingStore:
                 self.deleted += 1
                 available, reserve = self.space()
             # Empty sessions accumulate after restarts; never remove foreign files.
-            for run in self.root.iterdir():
+            for run in list(self.root.iterdir()) + list(self.staging.iterdir()):
                 if (
                     RUN.fullmatch(run.name)
                     and not run.is_symlink()
@@ -207,7 +230,16 @@ class RecordingStore:
 
 
 def recorder_config(options, session):
-    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "--complete"])
+    command = shlex.join(
+        [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--complete",
+            str(Path(options.recording_directory).expanduser().resolve()),
+            recording_name(options),
+            options.recording_timezone or "UTC",
+        ]
+    )
     config = {
         name: False
         for name in (
@@ -253,6 +285,7 @@ class Recorder:
         validate_recording(options)
         self.options = options
         self.binary = binary
+        self.camera_name = recording_name(options)
         # Keep more than a full segment plus bursts in addition to the reserve.
         headroom = max(
             512 * 1024**2,
@@ -266,12 +299,13 @@ class Recorder:
             options.recording_directory,
             options.recording_reserve_percent or 20,
             headroom,
-            options.stream_name,
+            self.camera_name,
         )
         self.process = None
         self.stop = threading.Event()
         self.thread = None
         self.status = {"state": "starting"}
+        self.last_data = 0
 
     def start(self):
         self.thread = threading.Thread(
@@ -281,14 +315,18 @@ class Recorder:
 
     def start_process(self):
         session = self.store.begin_session()
-        config = self.store.root / f"recorder-{self.options.stream_name}.json"
+        config = self.store.staging / f"recorder-{self.camera_name}.json"
         config.write_text(json.dumps(recorder_config(self.options, session)))
         # Retain the ownership lock if the parent is killed but the child survives.
         self.process = subprocess.Popen(
             [self.binary, str(config)],
             pass_fds=(self.store.lock, self.store.stream_lock, self.store.session_lock),
+            # Stage timestamps are unambiguous UTC, independent of host timezone
+            # and DST. Only completed filenames use the configured local zone.
+            env={**os.environ, "TZ": "UTC"},
         )
         self.started = time.monotonic()
+        self.last_data = 0
 
     def stop_process(self):
         if self.process:
@@ -315,7 +353,7 @@ class Recorder:
             "reserve_percent": self.store.reserve_percent,
             "deleted_clips": self.store.deleted,
         }
-        target = self.store.root / f"status-{self.options.stream_name}.json"
+        target = self.store.staging / f"status-{self.camera_name}.json"
         temporary = target.with_suffix(".tmp")
         temporary.write_text(json.dumps(self.status) + "\n")
         temporary.replace(target)
@@ -348,8 +386,13 @@ class Recorder:
                 ),
                 default=0,
             )
-        growing = time.time() - newest < 15
-        if not growing and time.monotonic() - self.started > 30:
+        now = time.monotonic()
+        if time.time() - newest < 15:
+            self.last_data = now
+        # A completion hook moves a closed clip before the next one appears.
+        # That short gap must not restart the recorder at each segment boundary.
+        growing = bool(self.last_data and now - self.last_data < 15)
+        if now - (self.last_data or self.started) > 30:
             self.stop_process()
             raise RuntimeError("No fresh recorded data for 30 seconds; reconnecting")
         self.publish_status(
@@ -382,16 +425,55 @@ class Recorder:
         self.store.close()
 
 
-def mark_complete():
-    # Called only after MediaMTX closes a segment. Unmarked active segments are
-    # never deleted; old process sessions become eligible after the lock is free.
+def finalize_clip(clip, root, camera_name, timezone_name):
+    """Publish a closed staged file without replacing an existing recording.
+
+    The caller holds the directory's retention lock. Preserve start time in the
+    filename and mtime; minute collisions (reconnects or DST) receive __2, __3, ...
+    instead of losing an earlier clip.
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", camera_name):
+        raise ValueError("Invalid recording camera name")
+    if (
+        not CLIP.fullmatch(clip.name)
+        or not RUN.fullmatch(clip.parent.name)
+        or clip.parent.parent != root / ".inprogress"
+        or clip.parent.is_symlink()
+        or clip.is_symlink()
+        or not clip.is_file()
+    ):
+        raise ValueError("Expected a managed staged recording")
+    start = datetime.strptime(clip.name, "recording-%Y%m%dT%H%M%S-%f.mp4")
+    local = start.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(timezone_name))
+    stem = f"{local:%Y%m%d%H%M}_{camera_name}"
+    target = root / f"{stem}.mp4"
+    collision = 1
+    while True:
+        try:
+            os.link(clip, target, follow_symlinks=False)
+            break
+        except FileExistsError:
+            collision += 1
+            target = root / f"{stem}__{collision}.mp4"
+    clip.unlink()
+    clip.with_suffix(".complete").unlink(missing_ok=True)
+    return target
+
+
+def mark_complete(directory, camera_name, timezone_name):
+    # MediaMTX calls this only after closing the clip. Serialize publication with
+    # both cameras' retention checks, so no half-published file can be deleted.
+    root = Path(directory)
     clip = Path(os.environ["MTX_SEGMENT_PATH"])
-    if CLIP.fullmatch(clip.name) and RUN.fullmatch(clip.parent.name):
-        if not clip.is_symlink() and clip.is_file():
-            clip.with_suffix(".complete").touch(mode=0o600)
+    fd = os.open(root / ".retention.lock", os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        finalize_clip(clip, root, camera_name, timezone_name)
+    finally:
+        os.close(fd)
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["--complete"]:
+    if len(sys.argv) != 5 or sys.argv[1] != "--complete":
         raise SystemExit("This module is invoked by MediaMTX's completion hook")
-    mark_complete()
+    mark_complete(*sys.argv[2:])
