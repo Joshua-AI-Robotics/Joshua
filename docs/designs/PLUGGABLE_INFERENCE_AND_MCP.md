@@ -82,3 +82,15 @@ Check timeout/blocked inference, stale/duplicate replies, stop races and legacy
 compatibility; then real ROS/MCP and chosen-client behavior. Physical runs need
 separate authorization and the existing
 [demo gates](../../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md).
+
+## External examples
+
+| Reference | Relevant finding or pattern |
+| --- | --- |
+| [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) | Typed choices; the application owns execution. |
+| [LeRobot remote inference](https://huggingface.co/docs/lerobot/remote_inference) | Asynchronous inference with local freshness and deadline checks. |
+| [ROS 2 actions](https://design.ros2.org/articles/actions.html) | Goal, feedback, result and cancellation semantics. |
+| [LEASH](https://arxiv.org/html/2611.14115v1) and [System1-Arena](https://arxiv.org/html/2610.21244v1) (preprints) | Study scoped execution authority and latency-sensitive closed-loop behavior. |
+
+These references inform the design; they do not establish Joshua runtime or
+hardware results. Joshua's own validation evidence belongs in the PR.
