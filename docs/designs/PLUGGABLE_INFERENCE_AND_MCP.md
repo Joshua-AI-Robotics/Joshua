@@ -60,12 +60,22 @@ Reconnect reads the run without replay, re-enable or deadline extension.
 
 ## Dependency and validation
 
-The colleague owns inference and its minimum shared extension; our integration
-depends on that implementation. [#151](https://github.com/Joshua-AI-Robotics/Joshua/pull/151)
-is a plan, not the implementation. Target one integration PR on our side.
-The current [#150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150) stack
-supplies camera work only; identify the inference PR before restacking.
-Reconcile #145 control interfaces and [#153 head qualification](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+Our integration requires the colleague's inference implementation and minimum
+shared extension; identify its implementation PR before coding. Target one
+integration PR on our side. Dependencies are described by role; consult the
+linked PRs for their current scope and state.
+
+| PR | Core design or implementation |
+| --- | --- |
+| [#151](https://github.com/Joshua-AI-Robotics/Joshua/pull/151) | Shared policy contracts and asynchronous inference design. |
+| [#145](https://github.com/Joshua-AI-Robotics/Joshua/pull/145) | Shared device-bus ownership and enable/stop/recovery controls. |
+| [#149](https://github.com/Joshua-AI-Robotics/Joshua/pull/149) | Feetech command acknowledgment and fault handling. |
+| [#150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150) | Native ROS camera images through MCP. |
+
+Head integration and qualification are tracked in
+[#153](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+The GitHub base branch records the current stack; it does not replace the
+inference dependency.
 
 Prove reuse with Decisions replay and a deterministic alternative plug-in.
 Check timeout/blocked inference, stale/duplicate replies, stop races and legacy
