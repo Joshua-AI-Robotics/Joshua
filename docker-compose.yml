@@ -36,6 +36,19 @@ x-nvidia-gpu: &nvidia-gpu
             capabilities: [gpu]
 
 services:
+  lint:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.lint
+    volumes:
+      - .:/workspace
+    environment:
+      - GIT_CONFIG_COUNT=1
+      - GIT_CONFIG_KEY_0=safe.directory
+      - GIT_CONFIG_VALUE_0=/workspace
+      - PYTHONDONTWRITEBYTECODE=1
+    profiles: [tasks]
+
   # ============================================
   # AMD64 (x86_64) Services
   # ============================================

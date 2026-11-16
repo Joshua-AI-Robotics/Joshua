@@ -120,24 +120,47 @@ Preset-specific flows: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ## Code style and linting
 
-Use the Docker shells for style and lint tooling:
+The lint wrapper uses the same pinned tool versions as CI. On the host it builds
+and runs the CPU-only lint image; inside a Joshua dev container it runs the tools
+directly from an isolated venv. Rebuild existing dev images to install that venv.
 
 | Language / file | Tool |
 |-----------------|------|
 | C, C++, `.proto` | `clang-format` (see [.clang-format](.clang-format)) |
 | Python | `black`, `isort`, `flake8` |
 | YAML | syntax validation |
+| `BUILD`, `BUILD.bazel` | `buildifier` |
 
 Manual check or auto-fix files changed since your branch diverged from `develop`:
 
 ```bash
-docker compose run --rm joshua-u22
-./hooks/lint_check.sh              # check changed files (quiet by default)
-./hooks/lint_check.sh --fix        # auto-fix changed files
-./hooks/lint_check.sh --verbose    # show summary and per-file fix output
+./hooks/lint_check.sh
+./hooks/lint_check.sh --fix
+./hooks/lint_check.sh --verbose
 ```
 
-Bazel `BUILD` / `BUILD.bazel` files should be kept tidy with `buildifier` when you edit them.
+The check includes committed, staged, unstaged, and untracked source files,
+excluding `ui/`, external dependencies, and Bazel output paths. Deleted files
+are ignored. Pass `--base REF` to choose another merge base or pass explicit
+filenames to check only those files. CI uses the PR's base SHA and fails on
+missing tools as well as lint errors. YAML checking covers every document and
+accepts Compose tags such as `!reset`; it does not validate Compose semantics.
+
+Use the wrapper on the host for linked Git worktrees. It discovers filenames
+before entering Docker and passes them as a NUL-delimited list, so the container
+does not need the worktree's external Git metadata. Host fixes run with your UID
+and GID. The optional pre-push hook uses this same wrapper in either environment.
+
+`--fix` formats files but still fails on unfixable errors (for example, undefined
+Python names or invalid YAML). Tool diagnostics are shown on failure. The wrapper
+can also be bypassed with `python3 hooks/lint_check.py` in an environment with
+the tools installed; `pre-commit` is optional and is not required by the checker.
+
+Run the lint regression tests with:
+
+```bash
+docker compose run --rm lint python3 hooks/lint_check_test.py
+```
 
 Keep changes consistent with surrounding code — match naming, structure, and documentation level in the file you are editing.
 
