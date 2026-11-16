@@ -1,0 +1,74 @@
+# Pluggable inference and MCP integration
+
+Proposed architecture, 2026-11-15; no runtime capability is implemented here.
+The camera-head demo is the first consumer.
+
+## Architecture
+
+Extend the existing [InferenceAdapter](../../ai/inference/adapter.py) and
+[manifest registry](../../ai/models/registry.py). Decisions is one ROS-free
+plug-in; a compatible API or local policy can replace it through protobuf
+configuration and registered artifacts.
+
+| Owner | Responsibility |
+| --- | --- |
+| Inference host | ROS inputs, task/session state, asynchronous scheduling, deadlines and result admission. |
+| Policy plug-in | Preprocessing, model/API calls, response validation and conversion to named SI commands. Keep provider SDKs in its model environment. |
+| Existing control owner | Command-source ownership, limits, leases, enable/stop/recovery and device bus. |
+| MCP server | Thin ROS adaptation of tested task operations, camera/feedback inspection and results. |
+
+Use versioned inputs/results carrying names, units, sample/request identity,
+generation and validity; preserve legacy adapters. Provider choices/errors stay
+inside the plug-in. Select compatible policies between runs with fresh binding
+and approval; defer hot swapping. Reuse existing owners and focused helpers,
+following [earlier review](https://github.com/Joshua-AI-Robotics/Joshua/pull/145#pullrequestreview-5887228322)
+and [native ROS guidance](https://github.com/Joshua-AI-Robotics/Joshua/pull/150#pullrequestreview-5887076039).
+
+## MCP inputs and outputs
+
+These are proposed operations, not tools currently exposed. Codex or another
+agent connects through the existing [stdio setup](../MCP_SETUP.md), discovers
+capabilities, previews a task, obtains direct human approval, then starts it.
+
+| Operation | Input | Output |
+| --- | --- | --- |
+| Discover | Configured target | Supported tasks/policies, requirements and readiness gaps. |
+| Preview | Target, configured policy, goal/duration and total timeout | Immutable preview ID, resolved limits, deadlines and request/spend budgets. |
+| Start | Approved preview ID | Run ID and accepted/blocked state. Retries return the same run. |
+| Status/result | Run ID | State, bounded progress, measured feedback, terminal outcome and reason. |
+| Stop | Run ID | Cancellation state, then terminal result and measured stop status. |
+
+Reuse existing read-only camera/feedback tools. Results distinguish known,
+unknown and stale evidence. Model arguments or automatic tool approval cannot
+assert human readiness; the backend must verify a single-use, preview-bound
+human grant. Unsupported client confirmation leaves motion unavailable.
+
+## Bounds
+
+Admit one active task per head. Keep one inference request in flight and one
+latest pending snapshot; isolate blocking calls and bound shutdown. Enforce
+monotonic task and shorter request timeouts; retries cannot extend duration or
+usage budgets. An unmet goal ends as `timed_out`; completing an approved tracking
+interval normally completes that duration-based task.
+
+Admit each inference result once. Recheck input freshness/motion, state, deadline
+and generations before inference, on response and at command handoff. Stop, takeover or invalidation fences queued
+and in-flight work before authority changes. Timeout revokes tracking authority
+and applies the qualified hold/stop policy; late responses cannot move the head.
+Unknown acquisition timing stays explicit. Acknowledgment is not measured stop.
+Reconnect reads the run without replay, re-enable or deadline extension.
+
+## Dependency and validation
+
+The colleague owns inference and its minimum shared extension; our integration
+depends on that implementation. [#151](https://github.com/Joshua-AI-Robotics/Joshua/pull/151)
+is a plan, not the implementation. Target one integration PR on our side.
+The current [#150](https://github.com/Joshua-AI-Robotics/Joshua/pull/150) stack
+supplies camera work only; identify the inference PR before restacking.
+Reconcile #145 control interfaces and [#153 head qualification](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+
+Prove reuse with Decisions replay and a deterministic alternative plug-in.
+Check timeout/blocked inference, stale/duplicate replies, stop races and legacy
+compatibility; then real ROS/MCP and chosen-client behavior. Physical runs need
+separate authorization and the existing
+[demo gates](../../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md).
