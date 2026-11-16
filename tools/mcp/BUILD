@@ -64,7 +64,7 @@ py_test(
         ":config_validation_server",
         "//config:joshua_inspect_config",
         "//config:joshua_validate_config",
-        "//node_generator:observation_fixture",
+        "//launcher/node_manager:observation_fixture",
     ],
     tags = ["local"],
     deps = [":config_validation_lib"] + mcp_requirement("mcp"),

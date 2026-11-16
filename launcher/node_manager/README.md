@@ -3,6 +3,9 @@
 `NodeManager` is the launcher's single owner for configured ROS node processes
 and simulation. It lives under `launcher/node_manager/`, alongside the launcher
 entrypoints that use it, in `node_manager.h` and `node_manager.cc`.
+Its optional passive observation helper lives in
+[`runtime_observation.h`](runtime_observation.h) and
+[`runtime_observation.cc`](runtime_observation.cc).
 
 ## Lifecycle
 
@@ -102,6 +105,10 @@ retain their own defensive construction checks.
 stalled processes, and descendants; it is not launched by normal robot presets.
 The Bazel targets are `//launcher/node_manager:node_manager` and
 `//launcher/node_manager:node_manager_test`. Run tests only when validation is requested.
+
+`//launcher/node_manager:runtime_observation_test` covers observation preflight.
+The test-only `//launcher/node_manager:observation_fixture` supplies synthetic ROS
+messages and process facts to the MCP integration tests without creating drivers.
 
 ## Optional passive observation
 
