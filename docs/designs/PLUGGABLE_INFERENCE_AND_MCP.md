@@ -58,7 +58,10 @@ and applies the qualified hold/stop policy; late responses cannot move the head.
 Unknown acquisition timing stays explicit. Acknowledgment is not measured stop.
 Reconnect reads the run without replay, re-enable or deadline extension.
 
-## Dependency and validation
+## POC dependencies and validation
+
+These dependencies and checks cover the camera-head tracking POC only. Use the
+relevant subset of each PR; other flows require separate validation.
 
 Our integration requires the colleague's inference implementation and minimum
 shared extension; identify its implementation PR before coding. Target one
@@ -85,12 +88,12 @@ separate authorization and the existing
 
 ## External examples
 
-| Reference | Relevant finding or pattern |
-| --- | --- |
-| [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) | Typed choices; the application owns execution. |
-| [LeRobot remote inference](https://huggingface.co/docs/lerobot/remote_inference) | Asynchronous inference with local freshness and deadline checks. |
-| [ROS 2 actions](https://design.ros2.org/articles/actions.html) | Goal, feedback, result and cancellation semantics. |
-| [LEASH](https://arxiv.org/html/2611.14115v1) and [System1-Arena](https://arxiv.org/html/2610.21244v1) (preprints) | Study scoped execution authority and latency-sensitive closed-loop behavior. |
+| Reference | Relevant finding or pattern | How it supports our design |
+| --- | --- | --- |
+| [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) | Typed choices; the application owns execution. | Keep API answers separate from command execution. |
+| [LeRobot remote inference](https://huggingface.co/docs/lerobot/remote_inference) | Asynchronous inference with local freshness and deadline checks. | Separate inference from local control; enforce freshness and timeouts. |
+| [ROS 2 actions](https://design.ros2.org/articles/actions.html) | Goal, feedback, result and cancellation semantics. | Reuse ROS task semantics for MCP operations. |
+| [LEASH](https://arxiv.org/html/2611.14115v1) and [System1-Arena](https://arxiv.org/html/2610.21244v1) (preprints) | Study scoped execution authority and latency-sensitive closed-loop behavior. | Retain execution-scoped authority and qualify actual closed-loop behavior. |
 
 These references inform the design; they do not establish Joshua runtime or
 hardware results. Joshua's own validation evidence belongs in the PR.
