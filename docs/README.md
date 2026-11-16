@@ -11,7 +11,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
 | Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |
 | OpenAI Decisions adapter, API failure handling, and demo gates | [../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md](../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md) |
-| Proposed Codex/MCP workflow and two-PR delivery plan for the Decisions head | [Codex Decisions demo design](superpowers/specs/2026-11-14-codex-decisions-demo-design.md) |
+| Pluggable decision inference, runtime ownership and bounded Codex integration | [Pluggable decision inference design](superpowers/specs/2026-11-15-pluggable-decision-inference-design.md) |
 | Shared C++ robot clock, configuration, and integration checklist | [ROBOT_TIME.md](ROBOT_TIME.md) |
 | AI stack (inference, models, deps) | [../ai/README.md](../ai/README.md) |
 | AI integration vision, requirements, user scenarios, checkpoints, feedback orchestration, and MCP constraints | [AI_INTEGRATION.md](AI_INTEGRATION.md) |
