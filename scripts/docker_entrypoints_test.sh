@@ -114,6 +114,42 @@ for service in test-u22 test-u24 run-u22 run-u24; do
   done
 done
 
+# Exercise the rendered launch commands with a shell function in place of Bazel.
+# No container or launcher is started by these argument checks.
+python3 - <<'PY'
+import json
+import os
+import subprocess
+
+compose = json.loads(subprocess.check_output(
+    ["docker", "compose", "--profile", "tasks", "config", "--format", "json"],
+    text=True,
+))
+for service in ("run-u22", "run-u24"):
+    # `config` re-escapes dollars for reusable Compose output.
+    command = compose["services"][service]["command"][2].replace("$$", "$")
+    stub = 'bazel() { printf "BAZEL_ARG:%s\\n" "$@"; }; '
+    for config in (None, "", "path with spaces/preset.pbtxt"):
+        env = dict(os.environ, AMENT_PREFIX_PATH="/test/ros")
+        env.pop("CONFIG", None)
+        if config is not None:
+            env["CONFIG"] = config
+        result = subprocess.run(
+            ["bash", "-c", stub + command], env=env,
+            capture_output=True, text=True, timeout=10,
+        )
+        if not config:
+            assert result.returncode == 2, (service, result)
+            assert "CONFIG is required" in result.stderr, (service, result)
+            assert "BAZEL_ARG:" not in result.stdout, (service, result)
+        else:
+            assert result.returncode == 0, (service, result)
+            args = result.stdout.splitlines()
+            assert args[-3:] == [
+                "BAZEL_ARG:--", "BAZEL_ARG:--config", f"BAZEL_ARG:{config}"
+            ], (service, args)
+PY
+
 if [[ ! -f docker/entrypoint.sh ]]; then
   echo "Missing docker/entrypoint.sh." >&2
   exit 1

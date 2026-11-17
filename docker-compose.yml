@@ -153,6 +153,9 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${CONFIG:-}" ]; then
+        echo "ERROR: CONFIG is required. Set CONFIG=path/to/preset.pbtxt before running this service." >&2;
+        exit 2; fi;
         if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
         echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
         Rebuild your image first: docker compose build joshua-u22
@@ -160,7 +163,7 @@ services:
         exit 1; fi;
         bazel run --config=u22 --config=x86-base
         --@rules_python//python/config_settings:python_version=3.10
-        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+        //launcher:joshua_main -- --config "$$CONFIG"
     profiles: [tasks]
 
   run-u24:
@@ -173,6 +176,9 @@ services:
       - bash
       - -lc
       - >-
+        if [ -z "$${CONFIG:-}" ]; then
+        echo "ERROR: CONFIG is required. Set CONFIG=path/to/preset.pbtxt before running this service." >&2;
+        exit 2; fi;
         if [ -z "$${AMENT_PREFIX_PATH:-}" ]; then
         echo "ERROR: ROS 2 environment is missing (AMENT_PREFIX_PATH is empty).
         Rebuild your image first: docker compose build joshua-u24
@@ -180,7 +186,7 @@ services:
         exit 1; fi;
         bazel run --config=u24 --config=x86-base
         --@rules_python//python/config_settings:python_version=3.12
-        //launcher:joshua_main -- $${CONFIG:+--config "$$CONFIG"}
+        //launcher:joshua_main -- --config "$$CONFIG"
     profiles: [tasks]
 
   build-u22-x86:
