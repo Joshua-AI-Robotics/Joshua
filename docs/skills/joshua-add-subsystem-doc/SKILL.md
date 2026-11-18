@@ -1,6 +1,6 @@
 ---
 name: joshua-add-subsystem-doc
-description: Use when adding or filling in a subsystem README.md (or a nested AGENTS.md) so it matches Joshua's doc conventions and the AGENTS_RFC contract.
+description: Use when adding or filling in a subsystem README.md (or a nested AGENTS.md) so it matches Joshua's doc conventions and the directory documentation contract.
 ---
 
 # Add a subsystem doc
@@ -9,18 +9,18 @@ description: Use when adding or filling in a subsystem README.md (or a nested AG
 
 - A directory under the repo root has code but no `README.md`.
 - An existing subsystem `README.md` is missing the sections agents rely on.
-- A subsystem has earned a nested `AGENTS.md` (see [AGENTS_RFC](../../AGENTS_RFC.md) §7)
-  and you are creating it plus its `CLAUDE.md` bridge.
+- A subsystem needs a nested `AGENTS.md` for its local architecture and rules;
+  follow the [instruction-file contract](../../AGENTS.md#instruction-files).
 
 Do **not** use this for the root `AGENTS.md` — that file is governed directly by
-[AGENTS_RFC](../../AGENTS_RFC.md), not this skill.
+[repository AGENTS.md](../../../AGENTS.md), not this skill.
 
 ## Steps
 
 1. **Decide the audience split.** `README.md` is for humans (what the subsystem
    is, how it fits, quick starts). A nested `AGENTS.md` carries agent-operational
    deltas (build/test invocations, "never do X here"). Do not duplicate rules
-   across them — state each fact once. See [AGENTS_RFC](../../AGENTS_RFC.md) §7.1.
+   across them — state each fact once. See [documentation ownership](../../AGENTS.md#architecture-contract).
 
 2. **Start from the template.** Copy
    [references/subsystem-readme-template.md](references/subsystem-readme-template.md)
@@ -41,16 +41,15 @@ Do **not** use this for the root `AGENTS.md` — that file is governed directly 
    [AGENTS.md](../../../AGENTS.md) and to the table in
    [docs/README.md](../../README.md) if it belongs there.
 
-6. **If you added a nested `AGENTS.md`,** create the sibling `CLAUDE.md` bridge
-   (`printf '@AGENTS.md\n' > <dir>/CLAUDE.md`) — [AGENTS_RFC](../../AGENTS_RFC.md)
-   §7.5 and the guard require it.
+6. **If you added a nested `AGENTS.md`,** link it from the local README and
+   architecture map. Keep local rules in that file; do not create a tool-specific
+   instruction copy.
 
-7. **Verify.** Run `hooks/agents_doc_check.sh` so every link and bridge you
-   touched still resolves. Do not run hardware or flash firmware to "verify" a
-   doc change.
+7. **Verify.** Run `hooks/agents_doc_check.sh` so instruction links and routing
+   targets still resolve. Do not run hardware or flash firmware to verify docs.
 
 ## References
 
 - Template: [references/subsystem-readme-template.md](references/subsystem-readme-template.md)
-- Doc contract and nested-file rules: [AGENTS_RFC](../../AGENTS_RFC.md)
+- Doc contract and nested-file rules: [docs/AGENTS.md](../../AGENTS.md)
 - Doc index this may need updating: [docs/README.md](../../README.md)

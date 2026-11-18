@@ -29,5 +29,5 @@ simulation-only unless you have confirmed it. -->
 Delete any section that does not apply rather than leaving it empty.
 Keep it to what a human needs; agent-operational deltas (build/test
 invocations, "never do X here") belong in a nested AGENTS.md, not here.
-See ../docs/AGENTS_RFC.md §7.
+See docs/AGENTS.md for instruction-file ownership.
 -->

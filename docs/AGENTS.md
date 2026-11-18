@@ -18,18 +18,22 @@ from software-only tests. Do not add RFC/spec/implementation-plan archives under
 `superpowers/`; update the owning contract and focused PR description instead.
 Skills remain in `skills/` and route to the same contracts.
 
-## Instruction files and bridges
+## Instruction files
 
 Root instructions apply repository-wide; local instructions add only their
 owned directory's contracts and are inherited by descendants. A deeper file
 must not silently contradict a parent contract. Read applicable files even when
 an agent starts at the repository root.
 
-Each local `AGENTS.md` needs a sibling `CLAUDE.md` containing only `@AGENTS.md`.
-Other tool bridges likewise contain routing, never their own engineering rules.
-Keep the root Gemini context configuration pointed at `AGENTS.md`. Add a README
-entry and an architecture-map link when introducing another directory contract.
-The link/bridge checker validates discoverability, not whether an agent complied.
+Add a local README or `AGENTS.md` when a subsystem has distinct usage or rules;
+smaller folders inherit their parent guidance. Use `AGENTS.md` as the single
+instruction file for local rules. Keep README
+usage and examples separate, linking to the owning rules rather than repeating
+them. Tool-specific settings or existing pointers may route to `AGENTS.md` but
+must not define separate engineering rules. Keep the root Gemini context
+configuration pointed at `AGENTS.md`. Add a README entry and architecture-map
+link when introducing another directory contract. The instruction checker
+validates links and routing targets, not whether an agent complied.
 
 ## Verification
 

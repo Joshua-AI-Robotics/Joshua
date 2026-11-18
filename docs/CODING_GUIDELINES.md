@@ -16,7 +16,7 @@ This guide owns shared design and review principles. The root
 [AGENTS.md](../AGENTS.md) owns repository operations and hardware authorization.
 Each directory's `AGENTS.md` owns its local architecture, dependency rules,
 lifecycle requirements, and verification guidance. READMEs explain usage and
-current behavior; agent bridges only import their sibling instruction file.
+current behavior; tool-specific settings point to the canonical instructions.
 The [architecture map](ARCHITECTURE.md#directory-contracts) links the local
 contracts. Change a rule at its owner rather than copying it into several files.
 
@@ -110,7 +110,7 @@ test where practical. Prose communicates intent; human review resolves design
 judgments that those checks cannot decide. Every new checker needs a known-good
 case and a deliberately invalid case that demonstrates rejection.
 
-Current CI checks agent links/bridges, skill metadata, CODEOWNERS coverage,
+Current CI checks agent instruction links, skill metadata, CODEOWNERS coverage,
 Docker entrypoint contracts, and Bazel tests in Humble and Jazzy. The existing
 transport boundary target checks public compilation contexts for leaked concrete
 transport headers. These checks do not establish compliance with every rule:

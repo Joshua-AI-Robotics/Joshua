@@ -1,7 +1,7 @@
 # Agent instruction routing reference
 
 The adopted instruction format is maintained in
-[docs/AGENTS.md](AGENTS.md#instruction-files-and-bridges). This path is retained
+[docs/AGENTS.md](AGENTS.md#instruction-files). This path is retained
 for existing references; it does not define a second set of rules.
 
 ## 7. Nested AGENTS.md for subsystems
@@ -12,7 +12,7 @@ live together in that directory's `AGENTS.md`. See the
 [coding guidelines](CODING_GUIDELINES.md#where-rules-live) for shared principles.
 READMEs retain descriptions, usage, and current behavior.
 
-The [link/bridge guard](../hooks/agents_doc_check.sh) discovers local instruction
-files and validates their links and sibling Claude imports. It also checks
-root bridge targets and Gemini's context setting. Source code, build visibility,
+The [instruction-link guard](../hooks/agents_doc_check.sh) discovers local instruction
+files and validates their links. It also checks root routing targets and
+Gemini's context setting. Source code, build visibility,
 and behavioral tests remain the mechanisms for enforcing code contracts.
