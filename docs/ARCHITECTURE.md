@@ -30,7 +30,6 @@ initialization, or lifecycle rules. Shared design principles live in
 | Developer tools and recording | [tools/AGENTS.md](../tools/AGENTS.md) |
 | Read-only MCP adapters and observation boundaries | [tools/mcp/AGENTS.md](../tools/mcp/AGENTS.md) |
 | Container tasks, setup, and artifact preparation | [scripts/AGENTS.md](../scripts/AGENTS.md) |
-| Web presentation and clients | [ui/AGENTS.md](../ui/AGENTS.md) |
 | Documentation ownership | [docs/AGENTS.md](AGENTS.md) |
 
 ## Configuration layer (Protobuf)

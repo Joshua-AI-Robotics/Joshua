@@ -72,7 +72,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Setup scripts and builds | [scripts/AGENTS.md](../scripts/AGENTS.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/AGENTS.md](../simulation/AGENTS.md) |
 | Data collection (DataStore) | [ai/train/AGENTS.md](../ai/train/AGENTS.md) |
-| React web UI | [ui/AGENTS.md](../ui/AGENTS.md) |
+| React web UI | [ui/README.md](../ui/README.md) |
 
 ## Temporary demo plans — planned for removal
 

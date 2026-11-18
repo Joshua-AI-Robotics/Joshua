@@ -227,6 +227,9 @@ coverage does not itself require owner approval or configure branch protection.
 
 ## Contribution workflow
 
+[CONTRIBUTING.md](CONTRIBUTING.md) provides GitHub's discovery link to this
+workflow; contribution and coding rules remain authoritative here.
+
 1. Branch from `develop` using `<github-username>/<topic>`; keep ownership with
    the operator. Merge or rebase current `develop` when needed.
 2. Keep changes focused, explain resource/state/lifecycle ownership, and reuse
@@ -391,7 +394,7 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | All docs index | [docs/AGENTS.md](docs/AGENTS.md) |
 | Scripts and builds | [scripts/AGENTS.md](scripts/AGENTS.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/AGENTS.md](simulation/AGENTS.md) |
-| Web UI | [ui/AGENTS.md](ui/AGENTS.md) |
+| Web UI | [ui/README.md](ui/README.md) |
 | AI coding agents | [AGENTS.md](AGENTS.md) |
 | Security | [SECURITY.md](SECURITY.md) |
 
@@ -415,5 +418,5 @@ for dependencies.
 - [third_party/soem/](third_party/soem/AGENTS.md)
 - [third_party/soes/](third_party/soes/AGENTS.md)
 - [tools/](tools/AGENTS.md)
-- [ui/](ui/AGENTS.md)
+- [ui/](ui/README.md)
 - [utils/](utils/AGENTS.md)
