@@ -51,6 +51,17 @@ operating procedures into the catalog.
    runtime evidence; use instruments for physical timing/electrical claims.
 6. Submit for owner review. Record reviewer/time/link only when review occurs.
    A successful protocol check does not establish physical stopping or endurance.
+7. Include the catalog addition or update in the same PR as a device integration.
+   Keep its implementation status and source references accurate. The public
+   website imports these files, including new device IDs; do not hand-edit UI
+   counts or duplicate validation facts in a website record. Device-software
+   additions also need a source mapping in the website's curated discovery list.
+
+The public catalog UI belongs to the
+[website repository](https://github.com/Joshua-AI-Robotics/Joshua-AI-Robotics.github.io),
+whose `AGENTS.md` owns generation and refresh. A device file remains the only
+authoritative hardware record. Candidate discovery and software eligibility are
+website concerns; their statuses must not imply unrecorded physical validation.
 
 ```sh
 bazel run //tools:hardware_catalog_cli -- --new --kind board \
