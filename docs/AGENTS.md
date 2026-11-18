@@ -21,6 +21,9 @@ software-only tests. Update the owning contract and focused PR description
 instead of keeping planning documents or RFC archives in this directory.
 Keep future delivery plans in issues and PRs; documentation describes active
 contracts, operating procedures, implementation limits, and evidence.
+The three legacy demo plans indexed below are temporary retention exceptions.
+They are historical planning context, not active contracts, and are planned for
+removal after any still-relevant work moves to issues/PRs.
 Skills remain in `skills/` and route to these same contracts.
 
 ## Instruction files
@@ -70,6 +73,17 @@ evidence workflow and the outstanding physical qualification gates.
 | Simulation (MuJoCo, Isaac Sim) | [simulation/AGENTS.md](../simulation/AGENTS.md) |
 | Data collection (DataStore) | [ai/train/AGENTS.md](../ai/train/AGENTS.md) |
 | React web UI | [ui/AGENTS.md](../ui/AGENTS.md) |
+
+## Temporary demo plans — planned for removal
+
+These documents were moved from `doc/` to keep documentation under `docs/`.
+Their implementation and hardware claims have not been revalidated. Migrate
+still-relevant work to issues/PRs, keep implemented contracts with their owners,
+then remove these documents and their index entries.
+
+- [Camera-head and R2S2R demo plan](CAMERA_HEAD_DEMO.md)
+- [OpenAI Decisions API camera-head demo plan](OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md)
+- [Robot nervous-system demo plan](ROBOT_NERVOUS_SYSTEM_DEMO.md)
 
 ## Directory navigation
 
