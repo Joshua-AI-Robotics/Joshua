@@ -8,15 +8,15 @@ and owning its behavior and architecture.
 ## Where rules live
 
 Open this guide and the applicable `AGENTS.md` files before implementation or
-review. Read the affected README and inspect implementations, factories,
+review. Inspect the existing implementations, factories,
 callers, and tests before proposing another abstraction. A link alone does not
 load its target into an agent's context.
 
 This guide owns shared design and review principles. The root
 [AGENTS.md](../AGENTS.md) owns repository operations and hardware authorization.
-Each directory's `AGENTS.md` owns its local architecture, dependency rules,
-lifecycle requirements, and verification guidance. READMEs explain usage and
-current behavior; tool-specific settings point to the canonical instructions.
+Each directory's `AGENTS.md` owns its purpose, architecture, dependency rules,
+lifecycle, usage/examples, and verification guidance. Tool-specific settings
+point to the canonical instructions.
 The [architecture map](ARCHITECTURE.md#directory-contracts) links the local
 contracts. Change a rule at its owner rather than copying it into several files.
 

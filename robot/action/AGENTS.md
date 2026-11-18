@@ -1,7 +1,7 @@
 # Actions
 
 Follow [robot/AGENTS.md](../AGENTS.md), the repository instructions, and shared
-coding guidelines. Read [README.md](README.md) before editing. This file owns
+coding guidelines. This file owns
 the local architecture contract and rules for `robot/action/`.
 
 ## Architecture contract
@@ -23,3 +23,13 @@ Use factory-backed mock channels and existing motor/factory tests. Check support
 and rejected payloads, units/limits, multiple actuators, enable policy, failure
 returns, and teardown. Run affected `//robot/action/...` targets in Docker;
 software results do not prove physical completion or stopping.
+
+## Actions
+
+Motor drivers translate configured actuator commands into board-channel operations.
+Interfaces, protobuf packets, factories, and drivers live here; board protocol
+and byte transport live in their sibling layers. The [contract](AGENTS.md) owns
+implementation and test rules.
+
+This code can move physical actuators. Follow the root
+[hardware authorization rules](../../AGENTS.md#hardware-safety--read-this-first).

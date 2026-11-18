@@ -3,8 +3,8 @@
 Implementation update: Joshua-owned MCU bindings and firmware now use JoshuaWire
 0.2.0 / revision 4 together. The former codec, host board and frame wrapper are
 removed. Earlier protocol/interface names in the design history below do not
-represent a supported compatibility path. See [firmware](../firmware/README.md)
-and the [shared engine](../robot/board/joshua_wire/README.md) for current artifacts.
+represent a supported compatibility path. See [firmware](../firmware/AGENTS.md)
+and the [shared engine](../robot/board/joshua_wire/AGENTS.md) for current artifacts.
 
 Status: **phases 1–5 landed.** This revision keeps only what is still open.
 Companion to: [ARCHITECTURE.md](ARCHITECTURE.md),

@@ -1,5 +1,8 @@
 # SOES (firmware slave stack)
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Pinned to `6ef7b9415e936c061ad30626ca00004bdde2ac62` from
 [OpenEtherCATsociety/SOES](https://github.com/OpenEtherCATsociety/SOES).
 This is **not** SOEM, the host master library.

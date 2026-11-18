@@ -10,7 +10,7 @@ Directory architecture, dependencies, lifecycle rules, and verification guidance
 live together in that directory's `AGENTS.md`. See the
 [architecture map](ARCHITECTURE.md#directory-contracts) for owners and the
 [coding guidelines](CODING_GUIDELINES.md#where-rules-live) for shared principles.
-READMEs retain descriptions, usage, and current behavior.
+Descriptions, usage, examples, and current behavior live in that same file.
 
 The [instruction-link guard](../hooks/agents_doc_check.sh) discovers local instruction
 files and validates their links. It also checks root routing targets and

@@ -1,5 +1,8 @@
 # EtherCAT Transport
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 `robot/comm/ethercat/` is the home for generic EtherCAT master-side transport
 code. It should not contain AM243 actuator semantics; those belong in action
 drivers that consume a transport abstraction.
@@ -44,7 +47,7 @@ model, vendor/product ID or slave-stack implementation. Every conforming board
 uses the same `JoshuaWireEthercatTransport`, owner and SOEM backend. Board
 identity is checked separately by `JoshuaWireBoard`; it is not a comm branch.
 
-Firmware reuses the [shared endpoint](../../../firmware/common/README.md#porting-jw-ethercat-to-another-board)
+Firmware reuses the [shared endpoint](../../../firmware/common/AGENTS.md#porting-jw-ethercat-to-another-board)
 and supplies board/stack adapters and real drive callbacks. SOES versus Beckhoff
 SSC is solely a firmware dependency choice. Regression tests exercise another
 board identity through the unchanged factory/engine/comm path without hardware.
@@ -129,7 +132,7 @@ socket racing an old owner's teardown. These guarantees are process-local;
 config validation also requires NIC consumers to share one ROS node process.
 Never run an unrelated master on the same NIC.
 
-Use the [config example](../../../config/README.md#joshuawire-over-ethercat)
+Use the [config example](../../../config/AGENTS.md#joshuawire-over-ethercat)
 for explicit timing/address selection. Register failures include address,
 elapsed time, budget and working count. Native regression coverage lives in
 `soem_ethercat_backend_test.cc`; real-bus qualification is incomplete.
@@ -201,7 +204,7 @@ SDO and snapshot waits release it. The master never calls endpoint code, so no
 reverse lock acquisition exists. This extra dispatcher is not a second SOEM
 owner and does not provide a hard-real-time scheduling guarantee.
 
-The separate [AM243 firmware profile](../../../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile)
+The separate [AM243 firmware profile](../../../firmware/am243/joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile)
 now implements this contract, including software command-progress/target
 watchdogs. An existing test runs these adapters against its actual portable
 core. Management exchanges publish an active-session idle image before sending

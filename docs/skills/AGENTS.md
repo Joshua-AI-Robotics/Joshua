@@ -1,5 +1,8 @@
 # Skills
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Repo-owned **skills** — procedural playbooks that both coding agents and humans
 follow to do a recurring Joshua task the same way every time. This directory is
 the **single source of truth**; `scripts/install-skills.sh` links each skill
@@ -13,7 +16,7 @@ live under `docs/skills/` and link to the current directory contracts.
 
 | Skill | Use it when | Audience |
 |-------|-------------|----------|
-| [joshua-add-subsystem-doc](joshua-add-subsystem-doc/SKILL.md) | Adding or filling in a subsystem `README.md` (or nested `AGENTS.md`) | agents + humans |
+| [joshua-add-subsystem-doc](joshua-add-subsystem-doc/SKILL.md) | Adding or filling in a subsystem `AGENTS.md` (or nested `AGENTS.md`) | agents + humans |
 | [joshua-guided-integration](joshua-guided-integration/SKILL.md) | Configuring existing hardware or adding a component with an AI IDE and MCP | agents + humans |
 
 ## How skills work here
@@ -30,7 +33,7 @@ live under `docs/skills/` and link to the current directory contracts.
   **not** make a skill discoverable — the install step is what does.
 - **Discovery in context:** a skill is referenced from the subsystem docs where
   it applies (for example, a hardware-bring-up skill would be linked from the
-  relevant `README.md`/`AGENTS.md`), so an agent touching that area meets it
+  relevant `AGENTS.md`/`AGENTS.md`), so an agent touching that area meets it
   just in time — rather than every agent loading a global list on every task.
 
 ## Authoring a skill
@@ -51,7 +54,7 @@ live under `docs/skills/` and link to the current directory contracts.
    ```
 
    Keep `SKILL.md` terse and procedural — it is the artifact agents execute.
-   Put human orientation and background in this README, not in each skill.
+   Put human orientation and background in this AGENTS.md, not in each skill.
 
 2. Put any templates or examples under `joshua-<name>/references/` and link to
    them from the skill.

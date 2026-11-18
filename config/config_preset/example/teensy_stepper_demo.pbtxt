@@ -3,7 +3,7 @@
 # Single NEMA17 stepper on a Teensy 4.1 (TB6600 drive) via JoshuaWire 0.2.0 / revision 4
 # over native USB serial (docs/BOARD_LAYER_RFC.md §10 Phase 5). Verified
 # end to end on real hardware, including physical motor rotation — see
-# firmware/teensy/41/README.md's Wiring / Pinout section for the wiring
+# firmware/teensy/41/AGENTS.md's Wiring / Pinout section for the wiring
 # diagram and DIP switch notes before wiring a second board.
 #
 # Launch:
@@ -47,7 +47,7 @@ robot {
         # GPIO pins on the Teensy 4.1, matching whatever the board is
         # physically wired to (docs/BOARD_LAYER_RFC.md §7.5, revised —
         # pins are host-configured, not baked into the firmware image).
-        # See firmware/teensy/41/README.md's Wiring / Pinout section.
+        # See firmware/teensy/41/AGENTS.md's Wiring / Pinout section.
         step_pin: 2
         dir_pin: 3
         enable_pin: 4

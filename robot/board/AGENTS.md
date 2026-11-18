@@ -1,7 +1,7 @@
 # Boards
 
 Follow [robot/AGENTS.md](../AGENTS.md), the repository instructions, and shared
-coding guidelines. Read [README.md](README.md) before editing. This file owns
+coding guidelines. This file owns
 the local architecture contract and rules for `robot/board/`.
 
 ## Architecture contract
@@ -24,3 +24,17 @@ Use fake transports and existing factory, session, coordinator, and native
 host/firmware tests. Check malformed/mismatched replies, shared ownership,
 timeouts, reset/ESTOP/recovery, telemetry freshness, and rollback when affected.
 Run affected `//robot/board/...` targets in Docker; no firmware flashing is needed.
+
+## Boards
+
+Boards adapt configured channels and device protocols to transport capabilities.
+The factory resolves and shares board instances; interfaces define what action
+and perception consumers can use. See [AGENTS.md](AGENTS.md) for the architecture
+contract and [JoshuaWire](joshua_wire/AGENTS.md) for the shared engine.
+
+Boards open real communication links and can enable motors. Follow the root
+[hardware authorization rules](../../AGENTS.md#hardware-safety--read-this-first).
+
+## Directory navigation
+
+- [joshua_wire/](joshua_wire/AGENTS.md)

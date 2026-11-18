@@ -21,7 +21,7 @@
 # single person being unavailable.
 
 # ---------------------------------------------------------------------------
-# Default — catches the repository root files (README, MODULE.bazel, BUILD,
+# Default — catches the repository root files (AGENTS.md, MODULE.bazel, BUILD,
 # VERSION, requirements*, docker-compose*, and the agent instruction files) and
 # anything not matched by a rule below.
 # ---------------------------------------------------------------------------

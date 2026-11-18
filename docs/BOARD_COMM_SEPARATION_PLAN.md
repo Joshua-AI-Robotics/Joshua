@@ -21,20 +21,20 @@ Serial timing comes from protobuf config, not board-specific sleeps.
 
 Use the [serial validation procedure](JOSHUA_WIRE_VALIDATION.md) for manual
 hardware checks. EtherCAT qualification is affected by the
-[master-side NIC timing limitation](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+[master-side NIC timing limitation](../robot/comm/ethercat/AGENTS.md#known-master-side-nic-timing-issue).
 
 Remaining qualification includes EtherCAT timing/failure behavior, watchdogs,
 OP/link-loss recovery and the separately approved SOES run longer than one hour
 before evaluation-stack retirement. Disabled-channel polling diagnostics do not
 satisfy these gates. Track TI profile removal and conversion of the default UART
-image to UART-only in the [firmware retirement TODO](../firmware/am243/joshua_dual_transport/README.md#todo-retire-ti-stack-profiles-after-soes-qualification).
+image to UART-only in the [firmware retirement TODO](../firmware/am243/joshua_dual_transport/AGENTS.md#todo-retire-ti-stack-profiles-after-soes-qualification).
 AM243 firmware has no physical motor backend; simultaneous
 UART/EtherCAT arbitration and descriptor-advertised watchdog settings remain
 separate work. The single-transport artifacts do not claim those capabilities.
 
 The contracts below define the target design; software coverage does not
 establish hard-real-time behavior or physical-output safety.
-See [firmware usage](../firmware/README.md) and [configuration](../config/README.md).
+See [firmware usage](../firmware/AGENTS.md) and [configuration](../config/AGENTS.md).
 
 ## 1. Goal
 

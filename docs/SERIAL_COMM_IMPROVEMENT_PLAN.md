@@ -59,7 +59,7 @@ establish completed streaming or physical qualification.
 | Session | [JoshuaWireSession](../robot/board/joshua_wire/joshua_wire_session.cc) supplies IDs, exact retries, response matching, and unknown-outcome handling. | Nested synchronous locks do not supply bounded admission, priority, stop preemption, or subscription ownership. |
 | Host device binding | [JoshuaWireBoard](../robot/board/joshua_wire/joshua_wire_board.h) exposes actuator channels. | Generic sensor handles and subscription-backed perception bindings are missing. Actuator/perception handles must share one MCU coordinator. |
 | Firmware transport | [Serial frame transport](../firmware/common/serial_frame_transport.c) bounds frames and retains an in-progress TX frame; it has a local TX-fault callback. | Telemetry routing, reserved reply/control capacity, and subscription lifetime are absent. The board main loops pause request admission while an application reply is pending. |
-| Firmware profiles | [Shared runtime and codecs](../firmware/common/README.md) define discovery, status, scalar samples, validity, boot identity, and sequence metadata. | Production mixed-device acquisition/scheduling and a negotiated streaming extension remain unimplemented. |
+| Firmware profiles | [Shared runtime and codecs](../firmware/common/AGENTS.md) define discovery, status, scalar samples, validity, boot identity, and sequence metadata. | Production mixed-device acquisition/scheduling and a negotiated streaming extension remain unimplemented. |
 | Recovery | Session reset disables configuration and preserves ESTOP. | Port retirement/reopen, cross-handle invalidation, subscription reconciliation, and no-replay/no-re-enable behavior need end-to-end implementation. |
 
 The existing H/F/T gates in [JoshuaWire](JOSHUA_WIRE.md#stacked-implementation-and-integration-gates)
@@ -203,7 +203,7 @@ reopen a connection. Alias identity, a process claim, flock, and TIOCEXCL preven
 cooperating duplicate owners; preexisting/privileged external descriptors remain
 an OS limitation.
 
-The [config policy](../config/README.md#serial-timing) now freezes configurable
+The [config policy](../config/AGENTS.md#serial-timing) now freezes configurable
 raw/vendor total and idle budgets and queue/transfer limits. Defaults are software
 policy, not baud-derived timing or hardware qualification. Explicit defaults and
 omitted fields compare equally. The P2 owner does not continuously consume idle
@@ -222,7 +222,7 @@ their current capabilities; receive modes cannot share a physical port.
 The serial implementation feeds the existing revision-4 decoder on the P2 owner
 and never flushes input in this mode. Frame assembly idle and separate reply /
 notification capacities are configured through `serial_config.frame_policy`.
-[Defaults and bounds](../config/README.md#continuous-frame-capability-p3a) are
+[Defaults and bounds](../config/AGENTS.md#continuous-frame-capability-p3a) are
 software limits, not measured device throughput or timing. Replies precede
 telemetry. Only complete, unconsumed notifications may be coalesced by envelope
 identity or dropped oldest on overload; every such loss increments a counter.

@@ -2,8 +2,9 @@
 
 Joshua is a config-driven robotics framework: one protobuf config (e.g.
 `config/config_preset/so100/teleoperate.pbtxt`) drives a ROS 2 stack built with
-Bazel. Human-facing docs live in [README.md](README.md) and
-[docs/](docs/README.md); this file is the entry point for coding agents. Launch
+Bazel. This file is the repository entry point for AI navigation. Directory
+`AGENTS.md` files combine purpose, architecture, rules, usage, and verification.
+The [documentation index](docs/AGENTS.md) links cross-cutting guides. Launch
 agents from the repository root so this file is picked up.
 
 ## Start each session with Joshua MCP
@@ -41,7 +42,7 @@ pure MuJoCo/Isaac simulation.
 - Prefer `bazel test //...` and config validation for verification — they touch
   no hardware.
 - Firmware is never flashed automatically. Flashing is a deliberate,
-  human-initiated operation — see [firmware/README.md](firmware/README.md).
+  human-initiated operation — see [firmware/AGENTS.md](firmware/AGENTS.md).
 
 ## Development environment
 
@@ -122,7 +123,7 @@ hook for you, so run it yourself before pushing.
 ## Implementation direction
 
 Before planning, changing, or reviewing code, open the shared
-[coding guidelines](docs/CODING_GUIDELINES.md), the affected README, and applicable
+[coding guidelines](docs/CODING_GUIDELINES.md) and applicable
 `AGENTS.md` files from the root down. Each directory file owns its local rules
 and architecture contract. Re-read instructions for a new task or changed rules.
 Use the [architecture map](docs/ARCHITECTURE.md#directory-contracts) to locate
@@ -133,29 +134,19 @@ ownership and allowed dependencies. Bridges contain routing only.
 Links are not loaded automatically — actually open these files when the work
 touches their area:
 
-- **Any subsystem**: read that directory's README first —
-  [ai/](ai/README.md), [robot/](robot/README.md), [config/](config/README.md),
-  [ros2/](ros2/README.md), [simulation/](simulation/README.md),
-  [ui/](ui/README.md), [firmware/](firmware/README.md),
-  [scripts/](scripts/README.md), [tools/](tools/README.md),
-  [launcher/node_manager/](launcher/node_manager/README.md),
-  [robot/comm/ethercat/](robot/comm/ethercat/README.md).
-- **Directory contracts**: [AI](ai/AGENTS.md), [config](config/AGENTS.md),
-  [robot](robot/AGENTS.md), [ROS](ros2/AGENTS.md), [launcher](launcher/AGENTS.md),
-  [utilities](utils/AGENTS.md), [firmware](firmware/AGENTS.md),
-  [simulation](simulation/AGENTS.md), [tools](tools/AGENTS.md),
-  [MCP](tools/mcp/AGENTS.md), [scripts](scripts/AGENTS.md), [UI](ui/AGENTS.md),
-  and [documentation](docs/AGENTS.md).
-- **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
+- **Any subsystem**: follow the directory navigation below and open each
+  applicable `AGENTS.md` from the root down. Each file includes its local
+  architecture, implementation rules, usage, and verification requirements.
+- **Shared firmware/JoshuaWire**: read [firmware/common/AGENTS.md](firmware/common/AGENTS.md).
 - **Build/packaging or release artifacts**: read
-  [scripts/README.md](scripts/README.md) and the "Testing and CI" section of
+  [scripts/AGENTS.md](scripts/AGENTS.md) and the "Testing and CI" section of
   [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Cross-cutting or architectural changes**: read
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Environment/setup variants** (ARM64, Isaac Sim, hardware runs): read
   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 - **Recurring tasks with a repo skill**: some tasks have a `joshua-*` skill that
-  encodes the steps — see [docs/skills/](docs/skills/README.md).
+  encodes the steps — see [docs/skills/](docs/skills/AGENTS.md).
 - **Hardware compatibility or model discovery**: read
   [implemented components](docs/SUPPORTED_COMPONENTS.md) and
   [supported hardware](docs/SUPPORTED_HARDWARE.md). MCP's
@@ -163,3 +154,124 @@ touches their area:
   `list_supported_hardware` returns curated model information;
   `list_hardware_test_records` returns separate [historical runs](docs/TESTED_HARDWARE.md)
   linked by hardware ID. None establishes current hardware readiness.
+
+## JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
+
+**A modular framework for robotic AI systems**
+
+**Version:** see [`VERSION`](VERSION)
+
+Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
+
+![Project Joshua core concept](assets/images/joshua_summary.png)
+
+One config file is the source of truth—for example [`config/config_preset/so100/teleoperate.pbtxt`](config/config_preset/so100/teleoperate.pbtxt) defines the full SO100 teleop setup. See [Architecture](docs/ARCHITECTURE.md) for how config, protobuf packets, and ROS 2 fit together.
+
+## Start with Joshua MCP
+
+From the repository root, run `./scripts/joshua_mcp.sh setup` to prepare the
+local MCP server and connect your AI IDE. This inspection workflow runs on CPU;
+ROS, Bazel and project libraries stay inside Docker. Setup checks your host,
+guides any missing prerequisites and verifies the first inspection.
+
+AI assistants should check the Joshua MCP connection when starting a session.
+If it is unavailable, explain what is missing and prompt the user to run setup
+or reconnect their AI IDE. Once connected, use the
+[guided integration workflow](docs/skills/joshua-guided-integration/SKILL.md)
+to configure existing hardware or add a component. See the
+[setup guide](docs/MCP_SETUP.md) for requirements and recovery.
+
+## Quick start
+
+Joshua is Docker-first. Install Docker host tooling, open either supported ROS environment, then run the launcher through Docker:
+
+```bash
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22      # Ubuntu 22.04 / ROS 2 Humble
+docker compose run --rm joshua-u24      # Ubuntu 24.04 / ROS 2 Jazzy
+CONFIG=config/config_preset/so100/random_noise.pbtxt docker compose run --rm run-u22
+```
+
+Install options (CPU fallback, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint. The default developer workflow also requires a host NVIDIA driver and NVIDIA Container Toolkit; CPU-only development is explicitly supported. The Makefile provides optional shorthand for the Compose commands.
+
+## GPU-first development
+
+Developer shells and launcher services request an NVIDIA GPU by default. Install the host runtime and verify that Docker can see the GPU:
+
+```bash
+sudo ./scripts/setup.sh
+docker compose run --rm joshua-u22 nvidia-smi
+```
+
+Run an AI preset:
+
+```bash
+CONFIG=config/config_preset/so100/random_noise.pbtxt \
+  docker compose run --rm run-u22
+```
+
+On a CPU-only host, skip NVIDIA setup and use the CPU override:
+
+```bash
+sudo ./scripts/setup.sh --cpu
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+  run --rm joshua-u22
+```
+
+Tests, package builds, UI services, and CI do not request a GPU. The host provides the NVIDIA driver and NVIDIA Container Toolkit for the default developer workflow. CUDA-enabled PyTorch and related user-space libraries remain inside each model environment; the host CUDA toolkit is not required.
+
+## Build deployable binaries
+
+Use the matching one-shot Compose service to produce a packaged, deployable build. It runs Bazel inside Docker and copies artifacts to `dist/<os>/<cpu>/`.
+
+```bash
+# Ubuntu 22.04 (Humble), x86_64
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u22-x86
+
+# Ubuntu 24.04 (Jazzy), ARM64 (e.g. Jetson; uses emulation on x86 hosts)
+TARGET=//launcher:joshua_main_pkg docker compose run --rm build-u24-arm64
+```
+
+Build services follow `build-<os>-<cpu>` and support `u22` or `u24` with `x86` or `arm64`. `TARGET` defaults to `//launcher:joshua_main_pkg`.
+
+Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`VERSION`](VERSION); paths vary by flags). The archive includes a `VERSION` file and `joshua_main --version` reports the same value. Extract and run on a target machine with the matching Ubuntu/ROS stack. Full details: [scripts/AGENTS.md](scripts/AGENTS.md).
+
+## Documentation
+
+| Topic | Guide |
+|-------|--------|
+| Getting started | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Implemented components | [docs/SUPPORTED_COMPONENTS.md](docs/SUPPORTED_COMPONENTS.md) |
+| Supported hardware models, drivers, and presets | [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md) |
+| Hardware test records and measured limitations | [docs/TESTED_HARDWARE.md](docs/TESTED_HARDWARE.md) |
+| All docs index | [docs/AGENTS.md](docs/AGENTS.md) |
+| Scripts and builds | [scripts/AGENTS.md](scripts/AGENTS.md) |
+| Simulation (MuJoCo, Isaac Sim) | [simulation/AGENTS.md](simulation/AGENTS.md) |
+| Web UI | [ui/AGENTS.md](ui/AGENTS.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| AI coding agents | [AGENTS.md](AGENTS.md) |
+| Security | [SECURITY.md](SECURITY.md) |
+
+## License
+
+Joshua is licensed under the [Apache License, Version 2.0](LICENSE). See
+[NOTICE](NOTICE) for attribution and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+for dependencies.
+
+## Directory navigation
+
+- [ai/](ai/AGENTS.md)
+- [config/](config/AGENTS.md)
+- [docs/](docs/AGENTS.md)
+- [firmware/](firmware/AGENTS.md)
+- [launcher/](launcher/AGENTS.md)
+- [robot/](robot/AGENTS.md)
+- [ros2/](ros2/AGENTS.md)
+- [scripts/](scripts/AGENTS.md)
+- [simulation/](simulation/AGENTS.md)
+- [third_party/soem/](third_party/soem/AGENTS.md)
+- [third_party/soes/](third_party/soes/AGENTS.md)
+- [tools/](tools/AGENTS.md)
+- [ui/](ui/AGENTS.md)
+- [utils/](utils/AGENTS.md)

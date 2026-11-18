@@ -1,5 +1,8 @@
 # Node Manager
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 `NodeManager` is the launcher's single owner for configured ROS node processes
 and simulation. It lives under `launcher/node_manager/`, alongside the launcher
 entrypoints that use it, in `node_manager.h` and `node_manager.cc`.
@@ -130,6 +133,6 @@ stream. Log names do not prove runtime association. Feedback requires the sole
 expected publisher endpoint and actual message publisher GID, and cached data
 is invalidated when the endpoint set changes. Receipt freshness does not prove
 acquisition freshness or physical readiness. Simulation observation is
-unsupported. The [MCP guide](../../tools/mcp/README.md#optional-runtime-observations)
+unsupported. The [MCP guide](../../tools/mcp/AGENTS.md#optional-runtime-observations)
 documents directory permissions, clock domain, fields and limitations. MCP is
 an optional reader; NodeManager remains the runtime owner.

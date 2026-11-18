@@ -1,5 +1,8 @@
 # Shared firmware and JoshuaWire
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 JoshuaWire **0.2.0 / wire revision 4** connects the host board engine and MCU
 firmware. The normative [protocol contract](../../docs/JOSHUA_WIRE.md) defines
 mixed-device discovery, versioned profiles, session ownership, reply semantics,
@@ -71,11 +74,11 @@ and invalidates configuration while preserving ESTOP/fault latches. RECOVER is
 explicit and never enables. GET_STATUS exposes firmware action completion,
 recovery requirements and unsupported physical verification separately.
 
-The [host engine](../../robot/board/joshua_wire/README.md) checks the complete
+The [host engine](../../robot/board/joshua_wire/AGENTS.md) checks the complete
 catalog, dependencies and metadata before applying desired actuator settings.
 One session serializes message and cyclic operations. Paired EtherCAT admits only
 actuator v1.0 target/feedback to PDO; discovery, status and other profiles stay on
-CoE. The AM243 [TI adapter](../am243/joshua_dual_transport/README.md) maps 28 words
+CoE. The AM243 [TI adapter](../am243/joshua_dual_transport/AGENTS.md) maps 28 words
 per PDO and has a software-only channel. Its UART and EtherCAT artifacts are
 separate owners; simultaneous transports on one MCU still need arbitration.
 
@@ -132,7 +135,7 @@ tests golden layouts, capability negotiation, replay after lost create/cancel
 replies, reset invalidation, and request/notification isolation. Production
 images remain request/response only and advertise no streaming operations.
 
-The [SOES binding](soes/README.md) supplies a separately pinned slave stack,
+The [SOES binding](soes/AGENTS.md) supplies a separately pinned slave stack,
 fixed object dictionary and PDO packing. It reuses the same revision-4 profile
 and remains subject to the same AM243 hardware qualification gates.
 
@@ -150,5 +153,9 @@ Unreplyable work is not dispatched and triggers a local output fault.
 `joshua_mixed_device` composes it with the existing STEP/DIR application and one
 intrinsic scalar function. Native tests compile the actual application and
 Teensy setup/loop/register adapter against controlled clock, ADC and GPIO hooks.
-The explicit Teensy candidate is described in the board README; physical
+The explicit Teensy candidate is described in the board AGENTS.md; physical
 qualification and P5 runtime wiring remain separate.
+
+## Directory navigation
+
+- [soes/](soes/AGENTS.md)

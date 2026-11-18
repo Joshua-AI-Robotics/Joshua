@@ -1,5 +1,8 @@
 # ESP32 — JoshuaWire revision 4 STEP/DIR firmware
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 This image and the host board binding use JoshuaWire 0.2.0 / wire revision 4.
 The former protocol is removed; update the host and firmware from the same
 checkout. Previously flashed firmware is incompatible with this host.
@@ -83,7 +86,7 @@ not input-only (34–39), not the default UART0/flash pins. A reasonable
 starting choice, not a requirement — rewire and edit the pbtxt freely.
 
 Reference wiring against a TB6600 (same shape as
-`firmware/teensy/41/README.md`'s, different pin numbers):
+`firmware/teensy/41/AGENTS.md`'s, different pin numbers):
 
 ```
 ESP32 GPIO 25  ──► TB6600 PUL+   (STEP)
@@ -108,7 +111,7 @@ TB6600 VCC/GND      ──► bench PSU, sized to the motor's rated current;
 Teensy bring-up's actual verification pass yet (see Status above). The
 `PUL-`/`DIR-`/`ENA-` ground-return requirement and the DIP-switch caveat
 that cost the most debugging time on the Teensy bring-up
-(`firmware/teensy/41/README.md`'s Wiring / Pinout section) almost
+(`firmware/teensy/41/AGENTS.md`'s Wiring / Pinout section) almost
 certainly apply here too, since they're facts about the TB6600, not the
 MCU — but treat that as a prediction until it's actually been run.
 
@@ -136,7 +139,7 @@ It does not qualify physical pulse timing or hardware stop behavior.
 
 A response retained in the adapter for 20 ms triggers a latched local fault,
 disabling and unconfiguring all channels even if a queued ESTOP cannot be read.
-See the shared [serial fault budget](../common/README.md#serial-transmit-fault-budget)
+See the shared [serial fault budget](../common/AGENTS.md#serial-transmit-fault-budget)
 for service timing, status, reply retention and explicit recovery requirements.
 
 The manual `//robot/board/joshua_wire:joshua_wire_smoke` CLI supports handshake,

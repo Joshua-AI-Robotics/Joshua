@@ -1,8 +1,7 @@
 # Shared utilities
 
 Follow the repository [AGENTS.md](../AGENTS.md) and
-[coding guidelines](../docs/CODING_GUIDELINES.md). Read the local
-[README.md](README.md) before editing. This file owns the rules and architecture
+[coding guidelines](../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
 contract for `utils/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
@@ -22,3 +21,12 @@ RobotTime, Unix, and monotonic clock domains.
 Run the affected tests in [BUILD](BUILD) using controlled clocks, temporary
 resources, and child processes. Exercise failure boundaries and cleanup, not
 only successful returns. Physical input or motor motion is not required.
+
+## Shared utilities
+
+Small shared libraries provide process failure handling, scope cleanup, RobotTime,
+logging helpers, and controller input. See [AGENTS.md](AGENTS.md) for ownership
+and dependency constraints, and [RobotTime](../docs/ROBOT_TIME.md) for clock semantics.
+
+Hardware input utilities can open devices; tests must use controlled clocks and
+fake inputs under the root hardware authorization rules.

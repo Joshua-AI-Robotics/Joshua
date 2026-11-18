@@ -1,5 +1,8 @@
 # JW binding for SOES
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 This is the board-independent slave-stack adapter. The host still uses the
 same JoshuaWire EtherCAT transport, with SOEM underneath. Changing the slave
 stack or board does not change the host wire contract.
@@ -44,7 +47,7 @@ rejected before copying or executing commands. PDO image objects cannot be
 read/written through CoE. SII and CoE `0x1018` identity come from the board; the
 adapter does not hard-code an AM243 or TI identity.
 
-The [pinned SOES dependency](../../../third_party/soes/README.md) is fetched at
+The [pinned SOES dependency](../../../third_party/soes/AGENTS.md) is fetched at
 build time, not vendored into Joshua. PlatformIO excludes this directory unless
 a board explicitly integrates SOES. Its license is not Joshua's Apache license.
 
@@ -57,5 +60,5 @@ validate an ESC hardware driver or timing on a real EtherCAT bus.
 Parser-level preemption tests additionally cover interrupted RECOVER/reset,
 expiry at dispatch and repeated fault/state-loss notifications.
 
-The initial [AM243 port](../../am243/joshua_dual_transport/README.md#opt-in-soes-replacement)
+The initial [AM243 port](../../am243/joshua_dual_transport/AGENTS.md#opt-in-soes-replacement)
 builds, but hardware qualification and evaluation-stack retirement are pending.

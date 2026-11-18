@@ -1,5 +1,8 @@
 # Shared JoshuaWire engine
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 `JoshuaWireBoard` supplies identity checks, channel configuration, correlated
 session reset, command dispatch and safe teardown. `JoshuaWireSession` owns
 message IDs and response matching; communication adapters own device I/O and

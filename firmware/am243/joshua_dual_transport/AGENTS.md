@@ -1,5 +1,8 @@
 # LP-AM243 — JoshuaWire 0.2.0 serial and EtherCAT firmware
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 One AM243 image that keeps TI's EtherCAT simple demo active while also serving
 JoshuaWire (JW) `0.2.0` on UART0 at 115200 baud. The build layers Joshua-owned source
 and a small patch over the externally installed TI Industrial Communications
@@ -27,7 +30,7 @@ guards and reply encoding live in `firmware/common/`.
 
 - TI Industrial Communications SDK `09.00.00.03`
 - CCS/ARM Clang, PRU CGT, and SysConfig versions listed in the adjacent
-  `ti_ethercat_simple_demo_v1/README.md`
+  `../ti_ethercat_simple_demo_v1/AGENTS.md`
 - The SDK configured by the existing AM243 setup scripts
 
 ## Install
@@ -51,7 +54,7 @@ temporary working tree and leaves TI SDK sources unchanged.
 The default UART outputs are `am243_dual_transport_rev4.release.*`. The script
 forwards arguments to `make`, allowing compiler/tool path overrides. EtherCAT
 in this image remains TI's echo demo; use the separate JW profile below for
-Joshua EtherCAT runtime. See [JW limits](../../README.md#joshuawire-serial)
+Joshua EtherCAT runtime. See [JW limits](../../AGENTS.md#joshuawire-serial)
 and the [serial validation procedure](../../../docs/JOSHUA_WIRE_VALIDATION.md).
 
 ### Opt-in JW EtherCAT profile
@@ -190,7 +193,7 @@ scheduler remains a separate H/F/T integration gate in `docs/JOSHUA_WIRE.md`.
 
 **Candidate; hardware qualification incomplete.**
 Register receive deadlines remain affected by the
-[master-side NIC timing issue](../../../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+[master-side NIC timing issue](../../../robot/comm/ethercat/AGENTS.md#known-master-side-nic-timing-issue).
 The TI profiles remain available until the replacement passes real-board
 qualification and a continuous run beyond one hour. No proprietary timeout
 is patched out.
@@ -202,7 +205,7 @@ firmware/am243/joshua_dual_transport/scripts/build.sh
 ```
 
 Run with the external SDK/toolchain available in the development container.
-`curl` downloads the hash-verified [SOES revision](../../../third_party/soes/README.md).
+`curl` downloads the hash-verified [SOES revision](../../../third_party/soes/AGENTS.md).
 The build uses SDK `09.00.00.03` hardware configuration, RTOS/driver libraries,
 and ICSS FWHAL/PRU firmware, **not** TI's evaluation slave stack or Beckhoff SSC.
 The SDK's SSC example supplies build/SysConfig rules and BSD-licensed board
@@ -221,7 +224,7 @@ is in `third_party/soes`. Existing TI artifacts are not overwritten.
 
 Production source roles:
 
-- [`../../common/soes/`](../../common/soes/README.md): shared SOES dictionary,
+- [`../../common/soes/`](../../common/soes/AGENTS.md): shared SOES dictionary,
   JW CoE/PDO binding and stack settings; no AM243 dependencies.
 - `src/joshua_ethercat_soes_am243.c`: AM243 boot, PRU register/mailbox/triple-buffer
   access, read-only RAM SII and independent watchdog task. Reuses the software
@@ -299,7 +302,7 @@ commercial redistribution.
 
 ## Host integration
 
-The [JW EtherCAT config](../../../config/README.md#joshuawire-over-ethercat)
+The [JW EtherCAT config](../../../config/AGENTS.md#joshuawire-over-ethercat)
 now selects paired adapters through CommFactory and the shared board engine.
 Native integration tests run that entire path against this production firmware
 core. Native coverage does not establish production Ethernet timing or
@@ -361,4 +364,4 @@ service iterations. Native builds/tests never flash devices.
 An adapter-owned UART response overdue by 20 ms latches a local fault on the
 next service iteration and disables/unconfigures the software actuator
 independently of pending RX or available TX capacity. See the shared
-[serial fault budget](../../common/README.md#serial-transmit-fault-budget).
+[serial fault budget](../../common/AGENTS.md#serial-transmit-fault-budget).

@@ -1,7 +1,7 @@
-# Firmware README template
+# Firmware AGENTS.md template
 
-Every `firmware/<board>/README.md` (and versioned subdirectories like
-`firmware/teensy/41/README.md`) should follow this section structure, so
+Every `firmware/<board>/AGENTS.md` (and versioned subdirectories like
+`firmware/teensy/41/AGENTS.md`) should follow this section structure, so
 "how do I flash board X" is always answered the same way regardless of
 which board it is. Copy this file, fill in each section, delete any
 instruction text (like this line). Where you genuinely don't know an

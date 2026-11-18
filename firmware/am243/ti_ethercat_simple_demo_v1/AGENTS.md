@@ -1,5 +1,8 @@
 # LP-AM243 — TI EtherCAT simple demo (Hello World + EtherCAT slave)
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Vendor TI firmware, not Joshua-owned (`docs/BOARD_LAYER_RFC.md` §7.3 —
 vendor code stays as-is rather than migrating to the Joshua firmware
 pattern). Tracks AM243 setup, firmware experiments, and EtherCAT bring-up
@@ -106,7 +109,7 @@ full SOEM master scan trace and expected slave identity
 (`firmware/am243/ti_ethercat_simple_demo_v1.md` has the expected identity
 fields). The old Joshua TI-demo host smoke target is retired. Current Joshua
 EtherCAT runtime requires the separate
-[JW profile](../joshua_dual_transport/README.md#opt-in-jw-ethercat-profile),
+[JW profile](../joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile),
 not this vendor image.
 
 ## Wiring / Pinout
@@ -129,7 +132,7 @@ JoshuaWire commands. Use the separate Joshua firmware for serial or JW EtherCAT.
 
 ## Related files
 
-- [JoshuaWire profile](../joshua_dual_transport/README.md) — current Joshua host integration
+- [JoshuaWire profile](../joshua_dual_transport/AGENTS.md) — current Joshua host integration
 - `firmware/am243/ti_ethercat_simple_demo_v1.md` — firmware record
   (provenance, expected slave identity)
 - `scripts/activate.sh` — create and activate the Python venv

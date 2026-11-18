@@ -1,10 +1,13 @@
 # Inference engine
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Model-agnostic ROS2 inference host and launcher. Concrete models live in
 [`ai/models/<model>/`](../models); this package does not import them directly.
 
-**Adding a model:** [`../README.md`](../README.md) (workflow and checklists).
-**Adapter API and worked example:** [`../models/README.md`](../models/README.md).
+**Adding a model:** [`../AGENTS.md`](../AGENTS.md) (workflow and checklists).
+**Adapter API and worked example:** [`../models/AGENTS.md`](../models/AGENTS.md).
 
 ## Architecture
 

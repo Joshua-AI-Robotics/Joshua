@@ -13,7 +13,7 @@ You do not need to write code to help:
 - **Report bugs** — [open an issue](https://github.com/Joshua-AI-Robotics/Joshua/issues/new/choose) with steps to reproduce, environment details, and logs.
 - **Report security issues** — follow [SECURITY.md](SECURITY.md); do not use public issues.
 - **Suggest features** — describe the problem, your proposed approach, and which robot or preset it affects.
-- **Improve docs** — README, `docs/`, preset comments, and module READMEs are always welcome.
+- **Improve docs** — `AGENTS.md`, `docs/`, and preset comments are always welcome.
 - **Submit code** — follow the workflow below.
 
 For open-ended questions or ideas, prefer [GitHub Discussions](https://github.com/Joshua-AI-Robotics/Joshua/discussions) when available.
@@ -79,7 +79,7 @@ Pick one style and keep the branch focused on a single change where possible.
 There is no strict format enforced today. Clear, descriptive messages work best:
 
 - `Fix ActionPacket payload handling in ROS2 nodes`
-- `docs: slim README and add docs/ guides`
+- `docs: clarify subsystem guidance`
 - `Organize config presets into subdirectories by robot/category`
 
 Prefer present tense or imperative mood. If a commit fixes an issue, mention it in the PR body (`Fixes #123`).
@@ -169,7 +169,7 @@ These areas affect many presets and downstream nodes:
 
 - **`action_packet.proto`** and [`ros2/utils/packet_parser`](ros2/utils/packet_parser.md) — update registries, open `docker compose run --rm joshua-u22`, then run `bazel test --config=u22 --config=x86-base //ros2/utils:packet_parser_test`
 - **Top-level protos** (`config.proto`, `robot.proto`, `ai.proto`) — may require node generator and preset updates
-- **Breaking preset moves** — update docs and any referenced paths in README / GETTING_STARTED
+- **Breaking preset moves** — update docs and any referenced paths in `AGENTS.md` / GETTING_STARTED
 
 ## Releases and versioning
 
@@ -214,7 +214,7 @@ These areas affect many presets and downstream nodes:
 
 ## Getting help
 
-- **Docs index:** [docs/README.md](docs/README.md)
+- **Docs index:** [docs/AGENTS.md](docs/AGENTS.md)
 - **Issues:** [github.com/Joshua-AI-Robotics/Joshua/issues](https://github.com/Joshua-AI-Robotics/Joshua/issues)
 - **Security:** [SECURITY.md](SECURITY.md)
 - **Website:** [joshua-ai-robotics.org](https://joshua-ai-robotics.org/)

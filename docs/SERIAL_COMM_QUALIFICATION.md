@@ -66,7 +66,7 @@ Before execution, confirm the exact board/sensor and stable port, analog voltage
 and common ground, motor/drive/power state, reviewed pin map, secured mechanism
 and accessible motor-power cutoff. First run with motor power disconnected.
 Flashing is a separate deliberate operation following the
-[firmware guide](../firmware/teensy/41/README.md).
+[firmware guide](../firmware/teensy/41/AGENTS.md).
 
 1. Freeze source, `.hex` hash, package/compiler inventory and reviewed local
    configuration. Verify A0's input stays within the Teensy input limits using

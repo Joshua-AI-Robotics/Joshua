@@ -1,5 +1,8 @@
 # Arduino — STEP/DIR firmware (not implemented)
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 A future Arduino image must use the current `firmware/common/joshua_wire`
 codec, endpoint and runtime. There is no previous-protocol fallback. Use
 `firmware/teensy/41` as the source layout reference and determine the board's

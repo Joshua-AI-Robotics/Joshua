@@ -1,5 +1,8 @@
 # Teensy 4.1 — JoshuaWire revision 4 STEP/DIR firmware
 
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 This image and the host board binding use JoshuaWire 0.2.0 / wire revision 4.
 The former protocol is removed; update the host and firmware from the same
 checkout. Previously flashed firmware is incompatible with this host.
@@ -130,7 +133,7 @@ It does not qualify physical pulse timing or hardware stop behavior.
 
 A response retained in the adapter for 20 ms triggers a latched local fault,
 disabling and unconfiguring all channels even if a queued ESTOP cannot be read.
-See the shared [serial fault budget](../../common/README.md#serial-transmit-fault-budget)
+See the shared [serial fault budget](../../common/AGENTS.md#serial-transmit-fault-budget)
 for service timing, status, reply retention and explicit recovery requirements.
 
 The manual `//robot/board/joshua_wire:joshua_wire_smoke` CLI supports handshake,

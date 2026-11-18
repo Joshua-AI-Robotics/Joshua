@@ -93,8 +93,8 @@ It loads the config, resolves executables, and owns each job's guardian,
 application PID, process group, readiness channels, exit history, and shutdown
 sequence. ROS nodes and simulation share that manager and one registry of plain
 node records. Robot drivers and ROS objects remain inside their application
-process. See the [node manager guide](../launcher/node_manager/README.md) for the
-Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
+process. See the [node manager guide](../launcher/node_manager/AGENTS.md) for the
+Linux ownership contract and [ROS runtime guide](../ros2/AGENTS.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
 ## Hardware topology and latency budgets
@@ -105,8 +105,8 @@ The normative topology and qualification rules live in
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
-- [ai/README.md](../ai/README.md) — inference engine, model plug-ins, per-model venvs
-- [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
-- [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
-- [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
-- [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership
+- [ai/AGENTS.md](../ai/AGENTS.md) — inference engine, model plug-ins, per-model venvs
+- [ai/train/AGENTS.md](../ai/train/AGENTS.md) — data collection (DataStore)
+- [simulation/AGENTS.md](../simulation/AGENTS.md) — MuJoCo and Isaac Sim backends
+- [ros2/AGENTS.md](../ros2/AGENTS.md) — ROS 2 type resolver utilities
+- [launcher/node_manager/AGENTS.md](../launcher/node_manager/AGENTS.md) — node lifecycle and process ownership

@@ -1,3 +1,6 @@
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 AI Data Pipeline
 ================
 
@@ -5,7 +8,7 @@ This directory contains the tools for collecting data and managing datasets for 
 
 > The RL training pipeline (Isaac Lab trainer, evaluation, trajectory export)
 > has been removed. Isaac Sim is still available as a pure simulation backend
-> -- see [simulation/README.md](../../simulation/README.md).
+> -- see [simulation/AGENTS.md](../../simulation/AGENTS.md).
 
 DataStore (Data Collection)
 ---------------------------

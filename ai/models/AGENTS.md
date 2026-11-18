@@ -1,10 +1,13 @@
 # Models (inference plug-ins)
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 One directory per model: config schema, adapter, and manifest. The engine in
 [`ai/inference`](../inference) stays model-free.
 
 For the full **add-a-model workflow** (base + model locks, Bazel hubs),
-see [`../README.md`](../README.md). Model venvs always include the global
+see [`../AGENTS.md`](../AGENTS.md). Model venvs always include the global
 base; optional `requirements_lock` adds model-specific packages.
 
 ## Layout
@@ -347,7 +350,7 @@ In `ai/models/BUILD`, add to `sources` and `manifests`:
 ```
 
 Do **not** edit `registry.py`. Register pip hubs in `MODULE.bazel` per
-[`../README.md`](../README.md).
+[`../AGENTS.md`](../AGENTS.md).
 
 ### Step 6 — config preset
 

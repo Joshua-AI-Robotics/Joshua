@@ -108,7 +108,7 @@ docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
 **Isaac Sim viewer** (requires Isaac Lab installed): the Isaac Sim backend
 (`SIM_BACKEND_ISAAC_SIM`) is supported by `simulation/isaac/`, but **no preset
 ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
-against [simulation/README.md](../simulation/README.md) to use it.
+against [simulation/AGENTS.md](../simulation/AGENTS.md) to use it.
 
 Tests, package builds, UI services, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
 
@@ -139,7 +139,7 @@ CONFIG=config/config_preset/so100/sim_interactive.pbtxt docker compose run --rm 
 CONFIG=config/config_preset/so100/sim_passive.pbtxt docker compose run --rm run-u24
 ```
 
-Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables. **No Isaac preset ships with the repo** — write one against [simulation/README.md](../simulation/README.md) first.
+Isaac Sim is not fully containerized in this repo. Launch Joshua through Docker, but provide Isaac Lab as an external GPU dependency via mounted host paths and environment variables. **No Isaac preset ships with the repo** — write one against [simulation/AGENTS.md](../simulation/AGENTS.md) first.
 
 ```bash
 export ISAAC_LAB_PATH=$HOME/IsaacLab

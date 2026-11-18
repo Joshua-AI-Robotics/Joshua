@@ -233,10 +233,10 @@ current implementations and example presets are indexed in the
 
 | Area | Current implementation | Limitation |
 |---|---|---|
-| Configuration | Protobuf schemas, presets, [`config::ValidateConfig`](../config/README.md), and a read-only [integrity CLI and MCP adapter](../tools/mcp/README.md) | The `.pbtxt` config is the source of truth. The integrity CLI checks parsing and existing integrity rules. The read-only MCP adapter adds config-free factory discovery and candidate device inspection; installed software metadata does not certify compatibility or hardware readiness. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) edits configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
-| Execution | The launcher, [node manager](../launcher/node_manager/README.md), ROS 2 nodes, and [simulation](../simulation/README.md) | The launcher selects the runtime path and NodeManager manages ROS 2 node processes. Optional private snapshots expose process facts, partial ROS logs and one explicitly selected POSITION/JOINT_STATE stream through a read-only observer. Simulation observation, motion and general task execution remain outside this contract. |
+| Configuration | Protobuf schemas, presets, [`config::ValidateConfig`](../config/AGENTS.md), and a read-only [integrity CLI and MCP adapter](../tools/mcp/AGENTS.md) | The `.pbtxt` config is the source of truth. The integrity CLI checks parsing and existing integrity rules. The read-only MCP adapter adds config-free factory discovery and candidate device inspection; installed software metadata does not certify compatibility or hardware readiness. The [web UI implementation](../ui/src/pages/ConfigPage.tsx) edits configs and parses and formats `.pbtxt`, but it does not run semantic validation. |
+| Execution | The launcher, [node manager](../launcher/node_manager/AGENTS.md), ROS 2 nodes, and [simulation](../simulation/AGENTS.md) | The launcher selects the runtime path and NodeManager manages ROS 2 node processes. Optional private snapshots expose process facts, partial ROS logs and one explicitly selected POSITION/JOINT_STATE stream through a read-only observer. Simulation observation, motion and general task execution remain outside this contract. |
 | Verification and safety | Targeted tests, Docker CI tasks, simulation, subsystem checks, and [hardware rules](../AGENTS.md) | Software results do not establish hardware validation. |
-| Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/README.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
+| Contributor workflows | Repository documentation, `AGENTS.md`, and [repository skills](skills/AGENTS.md) | Skills document and sequence existing workflows; they do not define parallel build, validation, or launch paths. |
 
 The nine-tool adapter separates setup inspection, model support metadata,
 historical hardware test records, and runtime observation.
@@ -280,8 +280,8 @@ full commissioning and general task execution remain follow-up work.
 
 The proposed first motion-capable Model Context Protocol (MCP) release is an
 optional front end for exactly one tested, bounded robot operation. AI inference,
-including the existing [inference host](../ai/README.md), and
-[data collection](../ai/train/README.md) are outside its scope.
+including the existing [inference host](../ai/AGENTS.md), and
+[data collection](../ai/train/AGENTS.md) are outside its scope.
 
 A later model workflow should assess whether an existing policy or programmed
 sequence meets the task requirements, using available evidence. Its MCP
@@ -345,9 +345,9 @@ and explain in plain language:
   terminals and signal grounds, and identify required firmware installation or
   checks and other manual setup.
   Link the matching board-specific wiring and firmware instructions (for
-  example, the [Teensy 4.1 guide](../firmware/teensy/41/README.md)) and state
+  example, the [Teensy 4.1 guide](../firmware/teensy/41/AGENTS.md)) and state
   the selected board's verification status from the
-  [firmware index](../firmware/README.md). The MCP adapter must not flash
+  [firmware index](../firmware/AGENTS.md). The MCP adapter must not flash
   firmware;
 - before real motion, how the operator confirms facts Joshua has not
   established: a physical disconnect for actuator or driver power is installed

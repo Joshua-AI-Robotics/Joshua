@@ -1,8 +1,7 @@
 # Launcher
 
 Follow the repository [AGENTS.md](../AGENTS.md) and
-[coding guidelines](../docs/CODING_GUIDELINES.md). Read the local
-[README.md](README.md) before editing. This file owns the rules and architecture
+[coding guidelines](../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
 contract for `launcher/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
@@ -27,3 +26,17 @@ Use CLI tests, NodeManager's test child, and runtime observation fixtures in
 [BUILD](BUILD) and [node_manager/BUILD](node_manager/BUILD). Exercise partial
 startup, signals, descendants, readiness failure, cancellation, and escalation
 without opening devices. Test both supported ROS stacks when changing execution.
+
+## Launcher
+
+The launcher loads an explicitly selected protobuf preset and delegates configured
+ROS nodes and simulation processes to [NodeManager](node_manager/AGENTS.md).
+That guide documents readiness, process groups, shutdown, and passive observations.
+The directory [contract](AGENTS.md) defines implementation boundaries.
+
+A normal launch can open physical devices and move motors. Follow the root
+[hardware authorization rules](../AGENTS.md#hardware-safety--read-this-first).
+
+## Directory navigation
+
+- [node_manager/](node_manager/AGENTS.md)

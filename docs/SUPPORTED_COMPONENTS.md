@@ -16,7 +16,7 @@ referencing models by stable hardware ID. A test does not automatically add a
 model or broaden its support scope; an absent model is not necessarily
 incompatible with an existing driver.
 
-For LLM discovery, [MCP](../tools/mcp/README.md) exposes
+For LLM discovery, [MCP](../tools/mcp/AGENTS.md) exposes
 `list_supported_components()` for factory implementations,
 `list_supported_hardware(kind="camera", query="XWF-1080P")` for model discovery,
 and `list_hardware_test_records(hardware_id="sunplus-spca2281-xwf-1080p")` for
@@ -41,7 +41,7 @@ determines which actuator can use each channel.
 [board schema](../robot/board/proto/board.proto), but the factory rejects them
 as unimplemented. A schema enum is not implementation or test evidence.
 For physical bring-up and firmware verification, use the
-[firmware status table](../firmware/README.md#current-firmware-records);
+[firmware status table](../firmware/AGENTS.md#current-firmware-records);
 in particular, ESP32 protocol verification does not establish motor rotation.
 
 The [communication factory](../robot/comm/factory/comm_factory.cc) provides
@@ -49,7 +49,7 @@ serial byte-stream and message transports, plus paired EtherCAT message/cyclic
 transport. EtherCAT requires explicit JoshuaWire protocol, endpoint, and timing
 configuration. The standalone `CYCLIC` transport and TI-demo runtime path are retired.
 Ethernet UDP is declared but rejected as unimplemented. The
-[communication guide](../robot/comm/README.md) describes these combinations.
+[communication guide](../robot/comm/AGENTS.md) describes these combinations.
 
 The [action factory](../robot/action/factory/action_factory.h) selects STS3215
 servo and NEMA17 stepper drivers. It rejects the retired `MOTOR_TI_DEMO` type.
@@ -69,9 +69,9 @@ configuration; Sunplus uses that existing implementation.
 | Area | Implemented scope | Source and examples |
 | --- | --- | --- |
 | Model adapters | Random noise and SmolVLA have registered adapters and manifests. | [Model build registry](../ai/models/BUILD), [random-noise preset](../config/config_preset/so100/random_noise.pbtxt); SmolVLA has [a manifest](../ai/models/smolvla/model.textproto) but no checked-in preset. |
-| Simulation | MuJoCo interactive, passive, mirror, and offscreen modes; Isaac Sim backend. | [Simulation guide](../simulation/README.md), [SO-100 interactive preset](../config/config_preset/so100/sim_interactive.pbtxt). No Isaac Sim preset ships in the repo. Mirror mode's [preset](../config/config_preset/so100/sim_mirror.pbtxt) also opens a real serial bus. |
+| Simulation | MuJoCo interactive, passive, mirror, and offscreen modes; Isaac Sim backend. | [Simulation guide](../simulation/AGENTS.md), [SO-100 interactive preset](../config/config_preset/so100/sim_interactive.pbtxt). No Isaac Sim preset ships in the repo. Mirror mode's [preset](../config/config_preset/so100/sim_mirror.pbtxt) also opens a real serial bus. |
 | ROS 2 types | The enum and Python resolver map message classes for generic subscription/data collection. A mapping entry alone does not establish support in every node. | [Type enum](../ros2/proto/ros2_data_type.proto), [resolver](../ros2/ros2_type_resolver.py). |
-| Concrete publishers | Camera publishes `Image`; lidar publishes `PointCloud2`. Position publishers select compiled scalar, array, or JointState conversions from config. Message support depends on the node. | [Camera](../ros2/camera_publisher.cc), [lidar](../ros2/lidar_publisher.cc), [position](../ros2/position_publisher.cc), [typed position contracts](../ros2/README.md#typed-position-and-actuator-messages). |
+| Concrete publishers | Camera publishes `Image`; lidar publishes `PointCloud2`. Position publishers select compiled scalar, array, or JointState conversions from config. Message support depends on the node. | [Camera](../ros2/camera_publisher.cc), [lidar](../ros2/lidar_publisher.cc), [position](../ros2/position_publisher.cc), [typed position contracts](../ros2/AGENTS.md#typed-position-and-actuator-messages). |
 
 The [preset validation test](../config/config_preset/config_preset_validation_test.cc)
 loads every checked-in preset and runs `config::ValidateConfig` without opening
@@ -79,5 +79,5 @@ devices. That check does not construct boards or verify that every declared
 board and transport is implemented. Factory and driver tests exercise selected
 behavior with test doubles. These software checks do not prove that a preset's
 physical wiring, firmware, or motion path is ready. See
-[configuration guidance](../config/README.md) and
-[simulation prerequisites](../simulation/README.md) before using an example.
+[configuration guidance](../config/AGENTS.md) and
+[simulation prerequisites](../simulation/AGENTS.md) before using an example.

@@ -1,3 +1,6 @@
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Ant Robot
 =========
 
@@ -89,4 +92,4 @@ CONFIG=<your-preset>.pbtxt \
 docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
-See [simulation/README.md](../../README.md) for the backend fields.
+See [simulation/AGENTS.md](../../AGENTS.md) for the backend fields.

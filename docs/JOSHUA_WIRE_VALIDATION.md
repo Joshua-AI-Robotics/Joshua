@@ -41,7 +41,7 @@ bazel build --config=u24 --config=x86-base \
 For Humble, use `u22` and Python `3.10`. Prepare a local board configuration
 with `protocol: JOSHUA_WIRE`, `serial_config { message_adapter: JOSHUA_WIRE }`
 and `firmware { min_proto_version: 4 }`.
-Review the device path, identity, channel pins and [serial timing](../config/README.md#serial-timing).
+Review the device path, identity, channel pins and [serial timing](../config/AGENTS.md#serial-timing).
 
 ```bash
 bazel-bin/robot/board/joshua_wire/joshua_wire_smoke \
@@ -54,7 +54,7 @@ zero to test only the configured runtime post-open delay.
 
 ## Hardware sequence (human-confirmed setup only)
 
-1. Deliberately flash the matching [JW artifact](../firmware/README.md#joshuawire-serial).
+1. Deliberately flash the matching [JW artifact](../firmware/AGENTS.md#joshuawire-serial).
    AM243 UART has a software-only channel; Teensy/ESP32 can drive GPIO.
 2. Replace `--dry_run` with `--confirm_hardware`. The default handshake runs
    RESET_SESSION, IDENTIFY and a fresh RESET_SESSION, without configuring or

@@ -1,5 +1,8 @@
 # SOEM Bazel Wrapper
 
+Follow the repository [instructions](../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
 Joshua pins upstream SOEM through `MODULE.bazel` and overlays this Bazel build
 file onto the release archive. The wrapper builds the Linux SOEM library only;
 samples and non-Linux ports are intentionally excluded.
