@@ -199,13 +199,26 @@ Canonical test services and lint commands live in the root instructions and
 
 ### Comments
 
-Keep production-code comments minimal. Remove redundant descriptions, stale
-explanations, commented-out code, and comments that justify leaving a workaround
-in place when touching that code. Prefer clear names and direct control flow.
-Keep license/generated notices and essential API, wire-protocol, safety, timing,
-unit, and concurrency invariants. Preserve protobuf field semantics and hardware
-limitations. Link TODO/FIXME items to an issue; do not replace necessary context
-with an unexplained issue number. Broader legacy cleanup belongs in focused changes.
+Production code is **comment-free by default**. Do not add explanatory inline or
+block comments, narrative docstrings, section banners, commented-out code, or
+inline TODO/FIXME notes. Express intent through clear names, types, constants,
+direct control flow, validation, and behavioral tests. Do not introduce extra
+layers or abstractions merely to avoid a comment.
+
+Put architecture, ownership, and operating guidance in the owning `AGENTS.md`;
+put normative protocol details in the linked contract. Keep plans, workarounds,
+and follow-up work in issues/PRs rather than source-code narratives.
+
+The only exceptions are required license/generated notices, functional tool
+directives, and essential API/schema, wire, safety, timing, unit, or concurrency
+constraints that cannot be expressed adequately in code. Keep each exception
+short, factual, and local to the constraint. Schema units, ranges, and omitted-
+value semantics qualify; restating the implementation does not. PR authors must
+justify added comments against these exceptions.
+
+Apply this rule to new code. Migrate existing comments in focused cleanup PRs;
+do not mix a repository-wide comment sweep into unrelated work. This rule is a
+review requirement; automated comment-policy enforcement is not implemented.
 
 ### Make recurring corrections enforceable
 
