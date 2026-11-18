@@ -9,6 +9,11 @@ Its optional passive observation helper lives in
 
 ## Lifecycle
 
+The launcher requires an explicit nonempty `--config PATH` (or `--config=PATH`).
+Omitting it or passing an empty value exits with usage status 2 before constructing
+the manager or initializing RobotTime. `--help` and `--version` remain available
+without a config. Compose run services require the corresponding `CONFIG` variable.
+
 The launcher constructs one manager, calls `Initialize()` to load and validate
 its preset, and initializes RobotTime from `manager.config()`. `LaunchAllNodes()`
 resolves every executable before starting the configured graph. `MonitorNodes()`
