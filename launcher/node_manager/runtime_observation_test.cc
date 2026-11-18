@@ -1,4 +1,4 @@
-#include "node_generator/runtime_observation.h"
+#include "launcher/node_manager/runtime_observation.h"
 
 #include <signal.h>
 #include <unistd.h>
@@ -9,7 +9,7 @@
 
 #include "gtest/gtest.h"
 
-namespace node_generator {
+namespace launcher {
 namespace {
 class ObservationPreflightTest : public ::testing::Test {
  protected:
@@ -87,4 +87,4 @@ TEST_F(ObservationPreflightTest, RejectsAmbiguousConfiguredPublisherAndInvalidTo
   }
 }
 }  // namespace
-}  // namespace node_generator
+}  // namespace launcher

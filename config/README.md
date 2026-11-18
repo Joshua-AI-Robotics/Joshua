@@ -44,6 +44,12 @@ Its metadata shares implementing factory tables and never invokes their
 creators. Device reports show declared configuration with compatibility and
 hardware readiness unverified. The inventory and report are bounded; see the
 [adapter guide](../tools/mcp/README.md) for identities and limits.
+The MCP adapter separately offers `list_supported_hardware` for
+[curated models](../docs/SUPPORTED_HARDWARE.md), including aliases, drivers,
+example presets, and intended support scope. `list_hardware_test_records`
+retrieves [historical runs](../docs/TESTED_HARDWARE.md) by stable hardware ID.
+Tests retain environments, measurements, and limitations separately from model
+metadata. Neither query establishes readiness or changes config validation.
 
 ## Layout
 
@@ -302,6 +308,27 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
+
+For USB cameras, prefer `opencv_config.device_path` with a stable V4L2 link from
+`/dev/v4l/by-id/`. For example, in your local preset:
+
+```text
+opencv_config {
+  device_path: "/dev/v4l/by-id/<camera-usb-id>-video-index0"
+  width: 640 height: 480 fps: 30 fourcc: "MJPG"
+}
+```
+
+Replace the placeholder with the link for your camera's capture interface. A
+nonempty `device_path` takes precedence over numeric `id`, including when the
+driver reopens after a disconnect. If that path is unavailable, capture fails;
+it never falls back to another camera. An omitted or empty path preserves
+numeric-index behavior. Cameras with identical USB identities need
+`/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
+in private runtime presets rather than committed examples.
+Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
+such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
+the camera must support the selected format.
 
 One serial bus must belong to one node process. Position sensors use
 `POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and

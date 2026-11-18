@@ -10,7 +10,7 @@
 #include <limits>
 #include <thread>
 
-#include "node_generator/runtime_observation.h"
+#include "launcher/node_manager/runtime_observation.h"
 #include "rcl_interfaces/msg/log.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -28,8 +28,7 @@ int main(int argc, char** argv) {
   auto* pub = sensor->mutable_node()->add_publishers();
   pub->set_ros2_data_type(ros2::data_type::JOINT_STATE);
   pub->set_topic("/joshua_observation_fixture/position");
-  auto prepared =
-      node_generator::RuntimeObservation::Prepare(cfg, "fixture.pbtxt", argv[1], "encoder");
+  auto prepared = launcher::RuntimeObservation::Prepare(cfg, "fixture.pbtxt", argv[1], "encoder");
   if (!prepared.ok()) {
     std::cerr << prepared.status();
     return 3;
@@ -41,7 +40,7 @@ int main(int argc, char** argv) {
     execl("/bin/sleep", "sleep", "1", nullptr);
     _exit(2);
   }
-  std::vector<node_generator::ProcessFact> processes = {
+  std::vector<launcher::ProcessFact> processes = {
       {static_cast<int>(child), 7, "position_publisher_node_7", "position_publisher"}};
   const char* rmw_env = std::getenv("RMW_IMPLEMENTATION");
   const std::string previous_rmw = rmw_env ? rmw_env : "";

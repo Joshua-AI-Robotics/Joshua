@@ -6,6 +6,19 @@ Bazel. Human-facing docs live in [README.md](README.md) and
 [docs/](docs/README.md); this file is the entry point for coding agents. Launch
 agents from the repository root so this file is picked up.
 
+## Start each session with Joshua MCP
+
+Check whether Joshua MCP is connected and call `list_supported_components`
+before MCP-dependent configuration work. If unavailable, explain the missing
+connection and prompt the user to run `./scripts/joshua_mcp.sh setup` from the
+repository root, or reconnect their AI IDE if already configured. Independent
+source and documentation work can continue while setup is pending.
+
+Use the [guided integration skill](docs/skills/joshua-guided-integration/SKILL.md)
+for existing-hardware configuration or component development. Read the
+[setup guide](docs/MCP_SETUP.md) when diagnosing a connection. Setup verifies
+inspection; it does not launch robot hardware or bypass client approvals.
+
 ## Hardware safety — read this first
 
 Joshua drives physical robots. `bazel run //launcher:joshua_main -- --config
@@ -141,7 +154,6 @@ touches their area:
   [ui/](ui/README.md), [firmware/](firmware/README.md),
   [scripts/](scripts/README.md), [tools/](tools/README.md),
   [launcher/node_manager/](launcher/node_manager/README.md),
-  [node_generator/](node_generator/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
 - **ROS 2 nodes and utilities**: follow [ros2/AGENTS.md](ros2/AGENTS.md) for
   directory-specific code generation and node layout rules.
@@ -155,3 +167,10 @@ touches their area:
   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 - **Recurring tasks with a repo skill**: some tasks have a `joshua-*` skill that
   encodes the steps — see [docs/skills/](docs/skills/README.md).
+- **Hardware compatibility or model discovery**: read
+  [implemented components](docs/SUPPORTED_COMPONENTS.md) and
+  [supported hardware](docs/SUPPORTED_HARDWARE.md). MCP's
+  `list_supported_components` describes software implementations;
+  `list_supported_hardware` returns curated model information;
+  `list_hardware_test_records` returns separate [historical runs](docs/TESTED_HARDWARE.md)
+  linked by hardware ID. None establishes current hardware readiness.

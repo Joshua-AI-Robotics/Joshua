@@ -17,6 +17,7 @@ confused for one another.
 | Skill | Use it when | Audience |
 |-------|-------------|----------|
 | [joshua-add-subsystem-doc](joshua-add-subsystem-doc/SKILL.md) | Adding or filling in a subsystem `README.md` (or nested `AGENTS.md`) | agents + humans |
+| [joshua-guided-integration](joshua-guided-integration/SKILL.md) | Configuring existing hardware or adding a component with an AI IDE and MCP | agents + humans |
 
 ## How skills work here
 

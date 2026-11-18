@@ -1,6 +1,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -11,15 +12,14 @@
 #include "utils/joshua_runtime.h"
 #include "version.h"
 
-DEFINE_string(config,
-              "config/config_preset/so100/teleoperate.pbtxt",
-              "Path to the robot config file");
+DEFINE_string(config, "", "Required path to the robot config file");
 
 DEFINE_string(observation_dir, "", "Existing private passive snapshot directory (opt-in)");
 DEFINE_string(observe_sensor, "", "One configured POSITION/JOINT_STATE sensor to observe");
 
 JOSHUA_MAIN(argc, argv) {
   gflags::SetVersionString(JOSHUA_VERSION);
+  gflags::SetUsageMessage("--config PATH [options]\nAn explicit robot config is required.");
   // Preserve idiomatic gflags names and the documented hyphenated aliases.
   std::vector<std::string> flag_storage;
   for (int i = 0; i < argc; ++i) {
@@ -36,6 +36,12 @@ JOSHUA_MAIN(argc, argv) {
   flag_pointers.push_back(nullptr);
   argv = flag_pointers.data();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+  if (FLAGS_config.empty()) {
+    std::cerr << "ERROR: --config PATH is required; no robot preset is selected by default.\n"
+              << "Usage: " << argv[0] << " --config PATH [options]\n";
+    return 2;
+  }
 
   launcher::NodeManager manager(FLAGS_config);
   joshua::ThrowIfError(manager.Initialize());

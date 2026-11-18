@@ -4,6 +4,11 @@ Joshua is Docker-first and GPU-first for development. The host should provide Do
 
 ## Host Bootstrap
 
+For AI-assisted inspection and configuration, start with
+`./scripts/joshua_mcp.sh setup`; see [MCP setup](MCP_SETUP.md). This dedicated
+CPU-only path requires no GPU or host installation of ROS/Bazel. The developer
+and robot-launch environments below retain their existing GPU defaults.
+
 Use the bootstrap script to prepare Docker and NVIDIA host tooling and PTP clock read access:
 
 ```bash
@@ -55,14 +60,9 @@ docker compose exec joshua-u24 bash
 
 ## Launcher
 
-Run the default launcher through Docker:
-
-```bash
-docker compose run --rm run-u22
-docker compose run --rm run-u24
-```
-
-Pass a preset config when needed:
+Select a preset explicitly before launching through Docker. `CONFIG` is required;
+there is no default robot preset. Read the preset and confirm hardware is set up
+before running a configuration that declares real devices.
 
 ```bash
 CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22

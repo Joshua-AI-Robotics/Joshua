@@ -112,7 +112,7 @@ If your change depends on ARM64 hardware or emulation, say so in the PR and desc
 To exercise the full stack manually:
 
 ```bash
-docker compose run --rm run-u22
+CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u22
 CONFIG=config/config_preset/so100/teleoperate.pbtxt docker compose run --rm run-u24
 ```
 

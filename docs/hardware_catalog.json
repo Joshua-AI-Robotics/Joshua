@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "hardware": [
+    {
+      "id": "sunplus-spca2281-xwf-1080p",
+      "kind": "camera",
+      "manufacturer": "Sunplus Innovation Technology Inc.",
+      "model": "XWF-1080P",
+      "aliases": [
+        "SPCA2281",
+        "Sunplus SPCA2281"
+      ],
+      "identifiers": {},
+      "driver": "CvCamera / OpenCV V4L2",
+      "implementation": "robot/perception/camera/cv_camera.cc",
+      "preset": "config/config_preset/example/sunplus_spca2281.pbtxt",
+      "support_scope": "Image capture through the existing OpenCV/V4L2 driver using the example preset on Linux."
+    }
+  ]
+}
