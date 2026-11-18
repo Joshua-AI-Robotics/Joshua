@@ -1,0 +1,19 @@
+FROM python:3.12.8-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY hooks/lint-requirements.txt /tmp/lint-requirements.txt
+RUN python3 -m pip install --no-cache-dir -r /tmp/lint-requirements.txt
+
+ARG TARGETARCH
+RUN case "$TARGETARCH" in amd64|arm64) ;; *) exit 1 ;; esac \
+    && curl -fL --retry 3 \
+    "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${TARGETARCH}" \
+    -o /usr/local/bin/buildifier \
+    && chmod +x /usr/local/bin/buildifier
+
+WORKDIR /workspace
+ENV JOSHUA_LINT_CONTAINER=1
+CMD ["./hooks/lint_check.sh"]

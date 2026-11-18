@@ -98,16 +98,17 @@ CI tests and normal package builds do not require GPU hardware.
 Before pushing:
 
 ```bash
-./hooks/lint_check.sh --fix   # auto-fix files changed since diverging from develop
+./hooks/lint_check.sh --fix
 ```
 
-Covers `clang-format` (C/C++/proto) and `black`/`isort`/`flake8` (Python). The
-script needs `pre-commit` on the machine you run it from
-(`python3 -m pip install --user pre-commit`); nothing installs a git pre-push
-hook for you, so run it yourself before pushing.
-
-`BUILD`/`BUILD.bazel` files are **not** covered by that script — run
-`buildifier` on them yourself when you edit them.
+Covers changed files since diverging from `develop`: `clang-format`
+(C/C++/proto), `black`/`isort`/`flake8` (Python), YAML syntax, and `buildifier`
+(`BUILD`/`BUILD.bazel`). `ui/` is excluded. CI runs the same pinned Docker tools
+in check mode against the PR base. Missing tools or failed fixes fail the check.
+The script does not require `pre-commit`; no git hook is installed automatically.
+On the host, it discovers changed files with local Git and runs tools in Docker,
+including for linked worktrees. Inside a dev container, it uses the pinned lint
+venv directly without Docker. Rebuild existing dev images to install that venv.
 
 ## Conventions
 

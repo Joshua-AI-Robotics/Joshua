@@ -113,13 +113,9 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
 # ============================================
 # Install linting tools
 # ============================================
-RUN apt-get update && apt-get install -y \
-    clang-format \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install buildifier
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -L "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${ARCH}" -o /usr/local/bin/buildifier && \
+    curl -fL "https://github.com/bazelbuild/buildtools/releases/download/v6.4.0/buildifier-linux-${ARCH}" -o /usr/local/bin/buildifier && \
     chmod +x /usr/local/bin/buildifier
 
 # ============================================
@@ -130,7 +126,12 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m pip install --ignore-installed pre-commit black flake8 isort --break-system-packages
+    && python3 -m pip install --ignore-installed pre-commit --break-system-packages
+
+COPY hooks/lint-requirements.txt /tmp/lint-requirements.txt
+RUN python3 -m venv /opt/joshua-lint \
+    && /opt/joshua-lint/bin/python3 -m pip install --no-cache-dir -r /tmp/lint-requirements.txt
+ENV JOSHUA_LINT_CONTAINER=1
 
 # ============================================
 # Install Python Project Dependencies

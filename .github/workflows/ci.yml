@@ -6,6 +6,28 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  lint:
+    name: Source lint
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+
+      - name: Build lint image
+        run: docker compose build lint
+
+      - name: Test lint enforcement
+        run: docker compose run --rm -T lint python3 hooks/lint_check_test.py
+
+      - name: Check changed source files
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop' }}
+        run: docker compose run --rm -T lint ./hooks/lint_check.sh --base "$LINT_BASE" --verbose
+
   agent-docs:
     name: Agent instruction links
     runs-on: ubuntu-22.04
