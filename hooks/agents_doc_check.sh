@@ -8,7 +8,7 @@
 # Scope is deliberately narrow: explicit Markdown link targets only. Paths and
 # commands mentioned in prose or code blocks are NOT checked, because docs
 # legitimately reference planned work (e.g. tools/flash/) and placeholders
-# (e.g. <github-username>/<topic>). See docs/AGENTS_RFC.md.
+# (e.g. <github-username>/<topic>). See docs/AGENTS.md.
 #
 # Usage: hooks/agents_doc_check.sh
 set -uo pipefail
@@ -59,11 +59,10 @@ REQUIRED=(
   AGENTS.md
   GEMINI.md
   .github/copilot-instructions.md
-  docs/AGENTS_RFC.md
 )
 
 # Nested per-directory AGENTS.md files are discovered, not listed, so adding one
-# (see docs/AGENTS_RFC.md §7) does not require editing this script.
+# (see docs/AGENTS.md) does not require editing this script.
 discover_nested() {
   if git rev-parse --git-dir >/dev/null 2>&1; then
     # -co --exclude-standard also catches a nested file you have created but

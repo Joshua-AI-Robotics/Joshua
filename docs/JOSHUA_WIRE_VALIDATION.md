@@ -30,7 +30,7 @@ limits. Feedback counts commanded pulses, not measured motor movement.
 
 ## Build and preflight (no hardware access)
 
-Inside the [Docker development environment](../CONTRIBUTING.md#development-setup):
+Inside the [Docker development environment](../AGENTS.md#development-environment):
 
 ```bash
 bazel build --config=u24 --config=x86-base \

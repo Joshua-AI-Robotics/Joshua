@@ -3,7 +3,7 @@
 Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
 `AGENTS.md` files before changing or running this subsystem.
 
-Vendor TI firmware, not Joshua-owned (`docs/BOARD_LAYER_RFC.md` §7.3 —
+Vendor TI firmware, not Joshua-owned (`robot/board/AGENTS.md` —
 vendor code stays as-is rather than migrating to the Joshua firmware
 pattern). Tracks AM243 setup, firmware experiments, and EtherCAT bring-up
 for Joshua. The former TI-demo host-side board/codec/tools are retired;
@@ -34,21 +34,10 @@ firmware/am243/ti_ethercat_simple_demo_v1/
       see `docs/ethercat.md`
 ## Prerequisites
 
-- Hardware: TI LP-AM243 LaunchPad (595-LP-AM243), USB-C cable (power),
-  Micro-USB cable (XDS110 debug + UART)
-- Toolchain / SDK, exact versions (bring-up is version-sensitive — see
-  `docs/bringup.md`/`docs/ethercat.md` for pitfalls with mismatched
-  versions):
-  - MCU+ SDK: `12.00.00.26`
-  - Industrial Communications SDK: `09.00.00.03` (for the EtherCAT demo;
-    not needed for Hello World alone)
-  - CCS: `21.0.0.00014` (`ccs2100`)
-  - SysConfig: `1.17.0` for the Industrial Comms SDK 09 flow, `1.26.3` for
-    the plain MCU+ SDK 12 flow — these are NOT interchangeable, see
-    `docs/ethercat.md`
-  - ARM Clang: `ti-cgt-armllvm_5.1.1.LTS` (ships inside CCS 2100)
-  - PRU CGT: `2.3.3`
-- Accounts: a free TI (myTI) account to download CCS/SDKs from TI's site.
+Use the board identities, external SDK/toolchain versions, container mounts,
+and device preparation in [the AM243 board guide](../AGENTS.md). Hello World
+uses MCU+ SDK 12; the vendor EtherCAT demo uses Industrial SDK 09. Their SysConfig
+versions and applications are different and must not be interchanged.
 
 ## Install
 
@@ -75,23 +64,16 @@ scripts/build_ethercat_beckhoff.sh     # LP-AM243 EtherCAT Beckhoff SSC demo (ne
 
 ## Flash
 
-Set `SW4` before power-cycling the LP-AM243:
-
-```text
-UART flashing: SW4 BOOTMODE [1:8] = 11100000
-OSPI boot:     SW4 BOOTMODE [1:8] = 01000100
-```
-
-In UART flashing mode, the ROM prints `C` every 2-3 seconds on the correct
-UART port. Close the UART terminal before flashing.
+Use the [board preparation](../AGENTS.md#preparation) to identify the XDS110
+UART and enter UART boot mode. From this legacy implementation directory,
+these commands select the vendor applications, not JoshuaWire images:
 
 ```bash
 scripts/flash.sh /dev/ttyACM0                    # Hello World
 scripts/flash_ethercat_simple.sh /dev/ttyACM0     # EtherCAT slave simple demo
 ```
 
-After a successful flash, switch back to OSPI boot mode and reset the
-board.
+After a successful flash, follow the [normal-boot procedure](../AGENTS.md#return-to-normal-boot).
 
 ## Verify
 

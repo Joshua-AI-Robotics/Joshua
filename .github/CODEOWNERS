@@ -45,7 +45,6 @@
 /docker/                   @donegjookim @hsmoon5458
 /dockerfiles/              @donegjookim @hsmoon5458
 # Docs have multiple owners so reviews can be handled by any listed owner.
-/doc/                      @piscesgh @donegjookim @hsmoon5458
 /docs/                     @piscesgh @donegjookim @hsmoon5458
 /firmware/                 @piscesgh @hsmoon5458
 /hooks/                    @hsmoon5458
@@ -67,7 +66,7 @@
 
 # Board layer — board drivers, frames, and the board factory.
 /robot/board/              @piscesgh @hsmoon5458
-/docs/BOARD_LAYER_RFC.md   @piscesgh @hsmoon5458
+/robot/board/AGENTS.md   @piscesgh @hsmoon5458
 
 # Communication layer — serial and EtherCAT transports and the comm factory.
 /robot/comm/               @piscesgh @hsmoon5458

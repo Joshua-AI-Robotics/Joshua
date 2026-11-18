@@ -1,7 +1,7 @@
 # Developer tools
 
 Follow the repository [AGENTS.md](../AGENTS.md) and
-[coding guidelines](../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
+[coding guidelines](../AGENTS.md#coding-guidelines). This file owns the rules and architecture
 contract for `tools/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
@@ -65,8 +65,7 @@ launcher and ROS 2 nodes never invoke these.
   hardware-safety section of [AGENTS.md](../AGENTS.md).
 
   It lives here rather than under `robot/` on purpose. The Python robot layer
-  was removed in [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md) §10
-  Phase 9 and `robot/` is C++ only. **This tool is now the only way to drive a
+  was removed; `robot/` is C++ only. **This tool is now the only way to drive a
   SPIKE hub.** The `SPIKE_HUB_BLE` board and the `MOTOR_SPIKE` motor type were
   both removed, so no preset can reach a hub through the launcher. Nothing Spike-shaped
   survives outside this directory: `ActuatorType::SPIKE_MOTOR`,
@@ -83,9 +82,8 @@ launcher and ROS 2 nodes never invoke these.
 - Anything the runtime depends on.
 - Environment setup and build orchestration — those are
   [scripts/](../scripts/AGENTS.md).
-- Firmware flashing. Planned to land here as `tools/flash/`, per
-  [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md), but it does not exist
-  yet and runtime code must never flash a board.
+- Firmware flashing. Board-specific procedures belong in
+  [firmware/AGENTS.md](../firmware/AGENTS.md); runtime code never flashes a board.
 
 ## Directory navigation
 

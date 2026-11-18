@@ -3,9 +3,9 @@
 P1–P5 software is implemented. P6 provides a reproducible software evidence kit
 and the procedure below; **physical qualification is pending**. Passing a PTY or
 fake ADC test does not establish USB throughput, physical motion, analog accuracy
-or stopping latency. This document is the evidence checklist for
-[the serial plan](SERIAL_COMM_IMPROVEMENT_PLAN.md), not a declaration of hardware
-readiness.
+or stopping latency. This document defines the current qualification procedure for the
+[serial/coordinator contracts](../robot/board/joshua_wire/AGENTS.md). It does
+not establish hardware readiness.
 
 ## Frozen candidate and workload
 

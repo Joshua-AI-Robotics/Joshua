@@ -11,7 +11,7 @@ enum ActionType {
 }
 
 // DEPRECATED: board/transport-flavored actuator types are replaced by
-// MotorType + Actuator.board_name (docs/BOARD_LAYER_RFC.md §6.3). Kept
+// MotorType + Actuator.board_name (robot/board/AGENTS.md). Kept
 // for parsing migration errors; rejected by the runtime factory.
 enum ActuatorType {
   ACTUATOR_INVALID = 0;

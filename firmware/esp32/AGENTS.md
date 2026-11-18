@@ -24,58 +24,95 @@ Historical hardware bring-up of the previous protocol does not verify this image
   cached feedback, resource ownership, and safety using the shared endpoint.
 - `firmware/common/backend_stepdir.cpp`: nonblocking STEP edges and GPIO enable.
 
-## Prerequisites
+## Firmware selection
 
-Use the Joshua Docker development environment, PlatformIO, and the `esp32-serial`
-Arduino framework/toolchain. Hardware is needed only for deliberate flashing
-and physical verification. See the wiring below before connecting a motor.
+| Environment | Artifact | Role |
+| --- | --- | --- |
+| `esp32-serial` | `.pio/build/esp32-serial/firmware.bin` | JoshuaWire UART, STEP/DIR |
 
-## Install
+Artifact paths are relative to `firmware/esp32`. Use host and firmware from the
+same checkout; wire revision 4 and codec 0.2.0 are required. Images have different
+capabilities; changing the environment is an explicit setup change.
 
-Install PlatformIO in the development container if it is not already available:
+## Prerequisites and install
 
-```bash
-python3 -m pip install platformio
-```
+Follow the [shared toolchain environment](../AGENTS.md#toolchain-environment).
+Use a data-capable USB cable and the exact ESP32 board named above. Record
+resolved packages from [platformio.ini](platformio.ini); building needs no board.
 
 ## Build
 
-Inside the container:
+From the repository root inside the container, select one environment:
 
 ```bash
-pio run -d firmware/esp32
+JOSHUA_ENV=esp32-serial
+pio run -d firmware/esp32 -e "$JOSHUA_ENV"
+pio pkg list -d firmware/esp32 -e "$JOSHUA_ENV"
+sha256sum firmware/esp32/.pio/build/"$JOSHUA_ENV"/firmware.bin
 ```
 
-The shared `joshua_wire` PlatformIO library compiles the same revision-4 C
-codecs, runtime and endpoint that Bazel uses on the host. No old codec is linked.
+## Preparation
+
+Identify the USB-UART adapter by its serial identity and board labeling inside
+the authorized container. `pio device list --json-output` lists serial metadata;
+it does not prove board wiring. Set the actual stable path, verify its target,
+and close other owners. The placeholder below must be replaced:
+
+```bash
+JOSHUA_PORT=/dev/serial/by-id/REPLACE_WITH_VERIFIED_ESP32
+readlink -f "$JOSHUA_PORT"
+```
+
+Use the wiring/power requirements below and the shared authorization rules.
+DevKitC automatic DTR/RTS reset normally selects download mode. If unavailable,
+follow [Espressif boot-mode selection](https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/boot-mode-selection.html):
+hold BOOT/GPIO0 low during an EN/reset, then release it for normal boot.
 
 ## Flash
 
-Flashing is a deliberate hardware operation. With the intended board connected
-and reviewed, upload the image explicitly:
+Only for the currently authorized, identified board, in the same shell:
 
 ```bash
-pio run -d firmware/esp32 --target upload
+pio run -d firmware/esp32 -e "$JOSHUA_ENV" --target upload --upload-port "$JOSHUA_PORT"
 ```
 
-The artifact is `.pio/build/esp32-serial/firmware.bin`.
+Require exit success and retain the esptool write/verification log. PlatformIO
+uploads the environment's complete image set; do not write `firmware.bin` to a
+guessed raw offset. See the [upload-port option](https://docs.platformio.org/en/latest/core/userguide/cmd_run.html#cmdoption-pio-run-upload-port).
+
+## Return to normal boot
+
+Release BOOT and reset/power-cycle as needed. Re-identify the USB-UART path;
+normal flash boot must replace download mode. Do not start motor commands merely
+because the upload succeeded.
 
 ## Verify
 
-After a human-initiated flash, review the device and wiring in
-`config/config_preset/example/esp32_stepper_demo.pbtxt`, then run that preset in the
-matching Docker launcher service. It selects `message_adapter: JOSHUA_WIRE` and
-`min_proto_version: 4`; initialization resets the session, discovers functions,
-checks profile/safety metadata and configures pins while outputs stay disabled.
-A physical motion test must separately confirm directions, enable polarity,
-pulse timing and stop behavior. The expected serial path is `/dev/ttyUSB0`.
+First confirm enumeration and the selected artifact/host revision. Use the
+[serial preflight and handshake](../../docs/JOSHUA_WIRE_VALIDATION.md#build-and-preflight-no-hardware-access):
+validate the reviewed protobuf board config with `--dry_run`, then perform an
+explicitly authorized handshake with `--confirm_hardware`. The default handshake
+resets/identifies/resets without configuring or enabling channels.
+
+Configuration can change GPIO even with motor power disconnected. Follow the
+validation guide for any further configuration or powered motion. A successful
+handshake does not establish wiring, direction, pulse timing, or physical stopping.
+
+## Recovery and evidence
+
+Check cable/data access, container permissions, exclusive loader access, selected
+environment, and board identity before retrying. Recover the boot mode using the
+board procedure above; rebuild/reselect an image instead of guessing compatibility.
+Record the commit, artifact SHA256, tool/package versions, board identity, upload
+command/result, boot result, handshake result, power state, and unresolved gaps.
+Keep the historical qualification records below distinct from this new run.
 
 ## Wiring / Pinout
 
 **Pin numbers are host-configured** (`StepDirConfig.step_pin`/`dir_pin`/
 `enable_pin` in the pbtxt, pushed to firmware via `actuator PROFILE/CONFIGURE` at
 `Init()`), not hardcoded in `channel_table.c`
-(`docs/BOARD_LAYER_RFC.md` §7.5, revised). `channel_table.c` only declares
+(`robot/board/AGENTS.md`). `channel_table.c` only declares
 how many channel *slots* this firmware image has — still compile-time,
 since that's reported by `IDENTIFY`.
 

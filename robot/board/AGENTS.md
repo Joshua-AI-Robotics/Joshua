@@ -18,6 +18,25 @@ request correlation, session/boot identity, command uncertainty, resource claims
 and deliberate recovery. Cancellation does not retract bytes already sent, and
 an acknowledgment does not establish physical stopping.
 
+## Selection and channel contract
+
+Motor, board, communication, and drive are independent configuration axes:
+`Actuator.motor_type`, `Board.board_type`, `Board.comm`, and `Channel.drive`.
+ActionFactory and PerceptionFactory resolve named boards/channels through the
+shared BoardFactory; ValidateMotorChannel rejects incompatible motor/drive pairs.
+One board instance and communication lease serve compatible local consumers.
+
+BoardInterface owns initialization, channel lookup, and teardown. BoardChannel
+owns enable/disable, native-unit target operations, and feedback. Motor drivers
+own conversion into those native units. Binary torque-enable registers use
+Enable/Disable; a genuine continuous torque target uses `TargetMode::kTorque`.
+Unsupported modes return an explicit error instead of reinterpreting their meaning.
+
+For Joshua-owned STEP/DIR firmware, GPIO pins, polarity, pulse width, and limits
+come from host protobuf configuration. Firmware advertises supported channel
+slots and validates resource claims; discovery cannot establish physical wiring.
+Board identity is distinct from transport peripherals and actuator drive hardware.
+
 ## Verification
 
 Use fake transports and existing factory, session, coordinator, and native

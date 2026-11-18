@@ -1,7 +1,7 @@
 # MCP adapters
 
 Follow the repository [AGENTS.md](../../AGENTS.md) and
-[coding guidelines](../../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
+[coding guidelines](../../AGENTS.md#coding-guidelines). This file owns the rules and architecture
 contract for `tools/mcp/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
@@ -170,12 +170,133 @@ capped at 64 KiB, including Unicode escaping; a larger report returns
 
 ## Typed observation contract
 
-[`observation_source.py`](observation_source.py) provides a standalone, stdlib-only
-`ObservationSource[T]` ABC and validated frozen metadata/result records. Concrete
-adapters own payload validation, bounds and lifecycle enforcement. The
-[design and usage examples](../../docs/MCP_OBSERVATION_DESIGN.md) distinguish the
-implemented base from deferred adapters. This library exposes no new MCP tool
-and does not change the existing interfaces or response schemas.
+[observation_source.py](observation_source.py) implements the standalone,
+stdlib-only ABC and validated metadata records. It adds no MCP tool or production
+adapter. Existing setup and runtime-observation tools retain their schemas.
+
+### Reader interface
+
+`ObservationSource[T]` has exactly three abstract methods:
+
+| Method | Adapter obligation |
+|---|---|
+| `describe() -> SourceDescriptor` | Return stable cached metadata, including after close, without discovery or device access. |
+| `async read_latest() -> ObservationResult[T]` | Non-destructively return the latest bounded sample or explicit unavailability; repeated reads can return the same sample. |
+| `async aclose() -> None` | Idempotently release reader resources and source-owned queries; concurrent calls are safe. |
+
+Close cancels source-owned query work. Reads still pending when closure wins return
+`UNAVAILABLE/CLOSED`; subsequent reads stay closed. An already completed read is
+not retroactively changed. Cancellation of a caller's read task propagates after
+query cleanup; closing a source must not cancel consumer-owned tasks.
+
+**The ABC implements no lifecycle engine.** Concrete adapters enforce deadlines,
+concurrency, payload validation and byte bounds, source binding, clock
+comparability, freshness, and cleanup. A subclass that merely implements the
+three method names has not proved those obligations. Reusable transport/codec
+helpers can be composed outside the base when real adapters need them.
+
+Bind policy at reader creation; requests cannot create unlimited helpers or
+subscriptions. Configured IDs select operator-enabled readers, excluding arbitrary
+model-selected ROS topics, paths or endpoints. One device can expose multiple
+sources, such as image and audio.
+
+### Metadata and results
+
+Four frozen records describe the contract:
+
+| Record | Fields and meaning |
+|---|---|
+| `ObservationLimits` | Positive finite `read_timeout_seconds` and `freshness_seconds`; positive integer `max_payload_bytes` and `max_in_flight_reads`. Defaults: 10 seconds, 3 seconds, 64 KiB and one read. |
+| `SourceDescriptor` | Required `source_id`, `kind`, `schema_name`; optional `encoding`, `units`, `reference`; default limits. References configured identity without copying wiring or calibration. |
+| `ObservationTime` | Integer `nanoseconds` and optional `clock_id`. Signed source time, including zero, is valid; `None` means unknown clock origin. |
+| `ObservationResult[T]` | Required source ID and `Availability`; optional typed payload, receipt/source times, runtime instance, sequence, diagnostic and `UnavailableReason`. |
+
+`FRESH` and `STALE` require a payload and a receipt time with a known clock ID;
+they prohibit an unavailable reason. `UNAVAILABLE` requires no payload, a
+nonempty human diagnostic and one stable reason: `NO_DATA`, `BUSY`, `TIMEOUT`,
+`CLOSED`, `INVALID_DATA` or `BACKEND_ERROR`. These codes describe outcomes;
+they do not promise that retry is safe. Callers never need to parse diagnostics
+to identify the outcome.
+
+Constructors enforce these metadata invariants, exact integer types (excluding
+bool), and optional nonnegative sequence numbers. Text is UTF-8 without NUL,
+at most 512 bytes per field; diagnostics allow 4096 bytes and can be empty for
+available results. Optional text uses `None` when unknown; supplied identity,
+format and clock text must be nonempty. The limits are policies for adapters to
+enforce, not universal media defaults or automatic runtime bounds.
+
+A reread preserves backend sample identity, sequence and receipt/source timestamps.
+Unknown sequence or runtime identity stays `None`. Receipt freshness does not
+establish acquisition freshness. Clock comparisons require a known comparable
+origin, including boot/time namespace where applicable; the generic layer never
+subtracts unrelated timestamps. A nonempty clock label alone verifies no
+synchronization.
+
+`Generic[T]` is a static payload contract, not runtime validation. Adapters
+validate actual payload type, representation size, units and source binding.
+Frozen records do not deep-freeze arbitrary payloads: supply immutable payloads
+or independent owned copies. ROS adapters must preserve verified
+domain/node/publisher association before reporting data; required but unverifiable
+association makes a source unavailable. Such association is not physical hardware
+authentication. Transport-specific provenance records remain deferred.
+
+### Usage with a fake
+
+Constructing metadata needs only the descriptor's three identifying fields.
+An available sample additionally needs its payload and original known receipt
+time. This example uses an invented clock and opens no device:
+
+```python
+from dataclasses import dataclass
+
+from tools.mcp.observation_source import (
+    Availability, ObservationResult, ObservationTime, SourceDescriptor,
+)
+
+@dataclass(frozen=True)
+class Reading:
+    value: float
+
+descriptor = SourceDescriptor("sensor:example", "numeric", "example.numeric/v1")
+sample = ObservationResult(
+    source_id=descriptor.source_id,
+    availability=Availability.FRESH,
+    payload=Reading(2.5),
+    receipt_time=ObservationTime(1_000_000_000, "fake-boot:fake-namespace:monotonic"),
+)
+```
+
+A caller uses the same methods for either payload kind. The following uses the
+[test-only cooperative fake](observation_source_test.py), not a
+production adapter. The fixture supplies its known immutable sample metadata.
+
+```python
+import asyncio
+
+from tools.mcp.observation_source import Availability, ObservationSource
+from tools.mcp.observation_source_test import FakeObservationSource, NumericReading
+
+async def inspect(source: ObservationSource[NumericReading]) -> None:
+    try:
+        print(source.describe())
+        first = await source.read_latest()
+        second = await source.read_latest()  # Can repeat the same sample identity.
+        if second.availability is Availability.UNAVAILABLE:
+            print(second.unavailable_reason, second.diagnostic)
+        else:
+            print(first.sample_sequence, second.sample_sequence, second.payload)
+    finally:
+        await source.aclose()
+
+asyncio.run(inspect(FakeObservationSource(NumericReading(2.5), lambda: 1_000_000_000)))
+```
+
+[observation_source_test.py](observation_source_test.py) verifies metadata,
+incomplete-ABC rejection, and SDK/ROS-free imports. Its cooperative fake covers
+sample identity, freshness, errors, overlap, deadline cleanup, caller cancellation,
+concurrent close, and read-after-close. Those tests establish the fake's behavior;
+new adapters must independently verify their lifecycle and payload obligations.
+Camera, audio, and composed position readers are not implemented by this ABC.
 
 ## Optional runtime observations
 
@@ -230,8 +351,8 @@ completion. Missing observations are not permission to move.
 Use protobuf presets for hardware declarations and the relevant subsystem and
 [firmware](../../firmware/AGENTS.md) guides for wiring, firmware versions,
 calibration and limits. New hardware requires implementation and verification;
-see [AI integration](../../docs/AI_INTEGRATION.md) for the wider workflow and
-remaining motion, commissioning, configuration-writing and task-execution gaps.
+configuration writing, motion, commissioning, and general task execution are
+not capabilities of this read-only adapter.
 
 The isolated pip locks are regenerated inside the matching Docker images with
 an ephemeral venv and `pip==25.2 pip-tools==7.5.2`:
@@ -244,3 +365,13 @@ python3 -m venv /tmp/mcp-lock-env
 
 Use `requirements_3.12.lock` for the Python 3.12 run. Root and model lockfiles
 are independent of this tool.
+
+## Integration boundary
+
+Before MCP exposes an operation, its implementing subsystem must define and test
+inputs, outputs, state transitions, cancellation, errors, observability, and limits.
+Adapters use that established interface, including ROS topics/services/actions
+where appropriate, rather than adding another runtime or opening hardware drivers.
+Joshua must continue to work through protobuf configuration and the normal launcher
+without MCP. Capability claims must match merged implementations and their recorded
+evidence; configured components do not imply a verified composed task.

@@ -310,23 +310,10 @@ physical-output safety.
 
 ## Flash
 
-Not automated by this target. After the image is built and reviewed, adapt the
-existing TI demo flash configuration to point at:
-
-```text
-out/am243_dual_transport_rev4.release.appimage.hs_fs
-```
-
-Use the same SDK 09 bootloader/application offsets. Verify both bootloader and
-application after flashing; do not use the vendor TI-demo application path for
-a JoshuaWire image.
-
-The separate JW EtherCAT profile uses
-`out/am243_ethercat_jw.release.appimage.hs_fs`; it is not the UART image.
-The SOES candidate uses `out/am243_ethercat_jw_soes.release.appimage.hs_fs`.
-
-Flashing remains a deliberate hardware operation and must not happen as part
-of build or test.
+Follow the [LP-AM243 board procedure](../AGENTS.md#flash). Select `uart`, `jw`,
+or `jw-soes` explicitly; that guide owns SDK bootloader selection, OSPI offsets,
+configuration preparation, actual upload/verification commands, and boot switches.
+Building this implementation never invokes flashing.
 
 ## Verify
 
@@ -337,11 +324,8 @@ validation references above; the default UART image contains TI echo EtherCAT.
 
 ## Wiring / Pinout
 
-- XDS110 UART console/protocol: 115200 8-N-1; the example uses `/dev/ttyACM0`.
-  Check the actual port after connecting the board.
-- EtherCAT: existing LP-AM243 IN/OUT ports and TI demo wiring.
-- STEP/DIR pins are accepted and retained by the serial protocol but are not
-  driven in this milestone.
+Use the [board wiring and port procedure](../AGENTS.md#wiring--pinout).
+This implementation's actuator backend remains software-only.
 
 ## Known gaps / Troubleshooting
 

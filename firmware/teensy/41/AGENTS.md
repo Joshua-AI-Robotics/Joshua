@@ -26,58 +26,90 @@ Historical hardware bring-up of the previous protocol does not verify this image
   cached feedback, resource ownership, and safety using the shared endpoint.
 - `firmware/common/backend_stepdir.cpp`: nonblocking STEP edges and GPIO enable.
 
-## Prerequisites
+## Firmware selection
 
-Use the Joshua Docker development environment, PlatformIO, and the `teensy41-serial`
-Arduino framework/toolchain. Hardware is needed only for deliberate flashing
-and physical verification. See the wiring below before connecting a motor.
+| Environment | Artifact | Role |
+| --- | --- | --- |
+| `teensy41-serial` | `.pio/build/teensy41-serial/firmware.hex` | Request-only JoshuaWire USB serial |
+| `teensy41-mixed-scalar` | `.pio/build/teensy41-mixed-scalar/firmware.hex` | Explicit A0 scalar-stream/watchdog candidate; Teensy platform 5.0.0 |
 
-## Install
+Artifact paths are relative to `firmware/teensy/41`. Use host and firmware from the
+same checkout; wire revision 4 and codec 0.2.0 are required. Images have different
+capabilities; changing the environment is an explicit setup change.
 
-Install PlatformIO in the development container if it is not already available:
+## Prerequisites and install
 
-```bash
-python3 -m pip install platformio
-```
+Follow the [shared toolchain environment](../../AGENTS.md#toolchain-environment).
+Use a data-capable USB cable and the exact Teensy 4.1 board named above. Record
+resolved packages from [platformio.ini](platformio.ini); building needs no board.
 
 ## Build
 
-Inside the container:
+From the repository root inside the container, select one environment:
 
 ```bash
-pio run -d firmware/teensy/41
+JOSHUA_ENV=teensy41-serial
+pio run -d firmware/teensy/41 -e "$JOSHUA_ENV"
+pio pkg list -d firmware/teensy/41 -e "$JOSHUA_ENV"
+sha256sum firmware/teensy/41/.pio/build/"$JOSHUA_ENV"/firmware.hex
 ```
 
-The shared `joshua_wire` PlatformIO library compiles the same revision-4 C
-codecs, runtime and endpoint that Bazel uses on the host. No old codec is linked.
+Set `JOSHUA_ENV=teensy41-mixed-scalar` before building only when selecting the
+mixed-scalar variant; keep the same value for hashing and uploading.
+
+## Preparation
+
+Connect only the intended Teensy to the authorized container's programming USB
+access. Check its labeling and USB identity. The selected `teensy-cli` protocol
+uses the USB bootloader; a serial path alone is not sufficient target selection.
+Close monitors and other loaders. Use the wiring/power requirements below.
 
 ## Flash
 
-Flashing is a deliberate hardware operation. With the intended board connected
-and reviewed, upload the image explicitly:
+In the same shell, with the intended board selected and currently authorized:
 
 ```bash
-pio run -d firmware/teensy/41 --target upload
+pio run -d firmware/teensy/41 -e "$JOSHUA_ENV" --target upload
 ```
 
-The artifact is `.pio/build/teensy41-serial/firmware.hex`.
+If the loader waits for a board, press that board's Program button. Require exit
+success and retain the loader log. This documented workflow assumes only the
+intended Teensy is available to the loader. See [PlatformIO Teensy upload protocols](https://docs.platformio.org/en/latest/boards/teensy/teensy41.html#uploading)
+and [PJRC loader usage](https://www.pjrc.com/teensy/loader_cli.html).
+
+## Return to normal boot
+
+Release Program and let the loader reboot the application; reset/power-cycle if
+needed. Re-identify the re-enumerated USB serial device before a protocol check.
+The bootloader's USB identity can differ from the running application's identity.
 
 ## Verify
 
-After a human-initiated flash, review the device and wiring in
-`config/config_preset/example/teensy_stepper_demo.pbtxt`, then run that preset in the
-matching Docker launcher service. It selects `message_adapter: JOSHUA_WIRE` and
-`min_proto_version: 4`; initialization resets the session, discovers functions,
-checks profile/safety metadata and configures pins while outputs stay disabled.
-A physical motion test must separately confirm directions, enable polarity,
-pulse timing and stop behavior. The expected serial path is `/dev/ttyACM0`.
+First confirm enumeration and the selected artifact/host revision. Use the
+[serial preflight and handshake](../../../docs/JOSHUA_WIRE_VALIDATION.md#build-and-preflight-no-hardware-access):
+validate the reviewed protobuf board config with `--dry_run`, then perform an
+explicitly authorized handshake with `--confirm_hardware`. The default handshake
+resets/identifies/resets without configuring or enabling channels.
+
+Configuration can change GPIO even with motor power disconnected. Follow the
+validation guide for any further configuration or powered motion. A successful
+handshake does not establish wiring, direction, pulse timing, or physical stopping.
+
+## Recovery and evidence
+
+Check cable/data access, container permissions, exclusive loader access, selected
+environment, and board identity before retrying. Recover the boot mode using the
+board procedure above; rebuild/reselect an image instead of guessing compatibility.
+Record the commit, artifact SHA256, tool/package versions, board identity, upload
+command/result, boot result, handshake result, power state, and unresolved gaps.
+Keep the historical qualification records below distinct from this new run.
 
 ## Wiring / Pinout
 
 **Pin numbers are host-configured** (`StepDirConfig.step_pin`/`dir_pin`/
 `enable_pin` in the pbtxt, pushed to firmware via `actuator PROFILE/CONFIGURE` at
 `Init()`), not hardcoded in `channel_table.c`
-(`docs/BOARD_LAYER_RFC.md` §7.5, revised). `channel_table.c` only declares
+(`robot/board/AGENTS.md`). `channel_table.c` only declares
 how many channel *slots* this firmware image has — still compile-time,
 since that's reported by `IDENTIFY`.
 

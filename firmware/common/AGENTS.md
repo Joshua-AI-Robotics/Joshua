@@ -116,7 +116,7 @@ must validate resources and stage or roll back hardware configuration.
 
 ## Validation and remaining gates
 
-Use Compose `test-u22`/`test-u24` from [CONTRIBUTING](../../CONTRIBUTING.md#testing-and-ci).
+Use Compose `test-u22`/`test-u24` from [root test instructions](../../AGENTS.md#test).
 Native tests cover golden core/profile bytes, a twelve-function mixed-device
 fixture, real host/firmware endpoint integration, stable IDs, shared IDs across
 planes, unknown outcomes, ESTOP/reset/recovery, resource conflicts, cached sample

@@ -69,7 +69,7 @@ TEST_F(BoardFactoryTest, UnportedBoardTypesReportUnimplemented) {
 }
 
 TEST_F(BoardFactoryTest, FeetechBusIsPortedAndRejectsAMockShapedConfig) {
-  // FEETECH_BUS is implemented (docs/BOARD_LAYER_RFC.md §10 Phase 4); a
+  // FEETECH_BUS is implemented (robot/board/AGENTS.md); a
   // config shaped for MockBoard (STEP_DIR channel, no comm) fails its own
   // validation rather than falling into UnportedBoardTypesReportUnimplemented.
   robot::board::Board board = MakeMockBoard("arm_bus_1", 1);

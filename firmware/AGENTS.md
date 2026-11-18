@@ -1,7 +1,7 @@
 # Firmware
 
 Follow the repository [AGENTS.md](../AGENTS.md) and
-[coding guidelines](../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
+[coding guidelines](../AGENTS.md#coding-guidelines). This file owns the rules and architecture
 contract for `firmware/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
@@ -41,18 +41,86 @@ this host; neither runtime initialization nor tests flash hardware.
   but should not vendor until redistribution rights are clear.
 
 Runtime code must not flash boards automatically. Flashing is a board-management
-operation that will eventually live behind `tools/flash/` and a firmware
-manifest. Runtime board initialization should detect a mismatch and report the
+operation described by the board guide. Runtime board initialization should
+detect a mismatch and report the
 firmware/artifact needed to fix it.
 
 ## How to flash a board
 
-Every board's AGENTS.md under `firmware/<board>/` (or `firmware/<board>/<version>/`
-for versioned boards) follows the same structure — Prerequisites, Install,
-Build, Flash, Verify, Wiring/Pinout, Known gaps — defined in
-[`FLASHING_TEMPLATE.md`](FLASHING_TEMPLATE.md). Start there for "how do I
-flash board X"; where a board hasn't been brought up yet, its AGENTS.md says
-so explicitly with `TODO` placeholders rather than staying silent.
+Start with the board guide below, select one firmware variant, build it, identify
+the exact connected board, and review the upload command. Building, preparing a
+flash configuration, or running tests never authorizes uploading. Follow the
+[root hardware authorization](../AGENTS.md#hardware-safety--read-this-first).
+
+| Board | Authoritative flashing guide |
+| --- | --- |
+| LP-AM243 HS-FS | [AM243 board guide](am243/AGENTS.md) — UART, TI-stack JW EtherCAT, SOES, and legacy vendor images |
+| Teensy 4.1 | [Teensy guide](teensy/41/AGENTS.md) — request-only and mixed-scalar images |
+| ESP32 DevKitC / esp32dev | [ESP32 guide](esp32/AGENTS.md) — UART image |
+| Arduino | [Arduino guide](arduino/AGENTS.md) — no image or upload target exists |
+
+### Toolchain environment
+
+Run repository commands from `/workspace` in the Docker development shell; a
+CPU-only firmware shell is sufficient:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml run --rm joshua-u22
+```
+
+For PlatformIO boards, use the reference CLI version and record resolved packages:
+
+```bash
+python3 -m pip install platformio==6.1.18
+pio --version
+```
+
+The default Teensy and ESP32 platform declarations are not pinned. Record their
+resolved platform/framework versions with `pio pkg list -d <project> -e <env>`
+and the artifact SHA256; do not infer reproducibility from the CLI version alone.
+The Teensy mixed-scalar environment pins its platform separately. TI SDKs and
+toolchains are external inputs and must be mounted into the container at the
+paths used by their make imports; the AM243 guide lists the required versions.
+
+For an authorized hardware session, expose only the intended devices to that
+shell and verify their identity again inside it. ESP32 needs its USB-UART device;
+Teensy programming also needs USB bootloader access; AM243 needs the selected
+XDS110 UART. A container-visible device name alone does not identify a board.
+Close terminals and other owners before uploading.
+
+## Required board-guide format
+
+This section is the canonical template. Put board-specific values in the board
+`AGENTS.md`, not in another template, script comment, or copied platform guide.
+Implementation subdirectories inherit the board procedure and document only
+variant-specific source/build details.
+
+1. **Identity and status:** exact board/revision, supported MCU/security variant,
+   host binding, and what has actually been built, flashed, and measured.
+2. **Firmware selection:** explicit build environment/profile, transport/protocol,
+   artifact path, and incompatible or legacy images.
+3. **Prerequisites and install:** supported container, tool/SDK versions, accounts,
+   packages, permissions, and external mounts. State unresolved dependencies.
+4. **Build:** exact working directory and build-only commands; list outputs and
+   how to record hashes and resolved tool versions.
+5. **Preparation:** board/device identity, power and wiring conditions, boot
+   switches/buttons, exclusive device access, and root hardware authorization.
+6. **Flash:** explicit selected artifact/device and complete upload command or
+   generated configuration, including bootloader/offset requirements where needed.
+7. **Return to normal boot:** switch restoration, reset/power cycle, and device
+   re-identification. Upload completion is not proof the application booted.
+8. **Verify:** enumeration and identity, then an explicitly authorized protocol
+   handshake. Keep configuration writes and powered motion separate.
+9. **Recovery and troubleshooting:** wrong device/image, missing permissions,
+   stuck boot mode, failed transfers, and known unsupported combinations.
+10. **Evidence and limitations:** commit, artifact/hash, board ID/revision, tool
+    versions, operation/commands, power state, result/log, and remaining gaps.
+
+For an unsupported board, say that no image/command exists; never fill a section
+with an invented operation. Keep wiring facts in protobuf and board-specific
+limits, and link shared protocol and authorization rules. Native tests, static
+config checks, build success, flash verification, protocol acknowledgment, and
+physical motion qualification are distinct evidence levels.
 
 ## Current firmware records
 
@@ -131,14 +199,14 @@ arbitration. Native coverage does not establish production timing or motor safet
 Explicit watchdog intervals are required at build time; see the profile AGENTS.md
 for the mapping, build command and safety limits. No flashing is automatic.
 
-## Flashing
+## Source layout
 
 For the protocol/session/dispatch file map and contributor entry points, see
 [Shared firmware and JoshuaWire](common/AGENTS.md).
 
 ```text
 firmware/
-  FLASHING_TEMPLATE.md   the section structure every board AGENTS.md follows
+  AGENTS.md     shared workflow, board index, and required guide format
   common/       # shared commands, JW codec, sessions and drive backend
   testing/      # native-test Arduino substitute and shared firmware tests
   am243/        # TI demo metadata plus Joshua's dual-transport source overlay
@@ -153,8 +221,7 @@ artifact names still identify the board, transport set, and protocol version.
 
 ## Directory navigation
 
-- [am243/joshua_dual_transport/](am243/joshua_dual_transport/AGENTS.md)
-- [am243/ti_ethercat_simple_demo_v1/](am243/ti_ethercat_simple_demo_v1/AGENTS.md)
+- [am243/](am243/AGENTS.md)
 - [arduino/](arduino/AGENTS.md)
 - [common/](common/AGENTS.md)
 - [esp32/](esp32/AGENTS.md)

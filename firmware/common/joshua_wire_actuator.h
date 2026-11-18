@@ -66,7 +66,7 @@ typedef struct {
   uint32_t max_pulse_rate_hz;
   uint8_t invert_dir;
   uint8_t enable_active_low;
-  // GPIO pin mapping, host-configured (docs/BOARD_LAYER_RFC.md §7.5,
+  // GPIO pin mapping, host-configured (robot/board/AGENTS.md,
   // revised — see robot/board/proto/board.proto's StepDirConfig comment
   // for why this moved out of the firmware image). MCU pin numbers, e.g.
   // Teensy 4.1 digital pin numbers.

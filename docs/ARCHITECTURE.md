@@ -11,7 +11,7 @@ A representative preset: [`config/config_preset/so100/teleoperate.pbtxt`](../con
 Each linked `AGENTS.md` is the authoritative local rule and architecture contract.
 This page maps owners; it does not maintain a second copy of their dependency,
 initialization, or lifecycle rules. Shared design principles live in
-[CODING_GUIDELINES.md](CODING_GUIDELINES.md).
+[root coding guidelines](../AGENTS.md#coding-guidelines).
 
 | Area | Authoritative contract |
 | --- | --- |

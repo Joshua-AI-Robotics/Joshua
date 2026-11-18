@@ -1,7 +1,7 @@
 # Launcher
 
 Follow the repository [AGENTS.md](../AGENTS.md) and
-[coding guidelines](../docs/CODING_GUIDELINES.md). This file owns the rules and architecture
+[coding guidelines](../AGENTS.md#coding-guidelines). This file owns the rules and architecture
 contract for `launcher/`; child directories inherit it unless they add local rules.
 
 ## Architecture contract
