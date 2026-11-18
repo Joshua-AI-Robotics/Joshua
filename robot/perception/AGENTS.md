@@ -12,6 +12,26 @@ or comm capabilities. Preserve independent drivers rather than adding a generic
 acquisition runtime around every sensor. ROS nodes own publication and scheduling
 when the driver/coordinator does not already acquire/cache samples.
 
+## Initialization ownership
+
+The baseline at develop `6cb9adca` has these owners. Preserve them during a
+refactor unless an explicit migration changes both factory and node callers.
+[PerceptionFactory](factory/perception_factory.cc) owns selection and assembly;
+calling `Init()` again in a new wrapper is not a recovery policy.
+
+| Backend | Initial setup owner | Failure and recovery baseline |
+| --- | --- | --- |
+| OpenCV camera | CameraPublisher calls `Init()` per physical source | Invalid settings fail startup; unavailable initialization remains registered for one-second RobotTime retries. Read failure closes the source; node-owned reinitialization reapplies settings. |
+| ALSA audio | AudioPublisher calls `Init()` | Initial failure aborts construction. Capture code reopens after device failure; the node owns retry cadence and refreshes the negotiated polling schedule. |
+| LDS01 lidar | PerceptionFactory calls driver `Init()` before returning | The node logs/skips a source whose factory initialization fails; it has no registered automatic retry for that source. |
+| Board position | BoardFactory initializes the board before resolving its channel | Sensor `Init()` is a no-op; board lifetime/recovery stays with the shared owner. The position node skips failed factory resolution. |
+| Board scalar stream | Factory resolves the shared board and subscribes the scalar source | Sensor `Init()` is a no-op; MCU node construction fails if source creation fails. Closing a scalar lease must not close another consumer's board. |
+
+A migration must choose abort-versus-registered-unhealthy behavior explicitly,
+including retry cadence, settings reapplication, and cleanup if a later source
+fails. These existing differences must not disappear behind a generic factory
+or worker constructor.
+
 ## Perception backend contract
 
 Before adding asynchronous acquisition, document each backend's read behavior,
