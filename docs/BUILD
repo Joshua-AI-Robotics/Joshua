@@ -3,6 +3,4 @@
 exports_files([
     "SUPPORTED_HARDWARE.md",
     "TESTED_HARDWARE.md",
-    "hardware_catalog.json",
-    "hardware_test_records.json",
 ])

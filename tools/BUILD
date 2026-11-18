@@ -15,10 +15,7 @@ py_binary(
     data = [
         "//docs:SUPPORTED_HARDWARE.md",
         "//docs:TESTED_HARDWARE.md",
-        "//docs:hardware_catalog.json",
-        "//docs:hardware_test_records.json",
         "//docs/hardware_catalog:guides",
-        "//docs/hardware_catalog:references",
     ],
     main = "hardware_catalog.py",
     deps = [":hardware_catalog_lib"],
@@ -31,10 +28,7 @@ py_test(
         ":hardware_catalog_cli",
         "//docs:SUPPORTED_HARDWARE.md",
         "//docs:TESTED_HARDWARE.md",
-        "//docs:hardware_catalog.json",
-        "//docs:hardware_test_records.json",
         "//docs/hardware_catalog:guides",
-        "//docs/hardware_catalog:references",
     ],
     deps = [":hardware_catalog_lib"] + mcp_requirement("jsonschema"),
 )

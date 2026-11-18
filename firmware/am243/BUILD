@@ -7,5 +7,3 @@ py_test(
         "prepare_flash_test.py",
     ],
 )
-
-exports_files(["AGENTS.md"])

@@ -266,7 +266,7 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     self.assertIn("historical", history["limitations"][0])
                     page = await client.call_tool(
                         "query_hardware_catalog",
-                        {"entity": "runs", "hardware_id": "ti-lp-am243", "limit": 1},
+                        {"view": "history", "hardware_id": "ti-lp-am243", "limit": 1},
                     )
                     self.assertFalse(page.isError, page)
                     self.assertEqual(len(page.structuredContent["data"]["entries"]), 1)
@@ -275,7 +275,7 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     second_page = await client.call_tool(
                         "query_hardware_catalog",
                         {
-                            "entity": "runs",
+                            "view": "history",
                             "hardware_id": "ti-lp-am243",
                             "limit": 1,
                             "cursor": cursor,
@@ -290,7 +290,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                         page.structuredContent["data"]["entries"][0]["validated_by"]
                     )
                     failed = await client.call_tool(
-                        "query_hardware_catalog", {"entity": "runs", "result": "failed"}
+                        "query_hardware_catalog",
+                        {"view": "history", "result": "failed"},
                     )
                     self.assertFalse(failed.isError, failed)
                     self.assertEqual(
@@ -299,8 +300,8 @@ class InspectionBehaviorTest(unittest.IsolatedAsyncioTestCase):
                     for invalid in (
                         {"limit": True},
                         {"limit": "1"},
-                        {"entity": "unknown"},
-                        {"entity": "models", "result": "passed"},
+                        {"view": "unknown"},
+                        {"view": "devices", "result": "passed"},
                     ):
                         bad = await client.call_tool("query_hardware_catalog", invalid)
                         self.assertTrue(bad.isError, bad)

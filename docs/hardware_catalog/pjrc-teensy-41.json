@@ -1,0 +1,412 @@
+{
+  "schema_version": 2,
+  "id": "pjrc-teensy-41",
+  "kind": "board",
+  "manufacturer": "PJRC",
+  "model": "Teensy 4.1",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [
+    "usb-serial",
+    "step-dir",
+    "scalar-acquisition"
+  ],
+  "specifications": [],
+  "integration": {
+    "status": "integrated",
+    "driver": "JoshuaWireBoard / TeensyBoard",
+    "implementations": [
+      "robot/board/teensy/teensy_board.h"
+    ],
+    "presets": [
+      "config/config_preset/example/teensy_stepper_demo.pbtxt",
+      "config/config_preset/example/teensy_mixed_scalar.pbtxt"
+    ],
+    "guide": "firmware/teensy/41/AGENTS.md",
+    "support_scope": "JoshuaWire serial integration; stationary USB fault checks are recorded. Mixed-scalar physical qualification and physical motion/timing remain open."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "mcu": "IMXRT1062",
+    "transports": [
+      "USB CDC"
+    ],
+    "firmware_guides": [
+      "firmware/teensy/41/AGENTS.md"
+    ]
+  },
+  "limitations": [
+    "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
+    "Hardware revision and responsible maintainer are not recorded in the imported evidence."
+  ],
+  "validation_history": [
+    {
+      "id": "teensy41-partial-write-2026-10-25",
+      "date": "2026-10-25",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "reply-integrity",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "fault-recovery",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "retry_burst_count": 4096,
+        "host_read_withholding_ms": 150,
+        "physical_gpio_stop_timing": "not measured"
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "0eb13fa9cde2c39c2d6ccc08f856c29499c7b8c47cdf8ab829aba1b5f6bae037",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "## Partial-write fix bench record \u2014 2026-10-25\n\nThe same authorized stationary bench checks were repeated after flashing the\npartial-write fix to Teensy `15104350`, with motor power disconnected. Image\nSHA-256:\n`181565393a599ff3438db8e05f525ab6182650de5f83d70f6f16f58ce687e39e`.\n\nThe production configure/feedback diagnostic passed. Both 4096-retry bursts\ndrained intact with byte-identical IDENTIFY replies. With host reads withheld,\nthe runtime reported the local fault; the burst with a queued ESTOP showed the\nlocal-fault and subsequent ESTOP transitions. Reset/recovery interlocks passed,\nand final ESTOP cleanup left the board latched and unavailable.\n\nThis is a hardware regression check for the new image. The specific 16-byte TX\ncapacity case is covered by native tests of the actual Teensy and ESP32 bindings;\nthis bench run does not establish that the physical Teensy's writable capacity\nwas 16 bytes. GPIO stop timing and physical motor stop remain unmeasured.\n",
+          "source_path": "docs/hardware_catalog/evidence/teensy41_partial_write_2026-10-25.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Motor power was disconnected; USB protocol results do not establish physical stopping or GPIO disable timing.",
+        "The 16-byte TX-capacity corner case is a native test; the physical capacity was not measured."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "teensy41-partial-write-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "pjrc-teensy-41",
+            "unit_alias": "teensy41-stationary-bench-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Single Teensy USB CDC connected to host; original local unit identified in retained narrative",
+        "wiring": [
+          "STEP 2, DIR 3, active-low enable 4; 4000 pulses/s maximum; 20 us pulse width"
+        ],
+        "power": "Motor power disconnected; stationary GPIO/output-enable checks only",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "teensy41-serial",
+            "artifact": "firmware.hex",
+            "sha256": "181565393a599ff3438db8e05f525ab6182650de5f83d70f6f16f58ce687e39e",
+            "toolchain": {}
+          }
+        ],
+        "configuration": [
+          {
+            "path": "config/config_preset/example/teensy_stepper_demo.pbtxt",
+            "sha256": null,
+            "overrides": [
+              "Explicit protocol JOSHUA_WIRE in a temporary local configuration."
+            ]
+          }
+        ],
+        "environment": {
+          "build_flash_environment": "Docker Ubuntu 24",
+          "host_smoke_environment": "Docker Ubuntu 22"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "teensy41-usb-backpressure-v1",
+        "version": 1,
+        "title": "Stationary USB backpressure and fault/recovery regression",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "4096 IDENTIFY retries; host reads withheld 150 ms; repeat with queued ESTOP.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "reply-integrity",
+            "capability": "usb-serial",
+            "metric": "4096 exact retry responses intact",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Retained raw USB probe with 150 ms host-read withholding."
+          },
+          {
+            "id": "fault-recovery",
+            "capability": "usb-serial",
+            "metric": "Fault, ESTOP and recovery interlocks reported correctly",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Production diagnostic plus retained backpressure/ESTOP probe."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "teensy41-tx-fault-2026-10-25",
+      "date": "2026-10-25",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "reply-integrity",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "fault-recovery",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "retry_burst_count": 4096,
+        "host_read_withholding_ms": 150,
+        "physical_gpio_stop_timing": "not measured"
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "da71f00573e41f1150b5dc43eb105a0551c2346d878aefc331529632e5af6155",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "## TX-fault bench record \u2014 2026-10-25\n\n- Board: Teensy USB serial `15104350`, `/dev/ttyACM0`. Motor power was confirmed\n  disconnected before the authorized flash and stationary output-enable tests.\n- Image: `teensy41-serial/firmware.hex`, SHA-256\n  `19734e2e0dcd42ab50aa6a61f087b24ac7ad6f62b6d95b0371499304c1f96159`.\n- Docker Ubuntu 24 built/flashed the image. Ubuntu 22's production\n  `joshua_wire_smoke` passed reset, identity, disabled configuration, feedback\n  and ESTOP cleanup. The bench config used the example preset's GPIO 2/3/4,\n  active-low enable, 4000 Hz maximum rate and 20 us pulse width, with explicit\n  `protocol: JOSHUA_WIRE` added to a temporary copy for the diagnostic preflight.\n- A raw USB probe used the checkout's C frame codec, enabled channel 0 without\n  a motion target, queued 4096 exact IDENTIFY requests and withheld reads for\n  150 ms. After draining, board and function `GET_STATUS` reported\n  `UNAVAILABLE / DEVICE_FAULT`, `ACTION_COMPLETE`, recovery mask 7, no host\n  action token and unsupported physical verification. All 4096 correlated\n  IDENTIFY replies were intact and byte-identical.\n- A second burst appended ESTOP behind the same 4096 retries. The function\n  epoch advanced twice: local fault, then the correlated queued ESTOP. All\n  IDENTIFY replies and the ESTOP response arrived intact. Fresh ENABLE was\n  rejected after fault and after session reset; RECOVER alone did not enable\n  outputs or permit ENABLE without reconfiguration.\n- Final ESTOP cleanup succeeded; the board was left unavailable and latched,\n  requiring recovery, configuration and explicit enable before reuse.\n\nThis establishes real USB backpressure, reply retention and reported fault/stop\ntransitions. Without GPIO instrumentation it does not measure the 20 ms output\ndisable deadline or establish a physical motor stop guarantee.\n",
+          "source_path": "docs/hardware_catalog/evidence/teensy41_tx_fault_2026-10-25.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Motor power was disconnected; USB protocol results do not establish physical stopping or GPIO disable timing.",
+        "The 16-byte TX-capacity corner case is a native test; the physical capacity was not measured."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "teensy41-tx-fault-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "pjrc-teensy-41",
+            "unit_alias": "teensy41-stationary-bench-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Single Teensy USB CDC connected to host; original local unit identified in retained narrative",
+        "wiring": [
+          "STEP 2, DIR 3, active-low enable 4; 4000 pulses/s maximum; 20 us pulse width"
+        ],
+        "power": "Motor power disconnected; stationary GPIO/output-enable checks only",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "teensy41-serial",
+            "artifact": "firmware.hex",
+            "sha256": "19734e2e0dcd42ab50aa6a61f087b24ac7ad6f62b6d95b0371499304c1f96159",
+            "toolchain": {}
+          }
+        ],
+        "configuration": [
+          {
+            "path": "config/config_preset/example/teensy_stepper_demo.pbtxt",
+            "sha256": null,
+            "overrides": [
+              "Explicit protocol JOSHUA_WIRE in a temporary local configuration."
+            ]
+          }
+        ],
+        "environment": {
+          "build_flash_environment": "Docker Ubuntu 24",
+          "host_smoke_environment": "Docker Ubuntu 22"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "teensy41-usb-backpressure-v1",
+        "version": 1,
+        "title": "Stationary USB backpressure and fault/recovery regression",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "4096 IDENTIFY retries; host reads withheld 150 ms; repeat with queued ESTOP.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "reply-integrity",
+            "capability": "usb-serial",
+            "metric": "4096 exact retry responses intact",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Retained raw USB probe with 150 ms host-read withholding."
+          },
+          {
+            "id": "fault-recovery",
+            "capability": "usb-serial",
+            "metric": "Fault, ESTOP and recovery interlocks reported correctly",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Production diagnostic plus retained backpressure/ESTOP probe."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    }
+  ],
+  "support_history": [
+    {
+      "id": "pjrc-teensy-41-historical-assessment",
+      "capabilities": [
+        "usb-serial"
+      ],
+      "run_ids": [
+        "teensy41-partial-write-2026-10-25",
+        "teensy41-tx-fault-2026-10-25"
+      ],
+      "status": "historical_unreviewed",
+      "scope": "Imported bench narratives only. No new execution, reviewer attribution or broader support qualification.",
+      "validated_at": null,
+      "validated_by": null,
+      "review_reference": null,
+      "limitations": [
+        "Review identities and exact times were not recorded.",
+        "Consult each failed and successful run; protocol results do not establish physical outputs, stopping or endurance."
+      ],
+      "supersedes": null
+    }
+  ]
+}

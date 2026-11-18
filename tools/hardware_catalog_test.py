@@ -1,347 +1,239 @@
 import copy
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from jsonschema import ValidationError
+from jsonschema import Draft202012Validator, ValidationError
 
 from tools.hardware_catalog import (
     CATALOG_ROOT,
-    MAX_RESPONSE_BYTES,
-    accepts,
     check_history,
-    generated_files,
     legacy_exports,
-    load_catalog,
+    load_devices,
     query_catalog,
     read_json,
-    validate_catalog,
+    validate_device,
     validate_query_report,
-    validator_for,
 )
 
 
-class CatalogTest(unittest.TestCase):
+class DeviceCatalogTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.catalog = load_catalog()
-        cls.schema = read_json(CATALOG_ROOT / "schemas/catalog.schema.json")
+        cls.devices = load_devices(check_files=False)
+        cls.schema = read_json(CATALOG_ROOT / "catalog.schema.json")
 
-    def changed(self):
-        return copy.deepcopy(self.catalog)
+    def camera(self):
+        return copy.deepcopy(self.devices["sunplus-spca2281-xwf-1080p"])
 
-    def test_existing_evidence_and_generated_exports_are_preserved(self):
-        self.assertEqual(len(self.catalog["models"]), 5)
-        self.assertEqual(len(self.catalog["runs"]), 13)
-        self.assertEqual(
-            sum(r["result"] == "failed" for r in self.catalog["runs"].values()), 4
-        )
-        for path, expected in generated_files(self.catalog).items():
-            self.assertEqual(path.read_text(), expected, str(path))
-        for run in self.catalog["runs"].values():
-            self.assertIsNone(run["executed_by"])
-            self.assertIsNone(run["started_at"])
-            self.assertIsNone(run["validated_by"])
-            self.assertIsNone(run["validated_at"])
-            self.assertEqual(run["review_status"], "unreviewed")
-        hardware, history = legacy_exports(self.catalog)
-        self.assertEqual(len(hardware["hardware"]), 1)
-        self.assertEqual(len(history["records"]), 2)
-        self.assertEqual(history["records"][0]["results"]["measured_fps"], 8.46)
-        self.assertEqual(history["records"][1]["results"]["received_frames"], 9001)
-        self.assertEqual(
-            len(history["records"][1]["results"]["ten_second_window_fps"]), 30
-        )
-
-    def test_templates_cover_all_device_kinds_and_record_types(self):
-        templates = list((CATALOG_ROOT / "templates").glob("*.json"))
-        self.assertEqual(len(templates), 14)
-        kinds = set()
-        for path in templates:
-            entry = read_json(path)
-            validator_for(self.schema, entry["record_type"]).validate(entry)
-            if entry["record_type"] == "model":
-                kinds.add(entry["kind"])
-        self.assertEqual(len(kinds), 10)
-
-    def test_invalid_category_fields_and_unknown_record_fields_are_rejected(self):
-        model = copy.deepcopy(self.catalog["models"]["ti-lp-am243"])
-        for mutate in (
-            lambda m: m["category_details"].pop("mcu"),
-            lambda m: m["category_details"].update(capture_modes=[]),
-            lambda m: m.update(universal_verified=True),
-        ):
-            value = copy.deepcopy(model)
-            mutate(value)
-            with self.assertRaises(ValidationError):
-                validator_for(self.schema, "model").validate(value)
-
-    def test_unknown_references_and_versions_fail(self):
-        for field, value in [
-            ("hardware_id", "missing"),
-            ("setup_id", "missing"),
-            ("specification_id", "missing"),
-            ("specification_version", 99),
-        ]:
-            catalog = self.changed()
-            next(iter(catalog["runs"].values()))[field] = value
-            with self.subTest(field=field), self.assertRaises(ValueError):
-                validate_catalog(catalog, check_files=False)
-
-    def test_empty_or_blank_execution_and_validation_identities_are_rejected(self):
-        for field in ("executed_by", "validated_by"):
-            for username in ("", " ", "\t"):
-                run = copy.deepcopy(next(iter(self.catalog["runs"].values())))
-                run[field] = dict(
-                    provider="github", username=username, organization=None
+    def test_one_file_contains_all_existing_history_and_inline_evidence(self):
+        self.assertEqual(len(self.devices), 5)
+        tests = [t for d in self.devices.values() for t in d["validation_history"]]
+        self.assertEqual(len(tests), 13)
+        self.assertEqual(sum(t["result"] == "failed" for t in tests), 4)
+        self.assertFalse(any(p.is_dir() for p in CATALOG_ROOT.iterdir()))
+        for test in tests:
+            self.assertIsNone(test["executed_by"])
+            self.assertIsNone(test["validated_by"])
+            self.assertIn("setup", test)
+            self.assertIn("specification", test)
+            for e in test["evidence"]:
+                self.assertEqual(e["availability"], "inline")
+                self.assertEqual(
+                    hashlib.sha256(e["notes"].encode()).hexdigest(), e["sha256"]
                 )
-                with self.subTest(field=field, username=username), self.assertRaises(
-                    ValidationError
-                ):
-                    validator_for(self.schema, "run").validate(run)
 
-    def test_review_requires_real_user_time_and_reference(self):
-        for changes in [
-            dict(
-                validated_by={
-                    "provider": "github",
-                    "username": "reviewer",
-                    "organization": None,
-                }
-            ),
+    def test_compatibility_views_preserve_original_measurements_and_order(self):
+        models, runs = legacy_exports(self.devices)
+        self.assertEqual(len(models["hardware"]), 1)
+        self.assertEqual(len(runs["records"]), 2)
+        self.assertEqual(runs["records"][0]["results"]["measured_fps"], 8.46)
+        self.assertEqual(runs["records"][1]["results"]["received_frames"], 9001)
+        self.assertEqual(
+            len(runs["records"][1]["results"]["ten_second_window_fps"]), 30
+        )
+        self.assertEqual(
+            runs["records"][0]["evidence"],
+            "docs/hardware_catalog/sunplus-spca2281-xwf-1080p.json",
+        )
+
+    def test_blank_tester_reviewer_and_wrong_device_fields_fail_schema(self):
+        for field in ("executed_by", "validated_by"):
+            for user in ("", " ", "\t"):
+                d = self.camera()
+                d["validation_history"][0][field] = dict(
+                    provider="github", username=user, organization=None
+                )
+                with self.assertRaises(ValidationError):
+                    Draft202012Validator(self.schema).validate(d)
+        d = self.camera()
+        d["category_details"]["mcu"] = "wrong kind"
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(self.schema).validate(d)
+
+    def test_missing_review_identity_time_reference_or_reversed_times_fail(self):
+        for changes in (
             dict(review_status="reviewed"),
+            dict(validated_at="2026-11-18T12:00:00Z"),
             dict(
-                validated_by={
-                    "provider": "github",
-                    "username": "reviewer",
-                    "organization": None,
-                },
-                validated_at="2026-11-18T12:00:00Z",
-                review_reference="file:///tmp/review",
-                review_status="reviewed",
+                started_at="2026-11-18T12:00:00Z", completed_at="2026-11-18T11:00:00Z"
             ),
-        ]:
-            catalog = self.changed()
-            next(iter(catalog["runs"].values())).update(changes)
+            dict(
+                started_at="2026-11-18T12:00:00+01:00",
+                completed_at="2026-11-18T13:00:00Z",
+            ),
+        ):
+            d = self.camera()
+            d["validation_history"][0].update(changes)
             with self.assertRaises(ValueError):
-                validate_catalog(catalog, check_files=False)
-        catalog = self.changed()
-        run = next(iter(catalog["runs"].values()))
-        run.update(
-            validated_by={
-                "provider": "github",
-                "username": "reviewer",
-                "organization": "Lab",
-            },
-            validated_at="2026-11-18T12:00:00Z",
-            review_reference="https://github.com/example/project/pull/1#review",
+                validate_device(d, check_files=False)
+        d = self.camera()
+        d["validation_history"][0].update(
             review_status="reviewed",
-        )
-        validate_catalog(catalog, check_files=False)
-
-    def test_reversed_non_utc_and_precompletion_review_times_fail(self):
-        cases = [
-            ("2026-11-18T12:00:00Z", "2026-11-18T11:00:00Z"),
-            ("2026-11-18T10:00:00", "2026-11-18T11:00:00Z"),
-            ("2026-11-18T10:00:00+01:00", "2026-11-18T11:00:00Z"),
-        ]
-        for start, end in cases:
-            catalog = self.changed()
-            next(iter(catalog["runs"].values())).update(
-                started_at=start, completed_at=end
-            )
-            with self.assertRaises(ValueError):
-                validate_catalog(catalog, check_files=False)
-        catalog = self.changed()
-        next(iter(catalog["runs"].values())).update(
-            started_at="2026-11-18T12:00:00Z",
-            completed_at="2026-11-18T13:00:00Z",
-            validated_at="2026-11-18T11:00:00Z",
-            validated_by={
-                "provider": "github",
-                "username": "reviewer",
-                "organization": None,
-            },
-            review_reference="https://github.com/example/project/pull/1",
-            review_status="reviewed",
-        )
-        with self.assertRaises(ValueError):
-            validate_catalog(catalog, check_files=False)
-
-    def test_missing_historical_provenance_is_not_invented_or_silently_complete(self):
-        catalog = self.changed()
-        run = next(iter(catalog["runs"].values()))
-        run["provenance"] = "complete"
-        with self.assertRaises(ValueError):
-            validate_catalog(catalog, check_files=False)
-        catalog = self.changed()
-        run = next(iter(catalog["runs"].values()))
-        run["unknowns"].pop("executed_by")
-        with self.assertRaises(ValueError):
-            validate_catalog(catalog, check_files=False)
-
-    def test_outcomes_cannot_claim_pass_for_failed_incomplete_or_unknown_measurements(
-        self,
-    ):
-        for modify in ("overall", "observed", "missing", "unknown", "duplicate"):
-            catalog = self.changed()
-            run = catalog["runs"]["am243-soes-endurance-attempt-1-2026-10-26"]
-            if modify == "overall":
-                run["result"] = "passed"
-            if modify == "observed":
-                run["checks"][0]["observed"] = True
-            if modify == "missing":
-                run["checks"] = []
-            if modify == "unknown":
-                run["checks"][0]["check_id"] = "missing"
-            if modify == "duplicate":
-                run["checks"].append(copy.deepcopy(run["checks"][0]))
-            with self.subTest(modify=modify), self.assertRaises(ValueError):
-                validate_catalog(catalog, check_files=False)
-
-    def test_measurement_comparisons_reject_bool_numeric_confusion(self):
-        check = dict(operator="eq", expected=1)
-        self.assertFalse(accepts(check, True))
-        check.update(operator="gte", expected=30)
-        self.assertFalse(accepts(check, None))
-        self.assertFalse(accepts(check, "30"))
-        self.assertTrue(accepts(check, 30.0))
-        check.update(operator="between", expected=[1, 2])
-        self.assertTrue(accepts(check, 1.5))
-        check["expected"] = [2, 1]
-        with self.assertRaises(ValueError):
-            accepts(check, 1.5)
-
-    def test_support_cannot_expand_without_review_or_passing_capability_evidence(self):
-        catalog = self.changed()
-        assessment = next(iter(catalog["assessments"].values()))
-        assessment["status"] = "supported"
-        with self.assertRaises(ValueError):
-            validate_catalog(catalog, check_files=False)
-        assessment.update(
+            validated_by=dict(
+                provider="github", username="reviewer", organization=None
+            ),
             validated_at="2026-11-18T12:00:00Z",
-            validated_by={
-                "provider": "github",
-                "username": "reviewer",
-                "organization": None,
-            },
             review_reference="https://github.com/example/project/pull/1",
-            capabilities=["physical-stop"],
         )
+        validate_device(d, check_files=False)
+
+    def test_unknown_provenance_and_false_passes_fail(self):
+        for mutation in (
+            "unknown",
+            "complete",
+            "observed",
+            "overall",
+            "duplicate",
+            "missing",
+        ):
+            d = self.camera()
+            test = d["validation_history"][0]
+            if mutation == "unknown":
+                test["unknowns"].pop("executed_by")
+            if mutation == "complete":
+                test["provenance"] = "complete"
+            if mutation == "observed":
+                test["checks"][0]["observed"] = False
+            if mutation == "overall":
+                test["result"] = "failed"
+            if mutation == "duplicate":
+                d["validation_history"].append(copy.deepcopy(test))
+            if mutation == "missing":
+                test["checks"] = []
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                validate_device(d, check_files=False)
+
+    def test_inline_evidence_tampering_and_unknown_setup_subject_fail(self):
+        d = self.camera()
+        d["validation_history"][0]["evidence"][0]["notes"] += "changed"
         with self.assertRaises(ValueError):
-            validate_catalog(catalog, check_files=False)
-
-    def test_evidence_tampering_and_escaping_paths_fail(self):
-        for field, value in [
-            ("sha256", "0" * 64),
-            ("path", "../outside.md"),
-            ("path", "/tmp/outside.md"),
-        ]:
-            catalog = self.changed()
-            next(iter(catalog["runs"].values()))["evidence"][0][field] = value
-            with self.assertRaises(ValueError):
-                validate_catalog(catalog)
-
-    def test_duplicate_json_fields_and_nonfinite_values_fail(self):
+            validate_device(d, check_files=False)
         with tempfile.TemporaryDirectory() as directory:
-            file = Path(directory, "record.json")
-            for data in ('{"id":"a","id":"b"}', '{"x":NaN}', '{"x":Infinity}'):
-                file.write_text(data)
-                with self.assertRaises(ValueError):
-                    read_json(file)
+            target = Path(directory)
+            shutil.copytree(CATALOG_ROOT, target, dirs_exist_ok=True)
+            p = target / "sunplus-spca2281-xwf-1080p.json"
+            d = self.camera()
+            d["validation_history"][0]["setup"]["subjects"][0][
+                "hardware_id"
+            ] = "missing"
+            p.write_text(json.dumps(d))
+            with self.assertRaises(ValueError):
+                load_devices(target, check_files=False)
 
-    def test_queries_are_paginated_stable_and_bind_cursors_to_filters(self):
+    def test_queries_are_device_first_and_history_paginates(self):
+        result = query_catalog()
+        validate_query_report(result)
+        self.assertEqual(len(result["data"]["entries"]), 5)
+        self.assertNotIn("notes", json.dumps(result["data"]["entries"]))
+        self.assertEqual(
+            query_catalog(kind="camera")["data"]["entries"][0]["id"],
+            "sunplus-spca2281-xwf-1080p",
+        )
+        seen = []
         cursor = None
-        ids = []
         while True:
-            filters = dict(entity="runs", hardware_id="ti-lp-am243", limit=2)
+            filters = dict(view="history", hardware_id="ti-lp-am243", limit=2)
             if cursor:
                 filters["cursor"] = cursor
-            report = query_catalog(**filters)
-            validate_query_report(report)
-            self.assertEqual(report["status_code"], "OK")
-            ids.extend(e["id"] for e in report["data"]["entries"])
-            cursor = report["data"]["next_cursor"]
+            page = query_catalog(**filters)
+            validate_query_report(page)
+            self.assertEqual(page["status_code"], "OK")
+            seen += [t["id"] for t in page["data"]["entries"]]
+            cursor = page["data"]["next_cursor"]
             if not cursor:
                 break
-        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(seen), 9)
+        self.assertEqual(len(set(seen)), 9)
         self.assertEqual(
-            len(ids),
-            sum(
-                r["hardware_id"] == "ti-lp-am243" for r in self.catalog["runs"].values()
-            ),
-        )
-        first = query_catalog(entity="runs", hardware_id="ti-lp-am243", limit=1)
-        invalid = query_catalog(
-            entity="runs",
-            hardware_id="pjrc-teensy-41",
-            cursor=first["data"]["next_cursor"],
-        )
-        self.assertEqual(invalid["status_code"], "INVALID_ARGUMENT")
-        self.assertEqual(
-            len(query_catalog(entity="runs", result="failed")["data"]["entries"]), 4
+            len(query_catalog(view="history", result="failed")["data"]["entries"]), 4
         )
         self.assertEqual(
-            query_catalog(entity="runs", validated_by="unrecorded")["data"]["entries"],
-            [],
-        )
-        self.assertEqual(
-            query_catalog(entity="models", query="Arduino")["data"]["entries"][0][
-                "integration"
-            ]["status"],
-            "unsupported",
+            query_catalog(view="history", validated_by="unknown")["data"]["entries"], []
         )
 
-    def test_invalid_queries_return_bounded_explicit_errors(self):
+    def test_invalid_filters_stale_cursors_and_budgets_return_explicit_errors(self):
         for filters in (
             {"limit": True},
             {"limit": 0},
             {"limit": "1"},
-            {"limit": 51},
-            {"entity": "../runs"},
-            {"unknown": "a"},
-            {"query": ""},
+            {"view": "runs"},
+            {"entity": "models"},
+            {"query": " "},
             {"query": "\x00"},
-            {"entity": "models", "result": "passed"},
+            {"result": "passed"},
             {"cursor": "bad"},
         ):
-            report = query_catalog(**filters)
-            self.assertEqual(report["status_code"], "INVALID_ARGUMENT", report)
-            validate_query_report(report)
-            self.assertLess(len(json.dumps(report).encode()), MAX_RESPONSE_BYTES)
+            result = query_catalog(**filters)
+            self.assertEqual(result["status_code"], "INVALID_ARGUMENT")
+            validate_query_report(result)
+        first = query_catalog(view="history", hardware_id="ti-lp-am243", limit=1)
         self.assertEqual(
-            query_catalog(hardware_id="unknown-model")["data"]["entries"], []
+            query_catalog(
+                view="history",
+                hardware_id="pjrc-teensy-41",
+                cursor=first["data"]["next_cursor"],
+            )["status_code"],
+            "INVALID_ARGUMENT",
         )
-
-    def test_response_and_catalog_admission_budgets_fail_explicitly(self):
-        with patch("tools.hardware_catalog.MAX_RESPONSE_BYTES", 5000):
-            report = query_catalog(entity="models", limit=50)
-            self.assertEqual(report["status_code"], "OK")
-            self.assertTrue(report["data"]["entries"])
-            self.assertIsNotNone(report["data"]["next_cursor"])
-            self.assertLessEqual(
-                len(json.dumps(report, ensure_ascii=True).encode()), 5000
-            )
-        for name, value in [
+        for key, value in [
             ("MAX_RESPONSE_BYTES", 100),
-            ("MAX_CATALOG_BYTES", 100),
-            ("MAX_RECORDS", 1),
             ("MAX_RECORD_BYTES", 100),
+            ("MAX_RECORDS", 1),
+            ("MAX_CATALOG_BYTES", 100),
         ]:
-            with patch("tools.hardware_catalog." + name, value):
-                report = query_catalog()
-                self.assertEqual(report["status_code"], "RESOURCE_EXHAUSTED", name)
-                self.assertEqual(report["data"], {})
+            with patch("tools.hardware_catalog." + key, value):
+                self.assertEqual(query_catalog()["status_code"], "RESOURCE_EXHAUSTED")
 
-    def test_history_cannot_be_removed_or_rewritten_but_superseding_records_are_allowed(
-        self,
-    ):
+    def test_adding_one_file_is_discovered_without_other_metadata_updates(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            shutil.copytree(CATALOG_ROOT, root, dirs_exist_ok=True)
+            d = self.camera()
+            d.update(
+                id="another-camera",
+                model="Another camera",
+                validation_history=[],
+                support_history=[],
+            )
+            d.pop("compatibility", None)
+            (root / "another-camera.json").write_text(json.dumps(d))
+            self.assertEqual(len(load_devices(root, check_files=False)), 6)
+
+    def test_history_allows_append_and_integration_notes_but_preserves_past_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / "docs/hardware_catalog"
+            folder.mkdir(parents=True)
+            device = self.camera()
+            file = folder / (device["id"] + ".json")
+            file.write_text(json.dumps(device))
 
             def git(*args):
                 return subprocess.run(
@@ -354,76 +246,47 @@ class CatalogTest(unittest.TestCase):
             git("init")
             git("config", "user.name", "Fixture")
             git("config", "user.email", "fixture@example.invalid")
-            folder = root / "docs/hardware_catalog/runs"
-            folder.mkdir(parents=True)
-            record = folder / "original.json"
-            record.write_text('{"id":"original","result":"failed"}')
-            model_dir = root / "docs/hardware_catalog/models"
-            model_dir.mkdir()
-            model = model_dir / "device.json"
-            original_model = dict(
-                id="device",
-                kind="board",
-                manufacturer="Vendor",
-                model="Board",
-                aliases=[],
-            )
-            model.write_text(json.dumps(original_model))
             git("add", ".")
             git("commit", "-m", "fixture")
             base = git("rev-parse", "HEAD")
+            device["integration"]["support_scope"] = "Updated current integration notes"
+            added = copy.deepcopy(device["validation_history"][0])
+            added["id"] = "new-test"
+            device["validation_history"].append(added)
+            file.write_text(json.dumps(device))
             check_history(base, root)
-            record.write_text('{"id":"original","result":"passed"}')
+            device["validation_history"][0]["result"] = "failed"
+            file.write_text(json.dumps(device))
             with self.assertRaises(ValueError):
                 check_history(base, root)
-            record.unlink()
+            file.unlink()
             with self.assertRaises(ValueError):
                 check_history(base, root)
-            record.write_text('{"result":"failed", "id":"original"}')
-            (folder / "correction.json").write_text(
-                '{"id":"correction","supersedes":"original"}'
-            )
-            check_history(base, root)
-            updated = dict(original_model, aliases=["Alternate name"])
-            model.write_text(json.dumps(updated))
-            check_history(base, root)
-            updated["model"] = "Different board"
-            model.write_text(json.dumps(updated))
-            with self.assertRaises(ValueError):
-                check_history(base, root)
-            model.unlink()
-            with self.assertRaises(ValueError):
-                check_history(base, root)
-            with self.assertRaises(ValueError):
-                check_history("--all", root)
 
-    def test_scaffolding_never_overwrites_and_does_not_touch_devices(self):
+    def test_scaffold_creates_one_device_and_never_overwrites(self):
         binary = (
             Path(os.environ["TEST_SRCDIR"])
             / os.environ["TEST_WORKSPACE"]
             / "tools/hardware_catalog_cli"
         )
         with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory, "board.json")
-            command = [
+            file = Path(directory, "new.json")
+            args = [
                 str(binary),
                 "--new",
-                "model",
                 "--kind",
                 "board",
                 "--id",
                 "new-board",
                 "--output",
-                str(output),
+                str(file),
             ]
-            result = subprocess.run(command, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            original = output.read_bytes()
-            self.assertEqual(json.loads(original)["id"], "new-board")
-            self.assertNotEqual(
-                subprocess.run(command, capture_output=True).returncode, 0
-            )
-            self.assertEqual(output.read_bytes(), original)
+            run = subprocess.run(args, capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            before = file.read_bytes()
+            self.assertEqual(json.loads(before)["validation_history"], [])
+            self.assertNotEqual(subprocess.run(args, capture_output=True).returncode, 0)
+            self.assertEqual(file.read_bytes(), before)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "arduino-uno",
-  "record_type": "model",
   "kind": "board",
   "manufacturer": "Arduino",
   "model": "UNO",
@@ -18,8 +17,7 @@
     "implementations": [],
     "presets": [],
     "guide": "firmware/arduino/AGENTS.md",
-    "support_scope": "Declared in the schema but rejected by the host factory; no firmware image or upload target exists.",
-    "legacy_export": false
+    "support_scope": "Declared in the schema but rejected by the host factory; no firmware image or upload target exists."
   },
   "documentation": [],
   "maintainers": [],
@@ -34,5 +32,6 @@
     "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
     "Hardware revision and responsible maintainer are not recorded in the imported evidence."
   ],
-  "legacy_order": null
+  "validation_history": [],
+  "support_history": []
 }

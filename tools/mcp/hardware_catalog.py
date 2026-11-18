@@ -7,16 +7,19 @@ import re
 from pathlib import Path, PurePosixPath
 
 from tools.hardware_catalog import (
+    CATALOG_ROOT,
     QUERY_OPERATION,
     QUERY_REPORT_SCHEMA,
+    legacy_exports,
+    load_devices,
     query_catalog,
     query_error,
     validate_query_report,
 )
 
 ROOT = Path(__file__).parents[2]
-CATALOG_PATH = ROOT / "docs/hardware_catalog.json"
-RECORDS_PATH = ROOT / "docs/hardware_test_records.json"
+CATALOG_PATH = CATALOG_ROOT
+RECORDS_PATH = CATALOG_ROOT
 CATALOG_GUIDE_PATH = ROOT / "docs/SUPPORTED_HARDWARE.md"
 TEST_GUIDE_PATH = ROOT / "docs/TESTED_HARDWARE.md"
 MAX_BYTES = 65536
@@ -27,8 +30,8 @@ SCOPES = {
     TEST_OPERATION: "hardware_test_history",
 }
 SOURCES = {
-    MODEL_OPERATION: "docs/hardware_catalog.json",
-    TEST_OPERATION: "docs/hardware_test_records.json",
+    MODEL_OPERATION: "docs/hardware_catalog",
+    TEST_OPERATION: "docs/hardware_catalog",
 }
 DATA_KEYS = {MODEL_OPERATION: "hardware", TEST_OPERATION: "records"}
 LIMITATIONS = {
@@ -214,10 +217,14 @@ def _load_entries(path, key, validator):
 
 
 def load_hardware(path=CATALOG_PATH):
+    if Path(path).is_dir():
+        return legacy_exports(load_devices(path, check_files=False))[0]["hardware"]
     return _load_entries(path, "hardware", validate_hardware)
 
 
 def load_test_records(path=RECORDS_PATH):
+    if Path(path).is_dir():
+        return legacy_exports(load_devices(path, check_files=False))[1]["records"]
     return _load_entries(path, "records", validate_test_record)
 
 
@@ -379,12 +386,12 @@ class HardwareCatalog:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--write-docs", action="store_true")
+    mode.add_argument("--check", action="store_true")
     mode.add_argument("--check-docs", action="store_true")
-    args = parser.parse_args()
+    parser.parse_args()
     from tools.hardware_catalog import main as catalog_main
 
-    return catalog_main(["--write-docs" if args.write_docs else "--check"])
+    return catalog_main(["--check"])
 
 
 if __name__ == "__main__":

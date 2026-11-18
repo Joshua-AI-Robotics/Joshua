@@ -1,7 +1,690 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:joshua:hardware-catalog:1",
-  "title": "Joshua hardware catalog record",
+  "$id": "urn:joshua:hardware-catalog:2",
+  "title": "One Joshua device and its integration/validation history",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "kind": {
+      "enum": [
+        "board",
+        "camera",
+        "actuator",
+        "motor_driver",
+        "sensor",
+        "transport_adapter",
+        "host",
+        "power",
+        "assembly",
+        "other"
+      ]
+    },
+    "manufacturer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x1f]*$"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x1f]*$"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "maxProperties": 32
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "specifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "value": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "conditions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "provenance": {
+            "enum": [
+              "manufacturer",
+              "configured",
+              "measured"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "unit",
+          "conditions",
+          "provenance",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "integration": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "candidate",
+            "integrated",
+            "unsupported",
+            "retired"
+          ]
+        },
+        "driver": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "implementations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+            "maxLength": 1024
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "presets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+            "maxLength": 1024
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "guide": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+          "maxLength": 1024
+        },
+        "support_scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        }
+      },
+      "required": [
+        "status",
+        "driver",
+        "implementations",
+        "presets",
+        "guide",
+        "support_scope"
+      ],
+      "additionalProperties": false
+    },
+    "documentation": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "maintainers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/person"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "category_details": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "validation_history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "support_history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assessment"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "model_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "run_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "model_order",
+        "run_order"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "manufacturer",
+    "model",
+    "aliases",
+    "revisions",
+    "identifiers",
+    "capabilities",
+    "specifications",
+    "integration",
+    "documentation",
+    "maintainers",
+    "category_details",
+    "limitations",
+    "validation_history",
+    "support_history"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "board"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "mcu": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "transports": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "firmware_guides": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "mcu",
+              "transports",
+              "firmware_guides"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "camera"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "capture_modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timestamp_semantics": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "capture_modes",
+              "timestamp_semantics"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "actuator"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "units": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "feedback": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "load": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "units",
+              "feedback",
+              "load"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "motor_driver"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "electrical_limits": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "modes",
+              "electrical_limits"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "sensor"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "units": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "calibration": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "quantity",
+              "units",
+              "calibration"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "transport_adapter"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "interface": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "chipset": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "topology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "interface",
+              "chipset",
+              "topology"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "host"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "architecture": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "os_kernel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resources": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "architecture",
+              "os_kernel",
+              "resources"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "power"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "voltage": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "current_limit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "protection": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "voltage",
+              "current_limit",
+              "protection"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "assembly"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "topology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "parts",
+              "topology"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "other"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "person": {
       "type": "object",
@@ -73,7 +756,8 @@
           "enum": [
             "retained",
             "not_retained",
-            "external"
+            "external",
+            "inline"
           ]
         },
         "description": {
@@ -81,11 +765,22 @@
           "minLength": 1,
           "maxLength": 4096,
           "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
         }
       },
       "required": [
         "id",
-        "path",
         "sha256",
         "media_type",
         "availability",
@@ -150,688 +845,12 @@
       ],
       "additionalProperties": false
     },
-    "model": {
-      "type": "object",
-      "properties": {
-        "schema_version": {
-          "const": 1
-        },
-        "id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "record_type": {
-          "const": "model"
-        },
-        "kind": {
-          "enum": [
-            "board",
-            "camera",
-            "actuator",
-            "motor_driver",
-            "sensor",
-            "transport_adapter",
-            "host",
-            "power",
-            "assembly",
-            "other"
-          ]
-        },
-        "manufacturer": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "pattern": "^[^\\x00-\\x1f]*$"
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "pattern": "^[^\\x00-\\x1f]*$"
-        },
-        "aliases": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "pattern": "^[^\\x00-\\x1f]*$"
-          },
-          "minItems": 0,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "revisions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "pattern": "^[^\\x00-\\x1f]*$"
-          },
-          "minItems": 0,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "identifiers": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "pattern": "^[^\\x00-\\x1f]*$"
-          },
-          "maxProperties": 32
-        },
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-          },
-          "minItems": 1,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "specifications": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4096,
-                "pattern": "^[^\\x00-\\x1f]*$"
-              },
-              "value": {
-                "type": [
-                  "number",
-                  "string",
-                  "boolean"
-                ]
-              },
-              "unit": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4096,
-                "pattern": "^[^\\x00-\\x1f]*$"
-              },
-              "conditions": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4096,
-                "pattern": "^[^\\x00-\\x1f]*$"
-              },
-              "provenance": {
-                "enum": [
-                  "manufacturer",
-                  "configured",
-                  "measured"
-                ]
-              },
-              "source": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4096,
-                "pattern": "^[^\\x00-\\x1f]*$"
-              }
-            },
-            "required": [
-              "name",
-              "value",
-              "unit",
-              "conditions",
-              "provenance",
-              "source"
-            ],
-            "additionalProperties": false
-          },
-          "minItems": 0,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "integration": {
-          "type": "object",
-          "properties": {
-            "status": {
-              "enum": [
-                "intended",
-                "catalogued",
-                "unsupported",
-                "retired"
-              ]
-            },
-            "driver": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 4096,
-                  "pattern": "^[^\\x00-\\x1f]*$"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "implementations": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
-                "maxLength": 1024
-              },
-              "minItems": 0,
-              "uniqueItems": true,
-              "maxItems": 256
-            },
-            "presets": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
-                "maxLength": 1024
-              },
-              "minItems": 0,
-              "uniqueItems": true,
-              "maxItems": 256
-            },
-            "guide": {
-              "type": "string",
-              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
-              "maxLength": 1024
-            },
-            "support_scope": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096,
-              "pattern": "^[^\\x00-\\x1f]*$"
-            },
-            "legacy_export": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "status",
-            "driver",
-            "implementations",
-            "presets",
-            "guide",
-            "support_scope",
-            "legacy_export"
-          ],
-          "additionalProperties": false
-        },
-        "documentation": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "pattern": "^[^\\x00-\\x1f]*$"
-          },
-          "minItems": 0,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "maintainers": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/person"
-          },
-          "minItems": 0,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "category_details": {
-          "type": "object",
-          "minProperties": 1
-        },
-        "limitations": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "pattern": "^[^\\x00-\\x1f]*$"
-          },
-          "minItems": 1,
-          "uniqueItems": true,
-          "maxItems": 256
-        },
-        "legacy_order": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "schema_version",
-        "id",
-        "record_type",
-        "kind",
-        "manufacturer",
-        "model",
-        "aliases",
-        "revisions",
-        "identifiers",
-        "capabilities",
-        "specifications",
-        "integration",
-        "documentation",
-        "maintainers",
-        "category_details",
-        "limitations",
-        "legacy_order"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "board"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "mcu": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "transports": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "firmware_guides": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "mcu",
-                  "transports",
-                  "firmware_guides"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "camera"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "capture_modes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "timestamp_semantics": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "capture_modes",
-                  "timestamp_semantics"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "actuator"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "units": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "feedback": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "load": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "units",
-                  "feedback",
-                  "load"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "motor_driver"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "modes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "electrical_limits": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "modes",
-                  "electrical_limits"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "sensor"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "quantity": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "units": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "calibration": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "quantity",
-                  "units",
-                  "calibration"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "transport_adapter"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "interface": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "chipset": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "topology": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "interface",
-                  "chipset",
-                  "topology"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "host"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "architecture": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "os_kernel": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "resources": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "architecture",
-                  "os_kernel",
-                  "resources"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "power"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "voltage": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "current_limit": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "protection": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "voltage",
-                  "current_limit",
-                  "protection"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "assembly"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "parts": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "topology": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "parts",
-                  "topology"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "other"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "category_details": {
-                "type": "object",
-                "properties": {
-                  "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "description"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      ]
-    },
     "setup": {
       "type": "object",
       "properties": {
-        "schema_version": {
-          "const": 1
-        },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "record_type": {
-          "const": "setup"
         },
         "subjects": {
           "type": "array",
@@ -1054,9 +1073,7 @@
         }
       },
       "required": [
-        "schema_version",
         "id",
-        "record_type",
         "subjects",
         "topology",
         "wiring",
@@ -1073,15 +1090,9 @@
     "specification": {
       "type": "object",
       "properties": {
-        "schema_version": {
-          "const": 1
-        },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "record_type": {
-          "const": "specification"
         },
         "version": {
           "type": "integer",
@@ -1207,9 +1218,7 @@
         }
       },
       "required": [
-        "schema_version",
         "id",
-        "record_type",
         "version",
         "title",
         "kinds",
@@ -1229,31 +1238,9 @@
     "run": {
       "type": "object",
       "properties": {
-        "schema_version": {
-          "const": 1
-        },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "record_type": {
-          "const": "run"
-        },
-        "hardware_id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "setup_id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "specification_id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "specification_version": {
-          "type": "integer",
-          "minimum": 1
         },
         "date": {
           "anyOf": [
@@ -1534,9 +1521,6 @@
             }
           ]
         },
-        "legacy_export": {
-          "type": "boolean"
-        },
         "reproduces": {
           "anyOf": [
             {
@@ -1548,26 +1532,15 @@
             }
           ]
         },
-        "legacy_order": {
-          "anyOf": [
-            {
-              "type": "integer",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "setup": {
+          "$ref": "#/$defs/setup"
+        },
+        "specification": {
+          "$ref": "#/$defs/specification"
         }
       },
       "required": [
-        "schema_version",
         "id",
-        "record_type",
-        "hardware_id",
-        "setup_id",
-        "specification_id",
-        "specification_version",
         "date",
         "date_timezone",
         "started_at",
@@ -1587,26 +1560,16 @@
         "limitations",
         "unknowns",
         "supersedes",
-        "legacy_export",
         "reproduces",
-        "legacy_order"
+        "setup",
+        "specification"
       ],
       "additionalProperties": false
     },
     "assessment": {
       "type": "object",
       "properties": {
-        "schema_version": {
-          "const": 1
-        },
         "id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
-        },
-        "record_type": {
-          "const": "assessment"
-        },
-        "hardware_id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,127}$"
         },
@@ -1705,10 +1668,7 @@
         }
       },
       "required": [
-        "schema_version",
         "id",
-        "record_type",
-        "hardware_id",
         "capabilities",
         "run_ids",
         "status",
@@ -1721,22 +1681,5 @@
       ],
       "additionalProperties": false
     }
-  },
-  "oneOf": [
-    {
-      "$ref": "#/$defs/model"
-    },
-    {
-      "$ref": "#/$defs/setup"
-    },
-    {
-      "$ref": "#/$defs/specification"
-    },
-    {
-      "$ref": "#/$defs/run"
-    },
-    {
-      "$ref": "#/$defs/assessment"
-    }
-  ]
+  }
 }

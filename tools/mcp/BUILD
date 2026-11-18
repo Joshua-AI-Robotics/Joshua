@@ -17,10 +17,7 @@ py_library(
         "interfaces.py",
         "snapshot_observer.py",
     ],
-    data = [
-        "//docs:hardware_catalog.json",
-        "//docs:hardware_test_records.json",
-    ],
+    data = ["//docs/hardware_catalog:records"],
     deps = ["//tools:hardware_catalog_lib"] + mcp_requirement("mcp"),
 )
 

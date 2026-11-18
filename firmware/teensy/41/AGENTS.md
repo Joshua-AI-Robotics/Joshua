@@ -182,14 +182,14 @@ AM243 uses `am243_software_backend` and has no physical STEP/DIR output.
 ## TX-fault bench record — 2026-10-25
 
 The complete historical narrative, firmware/setup details, observations and
-limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/pjrc-teensy-41.md#teensy41-tx-fault-2026-10-25).
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pjrc-teensy-41.json).
 This is stationary/protocol evidence; it does not qualify physical stopping,
 GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 
 ## Partial-write fix bench record — 2026-10-25
 
 The complete historical narrative, firmware/setup details, observations and
-limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/pjrc-teensy-41.md#teensy41-partial-write-2026-10-25).
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pjrc-teensy-41.json).
 This is stationary/protocol evidence; it does not qualify physical stopping,
 GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 

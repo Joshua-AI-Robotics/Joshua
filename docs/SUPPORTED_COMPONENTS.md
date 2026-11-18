@@ -9,7 +9,7 @@ every combination has been tested on hardware. Check the linked preset and the
 [hardware rules](../AGENTS.md#hardware-safety--read-this-first) before any run.
 
 For physical models, aliases, drivers, presets, and intended support scope,
-use the [hardware validation catalog](hardware_catalog/INDEX.md). Its
+use the [hardware validation catalog](hardware_catalog/). Its
 [contribution guide](hardware_catalog/AGENTS.md) defines models, exact setups,
 versioned specifications, dated runs and reviewed assessments. Results retain
 operator/reviewer identities and times, measurements, limitations and failures.
@@ -19,7 +19,7 @@ A test does not automatically add a model or broaden its support scope; an absen
 incompatible with an existing driver.
 
 For LLM discovery, [MCP](../tools/mcp/AGENTS.md) exposes
-`query_hardware_catalog(entity="runs", hardware_id="ti-lp-am243")` for the
+`query_hardware_catalog(view="history", hardware_id="ti-lp-am243")` for the
 full catalog with bounded pagination,
 `list_supported_components()` for factory implementations,
 `list_supported_hardware(kind="camera", query="XWF-1080P")` for model discovery,

@@ -112,27 +112,22 @@ are errors. The tests exercise the actual SDK stdio exchange in both ROS stacks.
 
 ## Catalog and device reports
 
-`query_hardware_catalog(entity="runs", hardware_id="ti-lp-am243", limit=20)`
-reads the full [hardware validation catalog](../../docs/hardware_catalog/AGENTS.md)
-through the shared catalog tool. Entities are `models`, `setups`, `specifications`,
-`runs` and `assessments`; optional filters include `hardware_id`, `query`, `result`
-(runs only) and `validated_by` (runs/assessments only). Limits are 1–50 records;
-continue with `next_cursor` and the same filters. Stale or mismatched cursors fail.
-The response includes execution/review identities and UTC timestamps, with explicit
-nulls and reasons for missing historical provenance. Files and response sizes are
-bounded; one oversized record returns an explicit error rather than truncation.
-No query probes hardware or runs a stored procedure.
+`query_hardware_catalog(view="history", hardware_id="ti-lp-am243", limit=20)`
+reads complete inline tests from the [device catalog](../../docs/hardware_catalog/AGENTS.md).
+The default view is bounded device summaries; `view="history"` returns tests with
+embedded setups, criteria, results, evidence and attribution. Optional filters are
+`hardware_id`, `kind`, `query`, `result` (history only), and `validated_by` (history
+only). Continue with `next_cursor` and the same filters. A large entry returns an
+explicit size error; its complete device source remains available.
 
-The original two hardware calls below preserve their v1 shapes and original
-camera coverage using generated compatibility projections. New device classes,
-full provenance, failures and incomplete legacy evidence are available through
-`query_hardware_catalog`. Edit canonical records, never the generated v1 JSON.
-
+Each device/board has one authoritative JSON file. Add a device by adding that
+file; append tests in that same file. No separate metadata or generated pages need
+updating. The original two APIs below preserve their v1 camera compatibility views
+by projecting from the same device files at query time.
 
 `list_supported_hardware` reads the bundled
-[model catalog](../../docs/hardware_catalog.json), also rendered as
-the [supported hardware guide](../../docs/SUPPORTED_HARDWARE.md). It is independent
-of test history, the selected config root, factory enumeration, and runtime
+[device catalog](../../docs/hardware_catalog/), linked from
+the [supported hardware guide](../../docs/SUPPORTED_HARDWARE.md). It requires no selected config root, factory enumeration, or runtime
 observations. Call with `{}` for all models,
 `{"kind":"camera","query":"XWF-1080P"}` for the
 Sunplus camera, or `{"query":"SPCA2281"}` for an alias search.
@@ -146,9 +141,9 @@ No match is an OK report with an empty `hardware` list. Model results use the
 example preset, and intended support scope. No measurements are embedded in
 model entries. Absence does not prove incompatibility with an existing driver.
 
-`list_hardware_test_records` reads separate
-[test records](../../docs/hardware_test_records.json), rendered as the
-[test history guide](../../docs/TESTED_HARDWARE.md). Call with `{}` for all runs
+`list_hardware_test_records` derives separate query results from
+[device validation history](../../docs/hardware_catalog/), rendered as the
+[test history guide](../../docs/TESTED_HARDWARE.md). Call with `{}` for legacy camera runs
 or `{"hardware_id":"sunplus-spca2281-xwf-1080p"}` for the model's history.
 `hardware_id` is an exact match. Results use the `hardware_test_history` scope,
 with a `records` list containing run IDs, hardware references, dates,
@@ -159,11 +154,12 @@ test does not automatically add a model or change its intended support scope.
 Broken model references produce `DATA_LOSS` rather than an apparent test result.
 
 Both operations read metadata only and do not scan devices or establish current
-connectivity, readiness, or compatibility of every revision. Each bundled file
-and encoded report is bounded to 64 KiB; each file contains at most 128 entries.
-Oversized reports return `RESOURCE_EXHAUSTED`, malformed data returns `DATA_LOSS`,
-and missing data returns `UNAVAILABLE`. Model discovery remains available when
-test history is missing or malformed. Requests cannot select metadata paths.
+connectivity, readiness, or compatibility of every revision. Encoded v1 reports
+are bounded to 64 KiB and 128 entries. The shared device loader admits at most
+256 KiB per device and 32 MiB overall. Oversized reports return
+`RESOURCE_EXHAUSTED`, malformed data returns `DATA_LOSS`, and missing data returns
+`UNAVAILABLE`. Default projections validate the same device sources, so malformed
+history can also prevent model discovery. Requests cannot select metadata paths.
 The software catalog below and existing validation/inspection report schemas
 retain their meanings.
 

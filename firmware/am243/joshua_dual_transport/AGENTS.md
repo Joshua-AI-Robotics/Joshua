@@ -143,7 +143,7 @@ safety, CPU-halt coverage or hard-real-time timing.
 ### Boot identity bench record — 2026-10-26 UTC
 
 The complete historical narrative, firmware/setup details, observations and
-limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/ti-lp-am243.md#am243-boot-identity-2026-10-26).
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/ti-lp-am243.json).
 This is stationary/protocol evidence; it does not qualify physical stopping,
 GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 
@@ -234,7 +234,7 @@ nor written; runtime identity/mapping writes and segmented CoE writes are reject
 #### SOES bench record — 2026-10-26
 
 The complete historical narrative, firmware/setup details, observations and
-limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/ti-lp-am243.md#am243-soes-protocol-2026-10-26).
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/ti-lp-am243.json).
 This is stationary/protocol evidence; it does not qualify physical stopping,
 GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 

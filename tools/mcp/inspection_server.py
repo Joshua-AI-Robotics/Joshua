@@ -46,19 +46,26 @@ _DESCRIPTIONS = (
         "without any config; physical support/readiness are unknown."
     ),
     (
-        "Find curated supported hardware models by kind, USB VID:PID, or model/alias. "
-        "Returns stable hardware IDs, drivers, presets and intended support scope. "
-        "Test evidence is separate; does not scan devices or establish readiness. "
-        "Use query_hardware_catalog for the full validation catalog including boards."
+        "Find curated supported hardware models by kind, USB VID:PID, "
+        "or model/alias. "
+        "Returns stable hardware IDs, drivers, presets and intended "
+        "support scope. "
+        "Test evidence is separate; does not scan devices or establish "
+        "readiness. "
+        "Use query_hardware_catalog for the full validation catalog "
+        "including boards."
     ),
     (
-        "List historical test records, optionally for one stable hardware_id. "
-        "Returns dates, software commits, environments, measurements and limitations; "
-        "tests do not automatically broaden model support or establish readiness."
+        "List historical test records, optionally for one stable "
+        "hardware_id. "
+        "Returns dates, software commits, environments, measurements "
+        "and limitations; "
+        "tests do not automatically broaden model support or establish "
+        "readiness."
     ),
-    "Check a relative candidate config for protobuf parser and integrity errors.",
-    "Inspect configured devices without creating them or opening hardware.",
-    "Describe one configured device and its declared references, topics and limits.",
+    "Check a relative candidate config for protobuf parser and " "integrity errors.",
+    "Inspect configured devices without creating them or opening " "hardware.",
+    "Describe one configured device and its declared references, " "topics and limits.",
     (
         "Read passive runtime process facts; process presence does "
         "not establish readiness or physical state."
@@ -72,8 +79,10 @@ _DESCRIPTIONS = (
         "receipt freshness is separate from acquisition freshness."
     ),
     (
-        "Query versioned hardware models, setups, specifications, validation runs "
-        "and assessments with bounded pagination. Historical facts do not establish "
+        "Query versioned hardware models, setups, specifications, "
+        "validation runs "
+        "and assessments with bounded pagination. Historical facts do "
+        "not establish "
         "current readiness."
     ),
 )

@@ -30,8 +30,7 @@ launcher and ROS 2 nodes never invoke these.
 ## Contents
 
 - [hardware_catalog.py](hardware_catalog.py) — shared hardware record validation,
-  versioned specifications, evidence integrity, bounded queries and generated
-  guides. The [catalog contract](../docs/hardware_catalog/AGENTS.md) owns its
+  one device file, embedded validation history, integrity checks and bounded queries. The [catalog contract](../docs/hardware_catalog/AGENTS.md) owns its
   templates and contribution workflow; MCP is a consumer of this tool.
 
 - [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
