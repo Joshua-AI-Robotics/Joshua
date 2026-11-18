@@ -1,5 +1,7 @@
 # Read-only inspection MCP tools
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 ## Local preparation and launch
 
 Start with `./scripts/joshua_mcp.sh setup` for guided preparation and AI IDE

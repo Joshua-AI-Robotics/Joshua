@@ -1,5 +1,7 @@
 # Simulation
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Joshua supports two simulation backends, both launched through the unified
 `joshua_main` launcher with a `MODE_SIMULATION` preset:
 

@@ -119,29 +119,14 @@ hook for you, so run it yourself before pushing.
 - The protobuf config is the single source of truth for a robot setup; don't
   duplicate configuration into code.
 
-## AI-assisted code generation
+## Implementation direction
 
-- Before generating or refactoring code, read the applicable directory's README
-  and `AGENTS.md`, then inspect the existing implementation, related interfaces,
-  factories, callers, and tests. Reuse the established ownership and data flow.
-- Minimize implementation layers. Extend existing modules before introducing a
-  new abstraction, wrapper, manager, or runtime. A new abstraction must solve a
-  concrete current need that existing components cannot own clearly.
-- Keep code modular and scalable through cohesive responsibilities and existing
-  interfaces. Preserve support for multiple configured devices, sensors,
-  actuators, and topics; do not narrow a general implementation to one instance.
-- Preserve backward compatibility when refactoring: APIs, protobuf configs,
-  topics and payloads, units and timestamps, defaults, startup, and teardown.
-  When the task requires a behavior change, explain its compatibility impact and
-  migration, update affected callers/presets/docs, and verify relevant behavior.
-- Keep PRs focused and file counts small. Prefer editing existing files; add a
-  file only for a clear responsibility required by the change. Avoid boilerplate
-  splits, forwarding-only code files, and speculative frameworks.
-- Keep directory-specific generation rules in that directory's `AGENTS.md`,
-  using local deltas and the bridges required by
-  [the agent-doc contract](docs/AGENTS_RFC.md#7-nested-agentsmd-for-subsystems).
-  Add scoped guidance where needed instead of copying global rules into every
-  directory. ROS-specific rules live in [ros2/AGENTS.md](ros2/AGENTS.md).
+Before planning, changing, or reviewing code, open the shared
+[coding guidelines](docs/CODING_GUIDELINES.md), the affected README, and applicable
+`AGENTS.md` files from the root down. Each directory file owns its local rules
+and architecture contract. Re-read instructions for a new task or changed rules.
+Use the [architecture map](docs/ARCHITECTURE.md#directory-contracts) to locate
+ownership and allowed dependencies. Bridges contain routing only.
 
 ## Read before you edit
 
@@ -155,8 +140,12 @@ touches their area:
   [scripts/](scripts/README.md), [tools/](tools/README.md),
   [launcher/node_manager/](launcher/node_manager/README.md),
   [robot/comm/ethercat/](robot/comm/ethercat/README.md).
-- **ROS 2 nodes and utilities**: follow [ros2/AGENTS.md](ros2/AGENTS.md) for
-  directory-specific code generation and node layout rules.
+- **Directory contracts**: [AI](ai/AGENTS.md), [config](config/AGENTS.md),
+  [robot](robot/AGENTS.md), [ROS](ros2/AGENTS.md), [launcher](launcher/AGENTS.md),
+  [utilities](utils/AGENTS.md), [firmware](firmware/AGENTS.md),
+  [simulation](simulation/AGENTS.md), [tools](tools/AGENTS.md),
+  [MCP](tools/mcp/AGENTS.md), [scripts](scripts/AGENTS.md), [UI](ui/AGENTS.md),
+  and [documentation](docs/AGENTS.md).
 - **Shared firmware/JoshuaWire**: read [firmware/common/README.md](firmware/common/README.md).
 - **Build/packaging or release artifacts**: read
   [scripts/README.md](scripts/README.md) and the "Testing and CI" section of

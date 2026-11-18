@@ -1,5 +1,7 @@
 # AI stack
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Joshua's AI code is organized around a **model-agnostic inference engine** and
 **per-model plug-ins**. Config presets select which model runs on which node;
 the engine never imports model-specific libraries directly.
@@ -87,89 +89,7 @@ rm -rf ~/.cache/joshua/envs/<model>-*
 
 ## Adding a model
 
-1. **Directory** — `ai/models/<model>/` with:
-   - `<model>_config.proto` — per-model config message
-   - `adapter.py` — `InferenceAdapter` subclass
-   - `model.textproto` — entrypoint; optional `requirements_lock`
-   - `BUILD` — proto targets + `adapter` `py_library`
-   - `requirements.in` — only if the model needs deps beyond the global base
-
-2. **Locks** (when needed) — `tools/lock_model.sh <model>` for model-specific
-   `requirements.lock` / `requirements_3.12.lock`
-
-3. **Catalog** — in `ai/proto/ai_model.proto`:
-   - new `ModelType` enum value
-   - new `oneof model_config` field on `SingleModel`
-   - add proto dep in `ai/proto/BUILD`
-
-4. **Bazel pip hub** — in `MODULE.bazel` (mirror existing models):
-
-   ```python
-   pip.parse(
-       hub_name = "joshua_pip_<model>",
-       python_version = "3.10",
-       requirements_lock = "//ai/models/<model>:requirements.lock",
-   )
-   pip.parse(
-       hub_name = "joshua_pip_<model>_312",
-       python_version = "3.12",
-       requirements_lock = "//ai/models/<model>:requirements_3.12.lock",
-   )
-   use_repo(pip, "joshua_pip_<model>")
-   use_repo(pip, "joshua_pip_<model>_312")
-   ```
-
-5. **Adapter BUILD deps** — global base via `requirement()`; model-only via
-   `model_requirement()` (only when the model has a pip hub):
-
-   ```python
-   load("@project_joshua_pip_deps//:requirements.bzl", "requirement")
-   load("//ai/models:requirements.bzl", "model_requirement")
-
-   deps = [
-       "//ai/inference:adapter",
-       "//ai/inference:types",
-       requirement("protobuf"),
-   ] + model_requirement("smolvla", "torch")  # model-specific only
-   ```
-
-   Keep deps on the model's `adapter` target only — not on shared `host` or
-   `registry`.
-
-6. **Aggregate** — in `ai/models/BUILD`:
-   - add `//ai/models/<model>:adapter` to `sources`
-   - add `//ai/models/<model>:model.textproto` to `manifests`
-   - add `//ai/models/<model>:requirements.lock` to `locks`
-
-7. **Preset** — `config/config_preset/.../*.pbtxt` with a `single_models`
-   entry for the inference node.
-
-8. **Verify**
-
-   ```bash
-   bazel build //ai/models/<model>:adapter //ros2:inference
-   ./hooks/lint_check.sh --fix
-   ```
-
-References: [`random_noise/`](models/random_noise/) (base venv only),
-[`smolvla/`](models/smolvla/) (base + model lock).
-
----
-
-## Checklist
-
-- [ ] `ai/models/<model>/<model>_config.proto`
-- [ ] `ai/models/<model>/adapter.py` (`spec()`, `on_observation()` minimum)
-- [ ] `ai/models/<model>/model.textproto` (`entrypoint`; `requirements_lock` if needed)
-- [ ] `ai/models/<model>/requirements.in` + lock (only for extra deps)
-- [ ] `ai/models/<model>/BUILD` (`model_requirement` deps on adapter only)
-- [ ] `MODULE.bazel` — `joshua_pip_<model>` hubs
-- [ ] `ai/proto/ai_model.proto` + `ai/proto/BUILD`
-- [ ] `ai/models/BUILD` — `sources`, `manifests`, `locks`
-- [ ] Config preset `single_models` entry
-- [ ] `bazel build //ros2:inference`
-
----
+Follow the model registration and verification procedure in [AGENTS.md](AGENTS.md#adding-a-model).
 
 ## Bazel vs runtime deps
 

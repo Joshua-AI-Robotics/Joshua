@@ -1,5 +1,7 @@
 # Joshua Firmware
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Joshua-owned MCU firmware and host bindings use JoshuaWire **0.2.0 / wire
 revision 4** from the same checkout. Earlier JoshuaWire implementations are
 removed. Existing devices need an intentional firmware update before use with

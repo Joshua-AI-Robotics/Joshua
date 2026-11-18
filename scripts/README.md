@@ -1,5 +1,7 @@
 # Scripts
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Joshua's public entrypoints are Docker Compose services from the repo root. The Makefile provides optional shorthand.
 
 ## `joshua_mcp.sh`

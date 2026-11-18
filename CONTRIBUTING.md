@@ -34,6 +34,10 @@ CPU-only developers should run `sudo ./scripts/setup.sh --cpu` and use the `dock
 
 If you develop with an AI coding agent (Claude Code, Copilot, Codex, …), the canonical agent instructions live in [AGENTS.md](AGENTS.md); launch your agent from the repository root so it picks the file up.
 
+Read the [coding guidelines](docs/CODING_GUIDELINES.md) and the affected directory's
+`AGENTS.md` before implementation or review. Directory contracts are indexed in
+[the architecture map](docs/ARCHITECTURE.md#directory-contracts).
+
 ## Branch and PR workflow
 
 This project uses **pull requests into `develop`**. Recent history follows this pattern:

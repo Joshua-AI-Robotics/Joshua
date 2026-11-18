@@ -1,11 +1,13 @@
 # Robot
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Hardware-facing code: everything between a `.pbtxt` config and a physical
 motor, sensor, or bus. ROS 2 nodes live in [ros2/](../ros2/README.md) and
 consume these interfaces; nothing here depends on ROS 2 message types.
 
 When choosing boards and physical links, follow
-[Hardware topology and latency budgets](../docs/ARCHITECTURE.md#hardware-topology-and-latency-budgets)
+[Hardware topology and latency budgets](AGENTS.md#hardware-topology-and-latency-budgets)
 for guidance on shared versus separate actuator and sensor-acquisition hardware.
 
 > This is the code that moves physical motors and opens real buses. Before
@@ -14,13 +16,7 @@ for guidance on shared versus separate actuator and sensor-acquisition hardware.
 
 ## Layers
 
-```
-action/       what moves      motor semantics — degrees, limits, calibration
-board/        what runs the   control-loop owner: bring-up, codec, channel mux
-              loop
-comm/         how bytes move  serial, EtherCAT — transport only
-perception/   what senses     cameras, encoders, lidar
-```
+The layer ownership and dependency contract is defined in [AGENTS.md](AGENTS.md#architecture-contract).
 
 `board/` is **mid-migration — read this before touching the actuator path.**
 Each layer talks to the one below through an interface, never a concrete type:
@@ -46,26 +42,6 @@ and loss counters. Device timestamps are not converted to ROS time.
 All perceptions select a concrete driver through `SinglePerception.sensor_config`;
 the legacy camera/encoder/lidar config wrappers have been removed.
 
-**There is no Python in this directory, and none should be added.** The Python
-robot layer (factories, interfaces, mock drivers) was deleted in RFC §10
-Phase 9, and the Pybricks bench driver moved to
-[tools/pybricks/](../tools/README.md) as off-runtime-path tooling.
-Hardware-facing ROS 2 nodes are C++ only, and `NodeManager` no longer
-selects between backends.
-
-## Responsibilities
-
-- `action/` — motor drivers (`motors/drivers/`), the actuator interfaces, and
-  `factory/`, which resolves a config actuator to a driver.
-- `board/` — `interfaces/` (`BoardChannel`, `BoardInterface`), `factory/` with
-  its per-board instance cache and motor/channel compatibility validation,
-  `proto/`, and `mock/`. `mock/` is C++ test infrastructure: it lets the
-  factory and board tests exercise real drivers with no hardware attached.
-- `comm/` — `serial/` and `ethercat/` transports plus `factory/`. Transports
-  move bytes and know nothing about motors.
-- `perception/` — camera, encoder, and lidar drivers behind
-  `perception/interfaces/`.
-
 AM243 JoshuaWire serial and EtherCAT configurations now use the shared
 `board/joshua_wire/` engine. CommFactory supplies either message-only or paired
 message/cyclic capabilities and owns the NIC lifecycle. The legacy TI-demo
@@ -84,9 +60,8 @@ for protocol selection and hardware-validation limits.
 
 ## Before you change this
 
-Adding a motor type, board, or transport should mean **one new file in one
-layer**, not a new enum value threaded through several. Communication mechanism
-and capability boundaries are described in [comm/README.md](comm/README.md).
+Follow the directory [architecture contract](AGENTS.md) when adding an implementation.
+Communication mechanism and capability boundaries are described in [comm/README.md](comm/README.md).
 EtherCAT specifics are in [comm/ethercat/README.md](comm/ethercat/README.md).
 
 ## Joint commands

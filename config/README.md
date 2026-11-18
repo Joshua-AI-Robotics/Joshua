@@ -1,5 +1,7 @@
 # Config
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 The protobuf config is the **single source of truth** for a robot setup. One
 `.pbtxt` file describes the whole system — actuators, boards, sensors, AI
 policies, simulation backend — and the launcher instantiates ROS 2 nodes from
@@ -80,8 +82,8 @@ to physical qualification.
 - `config_preset/<robot>/` — checked-in presets, one per robot and task
   (`so100/`, `example/`).
 - `config_utils.h` — `LoadConfig`, which opens a `.pbtxt` and parses it into a
-  `config::Config`. Parsing only; semantic checks happen later, in the
-  factories and `launcher/node_manager/`.
+  `config::Config`. Parsing only; `config::ValidateConfig` owns semantic acceptance before
+  construction. See [validation ownership](AGENTS.md#architecture-contract-and-validation-ownership).
 
 ## Responsibilities
 
@@ -89,8 +91,7 @@ to physical qualification.
 - Stay the only place a robot-specific value appears: ports, joint limits, gear
   ratios, servo IDs, topic names, model paths.
 - Carry enough structure that an inconsistent setup can be rejected during
-  startup — in the factories and `launcher/node_manager/` — rather than at first
-  motion.
+  startup through `ValidateConfig`, before constructing hardware resources.
 
 ## Non-Goals
 
@@ -100,15 +101,7 @@ to physical qualification.
 
 ## Adding or changing a preset
 
-1. Start from the nearest existing preset in the same robot directory.
-2. Change the schema in `proto/` only if the field genuinely does not exist —
-   a new preset should rarely need one.
-3. For anything you intend to run repeatedly during development, pick a preset
-   you have read and confirmed declares no real devices. Neither the filename
-   nor `operation_mode: MODE_SIMULATION` is that confirmation — both cross the
-   safe/unsafe boundary in this repo. What counts as safe is defined once, in
-   the hardware-safety section of [AGENTS.md](../AGENTS.md); check the preset
-   against that list rather than against a copy of it here.
+Follow the [schema, preset, and verification rules](AGENTS.md#schema-and-presets).
 
 ## JoshuaWire serial protocol selection
 

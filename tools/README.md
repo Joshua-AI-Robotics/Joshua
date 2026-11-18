@@ -1,5 +1,7 @@
 # Tools
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Standalone developer utilities. Nothing here is on the runtime path — the
 launcher and ROS 2 nodes never invoke these.
 

@@ -1,5 +1,7 @@
 # Joshua Control Panel - React UI
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 Modern web-based UI for the Joshua robot control system, built with React, TailwindCSS, ShadCN UI, and Vite.
 
 ## Tech Stack

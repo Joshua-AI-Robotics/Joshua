@@ -8,7 +8,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Local MCP setup, AI IDE connection and recovery | [MCP_SETUP.md](MCP_SETUP.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Production cleanup options for perception acquisition and ROS node ownership | [PRODUCTION_CODE_CLEANUP.md](PRODUCTION_CODE_CLEANUP.md) |
+| Shared coding principles, compatibility, comments, and verification evidence | [CODING_GUIDELINES.md](CODING_GUIDELINES.md) |
 | ROS 2 code generation and single-source node implementation rules | [../ros2/AGENTS.md](../ros2/AGENTS.md) |
 | Mixed-hardware demo and shared runtime, simulator, and evidence requirements | [../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md](../doc/ROBOT_NERVOUS_SYSTEM_DEMO.md) |
 | Camera-head setup, controller comparisons, and R2S2R training/transfer gates | [../doc/CAMERA_HEAD_DEMO.md](../doc/CAMERA_HEAD_DEMO.md) |
@@ -25,7 +25,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Serial reliability, mixed sensor streaming/control, and implementation review gates | [SERIAL_COMM_IMPROVEMENT_PLAN.md](SERIAL_COMM_IMPROVEMENT_PLAN.md) |
 | Shared JoshuaWire code, test layout and migration adapters | [../firmware/common/README.md](../firmware/common/README.md) |
 | JoshuaWire serial validation procedure | [JOSHUA_WIRE_VALIDATION.md](JOSHUA_WIRE_VALIDATION.md) |
-| Agent instructions RFC (AGENTS.md contract) | [AGENTS_RFC.md](AGENTS_RFC.md) |
+| Agent instruction routing reference | [AGENTS_RFC.md](AGENTS_RFC.md) |
 | Repository skills (agent + human playbooks) | [skills/README.md](skills/README.md) |
 | JoshuaWire core/profile contract | [JOSHUA_WIRE.md](JOSHUA_WIRE.md) |
 | AM243 EtherCAT bring-up | [am243_ethercat.md](am243_ethercat.md) |

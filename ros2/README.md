@@ -1,7 +1,12 @@
-ROS 2 Type Resolver Utilities  
-==============================
+ROS 2 Nodes and Utilities
+========================
 
-AI-assisted changes follow the directory's [agent instructions](AGENTS.md).
+Implementation rules, node source layout, acquisition/lifecycle contracts, and
+the real-node testing pattern live in [AGENTS.md](AGENTS.md).
+
+`utils/actuator_commands.h/.cc` shares command handling between the standalone
+actuator and mixed MCU bus nodes. Both nodes derive directly from `rclcpp::Node`.
+One utility instance retains every actuator and subscription matching its node ID.
 
 Process runtime and failure handling
 ------------------------------------
@@ -125,7 +130,7 @@ enable behavior. Standalone node teardown still disables outputs in either case.
 Mixed MCU bus
 -------------
 
-[`mcu_bus`](mcu_bus.h) hosts scalar subscriptions and actuator commands in one
+[`mcu_bus`](mcu_bus.cc) hosts scalar subscriptions and actuator commands in one
 process, sharing the production board cache and coordinator. Give all consumers
 of the MCU the same `node.id` and `node_type: MCU_BUS`. The reference
 [preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real

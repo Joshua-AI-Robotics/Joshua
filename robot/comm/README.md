@@ -1,5 +1,7 @@
 # Communication
 
+Implementation rules and the architecture contract live in [AGENTS.md](AGENTS.md).
+
 `CommFactory` is the shared communication entry point for boards, sensors, and
 other devices. Configuration selects two independent properties:
 
@@ -12,7 +14,6 @@ ABSL_ASSIGN_OR_RETURN(auto comm, CommFactory::CreateComm(config.comm()));
 ABSL_ASSIGN_OR_RETURN(auto stream, GetCommTransport<ByteStream>(comm));
 ```
 
-Consumers never switch on `comm_type` and never construct mechanism adapters.
 `CommFactory` validates the requested combination, opens or reuses the concrete
 link, and returns the configured capability in `CommTransport`.
 
@@ -48,10 +49,6 @@ PDO correlation and shared endpoint lifetime. Factory assembly validates all
 discovered slaves before OP, then leases one endpoint per configured slave on a
 shared NIC owner. The separate AM243 JW firmware profile implements this
 contract; it is not the TI demo. See [config selection](../../config/README.md#joshuawire-over-ethercat).
-
-Device protocol parsing remains outside this layer. For example, the lidar
-parser interprets bytes received through `ByteStream`, while a board codec
-interprets complete exchanges received through `MessageTransport`.
 
 ### Serial link timing
 

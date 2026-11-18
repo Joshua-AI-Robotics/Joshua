@@ -6,11 +6,8 @@ the **single source of truth**; `scripts/install-skills.sh` links each skill
 into the agent skill directories that are actually indexed, so an agent can
 invoke it.
 
-These are Joshua's own skills, named `joshua-*`. They are **not** the external
-`superpowers:*` skills you see referenced in [plans](../superpowers/plans) —
-those come from an installed framework. Naming ours `joshua-*` and keeping them
-under `docs/skills/` (not `docs/superpowers/`) keeps the two from being
-confused for one another.
+These are Joshua's own skills, named `joshua-*`. Their canonical procedures
+live under `docs/skills/` and link to the current directory contracts.
 
 ## Index
 
