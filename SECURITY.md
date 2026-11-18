@@ -45,7 +45,7 @@ assessment within **14 days**.
 ### In scope
 
 - Vulnerabilities in Joshua source code, configs, launcher, node generator,
-  ROS 2 integration, web UI (`ui/`), Docker/setup scripts, and official presets
+  ROS 2 integration, Docker/setup scripts, and official presets
 - Unsafe network exposure or missing authentication on control interfaces
 - Memory safety or parsing issues in protobuf / packet handling
 - Exploitable issues in dependencies when used by Joshua as shipped
@@ -75,7 +75,7 @@ anonymous.
 
 Joshua can control real hardware. Operators should:
 
-- Run the web UI and ROS graph on trusted networks only
+- Run the ROS graph on trusted networks only
 - Do not expose control ports to the public internet without authentication
 - Review `.pbtxt` presets before deployment
 - Keep Docker images and system packages updated

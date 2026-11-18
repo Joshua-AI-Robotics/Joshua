@@ -16,7 +16,6 @@ required_services=(
 docker compose \
   --profile u24 \
   --profile arm64 \
-  --profile production \
   --profile tasks \
   config >/dev/null
 

@@ -4,7 +4,7 @@
 
 **Version:** see [`VERSION`](VERSION)
 
-Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the right nodes; the React control panel lets you configure, launch, and monitor the system.
+Joshua turns a single protobuf config into a running robot stack on ROS 2: hardware (actions and perceptions), AI policy, and operation mode. The launcher builds and runs the nodes defined by that config.
 
 ![Project Joshua core concept](assets/images/joshua_summary.png)
 
@@ -35,7 +35,7 @@ docker compose run --rm joshua-u24      # Ubuntu 24.04 / ROS 2 Jazzy
 CONFIG=config/config_preset/so100/random_noise.pbtxt docker compose run --rm run-u22
 ```
 
-Install options (CPU fallback, ARM64, ROS Jazzy), SO100 teleop, simulation presets, and the web UI: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint. The default developer workflow also requires a host NVIDIA driver and NVIDIA Container Toolkit; CPU-only development is explicitly supported. The Makefile provides optional shorthand for the Compose commands.
+Install options (CPU fallback, ARM64, ROS Jazzy), SO100 teleop, and simulation presets: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). Native Ubuntu development is not a supported entrypoint. The default developer workflow also requires a host NVIDIA driver and NVIDIA Container Toolkit; CPU-only development is explicitly supported. The Makefile provides optional shorthand for the Compose commands.
 
 ## GPU-first development
 
@@ -61,7 +61,7 @@ docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
   run --rm joshua-u22
 ```
 
-Tests, package builds, UI services, and CI do not request a GPU. The host provides the NVIDIA driver and NVIDIA Container Toolkit for the default developer workflow. CUDA-enabled PyTorch and related user-space libraries remain inside each model environment; the host CUDA toolkit is not required.
+Tests, package builds, and CI do not request a GPU. The host provides the NVIDIA driver and NVIDIA Container Toolkit for the default developer workflow. CUDA-enabled PyTorch and related user-space libraries remain inside each model environment; the host CUDA toolkit is not required.
 
 ## Build deployable binaries
 
@@ -91,7 +91,6 @@ Output: `dist/u22/x86/joshua_main_pkg-<version>-u22-x86.tar.gz` (version from [`
 | All docs index | [docs/README.md](docs/README.md) |
 | Scripts and builds | [scripts/README.md](scripts/README.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/README.md](simulation/README.md) |
-| Web UI | [ui/README.md](ui/README.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | AI coding agents | [AGENTS.md](AGENTS.md) |
 | Security | [SECURITY.md](SECURITY.md) |

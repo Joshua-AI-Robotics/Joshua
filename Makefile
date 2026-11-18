@@ -16,7 +16,7 @@ endif
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_ISAAC := docker compose -f docker-compose.yml -f docker-compose.isaac.yml
 
-.PHONY: help shell-u22 shell-u24 test-u22 test-u24 run-u22 run-u24 run-isaac-u22 run-isaac-u24 build ui ui-dev down compose-config
+.PHONY: help shell-u22 shell-u24 test-u22 test-u24 run-u22 run-u24 run-isaac-u22 run-isaac-u24 build down compose-config
 
 help:
 	@printf '%s\n' 'Joshua Docker-first entrypoints (optional Make shorthand)'
@@ -37,9 +37,7 @@ help:
 	@printf '%s\n' '  make build OS=u22 CPU=x86 TARGET=//launcher:joshua_main_pkg'
 	@printf '%s\n' '  make build OS=u24 CPU=arm64 TARGET=//launcher:joshua_main_pkg'
 	@printf '%s\n' ''
-	@printf '%s\n' 'UI and services:'
-	@printf '%s\n' '  make ui                              Build and run production UI'
-	@printf '%s\n' '  make ui-dev                          Run UI dev server and Zenoh bridge'
+	@printf '%s\n' 'Services:'
 	@printf '%s\n' '  make down                            Stop Docker Compose services'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Host bootstrap:'
@@ -72,16 +70,10 @@ run-isaac-u24:
 build:
 	TARGET="$(TARGET)" $(COMPOSE) run --rm build-$(OS)-$(CPU)
 
-ui:
-	$(COMPOSE) --profile production up --build joshua-ui
-
-ui-dev:
-	$(COMPOSE_DEV) up zenoh-bridge-ros2dds joshua-ui-dev
-
 down:
-	$(COMPOSE_DEV) --profile production --profile u24 --profile arm64 --profile mac down
+	$(COMPOSE_DEV) --profile u24 --profile arm64 --profile mac down
 
 compose-config:
-	$(COMPOSE) --profile u24 --profile arm64 --profile production --profile tasks config >/dev/null
-	$(COMPOSE_DEV) --profile u24 --profile arm64 --profile production --profile tasks config >/dev/null
+	$(COMPOSE) --profile u24 --profile arm64 --profile tasks config >/dev/null
+	$(COMPOSE_DEV) --profile u24 --profile arm64 --profile tasks config >/dev/null
 	$(COMPOSE_ISAAC) --profile u24 --profile arm64 --profile tasks config >/dev/null

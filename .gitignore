@@ -38,13 +38,8 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 
-# Node.js
-node_modules/
-
 # MuJoCo logs
 MUJOCO_LOG.TXT
-
-ui/public/proto-schema*
 
 # Build output
 dist/
