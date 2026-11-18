@@ -259,7 +259,7 @@ no `/clock` integration is added here.
 
 `//ros2/utils:robot_timer` provides `CreateRobotTimer(node, period, callback)`.
 The period and deadlines are double RobotTime seconds. Position, camera, lidar,
-audio and Xbox publishers use this helper. Camera and lidar timers only publish
+and audio publishers use this helper. Camera and lidar timers only publish
 their own configured stream.
 
 A ROS wall timer wakes the executor at `min(period, 0.001)` seconds to check

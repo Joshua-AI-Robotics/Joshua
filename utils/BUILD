@@ -61,17 +61,6 @@ cc_test(
 )
 
 cc_library(
-    name = "xbox_controller",
-    srcs = ["xbox_controller/xbox_controller.cc"],
-    hdrs = ["xbox_controller/xbox_controller.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@glog",
-        "@local_deps//:libevdev",
-    ],
-)
-
-cc_library(
     name = "status_macros",
     hdrs = ["status_macros.h"],
     visibility = ["//visibility:public"],

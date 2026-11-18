@@ -26,13 +26,13 @@ nested `AGENTS.md` today.
 
 ## 2. Where Joshua is today
 
-After [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69):
+The bridges introduced in [PR #69](https://github.com/Joshua-AI-Robotics/Joshua/pull/69)
+remain; repository-local Gemini settings have been removed:
 
 ```
 AGENTS.md                          canonical — every rule lives here
 ├── CLAUDE.md                      "@AGENTS.md"        (Claude Code)
-├── .gemini/settings.json          context.fileName    (Gemini CLI)
-├── GEMINI.md                      pointer + import    (Gemini fallback)
+├── GEMINI.md                      pointer + import    (Gemini)
 └── .github/copilot-instructions.md  pointer           (Copilot IDE chat)
 ```
 
@@ -42,7 +42,7 @@ AGENTS.md                          canonical — every rule lives here
 | Copilot coding agent / CLI / VS Code | ✅ | native |
 | Antigravity (v1.20.3+) | ✅ | native |
 | Claude Code | ❌ (Anthropic: not planned) | `CLAUDE.md` |
-| Gemini CLI | ✅ via `context.fileName` in `.gemini/settings.json` | that setting, plus `GEMINI.md` as fallback |
+| Gemini CLI | Uses the root bridge | `GEMINI.md` |
 | Copilot IDE-chat surfaces | ❌ | `.github/copilot-instructions.md` |
 
 Observed practice that this RFC codifies rather than invents:
@@ -121,12 +121,9 @@ routing that has stopped working:
 - A nested `AGENTS.md` with no sibling `CLAUDE.md`, or with one that does not
   actually import it (§7.5). Presence is not enough — an empty bridge, or one
   carrying its own rules, leaves the nested file unread.
-- `.gemini/settings.json` not naming `AGENTS.md` under `context.fileName`.
-  That key is how Gemini sees `AGENTS.md` at all, and a stale spelling fails
-  silently by falling back to `GEMINI.md`.
 
-Scope stays deliberately narrow: **declared targets only** — links, imports,
-and config keys. Paths and commands in prose are not checked, because docs
+Scope stays deliberately narrow: **declared targets only** — links and imports.
+Paths and commands in prose are not checked, because docs
 legitimately reference planned work — `tools/flash/` appears in
 [firmware/README.md](../firmware/README.md) and
 [BOARD_LAYER_RFC.md](BOARD_LAYER_RFC.md) — and placeholders like
@@ -267,27 +264,10 @@ missing, so the pair cannot drift apart.
 
 No nested `GEMINI.md` or Copilot bridge, but for different reasons.
 
-Gemini reads *nested* files, not nested `AGENTS.md` — by default it looks only
-for `GEMINI.md`, so a bridge per subsystem would be the same multiplication one
-level down. Instead `.gemini/settings.json` sets `context.fileName` to
-`["AGENTS.md"]`, so `AGENTS.md` becomes the file Gemini looks for wherever it
-looks, from one committed file rather than one per subsystem. The key is
-nested; the flat `contextFileName` spelling predates the September 2025
-settings migration and is silently ignored, so
-`hooks/agents_doc_check.sh` asserts the shape.
-
-`GEMINI.md` is deliberately *not* in that list. It stays as a fallback for a
-Gemini surface that ignores `settings.json`, and its `@AGENTS.md` import serves
-that case; listing both would make a settings-honouring Gemini load `AGENTS.md`
-directly and then again through the import.
-
-One caveat, unresolved: Gemini's discovery walks *upward* from the working
-directory through ancestors, where Claude Code also descends on demand into
-subdirectories it reads. So nested coverage for Gemini depends on where the
-agent was launched — full when started inside the subsystem, not guaranteed
-from the repository root. This is why §7.4 keeps safety at the root, and why
-the first subsystem to adopt a nested file should verify Gemini's behaviour
-rather than assume it.
+Gemini uses the root `GEMINI.md` pointer and its `@AGENTS.md` import.
+There is no repository-local Gemini settings override or automatic nested
+`AGENTS.md` discovery configuration. Agents must follow the root instructions
+to open the applicable subsystem contracts before making changes.
 
 Copilot needs nothing yet. If it ever does, its path-scoped instructions
 (`.github/instructions/*.instructions.md` with an `applyTo:` glob) cover the
