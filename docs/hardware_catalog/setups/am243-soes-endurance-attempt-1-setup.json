@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "id": "am243-soes-endurance-attempt-1-setup",
+  "record_type": "setup",
+  "subjects": [
+    {
+      "role": "device",
+      "hardware_id": "ti-lp-am243",
+      "unit_alias": "am243-soes-bench-unit",
+      "revision": null
+    }
+  ],
+  "topology": "Direct enp5s0 EtherCAT link to LP-AM243; SOES descriptor am243-soes, product 0x4a570002 revision 0x00020002",
+  "wiring": [],
+  "power": "Motor power disconnected; software actuator channel only",
+  "firmware": [
+    {
+      "subject": "device",
+      "profile": "jw-soes",
+      "artifact": "am243_ethercat_jw_soes.release.appimage.hs_fs",
+      "sha256": "151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55",
+      "toolchain": {
+        "communication_watchdog_us": "5000000",
+        "target_watchdog_us": "2000000"
+      }
+    }
+  ],
+  "configuration": [],
+  "environment": {
+    "host_nic": "enp5s0",
+    "pdo_bytes": "112 input / 112 output",
+    "host_cycle_ms": "50",
+    "process_budget_ms": "5",
+    "state_budget_ms": "5",
+    "mailbox_step_budget_ms": "5",
+    "scheduling_guard_ms": "5"
+  },
+  "calibration": [],
+  "conditions": [
+    "Historical setup imported without new hardware execution."
+  ],
+  "unknowns": {
+    "subjects.device.revision": "Not recorded in the original evidence.",
+    "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+    "instruments": "Calibration/instrument identities not recorded."
+  }
+}

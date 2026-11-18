@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "id": "am243-boot-identity-2026-10-26",
+  "record_type": "run",
+  "hardware_id": "ti-lp-am243",
+  "setup_id": "am243-jw-boot-setup",
+  "specification_id": "am243-boot-identity-v1",
+  "specification_version": 1,
+  "date": "2026-10-26",
+  "date_timezone": "UTC",
+  "started_at": null,
+  "completed_at": null,
+  "executed_by": null,
+  "validated_at": null,
+  "validated_by": null,
+  "organization": null,
+  "review_reference": null,
+  "review_status": "unreviewed",
+  "provenance": "historical",
+  "software": {
+    "joshua_commit": null,
+    "source_state": "Not recorded in the original bench narrative.",
+    "build_flags": [],
+    "container_digest": null
+  },
+  "result": "passed",
+  "checks": [
+    {
+      "check_id": "boot-distinct",
+      "observed": true,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "session-stable",
+      "observed": true,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    }
+  ],
+  "measurements": {
+    "boot_ids": [
+      "0xc9d5fe7e",
+      "0xaf024889"
+    ],
+    "resets_per_boot": 5,
+    "identities_per_boot": 15
+  },
+  "evidence": [
+    {
+      "id": "record",
+      "path": "docs/hardware_catalog/evidence/am243_boot_identity_2026-10-26.md",
+      "sha256": "f76e9f138d4241760f5b66a429873b588c44afb39e2d9478d12ef98cca1941d1",
+      "media_type": "text/markdown",
+      "availability": "retained",
+      "description": "Retained historical test narrative"
+    }
+  ],
+  "limitations": [
+    "Corrected image boot/session checks only; initial missing SA2UL firewall grant caused a data abort.",
+    "No entropy quality, OP traffic, watchdog latency or physical motor safety was qualified."
+  ],
+  "unknowns": {
+    "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+    "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+    "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+    "software.container_digest": "Exact Docker image digest was not retained."
+  },
+  "supersedes": null,
+  "legacy_export": false,
+  "reproduces": null,
+  "legacy_order": null
+}

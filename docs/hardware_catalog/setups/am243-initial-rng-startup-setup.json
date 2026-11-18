@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "am243-initial-rng-startup-setup",
+  "record_type": "setup",
+  "subjects": [
+    {
+      "role": "device",
+      "hardware_id": "ti-lp-am243",
+      "unit_alias": "am243-jw-boot-setup-unit",
+      "revision": null
+    }
+  ],
+  "topology": "LP-AM243 UART console during initial JW TI-stack firmware startup.",
+  "wiring": [],
+  "power": "Motor power disconnected; two USB-C cold boots",
+  "firmware": [
+    {
+      "subject": "device",
+      "profile": "jw initial image missing the SA2UL firewall grant",
+      "artifact": null,
+      "sha256": null,
+      "toolchain": {
+        "communication_watchdog_us": "20000",
+        "target_watchdog_us": "10000"
+      }
+    }
+  ],
+  "configuration": [],
+  "environment": {
+    "phase": "R5 startup before successful identification"
+  },
+  "calibration": [],
+  "conditions": [
+    "Historical setup imported without new hardware execution."
+  ],
+  "unknowns": {
+    "subjects.device.revision": "Not recorded in the original evidence.",
+    "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+    "instruments": "Calibration/instrument identities not recorded.",
+    "firmware.sha256": "Only the corrected image hash is recorded; it must not be attributed to the failed image."
+  }
+}

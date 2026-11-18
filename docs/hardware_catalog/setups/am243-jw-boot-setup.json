@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "am243-jw-boot-setup",
+  "record_type": "setup",
+  "subjects": [
+    {
+      "role": "device",
+      "hardware_id": "ti-lp-am243",
+      "unit_alias": "am243-jw-boot-setup-unit",
+      "revision": null
+    }
+  ],
+  "topology": "Direct host NIC to LP-AM243 EtherCAT; 112-byte PDO descriptor; no OP request",
+  "wiring": [],
+  "power": "Motor power disconnected; two USB-C cold boots",
+  "firmware": [
+    {
+      "subject": "device",
+      "profile": "jw",
+      "artifact": "am243_ethercat_jw.release.appimage.hs_fs",
+      "sha256": "47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca",
+      "toolchain": {
+        "communication_watchdog_us": "20000",
+        "target_watchdog_us": "10000"
+      }
+    }
+  ],
+  "configuration": [],
+  "environment": {
+    "host_nic": "enp5s0",
+    "protocol": "revision 4/layout 2; CoE startup only"
+  },
+  "calibration": [],
+  "conditions": [
+    "Historical setup imported without new hardware execution."
+  ],
+  "unknowns": {
+    "subjects.device.revision": "Not recorded in the original evidence.",
+    "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+    "instruments": "Calibration/instrument identities not recorded."
+  }
+}

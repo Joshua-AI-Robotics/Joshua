@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-assessment",
+  "record_type": "assessment",
+  "hardware_id": "sunplus-spca2281-xwf-1080p",
+  "capabilities": [
+    "image-capture"
+  ],
+  "run_ids": [
+    "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s"
+  ],
+  "status": "historical_unreviewed",
+  "scope": "Recorded capture result for this setup only; no newly attributed review or model-wide qualification.",
+  "validated_at": null,
+  "validated_by": null,
+  "review_reference": null,
+  "limitations": [
+    "A five-minute run on one physical unit and one Ubuntu 22.04/Humble setup; not an endurance or cross-platform qualification.",
+    "This result requires the two-buffer capture change and an optimized build. With two buffers, the default development build measured 23.2 FPS in the short comparison.",
+    "The recorded Joshua commit is the source base; the driver change and new preset were uncommitted during measurement. Their exact SHA-256 hashes are retained in the environment.",
+    "Frame rate and gaps were measured at the ROS subscriber. Publisher timestamps do not establish camera-exposure timing, synchronization accuracy, or delivery of every sensor exposure.",
+    "The final automatic-exposure settings matched the original settings. Other lighting conditions and hardware revisions were not qualified."
+  ],
+  "supersedes": null
+}

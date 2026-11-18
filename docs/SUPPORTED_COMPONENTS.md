@@ -9,14 +9,18 @@ every combination has been tested on hardware. Check the linked preset and the
 [hardware rules](../AGENTS.md#hardware-safety--read-this-first) before any run.
 
 For physical models, aliases, drivers, presets, and intended support scope,
-use the separate [supported hardware list](SUPPORTED_HARDWARE.md), generated
-from the [model catalog](hardware_catalog.json). Dated environments,
-measurements, and limitations live in [test records](TESTED_HARDWARE.md),
-referencing models by stable hardware ID. A test does not automatically add a
-model or broaden its support scope; an absent model is not necessarily
+use the [hardware validation catalog](hardware_catalog/INDEX.md). Its
+[contribution guide](hardware_catalog/AGENTS.md) defines models, exact setups,
+versioned specifications, dated runs and reviewed assessments. Results retain
+operator/reviewer identities and times, measurements, limitations and failures.
+The original camera-only [model list](SUPPORTED_HARDWARE.md) and
+[test view](TESTED_HARDWARE.md) remain generated compatibility entrypoints.
+A test does not automatically add a model or broaden its support scope; an absent model is not necessarily
 incompatible with an existing driver.
 
 For LLM discovery, [MCP](../tools/mcp/AGENTS.md) exposes
+`query_hardware_catalog(entity="runs", hardware_id="ti-lp-am243")` for the
+full catalog with bounded pagination,
 `list_supported_components()` for factory implementations,
 `list_supported_hardware(kind="camera", query="XWF-1080P")` for model discovery,
 and `list_hardware_test_records(hardware_id="sunplus-spca2281-xwf-1080p")` for

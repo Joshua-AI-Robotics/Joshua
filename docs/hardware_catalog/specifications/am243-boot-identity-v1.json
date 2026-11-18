@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "am243-boot-identity-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "AM243 boot identity across cold boot and session reset",
+  "kinds": [
+    "board"
+  ],
+  "criteria_provenance": "historical_reconstruction",
+  "source": "docs/hardware_catalog/evidence/am243_boot_identity_2026-10-26.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "Two cold boots, five resets and fifteen correlated identities on each boot. No configuration, enable, target or OP.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "boot-distinct",
+      "capability": "ethercat",
+      "metric": "Two cold boots produce distinct boot identities",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "Compare two cold-boot IDENTIFY records."
+    },
+    {
+      "id": "session-stable",
+      "capability": "ethercat",
+      "metric": "Boot identity stable across session resets",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "Five resets and fifteen correlated IDENTIFY replies per boot."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+  ]
+}

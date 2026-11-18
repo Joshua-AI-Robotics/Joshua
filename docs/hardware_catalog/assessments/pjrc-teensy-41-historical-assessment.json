@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "pjrc-teensy-41-historical-assessment",
+  "record_type": "assessment",
+  "hardware_id": "pjrc-teensy-41",
+  "capabilities": [
+    "usb-serial"
+  ],
+  "run_ids": [
+    "teensy41-partial-write-2026-10-25",
+    "teensy41-tx-fault-2026-10-25"
+  ],
+  "status": "historical_unreviewed",
+  "scope": "Imported bench narratives only. No new execution, reviewer attribution or broader support qualification.",
+  "validated_at": null,
+  "validated_by": null,
+  "review_reference": null,
+  "limitations": [
+    "Review identities and exact times were not recorded.",
+    "Consult each failed and successful run; protocol results do not establish physical outputs, stopping or endurance."
+  ],
+  "supersedes": null
+}

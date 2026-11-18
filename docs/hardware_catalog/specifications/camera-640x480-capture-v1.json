@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "camera-640x480-capture-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "640x480 ROS capture smoke check",
+  "kinds": [
+    "camera"
+  ],
+  "criteria_provenance": "historical_reconstruction",
+  "source": "docs/hardware_catalog/evidence/sunplus_spca2281_2026-11-04.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "One camera; 12 s observation including discovery; retained 10.634 s sample.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "capture",
+      "capability": "image-capture",
+      "metric": "Valid RGB ROS images received",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "ROS subscriber validates dimensions, encoding and payload size."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+  ]
+}

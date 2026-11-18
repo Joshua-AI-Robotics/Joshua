@@ -5,6 +5,4 @@ exports_files([
     "TESTED_HARDWARE.md",
     "hardware_catalog.json",
     "hardware_test_records.json",
-    "hardware_tests/sunplus_spca2281_2026-11-04.md",
-    "hardware_tests/sunplus_spca2281_1080p_2026-11-04.md",
 ])

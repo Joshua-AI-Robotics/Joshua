@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "id": "camera-1080p-delivery-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "1080p ROS delivery at approximately 30 FPS",
+  "kinds": [
+    "camera"
+  ],
+  "criteria_provenance": "recorded_before_run",
+  "source": "docs/hardware_catalog/evidence/sunplus_spca2281_1080p_2026-11-04.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "One camera; 5 s warmup and 300 s measurement.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "capture",
+      "capability": "image-capture",
+      "metric": "Valid RGB ROS images received",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "ROS subscriber validates dimensions, encoding and payload size."
+    },
+    {
+      "id": "mean-rate",
+      "capability": "image-capture",
+      "metric": "Mean ROS delivery rate",
+      "unit": "Hz",
+      "operator": "gte",
+      "expected": 29.5,
+      "measurement_method": "Monotonic subscriber receipts over 300 seconds after warmup."
+    },
+    {
+      "id": "window-rate",
+      "capability": "image-capture",
+      "metric": "Minimum complete ten-second window rate",
+      "unit": "Hz",
+      "operator": "gte",
+      "expected": 29.0,
+      "measurement_method": "Minimum of all thirty ten-second windows."
+    },
+    {
+      "id": "max-gap",
+      "capability": "image-capture",
+      "metric": "Maximum host receipt gap",
+      "unit": "ms",
+      "operator": "lte",
+      "expected": 100.0,
+      "measurement_method": "Largest adjacent monotonic subscriber receipt interval."
+    },
+    {
+      "id": "invalid-frames",
+      "capability": "image-capture",
+      "metric": "Invalid frames",
+      "unit": "count",
+      "operator": "eq",
+      "expected": 0,
+      "measurement_method": "Check dimensions, encoding, stride and payload length."
+    },
+    {
+      "id": "stamp-order",
+      "capability": "image-capture",
+      "metric": "Nonincreasing publisher stamps",
+      "unit": "count",
+      "operator": "eq",
+      "expected": 0,
+      "measurement_method": "Compare adjacent publisher timestamps; not exposure times."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Criteria were recorded before the original run; migration retains them without expanding scope. Exposure timing, other lighting/revisions and endurance were not qualified."
+  ]
+}

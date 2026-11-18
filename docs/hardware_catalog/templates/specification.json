@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "replace-specification-id",
+  "record_type": "specification",
+  "version": 1,
+  "title": "REPLACE scope and procedure",
+  "kinds": [
+    "board"
+  ],
+  "criteria_provenance": "proposed",
+  "source": null,
+  "prerequisites": [
+    "REPLACE reviewed prerequisites and hardware authorization"
+  ],
+  "procedure": [
+    "REPLACE reproducible steps"
+  ],
+  "workload": "REPLACE devices/rates/payloads/duration/repetitions",
+  "measurement_point": "REPLACE sensor/firmware/host observation point",
+  "clock_domains": [
+    "REPLACE clocks and synchronization"
+  ],
+  "checks": [
+    {
+      "id": "replace-check-id",
+      "capability": "replace-capability",
+      "metric": "REPLACE metric",
+      "unit": "REPLACE unit",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "REPLACE instrument and method"
+    }
+  ],
+  "required_evidence": [
+    "REPLACE retained logs/measurements/configuration/artifacts"
+  ],
+  "limitations": [
+    "REPLACE exclusions and unmeasured behavior"
+  ]
+}

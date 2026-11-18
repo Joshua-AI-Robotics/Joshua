@@ -29,6 +29,11 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [hardware_catalog.py](hardware_catalog.py) — shared hardware record validation,
+  versioned specifications, evidence integrity, bounded queries and generated
+  guides. The [catalog contract](../docs/hardware_catalog/AGENTS.md) owns its
+  templates and contribution workflow; MCP is a consumer of this tool.
+
 - [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
   scalar/health recording to JSONL. It preserves validity and separate clock
   domains, opens no board and sends no commands. Observation subscriptions use
@@ -36,7 +41,7 @@ launcher and ROS 2 nodes never invoke these.
   may contain gaps. See the
   [serial qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
 
-- [`mcp/`](mcp/AGENTS.md) — nine read-only stdio MCP tools for config-free factory
+- [`mcp/`](mcp/AGENTS.md) — ten read-only stdio MCP tools for config-free factory
   discovery, curated hardware models, separate historical hardware test records,
   per-call protobuf validation and device inspection, and optional private
   runtime snapshots. The adapter never controls runtime or certifies hardware

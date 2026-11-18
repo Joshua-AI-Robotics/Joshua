@@ -1,6 +1,9 @@
 # Hardware test records
 
 <!-- Generated from hardware_test_records.json; do not edit by hand. -->
+For boards, devices, validation identities/times, failed runs and contribution templates, see the [full hardware catalog](hardware_catalog/INDEX.md).
+This page retains the original v1 camera compatibility view.
+
 
 These are historical tests of specific units and software setups. The
 [supported-hardware list](SUPPORTED_HARDWARE.md) defines intended model support
@@ -20,7 +23,7 @@ MCP: `list_hardware_test_records(hardware_id="sunplus-spca2281-xwf-1080p")`.
 - Hardware ID: `sunplus-spca2281-xwf-1080p`.
 - Tested: 2026-11-04 at Joshua `74ecbcc618658358de2bbc9048fe9d60df7acadb`.
 - Environment: os=Ubuntu 22.04 (Docker), ros_distribution=Humble, architecture=x86_64.
-- Evidence: [manual test record](../docs/hardware_tests/sunplus_spca2281_2026-11-04.md).
+- Evidence: [manual test record](../docs/hardware_catalog/evidence/sunplus_spca2281_2026-11-04.md).
 
 Recorded results:
 
@@ -50,7 +53,7 @@ Limitations:
 - Hardware ID: `sunplus-spca2281-xwf-1080p`.
 - Tested: 2026-11-04 at Joshua `261887dfdcfd9645b846ecffe3a3f30cfb3f111b`.
 - Environment: os=Ubuntu 22.04 (Docker), ros_distribution=Humble, architecture=x86_64, build_mode=opt (-c opt), source_state=Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run., camera_driver_sha256=f3ede40449aee042d16d68a683a7efd6668e9e602d5da7216aa1805b98201fe2, preset=config/config_preset/example/sunplus_spca2281_1080p.pbtxt, preset_sha256=27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a, exposure=Original automatic exposure settings; no manual exposure adjustment during the qualification run..
-- Evidence: [manual test record](../docs/hardware_tests/sunplus_spca2281_1080p_2026-11-04.md).
+- Evidence: [manual test record](../docs/hardware_catalog/evidence/sunplus_spca2281_1080p_2026-11-04.md).
 
 Recorded results:
 

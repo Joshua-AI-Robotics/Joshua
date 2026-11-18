@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.hardware_catalog import render_catalog_markdown, render_test_markdown
 from tools.mcp.hardware_catalog import (
     CATALOG_GUIDE_PATH,
     CATALOG_PATH,
@@ -18,8 +19,6 @@ from tools.mcp.hardware_catalog import (
     hardware_error,
     load_hardware,
     load_test_records,
-    render_catalog_markdown,
-    render_test_markdown,
     validate_hardware,
     validate_hardware_report,
     validate_references,

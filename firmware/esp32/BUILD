@@ -26,3 +26,5 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+exports_files(["AGENTS.md"])

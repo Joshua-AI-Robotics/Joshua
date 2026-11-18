@@ -6,6 +6,14 @@ import json
 import re
 from pathlib import Path, PurePosixPath
 
+from tools.hardware_catalog import (
+    QUERY_OPERATION,
+    QUERY_REPORT_SCHEMA,
+    query_catalog,
+    query_error,
+    validate_query_report,
+)
+
 ROOT = Path(__file__).parents[2]
 CATALOG_PATH = ROOT / "docs/hardware_catalog.json"
 RECORDS_PATH = ROOT / "docs/hardware_test_records.json"
@@ -65,6 +73,7 @@ def _report_schema(operation):
 
 
 REPORT_SCHEMAS = {op: _report_schema(op) for op in SCOPES}
+REPORT_SCHEMAS[QUERY_OPERATION] = QUERY_REPORT_SCHEMA
 
 
 def _unique_pairs(pairs):
@@ -231,6 +240,8 @@ def validate_references(hardware, records, root=ROOT):
 
 
 def hardware_error(operation, code, message):
+    if operation == QUERY_OPERATION:
+        return query_error(code, message)
     return dict(
         schema_version=1,
         scope=SCOPES[operation],
@@ -243,6 +254,9 @@ def hardware_error(operation, code, message):
 
 
 def validate_hardware_report(report, operation):
+    if operation == QUERY_OPERATION:
+        validate_query_report(report)
+        return
     if (
         type(report) is not dict
         or set(report) != set(REPORT_SCHEMAS[operation]["properties"])
@@ -299,6 +313,9 @@ def _success(operation, entries):
 class HardwareCatalog:
     def __init__(self, catalog_path=CATALOG_PATH, records_path=RECORDS_PATH):
         self.catalog_path, self.records_path = catalog_path, records_path
+
+    async def query_hardware_catalog(self, **filters):
+        return query_catalog(**filters)
 
     async def list_supported_hardware(self, kind=None, usb_id=None, query=None):
         if (
@@ -359,151 +376,15 @@ class HardwareCatalog:
         )
 
 
-def render_catalog_markdown(hardware):
-    lines = [
-        "# Supported hardware",
-        "",
-        "<!-- Generated from hardware_catalog.json; do not edit by hand. -->",
-        "",
-        "This is the curated model list: intended support through existing drivers",
-        "and example presets. Support scope is reviewed independently of test results.",
-        "Adding a successful test does not automatically add a model "
-        "or broaden its scope.",
-        "An absent model is not necessarily incompatible with an existing driver.",
-        "",
-        "See [implemented components](SUPPORTED_COMPONENTS.md) "
-        "for factory implementations",
-        "and [test records](TESTED_HARDWARE.md) "
-        "for dated measurements and environments.",
-        "Protobuf presets remain authoritative for runtime settings. "
-        "Resolve local device",
-        "indices before running and follow the [hardware rules](../AGENTS.md).",
-        "",
-        'MCP: `list_supported_hardware(kind="camera", query="XWF-1080P")`.',
-        "",
-    ]
-    for item in hardware:
-        lines.extend(
-            [
-                f'<a id="{item["id"]}"></a>',
-                "",
-                f'## {item["model"]}',
-                "",
-                f'- Hardware ID: `{item["id"]}` ({item["kind"]}).',
-                f'- Manufacturer: {item["manufacturer"].rstrip(".")}.',
-                "- Aliases: " + (", ".join(item["aliases"]) or "none recorded") + ".",
-                f'- Driver: [{item["driver"]}](../{item["implementation"]}).',
-                f'- Example: [{Path(item["preset"]).name}](../{item["preset"]}).',
-                f'- Support scope: {item["support_scope"]}',
-                "- Evidence: [separate test records]"
-                f'(TESTED_HARDWARE.md#{item["id"]}).',
-                "",
-            ]
-        )
-    lines.extend(
-        [
-            "## Maintaining the list",
-            "",
-            "Edit [hardware_catalog.json](hardware_catalog.json) "
-            "for stable model information.",
-            "A model can have zero or multiple tests. Add dated runs separately to",
-            "[hardware_test_records.json](hardware_test_records.json), "
-            "referencing the model's",
-            "stable `hardware_id`. Do not copy model metadata "
-            "into individual test records.",
-            "",
-            "In a Joshua Docker development shell, regenerate both guides with:",
-            "",
-            "```sh",
-            "python3 -m tools.mcp.hardware_catalog --write-docs",
-            "```",
-            "",
-            "The catalog test checks schemas, duplicate IDs, "
-            "unknown hardware references,",
-            "source/preset/evidence links, and generated-guide consistency. "
-            "Declare new",
-            "referenced files in the test data in `tools/mcp/BUILD` "
-            "for isolated Bazel checks.",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
-def render_test_markdown(hardware, records):
-    lines = [
-        "# Hardware test records",
-        "",
-        "<!-- Generated from hardware_test_records.json; do not edit by hand. -->",
-        "",
-        "These are historical tests of specific units and software setups. The",
-        "[supported-hardware list](SUPPORTED_HARDWARE.md) "
-        "defines intended model support",
-        "separately. Measurements below do not establish current readiness, "
-        "every hardware",
-        "revision's compatibility, or permission to run a device.",
-        "",
-        'MCP: `list_hardware_test_records(hardware_id="sunplus-spca2281-xwf-1080p")`.',
-        "",
-    ]
-    for item in hardware:
-        lines.extend(
-            [
-                f'<a id="{item["id"]}"></a>',
-                "",
-                f'## {item["model"]}',
-                "",
-                "[Model details and support scope]"
-                f'(SUPPORTED_HARDWARE.md#{item["id"]}).',
-                "",
-            ]
-        )
-        runs = [r for r in records if r["hardware_id"] == item["id"]]
-        if not runs:
-            lines.extend(["No test records recorded.", ""])
-        for run in runs:
-            environment = ", ".join(k + "=" + v for k, v in run["environment"].items())
-            lines.extend(
-                [
-                    f'### {run["id"]}',
-                    "",
-                    f'- Hardware ID: `{run["hardware_id"]}`.',
-                    f'- Tested: {run["date"]} at Joshua `{run["joshua_commit"]}`.',
-                    f"- Environment: {environment}.",
-                    f'- Evidence: [manual test record](../{run["evidence"]}).',
-                    "",
-                    "Recorded results:",
-                    "",
-                    "```json",
-                    json.dumps(run["results"], indent=2, ensure_ascii=False),
-                    "```",
-                    "",
-                    "Limitations:",
-                    "",
-                    *("- " + text for text in run["limitations"]),
-                    "",
-                ]
-            )
-    return "\n".join(lines)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write-docs", action="store_true")
     mode.add_argument("--check-docs", action="store_true")
     args = parser.parse_args()
-    hardware, records = load_hardware(), load_test_records()
-    validate_references(hardware, records)
-    guides = {
-        CATALOG_GUIDE_PATH: render_catalog_markdown(hardware),
-        TEST_GUIDE_PATH: render_test_markdown(hardware, records),
-    }
-    for path, expected in guides.items():
-        if args.write_docs:
-            path.write_text(expected, encoding="utf-8")
-        elif path.read_text(encoding="utf-8") != expected:
-            parser.exit(1, f"Regenerate {path.name} with --write-docs.\n")
+    from tools.hardware_catalog import main as catalog_main
+
+    return catalog_main(["--write-docs" if args.write_docs else "--check"])
 
 
 if __name__ == "__main__":

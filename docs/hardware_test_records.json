@@ -11,7 +11,7 @@
         "ros_distribution": "Humble",
         "architecture": "x86_64"
       },
-      "evidence": "docs/hardware_tests/sunplus_spca2281_2026-11-04.md",
+      "evidence": "docs/hardware_catalog/evidence/sunplus_spca2281_2026-11-04.md",
       "results": {
         "capture_format": "MJPG",
         "width": 640,
@@ -46,7 +46,7 @@
         "preset_sha256": "27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a",
         "exposure": "Original automatic exposure settings; no manual exposure adjustment during the qualification run."
       },
-      "evidence": "docs/hardware_tests/sunplus_spca2281_1080p_2026-11-04.md",
+      "evidence": "docs/hardware_catalog/evidence/sunplus_spca2281_1080p_2026-11-04.md",
       "results": {
         "capture_format": "MJPG",
         "width": 1920,

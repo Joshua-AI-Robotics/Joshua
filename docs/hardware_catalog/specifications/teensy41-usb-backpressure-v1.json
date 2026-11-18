@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "teensy41-usb-backpressure-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "Stationary USB backpressure and fault/recovery regression",
+  "kinds": [
+    "board"
+  ],
+  "criteria_provenance": "historical_reconstruction",
+  "source": "docs/hardware_catalog/evidence/teensy41_tx_fault_2026-10-25.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "4096 IDENTIFY retries; host reads withheld 150 ms; repeat with queued ESTOP.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "reply-integrity",
+      "capability": "usb-serial",
+      "metric": "4096 exact retry responses intact",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "Retained raw USB probe with 150 ms host-read withholding."
+    },
+    {
+      "id": "fault-recovery",
+      "capability": "usb-serial",
+      "metric": "Fault, ESTOP and recovery interlocks reported correctly",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "Production diagnostic plus retained backpressure/ESTOP probe."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+  ]
+}

@@ -48,7 +48,7 @@ launch. Client connection never compiles or installs dependencies. Use `doctor`
 for diagnostics; after source changes, prepare again and reconnect the client.
 The manual Bazel commands below remain available for development.
 
-`config_validation_server` exposes nine read-only tools over stdio when started
+`config_validation_server` exposes ten read-only tools over stdio when started
 with `--inspector`. `list_supported_components()` discovers factory-owned build
 metadata without a config. `list_supported_hardware(kind=None, usb_id=None, query=None)`
 searches curated model support metadata. `list_hardware_test_records(hardware_id=None)`
@@ -111,6 +111,23 @@ operator restart instruction; an ordinary overlapping request receives
 are errors. The tests exercise the actual SDK stdio exchange in both ROS stacks.
 
 ## Catalog and device reports
+
+`query_hardware_catalog(entity="runs", hardware_id="ti-lp-am243", limit=20)`
+reads the full [hardware validation catalog](../../docs/hardware_catalog/AGENTS.md)
+through the shared catalog tool. Entities are `models`, `setups`, `specifications`,
+`runs` and `assessments`; optional filters include `hardware_id`, `query`, `result`
+(runs only) and `validated_by` (runs/assessments only). Limits are 1–50 records;
+continue with `next_cursor` and the same filters. Stale or mismatched cursors fail.
+The response includes execution/review identities and UTC timestamps, with explicit
+nulls and reasons for missing historical provenance. Files and response sizes are
+bounded; one oversized record returns an explicit error rather than truncation.
+No query probes hardware or runs a stored procedure.
+
+The original two hardware calls below preserve their v1 shapes and original
+camera coverage using generated compatibility projections. New device classes,
+full provenance, failures and incomplete legacy evidence are available through
+`query_hardware_catalog`. Edit canonical records, never the generated v1 JSON.
+
 
 `list_supported_hardware` reads the bundled
 [model catalog](../../docs/hardware_catalog.json), also rendered as

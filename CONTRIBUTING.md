@@ -7,6 +7,7 @@ for people and coding agents. Start with its [contribution workflow](AGENTS.md#c
 - [Coding guidelines](AGENTS.md#coding-guidelines)
 - [Tests](AGENTS.md#test) and [lint](AGENTS.md#lint)
 - [Pull requests and review](AGENTS.md#pull-requests-and-review)
+- [Hardware catalog contributions](docs/hardware_catalog/AGENTS.md#add-a-device-or-validation-run)
 - [Hardware authorization](AGENTS.md#hardware-safety--read-this-first)
 
 This file provides GitHub's contribution-guidelines entry point. Keep rules in

@@ -35,3 +35,5 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+exports_files(["teensy_board.h"])

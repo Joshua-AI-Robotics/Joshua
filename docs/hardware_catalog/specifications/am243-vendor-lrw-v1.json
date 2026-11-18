@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "am243-vendor-lrw-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "Historical vendor demo LRW cyclic process-data probe",
+  "kinds": [
+    "board"
+  ],
+  "criteria_provenance": "historical_reconstruction",
+  "source": "docs/hardware_catalog/evidence/am243-vendor-ethercat.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "SOEM LRW cyclic frames to the TI demo slave; exact repetition count/duration not recorded.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "lrw-response",
+      "capability": "ethercat",
+      "metric": "LRW frame returns valid working count",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "SOEM transmits command 0x0c LRW; inspect response/working count."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+  ]
+}

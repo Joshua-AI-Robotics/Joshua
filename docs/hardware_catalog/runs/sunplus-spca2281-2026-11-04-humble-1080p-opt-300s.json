@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s",
+  "record_type": "run",
+  "hardware_id": "sunplus-spca2281-xwf-1080p",
+  "setup_id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-setup",
+  "specification_id": "camera-1080p-delivery-v1",
+  "specification_version": 1,
+  "date": "2026-11-04",
+  "date_timezone": "America/Los_Angeles",
+  "started_at": null,
+  "completed_at": null,
+  "executed_by": null,
+  "validated_at": null,
+  "validated_by": null,
+  "organization": null,
+  "review_reference": null,
+  "review_status": "unreviewed",
+  "provenance": "historical",
+  "software": {
+    "joshua_commit": "261887dfdcfd9645b846ecffe3a3f30cfb3f111b",
+    "source_state": "Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run.",
+    "build_flags": [
+      "-c opt",
+      "--config=u22",
+      "--config=x86-base",
+      "python_version=3.10"
+    ],
+    "container_digest": null
+  },
+  "result": "passed",
+  "checks": [
+    {
+      "check_id": "capture",
+      "observed": true,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "mean-rate",
+      "observed": 30.003333,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "window-rate",
+      "observed": 29.9,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "max-gap",
+      "observed": 56.313,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "invalid-frames",
+      "observed": 0,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    },
+    {
+      "check_id": "stamp-order",
+      "observed": 0,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    }
+  ],
+  "measurements": {
+    "capture_format": "MJPG",
+    "width": 1920,
+    "height": 1080,
+    "encoding": "rgb8",
+    "bytes_per_frame": 6220800,
+    "capture_buffers_requested": 2,
+    "requested_fps": 30,
+    "negotiated_fps": 30.0,
+    "warmup_seconds": 5,
+    "measurement_seconds": 300.0,
+    "received_frames": 9001,
+    "measured_fps": 30.003333,
+    "publisher_stamp_fps": 30.002796,
+    "ten_second_window_fps": [
+      30.1,
+      30.0,
+      30.0,
+      30.0,
+      29.9,
+      30.1,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0,
+      30.0
+    ],
+    "minimum_ten_second_window_fps": 29.9,
+    "maximum_ten_second_window_fps": 30.1,
+    "max_frame_gap_ms": 56.313,
+    "frame_gap_p99_ms": 46.064,
+    "invalid_frames": 0,
+    "nonincreasing_publisher_stamps": 0,
+    "subscriber_qos": "reliable",
+    "sustained_30fps_criteria": {
+      "minimum_mean_fps": 29.5,
+      "minimum_ten_second_window_fps": 29.0,
+      "maximum_frame_gap_ms": 100.0
+    },
+    "sustained_30fps_passed": true
+  },
+  "evidence": [
+    {
+      "id": "record",
+      "path": "docs/hardware_catalog/evidence/sunplus_spca2281_1080p_2026-11-04.md",
+      "sha256": "ecefdecf8b78e5dde553bce3924678ef53f9a9997bde3aeef721a5b58d144d7c",
+      "media_type": "text/markdown",
+      "availability": "retained",
+      "description": "Retained historical test narrative"
+    }
+  ],
+  "limitations": [
+    "A five-minute run on one physical unit and one Ubuntu 22.04/Humble setup; not an endurance or cross-platform qualification.",
+    "This result requires the two-buffer capture change and an optimized build. With two buffers, the default development build measured 23.2 FPS in the short comparison.",
+    "The recorded Joshua commit is the source base; the driver change and new preset were uncommitted during measurement. Their exact SHA-256 hashes are retained in the environment.",
+    "Frame rate and gaps were measured at the ROS subscriber. Publisher timestamps do not establish camera-exposure timing, synchronization accuracy, or delivery of every sensor exposure.",
+    "The final automatic-exposure settings matched the original settings. Other lighting conditions and hardware revisions were not qualified."
+  ],
+  "unknowns": {
+    "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+    "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+    "software.container_digest": "Exact Docker image digest was not retained."
+  },
+  "supersedes": null,
+  "legacy_export": true,
+  "reproduces": null,
+  "legacy_order": 1
+}

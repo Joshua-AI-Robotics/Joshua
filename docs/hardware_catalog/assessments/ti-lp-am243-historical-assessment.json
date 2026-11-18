@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "ti-lp-am243-historical-assessment",
+  "record_type": "assessment",
+  "hardware_id": "ti-lp-am243",
+  "capabilities": [
+    "ethercat",
+    "uart"
+  ],
+  "run_ids": [
+    "am243-boot-identity-2026-10-26",
+    "am243-delayed-dispatch-2026-10-25",
+    "am243-initial-rng-startup-failure-2026-10-26",
+    "am243-soes-endurance-attempt-1-2026-10-26",
+    "am243-soes-endurance-attempt-2-2026-10-26",
+    "am243-soes-protocol-2026-10-26",
+    "am243-vendor-ethercat-undated",
+    "am243-vendor-hello-world-undated",
+    "am243-vendor-lrw-failure-undated"
+  ],
+  "status": "historical_unreviewed",
+  "scope": "Imported bench narratives only. No new execution, reviewer attribution or broader support qualification.",
+  "validated_at": null,
+  "validated_by": null,
+  "review_reference": null,
+  "limitations": [
+    "Review identities and exact times were not recorded.",
+    "Consult each failed and successful run; protocol results do not establish physical outputs, stopping or endurance."
+  ],
+  "supersedes": null
+}

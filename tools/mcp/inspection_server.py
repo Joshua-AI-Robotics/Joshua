@@ -7,6 +7,7 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
+from tools.hardware_catalog import QUERY_INPUT_SCHEMA, QUERY_OPERATION
 from tools.mcp.config_validation_server import (
     REPORT_SCHEMA,
     _validate_report,
@@ -37,6 +38,7 @@ _NAMES = (
     "get_runtime_status",
     "get_recent_logs",
     "get_feedback",
+    QUERY_OPERATION,
 )
 _DESCRIPTIONS = (
     (
@@ -46,7 +48,8 @@ _DESCRIPTIONS = (
     (
         "Find curated supported hardware models by kind, USB VID:PID, or model/alias. "
         "Returns stable hardware IDs, drivers, presets and intended support scope. "
-        "Test evidence is separate; does not scan devices or establish readiness."
+        "Test evidence is separate; does not scan devices or establish readiness. "
+        "Use query_hardware_catalog for the full validation catalog including boards."
     ),
     (
         "List historical test records, optionally for one stable hardware_id. "
@@ -68,10 +71,17 @@ _DESCRIPTIONS = (
         "Read the operator-selected measured POSITION stream; "
         "receipt freshness is separate from acquisition freshness."
     ),
+    (
+        "Query versioned hardware models, setups, specifications, validation runs "
+        "and assessments with bounded pagination. Historical facts do not establish "
+        "current readiness."
+    ),
 )
 
 
 def _schema(name):
+    if name == QUERY_OPERATION:
+        return QUERY_INPUT_SCHEMA
     props, required = {}, []
     if name == "list_supported_hardware":
         props = {
@@ -171,7 +181,7 @@ def make_server(inspector, observer=None, validation_only=False, hardware_catalo
             arguments
         ) <= set(schema["properties"])
         if valid:
-            if name in HARDWARE_SCHEMAS:
+            if name in HARDWARE_SCHEMAS and name != QUERY_OPERATION:
                 valid = all(type(value) is str for value in arguments.values())
             for key in ("config_path", "device_id", "sensor_id"):
                 if key not in arguments:

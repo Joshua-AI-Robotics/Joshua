@@ -75,6 +75,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+          fetch-depth: 0
 
       - name: Free disk space
         run: |
@@ -110,3 +111,18 @@ jobs:
 
       - name: Run Bazel tests in Docker
         run: docker compose run --rm ${{ matrix.service }}
+
+      - name: Preserve hardware catalog history
+        if: github.event_name == 'pull_request'
+        env:
+          CATALOG_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          case "${{ matrix.os }}" in
+            u22) catalog_python=3.10 ;;
+            u24) catalog_python=3.12 ;;
+          esac
+          docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
+            run --rm -T ${{ matrix.shell }} bazel run \
+            --config=${{ matrix.os }} --config=x86-base \
+            --@rules_python//python/config_settings:python_version="$catalog_python" \
+            //tools:hardware_catalog_cli -- --check-history "$CATALOG_BASE_SHA"

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "am243-ti-demo-delay-setup",
+  "record_type": "setup",
+  "subjects": [
+    {
+      "role": "device",
+      "hardware_id": "ti-lp-am243",
+      "unit_alias": "am243-ti-demo-delay-setup-unit",
+      "revision": null
+    }
+  ],
+  "topology": "Host SOEM split LRD/LWR to TI demo slave; 8-byte input/output PDOs",
+  "wiring": [],
+  "power": "Not recorded; TI demo echo firmware, no motor-output verification",
+  "firmware": [
+    {
+      "subject": "device",
+      "profile": "TI vendor EtherCAT demo",
+      "artifact": null,
+      "sha256": null,
+      "toolchain": {}
+    }
+  ],
+  "configuration": [],
+  "environment": {
+    "os": "Docker Ubuntu 22",
+    "nic": "enp5s0",
+    "cycle_period_ms": "50",
+    "process_timeout_ms": "5",
+    "state_check_budget_ms": "10",
+    "startup_timeout_seconds": "10"
+  },
+  "calibration": [],
+  "conditions": [
+    "Historical setup imported without new hardware execution."
+  ],
+  "unknowns": {
+    "subjects.device.revision": "Not recorded in the original evidence.",
+    "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+    "instruments": "Calibration/instrument identities not recorded."
+  }
+}

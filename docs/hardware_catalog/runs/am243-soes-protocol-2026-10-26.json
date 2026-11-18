@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "am243-soes-protocol-2026-10-26",
+  "record_type": "run",
+  "hardware_id": "ti-lp-am243",
+  "setup_id": "am243-soes-setup",
+  "specification_id": "am243-soes-protocol-v1",
+  "specification_version": 1,
+  "date": "2026-10-26",
+  "date_timezone": null,
+  "started_at": null,
+  "completed_at": null,
+  "executed_by": null,
+  "validated_at": null,
+  "validated_by": null,
+  "organization": null,
+  "review_reference": null,
+  "review_status": "unreviewed",
+  "provenance": "historical",
+  "software": {
+    "joshua_commit": null,
+    "source_state": "Not recorded in the original bench narrative.",
+    "build_flags": [],
+    "container_digest": null
+  },
+  "result": "passed",
+  "checks": [
+    {
+      "check_id": "protocol-checks",
+      "observed": true,
+      "outcome": "passed",
+      "evidence_ids": [
+        "record"
+      ]
+    }
+  ],
+  "measurements": {
+    "boot_ids": [
+      "0x9c7cca7b",
+      "0x9986c086"
+    ],
+    "pdo_bytes": 112
+  },
+  "evidence": [
+    {
+      "id": "record",
+      "path": "docs/hardware_catalog/evidence/am243_soes_2026-10-26.md",
+      "sha256": "28487c96d9d29c852882f9eb280a02af97eb00cf21583726d06410755f4d2a49",
+      "media_type": "text/markdown",
+      "availability": "retained",
+      "description": "Retained historical test narrative"
+    }
+  ],
+  "limitations": [
+    "Software actuator channel only; no physical STEP/DIR GPIO output.",
+    "Protocol checks do not qualify endurance; the separate endurance attempts failed."
+  ],
+  "unknowns": {
+    "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+    "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+    "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+    "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+    "date_timezone": "Original bench date does not specify a timezone.",
+    "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+    "software.container_digest": "Exact Docker image digest was not retained."
+  },
+  "supersedes": null,
+  "legacy_export": false,
+  "reproduces": null,
+  "legacy_order": null
+}

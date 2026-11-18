@@ -35,3 +35,5 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+exports_files(["esp32_board.h"])

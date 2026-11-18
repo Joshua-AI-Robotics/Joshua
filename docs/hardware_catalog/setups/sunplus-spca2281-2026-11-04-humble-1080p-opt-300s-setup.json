@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-setup",
+  "record_type": "setup",
+  "subjects": [
+    {
+      "role": "device",
+      "hardware_id": "sunplus-spca2281-xwf-1080p",
+      "unit_alias": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-setup-unit",
+      "revision": null
+    }
+  ],
+  "topology": "One USB camera, Joshua camera publisher and reliable local ROS subscriber",
+  "wiring": [],
+  "power": "USB power; host/controller topology not retained",
+  "firmware": [],
+  "configuration": [
+    {
+      "path": "config/config_preset/example/sunplus_spca2281_1080p.pbtxt",
+      "sha256": "27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a",
+      "overrides": [
+        "Physical camera index resolved for the recorded run; do not assume index 0 for a new run."
+      ]
+    }
+  ],
+  "environment": {
+    "os": "Ubuntu 22.04 (Docker)",
+    "ros_distribution": "Humble",
+    "architecture": "x86_64",
+    "build_mode": "opt (-c opt)",
+    "source_state": "Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run.",
+    "camera_driver_sha256": "f3ede40449aee042d16d68a683a7efd6668e9e602d5da7216aa1805b98201fe2",
+    "preset": "config/config_preset/example/sunplus_spca2281_1080p.pbtxt",
+    "preset_sha256": "27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a",
+    "exposure": "Original automatic exposure settings; no manual exposure adjustment during the qualification run."
+  },
+  "calibration": [],
+  "conditions": [
+    "Historical setup imported without new hardware execution."
+  ],
+  "unknowns": {
+    "subjects.device.revision": "Not recorded in the original evidence.",
+    "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+    "instruments": "Calibration/instrument identities not recorded."
+  }
+}

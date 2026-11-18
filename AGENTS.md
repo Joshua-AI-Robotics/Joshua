@@ -308,13 +308,16 @@ touches their area:
   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 - **Recurring tasks with a repo skill**: some tasks have a `joshua-*` skill that
   encodes the steps — see [docs/skills/](docs/skills/AGENTS.md).
-- **Hardware compatibility or model discovery**: read
+- **Hardware compatibility or model discovery**: read the
+  [hardware catalog](docs/hardware_catalog/AGENTS.md) and its contribution contract,
   [implemented components](docs/SUPPORTED_COMPONENTS.md) and
   [supported hardware](docs/SUPPORTED_HARDWARE.md). MCP's
   `list_supported_components` describes software implementations;
   `list_supported_hardware` returns curated model information;
   `list_hardware_test_records` returns separate [historical runs](docs/TESTED_HARDWARE.md)
-  linked by hardware ID. None establishes current hardware readiness.
+  linked by hardware ID. `query_hardware_catalog` exposes the full versioned
+  catalog, including boards, setups, specifications and execution/review provenance.
+  None establishes current hardware readiness.
 
 ## JOSHUA (**J**oint **O**pen-**S**ource **H**ub for **U**niversal **A**utomation)
 

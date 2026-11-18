@@ -25,3 +25,5 @@ config_setting(
     constraint_values = ["@platforms//cpu:aarch64"],
     visibility = ["//visibility:public"],
 )
+
+exports_files(["firmware/arduino/AGENTS.md"])

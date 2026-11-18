@@ -62,6 +62,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Shared C++ robot clock, configuration, and integration checklist | [ROBOT_TIME.md](ROBOT_TIME.md) |
 | AI stack (inference, models, deps) | [../ai/AGENTS.md](../ai/AGENTS.md) |
 | Source-linked catalog of implemented components and representative presets | [SUPPORTED_COMPONENTS.md](SUPPORTED_COMPONENTS.md) |
+| Hardware validation catalog, templates, setups, specifications and provenance | [hardware_catalog/AGENTS.md](hardware_catalog/AGENTS.md) |
 | Supported hardware models, aliases, drivers, presets, and intended scope | [SUPPORTED_HARDWARE.md](SUPPORTED_HARDWARE.md) |
 | Separate hardware test records, environments, measured results, and limitations | [TESTED_HARDWARE.md](TESTED_HARDWARE.md) |
 | Shared JoshuaWire code, test layout and migration adapters | [../firmware/common/AGENTS.md](../firmware/common/AGENTS.md) |
@@ -87,4 +88,5 @@ then remove these documents and their index entries.
 
 ## Directory navigation
 
+- [hardware_catalog/](hardware_catalog/AGENTS.md)
 - [skills/](skills/AGENTS.md)

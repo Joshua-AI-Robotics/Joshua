@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "am243-vendor-hello-world-v1",
+  "record_type": "specification",
+  "version": 1,
+  "title": "Historical AM243 vendor Hello World OSPI boot",
+  "kinds": [
+    "board"
+  ],
+  "criteria_provenance": "historical_reconstruction",
+  "source": "docs/hardware_catalog/evidence/am243-vendor-hello-world.md",
+  "prerequisites": [
+    "Follow root hardware authorization and the model operating guide.",
+    "Freeze firmware, source, setup and configuration before a new test."
+  ],
+  "procedure": [
+    "Reproduce the steps in the retained historical evidence.",
+    "Record actual observations, failures, exact timestamps and operator identity for a new run."
+  ],
+  "workload": "Historical vendor bring-up; exact workload/duration not recorded.",
+  "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+  "clock_domains": [
+    "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+  ],
+  "checks": [
+    {
+      "id": "vendor-bringup",
+      "capability": "uart",
+      "metric": "Historical AM243 vendor Hello World OSPI boot",
+      "unit": "boolean",
+      "operator": "eq",
+      "expected": true,
+      "measurement_method": "Observe boot output after reset/power-on."
+    }
+  ],
+  "required_evidence": [
+    "Setup/configuration and source/firmware provenance",
+    "Observed measurements or protocol results with retained logs",
+    "Execution and review identities/times, or explicit historical gaps"
+  ],
+  "limitations": [
+    "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+  ]
+}

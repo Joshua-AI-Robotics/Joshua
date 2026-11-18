@@ -142,22 +142,10 @@ safety, CPU-halt coverage or hard-real-time timing.
 
 ### Boot identity bench record — 2026-10-26 UTC
 
-An authorized LP-AM243 run with motor power off flashed the JW TI-stack image
-built with communication/target watchdogs of 20000/10000 us. Its signed appimage
-SHA-256 was `47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca`.
-The first hardware attempt exposed a missing SA2UL firewall grant: the R5 took
-a synchronous data abort while reading `0x40901000` in `SA2UL_engineEnable`.
-Adding the SDK RNG example's grant to the isolated SysConfig overlay corrected
-startup; both UART/TI-demo and JW artifacts cross-built afterward.
-
-Over the direct `enp5s0` link, the corrected image advertised `am243-ec-jw`,
-revision 4/layout 2, with 112-byte input/output PDOs. Two USB-C power cycles
-produced boot IDs `0xc9d5fe7e` and `0xaf024889`. On each boot, five distinct
-session resets and 15 correlated IDENTIFY replies preserved that boot's ID.
-The probe used startup CoE SDOs only: it never requested OPERATIONAL or sent
-actuator configuration, enable or target commands. This verifies RNG startup
-and boot/session identity behavior on this board, not entropy quality,
-EtherCAT timing, watchdog latency or physical motor safety.
+The complete historical narrative, firmware/setup details, observations and
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/ti-lp-am243.md#am243-boot-identity-2026-10-26).
+This is stationary/protocol evidence; it does not qualify physical stopping,
+GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 
 ### Callback ownership and stop priority
 
@@ -245,37 +233,10 @@ nor written; runtime identity/mapping writes and segmented CoE writes are reject
 
 #### SOES bench record — 2026-10-26
 
-An authorized LP-AM243 run with motor power off flashed the corrected SOES
-artifact, built with 5000000-us command-progress and 2000000-us target watchdogs.
-Its signed appimage SHA-256 was
-`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.
-The console reported SOES ready without the TI slave stack. Discovery on
-`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision
-`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.
-
-Two USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.
-Each remained stable across five session resets and 15 correlated IDENTIFY
-replies. The production master/paired adapter probe then reached OP and verified
-CoE configuration, PDO target/feedback, exact retry, ESTOP preservation across
-session reset, target-watchdog expiry, rejected re-enable and explicit recovery.
-This exercised the software channel only; it did not drive physical motor GPIOs.
-
-The planned 65-minute endurance run did **not** complete. With a 50-ms cycle,
-5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,
-it reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before
-a state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A
-second attempt widened only the state budget to 20 ms and stopped during setup
-on a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register
-timeouts remain a qualification blocker; the runs do not establish their root
-cause or resolve the documented master-side NIC issue.
-
-The console continued reporting uptime without a reboot or AL error. After
-both failed attempts, a startup-CoE check confirmed the same second boot ID,
-another five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status
-with stop action complete and explicit recovery required. The host probe was
-closed with the software channel stopped. Native preemption regressions cover
-the precise interrupted-RECOVER race; this bench did not force that interleaving
-on the R5 or qualify physical outputs, timing bounds or endurance.
+The complete historical narrative, firmware/setup details, observations and
+limitations are retained in the [hardware catalog](../../../docs/hardware_catalog/pages/ti-lp-am243.md#am243-soes-protocol-2026-10-26).
+This is stationary/protocol evidence; it does not qualify physical stopping,
+GPIO timing or endurance. Consult failed and incomplete runs in the same catalog.
 
 #### TODO: Retire TI-stack profiles after SOES qualification
 

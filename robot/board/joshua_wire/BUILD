@@ -212,3 +212,5 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+exports_files(["joshua_wire_board.cc"])
