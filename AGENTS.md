@@ -111,7 +111,7 @@ hook for you, so run it yourself before pushing.
 
 ## Conventions
 
-- All PRs target the **`develop`** branch.
+- PRs target **`develop`** unless another target is explicitly specified.
 - Branch naming: `<github-username>/<topic>` (e.g. `djkim/initialize-web-app`) —
   branches are named for the **operator**, not the agent, so ownership and
   review routing stay with a person.
@@ -230,8 +230,9 @@ coverage does not itself require owner approval or configure branch protection.
 [CONTRIBUTING.md](CONTRIBUTING.md) provides GitHub's discovery link to this
 workflow; contribution and coding rules remain authoritative here.
 
-1. Branch from `develop` using `<github-username>/<topic>`; keep ownership with
-   the operator. Merge or rebase current `develop` when needed.
+1. Branch from `develop` unless another target is explicitly specified, using
+   `<github-username>/<topic>`; keep ownership with the operator. Merge or rebase
+   the current target branch when needed.
 2. Keep changes focused, explain resource/state/lifecycle ownership, and reuse
    existing subsystem contracts. Update affected presets, callers, and guides
    for intentional compatibility changes.
@@ -240,7 +241,8 @@ workflow; contribution and coding rules remain authoritative here.
 4. Run relevant tests, the required lint command, and Buildifier for edited
    Bazel files. Report exact commands/results, environment overrides, coverage
    gaps, and hardware-run status in the [PR template](.github/pull_request_template.md).
-5. Open the PR against `develop` and obtain at least one maintainer approval.
+5. Open the PR against `develop` unless another target is explicitly specified,
+   and obtain at least one maintainer approval.
    Address feedback with new commits on the same branch. CI results and review
    must cover architecture, compatibility, behavior, and verification limits.
 
