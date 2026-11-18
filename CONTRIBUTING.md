@@ -174,6 +174,11 @@ These areas affect many presets and downstream nodes:
 - **Tags:** `vX.Y.Z` on `develop` when cutting a release (for example `v0.1.0`)
 - Keep [`MODULE.bazel`](MODULE.bazel) `version` and [`ui/package.json`](ui/package.json) in sync with `VERSION`
 
+CI checks the project version in `MODULE.bazel` against `VERSION` alongside
+the CODEOWNERS coverage check.
+Run the same check locally with `python3 hooks/version_check.py`; it uses only
+the Python standard library and does not build or launch Joshua.
+
 ## Review process
 
 - Every PR into `develop` needs **at least one approving review** before it can
