@@ -70,6 +70,28 @@ process. See the [node manager guide](../launcher/node_manager/README.md) for th
 Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
+## Policy execution
+
+The existing `InferenceHost` ROS node owns subscriptions, publishers, and inference
+invocation timing. Model plug-ins own preprocessing, model execution, and decoding
+results into motor commands. The protobuf preset selects the plug-in and its
+wiring. MuJoCo and Isaac Sim provide separate simulation backends.
+
+The proposed [policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md)
+extends this boundary with named observations and commands shared across
+simulation and hardware. Backend bridges handle state and command mapping;
+model logic stays in plug-ins and training remains external. Every versioned
+adapter, including Decisions, decodes its output into named motor commands;
+raw API decisions remain internal to the plug-in. Static configuration checks
+belong in `config::ValidateConfig`; runtime capability, freshness, and command
+admission checks remain with their operating components. The first priority
+is the reusable OpenAI Decisions API policy adapter and its asynchronous
+observation/command contract, followed by the camera-head demo using the qualified
+shared head runtime from
+[milestone #153](https://github.com/Joshua-AI-Robotics/Joshua/issues/153).
+Broader local-model and simulator integration follows later. The adapter and
+shared execution bridges are planned, not yet implemented on this branch.
+
 ## Hardware topology and latency budgets
 
 For high-bandwidth sensing or tight actuator deadlines, prefer separate actuator
@@ -88,8 +110,10 @@ for measurement requirements and outstanding work.
 ## Related documentation
 
 - [Getting started](GETTING_STARTED.md) — install and first run
+- [Policy interface and bridges plan](POLICY_INTERFACE_AND_BRIDGES_PLAN.md) — proposed adapter and execution-bridge extensions; not implemented
 - [ai/README.md](../ai/README.md) — inference engine, model plug-ins, per-model venvs
+- [ai/models/README.md](../ai/models/README.md) — current model-adapter contract and worked example
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
 - [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
-- [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
+- [ros2/README.md](../ros2/README.md) — ROS node runtime, command transport, and type resolver utilities
 - [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership

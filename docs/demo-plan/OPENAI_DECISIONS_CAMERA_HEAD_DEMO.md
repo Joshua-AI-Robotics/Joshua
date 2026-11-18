@@ -95,9 +95,15 @@ flowchart LR
    command, measured response, and timing. Show decision, confidence, frame age,
    response delay, and actual joint angle in the audience view.
 
-Implement this as an asynchronous decision source feeding Joshua's local control
-path. Camera acquisition, command supervision, recording, and operator stop must
-continue while the request is in flight. The API request cadence and the local
+Implement this through the shared [policy adapter contract](../POLICY_INTERFACE_AND_BRIDGES_PLAN.md#minimum-interface-and-optional-capabilities).
+The asynchronous Decisions adapter validates API answers and applies the configured
+calibrated pan mapping before returning named SI motor commands. Raw decisions
+remain internal results and recorded evidence; the adapter has no decision-only
+exception. The demo supplies questions, thresholds, joint bindings, and mapping
+parameters through its preset and calibration artifacts. Static configuration
+rules belong in `config::ValidateConfig`; live freshness and command admission
+remain at the runtime boundary. Camera acquisition, command supervision, recording,
+and operator stop must continue while the request is in flight. The API request cadence and the local
 control cadence are separate settings, qualified through measurement.
 
 ### Freshness, failures, and recovery
@@ -151,5 +157,5 @@ Record prompt/preprocessing revisions, model/SDK identity, request correlation,
 responses/rejections, usage/cost, and applied commands in the shared evidence
 record. D gates establish this API path; C gates retain the trained-policy claims.
 The general-audience read-only inspection walkthrough remains a separate activity.
-Follow [AGENTS.md](../AGENTS.md) for execution authorization. No API adapter or
+Follow [AGENTS.md](../../AGENTS.md) for execution authorization. No API adapter or
 hardware result is established by this plan.

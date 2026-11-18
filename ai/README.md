@@ -14,6 +14,8 @@ the engine never imports model-specific libraries directly.
 **Related docs**
 
 - Model plug-ins (adapter contract, worked example): [`models/README.md`](models/README.md)
+- **Proposed extension—not implemented:** [policy interface and bridges plan](../docs/POLICY_INTERFACE_AND_BRIDGES_PLAN.md).
+  This README describes the current implementation; future contracts live in the plan.
 
 ---
 
