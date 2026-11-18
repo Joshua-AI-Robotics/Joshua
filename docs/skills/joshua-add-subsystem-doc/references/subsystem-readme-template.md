@@ -1,8 +1,8 @@
 # <Subsystem>
 
 One paragraph: what this subsystem is and where it sits in Joshua — what it
-depends on and what depends on it. Link the neighbours (e.g. "ROS 2 nodes live
-in [ros2/](../ros2/README.md) and consume these interfaces").
+depends on and what depends on it. Link neighboring subsystem READMEs, such as
+the ROS 2 node and hardware-interface guides, relative to the destination file.
 
 <!-- If anything here can open a real device or move a motor, say so plainly and
 link the hardware-safety section of ../AGENTS.md. Do not imply a path is
@@ -22,8 +22,7 @@ simulation-only unless you have confirmed it. -->
 
 ## Non-Goals
 
-- What deliberately lives elsewhere, with a link (e.g. build orchestration is
-  [scripts/](../scripts/README.md)).
+- What deliberately lives elsewhere, with links to its owning subsystem.
 
 <!--
 Delete any section that does not apply rather than leaving it empty.
