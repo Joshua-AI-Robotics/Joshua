@@ -110,7 +110,7 @@ docker compose -f docker-compose.yml -f docker-compose.cpu.yml \
 ships with it** — the ant/trileg/bileg Isaac presets were removed. Write one
 against [simulation/README.md](../simulation/README.md) to use it.
 
-Tests, package builds, UI services, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
+Tests, package builds, and CI remain GPU-independent. The host owns the NVIDIA driver and Container Toolkit; CUDA-enabled Python packages are installed inside model-specific environments.
 
 ## Tests and Builds
 
@@ -148,26 +148,11 @@ CONFIG=<your-isaac-preset>.pbtxt \
   docker compose -f docker-compose.yml -f docker-compose.isaac.yml run --rm run-u24
 ```
 
-## Web UI
-
-Run the production UI:
-
-```bash
-docker compose --profile production up --build joshua-ui
-```
-
-Run the development UI with the Zenoh bridge:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-  up zenoh-bridge-ros2dds joshua-ui-dev
-```
-
-Open `http://localhost:3000`.
+## Stop services
 
 Stop Docker Compose services:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-  --profile production --profile u24 --profile arm64 --profile mac down
+  --profile u24 --profile arm64 --profile mac down
 ```

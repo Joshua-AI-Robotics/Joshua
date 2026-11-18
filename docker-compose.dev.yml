@@ -1,13 +1,10 @@
 # Joshua Project Docker Compose - Development Services
 # Requires: Docker Compose v2 (use 'docker compose', not 'docker-compose')
-# This file contains development-specific services for Zenoh bridge and UI development
+# This file contains development services for the Zenoh bridge and ROS2 demo nodes
 #
-# Usage (recommended - only start needed services):
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds joshua-ui-dev ros2-demo-nodes
-#
-# Note: Do NOT start both joshua-ui and joshua-ui-dev at the same time (port conflict on 3000).
-# Use joshua-ui-dev for development (hot reload) or joshua-ui for production (nginx).
+# Usage (only start needed services):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up zenoh-bridge-ros2dds ros2-demo-nodes
 #
 # Note: ARM64 services (joshua-u22-arm64, joshua-u24-arm64) are excluded from dev workflow
 # to avoid cross-platform build issues on x86_64 systems. They can be built separately if needed.
@@ -67,23 +64,3 @@ services:
     depends_on:
       joshua-u22:
         condition: service_started  # Ensure joshua-u22 container is started (image built)
-
-  # UI Development Server (with hot reload)
-  joshua-ui-dev:
-    build:
-      context: .
-      dockerfile: ui/Dockerfile.dev
-    container_name: joshua-ui-dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./ui:/app/ui
-      - ./config:/app/config
-      - ./robot:/app/robot
-      - ./ai:/app/ai
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - ZENOH_BRIDGE_URL=http://host.docker.internal:8000
-    restart: unless-stopped
-

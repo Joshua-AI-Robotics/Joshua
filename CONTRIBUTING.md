@@ -30,7 +30,7 @@ docker compose run --rm joshua-u22
 docker compose run --rm joshua-u24
 ```
 
-CPU-only developers should run `sudo ./scripts/setup.sh --cpu` and use the `docker-compose.cpu.yml` override. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs, simulation, and UI workflows. Native Ubuntu development is not a supported entrypoint.
+CPU-only developers should run `sudo ./scripts/setup.sh --cpu` and use the `docker-compose.cpu.yml` override. See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for supported Docker environments, ARM64 builds, hardware runs and simulation workflows. Native Ubuntu development is not a supported entrypoint.
 
 If you develop with an AI coding agent (Claude Code, Copilot, Codex, …), the canonical agent instructions live in [AGENTS.md](AGENTS.md); launch your agent from the repository root so it picks the file up.
 
@@ -154,7 +154,6 @@ Joshua is organized around a single protobuf config that drives the runtime grap
 | Launcher | `launcher/` | `joshua_main` entry point |
 | AI & data | `ai/` | Policies and dataset collection (DataStore) |
 | Simulation | `simulation/` | Models and sim presets |
-| Web UI | `ui/` | React control panel |
 | Docker & builds | `dockerfiles/`, `scripts/` | Cross-platform and ARM64 builds |
 
 Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how config, protos, and ROS 2 connect.
@@ -172,7 +171,7 @@ These areas affect many presets and downstream nodes:
 - **Single source of truth:** [`VERSION`](VERSION)
 - **SemVer:** `0.x.y` while the API is pre-1.0; breaking changes may land in minor releases
 - **Tags:** `vX.Y.Z` on `develop` when cutting a release (for example `v0.1.0`)
-- Keep [`MODULE.bazel`](MODULE.bazel) `version` and [`ui/package.json`](ui/package.json) in sync with `VERSION`
+- Keep [`MODULE.bazel`](MODULE.bazel) `version` in sync with `VERSION`
 
 ## Review process
 
@@ -196,7 +195,6 @@ These areas affect many presets and downstream nodes:
   | Board layer | `robot/board/`, `docs/BOARD_LAYER_RFC.md` | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Communication layer | `robot/comm/` | [@piscesgh](https://github.com/piscesgh), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Firmware | `firmware/` | [@heostar](https://github.com/heostar), [@hsmoon5458](https://github.com/hsmoon5458) |
-  | Web UI | `ui/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Docker images | `dockerfiles/` | [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) |
   | Docs | `docs/` (except `docs/BOARD_LAYER_RFC.md`, owned by the board layer) | [@heostar](https://github.com/heostar), [@piscesgh](https://github.com/piscesgh), [@donegjookim](https://github.com/donegjookim), [@hsmoon5458](https://github.com/hsmoon5458) — everyone with write access |
   | Everything else | the remaining top-level directories and root files | [@hsmoon5458](https://github.com/hsmoon5458) |
