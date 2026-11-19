@@ -39,6 +39,18 @@ def fake_helper(directory, body):
     return helper
 
 
+async def wait_for_pid(pidfile):
+    for _ in range(300):
+        try:
+            text = pidfile.read_text()
+        except FileNotFoundError:
+            text = ""
+        if text.endswith("\n") and text[:-1].isdigit() and int(text) > 0:
+            return int(text)
+        await asyncio.sleep(0.01)
+    raise AssertionError("Helper did not publish a complete PID")
+
+
 class ReportContractTest(unittest.TestCase):
     def test_strict_report(self):
         path = "/tmp/config.pbtxt"
@@ -70,6 +82,13 @@ class ReportContractTest(unittest.TestCase):
 
 
 class ServiceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_pid_readiness_waits_for_complete_positive_pid(self):
+        pidfile = mock.Mock()
+        pidfile.read_text.side_effect = [FileNotFoundError(), "", "12", "0\n", "123\n"]
+        with mock.patch.object(asyncio, "sleep", new_callable=mock.AsyncMock) as sleep:
+            self.assertEqual(await wait_for_pid(pidfile), 123)
+        self.assertEqual(sleep.await_count, 4)
+
     async def test_large_burst_overflow_reaps_and_recovers(self):
         for fd in (1, 2):
             with self.subTest(fd=fd), tempfile.TemporaryDirectory() as directory:
@@ -79,7 +98,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 helper = fake_helper(
                     directory,
                     "import os, time\n"
-                    f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                    f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                     f"os.write({fd}, b'x' * 1048576)\n"
                     "time.sleep(30)\n",
                 )
@@ -105,7 +124,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             helper = fake_helper(
                 directory,
                 "import os, time\n"
-                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                 "os.write(1, b'x' * 1048576)\n"
                 "time.sleep(30)\n",
             )
@@ -135,9 +154,10 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     "UNAVAILABLE",
                 )
                 release.set()
+            pid = await wait_for_pid(pidfile)
             for _ in range(300):
                 try:
-                    os.kill(int(pidfile.read_text()), 0)
+                    os.kill(pid, 0)
                 except ProcessLookupError:
                     break
                 await asyncio.sleep(0.01)
@@ -434,7 +454,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 "fd = int(sys.argv[sys.argv.index('--config-root-fd') + 1])\n"
                 "child = os.open('config.pbtxt', os.O_RDONLY, dir_fd=fd)\n"
                 f"open({str(observed)!r}, 'wb').write(os.read(child, 100))\n"
-                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                 "os.close(child)\n"
                 "time.sleep(30)\n",
             )
@@ -478,10 +498,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     self.assertIn("restart", refused["message"].lower())
                 finally:
                     release.set()
-                for _ in range(300):
-                    if observed.exists() and pidfile.exists():
-                        break
-                    await asyncio.sleep(0.01)
+                pid = await wait_for_pid(pidfile)
                 self.assertEqual(observed.read_bytes(), b"original")
                 for _ in range(300):
                     try:
@@ -493,7 +510,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                     self.fail("spawn-owned root duplicate was not closed")
                 for _ in range(300):
                     try:
-                        os.kill(int(pidfile.read_text()), 0)
+                        os.kill(pid, 0)
                     except ProcessLookupError:
                         break
                     await asyncio.sleep(0.01)
@@ -541,7 +558,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             helper = fake_helper(
                 directory,
                 "import os, time\n"
-                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                 "time.sleep(30)\n",
             )
             params = StdioServerParameters(
@@ -556,15 +573,10 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                             "validate_config", {"config_path": "config.pbtxt"}
                         )
                     )
-                    for _ in range(100):
-                        if pidfile.exists():
-                            break
-                        await asyncio.sleep(0.01)
-                    self.assertTrue(pidfile.exists())
+                    pid = await wait_for_pid(pidfile)
                     pending.cancel()
                     with self.assertRaises(asyncio.CancelledError):
                         await pending
-            pid = int(pidfile.read_text())
             for _ in range(100):
                 try:
                     os.kill(pid, 0)
@@ -599,25 +611,22 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             path = Path(directory) / "config.pbtxt"
             path.write_text("")
             pidfile = Path(directory) / "pid"
+            pidfile.touch()
             helper = fake_helper(
                 directory,
                 "import os, time\n"
-                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                 "time.sleep(30)\n",
             )
             service = server.ValidationService(str(path.parent), str(helper))
             self.addAsyncCleanup(service.close)
             task = asyncio.create_task(service.validate("config.pbtxt"))
-            for _ in range(100):
-                if pidfile.exists():
-                    break
-                await asyncio.sleep(0.01)
-            self.assertTrue(pidfile.exists())
+            pid = await wait_for_pid(pidfile)
             await service.close()
             with self.assertRaises(asyncio.CancelledError):
                 await task
             with self.assertRaises(ProcessLookupError):
-                os.kill(int(pidfile.read_text()), 0)
+                os.kill(pid, 0)
 
     async def test_timeout_busy_and_cancel_during_spawn_reap(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -627,7 +636,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             helper = fake_helper(
                 directory,
                 "import os, time\n"
-                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()) + '\\n')\n"
                 "time.sleep(30)\n",
             )
             service = server.ValidationService(
@@ -635,11 +644,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             )
             self.addAsyncCleanup(service.close)
             first = asyncio.create_task(service.validate("config.pbtxt"))
-            for _ in range(100):
-                if pidfile.exists():
-                    break
-                await asyncio.sleep(0.01)
-            self.assertTrue(pidfile.exists())
+            pid = await wait_for_pid(pidfile)
             busy = await service.validate("other.pbtxt")
             self.assertEqual(
                 (busy["status_code"], busy["config_path"]),
@@ -651,7 +656,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 ("DEADLINE_EXCEEDED", "config.pbtxt"),
             )
             with self.assertRaises(ProcessLookupError):
-                os.kill(int(pidfile.read_text()), 0)
+                os.kill(pid, 0)
             pidfile.unlink()
             service = server.ValidationService(str(path.parent), str(helper))
             self.addAsyncCleanup(service.close)
@@ -659,11 +664,9 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             original = asyncio.create_subprocess_exec
 
             async def delayed_spawn(*args, **kwargs):
+                nonlocal pid
                 child = await original(*args, **kwargs)
-                for _ in range(100):
-                    if pidfile.exists():
-                        break
-                    await asyncio.sleep(0.01)
+                pid = await wait_for_pid(pidfile)
                 entered.set()
                 await release.wait()
                 return child
@@ -677,9 +680,8 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 release.set()
                 with self.assertRaises(asyncio.CancelledError):
                     await task
-            self.assertTrue(pidfile.exists())
             with self.assertRaises(ProcessLookupError):
-                os.kill(int(pidfile.read_text()), 0)
+                os.kill(pid, 0)
             pidfile.unlink()
 
             service = server.ValidationService(
@@ -689,7 +691,9 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             entered, release = asyncio.Event(), asyncio.Event()
 
             async def slow_spawn(*args, **kwargs):
+                nonlocal pid
                 child = await original(*args, **kwargs)
+                pid = await wait_for_pid(pidfile)
                 entered.set()
                 await release.wait()
                 return child
@@ -703,9 +707,8 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 release.set()
                 report = await task
             self.assertEqual(report["status_code"], "DEADLINE_EXCEEDED")
-            self.assertTrue(pidfile.exists())
             with self.assertRaises(ProcessLookupError):
-                os.kill(int(pidfile.read_text()), 0)
+                os.kill(pid, 0)
 
 
 if __name__ == "__main__":

@@ -28,6 +28,11 @@ class DeviceCatalogTest(unittest.TestCase):
     def setUpClass(cls):
         cls.devices = load_devices(check_files=False)
         cls.schema = read_json(CATALOG_ROOT / "catalog.schema.json")
+        cls.cli = (
+            Path(os.environ["TEST_SRCDIR"])
+            / os.environ["TEST_WORKSPACE"]
+            / "tools/hardware_catalog_cli"
+        )
 
     def camera(self):
         return copy.deepcopy(self.devices["sunplus-spca2281-xwf-1080p"])
@@ -129,6 +134,87 @@ class DeviceCatalogTest(unittest.TestCase):
                 test["checks"] = []
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 validate_device(d, check_files=False)
+
+    def test_support_claims_require_passing_checks_from_their_own_cited_runs(self):
+        for status in ("supported", "limited"):
+            for capability, run_id, accepted in (
+                ("uart", "am243-vendor-hello-world-undated", True),
+                ("ethercat", "am243-vendor-ethercat-undated", True),
+                ("uart", "am243-vendor-ethercat-undated", False),
+                ("uart", "am243-vendor-lrw-failure-undated", False),
+                ("ethercat", "am243-vendor-lrw-failure-undated", False),
+            ):
+                with self.subTest(status=status, capability=capability, run_id=run_id):
+                    device = copy.deepcopy(self.devices["ti-lp-am243"])
+                    review = copy.deepcopy(device["support_history"][0])
+                    review.update(
+                        id="reviewed-uart",
+                        status=status,
+                        capabilities=["uart"],
+                        run_ids=["am243-vendor-hello-world-undated"],
+                        validated_by=dict(
+                            provider="github", username="reviewer", organization=None
+                        ),
+                        validated_at="2026-11-18T12:00:00Z",
+                        review_reference="https://github.com/example/project/pull/1",
+                    )
+                    device["support_history"].append(review)
+                    claim = copy.deepcopy(review)
+                    claim.update(
+                        id="separate-claim",
+                        capabilities=[capability],
+                        run_ids=[run_id],
+                    )
+                    device["support_history"].append(claim)
+                    Draft202012Validator(self.schema).validate(device)
+                    if accepted:
+                        validate_device(device, check_files=False)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "cited runs"):
+                            validate_device(device, check_files=False)
+
+    def test_independent_reproduction_requires_distinct_provider_accounts(self):
+        for provider, original_user, second_provider, second_user, accepted in (
+            ("github", "SameAccount", "github", "SameAccount", False),
+            ("github", "SameAccount", "github", "sameaccount", False),
+            ("github", "SameAccount", "github", "another-account", True),
+            ("other", "SameAccount", "other", "SameAccount", False),
+            ("other", "SameAccount", "other", "sameaccount", True),
+            ("github", "SameAccount", "other", "SameAccount", True),
+        ):
+            with self.subTest(
+                provider=provider, second_provider=second_provider, user=second_user
+            ):
+                device = self.camera()
+                original = device["validation_history"][0]
+                original["executed_by"] = dict(
+                    provider=provider, username=original_user, organization="Lab A"
+                )
+                reproduction = copy.deepcopy(original)
+                reproduction.update(
+                    id="reproduction",
+                    reproduces=original["id"],
+                    review_status="independently_reproduced",
+                    executed_by=dict(
+                        provider=second_provider,
+                        username=second_user,
+                        organization="Lab B",
+                    ),
+                    validated_by=dict(
+                        provider="github", username="reviewer", organization=None
+                    ),
+                    validated_at="2026-11-18T12:00:00Z",
+                    review_reference="https://github.com/example/project/pull/1",
+                )
+                device["validation_history"].append(reproduction)
+                Draft202012Validator(self.schema).validate(device)
+                if accepted:
+                    validate_device(device, check_files=False)
+                else:
+                    with self.assertRaisesRegex(
+                        ValueError, "distinct recorded operators"
+                    ):
+                        validate_device(device, check_files=False)
 
     def test_inline_evidence_tampering_and_unknown_setup_subject_fail(self):
         d = self.camera()
@@ -264,18 +350,11 @@ class DeviceCatalogTest(unittest.TestCase):
                 check_history(base, root)
 
     def test_scaffold_creates_one_device_and_never_overwrites(self):
-        binary = (
-            Path(os.environ["TEST_SRCDIR"])
-            / os.environ["TEST_WORKSPACE"]
-            / "tools/hardware_catalog_cli"
-        )
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory, "new.json")
             args = [
-                str(binary),
+                str(self.cli),
                 "--new",
-                "--kind",
-                "board",
                 "--id",
                 "new-board",
                 "--output",
@@ -285,8 +364,48 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             before = file.read_bytes()
             self.assertEqual(json.loads(before)["validation_history"], [])
+            self.assertEqual(json.loads(before)["kind"], "board")
             self.assertNotEqual(subprocess.run(args, capture_output=True).returncode, 0)
             self.assertEqual(file.read_bytes(), before)
+
+    def test_cli_queries_honor_explicit_kind_without_filtering_by_default(self):
+        for view, kind, count in (
+            ("devices", None, 5),
+            ("devices", "camera", 1),
+            ("devices", "board", 4),
+            ("devices", "actuator", 0),
+            ("history", None, 13),
+            ("history", "camera", 2),
+        ):
+            with self.subTest(view=view, kind=kind):
+                args = [str(self.cli), "--query", view]
+                if kind:
+                    args += ["--kind", kind]
+                entries = []
+                cursor = None
+                while True:
+                    run = subprocess.run(
+                        args + (["--cursor", cursor] if cursor else []),
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    report = json.loads(run.stdout)
+                    validate_query_report(report)
+                    self.assertEqual(report["status_code"], "OK")
+                    entries.extend(report["data"]["entries"])
+                    cursor = report["data"]["next_cursor"]
+                    if not cursor:
+                        break
+                self.assertEqual(len(entries), count)
+                if kind:
+                    for entry in entries:
+                        actual_kind = (
+                            entry["kind"]
+                            if view == "devices"
+                            else self.devices[entry["hardware_id"]]["kind"]
+                        )
+                        self.assertEqual(actual_kind, kind)
 
 
 if __name__ == "__main__":

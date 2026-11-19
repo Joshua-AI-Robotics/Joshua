@@ -175,6 +175,11 @@ def validate_review(record):
     return all(v is not None for v in values)
 
 
+def operator_identity(operator):
+    provider, username = operator["provider"], operator["username"]
+    return provider, username.lower() if provider == "github" else username
+
+
 def validate_device(device, root=ROOT, check_files=True):
     integration = device["integration"]
     if integration["status"] == "integrated" and (
@@ -324,7 +329,8 @@ def validate_device(device, root=ROOT, check_files=True):
                 not original
                 or not original["executed_by"]
                 or not test["executed_by"]
-                or original["executed_by"] == test["executed_by"]
+                or operator_identity(original["executed_by"])
+                == operator_identity(test["executed_by"])
             ):
                 raise ValueError(
                     "Independent reproduction needs distinct recorded operators"
@@ -349,18 +355,18 @@ def validate_device(device, root=ROOT, check_files=True):
     reviews = {review["id"]: review for review in device["support_history"]}
     if len(reviews) != len(device["support_history"]):
         raise ValueError("Duplicate support review ID")
-    demonstrated = {
-        check["capability"]
-        for test in tests.values()
-        for check in test["specification"]["checks"]
-        if any(
-            r["check_id"] == check["id"] and r["outcome"] == "passed"
-            for r in test["checks"]
-        )
-    }
     for review in reviews.values():
         if not set(review["run_ids"]) <= set(tests):
             raise ValueError("Support review references an unknown test")
+        demonstrated = {
+            check["capability"]
+            for run_id in review["run_ids"]
+            for check in tests[run_id]["specification"]["checks"]
+            if any(
+                r["check_id"] == check["id"] and r["outcome"] == "passed"
+                for r in tests[run_id]["checks"]
+            )
+        }
         attribution = validate_review(review)
         if review["status"] != "historical_unreviewed" and not attribution:
             raise ValueError("Support claims need reviewer/time/reference")
@@ -368,7 +374,7 @@ def validate_device(device, root=ROOT, check_files=True):
             review["status"] in ("supported", "limited")
             and not set(review["capabilities"]) <= demonstrated
         ):
-            raise ValueError("Support claim has no passing evidence")
+            raise ValueError("Support claim has no passing evidence in its cited runs")
 
 
 def load_devices(directory=CATALOG_ROOT, root=ROOT, check_files=True):
@@ -724,7 +730,6 @@ def main(argv=None):
     mode.add_argument("--new", action="store_true")
     parser.add_argument(
         "--kind",
-        default="board",
         choices=(
             "board",
             "camera",
@@ -752,7 +757,9 @@ def main(argv=None):
             if not args.id or not args.output:
                 parser.error("--new needs --id and --output")
             device = scaffold(
-                args.id, args.kind, read_json(directory / "catalog.schema.json")
+                args.id,
+                args.kind or "board",
+                read_json(directory / "catalog.schema.json"),
             )
             with args.output.open("x", encoding="utf-8") as stream:
                 stream.write(json.dumps(device, indent=2) + "\n")
@@ -770,6 +777,7 @@ def main(argv=None):
                     k: v
                     for k, v in [
                         ("hardware_id", args.hardware_id),
+                        ("kind", args.kind),
                         ("query", args.text),
                         ("cursor", args.cursor),
                     ]
