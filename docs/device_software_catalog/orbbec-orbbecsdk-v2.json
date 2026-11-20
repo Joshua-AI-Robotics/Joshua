@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "orbbec-orbbecsdk-v2",
+  "name": "Orbbec SDK",
+  "vendor": "orbbec",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/orbbec/OrbbecSDK_v2",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

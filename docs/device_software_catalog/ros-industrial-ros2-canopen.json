@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "ros-industrial-ros2-canopen",
+  "name": "ros2_canopen",
+  "vendor": "ros-industrial",
+  "category": "Device communication",
+  "source_url": "https://github.com/ros-industrial/ros2_canopen",
+  "aliases": [],
+  "description": "Device communication",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

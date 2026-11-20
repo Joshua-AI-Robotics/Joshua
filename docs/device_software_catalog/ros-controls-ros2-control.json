@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "ros-controls-ros2-control",
+  "name": "ros2_control",
+  "vendor": "ros-controls",
+  "category": "Hardware control",
+  "source_url": "https://github.com/ros-controls/ros2_control",
+  "aliases": [],
+  "description": "Hardware control interfaces",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

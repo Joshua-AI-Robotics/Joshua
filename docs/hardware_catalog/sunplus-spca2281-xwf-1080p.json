@@ -6,6 +6,7 @@
   "model": "XWF-1080P",
   "aliases": [
     "SPCA2281",
+    "SPCA2281 / XWF-1080P",
     "Sunplus SPCA2281"
   ],
   "revisions": [],
@@ -543,5 +544,10 @@
       "sunplus-spca2281-2026-11-04-humble-640x480",
       "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s"
     ]
+  },
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Cameras",
+    "source_url": "https://github.com/Joshua-AI-Robotics/Joshua/tree/a5bcf7ac853a016cec853657477b4c0347bab8f5/docs/hardware_catalog"
   }
 }

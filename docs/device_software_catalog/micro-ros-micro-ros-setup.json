@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "micro-ros-micro-ros-setup",
+  "name": "micro-ROS",
+  "vendor": "micro-ROS",
+  "category": "Device communication",
+  "source_url": "https://github.com/micro-ROS/micro_ros_setup",
+  "aliases": [],
+  "description": "Embedded device communication",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

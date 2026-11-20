@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "luxonis-depthai-core",
+  "name": "DepthAI",
+  "vendor": "luxonis",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/luxonis/depthai-core",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

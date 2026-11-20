@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "openethercatsociety-soes",
+  "name": "SOES",
+  "vendor": "OpenEtherCATsociety",
+  "category": "Device communication",
+  "source_url": "https://github.com/OpenEtherCATsociety/SOES",
+  "aliases": [],
+  "description": "Firmware EtherCAT communication",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "integrated",
+    "implementation": "firmware/am243/joshua_dual_transport/scripts/build_soes.sh"
+  }
+}

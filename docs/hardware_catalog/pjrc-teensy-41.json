@@ -4,7 +4,9 @@
   "kind": "board",
   "manufacturer": "PJRC",
   "model": "Teensy 4.1",
-  "aliases": [],
+  "aliases": [
+    "pjrc-teensy-4-1"
+  ],
   "revisions": [],
   "identifiers": {},
   "capabilities": [
@@ -92,7 +94,7 @@
           "media_type": "text/markdown",
           "availability": "inline",
           "description": "Retained historical test narrative",
-          "notes": "## Partial-write fix bench record \u2014 2026-10-25\n\nThe same authorized stationary bench checks were repeated after flashing the\npartial-write fix to Teensy `15104350`, with motor power disconnected. Image\nSHA-256:\n`181565393a599ff3438db8e05f525ab6182650de5f83d70f6f16f58ce687e39e`.\n\nThe production configure/feedback diagnostic passed. Both 4096-retry bursts\ndrained intact with byte-identical IDENTIFY replies. With host reads withheld,\nthe runtime reported the local fault; the burst with a queued ESTOP showed the\nlocal-fault and subsequent ESTOP transitions. Reset/recovery interlocks passed,\nand final ESTOP cleanup left the board latched and unavailable.\n\nThis is a hardware regression check for the new image. The specific 16-byte TX\ncapacity case is covered by native tests of the actual Teensy and ESP32 bindings;\nthis bench run does not establish that the physical Teensy's writable capacity\nwas 16 bytes. GPIO stop timing and physical motor stop remain unmeasured.\n",
+          "notes": "## Partial-write fix bench record — 2026-10-25\n\nThe same authorized stationary bench checks were repeated after flashing the\npartial-write fix to Teensy `15104350`, with motor power disconnected. Image\nSHA-256:\n`181565393a599ff3438db8e05f525ab6182650de5f83d70f6f16f58ce687e39e`.\n\nThe production configure/feedback diagnostic passed. Both 4096-retry bursts\ndrained intact with byte-identical IDENTIFY replies. With host reads withheld,\nthe runtime reported the local fault; the burst with a queued ESTOP showed the\nlocal-fault and subsequent ESTOP transitions. Reset/recovery interlocks passed,\nand final ESTOP cleanup left the board latched and unavailable.\n\nThis is a hardware regression check for the new image. The specific 16-byte TX\ncapacity case is covered by native tests of the actual Teensy and ESP32 bindings;\nthis bench run does not establish that the physical Teensy's writable capacity\nwas 16 bytes. GPIO stop timing and physical motor stop remain unmeasured.\n",
           "source_path": "docs/hardware_catalog/evidence/teensy41_partial_write_2026-10-25.md",
           "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
         }
@@ -264,7 +266,7 @@
           "media_type": "text/markdown",
           "availability": "inline",
           "description": "Retained historical test narrative",
-          "notes": "## TX-fault bench record \u2014 2026-10-25\n\n- Board: Teensy USB serial `15104350`, `/dev/ttyACM0`. Motor power was confirmed\n  disconnected before the authorized flash and stationary output-enable tests.\n- Image: `teensy41-serial/firmware.hex`, SHA-256\n  `19734e2e0dcd42ab50aa6a61f087b24ac7ad6f62b6d95b0371499304c1f96159`.\n- Docker Ubuntu 24 built/flashed the image. Ubuntu 22's production\n  `joshua_wire_smoke` passed reset, identity, disabled configuration, feedback\n  and ESTOP cleanup. The bench config used the example preset's GPIO 2/3/4,\n  active-low enable, 4000 Hz maximum rate and 20 us pulse width, with explicit\n  `protocol: JOSHUA_WIRE` added to a temporary copy for the diagnostic preflight.\n- A raw USB probe used the checkout's C frame codec, enabled channel 0 without\n  a motion target, queued 4096 exact IDENTIFY requests and withheld reads for\n  150 ms. After draining, board and function `GET_STATUS` reported\n  `UNAVAILABLE / DEVICE_FAULT`, `ACTION_COMPLETE`, recovery mask 7, no host\n  action token and unsupported physical verification. All 4096 correlated\n  IDENTIFY replies were intact and byte-identical.\n- A second burst appended ESTOP behind the same 4096 retries. The function\n  epoch advanced twice: local fault, then the correlated queued ESTOP. All\n  IDENTIFY replies and the ESTOP response arrived intact. Fresh ENABLE was\n  rejected after fault and after session reset; RECOVER alone did not enable\n  outputs or permit ENABLE without reconfiguration.\n- Final ESTOP cleanup succeeded; the board was left unavailable and latched,\n  requiring recovery, configuration and explicit enable before reuse.\n\nThis establishes real USB backpressure, reply retention and reported fault/stop\ntransitions. Without GPIO instrumentation it does not measure the 20 ms output\ndisable deadline or establish a physical motor stop guarantee.\n",
+          "notes": "## TX-fault bench record — 2026-10-25\n\n- Board: Teensy USB serial `15104350`, `/dev/ttyACM0`. Motor power was confirmed\n  disconnected before the authorized flash and stationary output-enable tests.\n- Image: `teensy41-serial/firmware.hex`, SHA-256\n  `19734e2e0dcd42ab50aa6a61f087b24ac7ad6f62b6d95b0371499304c1f96159`.\n- Docker Ubuntu 24 built/flashed the image. Ubuntu 22's production\n  `joshua_wire_smoke` passed reset, identity, disabled configuration, feedback\n  and ESTOP cleanup. The bench config used the example preset's GPIO 2/3/4,\n  active-low enable, 4000 Hz maximum rate and 20 us pulse width, with explicit\n  `protocol: JOSHUA_WIRE` added to a temporary copy for the diagnostic preflight.\n- A raw USB probe used the checkout's C frame codec, enabled channel 0 without\n  a motion target, queued 4096 exact IDENTIFY requests and withheld reads for\n  150 ms. After draining, board and function `GET_STATUS` reported\n  `UNAVAILABLE / DEVICE_FAULT`, `ACTION_COMPLETE`, recovery mask 7, no host\n  action token and unsupported physical verification. All 4096 correlated\n  IDENTIFY replies were intact and byte-identical.\n- A second burst appended ESTOP behind the same 4096 retries. The function\n  epoch advanced twice: local fault, then the correlated queued ESTOP. All\n  IDENTIFY replies and the ESTOP response arrived intact. Fresh ENABLE was\n  rejected after fault and after session reset; RECOVER alone did not enable\n  outputs or permit ENABLE without reconfiguration.\n- Final ESTOP cleanup succeeded; the board was left unavailable and latched,\n  requiring recovery, configuration and explicit enable before reuse.\n\nThis establishes real USB backpressure, reply retention and reported fault/stop\ntransitions. Without GPIO instrumentation it does not measure the 20 ms output\ndisable deadline or establish a physical motor stop guarantee.\n",
           "source_path": "docs/hardware_catalog/evidence/teensy41_tx_fault_2026-10-25.md",
           "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
         }
@@ -408,5 +410,10 @@
       ],
       "supersedes": null
     }
-  ]
+  ],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Compute & boards",
+    "source_url": "https://www.pjrc.com/teensy/"
+  }
 }

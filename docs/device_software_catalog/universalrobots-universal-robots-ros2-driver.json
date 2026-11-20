@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "universalrobots-universal-robots-ros2-driver",
+  "name": "Universal Robots ROS 2 driver",
+  "vendor": "UniversalRobots",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/UniversalRobots/Universal_Robots_ROS2_Driver",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

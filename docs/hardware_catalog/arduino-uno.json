@@ -33,5 +33,11 @@
     "Hardware revision and responsible maintainer are not recorded in the imported evidence."
   ],
   "validation_history": [],
-  "support_history": []
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Compute & boards",
+    "source_url": "https://docs.arduino.cc/hardware/",
+    "coverage_exclusion": "Generic family with no recorded revision; named UNO board models are already counted. Keep this unsupported family searchable without double-counting the denominator."
+  }
 }

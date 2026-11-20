@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "id": "luxonis-oak-som-sets",
+  "kind": "board",
+  "manufacturer": "Luxonis",
+  "model": "OAK-SoM (sets)",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [],
+  "specifications": [],
+  "integration": {
+    "status": "candidate",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "docs/hardware_catalog/AGENTS.md",
+    "support_scope": "Discovered target; Joshua integration feasibility and physical operation are unassessed."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "mcu": null,
+    "transports": [],
+    "firmware_guides": []
+  },
+  "limitations": [
+    "Manufacturer discovery is not evidence of Joshua integration or physical qualification."
+  ],
+  "validation_history": [],
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Compute & boards",
+    "source_url": "https://docs.luxonis.com/hardware/products/OAK-SoM%20(sets)"
+  }
+}
