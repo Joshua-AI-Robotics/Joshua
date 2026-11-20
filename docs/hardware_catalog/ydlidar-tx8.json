@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "id": "ydlidar-tx8",
+  "kind": "sensor",
+  "manufacturer": "YDLIDAR",
+  "model": "TX8",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [],
+  "specifications": [],
+  "integration": {
+    "status": "candidate",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "docs/hardware_catalog/AGENTS.md",
+    "support_scope": "Discovered target; Joshua integration feasibility and physical operation are unassessed."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "quantity": null,
+    "units": null,
+    "calibration": null
+  },
+  "limitations": [
+    "Manufacturer discovery is not evidence of Joshua integration or physical qualification."
+  ],
+  "validation_history": [],
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "LiDAR",
+    "source_url": "https://raw.githubusercontent.com/YDLIDAR/YDLidar-SDK/master/doc/Dataset.md"
+  }
+}

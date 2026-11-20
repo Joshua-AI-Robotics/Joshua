@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "alsa-project-alsa-lib",
+  "name": "ALSA",
+  "vendor": "alsa-project",
+  "category": "Sensor capture",
+  "source_url": "https://github.com/alsa-project/alsa-lib",
+  "aliases": [],
+  "description": "Audio capture",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "integrated",
+    "implementation": "robot/perception/audio/alsa_audio.cc"
+  }
+}

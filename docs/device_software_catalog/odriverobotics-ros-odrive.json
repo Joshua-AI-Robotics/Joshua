@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "odriverobotics-ros-odrive",
+  "name": "ODrive ROS 2",
+  "vendor": "odriverobotics",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/odriverobotics/ros_odrive",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

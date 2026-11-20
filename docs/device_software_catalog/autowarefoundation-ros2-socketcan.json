@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "autowarefoundation-ros2-socketcan",
+  "name": "ros2_socketcan",
+  "vendor": "autowarefoundation",
+  "category": "Device communication",
+  "source_url": "https://github.com/autowarefoundation/ros2_socketcan",
+  "aliases": [],
+  "description": "Device communication",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

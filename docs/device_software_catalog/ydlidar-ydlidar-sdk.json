@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "ydlidar-ydlidar-sdk",
+  "name": "YDLIDAR SDK",
+  "vendor": "YDLIDAR",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/YDLIDAR/YDLidar-SDK",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

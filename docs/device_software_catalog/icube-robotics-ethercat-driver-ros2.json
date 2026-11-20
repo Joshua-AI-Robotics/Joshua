@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "icube-robotics-ethercat-driver-ros2",
+  "name": "EtherCAT driver ROS 2",
+  "vendor": "ICube-Robotics",
+  "category": "Device communication",
+  "source_url": "https://github.com/ICube-Robotics/ethercat_driver_ros2",
+  "aliases": [],
+  "description": "Device communication",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

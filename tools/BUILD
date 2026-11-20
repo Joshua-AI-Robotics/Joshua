@@ -4,7 +4,10 @@ load("//tools/mcp:requirements.bzl", "mcp_requirement")
 py_library(
     name = "hardware_catalog_lib",
     srcs = ["hardware_catalog.py"],
-    data = ["//docs/hardware_catalog:records"],
+    data = [
+        "//docs/device_software_catalog:records",
+        "//docs/hardware_catalog:records",
+    ],
     visibility = ["//visibility:public"],
     deps = mcp_requirement("jsonschema"),
 )

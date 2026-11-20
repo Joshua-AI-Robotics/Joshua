@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "id": "robotis-xd430-t350",
+  "kind": "actuator",
+  "manufacturer": "ROBOTIS",
+  "model": "XD430-T350",
+  "aliases": [
+    "XD430-T350"
+  ],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [],
+  "specifications": [],
+  "integration": {
+    "status": "candidate",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "docs/hardware_catalog/AGENTS.md",
+    "support_scope": "Discovered target; Joshua integration feasibility and physical operation are unassessed."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "units": null,
+    "feedback": null,
+    "load": null
+  },
+  "limitations": [
+    "Manufacturer discovery is not evidence of Joshua integration or physical qualification."
+  ],
+  "validation_history": [],
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Actuators",
+    "source_url": "https://emanual.robotis.com/docs/en/dxl/x/xd430-t350/"
+  }
+}

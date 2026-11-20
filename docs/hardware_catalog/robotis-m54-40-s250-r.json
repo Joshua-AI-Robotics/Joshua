@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "id": "robotis-m54-40-s250-r",
+  "kind": "actuator",
+  "manufacturer": "ROBOTIS",
+  "model": "M54-40-S250-R",
+  "aliases": [
+    "M54-40-S250-R",
+    "M54-40-S250-R(A)"
+  ],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [],
+  "specifications": [],
+  "integration": {
+    "status": "candidate",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "docs/hardware_catalog/AGENTS.md",
+    "support_scope": "Discovered target; Joshua integration feasibility and physical operation are unassessed."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "units": null,
+    "feedback": null,
+    "load": null
+  },
+  "limitations": [
+    "Manufacturer discovery is not evidence of Joshua integration or physical qualification."
+  ],
+  "validation_history": [],
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Actuators",
+    "source_url": "https://emanual.robotis.com/docs/en/dxl/pro/m54-40-s250-ra/"
+  }
+}

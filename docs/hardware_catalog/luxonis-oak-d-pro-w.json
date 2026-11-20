@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "id": "luxonis-oak-d-pro-w",
+  "kind": "camera",
+  "manufacturer": "Luxonis",
+  "model": "OAK-D Pro W",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [],
+  "specifications": [],
+  "integration": {
+    "status": "candidate",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "docs/hardware_catalog/AGENTS.md",
+    "support_scope": "Discovered target; Joshua integration feasibility and physical operation are unassessed."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "capture_modes": [],
+    "timestamp_semantics": null
+  },
+  "limitations": [
+    "Manufacturer discovery is not evidence of Joshua integration or physical qualification."
+  ],
+  "validation_history": [],
+  "support_history": [],
+  "discovery": {
+    "snapshot_date": "2026-11-18",
+    "category": "Cameras",
+    "source_url": "https://docs.luxonis.com/hardware/products/OAK-D%20Pro%20W"
+  }
+}

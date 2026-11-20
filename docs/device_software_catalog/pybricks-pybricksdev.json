@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "pybricks-pybricksdev",
+  "name": "Pybricks",
+  "vendor": "pybricks",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/pybricks/pybricksdev",
+  "aliases": [],
+  "description": "Bench control tool",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "integrated",
+    "implementation": "tools/pybricks/pybricks_driver.py"
+  }
+}

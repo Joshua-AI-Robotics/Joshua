@@ -15,6 +15,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).parents[1]
 CATALOG_ROOT = ROOT / "docs/hardware_catalog"
+SOFTWARE_ROOT = ROOT / "docs/device_software_catalog"
 MAX_RECORD_BYTES = 262144
 MAX_RECORDS = 10000
 MAX_CATALOG_BYTES = 33554432
@@ -181,6 +182,16 @@ def operator_identity(operator):
 
 
 def validate_device(device, root=ROOT, check_files=True):
+    if device.get("discovery") and not external_reference(
+        device["discovery"]["source_url"]
+    ):
+        raise ValueError("Discovery needs an HTTPS source without credentials")
+    discovery = device.get("discovery", {})
+    if (
+        "coverage_exclusion" in discovery
+        and not discovery["coverage_exclusion"].strip()
+    ):
+        raise ValueError("Coverage exclusion needs a nonblank reason")
     integration = device["integration"]
     if integration["status"] == "integrated" and (
         not integration["driver"]
@@ -406,6 +417,143 @@ def load_devices(directory=CATALOG_ROOT, root=ROOT, check_files=True):
             if any(s["hardware_id"] not in devices for s in test["setup"]["subjects"]):
                 raise ValueError("Setup references unknown catalog device")
     return devices
+
+
+def load_software(directory=SOFTWARE_ROOT, root=ROOT, check_files=True):
+    directory = Path(directory)
+    schema = read_json(directory / "catalog.schema.json")
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    records, implementations = {}, set()
+    total = 0
+    for path in sorted(directory.glob("*.json")):
+        if path.name == "catalog.schema.json":
+            continue
+        total += path.stat().st_size
+        if total > MAX_CATALOG_BYTES or len(records) >= MAX_RECORDS:
+            raise OverflowError("Software catalog admission budget exceeded")
+        record = read_json(path)
+        try:
+            validator.validate(record)
+        except ValidationError as error:
+            raise ValueError(f"{path}: {error.message}") from error
+        if path.stem != record["id"] or record["id"] in records:
+            raise ValueError("Duplicate or mismatched software ID")
+        if not external_reference(record["source_url"]):
+            raise ValueError("Software needs an HTTPS source without credentials")
+        integration = record["integration"]
+        if integration["status"] == "integrated":
+            implementation = integration["implementation"]
+            if not implementation or implementation in implementations:
+                raise ValueError("Integrated software needs a unique implementation")
+            if check_files:
+                local_reference(implementation, root)
+            implementations.add(implementation)
+        records[record["id"]] = record
+    return records
+
+
+def export_catalog(root=ROOT):
+    root = Path(root)
+    command = ["git", "-c", f"safe.directory={root.resolve()}", "-C", str(root)]
+    revision = subprocess.check_output(
+        command + ["rev-parse", "HEAD"], text=True
+    ).strip()
+    if subprocess.check_output(
+        command + ["status", "--porcelain", "--untracked-files=all"],
+        text=True,
+    ).strip():
+        raise ValueError("Export requires a clean, committed Joshua checkout")
+    paths = set(
+        subprocess.check_output(
+            command + ["ls-tree", "-r", "--name-only", revision],
+            text=True,
+        ).splitlines()
+    )
+    devices = load_devices(root / "docs/hardware_catalog", root)
+    software = load_software(root / "docs/device_software_catalog", root)
+    categories = {
+        "board": "Compute & boards",
+        "host": "Compute & boards",
+        "camera": "Cameras",
+        "actuator": "Actuators",
+        "sensor": "Sensors",
+        "motor_driver": "Motor controllers",
+        "assembly": "Robot assemblies",
+        "transport_adapter": "Communication adapters",
+        "power": "Power",
+        "other": "Other hardware",
+    }
+    repository = "https://github.com/Joshua-AI-Robotics/Joshua/blob/" + revision + "/"
+    result = dict(schema_version=1, joshua_revision=revision, hardware=[], software=[])
+    dates = []
+    for device in devices.values():
+        path = "docs/hardware_catalog/" + device["id"] + ".json"
+        references = [
+            path,
+            device["integration"]["guide"].partition("#")[0],
+            *device["integration"]["implementations"],
+            *device["integration"]["presets"],
+        ]
+        if any(reference not in paths for reference in references):
+            raise ValueError("Hardware export references an uncommitted source")
+        discovery = device.get("discovery", {})
+        if discovery.get("snapshot_date"):
+            dates.append(discovery["snapshot_date"])
+        entry = dict(
+            id=device["id"],
+            name=device["model"],
+            vendor=device["manufacturer"],
+            category=discovery.get("category", categories[device["kind"]]),
+            source_url=discovery.get("source_url", repository + path),
+            aliases=device["aliases"],
+            capabilities=device["capabilities"],
+            integrated=device["integration"]["status"] == "integrated",
+            status=device["integration"]["status"],
+            counts_toward_coverage="coverage_exclusion" not in discovery,
+            implementation_url=repository + path,
+        )
+        if "coverage_exclusion" in discovery:
+            entry["coverage_exclusion"] = discovery["coverage_exclusion"]
+        result["hardware"].append(entry)
+    for record in software.values():
+        path = "docs/device_software_catalog/" + record["id"] + ".json"
+        implementation = record["integration"]["implementation"]
+        integrated = record["integration"]["status"] == "integrated"
+        if path not in paths or (integrated and implementation not in paths):
+            raise ValueError("Software export references an uncommitted source")
+        dates.append(record["snapshot_date"])
+        result["software"].append(
+            dict(
+                id=record["id"],
+                name=record["name"],
+                vendor=record["vendor"],
+                category=record["category"],
+                source_url=record["source_url"],
+                aliases=record["aliases"],
+                description=record["description"],
+                integrated=integrated,
+                status=record["integration"]["status"],
+                counts_toward_coverage=True,
+                implementation_url=repository
+                + (implementation if integrated else path),
+            )
+        )
+    if not devices or not software or not dates:
+        raise ValueError("Catalog export needs hardware, software and dated discovery")
+    result["snapshot_date"] = max(dates)
+    result["totals"] = {}
+    for kind in ("hardware", "software"):
+        eligible = [entry for entry in result[kind] if entry["counts_toward_coverage"]]
+        if not eligible:
+            raise ValueError("Catalog denominator must not be empty")
+        integrated = sum(entry["integrated"] for entry in eligible)
+        result["totals"][kind] = dict(
+            integrated=integrated,
+            targets=len(eligible),
+            percentage=100 * integrated / len(eligible),
+        )
+    return result
 
 
 def legacy_exports(devices):
@@ -728,6 +876,7 @@ def main(argv=None):
     mode.add_argument("--query", choices=("devices", "history"))
     mode.add_argument("--check-history")
     mode.add_argument("--new", action="store_true")
+    mode.add_argument("--export", action="store_true")
     parser.add_argument(
         "--kind",
         choices=(
@@ -753,6 +902,13 @@ def main(argv=None):
     workspace = Path(os.environ.get("BUILD_WORKSPACE_DIRECTORY", ROOT))
     directory = workspace / "docs/hardware_catalog"
     try:
+        if args.export:
+            report = json.dumps(export_catalog(workspace), ensure_ascii=False, indent=2)
+            if args.output:
+                args.output.write_text(report + "\n", encoding="utf-8")
+            else:
+                print(report)
+            return 0
         if args.new:
             if not args.id or not args.output:
                 parser.error("--new needs --id and --output")
@@ -789,6 +945,7 @@ def main(argv=None):
             return int(report["status_code"] != "OK")
         else:
             load_devices(directory, workspace)
+            load_software(workspace / "docs/device_software_catalog", workspace)
         print("Device catalog checks passed.")
         return 0
     except (

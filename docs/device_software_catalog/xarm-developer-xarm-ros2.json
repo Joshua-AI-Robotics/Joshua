@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "xarm-developer-xarm-ros2",
+  "name": "xArm ROS 2",
+  "vendor": "xArm-Developer",
+  "category": "Device drivers and SDKs",
+  "source_url": "https://github.com/xArm-Developer/xarm_ros2",
+  "aliases": [],
+  "description": "Device drivers and SDKs",
+  "snapshot_date": "2026-11-18",
+  "integration": {
+    "status": "candidate",
+    "implementation": null
+  }
+}

@@ -1,7 +1,7 @@
 # Hardware catalog — one file per device
 
 Follow the [repository rules](../../AGENTS.md) and [documentation rules](../AGENTS.md).
-This directory is the hardware integration and validation resource. Each device
+This directory owns all discovered hardware, integration status and validation evidence. Each device
 or board has exactly one authoritative `<hardware-id>.json` file alongside this
 guide and the shared [schema](catalog.schema.json). Browse the directory or query
 MCP; there are no separate model, setup, run, assessment, evidence or page files.
@@ -9,6 +9,9 @@ MCP; there are no separate model, setup, run, assessment, evidence or page files
 ## What belongs in the device file
 
 - Identity: manufacturer, exact model, revisions, aliases, identifiers and kind.
+- Discovery: primary manufacturer source, dated research snapshot, display category,
+  and an optional `coverage_exclusion` reason for generic families already counted.
+  A discovered candidate has empty validation history and may have no known capabilities.
 - Specifications: capabilities, limits, units, conditions and manufacturer sources.
 - Integration: driver/factory references, presets, supported features and operating
   or firmware-guide links. `integrated` means the software path exists; physical
@@ -55,18 +58,37 @@ operating procedures into the catalog.
    Keep its implementation status and source references accurate. The public
    website imports these files, including new device IDs; do not hand-edit UI
    counts or duplicate validation facts in a website record. Device-software
-   additions also need a source mapping in the website's curated discovery list.
+   additions update their [device software record](../device_software_catalog/AGENTS.md).
 
 The public catalog UI belongs to the
 [website repository](https://github.com/Joshua-AI-Robotics/Joshua-AI-Robotics.github.io),
-whose `AGENTS.md` owns generation and refresh. A device file remains the only
-authoritative hardware record. Candidate discovery and software eligibility are
-website concerns; their statuses must not imply unrecorded physical validation.
+whose `AGENTS.md` owns presentation and daily publication. Joshua owns candidate
+discovery, software eligibility, counting rules, validation and JSON export.
+Every hardware candidate and integration has one authoritative file here;
+[device software](../device_software_catalog/AGENTS.md) has one file per library.
+Do not duplicate records or maintain percentages in the website repository.
+
+The denominator includes researched named targets and new device records. An
+explicit `discovery.coverage_exclusion` reason keeps a generic family searchable
+without counting it twice. The numerator counts `integration.status=integrated`,
+independently of physical validation and support reviews. Software has its own
+denominator and numerator. This researched scope is not a worldwide total.
+
+Keep meaningful model/interface variants while deduplicating marketing aliases,
+protocol-only variants and bundles. Passive accessories are outside the target
+inventory. Search existing identities and aliases before adding another record.
+
+`--export` requires a clean committed checkout, validates both catalogs and source
+references, and emits bounded summaries with source links pinned to that commit.
+The website packages this JSON as a deployment artifact. Do not commit generated
+counts or a second catalog snapshot. Discovery dates remain per-record research
+provenance; the exported snapshot date is the latest recorded discovery date.
 
 ```sh
 bazel run //tools:hardware_catalog_cli -- --new --kind board \
   --id vendor-model --output /tmp/vendor-model.json
 bazel run //tools:hardware_catalog_cli -- --check
+bazel run //tools:hardware_catalog_cli -- --export --output /tmp/catalog.json
 bazel run //tools:hardware_catalog_cli -- --query devices
 bazel run //tools:hardware_catalog_cli -- --query history --hardware-id ti-lp-am243
 bazel test //tools:hardware_catalog_test //tools/mcp:hardware_catalog_test
@@ -140,11 +162,19 @@ per-device generated pages to maintain.
 
 ## Migration and verification
 
-All five devices and thirteen historical tests were consolidated from the former
-split layout. Setup, criteria, measured values, small original narratives and
+The original five devices and thirteen historical tests were consolidated from
+the former split layout. The website discovery inventory was then migrated into
+438 canonical hardware files, including 433 candidates and the unsupported generic
+Arduino family. The software catalog contains 22 integrations/candidates. The
+initial export preserves 4/437 hardware and 5/22 software coverage counts. Setup, criteria, measured values, small original narratives and
 missing-attribution explanations are preserved inline. Four failures remain
 visible. No device was tested or evidence review attributed during migration.
 
 Validate schema, references, evidence hashes, timestamps, attribution and result
 consistency. Check append-only history, MCP compatibility/pagination and the
 canonical Docker tests. Documentation and catalog tests require no hardware.
+
+The migrated discovery scope was dated 2026-11-18 and covered selected named
+robotics vendor models, including candidates without ROS 2 drivers. Candidate
+feasibility remains unassessed. Aliases preserve old discovery IDs; existing
+device identities and all thirteen test histories remain unchanged.

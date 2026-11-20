@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches: [ develop ]
   workflow_dispatch: {}
 
 jobs:
@@ -132,3 +131,11 @@ jobs:
           --config=${{ matrix.os }} --config=x86-base
           --@rules_python//python/config_settings:python_version=${{ matrix.python }}
           //tools:hardware_catalog_cli -- --check-history "$CATALOG_BASE_SHA"
+
+      - name: Validate public catalog export
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.cpu.yml
+          run --rm -T ${{ matrix.shell }} bazel run
+          --config=${{ matrix.os }} --config=x86-base
+          --@rules_python//python/config_settings:python_version=${{ matrix.python }}
+          //tools:hardware_catalog_cli -- --export --output /tmp/joshua-catalog.json
