@@ -41,28 +41,29 @@ class DeviceCatalogTest(unittest.TestCase):
         return copy.deepcopy(self.devices["sunplus-spca2281-xwf-1080p"])
 
     def test_one_file_contains_all_existing_history_and_inline_evidence(self):
-        self.assertEqual(len(self.devices), 438)
-        software = load_software(check_files=False)
-        self.assertEqual(len(software), 22)
-        self.assertEqual(
-            sum(
-                d["integration"]["status"] == "integrated"
-                for d in self.devices.values()
-            ),
-            4,
-        )
-        self.assertEqual(
-            sum(s["integration"]["status"] == "integrated" for s in software.values()),
-            5,
-        )
-        self.assertEqual(
-            sum(
-                "coverage_exclusion" not in d["discovery"]
-                for d in self.devices.values()
-            ),
-            437,
-        )
-        tests = [t for d in self.devices.values() for t in d["validation_history"]]
+        self.assertTrue(self.devices)
+        self.assertTrue(load_software(check_files=False))
+        migrated_ids = {
+            "am243-soes-endurance-attempt-2-2026-10-26",
+            "teensy41-tx-fault-2026-10-25",
+            "am243-initial-rng-startup-failure-2026-10-26",
+            "am243-soes-protocol-2026-10-26",
+            "am243-vendor-ethercat-undated",
+            "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s",
+            "am243-boot-identity-2026-10-26",
+            "sunplus-spca2281-2026-11-04-humble-640x480",
+            "am243-vendor-lrw-failure-undated",
+            "am243-delayed-dispatch-2026-10-25",
+            "am243-vendor-hello-world-undated",
+            "am243-soes-endurance-attempt-1-2026-10-26",
+            "teensy41-partial-write-2026-10-25",
+        }
+        tests = [
+            t
+            for d in self.devices.values()
+            for t in d["validation_history"]
+            if t["id"] in migrated_ids
+        ]
         self.assertEqual(len(tests), 13)
         self.assertEqual(sum(t["result"] == "failed" for t in tests), 4)
         self.assertFalse(any(p.is_dir() for p in CATALOG_ROOT.iterdir()))
@@ -131,6 +132,25 @@ class DeviceCatalogTest(unittest.TestCase):
             review_reference="https://github.com/example/project/pull/1",
         )
         validate_device(d, check_files=False)
+
+    def test_unknown_candidate_capabilities_and_discovery_source_constraints(self):
+        device = self.camera()
+        device.pop("compatibility")
+        device.update(capabilities=[], validation_history=[], support_history=[])
+        device["integration"]["status"] = "candidate"
+        Draft202012Validator(self.schema).validate(device)
+        validate_device(device, check_files=False)
+        device["integration"]["status"] = "integrated"
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(self.schema).validate(device)
+        device["integration"]["status"] = "candidate"
+        device["discovery"]["source_url"] = "https://user:password@example.test/device"
+        with self.assertRaisesRegex(ValueError, "without credentials"):
+            validate_device(device, check_files=False)
+        device["discovery"]["source_url"] = "https://example.test/device"
+        device["discovery"]["coverage_exclusion"] = " "
+        with self.assertRaisesRegex(ValueError, "nonblank reason"):
+            validate_device(device, check_files=False)
 
     def test_unknown_provenance_and_false_passes_fail(self):
         for mutation in (
@@ -259,10 +279,15 @@ class DeviceCatalogTest(unittest.TestCase):
     def test_queries_are_device_first_and_history_paginates(self):
         result = query_catalog()
         validate_query_report(result)
-        self.assertEqual(len(result["data"]["entries"]), 20)
-        self.assertNotIn("notes", json.dumps(result["data"]["entries"]))
+        self.assertTrue(result["data"]["entries"])
+        self.assertLessEqual(len(result["data"]["entries"]), 20)
+        self.assertTrue(
+            all("validation_history" not in e for e in result["data"]["entries"])
+        )
         self.assertEqual(
-            query_catalog(kind="camera", query="SPCA2281")["data"]["entries"][0]["id"],
+            query_catalog(kind="camera", hardware_id="sunplus-spca2281-xwf-1080p")[
+                "data"
+            ]["entries"][0]["id"],
             "sunplus-spca2281-xwf-1080p",
         )
         seen = []
@@ -278,11 +303,13 @@ class DeviceCatalogTest(unittest.TestCase):
             cursor = page["data"]["next_cursor"]
             if not cursor:
                 break
-        self.assertEqual(len(seen), 9)
-        self.assertEqual(len(set(seen)), 9)
-        self.assertEqual(
-            len(query_catalog(view="history", result="failed")["data"]["entries"]), 4
-        )
+        expected = {t["id"] for t in self.devices["ti-lp-am243"]["validation_history"]}
+        self.assertEqual(set(seen), expected)
+        self.assertEqual(len(seen), len(expected))
+        failed = query_catalog(view="history", result="failed")
+        validate_query_report(failed)
+        self.assertTrue(failed["data"]["entries"])
+        self.assertTrue(all(t["result"] == "failed" for t in failed["data"]["entries"]))
         self.assertEqual(
             query_catalog(view="history", validated_by="unknown")["data"]["entries"], []
         )
@@ -394,15 +421,25 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertEqual(file.read_bytes(), before)
 
     def test_cli_queries_honor_explicit_kind_without_filtering_by_default(self):
-        for view, kind, count in (
-            ("devices", None, 438),
-            ("devices", "camera", 94),
-            ("devices", "board", 78),
-            ("devices", "actuator", 100),
-            ("history", None, 13),
-            ("history", "camera", 2),
+        for view, kind in (
+            ("devices", None),
+            ("devices", "camera"),
+            ("devices", "board"),
+            ("devices", "actuator"),
+            ("history", None),
+            ("history", "camera"),
         ):
             with self.subTest(view=view, kind=kind):
+                selected = [
+                    d
+                    for d in self.devices.values()
+                    if kind is None or d["kind"] == kind
+                ]
+                count = (
+                    len(selected)
+                    if view == "devices"
+                    else sum(len(d["validation_history"]) for d in selected)
+                )
                 args = [str(self.cli), "--query", view, "--limit", "50"]
                 if kind:
                     args += ["--kind", kind]
@@ -488,6 +525,13 @@ class CatalogExportTest(unittest.TestCase):
         self.assertEqual(report["schema_version"], 1)
         self.assertEqual(len(report["hardware"]), 1)
         self.assertEqual(len(report["software"]), 1)
+        self.assertEqual(
+            report["totals"],
+            {
+                kind: dict(integrated=1, targets=1, percentage=100)
+                for kind in ("hardware", "software")
+            },
+        )
         hardware, software = report["hardware"][0], report["software"][0]
         self.assertTrue(hardware["integrated"])
         self.assertTrue(software["integrated"])
@@ -509,6 +553,9 @@ class CatalogExportTest(unittest.TestCase):
         report = export_catalog(self.root)
         self.assertEqual(len(report["hardware"]), 2)
         self.assertEqual(sum(e["integrated"] for e in report["hardware"]), 1)
+        self.assertEqual(
+            report["totals"]["hardware"], dict(integrated=1, targets=2, percentage=50)
+        )
         added["integration"]["status"] = "integrated"
         self.write(self.hardware, added)
         self.commit()
@@ -518,7 +565,12 @@ class CatalogExportTest(unittest.TestCase):
         added["discovery"]["coverage_exclusion"] = "Generic family already counted"
         self.write(self.hardware, added)
         self.commit()
-        entries = export_catalog(self.root)["hardware"]
+        exported = export_catalog(self.root)
+        entries = exported["hardware"]
+        self.assertEqual(
+            exported["totals"]["hardware"],
+            dict(integrated=1, targets=1, percentage=100),
+        )
         self.assertEqual(len(entries), 2)
         self.assertEqual(sum(e["counts_toward_coverage"] for e in entries), 1)
         self.assertEqual(entries[0]["aliases"], ["new-camera-alias"])

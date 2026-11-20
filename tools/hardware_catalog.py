@@ -186,6 +186,12 @@ def validate_device(device, root=ROOT, check_files=True):
         device["discovery"]["source_url"]
     ):
         raise ValueError("Discovery needs an HTTPS source without credentials")
+    discovery = device.get("discovery", {})
+    if (
+        "coverage_exclusion" in discovery
+        and not discovery["coverage_exclusion"].strip()
+    ):
+        raise ValueError("Coverage exclusion needs a nonblank reason")
     integration = device["integration"]
     if integration["status"] == "integrated" and (
         not integration["driver"]
@@ -449,17 +455,18 @@ def load_software(directory=SOFTWARE_ROOT, root=ROOT, check_files=True):
 
 def export_catalog(root=ROOT):
     root = Path(root)
+    command = ["git", "-c", f"safe.directory={root.resolve()}", "-C", str(root)]
     revision = subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        command + ["rev-parse", "HEAD"], text=True
     ).strip()
     if subprocess.check_output(
-        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"],
+        command + ["status", "--porcelain", "--untracked-files=all"],
         text=True,
     ).strip():
         raise ValueError("Export requires a clean, committed Joshua checkout")
     paths = set(
         subprocess.check_output(
-            ["git", "-C", str(root), "ls-tree", "-r", "--name-only", revision],
+            command + ["ls-tree", "-r", "--name-only", revision],
             text=True,
         ).splitlines()
     )
@@ -535,6 +542,17 @@ def export_catalog(root=ROOT):
     if not devices or not software or not dates:
         raise ValueError("Catalog export needs hardware, software and dated discovery")
     result["snapshot_date"] = max(dates)
+    result["totals"] = {}
+    for kind in ("hardware", "software"):
+        eligible = [entry for entry in result[kind] if entry["counts_toward_coverage"]]
+        if not eligible:
+            raise ValueError("Catalog denominator must not be empty")
+        integrated = sum(entry["integrated"] for entry in eligible)
+        result["totals"][kind] = dict(
+            integrated=integrated,
+            targets=len(eligible),
+            percentage=100 * integrated / len(eligible),
+        )
     return result
 
 

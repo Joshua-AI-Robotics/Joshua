@@ -74,6 +74,10 @@ without counting it twice. The numerator counts `integration.status=integrated`,
 independently of physical validation and support reviews. Software has its own
 denominator and numerator. This researched scope is not a worldwide total.
 
+Keep meaningful model/interface variants while deduplicating marketing aliases,
+protocol-only variants and bundles. Passive accessories are outside the target
+inventory. Search existing identities and aliases before adding another record.
+
 `--export` requires a clean committed checkout, validates both catalogs and source
 references, and emits bounded summaries with source links pinned to that commit.
 The website packages this JSON as a deployment artifact. Do not commit generated
