@@ -54,6 +54,18 @@ available before any job is registered. Processes are never automatically
 restarted, and a trajectory process may complete successfully without failing
 the remaining graph.
 
+## Shared board processes
+
+Use `BOARD_NODE` for board-backed actuator and position/scalar consumers sharing
+one connection, including mixed JoshuaWire MCU setups. Assign one shared node ID;
+NodeManager launches `ros2/board_node` once for that ID. Configuration validation
+rejects competing process owners. The launcher includes this binary in its
+runfiles and release package alongside the standalone nodes.
+
+The former `MCU_BUS` and `DEVICE_BUS` node types and executables are removed.
+See the [migration instructions](../../config/AGENTS.md#shared-board-runtime) for
+configuration, executable, and node-name changes.
+
 ## Process ownership
 
 Each job is `launcher → guardian → application → descendants`. The existing

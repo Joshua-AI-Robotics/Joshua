@@ -89,10 +89,13 @@ TEST_F(CameraDeviceSelectionTest, ReconnectRetriesTheSamePath) {
   allow_open = true;
   CvCamera camera(config_);
   ASSERT_TRUE(camera.Init().ok());
-  // Simulate loss of the capture device before the next acquisition.
+  // Simulate device loss. The node owns retries through explicit Init calls;
+  // GetData must not reopen a device on its own.
   capture_open = false;
   allow_open = false;
   EXPECT_FALSE(camera.GetData().ok());
+  EXPECT_EQ(path_opens, (std::vector<std::string>{path}));
+  EXPECT_FALSE(camera.Init().ok());
   EXPECT_EQ(path_opens, (std::vector<std::string>{path, path, path, path}));
   EXPECT_TRUE(numeric_opens.empty());
 }

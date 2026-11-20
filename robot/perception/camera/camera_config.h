@@ -5,7 +5,6 @@
 
 namespace robot::perception {
 
-// Check camera settings without loading OpenCV or opening a capture device.
 inline absl::Status ValidateCameraConfig(const OpenCvConfig& config) {
   if (config.fourcc().size() != 4) {
     return absl::InvalidArgumentError(

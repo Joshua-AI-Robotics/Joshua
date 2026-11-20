@@ -12,6 +12,7 @@
 #include "rclcpp/version.h"
 #include "robot/board/factory/board_factory.h"
 #include "std_msgs/msg/float32.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #define JOSHUA_NODE_TEST
 #include "ros2/actuator_subscriber.cc"
@@ -117,7 +118,6 @@ TEST_F(ActuatorSubscriberTest,
   }));
   EXPECT_EQ(other_node->get_subscription_count(), 0u);
 
-  // Current #145 contract: every actuator starts disabled and requires explicit enable.
   for (int index = 0; index < 2; ++index) {
     EXPECT_EQ(channels_[index]->SetTarget(robot::board::TargetMode::kPosition, 1).code(),
               absl::StatusCode::kFailedPrecondition);

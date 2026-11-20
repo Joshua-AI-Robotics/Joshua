@@ -49,9 +49,9 @@ source for bounded retry; camera recovery must reapply the configured settings.
 A factory must not silently initialize a driver that the node initializes again.
 
 Choose and test the scheduling contract explicitly. The baseline is the target
-branch's behavior at the recorded commit, not an earlier draft PR. Current camera
-and position reads run in each output's RobotTime callback; changing to one
-steady-clock acquisition at the maximum output rate is a behavior change.
+branch's behavior at the recorded commit. At `a1eef5dc`, each camera and position output
+read in its own RobotTime callback. The node now shares one steady-clock
+acquisition at the maximum configured output rate.
 For example, 10 Hz and 30 Hz outputs can produce 40 read attempts versus 30
 shared acquisitions per second. State sample sharing, skipped periods,
 RobotTime pause/jump behavior, and timestamp/freshness clock domains separately.
@@ -75,7 +75,7 @@ See [camera_publisher_test.cc](camera_publisher_test.cc),
 [actuator_subscriber_test.cc](actuator_subscriber_test.cc), and the test-source
 targets in [BUILD](BUILD).
 
-Keep [mcu_bus_test.cc](mcu_bus_test.cc)'s actual stop-service tests and the
+Keep [board_node_stop_test.cc](board_node_stop_test.cc)'s actual stop-service tests and the
 [PTY mixed-binding test](../robot/board/joshua_wire/mixed_binding_test.cc).
 New acquisition code needs a controlled blocked read while health/stop callbacks
 remain responsive, cancellation and join within a declared deadline, stale/error
@@ -94,7 +94,7 @@ Implementation rules, node source layout, acquisition/lifecycle contracts, and
 the real-node testing pattern live in [AGENTS.md](AGENTS.md).
 
 `utils/actuator_commands.h/.cc` shares command handling between the standalone
-actuator and mixed MCU bus nodes. Both nodes derive directly from `rclcpp::Node`.
+actuator and shared board nodes. Both nodes derive directly from `rclcpp::Node`.
 One utility instance retains every actuator and subscription matching its node ID.
 
 Process runtime and failure handling
@@ -381,7 +381,8 @@ backoff measured by `joshua::RobotTime()` and reads frames only after
 initialization succeeds. Clock corrections can shorten or extend the retry wait.
 A capture failure closes the failed session and uses the same initialization
 path to reopen it, reapplying the configured pixel format, dimensions, and FPS.
-Initialization failures reported as invalid arguments fail startup. The shared
+Invalid camera syntax fails preflight; invalid arguments from a backend remain
+visible in observation health without repeated opens. The shared
 config validator and OpenCV driver both check the required four-character pixel
 format before opening a device.
 
@@ -402,7 +403,7 @@ qualifying frame rate and measure received frames; the configured rate alone
 does not establish delivered performance.
 
 `//ros2:camera_publisher_test` verifies startup recovery, retry backoff, frame
-delivery and timestamps, independent camera timers, exception propagation, and
+delivery and timestamps, shared acquisition across topics, exception reporting, and
 reinitialization after read failures using fake camera sources and a virtual
 retry clock. It opens no physical devices.
 
@@ -493,7 +494,7 @@ and `node_type: BOARD_NODE`. Existing factories share the board and transport;
 no transport implementation is selected by the node. Position publishers retain
 the existing numeric/JointState contracts. The old `MCU_BUS` and `DEVICE_BUS`
 node types and executables are removed. See the
-[configuration migration instructions](../config/README.md#shared-board-runtime)
+[configuration migration instructions](../config/AGENTS.md#shared-board-runtime)
 for node-name and private-service changes.
 
 The composed owner explicitly disables actuators at startup and tears them down
@@ -593,11 +594,10 @@ Audio retains its separate streaming/chunk contract.
 Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint live
 in the same `.cc` and compile directly with `ros2_cpp_binary`. `board_node.cc`
 provides the shared board runtime with a two-thread executor.
-`actuator_subscriber.cc` and `board_node.cc` each own their actuator configuration,
-subscriptions, control services, watchdog, and teardown workers. Shared control
-policy stays in `ControlGate`, and message conversion stays in the packet utilities.
-The component sources retain their ROS wiring so setup and shutdown are visible
-without another lifecycle owner. Neither node inherits another node.
+`actuator_subscriber.cc` and `board_node.cc` each own one `ActuatorCommands`
+instance. It registers subscriptions, services, and a watchdog on the owning
+node and tears down each actuator once. The board node interlocks these gates
+before dispatching concurrent board stops. `ControlGate` owns command admission.
 
 Hardware-free tests include the same node `.cc` through narrowly visible,
 `testonly` source targets, defining `JOSHUA_NODE_TEST` to exclude only the binary

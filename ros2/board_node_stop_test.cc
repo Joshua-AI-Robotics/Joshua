@@ -11,10 +11,6 @@
 #include "rclcpp/version.h"
 #include "ros2/board_node.cc"
 
-// Exercise the complete node without exporting a production node header.
-#define JOSHUA_NODE_TEST
-#include "ros2/mcu_bus.cc"
-
 namespace {
 using namespace std::chrono_literals;
 

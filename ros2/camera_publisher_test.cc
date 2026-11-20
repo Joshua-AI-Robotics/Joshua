@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
@@ -14,15 +15,15 @@ namespace {
 using namespace std::chrono_literals;
 
 struct FakeCameraState {
-  bool available = false;
-  bool configured = false;
-  bool fail_next_read = false;
-  bool throw_next_read = false;
-  int initializations = 0;
-  int successful_initializations = 0;
-  int reads = 0;
-  int teardowns = 0;
-  int uninitialized_reads = 0;
+  std::atomic<bool> available{false};
+  std::atomic<bool> configured{false};
+  std::atomic<bool> fail_next_read{false};
+  std::atomic<bool> throw_next_read{false};
+  std::atomic<int> initializations{0};
+  std::atomic<int> successful_initializations{0};
+  std::atomic<int> reads{0};
+  std::atomic<int> teardowns{0};
+  std::atomic<int> uninitialized_reads{0};
   absl::Status configuration_status;
 };
 
@@ -65,7 +66,8 @@ class FakeCamera : public robot::perception::PerceptionInterface {
     image->set_height(1);
     image->set_channels(3);
     image->set_encoding("bgr8");
-    const char data[] = {static_cast<char>(state_->successful_initializations), '\x02', '\x03'};
+    const char data[] = {
+        static_cast<char>(state_->successful_initializations.load()), '\x02', '\x03'};
     image->set_data(data, 3);
     return packet;
   }
@@ -123,7 +125,10 @@ class CameraPublisherTest : public testing::Test {
     EXPECT_EQ(joshua::RunGuarded("reset camera test runtime", [] { return 0; }), 0);
   }
 
-  void Start(CameraPublisher::Factory factory = {}) {
+  using Factory =
+      std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
+          const robot::perception::SinglePerception&)>;
+  void Start(Factory factory = {}) {
     if (!factory) {
       factory = [state = state_](const auto&)
           -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
@@ -162,6 +167,7 @@ class CameraPublisherTest : public testing::Test {
 
 TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializationRecovers) {
   Start();
+  ASSERT_TRUE(WaitUntil([&] { return state_->teardowns == 1; }));
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->teardowns, 1);
   ASSERT_TRUE(
@@ -173,7 +179,7 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
   EXPECT_EQ(state_->reads, 0);
   EXPECT_TRUE(images_.empty());
 
-  now_ += 1.0;
+  now_ = now_ + 1.0;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -188,14 +194,15 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
 
 TEST_F(CameraPublisherTest, RepeatedOpenFailuresUseOneSecondBackoff) {
   Start();
-  now_ += 1.0;
-  ASSERT_TRUE(WaitUntil([&]() { return state_->initializations == 2; }));
+  ASSERT_TRUE(WaitUntil([&] { return state_->teardowns == 1; }));
+  now_ = now_ + 1.0;
+  ASSERT_TRUE(WaitUntil([&]() { return state_->teardowns == 2; }));
   state_->available = true;
-  now_ += 0.5;
+  now_ = now_ + 0.5;
   SpinFor(50ms);
   EXPECT_EQ(state_->initializations, 2);
   EXPECT_EQ(state_->reads, 0);
-  now_ += 0.5;
+  now_ = now_ + 0.5;
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty(); }));
   EXPECT_EQ(state_->initializations, 3);
   EXPECT_EQ(state_->uninitialized_reads, 0);
@@ -208,12 +215,12 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
   state_->fail_next_read = true;
   ASSERT_TRUE(WaitUntil([&]() { return state_->teardowns == 1; }));
   EXPECT_FALSE(state_->configured);
-  const auto failed_reads = state_->reads;
+  const auto failed_reads = state_->reads.load();
   SpinFor(50ms);
   EXPECT_EQ(state_->reads, failed_reads);
   EXPECT_EQ(state_->initializations, 1);
 
-  now_ += 1.0;
+  now_ = now_ + 1.0;
   // A session marker distinguishes recovered frames from previously queued DDS messages.
   ASSERT_TRUE(WaitUntil([&]() { return !images_.empty() && images_.back().data.at(2) == 2; }));
   EXPECT_EQ(state_->initializations, 2);
@@ -221,12 +228,22 @@ TEST_F(CameraPublisherTest, ReadFailureClosesCameraAndReinitializesBeforeResumin
   EXPECT_EQ(state_->uninitialized_reads, 0);
 }
 
-TEST_F(CameraPublisherTest, InvalidConfigurationFailsStartupInsteadOfRetrying) {
+TEST_F(CameraPublisherTest, InvalidConfigurationIsReportedWithoutRetrying) {
   state_->configuration_status = absl::InvalidArgumentError("Invalid camera pixel format");
-  EXPECT_THROW(Start(), std::invalid_argument);
+  std::string health;
+  auto subscription = observer_->create_subscription<std_msgs::msg::String>(
+      "camera_recovery_test/image/health", 10, [&](std_msgs::msg::String::ConstSharedPtr message) {
+        health = message->data;
+      });
+  Start();
+  ASSERT_TRUE(
+      WaitUntil([&] { return health.find("Invalid camera pixel format") != std::string::npos; }));
+  now_ = now_ + 10.0;
+  SpinFor(50ms);
   EXPECT_EQ(state_->initializations, 1);
   EXPECT_EQ(state_->reads, 0);
   EXPECT_EQ(state_->teardowns, 1);
+  EXPECT_TRUE(images_.empty());
 }
 
 TEST_F(CameraPublisherTest, MultipleTopicsShareOneAcquisitionAndInitialization) {

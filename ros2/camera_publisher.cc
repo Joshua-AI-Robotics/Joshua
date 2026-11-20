@@ -31,7 +31,6 @@ class CameraPublisher : public rclcpp::Node {
         return robot::perception::PerceptionFactory::CreatePerception(sensor,
                                                                       config.robot().boards());
       };
-    // Roll back all completed records even when a later factory or thread start throws.
     bool complete = false;
     joshua::ScopeExit rollback([&] {
       if (!complete) StopSources();
@@ -121,7 +120,6 @@ class CameraPublisher : public rclcpp::Node {
     bool initialized = false;
     double retry_after = 0.0;
     absl::Status last_error = absl::UnavailableError("Camera not initialized");
-    // Scheduling belongs to the camera node; the driver applies all capture settings.
     while (!source.stopping && !joshua::ShutdownRequested()) {
       const auto start = Clock::now();
       if (!initialized && !absl::IsInvalidArgument(last_error) && source.now() >= retry_after) {

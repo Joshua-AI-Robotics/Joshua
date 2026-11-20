@@ -31,7 +31,6 @@ class LidarPublisher : public rclcpp::Node {
         return robot::perception::PerceptionFactory::CreatePerception(sensor,
                                                                       config.robot().boards());
       };
-    // Roll back all completed records even when a later factory or thread start throws.
     bool complete = false;
     joshua::ScopeExit rollback([&] {
       if (!complete) StopSources();

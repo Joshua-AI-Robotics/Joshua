@@ -34,7 +34,6 @@ struct ObservationDescription {
   std::string frame_id;
 };
 
-// Shared validation at the acquisition boundary, before readiness is granted.
 inline absl::Status ValidateObservation(const PerceptionPacket& p) {
   if (p.ByteSizeLong() > 64 * 1024 * 1024)
     return absl::ResourceExhaustedError("Observation exceeds 64 MiB");
@@ -56,8 +55,6 @@ inline absl::Status ValidateObservation(const PerceptionPacket& p) {
   return absl::DataLossError("Invalid or unsupported observation payload");
 }
 
-// Latest-only storage, controlled-clock readiness and bounded diagnostics. No ROS,
-// transport, device commands, or invented acquisition timestamp is involved.
 class ObservationState {
  public:
   using Clock = std::chrono::steady_clock;

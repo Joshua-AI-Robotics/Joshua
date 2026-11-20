@@ -364,10 +364,28 @@ channel's native units; the old encoder operational limits were unused and are
 not part of the new sensor config. Actuator limits remain configured separately.
 OpenCV keeps its camera index and image settings in `opencv_config`; LDS01 keeps
 its transport settings in `lds01_config.comm`.
-Camera initialization applies the configured capture settings. Set an explicit
-four-character pixel format, such as `fourcc: "MJPG"` or `fourcc: "YUYV"`;
-missing or malformed formats fail validation before a camera is opened. The
-checked-in camera presets select MJPG.
+
+For USB cameras, prefer `opencv_config.device_path` with a stable V4L2 link from
+`/dev/v4l/by-id/`. For example, in your local preset:
+
+```text
+opencv_config {
+  device_path: "/dev/v4l/by-id/<camera-usb-id>-video-index0"
+  width: 640 height: 480 fps: 30 fourcc: "MJPG"
+}
+```
+
+Replace the placeholder with the link for your camera's capture interface. A
+nonempty `device_path` takes precedence over numeric `id`, including when the
+driver reopens after a disconnect. If that path is unavailable, capture fails;
+it never falls back to another camera. An omitted or empty path preserves
+numeric-index behavior. Cameras with identical USB identities need
+`/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
+in private runtime presets rather than committed examples.
+Camera initialization applies the configured capture settings. The checked-in
+camera presets select MJPG. Camera pixel format (`opencv_config.fourcc`) must
+contain exactly four characters, such as `MJPG` or `YUYV`. Config validation
+checks this before any nodes launch; the camera must support the selected format.
 
 One serial bus must belong to one node process. Use `BOARD_NODE` to compose
 commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`
@@ -479,7 +497,7 @@ invocations with `ros2/board_node`. Update node-name-based tooling from
 private service paths such as `~/<actuator>/enable` and `~/estop`; explicitly
 configured topic names remain unchanged. All entries sharing a node ID must use
 the same node type. Old text enum names are rejected. Numeric value 9 now means
-`BOARD_NODE`; values 10 and 11 are unrecognized.
+`BOARD_NODE`; values 10 and 11 and the removed enum names are reserved.
 
 The composed owner explicitly disables actuators at startup and tears them down
 before releasing boards. Steppers require `require_explicit_enable: true` so their
@@ -496,7 +514,7 @@ sets `initial_source` (default `default`), positive `command_timeout_ms` (defaul
 IDs are lowercase ROS identifiers, up to 64 characters. Input-age enforcement
 requires JointState motion with synchronized ROS timestamps; Bool enable gates
 remain explicit operator actions. See the shared lifecycle in
-[ROS runtime documentation](../ros2/README.md#shared-control-lifecycle).
+[ROS runtime documentation](../ros2/AGENTS.md#shared-control-lifecycle).
 
 ## Observation metadata and packet output
 
@@ -508,7 +526,7 @@ Native outputs retain their message types and add `/metadata` and `/status`
 packet companions. For atomic payload/identity/timing recording, a publisher may
 select `observation_packet: true` with `UINT8_MULTI_ARRAY`; otherwise position
 arrays retain their existing numeric meaning. Camera and lidar native outputs
-require IMAGE and POINTCLOUD2 respectively. See [sample clocks and recording](../ros2/README.md#sample-identity-clocks-and-recording)
+require IMAGE and POINTCLOUD2 respectively. See [sample clocks and recording](../ros2/AGENTS.md#sample-identity-clocks-and-recording)
 for timestamp meaning, unavailable acquisition time, generation markers and
 native-unit conversions.
 

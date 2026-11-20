@@ -34,11 +34,6 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "utils/joshua_runtime.h"
-
-// Compile the same node implementations used by the standalone executables.
-#define JOSHUA_NODE_TEST
-#include "ros2/actuator_subscriber.cc"
-#include "ros2/mcu_bus.cc"
 extern char** environ;
 
 ChannelState g_channels[1];

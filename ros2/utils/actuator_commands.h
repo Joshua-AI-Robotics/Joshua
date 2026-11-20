@@ -1,44 +1,44 @@
 #pragma once
 
-#include <list>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "config/proto/config.pb.h"
-#include "robot/action/interfaces/action_interface.h"
-#include "robot/action/proto/action_packet.pb.h"
-
-namespace rclcpp {
-class Node;
-class SubscriptionBase;
-}  // namespace rclcpp
+#include "rclcpp/rclcpp.hpp"
+#include "robot/action/interfaces/control_gate.h"
+#include "std_srvs/srv/trigger.hpp"
 
 namespace ros2_utils {
 
-// Owns command subscriptions on a caller-owned node; it is not a ROS node.
-// Standalone owners enable/teardown actuators. Mixed bus owners pass false and
-// manage the board lifecycle themselves, keeping startup disabled.
 class ActuatorCommands {
  public:
-  ActuatorCommands(rclcpp::Node& node,
-                   int node_id,
-                   const config::Config& config,
-                   bool auto_enable = true);
+  ActuatorCommands(rclcpp::Node& node, int node_id, const config::Config& config);
   ~ActuatorCommands();
   ActuatorCommands(const ActuatorCommands&) = delete;
   ActuatorCommands& operator=(const ActuatorCommands&) = delete;
 
- private:
-  struct Actuator {
-    std::string topic;
-    std::shared_ptr<robot::action::ActionInterface> interface;
-    std::pair<float, float> limits;
-    std::shared_ptr<rclcpp::SubscriptionBase> subscription;
-    robot::action::ActionPacket reusable_packet;
-  };
-  bool manage_lifecycle_;
-  std::list<Actuator> actuators_;
-};
+  using StopRequests =
+      std::vector<std::pair<std::shared_ptr<robot::action::ControlGate>, uint64_t>>;
+  StopRequests RequestStopActions();
+  static absl::Status CompleteStopActions(const StopRequests& requests);
+  absl::Status StopBoardActions(const std::string& board_name, bool output_already_disabled);
 
+ private:
+  struct ControlledActuator {
+    std::shared_ptr<robot::action::ControlGate> gate;
+    std::string board_name;
+  };
+  void ShutdownActions();
+  void AddService(const std::string& name, std::function<absl::Status()> action);
+
+  rclcpp::Node& node_;
+  std::vector<ControlledActuator> gates_;
+  std::vector<rclcpp::SubscriptionBase::SharedPtr> subscriptions_;
+  std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;
+  rclcpp::TimerBase::SharedPtr watchdog_;
+};
 }  // namespace ros2_utils

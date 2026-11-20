@@ -118,6 +118,9 @@ _CAMERA_PUBLISHER_DEPS = [
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
     set_up_ament = True,
     deps = _CAMERA_PUBLISHER_DEPS,
 )
@@ -211,27 +214,17 @@ ros2_cpp_library(
 
 _ACTUATOR_SUBSCRIBER_DEPS = [
     "//config/proto:config_cc_proto",
-    "//utils:scope_exit",
-    "//utils:status_macros",
-    "//robot/action/factory:action_factory",
-    "//robot/action/interfaces:control_gate",
-    "//robot/action/proto:action_cc_proto",
-    "//robot/action/proto:action_packet_cc_proto",
     "//ros2:logging",
     "//ros2:node_runner",
-    "//ros2/proto:node_cc_proto",
-    "//ros2/utils:packet_parser",
-    "//ros2/utils:qos_setting",
-    "@abseil-cpp//absl/strings",
-    "@protobuf",
-    "@ros2_deps//:cpp_std_msgs",
-    "@ros2_deps//:cpp_std_srvs",
+    "//ros2/utils:actuator_commands",
     "@ros2_deps//:rclcpp",
 ]
 
 ros2_cpp_binary(
     name = "actuator_subscriber",
     srcs = ["actuator_subscriber.cc"],
+    data = ["//config/config_preset:config_presets"],
+    set_up_ament = True,
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
@@ -253,9 +246,7 @@ _BOARD_NODE_DEPS = [
     ":node_runner",
     ":observation_publisher",
     "//config/proto:config_cc_proto",
-    "//robot/action/factory:action_factory",
-    "//robot/action/interfaces:control_gate",
-    "//robot/action/proto:action_packet_cc_proto",
+    "//ros2/utils:actuator_commands",
     "//robot/board/factory:board_factory",
     "//robot/perception/factory:perception_factory",
     "//ros2/utils:packet_parser",
@@ -278,7 +269,7 @@ ros2_cpp_library(
     deps = _BOARD_NODE_DEPS,
 )
 
-cc_test(
+ros2_cpp_test(
     name = "board_node_stop_test",
     srcs = ["board_node_stop_test.cc"],
     deps = [
@@ -387,6 +378,8 @@ ros2_cpp_binary(
 ros2_cpp_binary(
     name = "board_node",
     srcs = ["board_node.cc"],
+    data = ["//config/config_preset:config_presets"],
+    set_up_ament = True,
     deps = _BOARD_NODE_DEPS,
 )
 
@@ -449,8 +442,13 @@ ros2_cpp_test(
     deps = [
         ":actuator_subscriber_test_source",
         "//config:validation",
+        "//config/proto:config_cc_proto",
+        "//robot/board/factory:board_factory",
         "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
     ],
 )

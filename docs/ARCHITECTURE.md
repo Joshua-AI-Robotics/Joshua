@@ -105,7 +105,7 @@ select drivers and resolve shared board/transport handles. Blocking sensors use
 one guarded worker per sensor with latest-sample fan-out; scalar streams read the
 existing coordinator cache without another worker. Audio preserves chunk streaming.
 Shared helpers validate and convert caller-owned samples without a generic node
-or an additional acquisition owner. See [ROS observation lifecycle and tests](../ros2/README.md#observation-readiness)
+or an additional acquisition owner. See [ROS observation lifecycle and tests](../ros2/AGENTS.md#observation-readiness)
 for cancellation, rollback, clocks and the uninterruptible-camera process fallback.
 
 ## Hardware topology and latency budgets

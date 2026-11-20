@@ -50,8 +50,6 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   using robot::perception::SensorType;
   using robot::perception::SinglePerception;
   const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
-  // Component nodes only acquire their own sensor kinds. Do not accept outputs
-  // which the selected executable would silently ignore after node construction.
   if (!sensor.node().publishers().empty()) {
     const auto node = sensor.node().node_type();
     const auto kind = sensor.sensor_type();
