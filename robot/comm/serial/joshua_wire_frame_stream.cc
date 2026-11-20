@@ -40,6 +40,7 @@ struct JoshuaWireFrameStream::State {
   }
   absl::Status Feed(const uint8_t* bytes, size_t count) {
     const auto now = Clock::now();
+    const auto unix_now = std::chrono::system_clock::now();
     const auto ms = static_cast<uint32_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
     for (size_t i = 0; i < count; ++i) {
@@ -58,7 +59,7 @@ struct JoshuaWireFrameStream::State {
       ++diagnostics.received_frames;
       jw_frame_t incoming{};
       jw_decode_frame(decoder.bytes, size, &incoming);
-      QueuedFrame frame{{std::vector<uint8_t>(decoder.bytes, decoder.bytes + size), now},
+      QueuedFrame frame{{std::vector<uint8_t>(decoder.bytes, decoder.bytes + size), now, unix_now},
                         incoming.session_id,
                         incoming.message_id,
                         incoming.channel};

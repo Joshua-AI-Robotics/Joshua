@@ -56,37 +56,42 @@ inline void AddObservationOutputs(rclcpp::Node& node,
     auto publish = make_publish(node, config, sensor);
     auto metadata =
         node.create_publisher<std_msgs::msg::UInt8MultiArray>(config.topic() + "/metadata", 1);
-    timers.push_back(
-        CreateRobotTimer(node, 1.0 / config.publish_rate_hz(), [snapshot, publish, metadata] {
-          const auto sample = snapshot();
-          if (!sample.packet) return;
-          const bool usable = sample.health.state() == robot::perception::ObservationStatus::READY;
-          if (!usable && !sample.packet->has_scalar()) return;
-          if (!sample.packet->has_scalar()) {
-            const auto status = publish(*sample.packet);
-            if (!status.ok())
-              JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
-            else
-              PublishMetadata(metadata, *sample.packet);
-            return;
-          }
-          auto packet = *sample.packet;
-          if (packet.has_scalar()) {
-            auto* s = packet.mutable_scalar();
-            const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                 std::chrono::steady_clock::now().time_since_epoch())
-                                 .count();
-            if (s->host_receipt_steady_ns() <= static_cast<uint64_t>(now))
-              s->set_receipt_age_us((now - s->host_receipt_steady_ns()) / 1000);
-            s->set_usable(s->usable() && usable);
-            s->set_receipt_fresh(s->receipt_fresh() && usable);
-          }
-          const auto status = publish(packet);
-          if (!status.ok())
-            JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
-          else
-            PublishMetadata(metadata, packet);
-        }));
+    auto publish_sample = [snapshot, publish, metadata] {
+      const auto sample = snapshot();
+      if (!sample.packet) return;
+      const bool usable = sample.health.state() == robot::perception::ObservationStatus::READY;
+      if (!usable && !sample.packet->has_scalar()) return;
+      if (!sample.packet->has_scalar()) {
+        const auto status = publish(*sample.packet);
+        if (!status.ok())
+          JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
+        else
+          PublishMetadata(metadata, *sample.packet);
+        return;
+      }
+      auto packet = *sample.packet;
+      auto* s = packet.mutable_scalar();
+      const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count();
+      if (s->host_receipt_steady_ns() <= static_cast<uint64_t>(now))
+        s->set_receipt_age_us((now - s->host_receipt_steady_ns()) / 1000);
+      s->set_usable(s->usable() && usable);
+      s->set_receipt_fresh(s->receipt_fresh() && usable);
+      const auto status = publish(packet);
+      if (!status.ok())
+        JOSHUA_LOG(WARNING) << "Observation publication: " << status.ToString();
+      else
+        PublishMetadata(metadata, packet);
+    };
+    if (sensor.has_joshua_wire_scalar_config()) {
+      timers.push_back(
+          node.create_wall_timer(std::chrono::nanoseconds(1000000000ull / config.publish_rate_hz()),
+                                 std::move(publish_sample)));
+    } else {
+      timers.push_back(
+          CreateRobotTimer(node, 1.0 / config.publish_rate_hz(), std::move(publish_sample)));
+    }
     auto status =
         node.create_publisher<std_msgs::msg::UInt8MultiArray>(config.topic() + "/status", 1);
     auto health = node.create_publisher<std_msgs::msg::String>(config.topic() + "/health", 1);

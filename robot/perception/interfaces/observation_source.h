@@ -8,6 +8,7 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <tuple>
 
 #include "robot/perception/interfaces/perception_interface.h"
@@ -88,10 +89,17 @@ class ObservationState {
           std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
       return;
     }
+    auto receipt = now;
+    std::optional<int64_t> receipt_unix_ns = unix_ns;
     bool distinct = true;
     bool source_changed = false;
     if (result->has_scalar()) {
       const auto& s = result->scalar();
+      receipt = Clock::time_point(std::chrono::nanoseconds(s.host_receipt_steady_ns()));
+      if (result->sample_metadata().has_host_receipt_unix_ns())
+        receipt_unix_ns = result->sample_metadata().host_receipt_unix_ns();
+      else
+        receipt_unix_ns.reset();
       const auto identity = std::make_tuple(
           s.boot_id(), s.session_id(), s.subscription_id(), s.acquisition_sequence());
       distinct = !have_scalar_ || identity != scalar_identity_;
@@ -108,12 +116,12 @@ class ObservationState {
       if (usable) {
         if (health_.state() == ObservationStatus::ERROR ||
             health_.state() == ObservationStatus::INVALID ||
-            (have_valid_ && now - last_valid_ >= stale_after_)) {
+            (have_valid_ && receipt - last_valid_ >= stale_after_)) {
           health_.set_recoveries(health_.recoveries() + 1);
           health_.set_last_recovery_steady_ns(
               std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
         }
-        last_valid_ = now;
+        last_valid_ = receipt;
         have_valid_ = true;
         health_.set_valid_samples(health_.valid_samples() + 1);
       } else
@@ -125,9 +133,9 @@ class ObservationState {
       metadata->set_source_instance_id(instance_id_);
       metadata->set_sequence(++sample_sequence_);
       metadata->set_discontinuity(pending_discontinuity_ || source_changed);
-      metadata->set_host_receipt_unix_ns(unix_ns);
+      if (receipt_unix_ns) metadata->set_host_receipt_unix_ns(*receipt_unix_ns);
       metadata->set_host_receipt_steady_ns(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count());
+          std::chrono::duration_cast<std::chrono::nanoseconds>(receipt.time_since_epoch()).count());
       metadata->set_host_clock_id(ObservationHostClockId());
       metadata->set_native_unit(description_.native_unit);
       metadata->set_frame_id(description_.frame_id);
@@ -146,8 +154,7 @@ class ObservationState {
       if (result->has_point_cloud() && metadata->frame_id().empty())
         metadata->set_frame_id(result->point_cloud().frame_id());
       pending_discontinuity_ = false;
-      result->set_sequence_id(sample_sequence_);
-      // Preserve the driver's RobotTime acquisition estimate; receipt has its own clock.
+      if (!result->has_scalar()) result->set_sequence_id(sample_sequence_);
     } else {
       // Cached publications retain original identity and receipt times.
       *result->mutable_sample_metadata() = packet_->sample_metadata();

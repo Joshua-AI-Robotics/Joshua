@@ -70,8 +70,10 @@ class BoardNode : public rclcpp::Node {
           *this,
           s,
           [record] {
-            if (record->cached && record->driver && !record->stopping && record->initialized)
-              record->state.Record(record->driver->GetData(), Clock::now());
+            if (record->cached && record->driver && !record->stopping && record->initialized) {
+              auto result = record->driver->GetData();
+              record->state.Record(std::move(result), Clock::now());
+            }
             return record->state.Get();
           },
           MakePublisher,

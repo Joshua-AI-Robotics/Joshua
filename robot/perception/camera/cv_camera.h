@@ -21,6 +21,7 @@ class CvCamera : public CameraInterface {
  public:
   explicit CvCamera(const robot::perception::SinglePerception& camera_config);
   ~CvCamera() override;
+  static absl::StatusOr<int> CaptureFourCC(const std::string& format);
 
   absl::Status Init() override;
   std::string GetId() override;

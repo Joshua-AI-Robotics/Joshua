@@ -12,7 +12,8 @@ class ActionSubscriber : public rclcpp::Node {
   ActionSubscriber(const std::string& node_name, int node_id, const config::Config& config)
       : Node(node_name) {
     ros2_utils::SetLogNodeName(get_logger().get_name());
-    commands_ = std::make_unique<ros2_utils::ActuatorCommands>(*this, node_id, config);
+    commands_ = std::make_unique<ros2_utils::ActuatorCommands>(
+        *this, node_id, config, ros2_utils::ActuatorCommands::ShutdownMode::kParkIfEnabled);
   }
 
  private:

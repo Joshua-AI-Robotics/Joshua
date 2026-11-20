@@ -119,6 +119,7 @@ class JoshuaWireScalarSensor : public ScalarSensor {
     value.sequence_gaps = o.sequence_gaps;
     value.overwritten = o.overwritten;
     value.received_at = o.received_at;
+    value.received_at_unix = o.received_at_unix;
     value.receipt_age = o.receipt_age;
     value.receipt_fresh = o.receipt_fresh;
     value.usable = o.usable;

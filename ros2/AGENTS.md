@@ -537,6 +537,12 @@ complete a pending bus-wide request. Completed stops still require explicit
 recovery and enable.
 No host acknowledgment is physical stop evidence.
 
+On orderly standalone shutdown, each enabled actuator with a live lease and no
+pending stop runs its driver's teardown sequence, including the configured idle
+position. A failed parking attempt triggers a torque disable. Disabled, stopped,
+faulted, and expired actuators receive only a disable. Construction rollback,
+runtime failure, and shared-board shutdown also take the disable-only path.
+
 ## Observation readiness
 
 Camera, lidar, position, and composed bus nodes own their sensor records in their
@@ -551,8 +557,9 @@ sample identity and receipt times and do not refresh the last-valid time.
 
 Blocking acquisition uses steady elapsed time at the maximum configured output
 rate for that sensor. A slow read skips waiting for the expired period; it does not
-queue catch-up reads. Each output retains its independent RobotTime publication
-cadence. Paused/backward RobotTime waits for the outstanding publication deadline;
+queue catch-up reads. Camera, lidar, and position outputs retain independent
+RobotTime publication deadlines. Scalar payload timers use steady wall time at
+the configured rate and continue publishing while RobotTime is paused. Paused/backward RobotTime waits for the outstanding publication deadline;
 forward jumps skip missed periods without a burst. Acquisition and 50 ms health
 callbacks continue while publication is paused. Camera retry backoff still uses
 RobotTime. Readiness requires validated data; invalid samples, acquisition errors,
@@ -619,6 +626,12 @@ receipt timestamps. Startup, acquisition errors and device/session/subscription
 changes mark the next distinct sample as a discontinuity. Wall-clock adjustments
 do not affect monotonic freshness calculations. Host clock IDs distinguish clock
 domains; they do not establish synchronization between machines.
+
+For scalar packets, the top-level `sequence_id` retains the device acquisition
+sequence. The local counter lives in `sample_metadata.sequence`. The serial
+transport stamps frames with both host clocks at receipt. The coordinator retains
+those stamps across cache reads. Freshness uses elapsed steady time since receipt.
+Sources that supply only steady time leave the Unix receipt field absent.
 
 Scalar metadata also retains acquisition ticks, their scale, device boot/clock
 identity and source sequence. The original scalar timestamps and loss counters

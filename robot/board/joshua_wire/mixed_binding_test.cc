@@ -212,6 +212,8 @@ TEST_F(MixedBindingTest, ProductionFactoriesShareSessionAndPreserveObservationMe
   EXPECT_EQ(packet.scalar().unit(), 65535);
   EXPECT_EQ(packet.scalar().boot_id(), 1234);
   EXPECT_GT(packet.scalar().host_receipt_steady_ns(), 0);
+  EXPECT_GT(packet.sample_metadata().host_receipt_unix_ns(), 0);
+  EXPECT_EQ(packet.sequence_id(), packet.scalar().acquisition_sequence());
   EXPECT_EQ(packet.timestamp(), 0);
   auto channel = (*board)->OpenChannel(0);
   ASSERT_TRUE(channel.ok());

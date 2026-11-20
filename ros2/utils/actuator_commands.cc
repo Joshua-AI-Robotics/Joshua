@@ -1,6 +1,7 @@
 #include "ros2/utils/actuator_commands.h"
 
 #include <chrono>
+#include <exception>
 #include <set>
 #include <stdexcept>
 #include <thread>
@@ -15,11 +16,14 @@
 
 namespace ros2_utils {
 
-ActuatorCommands::ActuatorCommands(rclcpp::Node& node, int id, const config::Config& config)
-    : node_(node) {
+ActuatorCommands::ActuatorCommands(rclcpp::Node& node,
+                                   int id,
+                                   const config::Config& config,
+                                   ShutdownMode shutdown_mode)
+    : node_(node), shutdown_mode_(shutdown_mode) {
   bool complete = false;
   joshua::ScopeExit rollback([&] {
-    if (!complete) ShutdownActions();
+    if (!complete) ShutdownActions(ShutdownMode::kDisable);
   });
 
   for (const auto& action : config.robot().actions().single_actions()) {
@@ -92,7 +96,8 @@ ActuatorCommands::ActuatorCommands(rclcpp::Node& node, int id, const config::Con
 }
 
 ActuatorCommands::~ActuatorCommands() {
-  ShutdownActions();
+  ShutdownActions(joshua::RuntimeFailed() || std::uncaught_exceptions() ? ShutdownMode::kDisable
+                                                                        : shutdown_mode_);
 }
 
 ActuatorCommands::StopRequests ActuatorCommands::RequestStopActions() {
@@ -117,10 +122,10 @@ absl::Status ActuatorCommands::StopBoardActions(const std::string& board_name,
   return result;
 }
 
-void ActuatorCommands::ShutdownActions() {
+void ActuatorCommands::ShutdownActions(ShutdownMode mode) {
   watchdog_.reset();
   joshua::RunCleanup("actuator shutdown", [&] {
-    RequestStopActions();
+    if (mode == ShutdownMode::kDisable) RequestStopActions();
     std::vector<std::thread> threads;
     threads.reserve(gates_.size());
     joshua::ScopeExit join([&] {
@@ -128,8 +133,9 @@ void ActuatorCommands::ShutdownActions() {
         if (thread.joinable()) thread.join();
     });
     for (const auto& actuator : gates_)
-      threads.push_back(joshua::StartWorker(
-          "actuator teardown", [gate = actuator.gate] { joshua::ThrowIfError(gate->Shutdown()); }));
+      threads.push_back(joshua::StartWorker("actuator teardown", [gate = actuator.gate, mode] {
+        joshua::ThrowIfError(gate->Shutdown(mode));
+      }));
   });
 }
 

@@ -16,7 +16,11 @@ namespace ros2_utils {
 
 class ActuatorCommands {
  public:
-  ActuatorCommands(rclcpp::Node& node, int node_id, const config::Config& config);
+  using ShutdownMode = robot::action::ControlGate::ShutdownMode;
+  ActuatorCommands(rclcpp::Node& node,
+                   int node_id,
+                   const config::Config& config,
+                   ShutdownMode shutdown_mode = ShutdownMode::kDisable);
   ~ActuatorCommands();
   ActuatorCommands(const ActuatorCommands&) = delete;
   ActuatorCommands& operator=(const ActuatorCommands&) = delete;
@@ -32,10 +36,11 @@ class ActuatorCommands {
     std::shared_ptr<robot::action::ControlGate> gate;
     std::string board_name;
   };
-  void ShutdownActions();
+  void ShutdownActions(ShutdownMode mode);
   void AddService(const std::string& name, std::function<absl::Status()> action);
 
   rclcpp::Node& node_;
+  const ShutdownMode shutdown_mode_;
   std::vector<ControlledActuator> gates_;
   std::vector<rclcpp::SubscriptionBase::SharedPtr> subscriptions_;
   std::vector<rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr> services_;

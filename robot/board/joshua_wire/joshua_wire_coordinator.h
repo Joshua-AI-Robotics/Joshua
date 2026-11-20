@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,7 @@ class JoshuaWireCoordinator : public std::enable_shared_from_this<JoshuaWireCoor
     // advertised clock; no cross-clock mapping or absolute age is invented.
     bool receipt_fresh = false;
     bool usable = false;
+    std::optional<std::chrono::system_clock::time_point> received_at_unix;
   };
   class Subscription {
    public:

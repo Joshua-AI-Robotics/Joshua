@@ -2,8 +2,6 @@
 
 #include <opencv2/videoio.hpp>
 
-#include "robot/perception/camera/camera_config.h"
-
 namespace robot::perception {
 CvCamera::CvCamera(const robot::perception::SinglePerception& camera_config) {
   opencv_config_ = camera_config.opencv_config();
@@ -19,15 +17,18 @@ CvCamera::~CvCamera() {
   }
 }
 
+absl::StatusOr<int> CvCamera::CaptureFourCC(const std::string& format) {
+  if (format.size() != 4)
+    return absl::InvalidArgumentError("OpenCV capture requires four bytes in opencv_config.fourcc");
+  return cv::VideoWriter::fourcc(format[0], format[1], format[2], format[3]);
+}
+
 absl::Status CvCamera::Init() {
   std::lock_guard<std::mutex> lock(cap_mutex_);
   if (stopping_) return absl::CancelledError("Camera stopped");
 
-  const auto config_status = ValidateCameraConfig(opencv_config_);
-  if (!config_status.ok()) {
-    LOG(ERROR) << config_status.message();
-    return config_status;
-  }
+  const auto fourcc = CaptureFourCC(opencv_config_.fourcc());
+  if (!fourcc.ok()) return fourcc.status();
 
   absl::Status status = OpenCameraLocked();
   if (!status.ok()) {
@@ -35,11 +36,7 @@ absl::Status CvCamera::Init() {
   }
   if (stopping_) return absl::CancelledError("Camera stopped");
 
-  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC,
-                             cv::VideoWriter::fourcc(opencv_config_.fourcc()[0],
-                                                     opencv_config_.fourcc()[1],
-                                                     opencv_config_.fourcc()[2],
-                                                     opencv_config_.fourcc()[3]));
+  bool set_fourcc = cap_.set(cv::CAP_PROP_FOURCC, *fourcc);
   bool set_width = cap_.set(cv::CAP_PROP_FRAME_WIDTH, opencv_config_.width());
   bool set_height = cap_.set(cv::CAP_PROP_FRAME_HEIGHT, opencv_config_.height());
   bool set_fps = cap_.set(cv::CAP_PROP_FPS, opencv_config_.fps());

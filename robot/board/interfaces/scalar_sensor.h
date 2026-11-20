@@ -2,6 +2,7 @@
 #pragma once
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 #include "absl/status/statusor.h"
 
@@ -16,6 +17,7 @@ struct ScalarObservation {
   std::chrono::steady_clock::time_point received_at;
   std::chrono::microseconds receipt_age{0};
   bool receipt_fresh = false, usable = false;
+  std::optional<std::chrono::system_clock::time_point> received_at_unix;
 };
 class ScalarSensor {
  public:

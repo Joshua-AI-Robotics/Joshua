@@ -27,7 +27,6 @@ cc_library(
         "//robot/comm/serial:serial_config_validation",
         "//robot/comm/serial:serial_device_identity",
         "//robot/perception/audio:audio_config",
-        "//robot/perception/camera:camera_config",
         "//ros2/utils:packet_parser",
         "//utils:robot_time",
         "//utils:status_macros",

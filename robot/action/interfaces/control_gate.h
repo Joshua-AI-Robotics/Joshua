@@ -21,6 +21,7 @@ namespace robot::action {
 class ControlGate {
  public:
   using Clock = std::chrono::steady_clock;
+  enum class ShutdownMode { kDisable, kParkIfEnabled };
   enum class State { kDisabled, kEnabled, kStopped, kFault, kClosed };
   ControlGate(std::shared_ptr<ActionInterface> action,
               const ControlPolicy& policy,
@@ -57,14 +58,16 @@ class ControlGate {
     std::lock_guard lock(mutex_);
     if (state_ == State::kClosed) return absl::UnavailableError("Actuator is closed");
     if (!sources_.count(source)) return absl::PermissionDeniedError("Unknown command source");
-    // Any declared producer may disable; it cannot clear a latched stop/fault.
-    if (packet.has_preset() && packet.preset() == PRESET_DISABLE_TORQUE)
+    const bool expired = state_ == State::kEnabled && now >= deadline_;
+    if (packet.has_preset() && packet.preset() == PRESET_DISABLE_TORQUE) {
+      if (expired) return DisableLocked(State::kStopped);
       return DisableLocked(state_ == State::kEnabled ? State::kDisabled : state_);
+    }
     if (source != source_) return absl::PermissionDeniedError("Inactive command source");
     if (stop_epoch_.load() != recovered_stop_epoch_ || state_ == State::kStopped ||
         state_ == State::kFault)
       return absl::FailedPreconditionError("Explicit disabled recovery is required");
-    if (state_ == State::kEnabled && now >= deadline_) {
+    if (expired) {
       DisableLocked(State::kStopped).IgnoreError();
       return absl::DeadlineExceededError("Command lease expired");
     }
@@ -81,10 +84,6 @@ class ControlGate {
     }
     if (!packet.has_joint()) return absl::InvalidArgumentError("Expected motion or enable/disable");
     if (state_ != State::kEnabled) return absl::FailedPreconditionError("Actuator is disabled");
-    if (now >= deadline_) {
-      DisableLocked(State::kStopped).IgnoreError();
-      return absl::DeadlineExceededError("Command lease expired");
-    }
     if (max_age_ns_) {
       const double stamp = packet.timestamp();
       if (!std::isfinite(stamp) || ros_now_ns <= 0 || stamp <= RobotTimestamp(0) ||
@@ -164,10 +163,17 @@ class ControlGate {
     last_stamp_ = -std::numeric_limits<double>::infinity();
     return absl::OkStatus();
   }
-  absl::Status Shutdown() {
+  absl::Status Shutdown(ShutdownMode mode = ShutdownMode::kDisable) {
     std::lock_guard lock(mutex_);
     if (state_ == State::kClosed) return absl::OkStatus();
-    auto status = DisableLocked(State::kClosed);
+    absl::Status status;
+    if (mode == ShutdownMode::kParkIfEnabled && state_ == State::kEnabled &&
+        Clock::now() < deadline_ && stop_epoch_.load() == recovered_stop_epoch_) {
+      status = action_->Teardown();
+      if (!status.ok()) status.Update(DisableLocked(State::kClosed));
+    } else {
+      status = DisableLocked(State::kClosed);
+    }
     state_ = State::kClosed;  // Retained callbacks can never revive this generation.
     return status;
   }

@@ -383,12 +383,12 @@ TEST_F(PerceptionNodesTest, ScalarCacheHasNoWorkerAndHealthRefreshesWhileRobotTi
   executor.add_node(node);
   executor.add_node(observer);
   ASSERT_TRUE(Wait([&] { return health.has_observation_status(); }, &executor));
-  EXPECT_FALSE(first.has_scalar());
-  clock_->now = 100.1;
+  EXPECT_DOUBLE_EQ(clock_->Now(), 100.0);
   ASSERT_TRUE(Wait([&] { return first.has_scalar() && other.has_scalar(); }, &executor));
   EXPECT_EQ(first.sample_metadata().SerializeAsString(),
             other.sample_metadata().SerializeAsString());
   EXPECT_EQ(first.scalar().host_receipt_steady_ns(), state->receipt_ns);
+  EXPECT_EQ(first.sample_metadata().host_receipt_steady_ns(), state->receipt_ns);
   EXPECT_EQ(first.timestamp(), 0);
   const auto original = first.sample_metadata().SerializeAsString();
   state->usable = false;

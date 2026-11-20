@@ -11,6 +11,38 @@ PerceptionPacket Position(float value) {
   p.mutable_position()->set_position(value);
   return p;
 }
+
+TEST(ObservationStateTest, ScalarRetainsDriverSequenceInPublishedPacket) {
+  auto t = ObservationState::Clock::time_point{};
+  ObservationState state(100ms, t);
+  PerceptionPacket packet;
+  packet.set_sequence_id(57);
+  auto* scalar = packet.mutable_scalar();
+  scalar->set_acquisition_sequence(57);
+  scalar->set_usable(true);
+  scalar->set_receipt_fresh(true);
+  state.Record(packet, t);
+  const auto first = state.Get(t).packet;
+  ASSERT_TRUE(first);
+  EXPECT_EQ(first->sequence_id(), 57u);
+  EXPECT_EQ(first->sample_metadata().sequence(), 1u);
+}
+TEST(ObservationStateTest, FirstCacheReadUsesCoordinatorReceiptForFreshness) {
+  auto t = ObservationState::Clock::time_point{};
+  ObservationState state(10ms, t);
+  PerceptionPacket packet;
+  auto* scalar = packet.mutable_scalar();
+  scalar->set_usable(true);
+  scalar->set_receipt_fresh(true);
+  scalar->set_host_receipt_steady_ns(10000000);
+  state.Record(packet, t + 60ms);
+  auto sample = state.Get(t + 60ms);
+  ASSERT_TRUE(sample.packet);
+  EXPECT_EQ(sample.packet->sample_metadata().host_receipt_steady_ns(), 10000000u);
+  EXPECT_EQ(sample.health.state(), ObservationStatus::STALE);
+  EXPECT_FALSE(sample.packet->sample_metadata().has_host_receipt_unix_ns());
+}
+
 TEST(ObservationStateTest, ValidDataReadinessStallErrorAndRecoveryUseControlledTime) {
   auto t = ObservationState::Clock::time_point{};
   ObservationState state(100ms, t);
@@ -76,9 +108,12 @@ TEST(ObservationStateTest, MetadataPreservesDeviceClockAndOriginalReceiptAcrossC
   scalar->set_acquisition_us(12345);
   scalar->set_usable(true);
   scalar->set_receipt_fresh(true);
+  scalar->set_host_receipt_steady_ns(1000000000);
+  p.mutable_sample_metadata()->set_host_receipt_unix_ns(4900000000);
   state.Record(p, t, 5000000000);
   const auto first = state.Get(t).packet->sample_metadata();
   EXPECT_EQ(first.acquisition_ticks(), 12345u);
+  EXPECT_EQ(first.host_receipt_unix_ns(), 4900000000);
   EXPECT_EQ(first.acquisition_tick_ns(), 1000u);
   EXPECT_EQ(first.acquisition_clock_id(), "jw-device:9:1");
   EXPECT_EQ(first.source_sequence(), 4u);
@@ -90,12 +125,14 @@ TEST(ObservationStateTest, MetadataPreservesDeviceClockAndOriginalReceiptAcrossC
   EXPECT_DOUBLE_EQ(cached->timestamp(), 0);  // Device acquisition remains unmapped.
   // A wall-clock step cannot alter steady-clock freshness.
   scalar->set_acquisition_sequence(5);
+  scalar->set_host_receipt_steady_ns(1060000000);
+  p.mutable_sample_metadata()->set_host_receipt_unix_ns(3900000000);
   state.Record(p, t + 60ms, 4000000000);
   auto next = state.Get(t + 70ms);
   EXPECT_FALSE(next.packet->sample_metadata().discontinuity());
   EXPECT_EQ(next.health.last_valid_age_ns(), 10000000u);
   EXPECT_EQ(next.packet->sample_metadata().sequence(), first.sequence() + 1);
-  EXPECT_EQ(next.packet->sample_metadata().host_receipt_unix_ns(), 4000000000);
+  EXPECT_EQ(next.packet->sample_metadata().host_receipt_unix_ns(), 3900000000);
   PerceptionPacket replay;
   ASSERT_TRUE(replay.ParseFromString(next.packet->SerializeAsString()));
   EXPECT_EQ(replay.sample_metadata().SerializeAsString(),

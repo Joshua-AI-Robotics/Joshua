@@ -153,11 +153,12 @@ TEST_F(ActuatorSubscriberTest,
 
   executor_->remove_node(runtime_);
   runtime_.reset();
-  // Both owned actuators are disabled during node teardown.
+  // Both owned actuators return to their individual idle positions, then disable.
   // Multiple subscriptions on the first actuator must not lose the second one.
   for (int index = 0; index < 2; ++index) {
     const auto feedback = channels_[index]->ReadFeedback();
     ASSERT_TRUE(feedback.ok());
+    EXPECT_FLOAT_EQ(feedback->position, (index + 1) * (index + 2));
     EXPECT_EQ(channels_[index]->SetTarget(robot::board::TargetMode::kPosition, 1).code(),
               absl::StatusCode::kFailedPrecondition);
   }

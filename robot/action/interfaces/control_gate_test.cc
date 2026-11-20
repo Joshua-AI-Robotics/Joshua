@@ -16,6 +16,8 @@ class FakeAction : public ActionInterface {
     return "test";
   }
   absl::Status Teardown() override {
+    ++teardowns;
+    if (!teardown_status.ok()) return teardown_status;
     enabled = false;
     return absl::OkStatus();
   }
@@ -36,7 +38,8 @@ class FakeAction : public ActionInterface {
     return absl::OkStatus();
   }
   bool enabled = true;
-  int targets = 0, enables = 0, disables = 0;
+  int targets = 0, enables = 0, disables = 0, teardowns = 0;
+  absl::Status teardown_status;
   absl::Status target_status;
   absl::Status disable_status;
 };
@@ -47,6 +50,24 @@ ActionPacket Target(uint64_t stamp = 0) {
                   (stamp % 1000000000) / 1e9);
   return p;
 }
+
+TEST(ControlGateTest, DisableAfterExpiryStillRequiresRecovery) {
+  auto action = std::make_shared<FakeAction>();
+  ControlPolicy policy;
+  policy.set_command_timeout_ms(100);
+  ControlGate gate(action, policy, {"default", "backup"});
+  auto t = ControlGate::Clock::time_point{};
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Enable(t).ok());
+  ActionPacket disable;
+  disable.set_preset(PRESET_DISABLE_TORQUE);
+  ASSERT_TRUE(gate.Execute("backup", disable, 0, t + 101ms).ok());
+  EXPECT_FALSE(action->enabled);
+  EXPECT_FALSE(gate.Enable(t + 102ms).ok());
+  ASSERT_TRUE(gate.Recover(0).ok());
+  EXPECT_TRUE(gate.Enable(t + 103ms).ok());
+}
+
 TEST(ControlGateTest, DisabledStartupExclusiveSourceAndLatchedCommandExpiry) {
   auto action = std::make_shared<FakeAction>();
   ControlPolicy policy;
@@ -75,6 +96,42 @@ TEST(ControlGateTest, DisabledStartupExclusiveSourceAndLatchedCommandExpiry) {
   EXPECT_TRUE(gate.Execute("policy", Target(), 0, t + 161ms).ok());
   EXPECT_EQ(action->targets, 2);
 }
+TEST(ControlGateTest, StandaloneShutdownOnlyParksAnEnabledActuatorWithALiveLease) {
+  const auto now = ControlGate::Clock::now();
+  for (const auto state : {ControlGate::State::kDisabled,
+                           ControlGate::State::kStopped,
+                           ControlGate::State::kFault,
+                           ControlGate::State::kEnabled}) {
+    SCOPED_TRACE(static_cast<int>(state));
+    auto action = std::make_shared<FakeAction>();
+    ControlGate gate(action, {}, {"default"});
+    ASSERT_TRUE(gate.Initialize().ok());
+    if (state != ControlGate::State::kDisabled)
+      ASSERT_TRUE(gate.Enable(state == ControlGate::State::kEnabled ? now - 2s : now).ok());
+    if (state == ControlGate::State::kStopped) gate.RequestStop();
+    if (state == ControlGate::State::kFault) {
+      action->target_status = absl::UnavailableError("write failed");
+      ASSERT_FALSE(gate.Execute("default", Target(), 0, now).ok());
+    }
+    EXPECT_TRUE(gate.Shutdown(ControlGate::ShutdownMode::kParkIfEnabled).ok());
+    EXPECT_EQ(action->teardowns, 0);
+    EXPECT_FALSE(action->enabled);
+  }
+}
+
+TEST(ControlGateTest, FailedParkingStillDisablesAndClosesOnce) {
+  auto action = std::make_shared<FakeAction>();
+  ControlGate gate(action, {}, {"default"});
+  ASSERT_TRUE(gate.Initialize().ok());
+  ASSERT_TRUE(gate.Enable(ControlGate::Clock::now()).ok());
+  action->teardown_status = absl::UnavailableError("idle target failed");
+  EXPECT_EQ(gate.Shutdown(ControlGate::ShutdownMode::kParkIfEnabled), action->teardown_status);
+  EXPECT_EQ(gate.state(), ControlGate::State::kClosed);
+  EXPECT_FALSE(action->enabled);
+  EXPECT_TRUE(gate.Shutdown().ok());
+  EXPECT_EQ(action->teardowns, 1);
+}
+
 TEST(ControlGateTest, SourceAgeDuplicateAndPriorGenerationStampsNeverRenewLease) {
   auto action = std::make_shared<FakeAction>();
   ControlPolicy policy;
