@@ -7,6 +7,18 @@ Bazel. This file is the repository entry point for AI navigation. Directory
 The [documentation index](docs/AGENTS.md) links cross-cutting guides. Launch
 agents from the repository root so this file is picked up.
 
+## Instruction changes
+
+Root `AGENTS.md` is maintainer-controlled. Agents must not edit, replace, move,
+delete, or weaken it unless the user explicitly requests the root instruction
+change in the current task. General permission to implement code, update docs,
+or address a review does not authorize changing root policy. Keep authorized
+root edits limited to the requested rules.
+
+Agents may update directory `AGENTS.md` files when needed for the task's local
+architecture, usage, or verification guidance. These files inherit root rules
+and must not override or weaken them.
+
 ## Start each session with Joshua MCP
 
 Check whether Joshua MCP is connected and call `list_supported_components`
@@ -196,6 +208,28 @@ results, environment overrides, and uncovered behavior. Passing simulation or
 protocol tests does not establish physical readiness, stopping, or timing.
 Canonical test services and lint commands live in the root instructions and
 [test instructions](AGENTS.md#test).
+
+### Clock selection
+
+Use the shared RobotTime service as the default for Joshua runtime timestamps,
+scheduling, and time-based logic. In C++, call `joshua::RobotTime()` and use
+`ros2_utils::CreateRobotTimer` for RobotTime-driven ROS callbacks. Follow the
+[RobotTime contract](docs/ROBOT_TIME.md) for initialization, units, epochs,
+failure handling, and ROS conversion. Reuse this service rather than duplicating
+its clock selection or epoch logic.
+
+Allow `std::chrono::steady_clock` or the platform's monotonic equivalent only
+for local elapsed-time requirements that must remain independent of RobotTime
+jumps, pauses, or read failures, such as bounded I/O, cancellation/shutdown,
+watchdog deadlines, or profiling. State the concrete reason and clock domain in
+the owning directory's guidance and PR; test the relevant pause/jump/failure
+behavior when changing that timing contract. Convenience alone is not an
+exception.
+
+Never substitute a local monotonic or wall clock for a failed RobotTime read.
+Preserve supplied device/source timestamps and their domains; a host receipt
+time is a separate measurement. Only compare or subtract timestamps in a known
+common domain, and never publish a local elapsed-time value as a robot timestamp.
 
 ### Comments
 

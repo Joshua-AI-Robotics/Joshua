@@ -469,10 +469,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                 entered.set()
                 await release.wait()
                 child = await original_spawn(*args, **kwargs)
-                for _ in range(200):
-                    if observed.exists():
-                        break
-                    await asyncio.sleep(0.005)
+                await wait_for_pid(pidfile)
                 return child
 
             with mock.patch.object(
