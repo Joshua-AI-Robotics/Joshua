@@ -107,9 +107,11 @@ class Sensor : public robot::perception::PerceptionInterface {
 class TestClock : public joshua::RobotClock {
  public:
   double Now() const override {
+    if (fail) throw std::runtime_error("sensor test clock unavailable");
     return now.load();
   }
   std::atomic<double> now{100.0};
+  std::atomic<bool> fail{false};
 };
 class PerceptionNodesTest : public testing::Test {
  protected:
@@ -127,6 +129,7 @@ class PerceptionNodesTest : public testing::Test {
     rclcpp::shutdown();
   }
   void SetUp() override {
+    clock_->fail = false;
     clock_->now = 100.0;
     EXPECT_EQ(joshua::RunGuarded("reset sensor test", [] { return 0; }), 0);
   }
@@ -292,16 +295,19 @@ TEST_F(PerceptionNodesTest, TeardownFailureReachesProcessRuntimeOnce) {
   EXPECT_EQ(state->cleanups, 1);
 }
 
-TEST_F(PerceptionNodesTest, PausedRobotTimeDoesNotPauseAcquisitionOrCreateWorkersPerOutput) {
+TEST_F(PerceptionNodesTest, RobotTimeSchedulesOneAcquisitionPerSensorAcrossPausesAndJumps) {
   auto state = std::make_shared<SensorState>();
   state->block_read = false;
   auto config = Config(robot::perception::POSITION);
   auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  sensor->mutable_observation_policy()->set_stale_after_ms(10000);
   sensor->mutable_node()->mutable_publishers(0)->set_publish_rate_hz(10);
   auto* second = sensor->mutable_node()->add_publishers();
   *second = sensor->node().publishers(0);
   second->set_topic("sensor_test/fast");
   second->set_publish_rate_hz(30);
+  second->set_observation_packet(false);
+  second->set_ros2_data_type(ros2::data_type::FLOAT64);
   auto ignored = *sensor;
   ignored.mutable_node()->set_id(2);
   *config.mutable_robot()->mutable_perceptions()->add_single_perceptions() = ignored;
@@ -317,32 +323,62 @@ TEST_F(PerceptionNodesTest, PausedRobotTimeDoesNotPauseAcquisitionOrCreateWorker
         ++starts;
         return joshua::StartWorker(name, work);
       });
-  ASSERT_TRUE(Wait([&] { return state->reads >= 3; }));
+  ASSERT_TRUE(Wait([&] { return state->reads == 1; }));
   EXPECT_EQ(starts, 1);
   EXPECT_EQ(factories, 1);
   EXPECT_EQ(state->inits, 1);
   auto observer = std::make_shared<rclcpp::Node>("packet_observer");
   int packets = 0;
   auto sub = observer->create_subscription<std_msgs::msg::UInt8MultiArray>(
-      "sensor_test/fast", 10, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr) { ++packets; });
+      "sensor_test/fast/metadata", 10, [&](std_msgs::msg::UInt8MultiArray::ConstSharedPtr message) {
+        robot::perception::PerceptionPacket packet;
+        ASSERT_TRUE(packet.ParseFromArray(message->data.data(), message->data.size()));
+        EXPECT_EQ(packet.timestamp(), 123.25);
+        ++packets;
+      });
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node);
   executor.add_node(observer);
-  ASSERT_TRUE(Wait([&] { return observer->count_publishers("sensor_test/fast") == 1; }, &executor));
+  ASSERT_TRUE(Wait([&] { return sub->get_publisher_count() == 1; }, &executor));
+  const auto paused_until = std::chrono::steady_clock::now() + 120ms;
+  while (std::chrono::steady_clock::now() < paused_until) executor.spin_once(5ms);
+  EXPECT_EQ(state->reads, 1);
   for (int i = 0; i < 10; ++i) executor.spin_once(5ms);
   EXPECT_EQ(packets, 0);
-  clock_->now = 100.1;
-  ASSERT_TRUE(Wait([&] { return packets == 1; }, &executor));
+  clock_->now = 100.04;
+  ASSERT_TRUE(Wait([&] { return packets == 1 && state->reads == 2; }, &executor));
   for (int i = 0; i < 10; ++i) executor.spin_once(5ms);
   EXPECT_EQ(packets, 1);
   clock_->now = 90.0;
   for (int i = 0; i < 10; ++i) executor.spin_once(5ms);
   EXPECT_EQ(packets, 1);
+  EXPECT_EQ(state->reads, 2);
   clock_->now = 200.0;
-  ASSERT_TRUE(Wait([&] { return packets == 2; }, &executor));
+  ASSERT_TRUE(Wait([&] { return packets == 2 && state->reads == 3; }, &executor));
   for (int i = 0; i < 10; ++i) executor.spin_once(5ms);
   EXPECT_EQ(packets, 2);
+  EXPECT_EQ(state->reads, 3);
   executor.remove_node(node);
+}
+
+TEST_F(PerceptionNodesTest, FailedRobotClockStopsSchedulingAndAllowsWorkerShutdown) {
+  auto state = std::make_shared<SensorState>();
+  state->block_read = false;
+  auto node = Make(
+      robot::perception::POSITION,
+      Config(robot::perception::POSITION),
+      [&](const auto&) -> absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>> {
+        return std::make_unique<Sensor>(state, robot::perception::POSITION);
+      });
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+  ASSERT_TRUE(Wait([&] { return state->reads == 1; }));
+  clock_->fail = true;
+  EXPECT_THROW(Wait([] { return false; }, &executor), joshua::RobotTimeError);
+  executor.remove_node(node);
+  node.reset();
+  EXPECT_EQ(state->reads, 1);
+  EXPECT_EQ(state->cleanups, 1);
 }
 
 TEST_F(PerceptionNodesTest, ScalarCacheHasNoWorkerAndHealthRefreshesWhileRobotTimeIsPaused) {

@@ -50,7 +50,7 @@ A factory must not silently initialize a driver that the node initializes again.
 
 Choose and test the scheduling contract explicitly. The baseline is the target
 branch's behavior at the recorded commit. At `a1eef5dc`, each camera and position output
-read in its own RobotTime callback. The node now shares one steady-clock
+read in its own RobotTime callback. The node now shares one RobotTime-scheduled
 acquisition at the maximum configured output rate.
 For example, 10 Hz and 30 Hz outputs can produce 40 read attempts versus 30
 shared acquisitions per second. State sample sharing, skipped periods,
@@ -513,7 +513,8 @@ not publisher authentication. Use separate JointState command topics for multipl
 sources; the existing numeric topics keep their actuator-name contract.
 
 `command_timeout_ms` defaults to 1000 ms. Accepted motion renews the steady-clock
-lease; repeated enables, telemetry, rejected inputs and board heartbeats do not.
+lease so a paused or backward RobotTime cannot extend command authority.
+Repeated enables, telemetry, rejected inputs and board heartbeats do not renew it.
 Expiry attempts a disable and latches a stop, checked every 10 ms and at command
 admission. Host scheduling/driver delay applies. Link loss still requires the
 selected device's watchdog and physical qualification.
@@ -555,15 +556,20 @@ Board scalar records instead read the coordinator's existing cache in publicatio
 and health callbacks, with no acquisition worker. Repeated cache reads retain
 sample identity and receipt times and do not refresh the last-valid time.
 
-Blocking acquisition uses steady elapsed time at the maximum configured output
-rate for that sensor. A slow read skips waiting for the expired period; it does not
-queue catch-up reads. Camera, lidar, and position outputs retain independent
-RobotTime publication deadlines. Scalar payload timers use steady wall time at
-the configured rate and continue publishing while RobotTime is paused. Paused/backward RobotTime waits for the outstanding publication deadline;
-forward jumps skip missed periods without a burst. Acquisition and 50 ms health
-callbacks continue while publication is paused. Camera retry backoff still uses
-RobotTime. Readiness requires validated data; invalid samples, acquisition errors,
-and stalled sources remain observable.
+Each camera, lidar, and position source takes one initial reading and uses a
+RobotTime timer at its fastest configured output rate for subsequent reads.
+The timer wakes one worker. Multiple deadlines during a blocking read leave at
+most one pending read. A paused or backward clock waits for the outstanding
+deadline, and a forward jump skips missed periods. Acquisition and native
+publication have independent RobotTime deadlines. Camera retry backoff uses
+RobotTime. A clock read failure propagates through the runtime failure boundary.
+Shutdown explicitly wakes the worker even while RobotTime is paused.
+
+Scalar payload timers retain the configured wall-time cadence so consumers
+continue to receive cached validity and loss information during a RobotTime
+pause. The 50 ms health timer and receipt-age calculations use local steady
+time so stalled physical inputs remain observable during a pause. Readiness
+requires validated data. Health reports invalid samples and acquisition errors.
 
 Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
 with `observation_status`) and a short `/health` String. Status includes starting,
@@ -649,7 +655,7 @@ mapping is inferred. Configure `observation_policy.frame_id` when a calibrated
 frame is available. Preserve the configuration defining conversions and frames.
 
 Each native topic has a `/metadata` UInt8MultiArray containing a serialized
-PerceptionPacket with the matching sample metadata. `/status` also references
+PerceptionPacket with the source packet timestamp and matching sample metadata. `/status` also references
 the last sample. Record those topics alongside native data. Numeric std_msgs
 have no sample ID or header, so a companion topic cannot guarantee atomic pairing.
 For exact replay/recording, select `observation_packet: true` and

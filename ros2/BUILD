@@ -97,6 +97,7 @@ py_library(
 )
 
 _CAMERA_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
     ":observation_publisher",
     "//utils:scope_exit",
     "//utils:status_macros",
@@ -143,6 +144,7 @@ ros2_cpp_test(
 )
 
 _POSITION_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
     ":observation_publisher",
     "//utils:scope_exit",
     "//utils:status_macros",
@@ -175,6 +177,7 @@ ros2_cpp_library(
 )
 
 _LIDAR_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
     ":observation_publisher",
     "//utils:scope_exit",
     "//utils:status_macros",
@@ -240,6 +243,7 @@ ros2_cpp_library(
 )
 
 _BOARD_NODE_DEPS = [
+    ":acquisition_schedule",
     "//utils:scope_exit",
     "//utils:status_macros",
     ":logging",
@@ -393,6 +397,15 @@ cc_test(
         "@googletest//:gtest_main",
         "@protobuf",
         "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+cc_library(
+    name = "acquisition_schedule",
+    hdrs = ["acquisition_schedule.h"],
+    deps = [
+        "//robot/perception/proto:perception_cc_proto",
+        "//ros2/utils:robot_timer",
     ],
 )
 

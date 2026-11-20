@@ -1,7 +1,4 @@
-#include <algorithm>
-#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
 #include <future>
 #include <map>
@@ -18,6 +15,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot/board/factory/board_factory.h"
 #include "robot/perception/factory/perception_factory.h"
+#include "ros2/acquisition_schedule.h"
 #include "ros2/logging.h"
 #include "ros2/node_runner.h"
 #include "ros2/observation_publisher.h"
@@ -70,7 +68,8 @@ class BoardNode : public rclcpp::Node {
           *this,
           s,
           [record] {
-            if (record->cached && record->driver && !record->stopping && record->initialized) {
+            if (record->cached && record->driver && !record->schedule.stopped() &&
+                record->initialized) {
               auto result = record->driver->GetData();
               record->state.Record(std::move(result), Clock::now());
             }
@@ -83,6 +82,8 @@ class BoardNode : public rclcpp::Node {
         record->driver = std::move(*made);
       else
         record->state.Record(made.status(), Clock::now());
+      if (record->driver && !record->cached)
+        record->timers.push_back(record->schedule.CreateTimer(*this, s));
       observations_.push_back(std::move(source));
     }
     for (const auto& b : config.robot().boards()) {
@@ -155,12 +156,7 @@ class BoardNode : public rclcpp::Node {
                                               ? sensor.observation_policy().stale_after_ms()
                                               : 1000),
                 Clock::now(),
-                {std::move(unit), std::move(frame)}) {
-      uint32_t rate = 1;
-      for (const auto& output : sensor.node().publishers())
-        rate = std::max(rate, output.publish_rate_hz());
-      period = std::chrono::nanoseconds(1000000000ull / rate);
-    }
+                {std::move(unit), std::move(frame)}) {}
     bool cached = false;
     bool initialized = false;
     ~Source() {
@@ -172,19 +168,15 @@ class BoardNode : public rclcpp::Node {
       state.Stop();
     }
     void RequestStop() noexcept {
-      stopping.store(true);
+      schedule.Stop();
       for (auto& timer : timers)
         joshua::RunCleanup("observation timer cancellation", [&] { timer->cancel(); });
       if (driver) driver->RequestStop();
-      wake.notify_all();
     }
     robot::perception::ObservationState state;
     std::unique_ptr<robot::perception::PerceptionInterface> driver;
     std::vector<rclcpp::TimerBase::SharedPtr> timers;
-    std::atomic<bool> stopping{false};
-    std::mutex wait_mutex;
-    std::condition_variable wake;
-    std::chrono::nanoseconds period;
+    ros2_utils::AcquisitionSchedule schedule;
     std::thread worker;
   };
   static void Acquire(Source& source) {
@@ -192,19 +184,16 @@ class BoardNode : public rclcpp::Node {
       joshua::RunCleanup("sensor teardown",
                          [&] { joshua::ThrowIfError(source.driver->Teardown()); });
     });
-    if (source.stopping || joshua::ShutdownRequested()) return;
+    if (source.schedule.stopped() || joshua::ShutdownRequested()) return;
     const auto status = source.driver->Init();
     if (!status.ok()) {
       source.state.Record(status, Clock::now());
       return;
     }
-    while (!source.stopping && !joshua::ShutdownRequested()) {
-      const auto start = Clock::now();
+    while (source.schedule.WaitForRead() && !joshua::ShutdownRequested()) {
       auto result = source.driver->GetData();
-      if (source.stopping || joshua::ShutdownRequested()) break;
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
       source.state.Record(std::move(result), Clock::now());
-      std::unique_lock lock(source.wait_mutex);
-      source.wake.wait_until(lock, start + source.period, [&] { return source.stopping.load(); });
     }
   }
   static ros2_utils::ObservationPublish MakePublisher(

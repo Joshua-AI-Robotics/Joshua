@@ -86,9 +86,11 @@ class ControlGate {
     if (state_ != State::kEnabled) return absl::FailedPreconditionError("Actuator is disabled");
     if (max_age_ns_) {
       const double stamp = packet.timestamp();
-      if (!std::isfinite(stamp) || ros_now_ns <= 0 || stamp <= RobotTimestamp(0) ||
-          stamp > RobotTimestamp(ros_now_ns) || stamp < RobotTimestamp(ros_now_ns - max_age_ns_) ||
-          stamp < RobotTimestamp(source_epoch_ns_) || stamp <= last_stamp_)
+      if (!std::isfinite(stamp) || ros_now_ns <= 0 ||
+          stamp <= joshua::RobotTimeFromUnixNanoseconds(0) ||
+          stamp > joshua::RobotTimeFromUnixNanoseconds(ros_now_ns) ||
+          stamp < joshua::RobotTimeFromUnixNanoseconds(ros_now_ns - max_age_ns_) ||
+          stamp < joshua::RobotTimeFromUnixNanoseconds(source_epoch_ns_) || stamp <= last_stamp_)
         return absl::DeadlineExceededError("Stale, future, duplicate or prior-source input");
     }
     auto status = action_->SetAction(packet);
@@ -186,11 +188,6 @@ class ControlGate {
   }
 
  private:
-  // Translate the ROS epoch without reading or switching the configured clock.
-  static double RobotTimestamp(int64_t ros_ns) {
-    return static_cast<double>(ros_ns / 1000000000) - joshua::kRobotStartTime +
-           (ros_ns % 1000000000) / 1e9;
-  }
   absl::Status DisableLocked(State next) {
     state_ = next;  // Interlock before issuing the possibly failing output operation.
     ActionPacket packet;

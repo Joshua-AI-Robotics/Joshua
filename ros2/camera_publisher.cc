@@ -1,9 +1,8 @@
-#include <algorithm>
-#include <atomic>
-#include <condition_variable>
+#include <limits>
 #include <thread>
 
 #include "robot/perception/factory/perception_factory.h"
+#include "ros2/acquisition_schedule.h"
 #include "ros2/node_runner.h"
 #include "ros2/observation_publisher.h"
 #include "ros2/utils/robot_time_conversion.h"
@@ -62,6 +61,7 @@ class CameraPublisher : public rclcpp::Node {
         continue;
       }
       source.driver = std::move(*made);
+      source.timers.push_back(source.schedule.CreateTimer(*this, sensor));
     }
     for (auto& source : sources_) {
       if (source->driver)
@@ -81,31 +81,22 @@ class CameraPublisher : public rclcpp::Node {
                                               ? sensor.observation_policy().stale_after_ms()
                                               : 1000),
                 Clock::now(),
-                {std::move(unit), std::move(frame)}) {
-      uint32_t rate = 1;
-      for (const auto& output : sensor.node().publishers())
-        rate = std::max(rate, output.publish_rate_hz());
-      period = std::chrono::nanoseconds(1000000000ull / rate);
-    }
+                {std::move(unit), std::move(frame)}) {}
     ~Source() {
       RequestStop();
       if (worker.joinable()) worker.join();
       state.Stop();
     }
     void RequestStop() noexcept {
-      stopping.store(true);
+      schedule.Stop();
       for (auto& timer : timers)
         joshua::RunCleanup("observation timer cancellation", [&] { timer->cancel(); });
       if (driver) driver->RequestStop();
-      wake.notify_all();
     }
     robot::perception::ObservationState state;
     std::unique_ptr<robot::perception::PerceptionInterface> driver;
     std::vector<rclcpp::TimerBase::SharedPtr> timers;
-    std::atomic<bool> stopping{false};
-    std::mutex wait_mutex;
-    std::condition_variable wake;
-    std::chrono::nanoseconds period;
+    ros2_utils::AcquisitionSchedule schedule;
     std::thread worker;
     std::function<double()> now;
   };
@@ -116,18 +107,17 @@ class CameraPublisher : public rclcpp::Node {
       joshua::RunCleanup("sensor teardown",
                          [&] { joshua::ThrowIfError(source.driver->Teardown()); });
     });
-    if (source.stopping || joshua::ShutdownRequested()) return;
+    if (source.schedule.stopped() || joshua::ShutdownRequested()) return;
     bool initialized = false;
-    double retry_after = 0.0;
+    double retry_after = -std::numeric_limits<double>::infinity();
     absl::Status last_error = absl::UnavailableError("Camera not initialized");
-    while (!source.stopping && !joshua::ShutdownRequested()) {
-      const auto start = Clock::now();
+    while (source.schedule.WaitForRead() && !joshua::ShutdownRequested()) {
       if (!initialized && !absl::IsInvalidArgument(last_error) && source.now() >= retry_after) {
         active = true;
         last_error = source.driver->Init();
         initialized = last_error.ok();
       }
-      if (source.stopping || joshua::ShutdownRequested()) break;
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
       auto result = initialized ? source.driver->GetData()
                                 : absl::StatusOr<robot::perception::PerceptionPacket>(last_error);
       if (!result.ok() && active) {
@@ -141,10 +131,8 @@ class CameraPublisher : public rclcpp::Node {
                            std::string(last_error.message()) + "; teardown: " + status.ToString());
         retry_after = source.now() + 1.0;
       }
-      if (source.stopping || joshua::ShutdownRequested()) break;
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
       source.state.Record(std::move(result), Clock::now());
-      std::unique_lock lock(source.wait_mutex);
-      source.wake.wait_until(lock, start + source.period, [&] { return source.stopping.load(); });
     }
   }
   static ros2_utils::ObservationPublish MakePublisher(

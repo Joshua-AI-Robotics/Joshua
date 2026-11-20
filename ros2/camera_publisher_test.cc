@@ -193,6 +193,7 @@ TEST_F(CameraPublisherTest, RetainsUnavailableCameraAndPublishesAfterInitializat
 }
 
 TEST_F(CameraPublisherTest, RepeatedOpenFailuresUseOneSecondBackoff) {
+  now_ = -3.0;
   Start();
   ASSERT_TRUE(WaitUntil([&] { return state_->teardowns == 1; }));
   now_ = now_ + 1.0;

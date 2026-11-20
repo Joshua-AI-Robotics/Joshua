@@ -176,6 +176,11 @@ TEST_F(PacketParserCppTest, JointStatePreservesPresenceAndTimestampValues) {
     EXPECT_EQ(result->joint().has_effort(), field == 2);
     EXPECT_DOUBLE_EQ(result->timestamp(), -joshua::kRobotStartTime);
   }
+  message.header.stamp.sec = static_cast<int32_t>(joshua::kRobotStartTime) - 1;
+  message.header.stamp.nanosec = 999999998;
+  auto boundary = Send(ros2::data_type::JOINT_STATE, message);
+  ASSERT_TRUE(boundary.ok());
+  EXPECT_EQ(boundary->timestamp(), -2e-9);
   message.header.stamp.sec = -1;
   message.header.stamp.nanosec = 500000000;
   auto result = Send(ros2::data_type::JOINT_STATE, message);

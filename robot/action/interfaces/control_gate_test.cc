@@ -46,8 +46,7 @@ class FakeAction : public ActionInterface {
 ActionPacket Target(uint64_t stamp = 0) {
   ActionPacket p;
   p.mutable_joint()->set_position(1);
-  p.set_timestamp(static_cast<double>(stamp / 1000000000) - joshua::kRobotStartTime +
-                  (stamp % 1000000000) / 1e9);
+  p.set_timestamp(joshua::RobotTimeFromUnixNanoseconds(stamp));
   return p;
 }
 
@@ -174,7 +173,11 @@ TEST(ControlGateTest, RobotTimeEpochAndNonfiniteStampsRespectRosFreshness) {
   const auto t = ControlGate::Clock::time_point{};
   const int64_t ros_epoch_ns = static_cast<int64_t>(joshua::kRobotStartTime) * 1000000000;
   ASSERT_TRUE(gate.Initialize().ok());
-  ASSERT_TRUE(gate.Enable(t, ros_epoch_ns).ok());
+  const auto just_before_epoch = ros_epoch_ns - 2;
+  ASSERT_TRUE(gate.Enable(t, just_before_epoch).ok());
+  auto boundary = Target();
+  boundary.set_timestamp(-2e-9);
+  ASSERT_TRUE(gate.Execute("default", boundary, just_before_epoch, t).ok());
   auto packet = Target(ros_epoch_ns);
   ASSERT_DOUBLE_EQ(packet.timestamp(), 0.0);
   ASSERT_TRUE(gate.Execute("default", packet, ros_epoch_ns, t).ok());
@@ -188,7 +191,7 @@ TEST(ControlGateTest, RobotTimeEpochAndNonfiniteStampsRespectRosFreshness) {
   EXPECT_TRUE(
       gate.Execute("default", Target(ros_epoch_ns + 5000000), ros_epoch_ns + 5000000, t + 5ms)
           .ok());
-  EXPECT_EQ(action->targets, 2);
+  EXPECT_EQ(action->targets, 3);
 }
 
 TEST(ControlGateTest, DriverFailureStopsAndRequiresExplicitRecoveryWithoutReplay) {

@@ -38,6 +38,7 @@ inline void PublishMetadata(const rclcpp::Publisher<std_msgs::msg::UInt8MultiArr
   robot::perception::PerceptionPacket packet;
   packet.set_perception_id(source.perception_id());
   packet.set_sequence_id(source.sequence_id());
+  packet.set_timestamp(source.timestamp());
   *packet.mutable_sample_metadata() = source.sample_metadata();
   const auto bytes = packet.SerializeAsString();
   std_msgs::msg::UInt8MultiArray msg;
