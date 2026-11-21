@@ -34,8 +34,9 @@ launcher and ROS 2 nodes never invoke these.
   templates and contribution workflow; MCP is a consumer of this tool.
 
 - [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
-  scalar/health recording to JSONL. It preserves validity and separate clock
-  domains, opens no board and sends no commands. Observation subscriptions use
+  scalar/health recording to JSONL. It retains the scalar fields and `sample_metadata`,
+  including device acquisition ticks and separate host receipt clocks. It opens
+  no board and sends no commands. Observation subscriptions use
   best-effort delivery to accept either publisher reliability setting; captures
   may contain gaps. See the
   [serial qualification procedure](../docs/SERIAL_COMM_QUALIFICATION.md).
@@ -88,11 +89,6 @@ launcher and ROS 2 nodes never invoke these.
   [scripts/](../scripts/AGENTS.md).
 - Firmware flashing. Board-specific procedures belong in
   [firmware/AGENTS.md](../firmware/AGENTS.md); runtime code never flashes a board.
-
-The scalar recorder preserves shared `sample_metadata` alongside the original
-scalar fields. Its JSONL records distinguish device acquisition ticks from host
-receipt clocks. Receipt timestamps and clock IDs do not establish device/host or
-cross-host synchronization; record the reviewed configuration and calibration.
 
 ## Directory navigation
 

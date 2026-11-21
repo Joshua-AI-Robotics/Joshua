@@ -79,20 +79,7 @@ code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
-Feetech identification also reads each servo's status-return level (register 8).
-Level 1 register writes consume and validate their acknowledgment before releasing
-the bus; level 0 remains send-only. This includes torque and position writes.
-The host never changes the setting or automatically retries a write. A failed
-write or invalid write reply latches a fault across the shared board: further
-motion, enable and feedback requests are rejected, so a late reply cannot confirm
-a later command. Torque-disable requests still send best-effort bytes, but return
-an error stating that the outcome is unconfirmed; they never consume a reply or
-clear the fault. Host `recover` cannot clear this board fault. Secure the mechanism,
-inspect the device/link, close all consumers and deliberately restart the runtime
-before resuming. Changing the servo's reply policy externally also requires a
-runtime restart. See the
-[vendor reply contract](https://github.com/ftservo/FTServo_Arduino/blob/main/src/SCS.cpp)
-and [status-return register](https://docs.waveshare.com/Memory_Map_Explanation/ST_Servo_Memory_Map_Explanation).
+The board layer owns [Feetech write acknowledgments and fault recovery](board/AGENTS.md#feetech-write-recovery).
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
 See [implemented components](../docs/SUPPORTED_COMPONENTS.md) for software paths
 and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
@@ -161,19 +148,9 @@ limits are rejected, never clamped. Native and SI positions are left for drivers
 Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
 
-The observation state in `perception/interfaces/observation_source.h` validates
-samples and maintains latest-only data plus identity/readiness/freshness/error
-state. It owns no driver or acquisition thread. Sensor-specific ROS nodes own
-acquisition workers and publication; board scalar streams reuse their coordinator
-cache directly. `PerceptionFactory::CreatePerception` selects and constructs a
-driver; its caller must now call `Init()` explicitly, including for LDS01 (formerly
-initialized inside the factory). Camera nodes schedule retries, while the camera driver reapplies device
-settings on every `Init()`. `RequestStop()` is separate from `Teardown()`; see the
-[ROS shutdown contract](../ros2/AGENTS.md#observation-readiness) for bounded serial
-reads and the OpenCV process-escalation fallback. None of this sends actuator
-commands. Shared actuator gates in `action/interfaces/control_gate.h` implement
-explicit enable, source selection, local command leases, and latched recovery
-above motor drivers and transports.
+See [perception initialization and cancellation](perception/AGENTS.md#initialization-ownership)
+for driver ownership and the [ROS actuator lifecycle](../ros2/AGENTS.md#shared-control-lifecycle)
+for command admission and recovery.
 
 ## Directory navigation
 

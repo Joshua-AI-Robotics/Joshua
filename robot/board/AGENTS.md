@@ -37,6 +37,21 @@ come from host protobuf configuration. Firmware advertises supported channel
 slots and validates resource claims; discovery cannot establish physical wiring.
 Board identity is distinct from transport peripherals and actuator drive hardware.
 
+## Feetech write recovery
+
+At identification, read each servo's status-return level (register 8). Level 1
+writes must consume and validate the acknowledgment before releasing the bus.
+Level 0 writes are send-only. Preserve the configured reply policy and never
+retry a write automatically.
+
+An uncertain write faults the whole board. Reject motion, enable and feedback
+so a late reply cannot confirm a later command. Torque disable may still send
+best-effort bytes and must report the outcome as unconfirmed. To recover, secure
+the mechanism, inspect the link, close all consumers and restart the runtime.
+Host `recover` cannot clear this fault. Restart after an external reply-policy
+change. See the [vendor protocol](https://github.com/ftservo/FTServo_Arduino/blob/main/src/SCS.cpp)
+and [register map](https://docs.waveshare.com/Memory_Map_Explanation/ST_Servo_Memory_Map_Explanation).
+
 ## Verification
 
 Use fake transports and existing factory, session, coordinator, and native

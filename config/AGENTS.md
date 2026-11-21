@@ -382,15 +382,11 @@ it never falls back to another camera. An omitted or empty path preserves
 numeric-index behavior. Cameras with identical USB identities need
 `/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
 in private runtime presets rather than committed examples.
-Camera initialization applies the configured capture settings. The checked-in
-camera presets select MJPG. Camera pixel format (`opencv_config.fourcc`) must
-contain exactly four characters, such as `MJPG` or `YUYV`. Config validation
-checks this before any nodes launch; the camera must support the selected format.
+Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters
+supported by the camera, such as `MJPG` or `YUYV`.
 
-One serial bus must belong to one node process. Use `BOARD_NODE` to compose
-commands and position feedback on the same bus. Standalone `POSITION_PUBLISHER`
-and `ACTUATOR_SUBSCRIBER` remain available for independent buses; they cannot
-share a port across processes.
+Use standalone `POSITION_PUBLISHER` and `ACTUATOR_SUBSCRIBER` for independent
+buses. For a shared bus, follow the [board configuration](#shared-board-runtime).
 The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
 the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
 subscribers share `sts3215_servo_<joint>/position` topics, carrying native
@@ -420,17 +416,10 @@ checks and dependency extraction are separate private helpers in that module.
 Adding a driver updates those helpers; the shared resource checks
 remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
-For sensors declaring outputs, `ValidateConfig` checks that the selected component
-node supports their kind: camera/IMAGE, lidar/RANGE_SCAN, position/POSITION,
-audio/AUDIO, MCU/SCALAR, or BOARD_NODE/POSITION and SCALAR. Previously the generic
-observation node could accept cross-kind assignments; these now fail before
-hardware construction instead of being silently ignored by a component node.
-Migrate such external configs to the matching node type (and distinct node IDs
-when necessary). Existing checked-in presets retain their assignments.
-Resource-only entries without outputs retain their existing validation behavior.
-Node validation also checks that node types are specified and each node ID has
-one consistent type.
-
+For sensors with outputs, match `IMAGE`, `RANGE_SCAN`, `POSITION`, and `AUDIO`
+to `CAMERA_PUBLISHER`, `LIDAR_PUBLISHER`, `POSITION_PUBLISHER`, and
+`AUDIO_PUBLISHER`, respectively. `BOARD_NODE` accepts board-backed `POSITION`
+and `SCALAR` and is the only node for scalar output. Each node ID has one type.
 
 Position publishers and actuator subscribers select compiled ROS message types
 using the existing `ros2_data_type` field. No field mappings are required.
@@ -481,54 +470,30 @@ qualification. Runtime board/perception integration follows in P5.
 
 ## Shared board runtime
 
-`BOARD_NODE` composes actuator commands and board-backed position/scalar
-observations in one process. Assign every consumer of a bus the same node ID
-and `node_type: BOARD_NODE`. Existing factories share the board and transport;
-no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. Use `BOARD_NODE` for new configurations.
-`BOARD_NODE` uses protobuf value 9. `MCU_BUS` and `DEVICE_BUS` are removed,
-including their executables.
+Assign actuator and sensor entries sharing a bus the same node ID and
+`node_type: BOARD_NODE`. Board-backed steppers require `require_explicit_enable: true`
+in this node.
 
-To migrate, change every `node_type: MCU_BUS` or `node_type: DEVICE_BUS` on a bus
-to `BOARD_NODE`, keeping the same shared node ID, board references, topics, and
-hardware/control settings. Replace direct `ros2/mcu_bus` or `ros2/device_bus`
-invocations with `ros2/board_node`. Update node-name-based tooling from
-`mcu_bus_node_<id>` or `device_bus_node_<id>` to `board_node_<id>`. This also changes
-private service paths such as `~/<actuator>/enable` and `~/estop`; explicitly
-configured topic names remain unchanged. All entries sharing a node ID must use
-the same node type. Old text enum names are rejected. Numeric value 9 now means
-`BOARD_NODE`; values 10 and 11 and the removed enum names are reserved.
-
-The composed owner explicitly disables actuators at startup and tears them down
-before releasing boards. Steppers require `require_explicit_enable: true` so their
-driver initialization cannot enable early. Camera/lidar acquisition remains in
-its existing standalone nodes. This feature does not qualify physical motion,
-link-loss stopping or a particular rig.
+Migrate all `MCU_BUS` or `DEVICE_BUS` entries on the bus together, preserving
+the shared ID, board references and topics. Replace the old executables with
+`ros2/board_node`. Update private service paths to use `board_node_<id>` in
+place of `mcu_bus_node_<id>` or `device_bus_node_<id>`. The protobuf value
+for `BOARD_NODE` is 9. Values 10 and 11 and both former names are reserved.
 
 ## Control policy
 
-All ROS actuator nodes now start disabled. Optional `actuator.control_policy`
-sets `initial_source` (default `default`), positive `command_timeout_ms` (default
-1000) and positive `max_input_age_ms` (unset means no source-age claim). Assign
-`source_id` on actuator subscriptions when selecting multiple producers. Source
-IDs are lowercase ROS identifiers, up to 64 characters. Input-age enforcement
-requires JointState motion with synchronized ROS timestamps; Bool enable gates
-remain explicit operator actions. See the shared lifecycle in
-[ROS runtime documentation](../ros2/AGENTS.md#shared-control-lifecycle).
+Set `actuator.control_policy.initial_source` to a subscription's `source_id`
+(default `default`). Source IDs are lowercase ROS identifiers up to 64 characters.
+`command_timeout_ms` defaults to 1000. Optional `max_input_age_ms` requires
+JointState motion stamped in the receiver's ROS clock domain. Both intervals
+must be positive when set. See the [actuator lifecycle](../ros2/AGENTS.md#shared-control-lifecycle).
 
 ## Observation metadata and packet output
 
-`observation_policy { stale_after_ms: 1000 frame_id: "base" }` configures receipt
-freshness and an optional calibrated frame. Source-native units are fixed by the
-selected driver; an STS3215 encoder requires a servo-bus channel.
-
-Native outputs retain their message types and add `/metadata` and `/status`
-packet companions. For atomic payload/identity/timing recording, a publisher may
-select `observation_packet: true` with `UINT8_MULTI_ARRAY`; otherwise position
-arrays retain their existing numeric meaning. Camera and lidar native outputs
-require IMAGE and POINTCLOUD2 respectively. See [sample clocks and recording](../ros2/AGENTS.md#sample-identity-clocks-and-recording)
-for timestamp meaning, unavailable acquisition time, generation markers and
-native-unit conversions.
+`observation_policy.stale_after_ms` sets the receipt freshness limit (default
+1000 ms). Set `frame_id` when the calibrated frame is known. For atomic
+recording, select `observation_packet: true` with `UINT8_MULTI_ARRAY` on
+supported publishers. See [observation outputs and timestamps](../ros2/AGENTS.md#sample-identity-clocks-and-recording).
 
 ## C++ ROS logging
 

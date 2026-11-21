@@ -15,14 +15,12 @@ when the driver/coordinator does not already acquire/cache samples.
 ## Initialization ownership
 
 [PerceptionFactory](factory/perception_factory.cc) selects and assembles drivers.
-At the PR #160 baseline (`a1eef5dc`), the factory also initialized LDS01.
-The lidar acquisition worker now calls `Init()` once after construction.
 
 | Backend | Initial setup owner | Failure and recovery |
 | --- | --- | --- |
 | OpenCV camera | CameraPublisher acquisition worker per physical source | Invalid configuration fails validation. Recoverable device errors close the source and trigger a retry after one RobotTime second. Each open reapplies the capture settings. |
 | ALSA audio | AudioPublisher calls `Init()` | Initial failure aborts construction. Capture code reopens after device failure. The node refreshes its polling schedule. |
-| LDS01 lidar | LidarPublisher acquisition worker | A failed factory or initialization result remains visible on the source status topic until restart. |
+| LDS01 lidar | LidarPublisher acquisition worker calls `Init()` once | A failed factory or initialization result remains visible on the source status topic until restart. |
 | Board position | BoardFactory initializes the shared board. The acquisition worker initializes the sensor. | Failed source resolution remains visible on the status topic. The board owner controls board lifetime and recovery. |
 | Board scalar stream | The factory subscribes the stream. BoardNode initializes the sensor and reads the coordinator cache. | Source errors are reported through status. Closing a scalar lease preserves other consumers. Failure to obtain a required board aborts construction. |
 

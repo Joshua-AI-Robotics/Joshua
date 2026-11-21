@@ -48,14 +48,8 @@ whether an initialization error aborts startup or leaves a registered unhealthy
 source for bounded retry; camera recovery must reapply the configured settings.
 A factory must not silently initialize a driver that the node initializes again.
 
-Choose and test the scheduling contract explicitly. The baseline is the target
-branch's behavior at the recorded commit. At `a1eef5dc`, each camera and position output
-read in its own RobotTime callback. The node now shares one RobotTime-scheduled
-acquisition at the maximum configured output rate.
-For example, 10 Hz and 30 Hz outputs can produce 40 read attempts versus 30
-shared acquisitions per second. State sample sharing, skipped periods,
-RobotTime pause/jump behavior, and timestamp/freshness clock domains separately.
-Publication must retain the [RobotTime contract](../docs/ROBOT_TIME.md).
+Compare scheduling changes with the target branch. Verify sample sharing, missed
+periods, and RobotTime pauses and jumps against the [observation schedule](#observation-readiness).
 
 Use `joshua::StartWorker` and ensure completed member records or rollback guards
 own cleanup if a later device, timer, or worker fails to construct. The destructor
@@ -67,8 +61,8 @@ a worker that can still access node memory.
 
 ## Hardware-free real-node tests
 
-Compile the actual `.cc` in a narrowly visible, `testonly` target with only the
-entrypoint excluded. Tests include that implementation, inject a test source or
+Compile the actual `.cc` in a narrowly visible, `testonly` target. Define
+`JOSHUA_NODE_TEST` to exclude its entrypoint. Tests include that implementation, inject a test source or
 use factory-backed mock boards/PTYs, and execute real callbacks in a ROS executor.
 Do not create a production node library or duplicate the implementation for tests.
 See [camera_publisher_test.cc](camera_publisher_test.cc),
@@ -83,6 +77,9 @@ reporting, clock pause/jump and multi-rate cases, and rollback when a later sour
 or worker creation fails. Test the cancellation contract itself; moving I/O off
 the executor is not evidence of bounded teardown. Unsupported cancellation needs
 a separate supervised-process escalation test, with its limitation stated.
+Use [perception_nodes_test.cc](perception_nodes_test.cc) for acquisition and
+rollback, and [perception_shutdown_test.cc](perception_shutdown_test.cc) for
+supervised shutdown during a stuck capture.
 
 Run changed targets and the canonical test services from the root instructions.
 No real camera, serial port, NIC, or physical actuator is needed for these tests.
@@ -211,47 +208,17 @@ It reads sensors and publishes their values using the configured message type.
 host sensor publishers. Use `BOARD_NODE` for commands and board-backed feedback
 on one bus, including mixed JoshuaWire scalar/actuator setups.
 
-All ROS actuator runtimes start disabled, including STS3215 and legacy stepper
-presets. Driver construction is forced to remain disabled. Enable deliberately
-through the configured torque topic or `~/<actuator>/enable` Trigger service.
-This changes prior standalone startup behavior; existing command-only producers
-must add an explicit operator enable step.
+## Shared board runtime
 
-Mixed MCU bus
--------------
-
-[`board_node`](board_node.cc) hosts scalar subscriptions and actuator commands in one
-process, sharing the production board cache and coordinator. Give all consumers
-of the MCU the same `node.id` and `node_type: BOARD_NODE`. The reference
-[preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real
-hardware and must be reviewed before a deliberate run.
-
-Startup configures outputs but leaves them disabled. A BOOL `/<actuator>/torque`
-command explicitly enables/disables them; position topics retain native driver
-units. `~/estop` is a Trigger service in a separate callback group with two executor
-threads, so a blocked ordinary callback cannot hold the stop behind it. When a
-node owns multiple boards, it starts every stop concurrently before waiting for
-acknowledgments; a stalled board cannot delay stop dispatch to the others. Stop
-acknowledgment is protocol evidence; physical stop verification is unsupported.
-Ordinary subscriptions, control services and the lease watchdog share one callback
-group. ESTOP interlocks every host gate without waiting for command I/O, dispatches
-board stops, then completes the host stop. Acknowledged board stops replace redundant
-channel disables; boards without that capability still receive channel disables.
-After a fault/ESTOP, recovery and a fresh process/session are deliberate operator
-steps. No subscription, enable or target is automatically restored.
-
-Scalar topics publish serialized `PerceptionPacket` messages as
-`std_msgs/UInt8MultiArray`, retaining the named sensor, native unit code, validity,
-boot/clock identity, acquisition sequence/time, receipt age and loss counters.
-The packet's top-level timestamp is unset: no device-to-ROS clock mapping exists.
-The companion `<topic>/health` String reports usable, invalid/stale, or the source
-error. Record both topics; decoding uses `perception_packet.proto`. Receipt
-freshness does not establish absolute device acquisition age.
+[`BoardNode`](board_node.cc) runs actuator commands and board-backed position
+or scalar feedback in one process. See the [configuration and migration
+guide](../config/AGENTS.md#shared-board-runtime). The [mixed Teensy
+preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real hardware.
 
 Position, camera, lidar, audio and Xbox publisher callbacks use
 `utils/robot_timer.h` with double-second RobotTime deadlines. The executor polls
 those deadlines; a paused RobotTime pauses publication. Missed periods are
-skipped, and camera/lidar callbacks only read their own configured stream. See
+skipped. Camera and lidar publication callbacks read the latest sample. See
 [publisher timers](../docs/ROBOT_TIME.md#publisher-timers) for clock-jump behavior.
 The old `encoder_publisher` executable and `ENCODER_PUBLISHER` node type have
 been removed; use `POSITION_PUBLISHER` for standalone position sensors. Topic
@@ -386,14 +353,8 @@ visible in observation health without repeated opens. The shared
 config validator and OpenCV driver both check the required four-character pixel
 format before opening a device.
 
-Each topic uses its own robot-time publication timer. Image headers preserve the
-driver packet timestamp through the shared ROS epoch conversion; for OpenCV this
-is a host capture-completion estimate, not a sensor exposure timestamp. Expected
-device errors use the recovery path; unexpected acquisition exceptions report a
-process failure through `joshua::StartWorker()` and request shutdown. Acquisition
-and retry scheduling belong to each camera record in `camera_publisher.cc`,
-independently of ROS publication timers. This changes the former health-only
-handling of unexpected exceptions; expected device errors remain recoverable.
+Each camera worker owns capture and retry. Unexpected acquisition exceptions
+propagate through `joshua::StartWorker()` and trigger process shutdown.
 
 The OpenCV backend uses two capture buffers so the next frame can remain queued
 while the previous one is read. The
@@ -486,181 +447,73 @@ ALSA aliases for the same physical device cannot be detected statically.
 virtual time to cover large and tiny chunks, short reads, delayed polls, changed
 buffer sizes after recovery, and bounded work for always-ready sources.
 
-## Shared board runtime
-
-`BOARD_NODE` composes actuator commands and board-backed position/scalar
-observations in one process. Assign every consumer of a bus the same node ID
-and `node_type: BOARD_NODE`. Existing factories share the board and transport;
-no transport implementation is selected by the node. Position publishers retain
-the existing numeric/JointState contracts. The old `MCU_BUS` and `DEVICE_BUS`
-node types and executables are removed. See the
-[configuration migration instructions](../config/AGENTS.md#shared-board-runtime)
-for node-name and private-service changes.
-
-The composed owner explicitly disables actuators at startup and tears them down
-before releasing boards. Steppers require `require_explicit_enable: true` so their
-driver initialization cannot enable early. Camera/lidar acquisition remains in
-its existing standalone nodes. This feature does not qualify physical motion,
-link-loss stopping or a particular rig.
-
 ## Shared control lifecycle
 
-Each actuator has one transport-independent `ControlGate` shared by its topics.
-`Subscription.source_id` (default `default`) identifies a configured producer.
-`Actuator.control_policy.initial_source` selects the initial producer; other
-producers cannot enable or move the actuator. This is topic-based arbitration,
-not publisher authentication. Use separate JointState command topics for multiple
-sources; the existing numeric topics keep their actuator-name contract.
+All ROS actuators start disabled. Enable deliberately through the torque topic
+or `~/<actuator>/enable`. Each actuator also exposes `stop`, `recover`, and
+`select_<source_id>` as Trigger services under the same private path. One
+`ControlGate` admits motion from the selected source. Use separate JointState
+topics for multiple producers. Source selection requires disabled state.
+Source IDs identify configured topics and provide no publisher authentication.
 
-`command_timeout_ms` defaults to 1000 ms. Accepted motion renews the steady-clock
-lease so a paused or backward RobotTime cannot extend command authority.
-Repeated enables, telemetry, rejected inputs and board heartbeats do not renew it.
-Expiry attempts a disable and latches a stop, checked every 10 ms and at command
-admission. Host scheduling/driver delay applies. Link loss still requires the
-selected device's watchdog and physical qualification.
+Only accepted motion renews the steady-clock lease. The watchdog checks expiry
+every 10 ms, and the gate checks again at command admission. A paused or backward
+RobotTime cannot extend command authority. When input-age checking is configured, reject zero, future,
+expired, repeated and pre-selection or pre-recovery stamps in the receiver's
+ROS clock domain. See [control policy settings](../config/AGENTS.md#control-policy).
 
-An optional positive `max_input_age_ms` requires motion as JointState with
-nonzero, increasing stamps in the receiver's ROS clock. Future, old, repeated and
-pre-selection/pre-recovery stamps are rejected. Numeric motion has no acquisition
-time and cannot be used with that bound; absent the bound, only local command
-inactivity is enforced. Producers must independently gate their input freshness.
+A stop, fault or lease expiry requires explicit recovery and enable. On shared
+boards, `~/estop` has a separate callback group and executor thread. It
+interlocks all gates without waiting for command I/O, then dispatches board stops concurrently. Each board
+falls back to channel disables if its stop is unavailable or unacknowledged.
+Recovery waits for all pending stops. Host recovery cannot clear firmware
+latches. Recovery never replays commands. Physical stopping requires independent verification.
 
-`~/<actuator>/stop`, `/recover`, `/enable` and `/select_<source_id>` are Trigger
-services. Selection requires disabled state. Stop/driver failure/lease expiry
-requires explicit recovery, then enable; recovery never replays motion. These
-services clear only host state and cannot clear a firmware latch. JoshuaWire
-fault/ESTOP still needs deliberate device recovery and a fresh runtime. Composed
-`~/estop` also interlocks all host gates and invokes available board stop support.
-Each board performs any required channel-disable fallback independently, so a
-delayed acknowledgment on another board cannot hold up that fallback. Recovery
-stays blocked until all bus-wide stop work completes; a per-actuator stop cannot
-complete a pending bus-wide request. Completed stops still require explicit
-recovery and enable.
-No host acknowledgment is physical stop evidence.
-
-On orderly standalone shutdown, each enabled actuator with a live lease and no
-pending stop runs its driver's teardown sequence, including the configured idle
-position. A failed parking attempt triggers a torque disable. Disabled, stopped,
-faulted, and expired actuators receive only a disable. Construction rollback,
-runtime failure, and shared-board shutdown also take the disable-only path.
+On orderly standalone shutdown, an enabled actuator with a live lease and no
+pending stop may park at its configured idle position. A parking failure triggers
+torque disable. Disabled, expired, stopped and faulted actuators take the
+disable-only path, as do construction rollback, runtime failure and shared-board
+shutdown. Release boards after actuator shutdown and sensor cleanup.
 
 ## Observation readiness
 
-Camera, lidar, position, and composed bus nodes own their sensor records in their
-`.cc` implementations. Each blocking sensor has one guarded acquisition worker and
-one bounded latest sample shared by all its outputs. `ObservationState` supplies
-validation, identity and freshness transitions without owning a driver or worker;
-`AddObservationOutputs` creates output callbacks on the owning node and returns
-timers to its sensor record. Blocking reads never run on the ROS executor.
-Board scalar records instead read the coordinator's existing cache in publication
-and health callbacks, with no acquisition worker. Repeated cache reads retain
-sample identity and receipt times and do not refresh the last-valid time.
+Each camera, lidar and position source takes one initial reading. One worker
+per physical source serves all outputs at the highest configured rate. Acquisition
+and native publication use independent RobotTime deadlines. A blocked read can
+leave at most one read pending. Pauses and backward jumps wait for the current
+deadline, forward jumps skip missed periods, and a clock failure propagates.
+Shutdown wakes the worker even while RobotTime is paused.
 
-Each camera, lidar, and position source takes one initial reading and uses a
-RobotTime timer at its fastest configured output rate for subsequent reads.
-The timer wakes one worker. Multiple deadlines during a blocking read leave at
-most one pending read. A paused or backward clock waits for the outstanding
-deadline, and a forward jump skips missed periods. Acquisition and native
-publication have independent RobotTime deadlines. Camera retry backoff uses
-RobotTime. A clock read failure propagates through the runtime failure boundary.
-Shutdown explicitly wakes the worker even while RobotTime is paused.
+Board scalar outputs read the coordinator cache directly. Their wall-time
+publication continues during RobotTime pauses so consumers can see invalid or
+stale readings. Health updates every 50 ms and receipt age uses steady time so
+a stalled sensor remains observable. Native camera, lidar and position outputs
+pause when unusable. Scalar packets retain the sample with `usable=false`.
 
-Scalar payload timers retain the configured wall-time cadence so consumers
-continue to receive cached validity and loss information during a RobotTime
-pause. The 50 ms health timer and receipt-age calculations use local steady
-time so stalled physical inputs remain observable during a pause. Readiness
-requires validated data. Health reports invalid samples and acquisition errors.
-
-Every output topic has `/status` (`UInt8MultiArray`, serialized `PerceptionPacket`
-with `observation_status`) and a short `/health` String. Status includes starting,
-ready, invalid, stale, error or stopped state, optional last-valid receipt age,
-and valid/invalid/error/recovery counters. Last error/recovery timestamps and the
-last error text remain available after recovery, including brief faults. Scalar `/health` retains its existing summary.
-The status timer runs every 50 ms independently of acquisition. Configure
-`sensor.observation_policy.stale_after_ms` (positive, default 1000 ms). Native
-payload publication pauses when unusable; invalid/stale scalar packets remain
-inspectable with `usable=false`. No stale sample becomes a new measurement.
-
-Sensor construction errors are reported through status until deliberate restart;
-camera open/read failures use the recovery path described above, while
-no board session or subscription is automatically restored. Each node cancels all
-sensor records before joining them. `PerceptionInterface::RequestStop()` is a
-nonblocking terminal request, separate from final `Teardown()`. Workers perform
-final cleanup after leaving device I/O, including when initialization or a read
-throws. Completed records clean up if a later factory or thread start fails.
-Shared board release follows actuator shutdown and sensor cleanup; a position
-sensor never closes the bus to cancel another consumer's I/O.
-
-Serial feedback/read completion is bounded by the configured transport operation
-and queue budget; lidar additionally attempts its motor-stop write during cleanup.
-The OpenCV V4L2 backend cannot guarantee an interruptible open/read: its stop flag
-prevents later operations, but cannot interrupt an already blocked call. A managed
-camera process therefore relies on NodeManager's existing SIGINT/SIGTERM/SIGKILL
-escalation if graceful joining stalls. Directly embedding or launching that node
-without a supervisor does not acquire this fallback. Forced termination is visible
-in process status and cannot promise device cleanup or physical stopping. Finite
-backend budgets must also fit the configured process grace periods.
-Audio retains its separate streaming/chunk contract.
-
-## Component source layout and tests
-
-Each component's complete node and `JOSHUA_MAIN` / `RunNode<T>()` entrypoint live
-in the same `.cc` and compile directly with `ros2_cpp_binary`. `board_node.cc`
-provides the shared board runtime with a two-thread executor.
-`actuator_subscriber.cc` and `board_node.cc` each own one `ActuatorCommands`
-instance. It registers subscriptions, services, and a watchdog on the owning
-node and tears down each actuator once. The board node interlocks these gates
-before dispatching concurrent board stops. `ControlGate` owns command admission.
-
-Hardware-free tests include the same node `.cc` through narrowly visible,
-`testonly` source targets, defining `JOSHUA_NODE_TEST` to exclude only the binary
-entrypoint. Production nodes are not split into a library and separate main.
-`perception_nodes_test` covers responsive health during blocked reads, initialization
-cancellation, factory/thread rollback, cleanup failure, clock pause/jumps, and
-worker-free scalar cache fan-out. `perception_shutdown_test` runs an uninterruptible
-fake capture in a separate process and verifies the existing manager kills and
-reaps it. Actuator, bus and PTY tests preserve explicit enable, lease/recovery,
-shared ownership and concurrent stop behavior.
+Cancel all sources before joining their workers. For OpenCV, an already blocked
+capture can require NodeManager's process escalation. Keep bounded backend I/O
+within the supervisor's grace periods. See the [backend cancellation and recovery
+contract](../robot/perception/AGENTS.md#perception-backend-contract).
 
 ## Sample identity, clocks and recording
 
-The node-owned observation state assigns every distinct sample a `sample_metadata`
-record: source-instance identity, generation-local sequence, discontinuity,
-host receipt in Unix and steady nanoseconds, Linux boot clock identity, native
-units/frame, and measurement validity. Cached publication preserves identity and
-receipt timestamps. Startup, acquisition errors and device/session/subscription
-changes mark the next distinct sample as a discontinuity. Wall-clock adjustments
-do not affect monotonic freshness calculations. Host clock IDs distinguish clock
-domains; they do not establish synchronization between machines.
+Camera, lidar, position and board observation outputs publish `/metadata` and
+`/status` as serialized `PerceptionPacket` messages in `UInt8MultiArray`, plus
+a short `/health` String. Audio keeps its separate chunk stream. The metadata
+companion preserves the source packet timestamp. For atomic pairing of payload
+and metadata, select packet output. Scalar outputs already carry both.
 
-For scalar packets, the top-level `sequence_id` retains the device acquisition
-sequence. The local counter lives in `sample_metadata.sequence`. The serial
-transport stamps frames with both host clocks at receipt. The coordinator retains
-those stamps across cache reads. Freshness uses elapsed steady time since receipt.
-Sources that supply only steady time leave the Unix receipt field absent.
+Preserve the source instance, sequence, discontinuity and original receipt
+times across cached reads. Scalar `sequence_id` is the device acquisition
+sequence, while `sample_metadata.sequence` counts distinct samples within the
+source instance. A new instance, acquisition error or device/session/subscription
+change marks the next distinct sample as discontinuous.
 
-Scalar metadata also retains acquisition ticks, their scale, device boot/clock
-identity and source sequence. The original scalar timestamps and loss counters
-remain intact. Camera exposure time, lidar scan acquisition time and servo
-measurement time are unavailable through the current drivers, so acquisition
-fields stay absent. Host receipt means completed acquisition/read, not physical
-response. Source-native position is STS3215 ticks; native JointState output
-converts that position to radians. Unsupported velocity remains absent.
-
-Image, cloud and packet-aware JointState headers preserve the driver's RobotTime
-acquisition/read estimate, translated to the ROS epoch. The packet's double-second
-`timestamp` retains that estimate; `sample_metadata` carries host receipt Unix
-and steady nanoseconds separately. No physical acquisition or device clock
-mapping is inferred. Configure `observation_policy.frame_id` when a calibrated
-frame is available. Preserve the configuration defining conversions and frames.
-
-Each native topic has a `/metadata` UInt8MultiArray containing a serialized
-PerceptionPacket with the source packet timestamp and matching sample metadata. `/status` also references
-the last sample. Record those topics alongside native data. Numeric std_msgs
-have no sample ID or header, so a companion topic cannot guarantee atomic pairing.
-For exact replay/recording, select `observation_packet: true` and
-`ros2_data_type: UINT8_MULTI_ARRAY` on a position, camera or lidar publisher.
-That output carries payload and metadata in one serialized PerceptionPacket;
-scalar outputs already use this contract. Multiple outputs still share one
-acquisition. Decode with the generated perception proto; retain unknown/absent
-source timing explicitly. The scalar recorder includes the metadata in JSONL.
+Keep device acquisition ticks and their clock identity separate from host
+receipt time. Preserve an absent Unix receipt stamp if only steady time was
+recorded. A host clock ID identifies its domain without establishing cross-host
+synchronization. Image, cloud and JointState headers carry the driver's RobotTime
+estimate converted to the ROS epoch. Camera exposure, lidar acquisition and
+servo measurement times remain unknown. Scalar packets leave the top-level
+timestamp unset without a device-to-ROS mapping. See the
+[packet schema](../robot/perception/proto/perception_packet.proto) for field definitions.
