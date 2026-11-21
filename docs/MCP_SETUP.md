@@ -61,6 +61,10 @@ before rerunning setup. Doctor compares
 saved registrations with the prepared checkout, stack and config root as well
 as the current client settings; a mismatch requires attention.
 
+If Joshua is disabled for the current project in Claude Code, doctor reports
+`attention` and setup stops before preparation. Re-enable Joshua through Claude's
+`/mcp` panel, then retry. Setup and doctor preserve the disabled setting.
+
 To inspect configurations elsewhere, pass an absolute `--config-root` directory
 to `setup` and `prepare`. That actual directory is mounted read-only; MCP paths
 are relative to it. For example, `check --config so100/teleoperate.pbtxt` validates
