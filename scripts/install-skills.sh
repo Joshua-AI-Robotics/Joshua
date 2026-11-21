@@ -6,7 +6,7 @@
 # discoverable on its own — each agent reads skills from its own directory
 # (Codex $CODEX_HOME/skills, Claude Code ~/.claude/skills, ...). This script
 # symlinks every docs/skills/joshua-* into those directories. Run it once per
-# environment (and again after adding a skill). See docs/skills/README.md.
+# environment (and again after adding a skill). See docs/skills/AGENTS.md.
 #
 # The link points back at the repo, so editing a skill in docs/skills/ updates
 # what every agent sees — the repo stays the source of truth. This script never

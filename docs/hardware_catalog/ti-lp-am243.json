@@ -1,0 +1,1462 @@
+{
+  "schema_version": 2,
+  "id": "ti-lp-am243",
+  "kind": "board",
+  "manufacturer": "Texas Instruments",
+  "model": "LP-AM243",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [
+    "uart",
+    "ethercat",
+    "software-actuator-channel"
+  ],
+  "specifications": [],
+  "integration": {
+    "status": "integrated",
+    "driver": "JoshuaWireBoard / AM243",
+    "implementations": [
+      "robot/board/joshua_wire/joshua_wire_board.cc"
+    ],
+    "presets": [
+      "config/config_preset/example/am243_serial_demo.pbtxt",
+      "config/config_preset/example/am243_jw_ethercat_demo.pbtxt"
+    ],
+    "guide": "firmware/am243/AGENTS.md",
+    "support_scope": "JoshuaWire UART and explicit TI/SOES EtherCAT profiles; software-only actuator channel. TI vendor demo is historical; SOES endurance is blocked."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "mcu": "AM243x; historical images use HS-FS format",
+    "transports": [
+      "UART",
+      "EtherCAT"
+    ],
+    "firmware_guides": [
+      "firmware/am243/AGENTS.md"
+    ]
+  },
+  "limitations": [
+    "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
+    "Hardware revision and responsible maintainer are not recorded in the imported evidence."
+  ],
+  "validation_history": [
+    {
+      "id": "am243-boot-identity-2026-10-26",
+      "date": "2026-10-26",
+      "date_timezone": "UTC",
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "boot-distinct",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "session-stable",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "boot_ids": [
+          "0xc9d5fe7e",
+          "0xaf024889"
+        ],
+        "resets_per_boot": 5,
+        "identities_per_boot": 15
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "f76e9f138d4241760f5b66a429873b588c44afb39e2d9478d12ef98cca1941d1",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "### Boot identity bench record \u2014 2026-10-26 UTC\n\nAn authorized LP-AM243 run with motor power off flashed the JW TI-stack image\nbuilt with communication/target watchdogs of 20000/10000 us. Its signed appimage\nSHA-256 was `47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca`.\nThe first hardware attempt exposed a missing SA2UL firewall grant: the R5 took\na synchronous data abort while reading `0x40901000` in `SA2UL_engineEnable`.\nAdding the SDK RNG example's grant to the isolated SysConfig overlay corrected\nstartup; both UART/TI-demo and JW artifacts cross-built afterward.\n\nOver the direct `enp5s0` link, the corrected image advertised `am243-ec-jw`,\nrevision 4/layout 2, with 112-byte input/output PDOs. Two USB-C power cycles\nproduced boot IDs `0xc9d5fe7e` and `0xaf024889`. On each boot, five distinct\nsession resets and 15 correlated IDENTIFY replies preserved that boot's ID.\nThe probe used startup CoE SDOs only: it never requested OPERATIONAL or sent\nactuator configuration, enable or target commands. This verifies RNG startup\nand boot/session identity behavior on this board, not entropy quality,\nEtherCAT timing, watchdog latency or physical motor safety.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_boot_identity_2026-10-26.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Corrected image boot/session checks only; initial missing SA2UL firewall grant caused a data abort.",
+        "No entropy quality, OP traffic, watchdog latency or physical motor safety was qualified."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-jw-boot-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-jw-boot-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Direct host NIC to LP-AM243 EtherCAT; 112-byte PDO descriptor; no OP request",
+        "wiring": [],
+        "power": "Motor power disconnected; two USB-C cold boots",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "jw",
+            "artifact": "am243_ethercat_jw.release.appimage.hs_fs",
+            "sha256": "47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca",
+            "toolchain": {
+              "communication_watchdog_us": "20000",
+              "target_watchdog_us": "10000"
+            }
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "host_nic": "enp5s0",
+          "protocol": "revision 4/layout 2; CoE startup only"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-boot-identity-v1",
+        "version": 1,
+        "title": "AM243 boot identity across cold boot and session reset",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Two cold boots, five resets and fifteen correlated identities on each boot. No configuration, enable, target or OP.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "boot-distinct",
+            "capability": "ethercat",
+            "metric": "Two cold boots produce distinct boot identities",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Compare two cold-boot IDENTIFY records."
+          },
+          {
+            "id": "session-stable",
+            "capability": "ethercat",
+            "metric": "Boot identity stable across session resets",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Five resets and fifteen correlated IDENTIFY replies per boot."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-delayed-dispatch-2026-10-25",
+      "date": "2026-10-25",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "late-dispatch",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "stop-image",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "normal_exchanges": 11,
+        "final_exchanges": 12,
+        "injected_delay_ms": 150,
+        "stop_wkc": 3
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "63a992923cb18ee33d53dbf1d30ad26a6284830346231acdcab41241eeea10d2",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "## Historical delayed-dispatch bench record \u2014 2026-10-25\n\nThis record covers JW05 before the factory migration retired its TI-demo path.\n\nAn authorized AM243 bench run exercised the production `EthercatMaster` and\nSOEM backend with the pre-dispatch deadline fix. The direct `enp5s0` link\ndiscovered one `TI EtherCAT Toolkit for AM243X.R5F` slave: manufacturer\n`0xe000059d`, product `0x54490025`, revision `0x00010000`, with 8-byte input and\noutput PDOs. The existing TI demo image was used; no firmware was flashed.\n\nThe Docker Ubuntu 22 probe used a 50 ms cycle period, 5 ms process timeout,\n10 ms state-check budget and 10 s startup-operation timeout. Eleven normal\nexchanges returned WKC `3/3`; the demo echoed seed `0x5a` after the initial\npipeline delay. The probe then held the owner mutex after a completed cycle\nfor 150 ms to delay dispatch beyond the next cycle's completion deadline.\n\nOn resumption, the worker reported `DEADLINE_EXCEEDED` before dispatch. The\nexchange count advanced from 11 to 12, and that sole additional exchange\ncarried the all-zero demo stop image with WKC `3/3`. No normal output image\nwas transmitted for the expired cycle. StopCyclic and teardown returned OK.\n\nThis verifies the delayed-dispatch path against a real TI-demo slave under an\ninjected host delay. It does not establish production scheduling bounds,\nphysical motor stop timing or qualification of other NICs/slave images.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_delayed_dispatch_2026-10-25.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Uses retired TI demo host path and existing firmware, not current JW runtime qualification.",
+        "No production scheduling bound or physical stopping time was measured."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-ti-demo-delay-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-ti-demo-delay-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Host SOEM split LRD/LWR to TI demo slave; 8-byte input/output PDOs",
+        "wiring": [],
+        "power": "Not recorded; TI demo echo firmware, no motor-output verification",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "TI vendor EtherCAT demo",
+            "artifact": null,
+            "sha256": null,
+            "toolchain": {}
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "os": "Docker Ubuntu 22",
+          "nic": "enp5s0",
+          "cycle_period_ms": "50",
+          "process_timeout_ms": "5",
+          "state_check_budget_ms": "10",
+          "startup_timeout_seconds": "10"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-delayed-dispatch-v1",
+        "version": 1,
+        "title": "Historical TI demo delayed-dispatch stop path",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Eleven normal exchanges, injected 150 ms delay, then bounded stop/teardown.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "late-dispatch",
+            "capability": "ethercat",
+            "metric": "Expired normal cycle rejected before dispatch",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Inject 150 ms owner mutex hold after a completed cycle."
+          },
+          {
+            "id": "stop-image",
+            "capability": "ethercat",
+            "metric": "Only additional exchange is zero stop image with WKC 3/3",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Compare exchange count before and after injected delay."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-initial-rng-startup-failure-2026-10-26",
+      "date": "2026-10-26",
+      "date_timezone": "UTC",
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "failed",
+      "checks": [
+        {
+          "check_id": "startup",
+          "observed": false,
+          "outcome": "failed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "phase": "SA2UL_engineEnable",
+        "register": "0x40901000",
+        "failure": "synchronous data abort",
+        "reported_correction": "SDK RNG example SA2UL firewall grant added in isolated SysConfig overlay"
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "f76e9f138d4241760f5b66a429873b588c44afb39e2d9478d12ef98cca1941d1",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "### Boot identity bench record \u2014 2026-10-26 UTC\n\nAn authorized LP-AM243 run with motor power off flashed the JW TI-stack image\nbuilt with communication/target watchdogs of 20000/10000 us. Its signed appimage\nSHA-256 was `47e96a9572618330621e3612e69cc2f286c954e7309ced8479695fc7da88e0ca`.\nThe first hardware attempt exposed a missing SA2UL firewall grant: the R5 took\na synchronous data abort while reading `0x40901000` in `SA2UL_engineEnable`.\nAdding the SDK RNG example's grant to the isolated SysConfig overlay corrected\nstartup; both UART/TI-demo and JW artifacts cross-built afterward.\n\nOver the direct `enp5s0` link, the corrected image advertised `am243-ec-jw`,\nrevision 4/layout 2, with 112-byte input/output PDOs. Two USB-C power cycles\nproduced boot IDs `0xc9d5fe7e` and `0xaf024889`. On each boot, five distinct\nsession resets and 15 correlated IDENTIFY replies preserved that boot's ID.\nThe probe used startup CoE SDOs only: it never requested OPERATIONAL or sent\nactuator configuration, enable or target commands. This verifies RNG startup\nand boot/session identity behavior on this board, not entropy quality,\nEtherCAT timing, watchdog latency or physical motor safety.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_boot_identity_2026-10-26.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "The initial image hash and exact tested source commit were not retained.",
+        "Later corrected startup is a separate passing run; this initial failure must not be hidden by that success."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-initial-rng-startup-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-jw-boot-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "LP-AM243 UART console during initial JW TI-stack firmware startup.",
+        "wiring": [],
+        "power": "Motor power disconnected; two USB-C cold boots",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "jw initial image missing the SA2UL firewall grant",
+            "artifact": null,
+            "sha256": null,
+            "toolchain": {
+              "communication_watchdog_us": "20000",
+              "target_watchdog_us": "10000"
+            }
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "phase": "R5 startup before successful identification"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded.",
+          "firmware.sha256": "Only the corrected image hash is recorded; it must not be attributed to the failed image."
+        }
+      },
+      "specification": {
+        "id": "am243-rng-startup-v1",
+        "version": 1,
+        "title": "AM243 initial RNG startup check",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Initial JW TI-stack firmware boot before the SA2UL firewall grant was corrected.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "startup",
+            "capability": "ethercat",
+            "metric": "Firmware reaches operational startup without synchronous data abort",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Observe R5 startup/UART failure while SA2UL_engineEnable reads 0x40901000."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-soes-endurance-attempt-1-2026-10-26",
+      "date": "2026-10-26",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "failed",
+      "checks": [
+        {
+          "check_id": "endurance-complete",
+          "observed": false,
+          "outcome": "failed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "completed_seconds": 30,
+        "checked_rounds": 150,
+        "wkc": "3/3 before failure",
+        "failed_register": "0x0130",
+        "elapsed_us": 5071,
+        "budget_us": 5000,
+        "failed_wkc": -1
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "28487c96d9d29c852882f9eb280a02af97eb00cf21583726d06410755f4d2a49",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "#### SOES bench record \u2014 2026-10-26\n\nAn authorized LP-AM243 run with motor power off flashed the corrected SOES\nartifact, built with 5000000-us command-progress and 2000000-us target watchdogs.\nIts signed appimage SHA-256 was\n`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.\nThe console reported SOES ready without the TI slave stack. Discovery on\n`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision\n`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.\n\nTwo USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.\nEach remained stable across five session resets and 15 correlated IDENTIFY\nreplies. The production master/paired adapter probe then reached OP and verified\nCoE configuration, PDO target/feedback, exact retry, ESTOP preservation across\nsession reset, target-watchdog expiry, rejected re-enable and explicit recovery.\nThis exercised the software channel only; it did not drive physical motor GPIOs.\n\nThe planned 65-minute endurance run did **not** complete. With a 50-ms cycle,\n5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,\nit reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before\na state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A\nsecond attempt widened only the state budget to 20 ms and stopped during setup\non a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register\ntimeouts remain a qualification blocker; the runs do not establish their root\ncause or resolve the documented master-side NIC issue.\n\nThe console continued reporting uptime without a reboot or AL error. After\nboth failed attempts, a startup-CoE check confirmed the same second boot ID,\nanother five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status\nwith stop action complete and explicit recovery required. The host probe was\nclosed with the software channel stopped. Native preemption regressions cover\nthe precise interrupted-RECOVER race; this bench did not force that interleaving\non the R5 or qualify physical outputs, timing bounds or endurance.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_soes_2026-10-26.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Endurance did not complete; register timeout remains a qualification blocker.",
+        "No root cause, host NIC fix, physical outputs or timing guarantee established."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-soes-endurance-attempt-1-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-soes-bench-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Direct enp5s0 EtherCAT link to LP-AM243; SOES descriptor am243-soes, product 0x4a570002 revision 0x00020002",
+        "wiring": [],
+        "power": "Motor power disconnected; software actuator channel only",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "jw-soes",
+            "artifact": "am243_ethercat_jw_soes.release.appimage.hs_fs",
+            "sha256": "151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55",
+            "toolchain": {
+              "communication_watchdog_us": "5000000",
+              "target_watchdog_us": "2000000"
+            }
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "host_nic": "enp5s0",
+          "pdo_bytes": "112 input / 112 output",
+          "host_cycle_ms": "50",
+          "process_budget_ms": "5",
+          "state_budget_ms": "5",
+          "mailbox_step_budget_ms": "5",
+          "scheduling_guard_ms": "5"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-soes-endurance-v1",
+        "version": 1,
+        "title": "AM243 SOES planned 65-minute endurance",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "50 ms cycles, 5 ms process/mailbox budgets; state budget 5 ms then 20 ms on second attempt.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "endurance-complete",
+            "capability": "ethercat",
+            "metric": "Planned 65-minute target/feedback run completed",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Require completion without register timeout or reboot."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-soes-endurance-attempt-2-2026-10-26",
+      "date": "2026-10-26",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "failed",
+      "checks": [
+        {
+          "check_id": "endurance-complete",
+          "observed": false,
+          "outcome": "failed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "phase": "setup",
+        "state_budget_ms": 20,
+        "failed_register": "0x0805",
+        "budget_us": 5000,
+        "failed_wkc": -1
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "28487c96d9d29c852882f9eb280a02af97eb00cf21583726d06410755f4d2a49",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "#### SOES bench record \u2014 2026-10-26\n\nAn authorized LP-AM243 run with motor power off flashed the corrected SOES\nartifact, built with 5000000-us command-progress and 2000000-us target watchdogs.\nIts signed appimage SHA-256 was\n`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.\nThe console reported SOES ready without the TI slave stack. Discovery on\n`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision\n`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.\n\nTwo USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.\nEach remained stable across five session resets and 15 correlated IDENTIFY\nreplies. The production master/paired adapter probe then reached OP and verified\nCoE configuration, PDO target/feedback, exact retry, ESTOP preservation across\nsession reset, target-watchdog expiry, rejected re-enable and explicit recovery.\nThis exercised the software channel only; it did not drive physical motor GPIOs.\n\nThe planned 65-minute endurance run did **not** complete. With a 50-ms cycle,\n5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,\nit reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before\na state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A\nsecond attempt widened only the state budget to 20 ms and stopped during setup\non a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register\ntimeouts remain a qualification blocker; the runs do not establish their root\ncause or resolve the documented master-side NIC issue.\n\nThe console continued reporting uptime without a reboot or AL error. After\nboth failed attempts, a startup-CoE check confirmed the same second boot ID,\nanother five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status\nwith stop action complete and explicit recovery required. The host probe was\nclosed with the software channel stopped. Native preemption regressions cover\nthe precise interrupted-RECOVER race; this bench did not force that interleaving\non the R5 or qualify physical outputs, timing bounds or endurance.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_soes_2026-10-26.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Endurance did not complete; register timeout remains a qualification blocker.",
+        "No root cause, host NIC fix, physical outputs or timing guarantee established."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-soes-endurance-attempt-2-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-soes-bench-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Direct enp5s0 EtherCAT link to LP-AM243; SOES descriptor am243-soes, product 0x4a570002 revision 0x00020002",
+        "wiring": [],
+        "power": "Motor power disconnected; software actuator channel only",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "jw-soes",
+            "artifact": "am243_ethercat_jw_soes.release.appimage.hs_fs",
+            "sha256": "151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55",
+            "toolchain": {
+              "communication_watchdog_us": "5000000",
+              "target_watchdog_us": "2000000"
+            }
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "host_nic": "enp5s0",
+          "pdo_bytes": "112 input / 112 output",
+          "host_cycle_ms": "50",
+          "process_budget_ms": "5",
+          "state_budget_ms": "20",
+          "mailbox_step_budget_ms": "5",
+          "scheduling_guard_ms": "5"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-soes-endurance-v1",
+        "version": 1,
+        "title": "AM243 SOES planned 65-minute endurance",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "50 ms cycles, 5 ms process/mailbox budgets; state budget 5 ms then 20 ms on second attempt.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "endurance-complete",
+            "capability": "ethercat",
+            "metric": "Planned 65-minute target/feedback run completed",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Require completion without register timeout or reboot."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-soes-protocol-2026-10-26",
+      "date": "2026-10-26",
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "protocol-checks",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "boot_ids": [
+          "0x9c7cca7b",
+          "0x9986c086"
+        ],
+        "pdo_bytes": 112
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "28487c96d9d29c852882f9eb280a02af97eb00cf21583726d06410755f4d2a49",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "#### SOES bench record \u2014 2026-10-26\n\nAn authorized LP-AM243 run with motor power off flashed the corrected SOES\nartifact, built with 5000000-us command-progress and 2000000-us target watchdogs.\nIts signed appimage SHA-256 was\n`151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55`.\nThe console reported SOES ready without the TI slave stack. Discovery on\n`enp5s0` returned `Joshua AM243 JW SOES`, product `0x4a570002`, revision\n`0x00020002`, `am243-soes` descriptor and 112-byte input/output PDOs.\n\nTwo USB-C cold boots produced distinct IDs `0x9c7cca7b` and `0x9986c086`.\nEach remained stable across five session resets and 15 correlated IDENTIFY\nreplies. The production master/paired adapter probe then reached OP and verified\nCoE configuration, PDO target/feedback, exact retry, ESTOP preservation across\nsession reset, target-watchdog expiry, rejected re-enable and explicit recovery.\nThis exercised the software channel only; it did not drive physical motor GPIOs.\n\nThe planned 65-minute endurance run did **not** complete. With a 50-ms cycle,\n5-ms process/state budgets, 5-ms mailbox-step budget and 5-ms scheduling guard,\nit reached 30 seconds / 150 checked target-feedback rounds at WKC `3/3` before\na state-register read at `0x0130` exceeded its budget (5071 us, WKC `-1`). A\nsecond attempt widened only the state budget to 20 ms and stopped during setup\non a mailbox-register read at `0x0805` (5000-us budget, WKC `-1`). These register\ntimeouts remain a qualification blocker; the runs do not establish their root\ncause or resolve the documented master-side NIC issue.\n\nThe console continued reporting uptime without a reboot or AL error. After\nboth failed attempts, a startup-CoE check confirmed the same second boot ID,\nanother five resets / 15 IDENTIFY replies, and retained unavailable/ESTOP status\nwith stop action complete and explicit recovery required. The host probe was\nclosed with the software channel stopped. Native preemption regressions cover\nthe precise interrupted-RECOVER race; this bench did not force that interleaving\non the R5 or qualify physical outputs, timing bounds or endurance.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243_soes_2026-10-26.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Software actuator channel only; no physical STEP/DIR GPIO output.",
+        "Protocol checks do not qualify endurance; the separate endurance attempts failed."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-soes-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-soes-bench-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Direct enp5s0 EtherCAT link to LP-AM243; SOES descriptor am243-soes, product 0x4a570002 revision 0x00020002",
+        "wiring": [],
+        "power": "Motor power disconnected; software actuator channel only",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "jw-soes",
+            "artifact": "am243_ethercat_jw_soes.release.appimage.hs_fs",
+            "sha256": "151439ed3eab38bb68591366f2f1fed64c92c52a522e85955994b596815d6b55",
+            "toolchain": {
+              "communication_watchdog_us": "5000000",
+              "target_watchdog_us": "2000000"
+            }
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "host_nic": "enp5s0",
+          "pdo_bytes": "112 input / 112 output"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-soes-protocol-v1",
+        "version": 1,
+        "title": "AM243 SOES stationary protocol checks",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Two cold boots, session identity checks and software-channel CoE/PDO operations.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "protocol-checks",
+            "capability": "ethercat",
+            "metric": "Discovery, OP, retry, watchdog and recovery checks completed",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Production paired adapter/probe and retained console narrative."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-vendor-ethercat-undated",
+      "date": null,
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "vendor-bringup",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "reported_status": "Slave enumerated; split LRD/LWR reaches OP and WKC 3; LRW frames not returned."
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "cb3b6ea2e048a15987e86df88ad4b96ec297adcdbd8c46b751f6e6b245e4b2ea",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "# AM243 EtherCAT\n\nThe runtime now uses the separate [JoshuaWire EtherCAT profile](../../../firmware/am243/joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile).\nSee [configuration](../../../config/AGENTS.md#joshuawire-over-ethercat) and the\n[communication contract](../../../robot/comm/ethercat/AGENTS.md).\nThe TI-demo host path, codec, driver, smoke targets and preset are retired.\nFirmware build/flash assets below remain as historical bring-up material.\n\nHardware qualification is deferred because of the\n[suspected master-side NIC timing issue](../../../robot/comm/ethercat/AGENTS.md#known-master-side-nic-timing-issue).\n\n## Historical TI-Demo Hardware State\n\n- Target board: LP-AM243.\n- Firmware: TI EtherCAT simple demo booting from OSPI.\n- Validated Linux master interface: `enp5s0`; replace this with the EtherCAT\n  NIC name on your machine.\n- Detected slave:\n  - Name: `TI EtherCAT Toolkit for AM243X.R5F`\n  - Output size: 64 bits\n  - Input size: 64 bits\n  - Manufacturer: `e000059d`\n  - Product ID: `54490025`\n  - Revision: `00010000`\n\nSOEM can enumerate the slave from Linux. The current AM243 demo firmware does\nnot respond correctly to LRW cyclic process data frames: SOEM sends `0x0c` LRW\nframes, the AM243 demo does not return them, and the master reports WKC `-1`.\n\nSplit LRD/LWR process data works with the current firmware:\n\n- `scripts/run_ethercat_soem_split.sh <ethercat_interface>` reaches\n  OPERATIONAL. The validated local interface was `enp5s0`.\n- Expected working count is WKC `3`.\n- PDO seed tests show output byte 0 changing.\n- Input byte 0 follows the output seed one cycle behind.\n\n## Board Firmware Requirement\n\nThe validated slave firmware wrapper is checked into Joshua under\n`firmware/am243/ti_ethercat_simple_demo_v1`. Keep TI SDK sources, generated\nfirmware images, downloaded SOEM sources, and Beckhoff SSC sources out of\nJoshua unless their licenses are explicitly approved for vendoring.\n\nValidated firmware wrapper state:\n\n- Path: `firmware/am243/ti_ethercat_simple_demo_v1`\n- Imported from AM243 bring-up commit: `c8a41f3`\n- Joshua firmware record:\n  `firmware/am243/ti_ethercat_simple_demo_v1.md`\n- Demo: TI Industrial Communications SDK EtherCAT slave simple demo,\n  device profile `401_simple`\n- Boot target: OSPI\n- Build script:\n  `firmware/am243/ti_ethercat_simple_demo_v1/scripts/build_ethercat_simple.sh`\n- Flash script:\n  `firmware/am243/ti_ethercat_simple_demo_v1/scripts/flash_ethercat_simple.sh`\n- Flash config template:\n  `firmware/am243/ti_ethercat_simple_demo_v1/setup/ethercat_simple_sbl_ospi.cfg`\n\nThe retired TI-demo host path expected the board to enumerate as:\n\n```text\nName: TI EtherCAT Toolkit for AM243X.R5F\nMan:  e000059d\nID:   54490025\nRev:  00010000\nPDO:  8 output bytes, 8 input bytes\n```\n\nKnown setup bumps from bring-up:\n\n- MCU+ SDK 12.00.00.26 did not contain the EtherCAT examples used here. The\n  working local bring-up used Industrial Communications SDK 09.00.00.03.\n- Industrial Communications SDK 09 SysConfig metadata was incompatible with\n  SysConfig 1.26.3. Use SysConfig 1.17.0 for that SDK generation flow.\n- The PRU compiler installer may create a nested tool root. On the validated\n  machine, the usable PRU compiler path was\n  `~/ti/ti-cgt-pru_2.3.3/ti-cgt-pru_2.3.3`.\n- The SDK docs referenced TI ARM Clang 2.1.3.LTS, but that download URL\n  resolved to a TI 404 page during bring-up. The SDK-shipped `401_simple` demo\n  was verified locally with CCS 21 ARM Clang 5.1.1.\n- Start with `ethercat_slave_demo/device_profiles/401_simple`, not\n  `ethercat_slave_beckhoff_ssc_demo`. The Beckhoff SSC demo requires external\n  Beckhoff/ETG SSC 5i13 source; without it, the build fails on missing\n  `ecat_def.h`.\n- The flash config for the simple demo uses the Industrial Communications SDK\n  09 SBL and `.appimage.hs_fs` application image format, not the MCU+ SDK 12\n  Hello World `.mcelf.hs_fs` format.\n- The SDK-shipped EtherCAT simple demo uses an evaluation stack. If UART prints\n  `EVAL VERSION EXPIRED`, the EtherCAT slave stops responding and SOEM will no\n  longer connect. Power-cycle or reset the LP-AM243 to restart the demo timer,\n  or move to TI's licensed Beckhoff SSC flow for unlimited runtime.\n\n## Current Runtime Boundaries\n\nAM243 serial and JW EtherCAT both use the shared `JoshuaWireBoard` engine.\nSerial uses JW 0.2.0 with on-wire revision 4. EtherCAT requires explicit JW selection,\n`MESSAGE_AND_CYCLIC`, and the matching firmware; old TI-demo configs fail with\nmigration errors, not automatic protocol conversion.\n\nCommFactory assembles one `EthercatMaster` per NIC, backed by\n`SoemEthercatBackend`. Per-slave `JoshuaWireEthercatTransport` endpoints sit\nabove that master and supply management/cyclic capabilities to the board.\nOnly the master worker accesses SOEM. Motor drivers see `BoardChannel`,\nnever a NIC or raw PDO backend.\n\nThe JW profile uses 112-byte PDOs and CoE management objects, not the TI demo's\n8-byte seed/echo mapping. The firmware remains software-channel-only; these\nchecks do not establish motor-output safety. No replacement hardware test\nutility or runnable JW preset was added to the repository.\n\nThe serial example `config/config_preset/example/am243_serial_demo.pbtxt`\nremains. Use the [JW serial validation guide](../../JOSHUA_WIRE_VALIDATION.md)\nfor the maintained serial probe. Firmware flashing is always a separate,\noperator-confirmed action.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243-vendor-ethercat.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Historical vendor firmware; not evidence of current JoshuaWire runtime compatibility.",
+        "Exact test date, software revision, operator and reviewer are not recorded."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date": "No test date is recorded; Git import/commit dates are not test dates.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-vendor-ethercat-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-vendor-ethercat-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Vendor bring-up setup retained in evidence; not a current JW runtime setup",
+        "wiring": [],
+        "power": "USB board power; motor power state not recorded",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "Industrial SDK TI simple demo",
+            "artifact": null,
+            "sha256": null,
+            "toolchain": {}
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "Industrial Communications SDK": "09.00.00.03",
+          "SysConfig": "1.17.0",
+          "ARM Clang": "5.1.1",
+          "host_nic": "enp5s0"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-vendor-ethercat-v1",
+        "version": 1,
+        "title": "Historical AM243 vendor EtherCAT seed/echo",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Historical vendor bring-up; exact workload/duration not recorded.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "vendor-bringup",
+            "capability": "ethercat",
+            "metric": "Historical AM243 vendor EtherCAT seed/echo",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "SOEM enumeration and split LRD/LWR OP seed/echo observation."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-vendor-hello-world-undated",
+      "date": null,
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "vendor-bringup",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "reported_status": "Booted Hello World from OSPI without CCS."
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "9e92723db051118b1f35752cd87e6be32d25a2db07dbc87871b398993ceeabbc",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "# LP-AM243 Bring-up Notes\n\n## Objective\n\nBring up the TI LP-AM243 LaunchPad and establish a reproducible development environment for Joshua.\n\nStatus:\n\n- \u2705 Board recognized\n- \u2705 XDS110 debugger working\n- \u2705 UART working\n- \u2705 MCU+ SDK build successful\n- \u2705 Hello World executed from CCS\n- \u2705 Hello World flashed to OSPI\n- \u2705 Hello World boots after reset/power-on without CCS\n\n---\n\n# Hardware\n\nBoard\n\n- TI LP-AM243 LaunchPad (595-LP-AM243)\n\nConnections\n\n- USB-C \u2192 Power\n- Micro-USB \u2192 XDS110 Debug + UART\n\nUART\n\n```\n/dev/ttyACM0\n```\n\nBoot modes\n\n```\nUART flashing: SW4 BOOTMODE [1:8] = 11100000\nOSPI boot:     SW4 BOOTMODE [1:8] = 01000100\n```\n\nUSB Device\n\n```\n0451:bef3 Texas Instruments XDS110\n```\n\n---\n\n# Software Versions\n\n| Component | Version |\n|-----------|---------|\n| Ubuntu | 24.04 |\n| MCU+ SDK | 12.00.00.26 |\n| CCS | 21.0.0.00014 |\n| SysConfig | 1.26.3 |\n| ARM LLVM | 5.1.1.LTS |\n\n---\n\n# Required Linux Packages\n\n```bash\nsudo apt install \\\n    libusb-0.1-4 \\\n    libc6-i386 \\\n    libpython3.9 \\\n    python3-pyelftools \\\n    python3-construct\n```\n\n---\n\n# CCS Installation\n\nInstalled at\n\n```\n~/ti/ccs2100\n```\n\nExecutable\n\n```bash\n~/ti/ccs2100/ccs/theia/ccstudio\n```\n\n---\n\n# SysConfig\n\nInstalled at\n\n```\n~/ti/sysconfig_1.26.3\n```\n\n---\n\n# MCU+ SDK\n\nInstalled at\n\n```\n~/ti/mcu_plus_sdk_am243x_12_00_00_26\n```\n\n---\n\n# imports.mak modifications\n\nLinux section\n\n```make\nexport TOOLS_PATH?=$(HOME)/ti\nexport CCS_PATH?=$(TOOLS_PATH)/ccs2100/ccs\n```\n\nSysConfig\n\n```make\nSYSCFG_PATH ?= $(TOOLS_PATH)/sysconfig_1.26.3\n```\n\nCompiler\n\n```make\nCGT_TI_ARM_CLANG_PATH=$(CCS_PATH)/tools/compiler/ti-cgt-armllvm_5.1.1.LTS\n```\n\n---\n\n# Python Dependencies\n\nMCU+ SDK image generation requires\n\n- pyelftools\n- construct\n\nInstall\n\n```bash\nsudo apt install python3-pyelftools python3-construct\n```\n\n---\n\n# CCS Theia Fix\n\nRequired on Ubuntu\n\n```bash\nsudo chown root:root ~/ti/ccs2100/ccs/theia/chrome-sandbox\nsudo chmod 4755 ~/ti/ccs2100/ccs/theia/chrome-sandbox\n```\n\n---\n\n# XDS110\n\nCCS automatically upgraded firmware\n\n```\n3.0.0.15\n    \u2193\n3.0.0.43\n```\n\n---\n\n# Build\n\n```bash\ncd ~/ti/mcu_plus_sdk_am243x_12_00_00_26\n\nmake -C examples/hello_world/am243x-lp/r5fss0-0_nortos/ti-arm-clang all\n```\n\nExpected output\n\n```\nBoot image ... hello_world.release.mcelf.hs_fs Done !!!\n```\n\n---\n\n# Setup workflow\n\n```bash\ncd firmware/am243/ti_ethercat_simple_demo_v1\nsource scripts/activate.sh\npython3 -m pip install --upgrade -r setup/requirements.txt\npython3 setup/configure_sdk.py\nscripts/build.sh\n```\n\n# Flash OSPI for Boot-on-Power\n\nAfter building Hello World, flash the OSPI image so the board boots the app after power-on without CCS.\n\n1. Power off the LP-AM243.\n2. Set UART flashing boot mode:\n\n   ```\n   SW4 BOOTMODE [1:8] = 11100000\n   ```\n\n3. Power on the LP-AM243.\n4. Confirm the ROM is in UART boot mode. The correct UART port prints `C` every 2-3 seconds:\n\n   ```bash\n   picocom -b 115200 /dev/ttyACM0\n   ```\n\n   Exit picocom before flashing:\n\n   ```\n   Ctrl+A, then Ctrl+X\n   ```\n\n5. Flash the OSPI bootloader and Hello World application:\n\n```bash\ncd firmware/am243/ti_ethercat_simple_demo_v1\nscripts/flash.sh /dev/ttyACM0\n```\n\nThe flash script uses `uart_uniflash.py` from the TI SDK and the `setup/hello_world_sbl_ospi.cfg` configuration.\n\nExpected final flash output\n\n```\nAll commands from config file are executed !!!\n```\n\nAfter flashing:\n\n1. Power off the LP-AM243.\n2. Set OSPI boot mode:\n\n   ```\n   SW4 BOOTMODE [1:8] = 01000100\n   ```\n\n3. Power on or reset the board.\n4. Open the UART console:\n\n   ```bash\n   picocom -b 115200 /dev/ttyACM0\n   ```\n\n---\n\n# Debug\n\nOpen project in CCS.\n\nRun\n\n```\nRun \u2192 Start Debugging\n```\n\nProgram downloads through XDS110.\n\n---\n\n# Verification\n\nObserved output\n\n```\nMAIN_Cortex_R5_0_0: Hello World!\n```\n\nObserved boot-from-OSPI output\n\n```\nDMSC Firmware Version 12.0.2--v12.00.02\nKPI_DATA: [BOOTLOADER_PROFILE] Boot Media       : NOR SPI FLASH\nImage loading done, switching to application ...\nHello World!\n```\n\nThis confirms\n\n- JTAG working\n- XDS110 working\n- Compiler working\n- Linker working\n- Image generation working\n- Download working\n- UART working\n- OSPI flashing working\n- OSPI boot working\n\n---\n\n# Known Issues\n\n## UART Flashing Stuck at 0%\n\nIf `uart_uniflash.py` shows the flash writer transfer stuck at `0%`, the board is usually not in UART flashing boot mode or the wrong `/dev/ttyACM*` port is being used.\n\nChecks:\n\n- Set UART flashing boot mode:\n\n  ```text\n  SW4 BOOTMODE [1:8] = 11100000\n  ```\n\n- Power-cycle after changing BOOTMODE.\n- Confirm the ROM is alive. The correct UART port prints `C` every 2-3 seconds at 115200 baud:\n\n  ```bash\n  picocom -b 115200 /dev/ttyACM0\n  ```\n\n- Close `picocom` before running a flash script. Only one process can own `/dev/ttyACM0`.\n- If output is missing, check both ACM ports exposed by XDS110:\n\n  ```bash\n  ls /dev/ttyACM*\n  picocom -b 115200 /dev/ttyACM0\n  picocom -b 115200 /dev/ttyACM1\n  ```\n\nDo not use the board LED as proof that UART flashing is progressing. The reliable indicators are ROM `C` output, `uart_uniflash.py` progress, and final `All commands from config file are executed !!!`.\n\n## Power Cycle\n\nPower-cycle means remove board power, wait a moment, then reconnect power. On this setup, USB-C powers the board and Micro-USB provides XDS110/UART.\n\nAfter a successful UART flash, switch from UART flashing mode back to OSPI boot mode before expecting the flashed app to run:\n\n```text\nSW4 BOOTMODE [1:8] = 01000100\n```\n\n## LIBUSB_ERROR_ACCESS\n\nUsually fixed by\n\n- reconnecting XDS110\n- installing udev rules\n- verifying\n\n```bash\nls -l /dev/bus/usb/001/XXX\n```\n\n---\n\n# Next Steps\n\n1. Industrial Communications SDK\n2. EtherCAT Slave example\n3. TMC5160 evaluation\n4. Joshua hardware abstraction layer\n5. Joshua EtherCAT integration\n",
+          "source_path": "docs/hardware_catalog/evidence/am243-vendor-hello-world.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Historical vendor firmware; not evidence of current JoshuaWire runtime compatibility.",
+        "Exact test date, software revision, operator and reviewer are not recorded."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date": "No test date is recorded; Git import/commit dates are not test dates.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-vendor-hello-world-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-vendor-hello-world-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Vendor bring-up setup retained in evidence; not a current JW runtime setup",
+        "wiring": [],
+        "power": "USB board power; motor power state not recorded",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "MCU+ SDK Hello World",
+            "artifact": null,
+            "sha256": null,
+            "toolchain": {}
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "os": "Ubuntu 24.04",
+          "MCU+ SDK": "12.00.00.26",
+          "CCS": "21.0.0.00014",
+          "SysConfig": "1.26.3",
+          "ARM LLVM": "5.1.1.LTS"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-vendor-hello-world-v1",
+        "version": 1,
+        "title": "Historical AM243 vendor Hello World OSPI boot",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "Historical vendor bring-up; exact workload/duration not recorded.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "vendor-bringup",
+            "capability": "uart",
+            "metric": "Historical AM243 vendor Hello World OSPI boot",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "Observe boot output after reset/power-on."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "am243-vendor-lrw-failure-undated",
+      "date": null,
+      "date_timezone": null,
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": null,
+        "source_state": "Not recorded in the original bench narrative.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "failed",
+      "checks": [
+        {
+          "check_id": "lrw-response",
+          "observed": false,
+          "outcome": "failed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "ethercat_command": "0x0c LRW",
+        "working_count": -1,
+        "returned_frames": false
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "cb3b6ea2e048a15987e86df88ad4b96ec297adcdbd8c46b751f6e6b245e4b2ea",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "# AM243 EtherCAT\n\nThe runtime now uses the separate [JoshuaWire EtherCAT profile](../../../firmware/am243/joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile).\nSee [configuration](../../../config/AGENTS.md#joshuawire-over-ethercat) and the\n[communication contract](../../../robot/comm/ethercat/AGENTS.md).\nThe TI-demo host path, codec, driver, smoke targets and preset are retired.\nFirmware build/flash assets below remain as historical bring-up material.\n\nHardware qualification is deferred because of the\n[suspected master-side NIC timing issue](../../../robot/comm/ethercat/AGENTS.md#known-master-side-nic-timing-issue).\n\n## Historical TI-Demo Hardware State\n\n- Target board: LP-AM243.\n- Firmware: TI EtherCAT simple demo booting from OSPI.\n- Validated Linux master interface: `enp5s0`; replace this with the EtherCAT\n  NIC name on your machine.\n- Detected slave:\n  - Name: `TI EtherCAT Toolkit for AM243X.R5F`\n  - Output size: 64 bits\n  - Input size: 64 bits\n  - Manufacturer: `e000059d`\n  - Product ID: `54490025`\n  - Revision: `00010000`\n\nSOEM can enumerate the slave from Linux. The current AM243 demo firmware does\nnot respond correctly to LRW cyclic process data frames: SOEM sends `0x0c` LRW\nframes, the AM243 demo does not return them, and the master reports WKC `-1`.\n\nSplit LRD/LWR process data works with the current firmware:\n\n- `scripts/run_ethercat_soem_split.sh <ethercat_interface>` reaches\n  OPERATIONAL. The validated local interface was `enp5s0`.\n- Expected working count is WKC `3`.\n- PDO seed tests show output byte 0 changing.\n- Input byte 0 follows the output seed one cycle behind.\n\n## Board Firmware Requirement\n\nThe validated slave firmware wrapper is checked into Joshua under\n`firmware/am243/ti_ethercat_simple_demo_v1`. Keep TI SDK sources, generated\nfirmware images, downloaded SOEM sources, and Beckhoff SSC sources out of\nJoshua unless their licenses are explicitly approved for vendoring.\n\nValidated firmware wrapper state:\n\n- Path: `firmware/am243/ti_ethercat_simple_demo_v1`\n- Imported from AM243 bring-up commit: `c8a41f3`\n- Joshua firmware record:\n  `firmware/am243/ti_ethercat_simple_demo_v1.md`\n- Demo: TI Industrial Communications SDK EtherCAT slave simple demo,\n  device profile `401_simple`\n- Boot target: OSPI\n- Build script:\n  `firmware/am243/ti_ethercat_simple_demo_v1/scripts/build_ethercat_simple.sh`\n- Flash script:\n  `firmware/am243/ti_ethercat_simple_demo_v1/scripts/flash_ethercat_simple.sh`\n- Flash config template:\n  `firmware/am243/ti_ethercat_simple_demo_v1/setup/ethercat_simple_sbl_ospi.cfg`\n\nThe retired TI-demo host path expected the board to enumerate as:\n\n```text\nName: TI EtherCAT Toolkit for AM243X.R5F\nMan:  e000059d\nID:   54490025\nRev:  00010000\nPDO:  8 output bytes, 8 input bytes\n```\n\nKnown setup bumps from bring-up:\n\n- MCU+ SDK 12.00.00.26 did not contain the EtherCAT examples used here. The\n  working local bring-up used Industrial Communications SDK 09.00.00.03.\n- Industrial Communications SDK 09 SysConfig metadata was incompatible with\n  SysConfig 1.26.3. Use SysConfig 1.17.0 for that SDK generation flow.\n- The PRU compiler installer may create a nested tool root. On the validated\n  machine, the usable PRU compiler path was\n  `~/ti/ti-cgt-pru_2.3.3/ti-cgt-pru_2.3.3`.\n- The SDK docs referenced TI ARM Clang 2.1.3.LTS, but that download URL\n  resolved to a TI 404 page during bring-up. The SDK-shipped `401_simple` demo\n  was verified locally with CCS 21 ARM Clang 5.1.1.\n- Start with `ethercat_slave_demo/device_profiles/401_simple`, not\n  `ethercat_slave_beckhoff_ssc_demo`. The Beckhoff SSC demo requires external\n  Beckhoff/ETG SSC 5i13 source; without it, the build fails on missing\n  `ecat_def.h`.\n- The flash config for the simple demo uses the Industrial Communications SDK\n  09 SBL and `.appimage.hs_fs` application image format, not the MCU+ SDK 12\n  Hello World `.mcelf.hs_fs` format.\n- The SDK-shipped EtherCAT simple demo uses an evaluation stack. If UART prints\n  `EVAL VERSION EXPIRED`, the EtherCAT slave stops responding and SOEM will no\n  longer connect. Power-cycle or reset the LP-AM243 to restart the demo timer,\n  or move to TI's licensed Beckhoff SSC flow for unlimited runtime.\n\n## Current Runtime Boundaries\n\nAM243 serial and JW EtherCAT both use the shared `JoshuaWireBoard` engine.\nSerial uses JW 0.2.0 with on-wire revision 4. EtherCAT requires explicit JW selection,\n`MESSAGE_AND_CYCLIC`, and the matching firmware; old TI-demo configs fail with\nmigration errors, not automatic protocol conversion.\n\nCommFactory assembles one `EthercatMaster` per NIC, backed by\n`SoemEthercatBackend`. Per-slave `JoshuaWireEthercatTransport` endpoints sit\nabove that master and supply management/cyclic capabilities to the board.\nOnly the master worker accesses SOEM. Motor drivers see `BoardChannel`,\nnever a NIC or raw PDO backend.\n\nThe JW profile uses 112-byte PDOs and CoE management objects, not the TI demo's\n8-byte seed/echo mapping. The firmware remains software-channel-only; these\nchecks do not establish motor-output safety. No replacement hardware test\nutility or runnable JW preset was added to the repository.\n\nThe serial example `config/config_preset/example/am243_serial_demo.pbtxt`\nremains. Use the [JW serial validation guide](../../JOSHUA_WIRE_VALIDATION.md)\nfor the maintained serial probe. Firmware flashing is always a separate,\noperator-confirmed action.\n",
+          "source_path": "docs/hardware_catalog/evidence/am243-vendor-ethercat.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Historical TI vendor firmware does not return the recorded LRW frames; split LRD/LWR passes separately.",
+        "Test date, exact source/firmware, operator, root cause and relevance to current JW firmware are not established."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "date": "No test date is recorded; Git import/commit dates are not test dates.",
+        "date_timezone": "Original bench date does not specify a timezone.",
+        "software.joshua_commit": "Exact tested Joshua commit was not recorded; documentation history is not a tested commit.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "am243-vendor-ethercat-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "ti-lp-am243",
+            "unit_alias": "am243-vendor-ethercat-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "Vendor bring-up setup retained in evidence; not a current JW runtime setup",
+        "wiring": [],
+        "power": "USB board power; motor power state not recorded",
+        "firmware": [
+          {
+            "subject": "device",
+            "profile": "Industrial SDK TI simple demo",
+            "artifact": null,
+            "sha256": null,
+            "toolchain": {}
+          }
+        ],
+        "configuration": [],
+        "environment": {
+          "Industrial Communications SDK": "09.00.00.03",
+          "SysConfig": "1.17.0",
+          "ARM Clang": "5.1.1",
+          "host_nic": "enp5s0"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "am243-vendor-lrw-v1",
+        "version": 1,
+        "title": "Historical vendor demo LRW cyclic process-data probe",
+        "kinds": [
+          "board"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "SOEM LRW cyclic frames to the TI demo slave; exact repetition count/duration not recorded.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "lrw-response",
+            "capability": "ethercat",
+            "metric": "LRW frame returns valid working count",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "SOEM transmits command 0x0c LRW; inspect response/working count."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    }
+  ],
+  "support_history": [
+    {
+      "id": "ti-lp-am243-historical-assessment",
+      "capabilities": [
+        "ethercat",
+        "uart"
+      ],
+      "run_ids": [
+        "am243-boot-identity-2026-10-26",
+        "am243-delayed-dispatch-2026-10-25",
+        "am243-initial-rng-startup-failure-2026-10-26",
+        "am243-soes-endurance-attempt-1-2026-10-26",
+        "am243-soes-endurance-attempt-2-2026-10-26",
+        "am243-soes-protocol-2026-10-26",
+        "am243-vendor-ethercat-undated",
+        "am243-vendor-hello-world-undated",
+        "am243-vendor-lrw-failure-undated"
+      ],
+      "status": "historical_unreviewed",
+      "scope": "Imported bench narratives only. No new execution, reviewer attribution or broader support qualification.",
+      "validated_at": null,
+      "validated_by": null,
+      "review_reference": null,
+      "limitations": [
+        "Review identities and exact times were not recorded.",
+        "Consult each failed and successful run; protocol results do not establish physical outputs, stopping or endurance."
+      ],
+      "supersedes": null
+    }
+  ]
+}

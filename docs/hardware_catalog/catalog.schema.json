@@ -1,0 +1,1685 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:joshua:hardware-catalog:2",
+  "title": "One Joshua device and its integration/validation history",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "kind": {
+      "enum": [
+        "board",
+        "camera",
+        "actuator",
+        "motor_driver",
+        "sensor",
+        "transport_adapter",
+        "host",
+        "power",
+        "assembly",
+        "other"
+      ]
+    },
+    "manufacturer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x1f]*$"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\x00-\\x1f]*$"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "maxProperties": 32
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "specifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "value": {
+            "type": [
+              "number",
+              "string",
+              "boolean"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "conditions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "provenance": {
+            "enum": [
+              "manufacturer",
+              "configured",
+              "measured"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "unit",
+          "conditions",
+          "provenance",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "integration": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "candidate",
+            "integrated",
+            "unsupported",
+            "retired"
+          ]
+        },
+        "driver": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "implementations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+            "maxLength": 1024
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "presets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+            "maxLength": 1024
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "guide": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+          "maxLength": 1024
+        },
+        "support_scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        }
+      },
+      "required": [
+        "status",
+        "driver",
+        "implementations",
+        "presets",
+        "guide",
+        "support_scope"
+      ],
+      "additionalProperties": false
+    },
+    "documentation": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "maintainers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/person"
+      },
+      "minItems": 0,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "category_details": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^[^\\x00-\\x1f]*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 256
+    },
+    "validation_history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "support_history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assessment"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "model_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "run_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "model_order",
+        "run_order"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "manufacturer",
+    "model",
+    "aliases",
+    "revisions",
+    "identifiers",
+    "capabilities",
+    "specifications",
+    "integration",
+    "documentation",
+    "maintainers",
+    "category_details",
+    "limitations",
+    "validation_history",
+    "support_history"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "board"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "mcu": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "transports": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "firmware_guides": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "mcu",
+              "transports",
+              "firmware_guides"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "camera"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "capture_modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timestamp_semantics": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "capture_modes",
+              "timestamp_semantics"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "actuator"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "units": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "feedback": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "load": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "units",
+              "feedback",
+              "load"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "motor_driver"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "electrical_limits": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "modes",
+              "electrical_limits"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "sensor"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "units": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "calibration": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "quantity",
+              "units",
+              "calibration"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "transport_adapter"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "interface": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "chipset": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "topology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "interface",
+              "chipset",
+              "topology"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "host"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "architecture": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "os_kernel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resources": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "architecture",
+              "os_kernel",
+              "resources"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "power"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "voltage": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "current_limit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "protection": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "voltage",
+              "current_limit",
+              "protection"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "assembly"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "topology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "parts",
+              "topology"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "other"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "category_details": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "person": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "enum": [
+            "github",
+            "other"
+          ]
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?=.*\\S)[^\\x00-\\x1f]*$"
+        },
+        "organization": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "username",
+        "organization"
+      ],
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "availability": {
+          "enum": [
+            "retained",
+            "not_retained",
+            "external",
+            "inline"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "required": [
+        "id",
+        "sha256",
+        "media_type",
+        "availability",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "capability": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "gte",
+            "lte",
+            "between"
+          ]
+        },
+        "expected": {
+          "type": [
+            "number",
+            "boolean",
+            "string",
+            "array"
+          ]
+        },
+        "measurement_method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        }
+      },
+      "required": [
+        "id",
+        "capability",
+        "metric",
+        "unit",
+        "operator",
+        "expected",
+        "measurement_method"
+      ],
+      "additionalProperties": false
+    },
+    "setup": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+              },
+              "hardware_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+              },
+              "unit_alias": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x1f]*$"
+              },
+              "revision": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^[^\\x00-\\x1f]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "role",
+              "hardware_id",
+              "unit_alias",
+              "revision"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "topology": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "wiring": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "power": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "firmware": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+              },
+              "profile": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x1f]*$"
+              },
+              "artifact": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^[^\\x00-\\x1f]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sha256": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolchain": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^[^\\x00-\\x1f]*$"
+                }
+              }
+            },
+            "required": [
+              "subject",
+              "profile",
+              "artifact",
+              "sha256",
+              "toolchain"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "configuration": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+                "maxLength": 1024
+              },
+              "sha256": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "overrides": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^[^\\x00-\\x1f]*$"
+                },
+                "minItems": 0,
+                "uniqueItems": true,
+                "maxItems": 256
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "overrides"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minProperties": 1
+        },
+        "calibration": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 0,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "unknowns": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "subjects",
+        "topology",
+        "wiring",
+        "power",
+        "firmware",
+        "configuration",
+        "environment",
+        "calibration",
+        "conditions",
+        "unknowns"
+      ],
+      "additionalProperties": false
+    },
+    "specification": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "criteria_provenance": {
+          "enum": [
+            "recorded_before_run",
+            "historical_reconstruction",
+            "proposed"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\\\s]+$",
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "procedure": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "workload": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "measurement_point": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "clock_domains": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "required_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "title",
+        "kinds",
+        "criteria_provenance",
+        "source",
+        "prerequisites",
+        "procedure",
+        "workload",
+        "measurement_point",
+        "clock_domains",
+        "checks",
+        "required_evidence",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "date_timezone": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executed_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/person"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validated_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/person"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "organization": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_reference": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_status": {
+          "enum": [
+            "unreviewed",
+            "reviewed",
+            "independently_reproduced"
+          ]
+        },
+        "provenance": {
+          "enum": [
+            "historical",
+            "complete"
+          ]
+        },
+        "software": {
+          "type": "object",
+          "properties": {
+            "joshua_commit": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_state": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            "build_flags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x1f]*$"
+              },
+              "minItems": 0,
+              "uniqueItems": true,
+              "maxItems": 256
+            },
+            "container_digest": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^[^\\x00-\\x1f]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "joshua_commit",
+            "source_state",
+            "build_flags",
+            "container_digest"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "enum": [
+            "passed",
+            "failed",
+            "inconclusive",
+            "not_run"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "check_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+              },
+              "observed": {
+                "anyOf": [
+                  {
+                    "type": [
+                      "number",
+                      "boolean",
+                      "string"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "outcome": {
+                "enum": [
+                  "passed",
+                  "failed",
+                  "inconclusive",
+                  "not_run"
+                ]
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+                },
+                "minItems": 1,
+                "uniqueItems": true,
+                "maxItems": 256
+              }
+            },
+            "required": [
+              "check_id",
+              "observed",
+              "outcome",
+              "evidence_ids"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "measurements": {
+          "type": "object"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "unknowns": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          }
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reproduces": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "setup": {
+          "$ref": "#/$defs/setup"
+        },
+        "specification": {
+          "$ref": "#/$defs/specification"
+        }
+      },
+      "required": [
+        "id",
+        "date",
+        "date_timezone",
+        "started_at",
+        "completed_at",
+        "executed_by",
+        "validated_at",
+        "validated_by",
+        "organization",
+        "review_reference",
+        "review_status",
+        "provenance",
+        "software",
+        "result",
+        "checks",
+        "measurements",
+        "evidence",
+        "limitations",
+        "unknowns",
+        "supersedes",
+        "reproduces",
+        "setup",
+        "specification"
+      ],
+      "additionalProperties": false
+    },
+    "assessment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "run_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "status": {
+          "enum": [
+            "historical_unreviewed",
+            "supported",
+            "limited",
+            "unsupported",
+            "regression"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\x00-\\x1f]*$"
+        },
+        "validated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validated_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/person"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_reference": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x1f]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x1f]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "capabilities",
+        "run_ids",
+        "status",
+        "scope",
+        "validated_at",
+        "validated_by",
+        "review_reference",
+        "limitations",
+        "supersedes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

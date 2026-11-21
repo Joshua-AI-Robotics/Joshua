@@ -3,7 +3,7 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 package(default_visibility = ["//visibility:public"])
 
 # Host-side Pybricks/SPIKE bring-up tooling. Deliberately NOT under robot/:
-# the Python robot layer was removed in docs/BOARD_LAYER_RFC.md §10 Phase 9
+# the Python robot layer was removed in robot/board/AGENTS.md
 # and robot/ is C++ only. Joshua has no SPIKE board type any more, so this is
 # the only way to drive a hub; nothing on the runtime path depends on it.
 

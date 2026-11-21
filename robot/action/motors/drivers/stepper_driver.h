@@ -16,7 +16,7 @@ namespace robot::action {
 // (max pulse rate, direction inversion) live in the board
 // (TeensyBoard/ArduinoBoard) so the same channel abstraction works no
 // matter which MCU or transport is driving the TB6600 underneath
-// (docs/BOARD_LAYER_RFC.md §5.4, §10 Phase 5). Board- and
+// (see robot/board/AGENTS.md). Board- and
 // transport-agnostic: no comm headers, no board headers, no #ifdefs.
 class StepperDriver : public robot::action::ActuatorInterface {
  public:
@@ -35,7 +35,7 @@ class StepperDriver : public robot::action::ActuatorInterface {
   absl::Status SetPosition(float angle_deg) override;
   // TB6600's ENA pin is a binary holding-torque gate, not a continuous
   // target, so this gates Enable()/Disable() like Sts3215Driver's torque-
-  // enable register (docs/BOARD_LAYER_RFC.md §12.7, resolved in
+  // enable register (robot/board/AGENTS.md, resolved in
   // robot/board/interfaces/board_channel.h) rather than staging
   // TargetMode::kTorque.
   absl::Status SetTorque(float torque) override;

@@ -5,7 +5,7 @@ Usage (unified config -- launched from Docker):
         docker compose run --rm run-u22
 
     # Isaac Sim viewer needs a preset with sim_backend: SIM_BACKEND_ISAAC_SIM;
-    # none ships with the repo (see simulation/README.md). With one of your
+    # none ships with the repo (see simulation/AGENTS.md). With one of your
     # own, and Isaac Lab installed:
     CONFIG=<your_isaac_preset>.pbtxt \
         docker compose -f docker-compose.yml -f docker-compose.isaac.yml \

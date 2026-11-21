@@ -8,7 +8,7 @@ namespace {
 // Expected bytes below are the pre-board-layer Sts3215Driver/Sts3215Encoder's
 // own checksum arithmetic, recomputed by hand from the original
 // create_torque_packet/create_read_position_packet implementations
-// (docs/BOARD_LAYER_RFC.md §10 Phase 4 acceptance bar: byte-identical bus
+// (robot/board/AGENTS.md acceptance bar: byte-identical bus
 // traffic for the register writes that carry over unchanged).
 
 TEST(FeetechProtocolTest, TorqueEnableWriteMatchesLegacyBytes) {

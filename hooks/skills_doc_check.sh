@@ -3,16 +3,16 @@
 #
 # docs/skills/ is the single source of truth for Joshua's skills;
 # scripts/install-skills.sh links them into each agent's real skill directory
-# (see docs/skills/README.md). A malformed or unindexed skill therefore rots
+# (see docs/skills/AGENTS.md). A malformed or unindexed skill therefore rots
 # silently — it installs, but an agent that loads it gets broken frontmatter or
 # a dead reference, and nothing else catches it. This guard is blocking in CI
 # for the same reason hooks/agents_doc_check.sh is: stale routing an agent will
-# follow is worse than none. See docs/AGENTS_RFC.md §5.
+# follow is worse than none. See docs/AGENTS.md.
 #
 # Checks, all blocking:
 #   1. every docs/skills/<name>/ has a SKILL.md with `name:` and `description:`
 #      frontmatter, and `name:` matches the directory name;
-#   2. every skill directory is listed in docs/skills/README.md;
+#   2. every skill directory is listed in docs/skills/AGENTS.md;
 #   3. Markdown links and @imports *inside* each SKILL.md resolve.
 #
 # Usage: hooks/skills_doc_check.sh
@@ -22,7 +22,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 SKILLS_DIR="docs/skills"
-INDEX="$SKILLS_DIR/README.md"
+INDEX="$SKILLS_DIR/AGENTS.md"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required by $0" >&2
@@ -99,13 +99,13 @@ done < <(find "$SKILLS_DIR" -mindepth 2 -maxdepth 2 -name SKILL.md \
 
 # Catch a skill authored as a flat file (docs/skills/joshua-x.md) instead of a
 # directory. Both the guard and the installer key off directories, so a flat
-# file would pass silently and never install. README.md is the one allowed
+# file would pass silently and never install. AGENTS.md is the one allowed
 # top-level file.
 while IFS= read -r stray; do
   [[ -z "$stray" ]] && continue
   echo "STRAY FILE: $stray — skills are directories (joshua-<name>/SKILL.md), not flat files" >&2
   status=1
-done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.md' -not -name README.md)
+done < <(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.md' -not -name AGENTS.md)
 
 index_text="$(strip_code "$INDEX")"
 
@@ -164,7 +164,7 @@ done
 
 # The per-skill loop asserts every skill has an index link. Also check the
 # inverse: every skill link in the index points at a skill that still exists,
-# so a deleted skill whose README row was left behind is caught too.
+# so a deleted skill whose index row was left behind is caught too.
 while IFS= read -r target; do
   [[ -z "$target" ]] && continue
   target="${target%% *}"
@@ -180,7 +180,7 @@ if [[ $status -eq 0 ]]; then
   echo "skills OK: every skill has valid frontmatter, is indexed, and its links resolve"
 else
   echo "" >&2
-  echo "Fix the problems above. See docs/skills/README.md for the skill contract." >&2
+  echo "Fix the problems above. See docs/skills/AGENTS.md for the skill contract." >&2
 fi
 
 exit $status
