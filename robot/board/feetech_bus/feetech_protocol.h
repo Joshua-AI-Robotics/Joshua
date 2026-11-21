@@ -11,7 +11,7 @@ namespace robot::board::feetech {
 // Feetech STS/SCS register map used by FeetechBusBoard. Addresses match the
 // public STS3215 memory map; unverified against real hardware on this
 // branch (no LP servo bus wired up here — same caveat as the AM243 port's
-// pending hardware smoke run, docs/BOARD_LAYER_RFC.md §10 Phase 3).
+// pending hardware smoke run, robot/board/AGENTS.md).
 inline constexpr uint8_t kRegTorqueEnable = 0x28;
 inline constexpr uint8_t kRegGoalPosition = 0x2A;
 // Bundled into the same WRITE_DATA burst as kRegGoalPosition (contiguous
@@ -25,7 +25,7 @@ inline constexpr uint8_t kRegModelNumber = 0x03;
 // 0xFF 0xFF id length error checksum.
 inline constexpr size_t kStatusPacketOverheadBytes = 6;
 
-// Builds a PING instruction packet (docs/BOARD_LAYER_RFC.md §5.6 IDENTIFY).
+// Builds a PING instruction packet (robot/board/AGENTS.md IDENTIFY).
 std::vector<uint8_t> BuildPingPacket(uint8_t servo_id);
 
 // Builds a READ_DATA instruction packet requesting `length` bytes starting

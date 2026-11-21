@@ -13,7 +13,7 @@ namespace {
 // gating were confirmed correct (position tracked exactly as commanded)
 // but the motor still didn't respond with the previous hardcoded 2us. Now
 // host-configurable (StepDirConfig.step_pulse_width_us,
-// docs/BOARD_LAYER_RFC.md §7.5) for a different STEP/DIR driver chip that
+// robot/board/AGENTS.md) for a different STEP/DIR driver chip that
 // needs a different minimum HIGH time, without a firmware edit + reflash.
 constexpr unsigned int kDefaultStepPulseWidthUs = JW_STEPDIR_DEFAULT_PULSE_WIDTH_US;
 
@@ -42,10 +42,9 @@ void Pulse(ChannelState* channel, bool dir_positive) {
   const bool dir_pin_level = channel->step_dir.config.invert_dir ? !dir_positive : dir_positive;
   digitalWrite(channel->step_dir.config.dir_pin, dir_pin_level ? HIGH : LOW);
   // Plain digitalWrite, not Teensyduino's digitalWriteFast: this file is
-  // shared across every Arduino-framework board (docs/BOARD_LAYER_RFC.md
-  // §7.3, revised), and digitalWriteFast isn't universal Arduino-core API
-  // (AVR needs a separate library for it, ESP32 has a different fast-GPIO
-  // mechanism). Costs a little speed on Teensy for portability everywhere
+  // shared across every Arduino-framework board (see firmware/common/AGENTS.md), and
+  // digitalWriteFast isn't universal Arduino-core API (AVR needs a separate library for it, ESP32
+  // has a different fast-GPIO mechanism). Costs a little speed on Teensy for portability everywhere
   // else; StepPulseWidthUs()'s own delay dwarfs the difference regardless.
   digitalWrite(channel->step_dir.config.step_pin, HIGH);
   channel->step_dir.step_high = true;

@@ -382,7 +382,8 @@ class ImageSdkTest(unittest.IsolatedAsyncioTestCase):
             async with ClientSession(reader, writer) as session:
                 await session.initialize()
                 tools = (await session.list_tools()).tools
-                self.assertEqual(len(tools), 10)
+                self.assertEqual(len(tools), 11)
+                self.assertIn("query_hardware_catalog", {t.name for t in tools})
                 image = next(t for t in tools if t.name == "get_camera_image")
                 self.assertEqual(image.inputSchema["required"], ["camera_id"])
                 self.assertEqual(

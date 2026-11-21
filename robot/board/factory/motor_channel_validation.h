@@ -6,7 +6,7 @@
 
 namespace robot::board {
 
-// Central motor<->drive compatibility table (docs/BOARD_LAYER_RFC.md §5.5).
+// Central motor<->drive compatibility table (robot/board/AGENTS.md).
 // ActionFactory calls this before constructing a motor driver, so an
 // actuator bound to a channel whose drive cannot move that motor fails at
 // Init() with an actionable error instead of mid-motion.
