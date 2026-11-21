@@ -48,8 +48,14 @@ whether an initialization error aborts startup or leaves a registered unhealthy
 source for bounded retry; camera recovery must reapply the configured settings.
 A factory must not silently initialize a driver that the node initializes again.
 
-Compare scheduling changes with the target branch. Verify sample sharing, missed
-periods, and RobotTime pauses and jumps against the [observation schedule](#observation-readiness).
+Choose and test the scheduling contract explicitly. The baseline is the target
+branch's behavior at the recorded commit. At `a1eef5dc`, each camera and position output
+read in its own RobotTime callback. The node now shares one RobotTime-scheduled
+acquisition at the maximum configured output rate.
+For example, 10 Hz and 30 Hz outputs can produce 40 read attempts versus 30
+shared acquisitions per second. State sample sharing, skipped periods,
+RobotTime pause/jump behavior, and timestamp/freshness clock domains separately.
+Publication must retain the [RobotTime contract](../docs/ROBOT_TIME.md).
 
 Use `joshua::StartWorker` and ensure completed member records or rollback guards
 own cleanup if a later device, timer, or worker fails to construct. The destructor
@@ -61,8 +67,8 @@ a worker that can still access node memory.
 
 ## Hardware-free real-node tests
 
-Compile the actual `.cc` in a narrowly visible, `testonly` target. Define
-`JOSHUA_NODE_TEST` to exclude its entrypoint. Tests include that implementation, inject a test source or
+Compile the actual `.cc` in a narrowly visible, `testonly` target with only the
+entrypoint excluded. Tests include that implementation, inject a test source or
 use factory-backed mock boards/PTYs, and execute real callbacks in a ROS executor.
 Do not create a production node library or duplicate the implementation for tests.
 See [camera_publisher_test.cc](camera_publisher_test.cc),
