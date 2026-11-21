@@ -79,6 +79,7 @@ code.
 
 The actuator path is there: every `MotorType` `ActionFactory` supports resolves
 `board_name` → `BoardFactory` → `OpenChannel` → driver. Position sensors use the same board/channel resolver and shared board cache.
+The board layer owns [Feetech write acknowledgments and fault recovery](board/AGENTS.md#feetech-write-recovery).
 Cameras use OpenCV directly; LDS01 lidar acquires a byte stream from CommFactory.
 See [implemented components](../docs/SUPPORTED_COMPONENTS.md) for software paths
 and [supported hardware](../docs/SUPPORTED_HARDWARE.md) for curated models,
@@ -146,6 +147,10 @@ POSITION_NATIVE before driver execution. Nonfinite/out-of-range input and invali
 limits are rejected, never clamped. Native and SI positions are left for drivers.
 Position encoding does not normalize velocity or effort.
 Header metadata does not imply scheduling, clock synchronization, or transforms.
+
+See [perception initialization and cancellation](perception/AGENTS.md#initialization-ownership)
+for driver ownership and the [ROS actuator lifecycle](../ros2/AGENTS.md#shared-control-lifecycle)
+for command admission and recovery.
 
 ## Directory navigation
 

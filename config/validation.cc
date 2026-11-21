@@ -49,6 +49,40 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   using robot::perception::SensorType;
   using robot::perception::SinglePerception;
   const std::string owner = absl::StrCat("Sensor '", sensor.sensor_name(), "'");
+  if (!sensor.node().publishers().empty()) {
+    const auto node = sensor.node().node_type();
+    const auto kind = sensor.sensor_type();
+    const bool supported =
+        (node == ros2::node::CAMERA_PUBLISHER && kind == SensorType::IMAGE) ||
+        (node == ros2::node::LIDAR_PUBLISHER && kind == SensorType::RANGE_SCAN) ||
+        (node == ros2::node::POSITION_PUBLISHER && kind == SensorType::POSITION) ||
+        (node == ros2::node::AUDIO_PUBLISHER && kind == SensorType::AUDIO) ||
+        (node == ros2::node::BOARD_NODE &&
+         (kind == SensorType::POSITION || kind == SensorType::SCALAR));
+    if (!supported)
+      return absl::InvalidArgumentError(
+          absl::StrCat(owner, ": node.node_type does not support configured sensor_type outputs"));
+  }
+  if (sensor.observation_policy().has_stale_after_ms() &&
+      (!sensor.observation_policy().stale_after_ms() ||
+       sensor.observation_policy().stale_after_ms() > INT32_MAX))
+    return absl::InvalidArgumentError("Observation stale_after_ms must be 1..INT_MAX");
+  for (const auto& p : sensor.node().publishers()) {
+    if (p.observation_packet() && (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY ||
+                                   sensor.sensor_type() == SensorType::AUDIO))
+      return absl::InvalidArgumentError(
+          "Observation packets require UINT8_MULTI_ARRAY and a supported source");
+    if (!p.observation_packet() &&
+        ((sensor.has_opencv_config() && p.ros2_data_type() != ros2::data_type::IMAGE) ||
+         (sensor.has_lds01_config() && p.ros2_data_type() != ros2::data_type::POINTCLOUD2)))
+      return absl::InvalidArgumentError("Observation output type does not match the source");
+    if ((sensor.node().node_type() == ros2::node::CAMERA_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::LIDAR_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::POSITION_PUBLISHER ||
+         sensor.node().node_type() == ros2::node::BOARD_NODE) &&
+        (!p.publish_rate_hz() || p.publish_rate_hz() > 1000))
+      return absl::InvalidArgumentError("Observation publisher rate must be 1..1000 Hz");
+  }
   if (sensor.sensor_name().empty()) {
     return absl::InvalidArgumentError("Sensor has no sensor_name.");
   }
@@ -59,11 +93,11 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
     case SinglePerception::kJoshuaWireScalarConfig: {
       const auto& c = sensor.joshua_wire_scalar_config();
       if (sensor.sensor_type() != SensorType::SCALAR ||
-          sensor.node().node_type() != ros2::node::MCU_BUS || c.function_id() >= 255 ||
+          sensor.node().node_type() != ros2::node::BOARD_NODE || c.function_id() >= 255 ||
           !c.period_us() || sensor.node().publishers().empty() ||
           !sensor.node().subscriptions().empty())
         return absl::InvalidArgumentError(
-            "Scalar streaming requires MCU_BUS, function/period and publishers");
+            "Scalar streaming requires BOARD_NODE, function/period and publishers");
       for (const auto& p : sensor.node().publishers())
         if (p.ros2_data_type() != ros2::data_type::UINT8_MULTI_ARRAY || p.topic().empty() ||
             !p.publish_rate_hz() || p.publish_rate_hz() > 1000)
@@ -98,11 +132,9 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
         return absl::InvalidArgumentError(
             absl::StrCat(owner, ": opencv_config requires IMAGE sensor_type."));
       }
-      if (sensor.opencv_config().fourcc().size() != 4) {
+      if (sensor.opencv_config().fourcc().size() != 4)
         return absl::InvalidArgumentError(
-            "Camera pixel format must contain exactly four characters (for example, MJPG or "
-            "YUYV); set opencv_config.fourcc");
-      }
+            absl::StrCat(owner, ": opencv_config.fourcc must contain exactly four characters"));
       return absl::OkStatus();
     case SinglePerception::kLds01Config:
       if (sensor.sensor_type() != SensorType::RANGE_SCAN) {
@@ -121,11 +153,11 @@ absl::Status ValidateSensorConfig(const robot::perception::SinglePerception& sen
   }
 }
 
-absl::Status ValidateSensorConfigs(const robot::perception::Perception& perceptions) {
+absl::Status ValidateSensorConfigs(
+    const robot::perception::Perception& perceptions,
+    const google::protobuf::RepeatedPtrField<robot::board::Board>& boards) {
   std::set<std::string> audio_devices;
   for (const auto& sensor : perceptions.single_perceptions()) {
-    if (sensor.node().node_type() == ros2::node::MCU_BUS && !sensor.has_joshua_wire_scalar_config())
-      return absl::InvalidArgumentError("MCU_BUS supports JoshuaWire scalar perceptions");
     if ((sensor.sensor_type() == robot::perception::AUDIO ||
          sensor.node().node_type() == ros2::node::AUDIO_PUBLISHER) &&
         !sensor.has_alsa_audio_config())
@@ -133,7 +165,18 @@ absl::Status ValidateSensorConfigs(const robot::perception::Perception& percepti
     if (sensor.has_alsa_audio_config() &&
         !audio_devices.insert(sensor.alsa_audio_config().device()).second)
       return absl::InvalidArgumentError("Audio device must have a single capture owner");
+    if (sensor.node().node_type() == ros2::node::BOARD_NODE &&
+        !sensor.has_joshua_wire_scalar_config() && !sensor.has_sts3215_encoder_config())
+      return absl::InvalidArgumentError("BOARD_NODE requires board-backed position/scalar sensors");
     ABSL_RETURN_IF_ERROR(ValidateSensorConfig(sensor));
+    if (sensor.has_sts3215_encoder_config()) {
+      const auto& c = sensor.sts3215_encoder_config();
+      ABSL_ASSIGN_OR_RETURN(auto resolved,
+                            robot::board::ResolveChannelConfig(
+                                boards, sensor.sensor_name(), c.board_name(), c.channel()));
+      if (resolved.channel->drive() != robot::board::SERVO_BUS_UART)
+        return absl::InvalidArgumentError("STS3215 position units require a servo-bus channel");
+    }
   }
   return absl::OkStatus();
 }
@@ -206,20 +249,56 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
     return absl::OkStatus();
   };
   for (const auto& sensor : robot.perceptions().single_perceptions()) {
-    if (sensor.node().node_type() != ros2::node::POSITION_PUBLISHER) continue;
+    if ((sensor.node().node_type() != ros2::node::POSITION_PUBLISHER &&
+         sensor.node().node_type() != ros2::node::BOARD_NODE) ||
+        sensor.sensor_type() != robot::perception::POSITION)
+      continue;
     for (const auto& pub : sensor.node().publishers()) {
-      ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
+      if (!pub.observation_packet())
+        ABSL_RETURN_IF_ERROR(ros2_utils::ValidatePositionMessageType(pub.ros2_data_type(), sensor));
       if (pub.publish_rate_hz() == 0)
         return absl::InvalidArgumentError("Position publisher requires a positive rate");
       ABSL_RETURN_IF_ERROR(check_topic(pub.topic(), pub.ros2_data_type()));
     }
   }
+  std::set<std::pair<uint32_t, std::string>> control_names;
+  std::set<std::pair<std::string, uint32_t>> controlled_channels;
   for (const auto& action : robot.actions().single_actions()) {
     if (action.node().node_type() != ros2::node::ACTUATOR_SUBSCRIBER &&
-        action.node().node_type() != ros2::node::MCU_BUS)
+        action.node().node_type() != ros2::node::BOARD_NODE)
       continue;
     const auto& actuator = action.actuator();
+    const std::string key = actuator.actuator_name().empty()
+                                ? "actuator_" + std::to_string(actuator.id())
+                                : actuator.actuator_name();
+    if (!control_names.emplace(action.node().id(), key).second ||
+        !controlled_channels.emplace(actuator.board_name(), actuator.channel()).second)
+      return absl::InvalidArgumentError(
+          "Actuator channels and control service names require one owner");
+    const auto& policy = actuator.control_policy();
+    if ((policy.has_command_timeout_ms() &&
+         (!policy.command_timeout_ms() || policy.command_timeout_ms() > INT32_MAX)) ||
+        (policy.has_max_input_age_ms() &&
+         (!policy.max_input_age_ms() || policy.max_input_age_ms() > INT32_MAX)))
+      return absl::InvalidArgumentError("Control timeouts must be 1..INT_MAX milliseconds");
+    std::set<std::string> sources;
+    std::map<std::string, std::string> topic_sources;
     for (const auto& sub : action.node().subscriptions()) {
+      const std::string source = sub.source_id().empty() ? "default" : sub.source_id();
+      if (source.size() > 64 ||
+          source.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos ||
+          source[0] < 'a' || source[0] > 'z')
+        return absl::InvalidArgumentError(
+            "Command source must be a lowercase ROS identifier (1..64)");
+      sources.insert(source);
+      auto topic = sub.topic();
+      if (!topic.empty() && topic.front() != '/') topic = "/" + topic;
+      auto [owner, inserted] = topic_sources.emplace(topic, source);
+      if (!inserted && owner->second != source)
+        return absl::InvalidArgumentError("A command topic cannot represent multiple sources");
+      if (policy.has_max_input_age_ms() && sub.ros2_data_type() != ros2::data_type::JOINT_STATE &&
+          sub.ros2_data_type() != ros2::data_type::BOOL)
+        return absl::InvalidArgumentError("Input age requires stamped JointState motion commands");
       ABSL_RETURN_IF_ERROR(ros2_utils::ValidateActionMessageType(sub, actuator));
       ABSL_RETURN_IF_ERROR(check_topic(sub.topic(), sub.ros2_data_type()));
       std::string field = "position";
@@ -233,6 +312,10 @@ absl::Status ValidateNumericEndpoints(const config::Robot& robot) {
            !std::isfinite(actuator.operational_upper_limit() - actuator.operational_lower_limit())))
         return absl::InvalidArgumentError("Invalid actuator operational limits");
     }
+    const std::string selected =
+        policy.initial_source().empty() ? "default" : policy.initial_source();
+    if (!sources.empty() && !sources.count(selected))
+      return absl::InvalidArgumentError("Initial command source has no configured subscription");
   }
   return absl::OkStatus();
 }
@@ -258,9 +341,6 @@ absl::StatusOr<std::vector<Connection>> ResolveConnections(
                             robot::board::ResolveChannelConfig(
                                 boards, device.owner, reference.board_name, reference.channel));
       connections.push_back({device.owner, device.node.id(), resolved.board->comm()});
-      if (device.node.node_type() == ros2::node::MCU_BUS &&
-          resolved.board->comm().transport_type() != robot::comm::FRAME_STREAM)
-        return absl::InvalidArgumentError("MCU_BUS actuator requires FRAME_STREAM board");
     }
     for (const auto& comm : device.resources.comms) {
       connections.push_back({device.owner, device.node.id(), comm});
@@ -402,18 +482,21 @@ absl::Status ValidateConfig(const config::Config& config) {
           "Legacy am243_config is retired; endpoint fields belong in comm.ethercat_config");
   }
   for (const auto& action : robot.actions().single_actions()) {
-    if (action.node().node_type() == ros2::node::MCU_BUS &&
-        (!action.has_actuator() ||
-         action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17 ||
-         !action.actuator().stepper_config().require_explicit_enable()))
-      return absl::InvalidArgumentError("MCU_BUS requires a stepper with require_explicit_enable");
+    if (action.node().node_type() == ros2::node::BOARD_NODE &&
+        (!action.has_actuator() || action.action_type() != robot::action::ACTUATOR ||
+         (action.actuator().motor_type() != robot::action::MOTOR_STS3215 &&
+          action.actuator().motor_type() != robot::action::MOTOR_STEPPER_NEMA17) ||
+         (action.actuator().motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
+          !action.actuator().stepper_config().require_explicit_enable())))
+      return absl::InvalidArgumentError(
+          "BOARD_NODE requires a supported actuator with disabled startup");
     if (action.has_actuator() && (action.actuator().motor_type() == robot::action::MOTOR_TI_DEMO ||
                                   action.actuator().has_am243_ethercat_config()))
       return absl::InvalidArgumentError(
           "Legacy TI-demo motor/actuator config is retired; configure a supported motor");
   }
   ABSL_RETURN_IF_ERROR(ValidateNumericEndpoints(robot));
-  ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions()));
+  ABSL_RETURN_IF_ERROR(ValidateSensorConfigs(robot.perceptions(), robot.boards()));
   ABSL_ASSIGN_OR_RETURN(auto devices, CollectDeviceDependencies(robot));
   ABSL_RETURN_IF_ERROR(ValidateNodeAssignments(devices));
   ABSL_ASSIGN_OR_RETURN(auto connections, ResolveConnections(robot.boards(), devices));

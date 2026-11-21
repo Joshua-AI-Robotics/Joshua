@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -18,6 +19,15 @@ class RobotTimeError : public std::runtime_error {
 // Fixed platform epoch: 2025-06-17 00:00:00 UTC, expressed in Unix seconds.
 inline constexpr double kRobotStartTime = 1'750'118'400.0;
 inline constexpr double kNanosecondsPerSecond = 1'000'000'000.0;
+
+inline double RobotTimeFromUnixNanoseconds(int64_t unix_ns) {
+  constexpr int64_t ns_per_second = 1'000'000'000;
+  const double seconds = static_cast<double>(unix_ns / ns_per_second) - kRobotStartTime;
+  const auto nanoseconds = unix_ns % ns_per_second;
+  if (seconds < 0 && nanoseconds > 0)
+    return (seconds + 1.0) - (ns_per_second - nanoseconds) / kNanosecondsPerSecond;
+  return seconds + nanoseconds / kNanosecondsPerSecond;
+}
 
 // Implementations must support concurrent reads. UTC/PTP subtract kRobotStartTime
 // from their source time; an explicitly selected MONOTONIC clock is boot-relative.

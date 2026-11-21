@@ -54,7 +54,7 @@ TEST(Lds01DriverTest, FailedStopHaltsCollectionAndRetriesUntilSuccessful) {
   const auto status = driver.Teardown();
   EXPECT_EQ(status.code(), absl::StatusCode::kUnavailable);
   EXPECT_EQ(status.message(), "stop write failed");
-  EXPECT_TRUE(driver.GetData().ok());
+  EXPECT_EQ(driver.GetData().status().code(), absl::StatusCode::kCancelled);
   EXPECT_EQ(stream->read_attempts, 0);
   EXPECT_EQ(driver.Teardown().code(), absl::StatusCode::kUnavailable);
   EXPECT_TRUE(driver.Teardown().ok());
@@ -117,6 +117,22 @@ TEST(Lds01DriverTest, ReinitializationRequiresAnotherMotorStop) {
   }
   EXPECT_EQ(stream->start_attempts, 2);
   EXPECT_EQ(stream->stop_attempts, 2);
+}
+
+TEST(Lds01DriverTest, StopRequestDoesNotPerformIoOrAllowReinitialization) {
+  auto stream = std::make_shared<RecordingStream>();
+  Lds01Driver driver(stream, SinglePerception{});
+  ASSERT_TRUE(driver.Init().ok());
+  driver.RequestStop();
+  driver.RequestStop();
+  EXPECT_EQ(stream->stop_attempts, 0);
+  EXPECT_EQ(driver.GetData().status().code(), absl::StatusCode::kCancelled);
+  EXPECT_EQ(driver.Init().code(), absl::StatusCode::kCancelled);
+  EXPECT_EQ(driver.GetData().status().code(), absl::StatusCode::kCancelled);
+  EXPECT_EQ(stream->read_attempts, 0);
+  EXPECT_EQ(stream->start_attempts, 1);
+  EXPECT_TRUE(driver.Teardown().ok());
+  EXPECT_EQ(stream->stop_attempts, 1);
 }
 
 }  // namespace

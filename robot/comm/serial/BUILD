@@ -78,6 +78,19 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "feetech_serial_test",
+    srcs = ["feetech_serial_test.cc"],
+    deps = [
+        "//robot/board/feetech_bus:feetech_bus_board",
+        "//robot/board/feetech_bus:feetech_protocol",
+        "//robot/board/proto:board_cc_proto",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/proto:comm_cc_proto",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "serial_io_options",
     hdrs = ["serial_io_options.h"],

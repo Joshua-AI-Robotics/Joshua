@@ -172,10 +172,22 @@ TEST_F(PerceptionFactoryTest, CreatesCameraWithConfiguredNameWithoutOpeningHardw
   sensor.set_sensor_name("front_camera");
   sensor.set_sensor_type(IMAGE);
   sensor.mutable_opencv_config()->set_id(7);
+  sensor.mutable_opencv_config()->set_fourcc("MJPG");
   config::Robot robot;
   auto result = PerceptionFactory::CreatePerception(sensor, robot.boards());
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_EQ((*result)->GetId(), "front_camera");
+}
+
+TEST_F(PerceptionFactoryTest, RejectsInvalidCameraFormatBeforeInitializationCanOpenHardware) {
+  SinglePerception sensor;
+  sensor.set_sensor_name("front_camera");
+  sensor.set_sensor_type(IMAGE);
+  sensor.mutable_opencv_config()->set_id(7);
+  config::Robot robot;
+  auto result = PerceptionFactory::CreatePerception(sensor, robot.boards());
+  EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_NE(result.status().message().find("opencv_config.fourcc"), absl::string_view::npos);
 }
 
 TEST_F(PerceptionFactoryTest, CreatesLidarThroughByteStreamAndPreservesPacketName) {
@@ -190,6 +202,8 @@ TEST_F(PerceptionFactoryTest, CreatesLidarThroughByteStreamAndPreservesPacketNam
   auto result = PerceptionFactory::CreatePerception(MakeLidar(), robot.boards());
   ASSERT_TRUE(result.ok()) << result.status();
   EXPECT_EQ((*result)->GetId(), "front_scan");
+  EXPECT_EQ(stream->opens, 0);
+  ASSERT_TRUE((*result)->Init().ok());
   EXPECT_EQ(stream->opens, 1);
   ASSERT_EQ(stream->writes.size(), 1);
   EXPECT_EQ(stream->writes.front(), std::vector<uint8_t>{'b'});
@@ -211,8 +225,8 @@ TEST_F(PerceptionFactoryTest, PropagatesLidarInitializationFailure) {
       });
   config::Robot robot;
   auto result = PerceptionFactory::CreatePerception(MakeLidar(), robot.boards());
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.status().code(), absl::StatusCode::kUnavailable);
+  ASSERT_TRUE(result.ok());
+  EXPECT_EQ((*result)->Init().code(), absl::StatusCode::kUnavailable);
   EXPECT_TRUE(stream->writes.empty());
 }
 

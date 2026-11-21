@@ -299,6 +299,32 @@ absl::StatusOr<PositionMessagePublisher> CreatePositionMessagePublisher(
   }));
   return result;
 }
+absl::StatusOr<PositionPacketPublisher> CreatePositionPacketPublisher(
+    rclcpp::Node& node,
+    const ros2::node::Publisher& config,
+    const robot::perception::SinglePerception& sensor) {
+  ABSL_RETURN_IF_ERROR(ValidatePositionMessageType(config.ros2_data_type(), sensor));
+  PositionPacketPublisher result;
+  ABSL_RETURN_IF_ERROR(VisitPositionMessage(config.ros2_data_type(), [&](auto tag) {
+    using Message = typename decltype(tag)::Type;
+    auto publisher = node.create_publisher<Message>(config.topic(),
+                                                    CreateQosSetting(sensor.node().qos_setting()));
+    result = [publisher, name = sensor.sensor_name()](const auto& packet) {
+      ABSL_ASSIGN_OR_RETURN(auto value, RequirePerceptionPosition(packet));
+      Message message;
+      ABSL_RETURN_IF_ERROR(EncodePosition(value, name, packet.timestamp(), message));
+      if constexpr (std::is_same_v<Message, sensor_msgs::msg::JointState>) {
+        if (packet.has_sample_metadata()) {
+          message.header.frame_id = packet.sample_metadata().frame_id();
+        }
+      }
+      publisher->publish(message);
+      return absl::OkStatus();
+    };
+    return absl::OkStatus();
+  }));
+  return result;
+}
 absl::StatusOr<std::shared_ptr<rclcpp::SubscriptionBase>> CreateActionMessageSubscription(
     rclcpp::Node& node,
     const ros2::node::Subscription& config,

@@ -1,3 +1,4 @@
+#define JOSHUA_NODE_TEST
 #include <chrono>
 #include <cstdlib>
 #include <future>
@@ -8,10 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "rclcpp/version.h"
-
-// Exercise the complete node without exporting a production node header.
-#define JOSHUA_NODE_TEST
-#include "ros2/mcu_bus.cc"
+#include "ros2/board_node.cc"
 
 namespace {
 using namespace std::chrono_literals;
@@ -55,7 +53,7 @@ class StopBoard : public robot::board::BoardInterface {
 };
 }  // namespace
 
-class McuBusTest : public testing::Test {
+class BoardNodeStopTest : public testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NE(std::getenv("TEST_TMPDIR"), nullptr);
@@ -64,7 +62,7 @@ class McuBusTest : public testing::Test {
     ASSERT_EQ(setenv("ROS_LOCALHOST_ONLY", "1", 1), 0);
     rclcpp::init(0, nullptr);
     // Empty config avoids constructing any production board or serial owner.
-    runtime_ = std::make_shared<McuBus>("stop_test", 1, config::Config{});
+    runtime_ = std::make_shared<BoardNode>("stop_test", 1, config::Config{});
     client_node_ = std::make_shared<rclcpp::Node>("stop_test_client");
     client_ = client_node_->create_client<std_srvs::srv::Trigger>("/stop_test/estop");
     executor_ =
@@ -90,19 +88,19 @@ class McuBusTest : public testing::Test {
   std::shared_ptr<StopBoard> AddBoard(absl::Status result) {
     auto board = std::make_shared<StopBoard>(std::move(result));
     boards_.push_back(board);
-    runtime_->boards_.push_back(board);
+    runtime_->boards_.emplace("board_" + std::to_string(boards_.size()), board);
     return board;
   }
 
   std::vector<std::shared_ptr<StopBoard>> boards_;
-  std::shared_ptr<McuBus> runtime_;
+  std::shared_ptr<BoardNode> runtime_;
   rclcpp::Node::SharedPtr client_node_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;
   std::unique_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
   std::thread spin_;
 };
 
-TEST_F(McuBusTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
+TEST_F(BoardNodeStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
   auto first = AddBoard(absl::DeadlineExceededError("first board acknowledgment lost"));
   auto second = AddBoard(absl::UnavailableError("second board disconnected"));
   auto healthy = AddBoard(absl::OkStatus());
@@ -125,7 +123,7 @@ TEST_F(McuBusTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
   EXPECT_NE(response->message.find("second board disconnected"), std::string::npos);
 }
 
-TEST_F(McuBusTest, ReportsSuccessWhenEveryBoardAcknowledges) {
+TEST_F(BoardNodeStopTest, ReportsSuccessWhenEveryBoardAcknowledges) {
   auto first = AddBoard(absl::OkStatus());
   auto second = AddBoard(absl::OkStatus());
   first->Release();
@@ -136,5 +134,7 @@ TEST_F(McuBusTest, ReportsSuccessWhenEveryBoardAcknowledges) {
   EXPECT_EQ(second->WaitForStop(0s), std::future_status::ready);
   const auto response = reply.get();
   EXPECT_TRUE(response->success);
-  EXPECT_EQ(response->message, "Protocol stop acknowledged; physical verification unsupported");
+  EXPECT_EQ(response->message,
+            "Host stop interlocked; available board stop acknowledged; physical verification "
+            "unsupported");
 }

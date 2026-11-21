@@ -1,231 +1,170 @@
-#include <functional>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
+#include <limits>
+#include <thread>
 
-#include "config/proto/config.pb.h"
-#include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
-#include "robot/perception/interfaces/perception_interface.h"
-#include "robot/perception/proto/perception.pb.h"
-#include "ros2/logging.h"
+#include "ros2/acquisition_schedule.h"
 #include "ros2/node_runner.h"
-#include "ros2/proto/ros2_data_type.pb.h"
-#include "ros2/utils/packet_parser.h"
-#include "ros2/utils/qos_setting.h"
+#include "ros2/observation_publisher.h"
 #include "ros2/utils/robot_time_conversion.h"
-#include "ros2/utils/robot_timer.h"
 #include "sensor_msgs/msg/image.hpp"
-#include "utils/robot_time.h"
-
-namespace {
-constexpr double kCameraRetryBackoffSeconds = 1.0;
-
-bool ValidateCameraPublisher(const ros2::data_type::Ros2DataType ros2_data_type) {
-  return ros2_data_type == ros2::data_type::IMAGE;
-}
-}  // namespace
+#include "utils/scope_exit.h"
+#include "utils/status_macros.h"
 
 class CameraPublisher : public rclcpp::Node {
  public:
-  // Retry times are seconds in the configured robot clock's domain.
-  using Now = std::function<double()>;
+  using Clock = robot::perception::ObservationState::Clock;
   using Factory =
       std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
           const robot::perception::SinglePerception&)>;
-
-  CameraPublisher(const std::string& node_name, int node_id, const config::Config& config);
-  // Inject the source and retry clock for hardware-free lifecycle tests.
-  CameraPublisher(const std::string& node_name,
-                  int node_id,
+  using WorkerStart = std::function<std::thread(std::string, std::function<void()>)>;
+  CameraPublisher(const std::string& name,
+                  int id,
                   const config::Config& config,
-                  Factory factory,
-                  Now now);
-
- private:
-  // Initialization and recovery belong to the physical source, shared by all
-  // its publishers. An unavailable source remains registered for later retries.
-  struct Source {
-    std::string name;
-    std::unique_ptr<robot::perception::PerceptionInterface> interface;
-    bool initialized = false;
-    double retry_after = 0.0;
-  };
-  struct Camera {
-    std::string topic;
-    std::shared_ptr<Source> source;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher;
-    rclcpp::TimerBase::SharedPtr timer;
-  };
-
-  bool InitializeCamera(Source& source);
-  void ResetCamera(Source& source);
-  void PublishCameraData(size_t camera_index);
-
-  Now now_;
-  std::vector<Camera> cameras_;
-};
-
-CameraPublisher::CameraPublisher(const std::string& node_name,
-                                 int node_id,
-                                 const config::Config& config)
-    : CameraPublisher(
-          node_name,
-          node_id,
-          config,
-          [&config](const auto& sensor) {
-            return robot::perception::PerceptionFactory::CreatePerception(sensor,
-                                                                          config.robot().boards());
-          },
-          joshua::RobotTime) {}
-
-CameraPublisher::CameraPublisher(const std::string& node_name,
-                                 int node_id,
-                                 const config::Config& config,
-                                 Factory factory,
-                                 Now now)
-    : Node(node_name), now_(std::move(now)) {
-  ros2_utils::SetLogNodeName(get_logger().get_name());
-  for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-    if (single_perception.sensor_type() != robot::perception::SensorType::IMAGE ||
-        static_cast<int>(single_perception.node().id()) != node_id) {
-      continue;
+                  Factory factory = {},
+                  WorkerStart start_worker = joshua::StartWorker,
+                  std::function<double()> now = joshua::RobotTime)
+      : Node(name) {
+    ros2_utils::SetLogNodeName(get_logger().get_name());
+    if (!factory)
+      factory = [&config](const auto& sensor) {
+        return robot::perception::PerceptionFactory::CreatePerception(sensor,
+                                                                      config.robot().boards());
+      };
+    bool complete = false;
+    joshua::ScopeExit rollback([&] {
+      if (!complete) StopSources();
+    });
+    for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
+      if (sensor.node().id() != static_cast<uint32_t>(id) ||
+          sensor.sensor_type() != robot::perception::IMAGE || sensor.node().publishers().empty())
+        continue;
+      auto source = std::make_unique<Source>(sensor,
+                                             "pixel",
+                                             sensor.observation_policy().frame_id().empty()
+                                                 ? "camera_frame"
+                                                 : sensor.observation_policy().frame_id());
+      auto* record = source.get();
+      record->now = now;
+      ros2_utils::AddObservationOutputs(
+          *this, sensor, [record] { return record->state.Get(); }, MakePublisher, record->timers);
+      sources_.push_back(std::move(source));
     }
-
-    const std::string sensor_name = single_perception.sensor_name();
-    const auto& qos_setting = single_perception.node().qos_setting();
-    auto interface = factory(single_perception);
-    if (!interface.ok()) {
-      JOSHUA_LOG(ERROR) << "Failed to create perception interface for camera '" << sensor_name
-                        << "': " << interface.status();
-      continue;
-    }
-
-    auto source = std::make_shared<Source>();
-    source->name = sensor_name;
-    source->interface = std::move(interface.value());
-    // Keep the source and its endpoints even if the first open attempt fails.
-    InitializeCamera(*source);
-
-    for (const auto& publisher : single_perception.node().publishers()) {
-      if (!ValidateCameraPublisher(publisher.ros2_data_type())) {
-        JOSHUA_LOG(ERROR) << "Invalid publisher config for camera topic '" << publisher.topic()
-                          << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
-                          << "). Require IMAGE.";
+    size_t index = 0;
+    for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
+      if (sensor.node().id() != static_cast<uint32_t>(id) ||
+          sensor.sensor_type() != robot::perception::IMAGE || sensor.node().publishers().empty())
+        continue;
+      auto& source = *sources_.at(index++);
+      auto made = factory(sensor);
+      if (!made.ok()) {
+        source.state.Record(made.status(), Clock::now());
         continue;
       }
-
-      const auto qos = ros2_utils::CreateQosSetting(qos_setting);
-      const size_t camera_index = cameras_.size();
-      cameras_.emplace_back(Camera{
-          .topic = publisher.topic(),
-          .source = source,
-          .publisher = this->create_publisher<sensor_msgs::msg::Image>(publisher.topic(), qos),
-          .timer = ros2_utils::CreateRobotTimer(
-              *this, 1.0 / publisher.publish_rate_hz(), [this, camera_index]() {
-                PublishCameraData(camera_index);
-              })});
+      source.driver = std::move(*made);
+      source.timers.push_back(source.schedule.CreateTimer(*this, sensor));
     }
-
-    JOSHUA_LOG(INFO) << "Found camera '" << sensor_name << "' in configuration for node_id "
-                     << node_id << ". Publishing on "
-                     << single_perception.node().publishers().size() << " topics";
+    for (auto& source : sources_) {
+      if (source->driver)
+        source->worker = start_worker("camera_publisher acquisition",
+                                      [record = source.get()] { Acquire(*record); });
+    }
+    complete = true;
+  }
+  ~CameraPublisher() override {
+    StopSources();
   }
 
-  if (cameras_.empty()) {
-    JOSHUA_LOG(ERROR) << "No camera found in configuration for node_id " << node_id << "!";
-    return;
+ private:
+  struct Source {
+    Source(const robot::perception::SinglePerception& sensor, std::string unit, std::string frame)
+        : state(std::chrono::milliseconds(sensor.observation_policy().has_stale_after_ms()
+                                              ? sensor.observation_policy().stale_after_ms()
+                                              : 1000),
+                Clock::now(),
+                {std::move(unit), std::move(frame)}) {}
+    ~Source() {
+      RequestStop();
+      if (worker.joinable()) worker.join();
+      state.Stop();
+    }
+    void RequestStop() noexcept {
+      schedule.Stop();
+      for (auto& timer : timers)
+        joshua::RunCleanup("observation timer cancellation", [&] { timer->cancel(); });
+      if (driver) driver->RequestStop();
+    }
+    robot::perception::ObservationState state;
+    std::unique_ptr<robot::perception::PerceptionInterface> driver;
+    std::vector<rclcpp::TimerBase::SharedPtr> timers;
+    ros2_utils::AcquisitionSchedule schedule;
+    std::thread worker;
+    std::function<double()> now;
+  };
+  static void Acquire(Source& source) {
+    bool active = false;
+    joshua::ScopeExit cleanup([&] {
+      if (!active) return;
+      joshua::RunCleanup("sensor teardown",
+                         [&] { joshua::ThrowIfError(source.driver->Teardown()); });
+    });
+    if (source.schedule.stopped() || joshua::ShutdownRequested()) return;
+    bool initialized = false;
+    double retry_after = -std::numeric_limits<double>::infinity();
+    absl::Status last_error = absl::UnavailableError("Camera not initialized");
+    while (source.schedule.WaitForRead() && !joshua::ShutdownRequested()) {
+      if (!initialized && !absl::IsInvalidArgument(last_error) && source.now() >= retry_after) {
+        active = true;
+        last_error = source.driver->Init();
+        initialized = last_error.ok();
+      }
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
+      auto result = initialized ? source.driver->GetData()
+                                : absl::StatusOr<robot::perception::PerceptionPacket>(last_error);
+      if (!result.ok() && active) {
+        initialized = false;
+        active = false;
+        last_error = result.status();
+        const auto status = source.driver->Teardown();
+        if (!status.ok())
+          last_error =
+              absl::Status(last_error.code(),
+                           std::string(last_error.message()) + "; teardown: " + status.ToString());
+        retry_after = source.now() + 1.0;
+      }
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
+      source.state.Record(std::move(result), Clock::now());
+    }
   }
-
-  JOSHUA_LOG(INFO) << "Camera publisher node started with " << cameras_.size()
-                   << " camera topics for node_id " << node_id << "!";
-}
-
-bool CameraPublisher::InitializeCamera(Source& source) {
-  const auto status = source.interface->Init();
-  if (status.ok()) {
-    source.initialized = true;
-    return true;
+  static ros2_utils::ObservationPublish MakePublisher(
+      rclcpp::Node& node,
+      const ros2::node::Publisher& config,
+      const robot::perception::SinglePerception& sensor) {
+    if (config.observation_packet()) return ros2_utils::MakePacketPublisher(node, config, sensor);
+    const auto qos = ros2_utils::CreateQosSetting(sensor.node().qos_setting());
+    auto publisher = node.create_publisher<sensor_msgs::msg::Image>(config.topic(), qos);
+    return [publisher, name = sensor.sensor_name()](const auto& packet) {
+      const auto& image = packet.image();
+      sensor_msgs::msg::Image msg;
+      ABSL_ASSIGN_OR_RETURN(msg.header.stamp, ros2_utils::ToRosTimestamp(packet.timestamp()));
+      msg.header.frame_id = packet.sample_metadata().frame_id();
+      msg.width = image.width();
+      msg.height = image.height();
+      msg.encoding = "rgb8";
+      msg.step = msg.width * 3;
+      msg.data.assign(image.data().begin(), image.data().end());
+      for (size_t i = 0; i < msg.data.size(); i += 3) std::swap(msg.data[i], msg.data[i + 2]);
+      publisher->publish(msg);
+      return absl::OkStatus();
+    };
   }
-
-  ResetCamera(source);
-  if (absl::IsInvalidArgument(status)) {
-    throw std::invalid_argument("Invalid camera configuration for '" + source.name +
-                                "': " + status.ToString());
+  void StopSources() noexcept {
+    for (auto& source : sources_) source->RequestStop();
+    sources_.clear();
   }
-  JOSHUA_LOG(WARNING) << "Camera '" << source.name
-                      << "' unavailable; retrying initialization in one second: " << status;
-  return false;
-}
+  std::vector<std::unique_ptr<Source>> sources_;
+};
 
-void CameraPublisher::ResetCamera(Source& source) {
-  source.initialized = false;
-  const auto status = source.interface->Teardown();
-  if (!status.ok()) {
-    JOSHUA_LOG(WARNING) << "Failed to close camera '" << source.name << "': " << status;
-  }
-  source.retry_after = now_() + kCameraRetryBackoffSeconds;
-}
-
-void CameraPublisher::PublishCameraData(size_t camera_index) {
-  const auto& camera = cameras_.at(camera_index);
-  auto& source = *camera.source;
-  if (!source.initialized) {
-    if (now_() < source.retry_after || !InitializeCamera(source)) return;
-  }
-  auto packet = source.interface->GetData();
-
-  if (!packet.ok()) {
-    ResetCamera(source);
-    JOSHUA_LOG(WARNING) << "Failed to get data from camera '" << source.name
-                        << "'; retrying in one second: " << packet.status();
-    return;
-  }
-
-  const auto image_status = ros2_utils::RequirePerceptionImage(packet.value());
-  if (!image_status.ok()) {
-    JOSHUA_LOG(WARNING) << "Failed to get image data from camera '" << camera.topic
-                        << "': " << image_status;
-    return;
-  }
-
-  const auto& image_data = packet.value().image();
-  if (image_data.width() <= 0 || image_data.height() <= 0 || image_data.channels() <= 0) {
-    JOSHUA_LOG(ERROR) << "Invalid image dimensions: " << image_data.width() << "x"
-                      << image_data.height() << ", channels=" << image_data.channels();
-    return;
-  }
-
-  auto image_msg = std::make_unique<sensor_msgs::msg::Image>();
-  const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
-  if (!stamp.ok()) {
-    JOSHUA_LOG(ERROR) << "Invalid camera timestamp: " << stamp.status();
-    return;
-  }
-  image_msg->header.stamp = *stamp;
-  image_msg->header.frame_id = "camera_frame";
-  image_msg->height = image_data.height();
-  image_msg->width = image_data.width();
-  image_msg->encoding = "rgb8";
-  image_msg->is_bigendian = false;
-  image_msg->step = image_data.width() * 3;
-
-  size_t data_size = image_data.width() * image_data.height() * 3;
-  image_msg->data.resize(data_size);
-
-  const uint8_t* bgr_data = reinterpret_cast<const uint8_t*>(image_data.data().data());
-  for (size_t i = 0; i < data_size; i += 3) {
-    image_msg->data[i] = bgr_data[i + 2];
-    image_msg->data[i + 1] = bgr_data[i + 1];
-    image_msg->data[i + 2] = bgr_data[i];
-  }
-
-  camera.publisher->publish(*image_msg);
-}
-
-#ifndef JOSHUA_CAMERA_PUBLISHER_TEST
+#ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<CameraPublisher>(argc, argv, "camera_publisher");
 }

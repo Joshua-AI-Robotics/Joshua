@@ -28,6 +28,11 @@ class BoardScalarSensor : public PerceptionInterface {
     PerceptionPacket packet;
     packet.set_perception_id(name_);
     packet.set_sequence_id(o.sequence);
+    if (o.received_at_unix)
+      packet.mutable_sample_metadata()->set_host_receipt_unix_ns(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              o.received_at_unix->time_since_epoch())
+              .count());
     // timestamp remains unset: there is no device-to-ROS clock mapping.
     auto* s = packet.mutable_scalar();
     s->set_value(o.value);

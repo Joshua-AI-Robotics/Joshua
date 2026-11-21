@@ -1,196 +1,169 @@
-#include <cmath>
-#include <memory>
-#include <set>
-#include <string>
-#include <utility>
-#include <vector>
+#include <thread>
 
-#include "config/proto/config.pb.h"
-#include "rclcpp/rclcpp.hpp"
 #include "robot/perception/factory/perception_factory.h"
-#include "robot/perception/proto/perception_packet.pb.h"
-#include "ros2/logging.h"
+#include "ros2/acquisition_schedule.h"
 #include "ros2/node_runner.h"
-#include "ros2/proto/ros2_data_type.pb.h"
-#include "ros2/utils/packet_parser.h"
-#include "ros2/utils/qos_setting.h"
+#include "ros2/observation_publisher.h"
 #include "ros2/utils/robot_time_conversion.h"
-#include "ros2/utils/robot_timer.h"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
-
-namespace {
-
-bool ValidateLidarPublisher(const ros2::data_type::Ros2DataType ros2_data_type) {
-  return ros2_data_type == ros2::data_type::POINTCLOUD2;
-}
-
-}  // namespace
+#include "utils/scope_exit.h"
+#include "utils/status_macros.h"
 
 class LidarPublisher : public rclcpp::Node {
- private:
-  struct Lidar {
-    std::string topic;
-    std::shared_ptr<robot::perception::PerceptionInterface> interface;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher;
-    rclcpp::TimerBase::SharedPtr timer;
-    std::string frame_id;
-  };
-
  public:
-  LidarPublisher(const std::string& node_name, const int node_id, const config::Config& config)
-      : Node(node_name) {
+  using Clock = robot::perception::ObservationState::Clock;
+  using Factory =
+      std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
+          const robot::perception::SinglePerception&)>;
+  using WorkerStart = std::function<std::thread(std::string, std::function<void()>)>;
+  LidarPublisher(const std::string& name,
+                 int id,
+                 const config::Config& config,
+                 Factory factory = {},
+                 WorkerStart start_worker = joshua::StartWorker)
+      : Node(name) {
     ros2_utils::SetLogNodeName(get_logger().get_name());
-    for (const auto& single_perception : config.robot().perceptions().single_perceptions()) {
-      if (single_perception.sensor_type() != robot::perception::SensorType::RANGE_SCAN ||
-          static_cast<int>(single_perception.node().id()) != node_id) {
+    if (!factory)
+      factory = [&config](const auto& sensor) {
+        return robot::perception::PerceptionFactory::CreatePerception(sensor,
+                                                                      config.robot().boards());
+      };
+    bool complete = false;
+    joshua::ScopeExit rollback([&] {
+      if (!complete) StopSources();
+    });
+    for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
+      if (sensor.node().id() != static_cast<uint32_t>(id) ||
+          sensor.sensor_type() != robot::perception::RANGE_SCAN ||
+          sensor.node().publishers().empty())
+        continue;
+      auto source = std::make_unique<Source>(sensor, "m", sensor.observation_policy().frame_id());
+      auto* record = source.get();
+      ros2_utils::AddObservationOutputs(
+          *this, sensor, [record] { return record->state.Get(); }, MakePublisher, record->timers);
+      sources_.push_back(std::move(source));
+    }
+    size_t index = 0;
+    for (const auto& sensor : config.robot().perceptions().single_perceptions()) {
+      if (sensor.node().id() != static_cast<uint32_t>(id) ||
+          sensor.sensor_type() != robot::perception::RANGE_SCAN ||
+          sensor.node().publishers().empty())
+        continue;
+      auto& source = *sources_.at(index++);
+      auto made = factory(sensor);
+      if (!made.ok()) {
+        source.state.Record(made.status(), Clock::now());
         continue;
       }
-
-      const std::string sensor_name = single_perception.sensor_name();
-      const auto& qos_setting = single_perception.node().qos_setting();
-
-      auto interface = robot::perception::PerceptionFactory::CreatePerception(
-          single_perception, config.robot().boards());
-      if (!interface.ok()) {
-        JOSHUA_LOG(ERROR) << "Failed to create perception interface for lidar '" << sensor_name
-                          << "': " << interface.status();
-        continue;
-      }
-
-      auto shared_interface =
-          std::shared_ptr<robot::perception::PerceptionInterface>(std::move(interface.value()));
-
-      for (const auto& publisher : single_perception.node().publishers()) {
-        if (!ValidateLidarPublisher(publisher.ros2_data_type())) {
-          JOSHUA_LOG(ERROR) << "Invalid publisher config for lidar topic '" << publisher.topic()
-                            << "' (ros2_data_type=" << static_cast<int>(publisher.ros2_data_type())
-                            << "). Require POINTCLOUD2.";
-          continue;
-        }
-
-        const auto qos = ros2_utils::CreateQosSetting(qos_setting);
-        const size_t lidar_index = lidars_.size();
-        lidars_.emplace_back(
-            Lidar{.topic = publisher.topic(),
-                  .interface = shared_interface,
-                  .publisher =
-                      this->create_publisher<sensor_msgs::msg::PointCloud2>(publisher.topic(), qos),
-                  .timer = ros2_utils::CreateRobotTimer(
-                      *this,
-                      1.0 / publisher.publish_rate_hz(),
-                      [this, lidar_index]() { publish_lidar_data(lidar_index); }),
-                  .frame_id = sensor_name.empty() ? "lidar_frame" : sensor_name});
-      }
-
-      JOSHUA_LOG(INFO) << "Found lidar '" << sensor_name << "' in configuration for node_id "
-                       << node_id << ". Publishing on "
-                       << single_perception.node().publishers().size() << " topics";
+      source.driver = std::move(*made);
+      source.timers.push_back(source.schedule.CreateTimer(*this, sensor));
     }
-
-    if (lidars_.empty()) {
-      JOSHUA_LOG(ERROR) << "No lidars found in configuration for node_id " << node_id << "!";
-      return;
+    for (auto& source : sources_) {
+      if (source->driver)
+        source->worker = start_worker("lidar_publisher acquisition",
+                                      [record = source.get()] { Acquire(*record); });
     }
-
-    JOSHUA_LOG(INFO) << "Lidar publisher node started with " << lidars_.size()
-                     << " lidars for node_id " << node_id << "!";
+    complete = true;
   }
-
   ~LidarPublisher() override {
-    std::set<robot::perception::PerceptionInterface*> stopped;
-    for (const auto& lidar : lidars_) {
-      if (!stopped.insert(lidar.interface.get()).second) continue;
-      try {
-        const auto status = lidar.interface->Teardown();
-        if (!status.ok())
-          JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << status;
-      } catch (const std::exception& error) {
-        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic << "' teardown failed: " << error.what();
-      } catch (...) {
-        JOSHUA_LOG(ERROR) << "LiDAR '" << lidar.topic
-                          << "' teardown failed with an unknown exception";
-      }
-    }
+    StopSources();
   }
 
  private:
-  void publish_lidar_data(size_t lidar_index) {
-    const auto& lidar = lidars_.at(lidar_index);
-    auto packet = lidar.interface->GetData();
-
-    if (!packet.ok()) {
-      JOSHUA_LOG(WARNING) << "Failed to get data from lidar '" << lidar.topic
-                          << "': " << packet.status();
+  struct Source {
+    Source(const robot::perception::SinglePerception& sensor, std::string unit, std::string frame)
+        : state(std::chrono::milliseconds(sensor.observation_policy().has_stale_after_ms()
+                                              ? sensor.observation_policy().stale_after_ms()
+                                              : 1000),
+                Clock::now(),
+                {std::move(unit), std::move(frame)}) {}
+    ~Source() {
+      RequestStop();
+      if (worker.joinable()) worker.join();
+      state.Stop();
+    }
+    void RequestStop() noexcept {
+      schedule.Stop();
+      for (auto& timer : timers)
+        joshua::RunCleanup("observation timer cancellation", [&] { timer->cancel(); });
+      if (driver) driver->RequestStop();
+    }
+    robot::perception::ObservationState state;
+    std::unique_ptr<robot::perception::PerceptionInterface> driver;
+    std::vector<rclcpp::TimerBase::SharedPtr> timers;
+    ros2_utils::AcquisitionSchedule schedule;
+    std::thread worker;
+  };
+  static void Acquire(Source& source) {
+    joshua::ScopeExit cleanup([&] {
+      joshua::RunCleanup("sensor teardown",
+                         [&] { joshua::ThrowIfError(source.driver->Teardown()); });
+    });
+    if (source.schedule.stopped() || joshua::ShutdownRequested()) return;
+    const auto status = source.driver->Init();
+    if (!status.ok()) {
+      source.state.Record(status, Clock::now());
       return;
     }
-
-    const auto cloud_status = ros2_utils::RequirePerceptionPointCloud(packet.value());
-    if (!cloud_status.ok()) {
-      JOSHUA_LOG(WARNING) << "LiDAR '" << lidar.topic
-                          << "' packet has no point cloud: " << cloud_status;
-      return;
+    while (source.schedule.WaitForRead() && !joshua::ShutdownRequested()) {
+      auto result = source.driver->GetData();
+      if (source.schedule.stopped() || joshua::ShutdownRequested()) break;
+      source.state.Record(std::move(result), Clock::now());
     }
-
-    const auto& cloud = packet.value().point_cloud();
-    const int num_points = cloud.x_size();
-    if (num_points == 0) {
-      JOSHUA_LOG(WARNING) << "Empty point cloud from '" << lidar.topic << "'!";
-      return;
-    }
-
-    sensor_msgs::msg::PointCloud2 cloud_msg;
-    const auto stamp = ros2_utils::ToRosTimestamp(packet->timestamp());
-    if (!stamp.ok()) {
-      JOSHUA_LOG(ERROR) << "Invalid lidar timestamp: " << stamp.status();
-      return;
-    }
-    cloud_msg.header.stamp = *stamp;
-    cloud_msg.header.frame_id = cloud.frame_id().empty() ? lidar.frame_id : cloud.frame_id();
-    cloud_msg.height = cloud.height() > 0 ? cloud.height() : 1;
-    cloud_msg.width = cloud.width() > 0 ? cloud.width() : static_cast<uint32_t>(num_points);
-    cloud_msg.is_bigendian = false;
-    cloud_msg.is_dense = cloud.is_dense();
-
-    sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
-    modifier.setPointCloud2Fields(4,
-                                  "x",
-                                  1,
-                                  sensor_msgs::msg::PointField::FLOAT32,
-                                  "y",
-                                  1,
-                                  sensor_msgs::msg::PointField::FLOAT32,
-                                  "z",
-                                  1,
-                                  sensor_msgs::msg::PointField::FLOAT32,
-                                  "intensity",
-                                  1,
-                                  sensor_msgs::msg::PointField::FLOAT32);
-    modifier.resize(num_points);
-
-    sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
-    sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
-    sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
-    sensor_msgs::PointCloud2Iterator<float> iter_i(cloud_msg, "intensity");
-
-    const int nx = cloud.x_size();
-    const int ny = cloud.y_size();
-    const int nz = cloud.z_size();
-    const int ni = cloud.intensity_size();
-    const int n = std::min({nx, ny, nz, std::max(1, ni)});
-    for (int i = 0; i < n; ++i, ++iter_x, ++iter_y, ++iter_z, ++iter_i) {
-      *iter_x = cloud.x(i);
-      *iter_y = cloud.y(i);
-      *iter_z = cloud.z(i);
-      *iter_i = (i < ni) ? cloud.intensity(i) : 0.0f;
-    }
-
-    lidar.publisher->publish(cloud_msg);
   }
-
-  std::vector<Lidar> lidars_;
+  static ros2_utils::ObservationPublish MakePublisher(
+      rclcpp::Node& node,
+      const ros2::node::Publisher& config,
+      const robot::perception::SinglePerception& sensor) {
+    if (config.observation_packet()) return ros2_utils::MakePacketPublisher(node, config, sensor);
+    const auto qos = ros2_utils::CreateQosSetting(sensor.node().qos_setting());
+    auto publisher = node.create_publisher<sensor_msgs::msg::PointCloud2>(config.topic(), qos);
+    return [publisher, name = sensor.sensor_name()](const auto& packet) {
+      const auto& cloud = packet.point_cloud();
+      sensor_msgs::msg::PointCloud2 msg;
+      ABSL_ASSIGN_OR_RETURN(msg.header.stamp, ros2_utils::ToRosTimestamp(packet.timestamp()));
+      msg.header.frame_id =
+          packet.sample_metadata().frame_id().empty() ? name : packet.sample_metadata().frame_id();
+      msg.height = 1;
+      msg.width = cloud.x_size();
+      msg.is_dense = cloud.is_dense();
+      sensor_msgs::PointCloud2Modifier modifier(msg);
+      modifier.setPointCloud2Fields(4,
+                                    "x",
+                                    1,
+                                    sensor_msgs::msg::PointField::FLOAT32,
+                                    "y",
+                                    1,
+                                    sensor_msgs::msg::PointField::FLOAT32,
+                                    "z",
+                                    1,
+                                    sensor_msgs::msg::PointField::FLOAT32,
+                                    "intensity",
+                                    1,
+                                    sensor_msgs::msg::PointField::FLOAT32);
+      modifier.resize(cloud.x_size());
+      sensor_msgs::PointCloud2Iterator<float> x(msg, "x"), y(msg, "y"), z(msg, "z"),
+          intensity(msg, "intensity");
+      for (int i = 0; i < cloud.x_size(); ++i, ++x, ++y, ++z, ++intensity) {
+        *x = cloud.x(i);
+        *y = cloud.y(i);
+        *z = cloud.z(i);
+        *intensity = cloud.intensity_size() ? cloud.intensity(i) : 0;
+      }
+      publisher->publish(msg);
+      return absl::OkStatus();
+    };
+  }
+  void StopSources() noexcept {
+    for (auto& source : sources_) source->RequestStop();
+    sources_.clear();
+  }
+  std::vector<std::unique_ptr<Source>> sources_;
 };
 
+#ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
   return ros2_utils::RunNode<LidarPublisher>(argc, argv, "lidar_publisher");
 }
+#endif
