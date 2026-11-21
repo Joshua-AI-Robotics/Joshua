@@ -4,7 +4,7 @@
 // the ActionFactory/ROS/actuator_subscriber stack" when debugging a new
 // Teensy bring-up — this is exactly the tool that found the missing
 // Enable() call during the first real hardware pass
-// (docs/BOARD_LAYER_RFC.md §10 Phase 5).
+// (robot/board/AGENTS.md).
 //
 // Usage:
 //   bazel run //robot/board/teensy:teensy_driver_smoke -- [port]

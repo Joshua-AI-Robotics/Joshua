@@ -55,7 +55,7 @@ class SpikeMotorSpec:
     This is the tool's own config surface. It deliberately does not use
     robot.action.Actuator: SPIKE_MOTOR, SpikeMotorConfig, and CommType.BLE
     were removed from the robot protos when Spike support was dropped
-    (docs/BOARD_LAYER_RFC.md §10 Phase 9), so nothing Spike-shaped remains
+    (robot/board/AGENTS.md), so nothing Spike-shaped remains
     outside this directory.
     """
 
@@ -75,7 +75,7 @@ class PybricksMotorDriver:
 
     Not on the runtime path, and the only way to drive a SPIKE hub. This lived
     under robot/ until the Python robot layer was removed
-    (docs/BOARD_LAYER_RFC.md §10 Phase 9); the SPIKE_HUB_BLE board type and
+    (robot/board/AGENTS.md); the SPIKE_HUB_BLE board type and
     MOTOR_SPIKE went too, so the launcher cannot reach a hub from a preset.
     It no longer implements ActuatorInterface — that ABC was deleted with the
     rest of the Python robot layer — but keeps the same

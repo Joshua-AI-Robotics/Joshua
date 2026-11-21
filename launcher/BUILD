@@ -1,5 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("@rules_python//python:defs.bzl", "py_test")
 
 genrule(
     name = "version_h",
@@ -57,6 +58,12 @@ cc_binary(
         "@gflags",
         "@glog",
     ],
+)
+
+py_test(
+    name = "joshua_main_cli_test",
+    srcs = ["joshua_main_cli_test.py"],
+    data = [":joshua_main"],
 )
 
 # Package the native binary and runtime libs into a tar archive

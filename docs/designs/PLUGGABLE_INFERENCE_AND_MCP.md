@@ -111,7 +111,7 @@ Prove reuse with Decisions replay and a deterministic alternative plug-in.
 Check timeout/blocked inference, stale/duplicate replies, stop races and legacy
 compatibility; then real ROS/MCP and chosen-client behavior. Physical runs need
 separate authorization and the existing
-[demo gates](../../doc/OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md).
+[demo gates](../OPENAI_DECISIONS_CAMERA_HEAD_DEMO.md).
 
 ## External examples
 

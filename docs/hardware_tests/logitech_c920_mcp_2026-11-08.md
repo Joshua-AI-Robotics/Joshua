@@ -77,7 +77,7 @@ and observed result without publishing those frames or host-specific identities.
   observation recovery tests remain useful coverage. They do not replace the
   current physical C920/image-adapter USB check.
 
-For another run, use the [camera/MCP guide](../../tools/mcp/README.md#optional-configured-camera-image)
+For another run, use the [camera/MCP guide](../../tools/mcp/AGENTS.md#optional-configured-camera-image)
 and [hardware rules](../../AGENTS.md#hardware-safety--read-this-first), inspect the
 entire preset and confirm the camera's current capture index and operator
 readiness. Retain the code/config identity and actual SDK image results. A

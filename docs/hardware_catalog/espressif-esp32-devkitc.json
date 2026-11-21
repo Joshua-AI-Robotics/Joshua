@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "id": "espressif-esp32-devkitc",
+  "kind": "board",
+  "manufacturer": "Espressif",
+  "model": "ESP32 DevKitC / esp32dev",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [
+    "uart",
+    "step-dir"
+  ],
+  "specifications": [],
+  "integration": {
+    "status": "integrated",
+    "driver": "JoshuaWireBoard / Esp32Board",
+    "implementations": [
+      "robot/board/esp32/esp32_board.h"
+    ],
+    "presets": [
+      "config/config_preset/example/esp32_stepper_demo.pbtxt"
+    ],
+    "guide": "firmware/esp32/AGENTS.md",
+    "support_scope": "JoshuaWire UART integration and native/cross-build coverage. No physical ESP32 run is retained in this catalog."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "mcu": "ESP32",
+    "transports": [
+      "UART through USB bridge"
+    ],
+    "firmware_guides": [
+      "firmware/esp32/AGENTS.md"
+    ]
+  },
+  "limitations": [
+    "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
+    "Hardware revision and responsible maintainer are not recorded in the imported evidence."
+  ],
+  "validation_history": [],
+  "support_history": []
+}

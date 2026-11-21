@@ -14,9 +14,8 @@ namespace robot::action {
 // position, torque gating) and hands the channel raw ticks; the Feetech
 // register-protocol encoding and bus serialization live in the board
 // (FeetechBusBoard / feetech_protocol.h) so bus traffic is shared correctly
-// with any other channel on the same port (docs/BOARD_LAYER_RFC.md §5.6,
-// §10 Phase 4). Replaces the pre-board-layer Sts3215Driver, which owned the
-// serial port and the register protocol directly.
+// with any other channel on the same port (see robot/board/AGENTS.md). Replaces the pre-board-layer
+// Sts3215Driver, which owned the serial port and the register protocol directly.
 class Sts3215Driver : public robot::action::ActuatorInterface {
  public:
   Sts3215Driver(std::shared_ptr<robot::board::BoardChannel> channel,

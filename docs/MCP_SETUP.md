@@ -120,7 +120,7 @@ After replacing the runtime container, reconnect the client to select its new
 ID. Setup registration remains inspection-only; enter these opt-in arguments in
 the client's MCP settings. Older prepared generations still serve inspection;
 camera use requires preparing a generation containing the helper. See the
-[image contract](../tools/mcp/README.md#optional-configured-camera-image) for
+[image contract](../tools/mcp/AGENTS.md#optional-configured-camera-image) for
 freshness, endpoint association and image limits.
 
 ## Recovery and limits

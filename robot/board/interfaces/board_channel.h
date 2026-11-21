@@ -22,11 +22,11 @@ struct ChannelFeedback {
 // One motor slot on one board. How the command reaches the controller
 // (serial frame, UDP frame, EtherCAT PDO field, servo bus register write)
 // is the board's problem. Values are in the board's native unit; the motor
-// driver owns the degrees<->native conversion (docs/BOARD_LAYER_RFC.md §5.3).
+// driver owns the degrees<->native conversion (robot/board/AGENTS.md).
 class BoardChannel {
  public:
   virtual ~BoardChannel() = default;
-  // Torque semantics (docs/BOARD_LAYER_RFC.md §12.7, decided in Phase 4):
+  // Torque semantics (robot/board/AGENTS.md):
   // Enable/Disable is the on/off gate — use it for any board whose torque
   // is fundamentally a binary enable register (STS3215's torque-enable
   // byte). Reserve TargetMode::kTorque for boards with a genuine continuous

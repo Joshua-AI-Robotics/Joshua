@@ -21,11 +21,11 @@ py_library(
         "interfaces.py",
         "snapshot_observer.py",
     ],
-    data = [
-        "//docs:hardware_catalog.json",
-        "//docs:hardware_test_records.json",
-    ],
-    deps = [":observation_source"] + mcp_requirement("mcp"),
+    data = ["//docs/hardware_catalog:records"],
+    deps = [
+        ":observation_source",
+        "//tools:hardware_catalog_lib",
+    ] + mcp_requirement("mcp"),
 )
 
 py_binary(
@@ -42,11 +42,13 @@ py_test(
         "//config/config_preset:config_presets",
         "//docs:SUPPORTED_HARDWARE.md",
         "//docs:TESTED_HARDWARE.md",
-        "//docs:hardware_tests/sunplus_spca2281_1080p_2026-11-04.md",
-        "//docs:hardware_tests/sunplus_spca2281_2026-11-04.md",
+        "//docs/hardware_catalog:records",
         "//robot/perception/camera:cv_camera.cc",
     ],
-    deps = [":config_validation_lib"],
+    deps = [
+        ":config_validation_lib",
+        "//tools:hardware_catalog_lib",
+    ],
 )
 
 py_test(
@@ -68,7 +70,7 @@ py_test(
         ":config_validation_server",
         "//config:joshua_inspect_config",
         "//config:joshua_validate_config",
-        "//node_generator:observation_fixture",
+        "//launcher/node_manager:observation_fixture",
     ],
     tags = ["local"],
     deps = [":config_validation_lib"] + mcp_requirement("mcp"),

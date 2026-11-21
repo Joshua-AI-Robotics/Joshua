@@ -370,7 +370,6 @@ robot {
                         (
                             "//launcher:",
                             "//launcher/",
-                            "//node_generator:",
                             "//firmware:",
                         )
                     )
