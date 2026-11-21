@@ -193,6 +193,15 @@ class MixedBindingTest : public ::testing::Test {
     std::lock_guard lock(firmware_mutex);
     return g_channels[0].enabled;
   }
+  std::string SetUniqueActuatorName(config::Config& local) {
+    const std::string name = "mixed_stepper_" + std::to_string(getpid()) + "_" +
+                             std::to_string(Clock::now().time_since_epoch().count());
+    auto* action = local.mutable_robot()->mutable_actions()->mutable_single_actions(0);
+    action->mutable_actuator()->set_actuator_name(name);
+    for (auto& sub : *action->mutable_node()->mutable_subscriptions())
+      sub.set_topic(name + sub.topic().substr(sub.topic().find_last_of('/')));
+    return name;
+  }
 };
 
 TEST_F(MixedBindingTest, ProductionFactoriesShareSessionAndPreserveObservationMetadata) {
@@ -247,6 +256,58 @@ TEST_F(MixedBindingTest, HeartbeatsNeverRefreshMovingTargetsAndFailureInvalidate
   EXPECT_EQ(pins[4], 1);
 }
 
+TEST_F(MixedBindingTest, ReenableAfterStopHoldsUntilFreshPositionCommand) {
+  const auto name = SetUniqueActuatorName(config);
+  auto runtime = std::make_shared<BoardNode>(name, 1, config);
+  auto client = std::make_shared<rclcpp::Node>(name + "_client");
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(runtime);
+  executor.add_node(client);
+  auto command = client->create_publisher<std_msgs::msg::Float32>(name + "/position", 1);
+  auto call = [&](const std::string& operation) {
+    using Trigger = std_srvs::srv::Trigger;
+    auto service = client->create_client<Trigger>("/" + name + "/" + name + "/" + operation);
+    if (!service->wait_for_service(2s)) return false;
+    auto reply = service->async_send_request(std::make_shared<Trigger::Request>());
+    return executor.spin_until_future_complete(reply, 2s) == rclcpp::FutureReturnCode::SUCCESS &&
+           reply.get()->success;
+  };
+  auto feedback = [&] {
+    std::lock_guard lock(firmware_mutex);
+    return g_channels[0].feedback;
+  };
+  ASSERT_TRUE(Await([&] { return command->get_subscription_count() == 1; }));
+  ASSERT_TRUE(call("enable"));
+  std_msgs::msg::Float32 target;
+  target.data = 360;
+  command->publish(target);
+  ASSERT_TRUE(Await([&] {
+    executor.spin_some();
+    return feedback().position > 0;
+  }));
+  ASSERT_TRUE(call("stop"));
+  ASSERT_FALSE(Enabled());
+  const float stopped_position = feedback().position;
+  ASSERT_LT(stopped_position, 3200);
+
+  ASSERT_TRUE(call("recover"));
+  ASSERT_TRUE(call("enable"));
+  ASSERT_TRUE(Enabled());
+  const auto resumed_at = feedback().metadata.timestamp_us;
+  ASSERT_TRUE(Await([&] { return feedback().metadata.timestamp_us >= resumed_at + 50000; }));
+  EXPECT_EQ(feedback().position, stopped_position);
+  EXPECT_EQ(targets.load(), 1);
+
+  target.data = 0;
+  command->publish(target);
+  ASSERT_TRUE(Await([&] {
+    executor.spin_some();
+    return feedback().position == 0;
+  }));
+  EXPECT_EQ(targets.load(), 2);
+  EXPECT_TRUE(call("stop"));
+}
+
 TEST_F(MixedBindingTest, ReservedStopRetiresLostTargetReplyWithoutReplayingOrEnabling) {
   auto board = robot::board::BoardFactory::GetOrCreate(config.robot().boards(0));
   ASSERT_TRUE(board.ok()) << board.status();
@@ -271,8 +332,6 @@ TEST_F(MixedBindingTest, ReservedStopRetiresLostTargetReplyWithoutReplayingOrEna
 }
 
 TEST_F(MixedBindingTest, RosEstopPreemptsBlockedCommandAndWatchdogWithTwoExecutorThreads) {
-  const std::string name = "joshua_stop_" + std::to_string(getpid()) + "_" +
-                           std::to_string(Clock::now().time_since_epoch().count());
   auto local = config;
   local.mutable_robot()->clear_perceptions();
   auto* policy = local.mutable_robot()->mutable_boards(0)->mutable_joshua_wire_host_policy();
@@ -280,10 +339,7 @@ TEST_F(MixedBindingTest, RosEstopPreemptsBlockedCommandAndWatchdogWithTwoExecuto
   policy->set_attempt_timeout_ms(1000);
   local.mutable_robot()->mutable_boards(0)->mutable_firmware()->set_communication_watchdog_us(
       5000000);
-  auto* action = local.mutable_robot()->mutable_actions()->mutable_single_actions(0);
-  action->mutable_actuator()->set_actuator_name(name);
-  for (auto& sub : *action->mutable_node()->mutable_subscriptions())
-    sub.set_topic(name + sub.topic().substr(sub.topic().find_last_of('/')));
+  const auto name = SetUniqueActuatorName(local);
   ASSERT_TRUE(config::ValidateConfig(local).ok()) << config::ValidateConfig(local);
   auto runtime = std::make_shared<BoardNode>(name, 1, local);
   auto client = std::make_shared<rclcpp::Node>(name + "_client");

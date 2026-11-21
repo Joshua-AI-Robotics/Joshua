@@ -51,6 +51,10 @@ and I/O handlers register independently. Actuator execution stays outside the
 core codec. AM243 supplies `am243_software_backend`; Teensy/ESP32 supply the
 STEP/DIR callbacks in `joshua_stepdir_device`.
 
+On Teensy and ESP32, disabling a STEP/DIR channel discards its target and
+preserves its step count. Movement requires a fresh target, which can be set
+before or after re-enabling. Existing boards need updated firmware for this behavior.
+
 Backend callbacks own device limits, resource staging/rollback, bounded acquisition
 and physical actions. They return explicit status/execution results. Rejected work
 has no effects; accepted, failed or uncertain work retains backend-authored state

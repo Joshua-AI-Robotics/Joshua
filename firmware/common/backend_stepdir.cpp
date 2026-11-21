@@ -61,8 +61,6 @@ void StepDirInit(ChannelState* channel) {
 
 void StepDirConfigure(ChannelState* channel, const jw_configure_step_dir_t* config) {
   channel->step_dir.config = *config;
-  channel->target_mode = JW_MODE_INVALID;
-  channel->target_value = 0;
   // Set inactive output latches before switching pins to output mode.
   digitalWrite(config->enable_pin, config->enable_active_low ? HIGH : LOW);
   digitalWrite(config->step_pin, LOW);
@@ -88,6 +86,8 @@ void StepDirEnable(ChannelState* channel) {
 
 void StepDirDisable(ChannelState* channel) {
   channel->enabled = false;
+  channel->target_mode = JW_MODE_INVALID;
+  channel->target_value = 0;
   if (!channel->configured) {
     return;  // No pins to drive yet — nothing to write.
   }
