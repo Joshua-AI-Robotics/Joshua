@@ -8,12 +8,15 @@ x-runtime: &runtime
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
-  network_mode: none
+  network_mode: ${JOSHUA_MCP_NETWORK_MODE:-none}
+  ipc: ${JOSHUA_MCP_IPC_MODE:-private}
   stdin_open: true
   tty: false
   working_dir: /workspace
   environment:
     ROS_DISTRO: ${JOSHUA_MCP_ROS_DISTRO:-humble}
+    ROS_DOMAIN_ID: ${JOSHUA_MCP_ROS_DOMAIN_ID:-0}
+    ROS_LOCALHOST_ONLY: ${JOSHUA_MCP_ROS_LOCALHOST_ONLY:-0}
     ENABLE_MOCK_SERIAL_PORTS: "false"
     PYTHONDONTWRITEBYTECODE: "1"
     HOME: /tmp

@@ -13,6 +13,7 @@ BINARIES = (
     "tools/mcp/setup_smoke",
     "config/joshua_validate_config",
     "config/joshua_inspect_config",
+    "tools/mcp/image_observer",
 )
 
 

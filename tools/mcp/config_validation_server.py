@@ -7,10 +7,6 @@ import os
 import stat
 import sys
 
-from mcp.server.lowlevel import NotificationOptions
-from mcp.server.models import InitializationOptions
-from mcp.server.stdio import stdio_server
-
 LIMITATIONS = ["Implementation support and hardware readiness were not checked."]
 RESTART_MESSAGE = (
     "Validation cleanup could not finish. Operator must restart the server."
@@ -457,6 +453,10 @@ def make_server(service):
 
 
 async def run_stdio(service):
+    from mcp.server.lowlevel import NotificationOptions
+    from mcp.server.models import InitializationOptions
+    from mcp.server.stdio import stdio_server
+
     app = make_server(service)
     options = InitializationOptions(
         server_name="joshua-config-validation",
@@ -478,8 +478,18 @@ def main(argv=None):
     parser.add_argument("--validator", required=True)
     parser.add_argument("--inspector")
     parser.add_argument("--observation-dir")
+    parser.add_argument("--image-observer")
+    parser.add_argument("--camera-id")
+    parser.add_argument("--ros-config")
     parser.add_argument("--freshness-seconds", type=float, default=3.0)
     args = parser.parse_args(argv)
+    image_options = (args.image_observer, args.camera_id, args.ros_config)
+    if any(image_options) and not all(image_options):
+        parser.error(
+            "--image-observer, --camera-id and --ros-config require each other"
+        )
+    if args.ros_config is not None and not safe_reference(args.ros_config):
+        parser.error("--ros-config must be a safe relative config path")
     root = os.path.abspath(args.config_root)
     validator = os.path.abspath(args.validator)
     try:
@@ -500,19 +510,28 @@ def main(argv=None):
     except OSError as error:
         print(f"Config root is unavailable: {error}", file=sys.stderr)
         return 2
-    if args.inspector or args.observation_dir:
+    if args.inspector or args.observation_dir or args.image_observer:
         from tools.mcp.inspection_adapters import CppSetupInspector
         from tools.mcp.inspection_server import run_stdio as run_inspection_stdio
         from tools.mcp.snapshot_observer import SnapshotObserver
 
         try:
             observer = SnapshotObserver(args.observation_dir, args.freshness_seconds)
+            image_source = None
+            if args.image_observer:
+                from tools.mcp.image_source import ImageSource
+
+                image_source = ImageSource(
+                    root, args.image_observer, args.camera_id, args.ros_config
+                )
         except (OSError, ValueError) as error:
             os.close(service._root_fd)
-            print(f"Observation directory is unavailable: {error}", file=sys.stderr)
+            print(f"Observation setup is unavailable: {error}", file=sys.stderr)
             return 2
         asyncio.run(
-            run_inspection_stdio(CppSetupInspector(service, args.inspector), observer)
+            run_inspection_stdio(
+                CppSetupInspector(service, args.inspector), observer, image_source
+            )
         )
     else:
         asyncio.run(run_stdio(service))

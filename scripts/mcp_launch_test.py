@@ -48,6 +48,13 @@ class RuntimeTest(unittest.TestCase):
         self.wrong_probe_nonce = False
         self.project_image_missing = False
         self.bootstrap_image_missing = False
+        self.missing_camera_helper = False
+        self.camera_runtime = {
+            "Id": "b" * 64,
+            "State": {"Running": True, "Paused": False, "Restarting": False},
+            "HostConfig": {"IpcMode": "shareable", "NetworkMode": "bridge"},
+            "Config": {"Env": ["ROS_DOMAIN_ID=42", "ROS_LOCALHOST_ONLY=1"]},
+        }
         self.runtime = runtime.Runtime(self.root, runner=self.fake_run, environ={})
 
     def fake_run(self, argv, **kwargs):
@@ -68,6 +75,10 @@ class RuntimeTest(unittest.TestCase):
             stdout = json.dumps(
                 [{"Id": self.image, "Os": "linux", "Architecture": "amd64"}]
             )
+        elif "inspect" in argv and "container" in argv:
+            if self.camera_runtime is None:
+                return subprocess.CompletedProcess(argv, 1, "", "missing runtime")
+            stdout = json.dumps([self.camera_runtime])
         elif "build" in argv:
             self.project_image_missing = False
         elif "pull" in argv:
@@ -79,7 +90,9 @@ class RuntimeTest(unittest.TestCase):
                 code = 1
             else:
                 stage = Path(kwargs["env"]["JOSHUA_MCP_ARTIFACTS"])
-                for name in runtime.BINARIES:
+                for name in (*runtime.BINARIES, "tools/mcp/image_observer"):
+                    if name.endswith("/image_observer") and self.missing_camera_helper:
+                        continue
                     target = stage / name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text("#!/bin/sh\nexit 0\n")
@@ -177,6 +190,246 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(cache.stat().st_uid, os.getuid())
         _, env = self.runtime.compose_command(state, "mcp-prepare")
         self.assertEqual(env["JOSHUA_MCP_CACHE"], str(cache))
+
+    def test_prepare_requires_camera_helper_and_preserves_previous_generation(self):
+        first = self.prepare()
+        self.missing_camera_helper = True
+        with self.assertRaisesRegex(runtime.McpError, "image_observer"):
+            self.prepare()
+        self.assertEqual(self.runtime.read_state(), first)
+
+    def serve(self, **options):
+        state = self.runtime.read_state()
+        with mock.patch.object(runtime, "require_host"), mock.patch.object(
+            runtime, "source_manifest", return_value=state["source"]
+        ), mock.patch.object(runtime.subprocess, "Popen") as popen:
+            popen.return_value.wait.return_value = 0
+            self.assertEqual(self.runtime.serve(**options), 0)
+            return popen.call_args
+
+    def test_camera_serve_pins_existing_runtime_and_keeps_scoped_cleanup(self):
+        state = self.prepare()
+        # A caller's current context and namespace variables cannot redirect it.
+        self.runtime.environ.update(
+            DOCKER_HOST="ssh://wrong", JOSHUA_MCP_NETWORK_MODE="host"
+        )
+        call = self.serve(
+            ros_config="example/publish_camera.pbtxt",
+            camera_id="sensor:webcam",
+            runtime_container="camera-runtime",
+        )
+        command, env = call.args[0], call.kwargs["env"]
+        self.assertEqual(command[:3], ["docker", "--host", state["docker"]["endpoint"]])
+        self.assertEqual(
+            command[command.index("mcp-serve") + 1 :],
+            [
+                "/opt/joshua-mcp/tools/mcp/config_validation_server",
+                "--validator",
+                "/opt/joshua-mcp/config/joshua_validate_config",
+                "--inspector",
+                "/opt/joshua-mcp/config/joshua_inspect_config",
+                "--config-root",
+                "/configs",
+                "--ros-config",
+                "example/publish_camera.pbtxt",
+                "--camera-id",
+                "sensor:webcam",
+                "--image-observer",
+                "/opt/joshua-mcp/tools/mcp/image_observer",
+            ],
+        )
+        immutable = "container:" + self.camera_runtime["Id"]
+        self.assertEqual(env["JOSHUA_MCP_NETWORK_MODE"], immutable)
+        self.assertEqual(env["JOSHUA_MCP_IPC_MODE"], immutable)
+        self.assertEqual(env["JOSHUA_MCP_ROS_DOMAIN_ID"], "42")
+        self.assertEqual(env["JOSHUA_MCP_ROS_LOCALHOST_ONLY"], "1")
+        inspect = next(args for args, _ in self.calls if "container" in args)
+        self.assertEqual(inspect[:3], command[:3])
+        self.assertEqual(inspect[-2:], ["--", "camera-runtime"])
+        cleanup = [args[-1] for args, _ in self.calls if "rm" in args]
+        self.assertIn(command[command.index("--name") + 1], cleanup)
+        self.assertNotIn(self.camera_runtime["Id"], cleanup)
+        self.assertFalse(
+            any("start" in args or "exec" in args for args, _ in self.calls)
+        )
+
+    def test_default_serve_does_not_join_runtime_or_inherit_namespace_options(self):
+        self.prepare()
+        self.runtime.environ.update(
+            JOSHUA_MCP_NETWORK_MODE="host",
+            JOSHUA_MCP_IPC_MODE="host",
+            JOSHUA_MCP_ROS_DOMAIN_ID="99",
+            JOSHUA_MCP_ROS_LOCALHOST_ONLY="1",
+        )
+        call = self.serve()
+        self.assertEqual(call.kwargs["env"]["JOSHUA_MCP_NETWORK_MODE"], "none")
+        self.assertEqual(call.kwargs["env"]["JOSHUA_MCP_IPC_MODE"], "private")
+        self.assertEqual(call.kwargs["env"]["JOSHUA_MCP_ROS_LOCALHOST_ONLY"], "0")
+        self.assertNotIn("--image-observer", call.args[0])
+        self.assertFalse(any("container" in args for args, _ in self.calls))
+
+    def test_camera_serve_requires_complete_selection_before_docker_access(self):
+        self.prepare()
+        for options in (
+            {"ros_config": "example/camera.pbtxt"},
+            {"camera_id": "sensor:webcam", "runtime_container": "runtime"},
+            {"ros_config": "example/camera.pbtxt", "camera_id": "sensor:webcam"},
+        ):
+            with self.subTest(options=options):
+                self.calls.clear()
+                with mock.patch.object(runtime, "require_host"), self.assertRaisesRegex(
+                    runtime.McpError, "require.*together"
+                ):
+                    self.runtime.serve(**options)
+                self.assertEqual(self.calls, [])
+
+    def test_camera_serve_rejects_unsafe_selection_before_docker_access(self):
+        self.prepare()
+        for field, invalid in (
+            ("ros_config", "../camera.pbtxt"),
+            ("ros_config", "/camera.pbtxt"),
+            ("ros_config", "a//camera.pbtxt"),
+            ("ros_config", "a/./camera.pbtxt"),
+            ("camera_id", "webcam"),
+            ("camera_id", "sensor: "),
+            ("runtime_container", "--all"),
+            ("runtime_container", "runtime\nother"),
+        ):
+            with self.subTest(field=field, invalid=invalid):
+                options = dict(
+                    ros_config="example/camera.pbtxt",
+                    camera_id="sensor:webcam",
+                    runtime_container="runtime",
+                )
+                options[field] = invalid
+                self.calls.clear()
+                with mock.patch.object(runtime, "require_host"), self.assertRaises(
+                    runtime.McpError
+                ):
+                    self.runtime.serve(**options)
+                self.assertEqual(self.calls, [])
+
+    def test_camera_serve_rejects_unusable_runtime_without_starting_server(self):
+        self.prepare()
+        for section, field, invalid in (
+            ("State", "Running", False),
+            ("State", "Paused", True),
+            ("State", "Restarting", True),
+            ("HostConfig", "IpcMode", "private"),
+            ("HostConfig", "IpcMode", "host"),
+            ("HostConfig", "NetworkMode", "host"),
+            ("HostConfig", "NetworkMode", "container:other"),
+            ("Config", "Env", ["ROS_DOMAIN_ID=233"]),
+            ("Config", "Env", ["ROS_DOMAIN_ID=-1"]),
+            ("Config", "Env", ["ROS_DOMAIN_ID=one"]),
+            ("Config", "Env", ["ROS_DOMAIN_ID=1", "ROS_DOMAIN_ID=2"]),
+            ("Config", "Env", ["ROS_LOCALHOST_ONLY=2"]),
+            ("Config", "Env", ["ROS_LOCALHOST_ONLY=true"]),
+            ("Config", "Env", ["ROS_LOCALHOST_ONLY=0", "ROS_LOCALHOST_ONLY=1"]),
+        ):
+            with self.subTest(section=section, field=field, invalid=invalid):
+                original = self.camera_runtime[section][field]
+                self.camera_runtime[section][field] = invalid
+                with mock.patch.object(runtime, "require_host"), mock.patch.object(
+                    runtime,
+                    "source_manifest",
+                    return_value=self.runtime.read_state()["source"],
+                ), self.assertRaises(runtime.McpError), mock.patch.object(
+                    runtime.subprocess, "Popen"
+                ) as popen:
+                    self.runtime.serve(
+                        ros_config="camera.pbtxt",
+                        camera_id="sensor:webcam",
+                        runtime_container="runtime",
+                    )
+                popen.assert_not_called()
+                self.camera_runtime[section][field] = original
+
+    def test_camera_runtime_without_domain_uses_zero(self):
+        self.prepare()
+        self.camera_runtime["Config"]["Env"] = []
+        call = self.serve(
+            ros_config="camera.pbtxt",
+            camera_id="sensor:webcam",
+            runtime_container="runtime",
+        )
+        self.assertEqual(call.kwargs["env"]["JOSHUA_MCP_ROS_DOMAIN_ID"], "0")
+        self.assertEqual(call.kwargs["env"]["JOSHUA_MCP_ROS_LOCALHOST_ONLY"], "0")
+
+    def test_camera_serve_failed_start_cleans_only_its_session(self):
+        self.prepare()
+        self.calls.clear()
+        with mock.patch.object(runtime, "require_host"), mock.patch.object(
+            runtime, "source_manifest", return_value=self.runtime.read_state()["source"]
+        ), mock.patch.object(
+            runtime.subprocess, "Popen", side_effect=OSError("failed")
+        ), self.assertRaises(
+            OSError
+        ):
+            self.runtime.serve(
+                ros_config="camera.pbtxt",
+                camera_id="sensor:webcam",
+                runtime_container="runtime",
+            )
+        cleanup = [args[-1] for args, _ in self.calls if "rm" in args]
+        self.assertTrue(cleanup)
+        self.assertTrue(all(name.startswith("joshua-mcp-") for name in cleanup))
+        self.assertNotIn(self.camera_runtime["Id"], cleanup)
+
+    def test_camera_serve_rejects_malformed_runtime_inspection(self):
+        self.prepare()
+        good = self.camera_runtime
+        for invalid in (
+            {},
+            {**good, "Id": "short"},
+            {**good, "Config": {"Env": "bad"}},
+        ):
+            with self.subTest(invalid=invalid):
+                self.camera_runtime = invalid
+                with mock.patch.object(runtime, "require_host"), self.assertRaises(
+                    runtime.McpError
+                ), mock.patch.object(runtime.subprocess, "Popen") as popen:
+                    self.runtime.serve(
+                        ros_config="camera.pbtxt",
+                        camera_id="sensor:webcam",
+                        runtime_container="runtime",
+                    )
+                popen.assert_not_called()
+
+    def test_camera_serve_missing_runtime_is_actionable(self):
+        self.prepare()
+        self.camera_runtime = None
+        with mock.patch.object(runtime, "require_host"), self.assertRaisesRegex(
+            runtime.McpError, "running.*runtime"
+        ):
+            self.runtime.serve(
+                ros_config="camera.pbtxt",
+                camera_id="sensor:webcam",
+                runtime_container="runtime",
+            )
+
+    def test_previous_generation_keeps_default_serve_but_camera_requires_reprepare(
+        self,
+    ):
+        state = self.prepare()
+        generation = self.runtime.state_dir / state["generation"]
+        observer = generation / "tools/mcp/image_observer"
+        observer.parent.chmod(0o755)
+        observer.unlink()
+        manifest = generation / "generation.json"
+        manifest.chmod(0o644)
+        manifest.write_text(
+            json.dumps({"state": state, "files": runtime.file_hashes(generation)})
+        )
+        self.serve()
+        with mock.patch.object(runtime, "require_host"), self.assertRaisesRegex(
+            runtime.McpError, "prepare"
+        ):
+            self.runtime.serve(
+                ros_config="camera.pbtxt",
+                camera_id="sensor:webcam",
+                runtime_container="runtime",
+            )
 
     @unittest.skipIf(os.getuid() == 0, "Root bypasses directory permissions")
     def test_prepare_reports_unwritable_storage_before_docker(self):
@@ -503,6 +756,33 @@ class RuntimeTest(unittest.TestCase):
 
 
 class ProtocolInputTest(unittest.TestCase):
+    def test_cli_passes_explicit_camera_selection_only_to_serve(self):
+        options = [
+            "--ros-config",
+            "camera.pbtxt",
+            "--camera-id",
+            "sensor:webcam",
+            "--runtime-container",
+            "runtime",
+        ]
+        with mock.patch.object(runtime, "Runtime") as item:
+            item.return_value.serve.return_value = 0
+            self.assertEqual(runtime.main(["serve", *options]), 0)
+            item.return_value.serve.assert_called_once_with(
+                ros_config="camera.pbtxt",
+                camera_id="sensor:webcam",
+                runtime_container="runtime",
+            )
+        for command in ("check", "prepare", "doctor"):
+            with self.subTest(command=command), mock.patch.object(
+                runtime, "Runtime"
+            ) as item, mock.patch("sys.stderr"), self.assertRaises(
+                SystemExit
+            ) as failure:
+                runtime.main([command, *options])
+            self.assertEqual(failure.exception.code, 2)
+            item.assert_not_called()
+
     def test_preflight_cannot_consume_an_early_initialize_message(self):
         script = (
             "import json,sys\n"
@@ -709,6 +989,66 @@ runtime.prepare(rebuild_image=os.environ["MCP_TEST_OPERATION"] == "image-build")
 
 
 class ComposeContractTest(unittest.TestCase):
+    def test_effective_serve_namespaces_remain_isolated_except_explicit_camera_join(
+        self,
+    ):
+        if not shutil.which("docker"):
+            self.skipTest("Docker Compose CLI is not installed")
+        if subprocess.run(
+            ["docker", "compose", "version"], capture_output=True, check=False
+        ).returncode:
+            self.skipTest("Docker Compose CLI is not installed")
+        item = runtime.Runtime(HERE.parent)
+        state = {
+            "image_id": "sha256:test",
+            "generation": "unused",
+            "docker": {"endpoint": "unix:///tmp/docker.sock"},
+        }
+        camera = {"runtime_id": "b" * 64, "domain_id": "42", "localhost_only": "1"}
+        for selected in (None, camera):
+            with self.subTest(camera=selected is not None):
+                _, env = item.compose_command(state, "mcp-serve", camera=selected)
+                model = json.loads(
+                    subprocess.check_output(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            "/dev/null",
+                            "-f",
+                            str(HERE.parent / "docker-compose.mcp.yml"),
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        env=env,
+                        text=True,
+                    )
+                )
+                service = model["services"]["mcp-serve"]
+                namespace = "container:" + camera["runtime_id"] if selected else None
+                self.assertEqual(service["network_mode"], namespace or "none")
+                self.assertEqual(service["ipc"], namespace or "private")
+                self.assertEqual(
+                    service["environment"]["ROS_DOMAIN_ID"], "42" if selected else "0"
+                )
+                self.assertEqual(
+                    service["environment"]["ROS_LOCALHOST_ONLY"],
+                    "1" if selected else "0",
+                )
+                self.assertEqual(service["user"], f"{os.getuid()}:{os.getgid()}")
+                self.assertTrue(service["read_only"])
+                self.assertEqual(service["cap_drop"], ["ALL"])
+                self.assertIn("no-new-privileges:true", service["security_opt"])
+                self.assertFalse(service.get("privileged"))
+                self.assertFalse(service.get("devices"))
+                self.assertFalse(service.get("gpus"))
+                self.assertTrue(all(mount["read_only"] for mount in service["volumes"]))
+                self.assertEqual(
+                    {mount["target"] for mount in service["volumes"]},
+                    {"/workspace", "/configs", "/opt/joshua-mcp"},
+                )
+
     def test_effective_prepare_service_is_nonroot_with_host_cache(self):
         if not shutil.which("docker"):
             self.skipTest("Docker Compose CLI is not installed")
@@ -837,6 +1177,41 @@ class PackagingTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_prepare_builds_and_retains_image_observer_with_its_runfiles(self):
+        bazel = self.root / "bazel"
+        binary_root = bazel / "bin"
+        for name in (*runtime.BINARIES, "tools/mcp/image_observer"):
+            target = binary_root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("executable")
+        dependency = binary_root / "tools/mcp/image_observer.runfiles/shared/data"
+        dependency.parent.mkdir(parents=True)
+        dependency.write_text("native runfile")
+        output = self.root / "output"
+
+        def path(value):
+            return output if value == "/artifacts" else Path(value)
+
+        def info(args, **_kwargs):
+            return str(binary_root if args[-1] == "bazel-bin" else bazel) + "\n"
+
+        with mock.patch.object(packager, "Path", side_effect=path), mock.patch.object(
+            packager.subprocess, "run"
+        ) as build, mock.patch.object(
+            packager.subprocess, "check_output", side_effect=info
+        ), mock.patch(
+            "sys.argv", ["mcp_container_prepare.py", "--stack", "u22"]
+        ):
+            self.assertEqual(packager.main(), 0)
+        self.assertIn("//tools/mcp:image_observer", build.call_args.args[0])
+        self.assertEqual(
+            (output / "tools/mcp/image_observer").read_text(), "executable"
+        )
+        self.assertEqual(
+            (output / "tools/mcp/image_observer.runfiles/shared/data").read_text(),
+            "native runfile",
+        )
 
     def test_runfiles_are_copied_with_external_symlinks_dereferenced(self):
         allowed = self.root / "bazel"
