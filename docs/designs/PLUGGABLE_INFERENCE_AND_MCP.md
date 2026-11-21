@@ -17,11 +17,43 @@ configuration and registered artifacts.
 | Existing control owner | Own and constrain robot execution. | Command-source ownership, limits, leases, enable/stop/recovery and device bus. |
 | MCP server | Expose robot tasks to AI clients. | Thin ROS adaptation of tested task operations, camera/feedback inspection and results. |
 
+```mermaid
+flowchart TD
+  client["AI client"] <--> mcp["MCP task operations:<br/>Discover, Preview, Start,<br/>Status/result, Stop"]
+  mcp <-->|ROS| host["Existing inference host"]
+  preset["Preset and artifacts"] --> validator["Shared config::ValidateConfig"]
+  validator --> host
+  mcp -.->|"Preview reuse via backend"| validator
+  sensors["Camera and measured joint feedback"] --> host
+  host --> policy["ROS-free policy plug-in"]
+  policy -->|"proposed command"| admission["Command admission:<br/>freshness, identity,<br/>units and bounds"]
+  policy -.->|"normalized no-command and diagnostics"| host
+  admission --> owner["Shared control owner"]
+  host -->|"lifecycle requests"| owner
+  owner --> drivers["Drivers and device bus"]
+  drivers --> robot["Robot"]
+  robot -->|observations| sensors
+  admission -->|"admission outcomes"| host
+  owner -->|"control state and fault evidence"| host
+```
+
+Boxes denote responsibilities, not mandatory new modules or processes. MCP
+manages tasks; observation, inference and command cycles run within Joshua.
+Accepted results or human approval cannot bypass shared control checks. The host
+coordinates lifecycle requests, relays admission outcomes and control state to
+MCP, and invalidates pending inference on cancellation; hardware
+enable/stop/recovery and command-source authority remain with the shared control
+owner. #151 extends existing inference contracts; #168 adds the proposed MCP
+task adaptation.
+
 Use versioned inputs/results carrying names, units, sample/request identity,
-generation and validity; preserve legacy adapters. Provider choices/errors stay
-inside the plug-in. Select compatible policies between runs with fresh binding
-and approval; defer hot swapping. Reuse existing owners and focused helpers,
-following [earlier review](https://github.com/Joshua-AI-Robotics/Joshua/pull/145#pullrequestreview-5887228322)
+generation and validity; preserve legacy adapters. Provider-specific parsing and
+error handling stay inside the plug-in; normalized command/no-command outcomes
+and diagnostics reach the runtime and MCP Status/result. No-command means no new
+motor command, not proof of a physical stop. Select compatible policies between
+runs with fresh binding and approval; defer hot swapping. Reuse existing owners
+and focused helpers, following
+[earlier review](https://github.com/Joshua-AI-Robotics/Joshua/pull/145#pullrequestreview-5887228322)
 and [native ROS guidance](https://github.com/Joshua-AI-Robotics/Joshua/pull/150#pullrequestreview-5887076039).
 
 ## MCP inputs and outputs
@@ -43,10 +75,20 @@ unknown and stale evidence. Model arguments or automatic tool approval cannot
 assert human readiness; the backend must verify a single-use, preview-bound
 human grant. Unsupported client confirmation leaves motion unavailable.
 
+Preview delegates static configuration validation through its backend to the
+shared [`config::ValidateConfig`](../../config/validation.cc) and does not
+duplicate its acceptance rules. Tool-argument validation, runtime
+capability/readiness/freshness checks and human approval remain separate.
+
 ## POC dependencies and validation
 
 These dependencies and checks cover the camera-head tracking POC only. Use the
 relevant subset of each PR; other flows require separate validation.
+
+The POC reuses existing configured presets. Configuration authoring,
+build/install flows and broader hardware or MHS compatibility belong to the
+wider Joshua MCP roadmap. Shared control checks constrain what a task may
+execute; they do not prevent prompt injection.
 
 Our integration requires the colleague's inference implementation and minimum
 shared extension; identify its implementation PR before coding. Target one
