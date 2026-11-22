@@ -46,17 +46,13 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 
 ## Motor-policy replay
 
-The optional `ai.motor_policy` preset field defines the version 1 replay contract.
-Each question selects required RGB8, text or JSON evidence by name and maps each
-answer to an absolute joint position, a measured-position increment, or an explicit
-no-command outcome. Version 1 supports one revolute joint per question, in radians.
-A question with an incremental choice requires measured position in every request.
-The configuration validator checks names, references, mode, units and limits.
+Replay checks how a [configured policy](proto/motor_policy.proto) maps a known
+answer to a joint command or a reason to send no command. The
+[rotary-gripper test fixture](testdata/rotary_gripper.pbtxt) supplies the mapping.
+The test collects commands in memory.
 
-After validation, `motor_policy.evaluate_choice` checks a request, calls a
-fixed-choice provider, and returns the original request and sample identities with
-either a named SI `JointCommand` or a reason for producing no command. The replay
-fixture uses a rotary gripper and an in-memory sink. Run it with
-`bazel test //ai/inference:motor_policy_test //config:validation_test` in a dev shell.
-The scalar ROS host only accepts legacy adapter specs. Asynchronous scheduling,
-deadline enforcement and hardware dispatch belong to later integration.
+Run the replay and configuration checks in a Docker dev shell.
+
+```bash
+bazel test //ai/inference:motor_policy_test //config:validation_test
+```
