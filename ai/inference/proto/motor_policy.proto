@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package ai.inference;
+
+message MotorPolicy {
+  Requirements requirements = 1;
+  // Each replay request selects one configured fixed-choice question.
+  repeated Question questions = 2;
+
+  message Requirements {
+    uint32 version = 1;
+    repeated Evidence evidence = 2;
+    repeated Joint joints = 3;
+  }
+
+  message Evidence {
+    enum Kind {
+      KIND_UNSPECIFIED = 0;
+      RGB8 = 1;
+      TEXT = 2;
+      JSON = 3;
+    }
+    string name = 1;
+    Kind kind = 2;
+  }
+
+  message Joint {
+    enum Mode {
+      MODE_UNSPECIFIED = 0;
+      ABSOLUTE_POSITION = 1;
+    }
+    enum Unit {
+      UNIT_UNSPECIFIED = 0;
+      RADIANS = 1;
+    }
+    string name = 1;
+    Mode mode = 2;
+    Unit unit = 3;
+    // Both inclusive limits are required and finite, with minimum < maximum.
+    optional double minimum = 4;
+    optional double maximum = 5;
+  }
+
+  message Question {
+    string id = 1;
+    string prompt = 2;
+    // Names from evidence. All listed inputs are required for this question.
+    repeated string inputs = 3;
+    string joint_name = 4;
+    repeated Choice choices = 5;
+  }
+
+  message NoCommand {}
+
+  message Choice {
+    string label = 1;
+    oneof outcome {
+      NoCommand no_command = 2;
+      // Absolute target in the joint's unit and inclusive limits.
+      double position = 3;
+      // Increment from the sampled position in the joint's unit. Reject out-of-range results.
+      double position_delta = 4;
+    }
+  }
+}

@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
@@ -42,6 +43,77 @@ config::Config MakeConfig() {
       )pb",
       &robot));
   return config;
+}
+
+TEST(ValidationTest, ValidatesMotorPolicyBindingsAndLimits) {
+  Config config;
+  auto* policy = config.mutable_ai()->mutable_motor_policy();
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        requirements {
+          version: 1
+          evidence { name: "instruction" kind: TEXT }
+          joints { name: "wrist" mode: ABSOLUTE_POSITION unit: RADIANS minimum: 0 maximum: 1 }
+        }
+        questions {
+          id: "pose"
+          prompt: "Which pose?"
+          inputs: "instruction"
+          joint_name: "wrist"
+          choices { label: "low" position: 0 }
+          choices { label: "high" position: 1 }
+          choices {
+            label: "rest"
+            no_command {}
+          }
+        }
+      )pb",
+      policy));
+  ASSERT_TRUE(ValidateConfig(config).ok()) << ValidateConfig(config);
+  using Policy = ai::inference::MotorPolicy;
+  auto invalid = [&](const auto& change) {
+    Config candidate = config;
+    change(*candidate.mutable_ai()->mutable_motor_policy());
+    EXPECT_EQ(ValidateConfig(candidate).code(), absl::StatusCode::kInvalidArgument);
+  };
+  invalid([](Policy& p) { p.mutable_requirements()->set_version(2); });
+  invalid([](Policy& p) { p.clear_questions(); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_evidence(0)->clear_name(); });
+  invalid(
+      [](Policy& p) { *p.mutable_requirements()->add_evidence() = p.requirements().evidence(0); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_evidence(0)->clear_kind(); });
+  invalid([](Policy& p) {
+    p.mutable_requirements()->mutable_evidence(0)->set_kind(
+        static_cast<Policy::Evidence::Kind>(99));
+  });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->clear_name(); });
+  invalid([](Policy& p) { *p.mutable_requirements()->add_joints() = p.requirements().joints(0); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->clear_mode(); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->clear_unit(); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->clear_minimum(); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->clear_maximum(); });
+  invalid([](Policy& p) { p.mutable_requirements()->mutable_joints(0)->set_minimum(1); });
+  invalid([](Policy& p) {
+    p.mutable_requirements()->mutable_joints(0)->set_maximum(
+        std::numeric_limits<double>::infinity());
+  });
+  invalid([](Policy& p) { p.mutable_questions(0)->clear_id(); });
+  invalid([](Policy& p) { *p.add_questions() = p.questions(0); });
+  invalid([](Policy& p) { p.mutable_questions(0)->clear_prompt(); });
+  invalid([](Policy& p) { p.mutable_questions(0)->set_joint_name("missing"); });
+  invalid([](Policy& p) { p.mutable_questions(0)->clear_inputs(); });
+  invalid([](Policy& p) { p.mutable_questions(0)->add_inputs("missing"); });
+  invalid([](Policy& p) { p.mutable_questions(0)->add_inputs("instruction"); });
+  invalid([](Policy& p) { p.mutable_questions(0)->clear_choices(); });
+  invalid([](Policy& p) { p.mutable_questions(0)->mutable_choices(0)->clear_label(); });
+  invalid([](Policy& p) { p.mutable_questions(0)->mutable_choices(0)->set_label("rest"); });
+  invalid([](Policy& p) { p.mutable_questions(0)->mutable_choices(0)->clear_position(); });
+  invalid([](Policy& p) { p.mutable_questions(0)->mutable_choices(0)->set_position(-0.01); });
+  invalid([](Policy& p) { p.mutable_questions(0)->mutable_choices(0)->set_position(1.01); });
+  invalid([](Policy& p) {
+    p.mutable_questions(0)->mutable_choices(0)->set_position_delta(
+        std::numeric_limits<double>::quiet_NaN());
+  });
 }
 
 TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {

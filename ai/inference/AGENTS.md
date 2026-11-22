@@ -43,3 +43,20 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 
 - `EVENT` — `on_observation` per decoded message; adapter buffers internally.
 - `TICK` — host also calls `on_tick` at `AdapterSpec.tick_hz`.
+
+## Motor-policy replay
+
+The optional `ai.motor_policy` preset field defines the version 1 replay contract.
+Each question selects required RGB8, text or JSON evidence by name and maps each
+answer to an absolute joint position, a measured-position increment, or an explicit
+no-command outcome. Version 1 supports one revolute joint per question, in radians.
+A question with an incremental choice requires measured position in every request.
+The configuration validator checks names, references, mode, units and limits.
+
+After validation, `motor_policy.evaluate_choice` checks a request, calls a
+fixed-choice provider, and returns the original request and sample identities with
+either a named SI `JointCommand` or a reason for producing no command. The replay
+fixture uses a rotary gripper and an in-memory sink. Run it with
+`bazel test //ai/inference:motor_policy_test //config:validation_test` in a dev shell.
+The scalar ROS host only accepts legacy adapter specs. Asynchronous scheduling,
+deadline enforcement and hardware dispatch belong to later integration.

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ai.inference;
 
+import "ai/inference/proto/motor_policy.proto";
+
 // Logical role of a subscription/publisher channel, derived from the
 // channel's ros2.data_type.Ros2DataType so adapters can reason about
 // inputs without depending on ROS enums.
@@ -29,4 +31,5 @@ message AdapterSpec {
   float tick_hz = 2;
   uint32 min_subscriptions = 3;
   uint32 min_publishers = 4;
+  MotorPolicy.Requirements motor_policy = 5;
 }

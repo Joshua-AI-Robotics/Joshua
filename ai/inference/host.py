@@ -116,6 +116,10 @@ class InferenceHost(Node):
     def _validate_against_spec(self) -> None:
         """Check the node wiring satisfies the adapter's declared schema."""
         cfg = self.single_model_config.node
+        if self._spec.HasField("motor_policy"):
+            raise ValueError(
+                "The scalar ROS host cannot dispatch named motor-policy commands"
+            )
         if len(cfg.subscriptions) < self._spec.min_subscriptions:
             raise ValueError(
                 f"Adapter requires >= {self._spec.min_subscriptions} subscriptions, "

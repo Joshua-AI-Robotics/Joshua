@@ -44,6 +44,7 @@ proto_library(
     srcs = ["ai.proto"],
     visibility = ["//visibility:public"],
     deps = [
+        "//ai/inference/proto:motor_policy_proto",
         "//ai/proto:ai_model_proto",
         "//ai/proto:data_store_proto",
     ],

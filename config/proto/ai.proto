@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package config;
 
+import "ai/inference/proto/motor_policy.proto";
 import "ai/proto/ai_model.proto";
 import "ai/proto/data_store.proto";
 
 message Ai {
   ai.models.Model models = 1;
   ai.data_store.DataStore data_stores = 2;
+  // Optional replay contract. Its presence does not select a model or launch a node.
+  ai.inference.MotorPolicy motor_policy = 3;
 }

@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -26,8 +26,8 @@ py_library(
     srcs = ["manifest.py"],
     deps = [
         ":adapter",
-        "//ai/proto:ai_model_py_proto",
         "//ai/inference/proto:model_manifest_py_proto",
+        "//ai/proto:ai_model_py_proto",
     ] + requirement("protobuf"),
 )
 
@@ -73,8 +73,8 @@ py_library(
     srcs = ["host_main.py"],
     deps = [
         ":host",
-        "//ros2/utils:ros_python_paths_py",
         "//ros2:node_runner_py",
+        "//ros2/utils:ros_python_paths_py",
     ],
 )
 
@@ -84,9 +84,9 @@ py_library(
     data = [
         "//:requirements.lock",
         "//:requirements_3.12.lock",
-        "//ai/models:sources",
-        "//ai/models:manifests",
         "//ai/models:locks",
+        "//ai/models:manifests",
+        "//ai/models:sources",
     ],
     deps = [
         ":environment_manager",
@@ -94,5 +94,32 @@ py_library(
         ":manifest",
         "//ai/inference/proto:model_manifest_py_proto",
         "//config/proto:config_py_proto",
+    ] + requirement("protobuf"),
+)
+
+py_library(
+    name = "motor_policy",
+    srcs = ["motor_policy.py"],
+    deps = [
+        "//ai/inference/proto:motor_policy_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
+    ],
+)
+
+py_test(
+    name = "motor_policy_test",
+    srcs = ["tests/motor_policy_test.py"],
+    data = [
+        "testdata/rotary_gripper.pbtxt",
+        "//config:joshua_validate_config",
+    ],
+    main = "tests/motor_policy_test.py",
+    deps = [
+        ":motor_policy",
+        ":types",
+        "//ai/inference/proto:motor_policy_py_proto",
+        "//ai/models/random_noise:adapter",
+        "//config/proto:config_py_proto",
+        "//robot/action/proto:action_packet_py_proto",
     ] + requirement("protobuf"),
 )
