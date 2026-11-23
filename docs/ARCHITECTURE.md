@@ -97,6 +97,15 @@ process. See the [node manager guide](../launcher/node_manager/AGENTS.md) for th
 Linux ownership contract and [ROS runtime guide](../ros2/AGENTS.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
+## Policy execution
+
+The protobuf preset selects the model and its ROS 2 subscriptions and publishers.
+The inference host decodes incoming messages into observations, invokes the
+configured adapter on an event or timer, and publishes the commands it returns.
+The adapter owns model-specific preprocessing, inference and output conversion.
+See the [host data flow](../ai/inference/AGENTS.md#architecture) and
+[model adapter contract](../ai/models/AGENTS.md#adapter-contract).
+
 ## Hardware topology and latency budgets
 
 The normative topology and qualification rules live in
