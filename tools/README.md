@@ -5,6 +5,11 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [`teleop/xbox_controller/`](teleop/xbox_controller/README.md) — standalone
+  Xbox input library and ROS publisher. Controller input tools live here;
+  top-level `utils/` is reserved for shared Joshua software and system utilities.
+  The launcher and production nodes do not depend on this package.
+
 - [`serial/record_scalar.py`](serial/record_scalar.py) — bounded, read-only ROS
   scalar/health recording to JSONL. It preserves validity and separate clock
   domains, opens no board and sends no commands. Observation subscriptions use
@@ -62,3 +67,7 @@ launcher and ROS 2 nodes never invoke these.
 - Firmware flashing. Planned to land here as `tools/flash/`, per
   [docs/BOARD_LAYER_RFC.md](../docs/BOARD_LAYER_RFC.md), but it does not exist
   yet and runtime code must never flash a board.
+
+## Directory navigation
+
+- [Xbox controller development contract](teleop/xbox_controller/AGENTS.md)

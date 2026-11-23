@@ -87,6 +87,8 @@ for measurement requirements and outstanding work.
 
 ## Related documentation
 
+- [Xbox controller tool](../tools/teleop/xbox_controller/AGENTS.md) — standalone
+  operator input, device ownership, ROS payload, and build/run commands
 - [Getting started](GETTING_STARTED.md) — install and first run
 - [ai/README.md](../ai/README.md) — inference engine, model plug-ins, per-model venvs
 - [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
