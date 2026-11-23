@@ -478,7 +478,7 @@ Migrate all `MCU_BUS` or `DEVICE_BUS` entries on the bus together, preserving
 the shared ID, board references and topics. Replace the old executables with
 `ros2/board_node`. Update private service paths to use `board_node_<id>` in
 place of `mcu_bus_node_<id>` or `device_bus_node_<id>`. The protobuf value
-for `BOARD_NODE` is 9. Values 10 and 11 and both former names are reserved.
+for `BOARD_NODE` is 9.
 
 ## Control policy
 

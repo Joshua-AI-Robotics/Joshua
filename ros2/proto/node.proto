@@ -6,9 +6,6 @@ import "ros2/proto/ros2_data_type.proto";
 
 // Enum names map to lowercase executable names under ros2/.
 enum NodeType {
-  reserved 10, 11;
-  reserved "MCU_BUS", "DEVICE_BUS";
-
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
   POSITION_PUBLISHER = 2;
