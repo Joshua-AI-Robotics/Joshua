@@ -13,6 +13,9 @@ prints standard stdio settings to enter in its MCP settings. Reconnect the IDE
 and complete any approval it requires, then ask it to list supported components.
 Saved registration alone does not establish an active IDE connection.
 
+For operator requests routed by OpenAI Decisions, use the optional
+[Decisions stdio entry point](../tools/mcp/AGENTS.md#operator-requests-through-decisions).
+
 ## Requirements
 
 The initial preflight accepts x86-64 Ubuntu 22.04 and 24.04 hosts with Python 3,

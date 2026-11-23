@@ -388,3 +388,30 @@ where appropriate, rather than adding another runtime or opening hardware driver
 Joshua must continue to work through protobuf configuration and the normal launcher
 without MCP. Capability claims must match merged implementations and their recorded
 evidence; configured components do not imply a verified composed task.
+
+## Operator requests through Decisions
+
+An MCP client sends each whole Joshua turn to `request_decision(text, sequence)`.
+Decisions chooses a capability. Joshua validates the choice and confidence,
+reads runtime status locally or asks Responses to write a general answer, and
+returns the route, outcome, reply and per-call usage. The transcript belongs
+to the client. Each stdio connection starts at sequence 1, retains four recent
+turns and accepts one active request. A retry of the last completed sequence
+and text returns the cached result. MCP cancellation consumes that sequence.
+The 20-second local monotonic deadline bounds network wait independently of
+RobotTime. Current messages and bounded conversational history go to OpenAI.
+Follow-ups can refer to the first 1,000 characters of a successful status reply,
+including the process names shown to the operator. Raw runtime snapshots stay
+with the observation reader.
+
+Run `./scripts/joshua_mcp.sh prepare` once after checking out this revision.
+Register a stdio server in the MCP client with the absolute path to
+`scripts/joshua_mcp.sh` as its command and `serve-decisions` as its argument.
+Give that server process `OPENAI_API_KEY` through its environment. Its
+prepared Docker service can reach OpenAI and mounts the generation read-only.
+Add `--observation-dir /absolute/private/snapshot-directory` to read an
+operator-selected runtime snapshot. A missing or stale snapshot yields an
+unavailable status. The inspection entry point is documented under
+[local preparation and launch](#local-preparation-and-launch).
+
+In a Docker dev shell, run `bazel test //tools/mcp:decisions_request_test`.

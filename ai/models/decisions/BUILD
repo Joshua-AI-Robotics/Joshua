@@ -19,9 +19,15 @@ proto_library(
 )
 
 py_library(
+    name = "choice",
+    srcs = ["choice.py"],
+)
+
+py_library(
     name = "adapter",
     srcs = ["adapter.py"],
     deps = [
+        ":choice",
         "//ai/inference:adapter",
         "//ai/inference:motor_policy",
         "//ai/inference:policy_session",
