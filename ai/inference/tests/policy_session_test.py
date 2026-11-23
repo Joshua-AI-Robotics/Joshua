@@ -173,6 +173,31 @@ class PolicySessionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.take(self.admitted), NoCommand.EXPIRED)
         self.assertFalse(self.sink)
 
+    async def test_active_and_pending_expire_while_provider_drains(self):
+        self.complete_after_stop = True
+        self.cancel_seen = asyncio.Event()
+        first = self.req(1)
+        self.session.submit(first)
+        _, gate = await self.take(self.entered)
+        try:
+            self.session.submit(self.req(2))
+            self.assertEqual(await self.take(self.admitted), NoCommand.EXPIRED)
+            self.assertEqual(await self.take(self.admitted), NoCommand.EXPIRED)
+            await asyncio.wait_for(self.cancel_seen.wait(), 1)
+            fresh = self.req(3)
+            self.session.submit(fresh)
+            self.assertTrue(self.entered.empty())
+            self.assertFalse(self.sink)
+        finally:
+            gate.set_result(first.id)
+        sequence, gate = await self.take(self.entered)
+        self.assertEqual(sequence, 3)
+        gate.set_result(fresh.id)
+        self.assertIsInstance(await self.take(self.admitted), JointCommand)
+        results = [e.request_id.sequence for e in self.events if e.phase == "result"]
+        self.assertEqual(results, [1, 2, 3])
+        self.assertEqual([r.request_id for r in self.sink], [fresh.id])
+
 
 if __name__ == "__main__":
     unittest.main()

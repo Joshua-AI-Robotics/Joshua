@@ -34,10 +34,11 @@ class PolicyEvent:
     evaluation: Evaluation | None
 
 
-@dataclass(frozen=True)
+@dataclass
 class _Submission:
     request: PolicyRequest
     expires_ns: int
+    timer: asyncio.TimerHandle | None = None
 
 
 class PolicySession:
@@ -110,6 +111,8 @@ class PolicySession:
         )
 
     def _reject(self, item, reason, details=None):
+        if item.timer:
+            item.timer.cancel()
         req = item.request
         self._event(
             "result",
@@ -178,13 +181,26 @@ class PolicySession:
         self._event("submitted", item)
         if not self._active or identity.generation != self._generation:
             return self._reject(item, NoCommand.INACTIVE)
+        item.timer = self._loop.call_later(
+            (deadline - self._clock()) / 1e9, self._expire, item
+        )
         if self._task is None:
             self._launch(item)
         else:
-            if self._pending:
-                self._reject(self._pending, NoCommand.SUPERSEDED)
-            self._pending = item
+            previous, self._pending = self._pending, item
+            if previous:
+                self._reject(previous, NoCommand.SUPERSEDED)
         return None
+
+    def _expire(self, item):
+        if self._current is item:
+            self._current = None
+            self._task.cancel()
+        elif self._pending is item:
+            self._pending = None
+        else:
+            return
+        self._reject(item, NoCommand.EXPIRED)
 
     def _launch(self, item):
         self._current = item
@@ -192,22 +208,26 @@ class PolicySession:
         self._task.add_done_callback(self._finished)
 
     async def _run_one(self, item):
-        remaining = (item.expires_ns - self._clock()) / 1e9
-        if remaining <= 0:
+        if self._clock() >= item.expires_ns:
+            self._current = None
             self._reject(item, NoCommand.EXPIRED)
             return
         try:
-            evaluation = await asyncio.wait_for(self._evaluate(item.request), remaining)
+            evaluation = await self._evaluate(item.request)
         except asyncio.TimeoutError:
             if self._current is item:
+                self._current = None
                 self._reject(item, NoCommand.EXPIRED)
             return
         except Exception:
             if self._current is item:
+                self._current = None
                 self._reject(item, NoCommand.PROVIDER_FAILED)
             return
         if self._current is not item:
             return
+        self._current = None
+        item.timer.cancel()
         result = evaluation.result
         if result.request_id != item.request.id or result.samples != sample_ids(
             item.request
@@ -219,7 +239,6 @@ class PolicySession:
             return
         result = replace(result, expires_monotonic_ns=item.expires_ns)
         evaluation = replace(evaluation, result=result)
-        self._current = None
         self._event("result", item, evaluation)
         if (
             isinstance(result.outcome, NoCommand)
