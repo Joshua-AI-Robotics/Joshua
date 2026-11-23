@@ -243,7 +243,10 @@ class DecisionsRequests:
             + ". You have no tools or observations of current robot state."
         )
         if route == "scene":
-            instructions += " Describe the image and identify it as a synthetic replay."
+            instructions += (
+                " Answer only the specific visual question using the synthetic replay "
+                "frame. Identify it as replay. Omit incidental details and speculation."
+            )
             messages[-1]["content"] = [
                 {"type": "input_text", "text": text},
                 {"type": "input_image", "image_url": replay.image_url},

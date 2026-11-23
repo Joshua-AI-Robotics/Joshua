@@ -227,6 +227,10 @@ class HeadReplay:
                 trace["outcome"] = (
                     reason.value if isinstance(reason, NoCommand) else "cancelled"
                 )
+                if reason is NoCommand.LOW_CONFIDENCE:
+                    return (
+                        "Replay issued no command. The visual decision was uncertain."
+                    )
                 return (
                     "Replay issued no command ("
                     + str(evaluation.details.get("choice", trace["outcome"]))

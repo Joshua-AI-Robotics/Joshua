@@ -23,6 +23,7 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.route = "answer"
         self.confidence = 0.97
+        self.motor_confidence = 0.97
         self.calls = []
         self.binding = None
         self.hold_motor = False
@@ -106,7 +107,11 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
             "type": "choice",
             "name": question["name"],
             "choice": choice,
-            "confidence": self.confidence,
+            "confidence": (
+                self.motor_confidence
+                if question["name"] == "target_location"
+                else self.confidence
+            ),
             "probabilities": [
                 {"value": k, "probability": float(k == choice)} for k in labels
             ],
@@ -373,6 +378,12 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
         self.requests.bind_replay(empty)
         report = await self.requests.request("Look at the blue mug.", 7)
         self.assertEqual(report["motor"]["choice"], "missing")
+        self.assertFalse(empty.commands)
+        self.motor_confidence = 0.77
+        report = await self.requests.request("Look at the green bottle.", 8)
+        self.assertEqual(report["outcome"], "low_confidence")
+        self.assertIn("uncertain", report["reply"])
+        self.assertNotIn("missing", report["reply"])
         self.assertFalse(empty.commands)
 
     async def test_stop_and_rebind_reject_late_motor_results(self):
