@@ -394,6 +394,32 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("missing", report["reply"])
         self.assertFalse(empty.commands)
 
+    async def test_keep_head_still_withholds_motion_before_routing(self):
+        replay = HeadReplay.load()
+        self.requests.bind_replay(replay)
+        self.binding = "red mug"
+        text = "Keep the head still and tell me where the red mug is."
+        self.route = "head"
+        rejected = await self.requests.request(text, 1)
+        self.assertNotIn("head", self.labels)
+        self.assertEqual(rejected["outcome"], "failed")
+        self.assertEqual(self.calls, ["decisions"])
+        self.assertFalse(replay.commands)
+
+        self.calls.clear()
+        self.route = "scene"
+        visual = await self.requests.request(text, 2)
+        self.assertIn("red mug", visual["reply"])
+        self.assertEqual(self.calls, ["decisions", "responses"])
+        self.assertFalse(replay.commands)
+
+        self.route = "head"
+        motion = await self.requests.request(
+            "Please still point your head at the red mug.", 3
+        )
+        self.assertEqual(motion["replay_command"], {"joint": "pan", "radians": 0.1})
+        self.assertEqual(len(replay.commands), 1)
+
     async def test_stop_and_rebind_reject_late_motor_results(self):
         old = HeadReplay.load()
         self.requests.bind_replay(old)

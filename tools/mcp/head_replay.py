@@ -34,7 +34,10 @@ HEAD_REQUEST = re.compile(
 NO_MOTION = re.compile(
     r"\b(?:do not|don['’]t|never|without|no|stop)\s+(?:(?:the|your|head)\s+)*"
     r"(?:mov(?:e|ing|ement)|turn(?:ing)?|pan(?:ning)?|motion|"
-    r"look(?:ing)?|point(?:ing)?|track(?:ing)?)\b",
+    r"look(?:ing)?|point(?:ing)?|track(?:ing)?)\b"
+    r"|\b(?:keep|hold|leave)\s+(?:(?:the|your)\s+)?(?:head|camera)\s+"
+    r"(?:still|stationary|fixed|in\s+place)\b"
+    r"|\b(?:stay|remain|hold|keep)\s+(?:still|stationary|in\s+place)\b",
     re.IGNORECASE,
 )
 
