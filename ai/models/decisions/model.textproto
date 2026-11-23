@@ -1,0 +1,4 @@
+name: "decisions"
+model_type: DECISIONS
+entrypoint: "ai.models.decisions.adapter:DecisionsAdapter"
+requirements_lock: "ai/models/decisions/requirements.lock"

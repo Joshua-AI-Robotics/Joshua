@@ -138,3 +138,20 @@ py_test(
         "//robot/action/proto:action_packet_py_proto",
     ] + requirement("protobuf"),
 )
+
+py_library(
+    name = "policy_session",
+    srcs = ["policy_session.py"],
+    deps = [":motor_policy"],
+)
+
+py_test(
+    name = "policy_session_test",
+    srcs = ["tests/policy_session_test.py"],
+    main = "tests/policy_session_test.py",
+    deps = [
+        ":motor_policy",
+        ":policy_session",
+        "//robot/action/proto:action_packet_py_proto",
+    ],
+)

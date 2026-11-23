@@ -10,6 +10,24 @@ For the full **add-a-model workflow** (base + model locks, Bazel hubs),
 see [`../AGENTS.md`](../AGENTS.md). Model venvs always include the global
 base; optional `requirements_lock` adds model-specific packages.
 
+## Decisions motor adapter
+
+Select `DECISIONS` and set the per-instance `decisions_config` in `SingleModel`.
+Its [schema](decisions/decisions_config.proto) owns the fixed-choice policy,
+model ID, confidence threshold, freshness, total deadline and attempt budget.
+The [rotary indexer example](../../config/config_preset/example/decisions_indexer_replay.pbtxt) uses an in-memory replay sink.
+Validate the complete preset with `joshua_validate_config` before construction.
+The registry loads the [manifest](decisions/model.textproto). Use the adapter's
+async `session` context with named samples and a test sink. The ROS scalar host
+rejects this adapter's named command spec before setting up publishers.
+
+The model environment pins `openai==3.57.0` for the [Decisions API](https://developers.openai.com/api/docs/guides/decisions).
+A live caller supplies `OPENAI_API_KEY` through its environment. An injected
+SDK client with a mock HTTP transport exercises the same request and decode
+path offline. The session records sample and request IDs, provider outcomes,
+available token counts and admitted commands through the caller's record
+callback. See [session timing and usage](../inference/AGENTS.md#asynchronous-motor-policy-sessions).
+
 ## Layout
 
 ```text
