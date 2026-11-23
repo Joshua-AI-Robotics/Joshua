@@ -135,7 +135,8 @@ class DecisionsRequests:
         target = None
         if replay is not None:
             routes["scene"] = (
-                "Describe, locate or count objects seen in the camera image."
+                "Answer questions and requests for information about objects in the "
+                "current camera image, including their locations, without moving."
             )
             offer_head, target = replay.motion_target(text)
             if offer_head:

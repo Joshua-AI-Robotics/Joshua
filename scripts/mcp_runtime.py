@@ -31,6 +31,7 @@ BINARIES = (
     "config/joshua_inspect_config",
 )
 DECISIONS_BINARY = "tools/mcp/decisions_server"
+DEMO_BINARY = "tools/mcp/decisions_replay_demo"
 ROOT_LABEL = "io.joshua.mcp.root"
 
 
@@ -626,7 +627,7 @@ class Runtime:
                     timeout=None,
                 )
                 self.daemon_info(pin)
-                for name in (*BINARIES, DECISIONS_BINARY):
+                for name in (*BINARIES, DECISIONS_BINARY, DEMO_BINARY):
                     if not (staging / name).is_file():
                         raise McpError(
                             f"Missing prepared artifact: {name}", "artifacts_invalid"
@@ -870,7 +871,24 @@ class Runtime:
                 "MCP protocol check did not produce a passing report", "smoke_failed"
             ) from error
 
-    def serve(self, decisions=False, observation_dir=None, head_replay=False):
+    @contextlib.contextmanager
+    def replay_transcript(self, state):
+        directory = self.root / "output/decisions-live"
+        directory.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", prefix="replay-", suffix=".jsonl", dir=directory, delete=False
+        ) as report:
+            print(f"Replay transcript: {report.name}", file=sys.stderr)
+            header = {
+                "event": "run",
+                "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "stack": self.stack,
+                "source": state["source"],
+            }
+            print(json.dumps(header), file=report, flush=True)
+            yield report
+
+    def serve(self, mode="serve", observation_dir=None, head_replay=False):
         require_host()
         state = self.checked_state()
         if state["source"] != source_manifest(self.root):
@@ -879,14 +897,15 @@ class Runtime:
                 "Run prepare to update.",
                 file=sys.stderr,
             )
-        service = "mcp-decisions" if decisions else "mcp-serve"
+        service = "mcp-serve" if mode == "serve" else "mcp-decisions"
         command, env = self.compose_command(state, service)
-        if decisions:
-            if not (self.state_dir / state["generation"] / DECISIONS_BINARY).is_file():
+        if service == "mcp-decisions":
+            binary = DEMO_BINARY if mode == "demo-decisions" else DECISIONS_BINARY
+            if not (self.state_dir / state["generation"] / binary).is_file():
                 raise McpError("Run prepare to build the Decisions tool.")
             if not self.environ.get("OPENAI_API_KEY"):
                 raise McpError("Set OPENAI_API_KEY for the Decisions MCP server.")
-            command.append("/opt/joshua-mcp/" + DECISIONS_BINARY)
+            command.append("/opt/joshua-mcp/" + binary)
             if head_replay:
                 command.append("--head-replay")
             if observation_dir is not None:
@@ -924,10 +943,16 @@ class Runtime:
                 previous[signum] = signal.signal(signum, stop)
             if interrupted is not None:
                 return 128 + interrupted
-            child = subprocess.Popen(command, cwd=self.root, env=env)
-            if interrupted is not None:
-                stop(interrupted, None)
-            return child.wait()
+            transcript = (
+                self.replay_transcript(state)
+                if mode == "demo-decisions"
+                else contextlib.nullcontext()
+            )
+            with transcript as report:
+                child = subprocess.Popen(command, cwd=self.root, env=env, stdout=report)
+                if interrupted is not None:
+                    stop(interrupted, None)
+                return child.wait()
         finally:
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
@@ -947,7 +972,15 @@ def main(argv=None):
         return setup_main(argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=("prepare", "serve", "serve-decisions", "doctor", "check")
+        "command",
+        choices=(
+            "prepare",
+            "serve",
+            "serve-decisions",
+            "demo-decisions",
+            "doctor",
+            "check",
+        ),
     )
     parser.add_argument("--stack", choices=STACKS, default="u22")
     parser.add_argument(
@@ -972,10 +1005,8 @@ def main(argv=None):
     if (args.observation_dir or args.head_replay) and args.command != "serve-decisions":
         parser.error("--observation-dir and --head-replay apply to serve-decisions")
     runtime = Runtime(args.root, args.stack, args.config_root)
-    if args.command in ("serve", "serve-decisions"):
-        return runtime.serve(
-            args.command == "serve-decisions", args.observation_dir, args.head_replay
-        )
+    if args.command in ("serve", "serve-decisions", "demo-decisions"):
+        return runtime.serve(args.command, args.observation_dir, args.head_replay)
     if args.command == "prepare":
         result = runtime.prepare(rebuild_image=args.rebuild_image)
     elif args.command == "check":
